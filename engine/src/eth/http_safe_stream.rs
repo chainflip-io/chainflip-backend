@@ -3,7 +3,7 @@ use std::{convert::TryInto, time::Duration};
 use futures::{stream, Stream};
 use web3::types::U64;
 
-use crate::{constants::ETH_BLOCK_SAFETY_MARGIN, eth::EthHttpRpcApi};
+use crate::eth::EthHttpRpcApi;
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -14,6 +14,7 @@ use anyhow::Result;
 pub async fn safe_polling_http_head_stream<HttpRpc>(
     eth_http_rpc: HttpRpc,
     poll_interval: Duration,
+    safety_margin: u64,
 ) -> impl Stream<Item = Result<EthNumberBloom>>
 where
     HttpRpc: EthHttpRpcApi + EthRpcApi,
@@ -36,9 +37,7 @@ where
                 state.last_block_yielded == U64::from(0) && state.last_head_fetched == U64::from(0);
 
             // Only request the latest block number if we are out of blocks to yield
-            if state.last_head_fetched
-                <= state.last_block_yielded + U64::from(ETH_BLOCK_SAFETY_MARGIN)
-            {
+            if state.last_head_fetched <= state.last_block_yielded + U64::from(safety_margin) {
                 if !is_first_iteration {
                     tokio::time::sleep(poll_interval).await;
                 }
@@ -48,10 +47,8 @@ where
                     Err(e) => break Some((Err(e), state)),
                 };
 
-                if unsafe_block_number + U64::from(ETH_BLOCK_SAFETY_MARGIN)
-                    < state.last_head_fetched
-                {
-                    break Some((Err(anyhow::Error::msg( format!("Fetched ETH block number ({}) is more than {} blocks behind the last fetched ETH block number ({})", unsafe_block_number, ETH_BLOCK_SAFETY_MARGIN, state.last_head_fetched))), state));
+                if unsafe_block_number + U64::from(safety_margin) < state.last_head_fetched {
+                    break Some((Err(anyhow::Error::msg( format!("Fetched ETH block number ({}) is more than {} blocks behind the last fetched ETH block number ({})", unsafe_block_number, safety_margin, state.last_head_fetched))), state));
                 }
                 state.last_head_fetched = unsafe_block_number;
             }
@@ -59,12 +56,12 @@ where
             let next_block_to_yield = if is_first_iteration {
                 state
                     .last_head_fetched
-                    .saturating_sub(U64::from(ETH_BLOCK_SAFETY_MARGIN))
+                    .saturating_sub(U64::from(safety_margin))
             } else {
                 // the last block yielded was safe, so the next is +1
                 state.last_block_yielded + U64::from(1)
             };
-            if next_block_to_yield + U64::from(ETH_BLOCK_SAFETY_MARGIN) <= state.last_head_fetched {
+            if next_block_to_yield + U64::from(safety_margin) <= state.last_head_fetched {
                 break Some((
                     state
                         .eth_http_rpc
@@ -96,7 +93,8 @@ pub mod tests {
     // in tests, this can be instant
     const TEST_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
-    use crate::{eth::mocks::MockEthHttpRpcClient, logging::test_utils::new_test_logger};
+    use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
+    use crate::eth::mocks::MockEthHttpRpcClient;
 
     use anyhow::Result;
 
@@ -124,8 +122,12 @@ pub mod tests {
             .times(1)
             .returning(move |n| dummy_block(n.as_u64()));
 
-        let mut stream =
-            safe_polling_http_head_stream(mock_eth_http_rpc_client, TEST_HTTP_POLL_INTERVAL).await;
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            ETH_BLOCK_SAFETY_MARGIN,
+        )
+        .await;
         let expected_returned_block_number = block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
             stream.next().await.unwrap().unwrap().block_number,
@@ -155,8 +157,12 @@ pub mod tests {
             .in_sequence(&mut seq)
             .returning(move |n| dummy_block(n.as_u64()));
 
-        let mut stream =
-            safe_polling_http_head_stream(mock_eth_http_rpc_client, TEST_HTTP_POLL_INTERVAL).await;
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            ETH_BLOCK_SAFETY_MARGIN,
+        )
+        .await;
         assert_eq!(
             stream.next().await.unwrap().unwrap().block_number,
             U64::from(1)
@@ -205,8 +211,12 @@ pub mod tests {
             .in_sequence(&mut seq)
             .returning(move |n| dummy_block(n.as_u64()));
 
-        let mut stream =
-            safe_polling_http_head_stream(mock_eth_http_rpc_client, TEST_HTTP_POLL_INTERVAL).await;
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            ETH_BLOCK_SAFETY_MARGIN,
+        )
+        .await;
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
@@ -261,8 +271,12 @@ pub mod tests {
         }
 
         // first block should come in as expected
-        let mut stream =
-            safe_polling_http_head_stream(mock_eth_http_rpc_client, TEST_HTTP_POLL_INTERVAL).await;
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            ETH_BLOCK_SAFETY_MARGIN,
+        )
+        .await;
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
@@ -324,8 +338,12 @@ pub mod tests {
             .returning(move |n| dummy_block(n.as_u64()));
 
         // first block should come in as expected
-        let mut stream =
-            safe_polling_http_head_stream(mock_eth_http_rpc_client, TEST_HTTP_POLL_INTERVAL).await;
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            ETH_BLOCK_SAFETY_MARGIN,
+        )
+        .await;
         let expected_first_returned_block_number =
             first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
@@ -363,8 +381,12 @@ pub mod tests {
                 .returning(move |number| dummy_block(number.as_u64()));
         }
 
-        let mut stream =
-            safe_polling_http_head_stream(mock_eth_http_rpc_client, TEST_HTTP_POLL_INTERVAL).await;
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            ETH_BLOCK_SAFETY_MARGIN,
+        )
+        .await;
         for block_number in block_range {
             if let Some(block) = stream.next().await {
                 assert_eq!(
@@ -416,8 +438,12 @@ pub mod tests {
             .in_sequence(&mut seq)
             .returning(move |number| dummy_block(number.as_u64()));
 
-        let mut stream =
-            safe_polling_http_head_stream(mock_eth_http_rpc_client, TEST_HTTP_POLL_INTERVAL).await;
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            ETH_BLOCK_SAFETY_MARGIN,
+        )
+        .await;
 
         for block_number in block_range {
             if let Some(block) = stream.next().await {
