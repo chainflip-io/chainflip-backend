@@ -545,7 +545,7 @@ mod tests {
         {
             let mut db = DB::open_cf(&Options::default(), &db_path.as_path(), COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest(&mut db, &new_test_logger(), &db_path.as_path()).is_err());
+            assert!(migrate_db_to_latest(&mut db, &new_test_logger(), db_path.as_path()).is_err());
         }
     }
 
