@@ -702,7 +702,7 @@ impl<T: Config> Pallet<T> {
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		// Remember in which epoch an validator was active
-		for validator in new_validators.into_iter() {
+		for validator in new_validators.iter() {
 			HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
 				epochs.push(new_epoch);
 			});

@@ -92,8 +92,7 @@ impl Bonding for BondManager {
 					.iter()
 					.map(|bond| EpochHistory::<Runtime>::epoch_bond(*bond))
 					.max()
-					.expect("we expect at least one active epoch")
-					.into(),
+					.expect("we expect at least one active epoch"),
 			);
 		}
 	}
