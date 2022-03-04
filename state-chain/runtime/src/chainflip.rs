@@ -20,9 +20,9 @@ use cf_chains::{
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
-	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
-	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochExpiry, EpochIndex, EpochInfo,
-	EpochTransitionHandler, Heartbeat, HistoricalEpochInfo, Issuance, NetworkState,
+	BackupValidators, BlockEmissions, Bonding, Chainflip, ChainflipAccount, ChainflipAccountStore,
+	EmergencyRotation, EmissionsTrigger, EpochExpiry, EpochIndex, EpochInfo,
+	EpochTransitionHandler, Heartbeat, HistoricalEpoch, Issuance, NetworkState,
 	RewardsDistribution, SigningContext, StakeHandler, StakeTransfer,
 };
 use codec::{Decode, Encode};
@@ -70,7 +70,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Update the the bond of all validators for the new epoch
 		for validator in new_validators {
-			bond_validator(validator.clone());
+			BondManager::bond_validator(validator);
 		}
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(
@@ -385,31 +385,30 @@ impl EpochExpiry for EpochExpiryHandler {
 	fn expire_epoch(epoch: EpochIndex) {
 		EpochHistory::<Runtime>::set_last_expired_epoch(epoch);
 		for validator in EpochHistory::<Runtime>::epoch_validators(epoch).iter() {
-			// Expire the epochs for an validator
-			EpochHistory::<Runtime>::set_active_epochs(validator.clone(), epoch);
-			// Bond the validator
-			bond_validator(validator.clone());
+			EpochHistory::<Runtime>::remove_epoch(validator, epoch);
+			BondManager::bond_validator(validator);
 		}
 	}
 }
 
-/// Bond the validator
-fn bond_validator(validator: AccountId) {
-	let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(validator.clone());
-	// If the validator isn't active in any epoch we release his bond - should be only the case on
-	// epoch expiry
-	if active_epochs.is_empty() {
-		Flip::set_validator_bond(&validator, 0u128);
-	} else {
-		// otherwise we use the highest MAB of all **NOT** expired epochs as bond
-		Flip::set_validator_bond(
-			&validator,
-			active_epochs
-				.iter()
-				.map(|bond| EpochHistory::<Runtime>::epoch_bond(*bond))
-				.max()
-				.expect("we expect at least one active epoch")
-				.into(),
-		);
+pub struct BondManager;
+
+impl Bonding for BondManager {
+	type ValidatorId = AccountId;
+	fn bond_validator(validator: &Self::ValidatorId) {
+		let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(validator);
+		if active_epochs.is_empty() {
+			Flip::set_validator_bond(validator, 0u128);
+		} else {
+			Flip::set_validator_bond(
+				validator,
+				active_epochs
+					.iter()
+					.map(|bond| EpochHistory::<Runtime>::epoch_bond(*bond))
+					.max()
+					.expect("we expect at least one active epoch")
+					.into(),
+			);
+		}
 	}
 }

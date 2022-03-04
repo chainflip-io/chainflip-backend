@@ -235,16 +235,6 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
-/// Trait for rotate bond after epoch.
-pub trait BondRotation {
-	type AccountId;
-	type Balance;
-
-	/// Sets the validator bond for all new_validator to the new_bond and
-	/// the bond for all old validators to zero.
-	fn update_validator_bonds(new_validators: &[Self::AccountId], new_bond: Self::Balance);
-}
-
 /// Provide feedback on staking
 pub trait StakeHandler {
 	type ValidatorId;
@@ -646,17 +636,31 @@ pub trait KeygenExclusionSet {
 	fn forgive_all();
 }
 
-pub trait HistoricalEpochInfo {
+/// Provides an intreface to all passed epochs
+pub trait HistoricalEpoch {
 	type ValidatorId;
 	type EpochIndex;
 	type Amount;
+	/// All validators which were active in an epoch
 	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
+	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
-	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	/// All epochs an validator is active in
+	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	/// Sets the last expired epoch
 	fn set_last_expired_epoch(epoch: EpochIndex);
-	fn set_active_epochs(validator: Self::ValidatorId, epoch: EpochIndex);
+	/// Removes an validator from an epoch
+	fn remove_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
 }
 
+/// Handles the expiry of an epoch
 pub trait EpochExpiry {
 	fn expire_epoch(epoch: EpochIndex);
+}
+
+/// Handles the bonding logic
+pub trait Bonding {
+	type ValidatorId;
+	/// Update the bond of an validator
+	fn bond_validator(validator: &Self::ValidatorId);
 }

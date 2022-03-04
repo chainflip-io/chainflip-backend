@@ -17,7 +17,7 @@ mod migrations;
 
 use cf_traits::{
 	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpochInfo, QualifyValidator,
+	ExecutionCondition, HistoricalEpoch, QualifyValidator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -715,7 +715,7 @@ impl<T: Config> Pallet<T> {
 
 pub struct EpochHistory<T>(PhantomData<T>);
 
-impl<T: Config> HistoricalEpochInfo for EpochHistory<T> {
+impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type EpochIndex = EpochIndex;
 	type Amount = T::Amount;
@@ -727,7 +727,7 @@ impl<T: Config> HistoricalEpochInfo for EpochHistory<T> {
 		HistoricalBonds::<T>::get(epoch)
 	}
 
-	fn active_epochs_for_validator(id: Self::ValidatorId) -> Vec<Self::EpochIndex> {
+	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
 		HistoricalActiveEpochs::<T>::get(id)
 	}
 
@@ -735,7 +735,7 @@ impl<T: Config> HistoricalEpochInfo for EpochHistory<T> {
 		LastExpiredEpoch::<T>::set(epoch);
 	}
 
-	fn set_active_epochs(validator: ValidatorIdOf<T>, epoch: EpochIndex) {
+	fn remove_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
 		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
 			active_epochs.retain(|&x| x != epoch);
 		});

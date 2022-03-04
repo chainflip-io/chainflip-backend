@@ -3,7 +3,7 @@ use std::mem;
 use crate::{
 	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
 };
-use cf_traits::{BondRotation, Issuance, StakeTransfer};
+use cf_traits::{Issuance, StakeTransfer};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
@@ -201,26 +201,6 @@ fn stake_transfers() {
 		check_balance_integrity();
 	});
 }
-
-// #[test]
-// fn update_bonds() {
-// 	new_test_ext().execute_with(|| {
-// 		<Flip as BondRotation>::update_validator_bonds(&[ALICE, BOB], 20);
-// 		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 20);
-// 		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
-
-// 		<Flip as BondRotation>::update_validator_bonds(&[BOB], 10);
-// 		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 0);
-// 		// Expect the bond not to be overwriten if the previous was hire #1355
-// 		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
-
-// 		// Simulate an increase of the bond from on epoch to the next
-// 		<Flip as BondRotation>::update_validator_bonds(&[BOB], 25);
-// 		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 25);
-
-// 		check_balance_integrity();
-// 	});
-// }
 
 #[cfg(test)]
 mod test_issuance {
