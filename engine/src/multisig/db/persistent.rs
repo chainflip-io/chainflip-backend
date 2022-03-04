@@ -163,7 +163,7 @@ impl KeyDB for PersistentKeyDB {
                 // deserialize the `KeygenResultInfo`
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
                     Ok(keygen_info) => {
-                        slog::info!(
+                        slog::debug!(
                             self.logger,
                             "Loaded key_info (key_id: {}) from database",
                             key_id
@@ -375,31 +375,25 @@ fn load_keys_using_kvdb(
         .map_err(|e| anyhow::Error::msg(format!("could not open kvdb database: {}", e)))?;
 
     // Load the keys from column 0 (aka "col0")
-    Ok(db
-        .iter(0)
-        .filter_map(|(key_id, key_info)| {
+    db.iter(0)
+        .map(|(key_id, key_info)| {
             let key_id: KeyId = KeyId(key_id.into());
             match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
                 Ok(keygen_info) => {
-                    slog::info!(
+                    slog::debug!(
                         logger,
                         "Loaded key_info (key_id: {}) from kvdb database",
                         key_id
                     );
-                    Some((key_id, keygen_info))
+                    Ok((key_id, keygen_info))
                 }
-                Err(err) => {
-                    slog::error!(
-                        logger,
-                        "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
-                        key_id,
-                        err
-                    );
-                    None
-                }
+                Err(err) => Err(anyhow::Error::msg(format!(
+                    "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
+                    key_id, err,
+                ))),
             }
         })
-        .collect())
+        .collect()
 }
 
 #[cfg(test)]
@@ -512,11 +506,9 @@ mod tests {
         // No metadata column, the keygen data column is named 'col0' and has no prefix.
         // The compression used by kvdb is different from rust_rocksdb, so we must use kvdb here.
         {
-            let db = kvdb_rocksdb::Database::open(
-                &kvdb_rocksdb::DatabaseConfig::default(),
-                db_path.to_str().expect("Invalid path"),
-            )
-            .unwrap();
+            let db =
+                kvdb_rocksdb::Database::open(&kvdb_rocksdb::DatabaseConfig::default(), &db_path)
+                    .unwrap();
 
             let mut tx = db.transaction();
             tx.put_vec(DEFAULT_DB_SCHEMA_VERSION, &key_id.0, bashful_secret_bin);
@@ -553,7 +545,7 @@ mod tests {
         {
             let mut db = DB::open_cf(&Options::default(), &db_path.as_path(), COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest(&mut db, &new_test_logger(), &db_path.as_path()).is_err());
+            assert!(migrate_db_to_latest(&mut db, &new_test_logger(), db_path.as_path()).is_err());
         }
     }
 
@@ -633,7 +625,7 @@ mod tests {
             let mut opts = Options::default();
             opts.create_missing_column_families(true);
             opts.create_if_missing(true);
-            let _ = DB::open_cf(&opts, &db_path, COLUMN_FAMILIES).expect("Should open db file");
+            let _db = DB::open_cf(&opts, &db_path, COLUMN_FAMILIES).expect("Should open db file");
         }
 
         // Load the db and trigger the migration and therefore the backup
@@ -724,13 +716,43 @@ mod tests {
         let mut permissions = backups_path.metadata().unwrap().permissions();
         permissions.set_readonly(true);
         assert_ok!(fs::set_permissions(&backups_path, permissions));
-        assert_eq!(
-            true,
+        assert!(
             backups_path.metadata().unwrap().permissions().readonly(),
             "Readonly permissions were not set"
         );
 
         // Try and backup the db, it should fail with permissions denied due to readonly
         assert!(create_backup(db_path.as_path(), DB_SCHEMA_VERSION).is_err());
+    }
+
+    #[test]
+    fn should_error_if_kvdb_fails_to_load_key() {
+        let logger = new_test_logger();
+        let db_path = get_temp_db_path();
+
+        // Create a db that is schema version 0 using kvdb.
+        {
+            let db =
+                kvdb_rocksdb::Database::open(&kvdb_rocksdb::DatabaseConfig::default(), &db_path)
+                    .unwrap();
+
+            let mut tx = db.transaction();
+
+            // Put in some junk data instead of proper KeygenResultInfo so that it will fail to load this key
+            tx.put_vec(0, &KeyId(TEST_KEY.into()).0, vec![1, 2, 3, 4]);
+            db.write(tx).unwrap();
+        }
+
+        // Load the bad db and make sure it errors
+        {
+            assert!(PersistentKeyDB::new(db_path.as_path(), &logger).is_err());
+        }
+
+        // Confirm that the db was not migrated, by checking that the metadata column doesn't exist.
+        {
+            assert!(!DB::list_cf(&Options::default(), db_path.as_path())
+                .expect("Should get column families")
+                .contains(&METADATA_COLUMN.to_string()))
+        }
     }
 }
