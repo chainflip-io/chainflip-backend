@@ -5,6 +5,8 @@ use sp_std::marker::PhantomData;
 
 mod delete_rewards;
 pub use delete_rewards::DeleteRewardsPallet;
+mod unify_ceremony_ids;
+pub use unify_ceremony_ids::UnifyCeremonyIds;
 
 /// A runtime storage migration that will only be applied if the `SPEC_VERSION` matches the
 /// post-upgrade runtime's spec version.

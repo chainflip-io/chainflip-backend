@@ -638,3 +638,10 @@ pub trait KeygenExclusionSet {
 	/// Clear the exclusion set
 	fn forgive_all();
 }
+
+pub trait CeremonyIdProvider {
+	type CeremonyId;
+
+	/// Get the next ceremony id in the sequence.
+	fn next_ceremony_id() -> Self::CeremonyId;
+}

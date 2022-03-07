@@ -121,7 +121,7 @@ pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static 
 	let pre_migration_id_counter: u64 = Pallet::<T, I>::get_temp_storage("id_counter")
 		.ok_or("No id_counter written during the pre-migration checks")?;
 
-	let post_migration_id_counter = KeygenCeremonyIdCounter::<T, I>::get();
+	let post_migration_id_counter = CeremonyIdCounter::<T, I>::get();
 
 	log::info!(
 		"🏯 KeygenCeremonyIdCounter checked; Pre-migration: {}, Post-migration: {}",

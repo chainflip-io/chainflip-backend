@@ -7,8 +7,8 @@
 use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Chain, ChainCrypto, Ethereum};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, KeygenStatus, Nonce, NonceProvider,
-	SigningContext, ThresholdSigner, VaultRotator,
+	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, KeygenStatus, Nonce,
+	NonceProvider, SigningContext, ThresholdSigner, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -34,8 +34,19 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// Id type used for the Keygen ceremony.
+/// Id type used for the Keygen and Signing ceremonies.
 pub type CeremonyId = u64;
+
+impl<T: Config<I>, I: 'static> CeremonyIdProvider for Pallet<T, I> {
+	type CeremonyId = CeremonyId;
+
+	fn next_ceremony_id() -> Self::CeremonyId {
+		CeremonyIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		})
+	}
+}
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum KeygenOutcome<Key, Id> {
@@ -340,10 +351,10 @@ pub mod pallet {
 		}
 	}
 
-	/// Counter for generating unique ceremony ids for the keygen ceremony.
+	/// Counter for generating unique ceremony ids.
 	#[pallet::storage]
-	#[pallet::getter(fn keygen_ceremony_id_counter)]
-	pub(super) type KeygenCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
+	#[pallet::getter(fn ceremony_id_counter)]
+	pub type CeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// A map of vaults by epoch.
 	#[pallet::storage]
@@ -623,10 +634,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
 		ensure!(!PendingVaultRotation::<T, I>::exists(), Error::<T, I>::DuplicateRotationRequest);
 
-		let ceremony_id = KeygenCeremonyIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
+		let ceremony_id = <Self as CeremonyIdProvider>::next_ceremony_id();
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::new(
 			ceremony_id,

@@ -454,6 +454,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = EthereumVault;
 	type OfflineReporter = Reputation;
+	type CeremonyIdCounter = EthereumVault;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
