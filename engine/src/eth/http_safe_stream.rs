@@ -423,14 +423,14 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn return_error_immediately_on_bad_block_number_poll() {
+    async fn return_error_on_bad_block_number_poll() {
         let mut mock_eth_http_rpc_client = MockEthHttpRpcClient::new();
 
         let logger = new_test_logger();
 
         let mut seq = Sequence::new();
 
-        let block_range = 10..12;
+        let block_range = 10..=12;
 
         for block_number in block_range.clone() {
             mock_eth_http_rpc_client
@@ -452,6 +452,19 @@ pub mod tests {
             .in_sequence(&mut seq)
             .returning(move || Err(anyhow::Error::msg("Failed to get block number, you fool")));
 
+        let block_number_after_error = 13;
+        mock_eth_http_rpc_client
+            .expect_block_number()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move || Ok(U64::from(block_number_after_error)));
+
+        mock_eth_http_rpc_client
+            .expect_block()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move |number| dummy_block(number.as_u64()));
+
         let mut stream = safe_polling_http_head_stream(
             mock_eth_http_rpc_client,
             TEST_HTTP_POLL_INTERVAL,
@@ -469,5 +482,9 @@ pub mod tests {
         }
 
         assert!(stream.next().await.unwrap().is_err());
+        assert_eq!(
+            stream.next().await.unwrap().unwrap().block_number,
+            U64::from(block_number_after_error - ETH_BLOCK_SAFETY_MARGIN)
+        );
     }
 }
