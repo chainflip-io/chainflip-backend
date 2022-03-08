@@ -685,14 +685,14 @@ pub trait EthObserver {
     }
 
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
-    async fn block_events_stream_from_head_stream<'a, BlockHeaderStream, EthRpc>(
-        &'a self,
+    async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc>(
+        &self,
         from_block: u64,
         contract_address: H160,
         safe_head_stream: BlockHeaderStream,
         eth_rpc: EthRpc,
         logger: slog::Logger,
-    ) -> Result<Pin<Box<dyn 'a + Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Send>>>
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Send + '_>>>
     where
         BlockHeaderStream: Stream<Item = Result<EthNumberBloom>> + 'static + Send,
         EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
@@ -752,15 +752,15 @@ pub trait EthObserver {
 
     /// Get an event stream for the contract, returning the stream only if the head of the stream is
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
-    async fn event_stream<'a>(
-        &'a self,
+    async fn event_stream(
+        &self,
         eth_ws_rpc: EthWsRpcClient,
         eth_http_rpc: EthHttpRpcClient,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
         // This stream must be Send, so it can be used by the spawn
-    ) -> Result<Pin<Box<dyn 'a + Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
+    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send + '_>>>
     {
         let deployed_address = self.get_contract_address();
         slog::info!(
@@ -806,16 +806,16 @@ pub trait EthObserver {
     }
 
     async fn merged_block_events_stream<'a, BlockEventsStreamWs, BlockEventsStreamHttp>(
-        &'a self,
+        &self,
         safe_ws_block_events_stream: BlockEventsStreamWs,
         safe_http_block_events_stream: BlockEventsStreamHttp,
         logger: slog::Logger,
-    ) -> Result<Pin<Box<dyn 'a + Stream<Item = EventWithCommon<Self::EventParameters>> + Send>>>
+    ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send + 'a>>>
     where
         BlockEventsStreamWs:
-            'a + Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send,
+            Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send + 'a,
         BlockEventsStreamHttp:
-            'a + Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send,
+            Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send + 'a,
     {
         #[derive(Debug)]
         struct ProtocolState {
