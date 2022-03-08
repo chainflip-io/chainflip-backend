@@ -562,9 +562,9 @@ fn derive_expected_blame_response_indexes(
 
 /// Checks if the blame response contains all (and only) expected indexes
 fn is_blame_response_complete(response: &BlameResponse6, expected_idxs: &BTreeSet<usize>) -> bool {
-    let received_idxs: BTreeSet<_> = response.0.keys().copied().collect();
-
-    &received_idxs == expected_idxs
+    // BTreeSet<T> is just a BTreeMap<T, ()>, so the elements
+    // are expected to be in the same order
+    response.0.keys().into_iter().eq(expected_idxs.iter())
 }
 
 #[cfg(test)]
