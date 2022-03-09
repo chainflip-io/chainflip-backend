@@ -460,4 +460,72 @@ pub mod tests {
             U64::from(block_number_after_error - ETH_BLOCK_SAFETY_MARGIN)
         );
     }
+
+    #[tokio::test]
+    async fn return_error_on_good_block_number_bad_block_fetch_with_safety() {
+        let mut mock_eth_http_rpc_client = MockEthHttpRpcClient::new();
+
+        let mut seq = Sequence::new();
+
+        let safety_margin = 2;
+
+        // === success ===
+        let first_block = 10;
+        mock_eth_http_rpc_client
+            .expect_block_number()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move || Ok(U64::from(first_block)));
+
+        mock_eth_http_rpc_client
+            .expect_block()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move |number| dummy_block(number.as_u64()));
+
+        // === successfully fetch block number, but fail getting block ===
+        let second_block = first_block + 1;
+        mock_eth_http_rpc_client
+            .expect_block_number()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move || Ok(U64::from(second_block)));
+
+        mock_eth_http_rpc_client
+            .expect_block()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move |_number| Err(anyhow::Error::msg("Fetch block failed :(")));
+
+        // === second block success ===
+        // We don't refetch the block number here. We don't need to, since we still need to yield block 11
+
+        mock_eth_http_rpc_client
+            .expect_block()
+            .times(1)
+            .in_sequence(&mut seq)
+            .returning(move |number| dummy_block(number.as_u64()));
+
+        // === ===
+        let mut stream = safe_polling_http_head_stream(
+            mock_eth_http_rpc_client,
+            TEST_HTTP_POLL_INTERVAL,
+            safety_margin,
+        )
+        .await;
+
+        assert_eq!(
+            stream.next().await.unwrap().unwrap().block_number,
+            // no safety margin
+            U64::from(first_block - safety_margin)
+        );
+
+        assert!(stream.next().await.unwrap().is_err());
+
+        assert_eq!(
+            stream.next().await.unwrap().unwrap().block_number,
+            // no safety margin
+            U64::from(second_block - safety_margin)
+        );
+    }
 }
