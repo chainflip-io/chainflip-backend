@@ -14,8 +14,9 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	pallet_prelude::*,
 };
+use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, One};
+use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	convert::TryFrom,
@@ -94,6 +95,8 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 
 		*self.success_votes.entry(key).or_default() += 1;
 
+		SuccessVoters::<T, I>::append(key, voter);
+
 		Ok(())
 	}
 
@@ -111,6 +114,8 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			*self.blame_votes.entry(id).or_default() += 1
 		}
 
+		FailureVoters::<T, I>::append(voter);
+
 		Ok(())
 	}
 
@@ -124,73 +129,99 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
-	/// Returns `Some(key)` *iff any* key has more than `self.threshold()` number of votes,
+	/// Returns `Some(key)` *iff any* key has at least `self.success_threshold()` number of votes,
 	/// otherwise returns `None`.
-	fn success_result(&self) -> Option<AggKeyFor<T, I>> {
-		self.success_votes.iter().find_map(|(key, votes)| {
-			if *votes >= self.success_threshold() {
-				Some(*key)
-			} else {
-				None
+	fn success_consensus(&self) -> Option<AggKeyFor<T, I>> {
+		for key in SuccessVoters::<T, I>::iter_keys() {
+			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
+				self.success_threshold() as usize
+			{
+				return Some(key)
 			}
-		})
-	}
-
-	/// Returns `Some(offenders)` **iff** we can reliably determine them based on the number of
-	/// received votes, otherwise returns `None`.
-	///
-	/// "Reliably determine" means: Some of the validators have exceeded the threshold number of
-	/// reports, *and* there are no other validators who *might* still exceed the threshold.
-	///
-	/// For example if the threshold is 10 and there are 5 votes left, it is assumed that any
-	/// validators that have 6 or more votes *might still* pass the threshold, so we return
-	/// `None` to signal that no decision can be made yet.
-	///
-	/// If no-one passes the threshold, returns `None`.
-	fn failure_result(&self) -> Option<BTreeSet<T::ValidatorId>> {
-		let mut possible = self
-			.blame_votes
-			.iter()
-			.filter(|(_, vote_count)| {
-				**vote_count + self.remaining_candidate_count() >= self.success_threshold()
-			})
-			.peekable();
-
-		// If no nodes will ever conclusively be considered failed, we return None to signify that
-		// we can't make a decision.
-		possible.peek()?;
-
-		if possible.clone().any(|(_, vote_count)| *vote_count < self.success_threshold()) {
-			// We are still waiting for more reponses before drawing a conclusion.
-			None
-		} else {
-			// The results are conclusive, we don't need to wait for any further reports.
-			Some(possible.map(|(id, _)| id).cloned().collect())
 		}
+		None
 	}
 
-	/// Based on the amalgamated reports, returns `Some` definitive outcome for the keygen ceremony.
 	///
-	/// If no outcome can be determined, returns `None`.
+	fn failure_consensus(&self) -> Option<BTreeSet<T::ValidatorId>> {
+		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
+			self.success_threshold() as usize
+		{
+			return None
+		}
+
+		Some(
+			self.blame_votes
+				.iter()
+				.filter_map(
+					|(id, vote_count)| {
+						if *vote_count >= self.success_threshold() {
+							Some(id)
+						} else {
+							None
+						}
+					},
+				)
+				.cloned()
+				.collect(),
+		)
+	}
+
+	/// Resolves the keygen outcome as follows:
+	///
+	/// If and only if *all* candidates agree on the same key, return Success.
+	///
+	/// Otherwise, determine unresponsive, dissenting and blamed nodes and return
+	/// `Failure(unresponsive | dissenting | blamed)`
+	fn resolve_keygen_outcome(self) -> KeygenOutcomeFor<T, I> {
+		// If and only if *all* candidates agree on the same key, return success.
+		if let Some((key, votes)) = self.success_votes.iter().next() {
+			if *votes == self.candidate_count {
+				return KeygenOutcome::Success(key.clone())
+			}
+		}
+
+		let mut to_punish = self.remaining_candidates.clone();
+		match self.consensus_outcome() {
+			Some(KeygenOutcome::Success(consensus_key)) => {
+				// all nodes that reported failure *and* all nodes that reported another success.
+				SuccessVoters::<T, I>::remove(consensus_key);
+				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
+					for dissenter in key_dissenters {
+						to_punish.insert(dissenter);
+					}
+				}
+				for failure_voter in FailureVoters::<T, I>::take() {
+					to_punish.insert(failure_voter);
+				}
+			},
+			Some(KeygenOutcome::Failure(mut blamed)) => {
+				to_punish.append(&mut blamed);
+				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
+					for dissenter in key_dissenters {
+						to_punish.insert(dissenter);
+					}
+				}
+			},
+			None => {
+				log::warn!("Unable to determine a consensus outcome for keygen.")
+			},
+		};
+
+		KeygenOutcome::Failure(to_punish)
+	}
+
+	/// Determines the keygen outcome based on threshold consensus.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
 		if self.response_count() < self.success_threshold() {
 			return None
 		}
 
-		self.success_result()
+		self.success_consensus()
 			// If it's a success, return success.
 			.map(KeygenOutcome::Success)
 			// Otherwise check if we have consensus on failure.
-			.or_else(|| self.failure_result().map(KeygenOutcome::Failure))
-			// Otherwise, if everyone has reported, report a default failure
-			.or_else(|| {
-				if self.remaining_candidates.is_empty() {
-					Some(KeygenOutcome::Failure(Default::default()))
-				} else {
-					// Otherwise we have no consensus result.
-					None
-				}
-			})
+			.or_else(|| self.failure_consensus().map(KeygenOutcome::Failure))
 	}
 }
 
@@ -239,9 +270,6 @@ pub mod releases {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-
-	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::Saturating;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -293,32 +321,32 @@ pub mod pallet {
 				response_status,
 			}) = PendingVaultRotation::<T, I>::get()
 			{
-				match response_status.consensus_outcome() {
-					Some(KeygenOutcome::Success(new_public_key)) => {
-						weight += T::WeightInfo::on_initialize_success();
-						Self::on_keygen_success(keygen_ceremony_id, new_public_key);
-					},
-					Some(KeygenOutcome::Failure(offenders)) => {
-						weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-						Self::on_keygen_failure(keygen_ceremony_id, offenders);
-					},
-					None => {
-						if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
-							T::KeygenResponseGracePeriod::get()
-						{
-							weight += T::WeightInfo::on_initialize_failure(
-								response_status.remaining_candidates.len() as u32,
-							);
-							log::debug!("Keygen response grace period has elapsed, reporting keygen failure.");
-							Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
-								keygen_ceremony_id,
-							));
-							Self::on_keygen_failure(
-								keygen_ceremony_id,
-								response_status.remaining_candidates,
-							);
-						}
-					},
+				let resolve = if response_status.remaining_candidate_count() == 0 {
+					log::debug!("All keygen candidates have reported, resolving outcome...");
+					true
+				} else if Self::has_grace_period_elapsed(current_block) {
+					log::debug!(
+						"Keygen response grace period has elapsed, reporting keygen failure."
+					);
+					Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
+						keygen_ceremony_id,
+					));
+					true
+				} else {
+					false
+				};
+
+				if resolve {
+					match response_status.resolve_keygen_outcome() {
+						KeygenOutcome::Success(new_public_key) => {
+							weight += T::WeightInfo::on_initialize_success();
+							Self::on_keygen_success(keygen_ceremony_id, new_public_key);
+						},
+						KeygenOutcome::Failure(offenders) => {
+							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
+							Self::on_keygen_failure(keygen_ceremony_id, offenders);
+						},
+					}
 				}
 			}
 
@@ -351,6 +379,18 @@ pub mod pallet {
 	#[pallet::getter(fn pending_vault_rotations)]
 	pub type PendingVaultRotation<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultRotationStatus<T, I>>;
+
+	/// Vault rotation statuses for the current epoch rotation.
+	#[pallet::storage]
+	#[pallet::getter(fn success_voters)]
+	pub type SuccessVoters<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
+
+	/// Vault rotation statuses for the current epoch rotation.
+	#[pallet::storage]
+	#[pallet::getter(fn failure_voters)]
+	pub type FailureVoters<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
 	/// Threshold key nonces for this chain.
 	#[pallet::storage]
@@ -664,6 +704,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::kill();
 		// TODO: Failure of one keygen should cause failure of all keygens.
 		StatusOfKeygen::<T, I>::put(KeygenStatus::Failed);
+	}
+
+	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {
+		block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
+			T::KeygenResponseGracePeriod::get()
 	}
 }
 
