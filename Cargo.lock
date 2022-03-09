@@ -4689,6 +4689,7 @@ dependencies = [
  "mockall 0.10.2",
  "sc-network",
  "sc-rpc",
+ "sc-service",
  "serde 1.0.130",
  "serde_json",
  "sp-core",
