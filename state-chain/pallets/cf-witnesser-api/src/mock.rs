@@ -245,6 +245,7 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }

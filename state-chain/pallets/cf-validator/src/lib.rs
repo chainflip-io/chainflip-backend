@@ -79,6 +79,22 @@ impl<T> Default for RotationStatus<T> {
 	}
 }
 
+/// Id type used for the Keygen and Signing ceremonies.
+pub type CeremonyId = u64;
+
+pub struct CeremonyIdProvider<T>(PhantomData<T>);
+
+impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
+	type CeremonyId = CeremonyId;
+
+	fn next_ceremony_id() -> Self::CeremonyId {
+		CeremonyIdCounter::<T>::mutate(|id| {
+			*id += 1;
+			*id
+		})
+	}
+}
+
 type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
 
 pub type Percentage = u8;
@@ -553,6 +569,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochExpiries<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+
+	/// Counter for generating unique ceremony ids.
+	#[pallet::storage]
+	#[pallet::getter(fn ceremony_id_counter)]
+	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {

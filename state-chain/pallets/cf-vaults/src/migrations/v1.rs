@@ -93,7 +93,7 @@ pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static s
 				.concat()
 				.as_slice()
 		),
-		"🏯 Can't find Ethereum vault."
+		"🏯 Can't find Ethereum vault at hash {:?}."
 	);
 	ensure!(
 		have_storage_value(
@@ -121,16 +121,14 @@ pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static 
 	let pre_migration_id_counter: u64 = Pallet::<T, I>::get_temp_storage("id_counter")
 		.ok_or("No id_counter written during the pre-migration checks")?;
 
-	let post_migration_id_counter = CeremonyIdCounter::<T, I>::get();
+	ensure!(
+		pre_migration_id_counter + 1 == T::CeremonyIdProvider::next_ceremony_id(),
+		"🏯 KeygenCeremonyIdCounter pre/post migration inconsistentcy."
+	);
 
 	log::info!(
-		"🏯 KeygenCeremonyIdCounter checked; Pre-migration: {}, Post-migration: {}",
+		"🏯 KeygenCeremonyIdCounter checked; Pre-migration ceremony Id: {}",
 		pre_migration_id_counter,
-		post_migration_id_counter
-	);
-	ensure!(
-		pre_migration_id_counter == post_migration_id_counter,
-		"CeremonyId counter has changed!"
 	);
 	Ok(())
 }

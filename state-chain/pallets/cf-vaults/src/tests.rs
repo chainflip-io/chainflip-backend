@@ -1,9 +1,9 @@
 use crate::{
-	mock::*, BlockHeightWindow, Error, Event as PalletEvent, KeygenOutcome,
+	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, KeygenOutcome,
 	KeygenResolutionPendingSince, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::AggKey;
-use cf_traits::{Chainflip, EpochInfo};
+use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, Chainflip, EpochInfo};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
@@ -12,6 +12,10 @@ fn last_event() -> Event {
 		.pop()
 		.expect("Event expected")
 		.event
+}
+
+fn current_ceremony_id() -> CeremonyId {
+	MockCeremonyIdProvider::<u64>::get()
 }
 
 const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
@@ -37,7 +41,7 @@ fn keygen_request_emitted() {
 		assert_eq!(
 			last_event(),
 			PalletEvent::<MockRuntime, _>::KeygenRequest(
-				VaultsPallet::ceremony_id_counter(),
+				current_ceremony_id(),
 				ALL_CANDIDATES.to_vec(),
 			)
 			.into()
@@ -63,7 +67,7 @@ fn keygen_success() {
 			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
-		let ceremony_id = VaultsPallet::ceremony_id_counter();
+		let ceremony_id = current_ceremony_id();
 
 		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
 
@@ -81,7 +85,7 @@ fn keygen_failure() {
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 
-		let ceremony_id = VaultsPallet::ceremony_id_counter();
+		let ceremony_id = current_ceremony_id();
 
 		// The ceremony failed.
 		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES.to_vec());
@@ -127,7 +131,7 @@ fn keygen_report_success() {
 			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
-		let ceremony_id = VaultsPallet::ceremony_id_counter();
+		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
 
@@ -208,7 +212,7 @@ fn keygen_report_failure() {
 			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
-		let ceremony_id = VaultsPallet::ceremony_id_counter();
+		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
 
@@ -283,7 +287,7 @@ fn keygen_report_failure() {
 fn test_grace_period() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
-		let ceremony_id = VaultsPallet::ceremony_id_counter();
+		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
 
@@ -326,7 +330,7 @@ fn vault_key_rotated() {
 		);
 
 		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
-		let ceremony_id = VaultsPallet::ceremony_id_counter();
+		let ceremony_id = current_ceremony_id();
 		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
