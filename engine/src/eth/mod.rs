@@ -895,7 +895,7 @@ pub trait EthObserver {
             let blocks_behind =
                 merged_stream_state.last_block_yielded - other_protocol_state.last_block_pulled;
 
-            // don't want to log on the first iteration
+            // we don't want to log on the first iteration
             if other_protocol_state.last_block_pulled != 0
                 && ((other_protocol_state.last_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
                     <= block_events.block_number)
@@ -959,8 +959,8 @@ pub trait EthObserver {
 
         /// Returns a block only if we are ready to yield this particular block
         /// Ok(Some) => Yield from unfold stream
-        /// Ok(None) => Something mundane occurred, just ignore and continue
-        /// Err - currently only occurs when the recovery fails => Terminate the unfold stream
+        /// Ok(None) => Something mundane occurred, just ignore and continue in the unfold stream
+        /// Err => only occurs when the recovery fails => Terminate the unfold stream
         async fn do_for_protocol<
             BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
             EventParameters: Debug,
