@@ -325,7 +325,7 @@ impl TryFrom<Block<H256>> for EthNumberBloom {
     fn try_from(block: Block<H256>) -> Result<Self, Self::Error> {
         if block.number.is_none() || block.logs_bloom.is_none() {
             Err(anyhow::Error::msg(
-                "HTTP block header did not contain necessary block number and/or logs bloom",
+                "Block<H256> did not contain necessary block number and/or logs bloom",
             ))
         } else {
             Ok(EthNumberBloom {
@@ -748,7 +748,7 @@ pub trait EthObserver {
                 )));
             }
         }
-        Err(anyhow::Error::msg("No events in safe head stream"))
+        Err(anyhow::Error::msg("No events in ETH safe head stream"))
     }
 
     /// Get an event stream for the contract, returning the stream only if the head of the stream is
@@ -766,7 +766,7 @@ pub trait EthObserver {
         let deployed_address = self.get_contract_address();
         slog::info!(
             logger,
-            "Subscribing to Ethereum events from contract at address: {:?}",
+            "Subscribing to ETH events from contract at address: {:?}",
             hex::encode(deployed_address)
         );
 
@@ -904,7 +904,7 @@ pub trait EthObserver {
                 slog::warn!(
                     merged_stream_state.logger,
                     #ETH_STREAM_BEHIND,
-                    "{} stream at ETH block {} but {} stream at ETH block {}",
+                    "{} stream at ETH block `{}` but {} stream at ETH block `{}`",
                     protocol_state.protocol,
                     block_events.block_number,
                     other_protocol_state.protocol,
@@ -928,31 +928,33 @@ pub trait EthObserver {
                         Ordering::Equal => {
                             slog::info!(
                                 logger,
-                                "ETH {} stream has caught up and returned block {}",
+                                "ETH {} stream has caught up and returned block `{}`",
                                 protocol_state.protocol,
                                 block_events.block_number
                             );
                             return Ok(block_events);
                         }
                         Ordering::Less => {
-                            slog::trace!(logger, "ETH {} stream pulled block {} but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
+                            slog::trace!(logger, "ETH {} stream pulled block `{}` but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
                         }
                         Ordering::Greater => {
                             panic!(
-                                "The {} input stream skipped blocks. This should not occur",
-                                protocol_state.protocol
+                                "ETH {} stream skipped blocks. Next block to yield was `{}` but got block `{}`. This should not occur",
+                                protocol_state.protocol,
+                                next_block_to_yield,
+                                block_events.block_number
                             );
                         }
                     },
                     Err(err) => {
                         return Err(anyhow::Error::msg(
-                            format!("The {} stream has failed after pulling block: {} while attempting to recover: {}", protocol_state.protocol, protocol_state.last_block_pulled, err),
+                            format!("ETH {} stream has failed after pulling block `{}` while attempting to recover. Error: {}", protocol_state.protocol, protocol_state.last_block_pulled, err),
                         ));
                     }
                 }
             }
             Err(anyhow::Error::msg(format!(
-                "The {} stream failed to yield any values when attempting to recover",
+                "ETH {} stream failed to yield any values when attempting to recover",
                 protocol_state.protocol,
             )))
         }
@@ -1067,7 +1069,7 @@ pub trait EthObserver {
                                 if let Some(events) = block_events.events {
                                     slog::info!(
                                         stream_state.merged_stream_state.logger,
-                                        "ETH Block: {} contains interesting events.",
+                                        "ETH block: {} contains interesting events",
                                         block_events.block_number
                                     );
                                     stream_state.merged_stream_state.events_to_yield =
