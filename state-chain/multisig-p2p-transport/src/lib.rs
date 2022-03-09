@@ -297,8 +297,9 @@ pub fn new_p2p_validator_network_node<
 					let mut state = self.state.write().unwrap();
 					if self.update_peer_mapping(&mut state, peer_id, port, ip_address) {
 						log::info!(
-							"Added reserved {} peer (Total Reserved: {})",
+							"Added reserved {} peer {} (Total Reserved: {})",
 							CHAINFLIP_P2P_PROTOCOL_NAME,
+							peer_id,
 							state.reserved_peers.len()
 						);
 						Ok(200)
@@ -317,8 +318,9 @@ pub fn new_p2p_validator_network_node<
 					if state.reserved_peers.remove(&peer_id).is_some() {
 						self.p2p_network_service.remove_reserved_peer(peer_id);
 						log::info!(
-							"Removed reserved {} peer (Total Reserved: {})",
+							"Removed reserved {} peer {} (Total Reserved: {})",
 							CHAINFLIP_P2P_PROTOCOL_NAME,
+							peer_id,
 							state.reserved_peers.len()
 						);
 						Ok(200)
