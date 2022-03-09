@@ -4678,6 +4678,7 @@ name = "multisig-p2p-transport"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bincode",
  "bs58",
  "futures 0.3.17",

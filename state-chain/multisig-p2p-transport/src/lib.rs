@@ -8,6 +8,7 @@
 pub use gen_client::Client as P2PRpcClient;
 pub use sc_network::PeerId;
 
+use async_trait::async_trait;
 use futures::{
 	channel::mpsc::{unbounded, UnboundedSender},
 	task::Spawn,
@@ -95,18 +96,20 @@ struct P2PValidatorNetworkNodeState {
 
 /// An abstration of the underlying network of peers.
 #[cfg_attr(test, automock)]
+#[async_trait]
 pub trait PeerNetwork {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
 	fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_reserved_peer(&self, peer_id: PeerId);
 	/// Write notification to network to peer id, over protocol
-	fn write_notification(&self, who: PeerId, message: Vec<u8>);
+	async fn write_notification(&self, who: PeerId, message: Vec<u8>);
 	/// Network event stream
 	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>>;
 }
 
 /// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
+#[async_trait]
 impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr) {
 		if let Err(err) = self.add_peers_to_reserved_set(
@@ -142,7 +145,7 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 		}
 	}
 
-	fn write_notification(&self, target: PeerId, message: Vec<u8>) {
+	async fn write_notification(&self, target: PeerId, message: Vec<u8>) {
 		self.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, message);
 	}
 
@@ -220,7 +223,7 @@ impl<
 			let p2p_network_service = self.p2p_network_service.clone();
 			self.message_sender_spawner.spawn("cf-peer-message-sender", async move {
 				while let Some(message) = receiver.recv().await {
-					p2p_network_service.write_notification(peer_id, message);
+					p2p_network_service.write_notification(peer_id, message).await;
 				}
 			});
 			self.p2p_network_service.reserve_peer(peer_id, port, ip_address);
@@ -503,41 +506,37 @@ pub fn new_p2p_validator_network_node<
 
 #[cfg(test)]
 mod tests {
-	use std::{
-		sync::{RwLockReadGuard, RwLockWriteGuard},
-		time::Duration,
-	};
+	use std::time::Duration;
 
 	use super::*;
 	use futures::Future;
 	use jsonrpc_core::MetaIoHandler;
 	use jsonrpc_core_client::transports::local;
 	use mockall::{predicate::eq, Sequence};
+	use tokio::sync::{Mutex, MutexGuard};
 
-	struct LockedMockPeerNetwork(RwLock<MockPeerNetwork>);
+	struct LockedMockPeerNetwork(Mutex<MockPeerNetwork>);
 	impl LockedMockPeerNetwork {
-		fn read(&self) -> RwLockReadGuard<MockPeerNetwork> {
-			self.0.read().unwrap()
-		}
-		fn write(&self) -> RwLockWriteGuard<MockPeerNetwork> {
-			self.0.write().unwrap()
+		fn lock(&self) -> MutexGuard<MockPeerNetwork> {
+			self.0.try_lock().unwrap()
 		}
 	}
+	#[async_trait]
 	impl PeerNetwork for LockedMockPeerNetwork {
 		fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr) {
-			self.read().reserve_peer(peer_id, port, address)
+			self.lock().reserve_peer(peer_id, port, address)
 		}
 
 		fn remove_reserved_peer(&self, peer_id: PeerId) {
-			self.read().remove_reserved_peer(peer_id)
+			self.lock().remove_reserved_peer(peer_id)
 		}
 
-		fn write_notification(&self, target: PeerId, message: Vec<u8>) {
-			self.read().write_notification(target, message)
+		async fn write_notification(&self, target: PeerId, message: Vec<u8>) {
+			self.lock().write_notification(target, message).await;
 		}
 
 		fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>> {
-			self.read().event_stream()
+			self.lock().event_stream()
 		}
 	}
 
@@ -551,8 +550,8 @@ mod tests {
 		let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let network_expectations =
-			Arc::new(LockedMockPeerNetwork(RwLock::new(MockPeerNetwork::new())));
-		network_expectations.write().expect_event_stream().return_once(move || {
+			Arc::new(LockedMockPeerNetwork(Mutex::new(MockPeerNetwork::new())));
+		network_expectations.lock().expect_event_stream().return_once(move || {
 			Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(event_receiver))
 		});
 
@@ -579,7 +578,7 @@ mod tests {
 		tokio::runtime::Handle::current().spawn(server);
 		tokio::runtime::Handle::current().spawn(p2p_message_handler_future);
 
-		network_expectations.write().checkpoint();
+		network_expectations.lock().checkpoint();
 
 		(event_sender, client, internal_state, network_expectations, task_manager)
 	}
@@ -593,19 +592,19 @@ mod tests {
 		final_state: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
 		c: C,
 	) {
-		network_expectations.write().checkpoint();
+		network_expectations.lock().checkpoint();
 		for (peer_id, port, ip_address) in replaces {
 			let mut seq = Sequence::new();
 			let peer_id: PeerId = peer_id.try_into().unwrap();
 			network_expectations
-				.write()
+				.lock()
 				.expect_remove_reserved_peer()
 				.with(eq(peer_id))
 				.times(1)
 				.in_sequence(&mut seq)
 				.return_const(());
 			network_expectations
-				.write()
+				.lock()
 				.expect_reserve_peer()
 				.with(eq(peer_id), eq(port), eq(ip_address))
 				.times(1)
@@ -615,7 +614,7 @@ mod tests {
 		for peer_id in removes {
 			let peer_id: PeerId = peer_id.try_into().unwrap();
 			network_expectations
-				.write()
+				.lock()
 				.expect_remove_reserved_peer()
 				.with(eq(peer_id))
 				.times(1)
@@ -624,14 +623,14 @@ mod tests {
 		for (peer_id, port, ip_address) in adds {
 			let peer_id: PeerId = peer_id.try_into().unwrap();
 			network_expectations
-				.write()
+				.lock()
 				.expect_reserve_peer()
 				.with(eq(peer_id), eq(port), eq(ip_address))
 				.times(1)
 				.return_const(());
 		}
 		c().await;
-		network_expectations.write().checkpoint();
+		network_expectations.lock().checkpoint();
 		assert_eq!(
 			internal_state
 				.read()
@@ -919,7 +918,7 @@ mod tests {
 
 		let message = vec![4, 5, 6, 7, 8];
 
-		network_expectations.write().expect_reserve_peer().times(2).return_const(());
+		network_expectations.lock().expect_reserve_peer().times(2).return_const(());
 		client
 			.add_peer(peer_0_transferable.clone(), port_0, ip_address_0)
 			.await
@@ -928,20 +927,20 @@ mod tests {
 			.add_peer(peer_1_transferable.clone(), port_1, ip_address_1)
 			.await
 			.unwrap();
-		network_expectations.write().checkpoint();
+		network_expectations.lock().checkpoint();
 
 		// Tests
 
 		// All peers get sent message
 
 		network_expectations
-			.write()
+			.lock()
 			.expect_write_notification()
 			.with(eq(peer_0), eq(message.clone()))
 			.times(1)
 			.return_const(());
 		network_expectations
-			.write()
+			.lock()
 			.expect_write_notification()
 			.with(eq(peer_1), eq(message.clone()))
 			.times(1)
@@ -955,12 +954,11 @@ mod tests {
 				.await,
 			Ok(_)
 		));
-		network_expectations.write().checkpoint();
 
 		// Peer gets sent message
 
 		network_expectations
-			.write()
+			.lock()
 			.expect_write_notification()
 			.with(eq(peer_0), eq(message.clone()))
 			.times(1)
@@ -969,7 +967,6 @@ mod tests {
 			client.send_message(vec![peer_0_transferable.clone()], message.clone()).await,
 			Ok(_)
 		));
-		network_expectations.write().checkpoint();
 
 		// Partially unreserved peers cause message to be not be sent
 
@@ -989,6 +986,10 @@ mod tests {
 			client.send_message(vec![peer_2_transferable.clone()], message.clone()).await,
 			Err(_)
 		));
+
+		// Need to make sure spawned senders finish before checking expectations, we currently don't
+		// have a better method
+		tokio::time::sleep(Duration::from_millis(100));
 	}
 
 	#[tokio::test]
