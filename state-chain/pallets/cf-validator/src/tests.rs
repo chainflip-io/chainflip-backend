@@ -436,5 +436,29 @@ fn register_peer_id() {
 			ValidatorPallet::validator_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 11))
 		);
+
+		// Updating only the ip address works
+		assert_ok!(ValidatorPallet::register_peer_id(
+			Origin::signed(BOB),
+			bob_peer_public_key,
+			40043,
+			12,
+			bob_peer_keypair.sign(&BOB.encode()[..]),
+		));
+		assert_eq!(
+			last_event(),
+			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+				BOB,
+				bob_peer_public_key,
+				40043,
+				12
+			)),
+			"should emit event on register peer id"
+		);
+		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
+		assert_eq!(
+			ValidatorPallet::validator_peer_id(&BOB),
+			Some((BOB, bob_peer_public_key, 40043, 12))
+		);
 	});
 }
