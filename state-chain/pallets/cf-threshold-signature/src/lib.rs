@@ -160,7 +160,7 @@ pub mod pallet {
 		type OfflineReporter: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
 
 		/// CeremonyId source.
-		type CeremonyIdCounter: CeremonyIdProvider<CeremonyId = CeremonyId>;
+		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
 
 		/// Timeout after which we consider a threshold signature ceremony to have failed.
 		#[pallet::constant]
@@ -435,7 +435,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Emits a request event, stores its context, and returns its id.
 	fn request_attempt(context: T::SigningContext, attempt: u8) -> u64 {
 		// Get a new id.
-		let id = T::CeremonyIdCounter::next_ceremony_id();
+		let id = T::CeremonyIdProvider::next_ceremony_id();
 
 		// Get the current signing key.
 		let key_id = T::KeyProvider::current_key_id();

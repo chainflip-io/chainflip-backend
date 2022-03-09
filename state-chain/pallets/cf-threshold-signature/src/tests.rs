@@ -44,7 +44,7 @@ fn tick(cfes: &[MockCfe]) {
 }
 
 fn current_ceremony_id() -> CeremonyId {
-	<Test as crate::Config<Instance1>>::CeremonyIdCounter::get()
+	<Test as crate::Config<Instance1>>::CeremonyIdProvider::get()
 }
 
 impl MockCfe {

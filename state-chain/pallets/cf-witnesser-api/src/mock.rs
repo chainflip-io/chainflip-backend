@@ -192,7 +192,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider<Ethereum, <Self as Chainflip>::KeyId>;
 	type OfflineReporter = MockOfflineReporter;
-	type CeremonyIdCounter = MockCeremonyIdProvider<u64>;
+	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();
