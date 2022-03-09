@@ -669,7 +669,10 @@ impl_runtime_apis! {
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
 		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
 			// Use unwrap here otherwise the error is swallowed silently.
-			let weight = Executive::try_runtime_upgrade().unwrap();
+			let weight = Executive::try_runtime_upgrade().map_err(|e| {
+				log::error!("{}", e);
+				e
+			})?;
 			Ok((weight, BlockWeights::get().max_block))
 		}
 	}
