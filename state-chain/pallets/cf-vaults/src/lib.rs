@@ -142,7 +142,11 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		None
 	}
 
+	/// Returns `Some(blamed_nodes)` *iff* at least `self.success_threshold()` number of nodes voted
+	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
+	/// votes.
 	///
+	/// If less than `self.success_threshold()` voted for failure, returns `None`.
 	fn failure_consensus(&self) -> Option<BTreeSet<T::ValidatorId>> {
 		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
 			self.success_threshold() as usize
