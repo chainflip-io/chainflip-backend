@@ -7,7 +7,6 @@ tasks:
 github:
   prebuilds:
     branches: true
-    pullRequestsFromForks: true
     addBadge: true
     addComment: false
     pullRequests: true
