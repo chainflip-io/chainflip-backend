@@ -5,6 +5,7 @@
 pub mod benchmarking;
 mod chainflip;
 pub mod constants;
+mod migrations;
 #[cfg(test)]
 mod tests;
 use cf_chains::Ethereum;
@@ -18,6 +19,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use migrations::DeleteRewardsPallet;
 pub use pallet_cf_environment::cfe::CfeSettings;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -539,7 +541,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
-	(),
+	migrations::VersionedMigration<DeleteRewardsPallet, 112>,
 >;
 
 impl_runtime_apis! {

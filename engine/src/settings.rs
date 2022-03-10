@@ -27,7 +27,8 @@ pub struct StateChain {
 
 impl StateChain {
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        parse_websocket_url(&self.ws_endpoint).map_err(|e| ConfigError::Message(e.to_string()))?;
+        parse_websocket_endpoint(&self.ws_endpoint)
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
         Ok(())
     }
 }
@@ -183,7 +184,10 @@ impl Settings {
 
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        parse_websocket_url(&self.eth.ws_node_endpoint)
+        parse_websocket_endpoint(&self.eth.ws_node_endpoint)
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
+
+        parse_http_endpoint(&self.eth.http_node_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
         self.state_chain.validate_settings()?;
@@ -259,24 +263,34 @@ impl Settings {
     }
 }
 
-/// Parse the URL and check that it is a valid websocket url
-pub fn parse_websocket_url(url: &str) -> Result<Url> {
-    let issue_list_url = Url::parse(url)?;
-    let scheme = issue_list_url.scheme();
-    if scheme != "ws" && scheme != "wss" {
+/// Validate a websocket endpoint URL
+pub fn parse_websocket_endpoint(url: &str) -> Result<Url> {
+    parse_endpoint(vec!["ws", "wss"], url)
+}
+
+/// Validate a http endpoint URL
+pub fn parse_http_endpoint(url: &str) -> Result<Url> {
+    parse_endpoint(vec!["http", "https"], url)
+}
+
+/// Parse the URL to check that it is the correct scheme and a valid endpoint URL
+fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
+    let parsed_url = Url::parse(url)?;
+    let scheme = parsed_url.scheme();
+    if !valid_schemes.contains(&scheme) {
         return Err(anyhow::Error::msg(format!("Invalid scheme: `{}`", scheme)));
     }
-    if issue_list_url.host() == None
-        || issue_list_url.username() != ""
-        || issue_list_url.password() != None
-        || issue_list_url.query() != None
-        || issue_list_url.fragment() != None
-        || issue_list_url.cannot_be_a_base()
+    if parsed_url.host() == None
+        || parsed_url.username() != ""
+        || parsed_url.password() != None
+        || parsed_url.query() != None
+        || parsed_url.fragment() != None
+        || parsed_url.cannot_be_a_base()
     {
         return Err(anyhow::Error::msg("Invalid URL data."));
     }
 
-    Ok(issue_list_url)
+    Ok(parsed_url)
 }
 
 fn is_valid_db_path(db_file: &Path) -> Result<()> {
@@ -320,23 +334,41 @@ mod tests {
     }
 
     #[test]
-    fn test_websocket_url_parsing() {
-        assert_ok!(parse_websocket_url(
+    fn test_websocket_endpoint_url_parsing() {
+        assert_ok!(parse_websocket_endpoint(
             "wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"
         ));
-        assert_ok!(parse_websocket_url(
+        assert_ok!(parse_websocket_endpoint(
             "wss://network.my_eth_node:80/<secret_key>"
         ));
-        assert_ok!(parse_websocket_url(
+        assert_ok!(parse_websocket_endpoint(
             "wss://network.my_eth_node/<secret_key>"
         ));
-        assert_ok!(parse_websocket_url("ws://network.my_eth_node/<secret_key>"));
-        assert_ok!(parse_websocket_url("wss://network.my_eth_node"));
-        assert!(parse_websocket_url(
-            "https://mainnet.infura.io/v3/3afd67225fe34be7b185442fab14a4ba"
-        )
-        .is_err());
-        assert!(parse_websocket_url("").is_err());
+        assert_ok!(parse_websocket_endpoint(
+            "ws://network.my_eth_node/<secret_key>"
+        ));
+        assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node"));
+        assert!(parse_websocket_endpoint("https://wrong_scheme.com").is_err());
+        assert!(parse_websocket_endpoint("").is_err());
+    }
+
+    #[test]
+    fn test_http_endpoint_url_parsing() {
+        assert_ok!(parse_http_endpoint(
+            "http://network.my_eth_node:80/d2er2easdfasdfasdf2e"
+        ));
+        assert_ok!(parse_http_endpoint(
+            "http://network.my_eth_node:80/<secret_key>"
+        ));
+        assert_ok!(parse_http_endpoint(
+            "http://network.my_eth_node/<secret_key>"
+        ));
+        assert_ok!(parse_http_endpoint(
+            "https://network.my_eth_node/<secret_key>"
+        ));
+        assert_ok!(parse_http_endpoint("http://network.my_eth_node"));
+        assert!(parse_http_endpoint("wss://wrong_scheme.com").is_err());
+        assert!(parse_http_endpoint("").is_err());
     }
 
     #[test]

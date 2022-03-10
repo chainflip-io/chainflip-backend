@@ -16,7 +16,7 @@ The set of Winners is the subset of Bidders which meet the following criteria:
 ## Terminology
 
 - Bidder: An entity that has placed a bid and would hope to be included in the winning set
-- Winners: Those Bidders that have been evaluated and have been included in the the winning set
+- Winners: Those Bidders that have been evaluated and have been included in the winning set
 - Minimum Bid: The minimum bid required to be included in the Winners set
 - Backup Validator: A group of bidders who make up a group size of ideally 1/3 of the desired validator
   group size.  They are expected to act as a reserve in that they are fully functioning nodes that are ready

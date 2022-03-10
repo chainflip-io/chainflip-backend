@@ -407,12 +407,24 @@ pub mod pallet {
 			// TODO Consider ensuring is non-private IP / valid IP
 
 			let account_id = ensure_signed(origin)?;
+
+			// Note this signature verify doesn't need replay protection as you need the
+			// account_id's private key to pass the above ensure_signed which has replay protection.
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
 
-			if let Some((_, existing_peer_id, _, _)) = AccountPeerMapping::<T>::get(&account_id) {
+			if let Some((_, existing_peer_id, existing_port, existing_ip_address)) =
+				AccountPeerMapping::<T>::get(&account_id)
+			{
+				if (existing_peer_id, existing_port, existing_ip_address) ==
+					(peer_id, port, ip_address)
+				{
+					// Mapping hasn't changed
+					return Ok(().into())
+				}
+
 				if existing_peer_id != peer_id {
 					ensure!(
 						!MappedPeers::<T>::contains_key(&peer_id),
