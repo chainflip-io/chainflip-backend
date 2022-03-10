@@ -40,7 +40,11 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
-  #        user: ci
+  rust-base-ci:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
+        user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
@@ -369,7 +373,8 @@ jobs:
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
 
   cargo-build-and-test:
-    <<: *cargo-base-job
+    executor: rust-base-ci
+    resource_class: xlarge
     steps:
       - checkout
       - merge_target

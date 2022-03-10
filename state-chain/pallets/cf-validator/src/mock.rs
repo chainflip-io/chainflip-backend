@@ -109,6 +109,7 @@ pub struct MockAuctioneer;
 
 thread_local! {
 	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, AuctionError>> = RefCell::new(Ok(Default::default()));
+	pub static AUCTION_WINNERS: RefCell<Option<Vec<ValidatorId>>> = RefCell::new(None);
 }
 
 impl MockAuctioneer {
@@ -127,7 +128,11 @@ impl Auctioneer for MockAuctioneer {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| (*cell.borrow()).clone())
 	}
 
-	fn update_validator_status(_winners: &[Self::ValidatorId]) {}
+	fn update_validator_status(winners: &[Self::ValidatorId]) {
+		AUCTION_WINNERS.with(|cell| {
+			*cell.borrow_mut() = Some(winners.to_vec());
+		});
+	}
 }
 
 pub struct MockIsOutgoing;
