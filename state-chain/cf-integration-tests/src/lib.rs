@@ -1348,19 +1348,10 @@ mod tests {
 			Flip::locked_balance(account_id)
 		}
 
-		// Shows which validators are bonded
-		fn show_bonds(accoutns: Vec<&AccountId>, epoch: u32) {
-			println!("Current Epoch: {:?}", epoch);
-			for account in accoutns {
-				let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(account);
-				println!("validator: {:?}, epochs: {:?}", account, active_epochs);
-			}
-		}
-
 		// Checks if the validator is bonded to the highest MAB
 		fn check_bond_integrity(accounts: Vec<&AccountId>) {
 			for account in accounts {
-				// If an validator is bonded at all we ignore it
+				// If an validator is not bonded at all we ignore it
 				if !EpochHistory::<Runtime>::active_epochs_for_validator(account).is_empty() {
 					assert_eq!(get_max_bond(account), get_current_validator_bond(account));
 				}
@@ -1368,6 +1359,9 @@ mod tests {
 		}
 
 		#[test]
+		// We create a network with an active set of 3 validators and a total of 5 nodes. We run
+		// through 4 epochs and change the stake of the different validators. After every epoch, we
+		// check if each validator is bonded for his highest active epoch.
 		fn check_bonds_during_epoch_transition() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			const ACTIVE_SET_SIZE: u32 = 3;
@@ -1401,8 +1395,6 @@ mod tests {
 
 					// Epoch 1
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					testnet.move_forward_blocks(1);
-
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 					assert_eq!(
 						3,
@@ -1414,7 +1406,6 @@ mod tests {
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
 					let current_validators = Validator::current_validators();
-					show_bonds(vec![node_1, node_2, node_3, node_4, node_5], 2);
 					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
 
 					// Expect node 1, 2, 3 with the highest stake in the validator set
@@ -1429,9 +1420,7 @@ mod tests {
 
 					// Epoch 3
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					testnet.move_forward_blocks(1);
 					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
-					show_bonds(vec![node_1, node_2, node_3, node_4, node_5], 3);
 					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
 					let current_validators = Validator::current_validators();
 
@@ -1447,7 +1436,6 @@ mod tests {
 
 					// Epoch 4
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					show_bonds(vec![node_1, node_2, node_3, node_4, node_5], 4);
 					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
 					assert_eq!(4, Validator::epoch_index(), "We should be in the next epoch");
 
@@ -1456,6 +1444,7 @@ mod tests {
 
 					assert!(current_validators.contains(node_3));
 					assert!(current_validators.contains(node_4));
+
 					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
 				});
 		}
