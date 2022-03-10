@@ -1340,7 +1340,6 @@ mod tests {
 				.map(|epoch| EpochHistory::<Runtime>::epoch_bond(*epoch))
 				.max()
 				.expect("validator not bonded")
-				.into()
 		}
 
 		// Returns the real current bond of a validator
@@ -1377,7 +1376,7 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					let (mut testnet, nodes) =
-						network::Network::create(5 as u8, &Validator::current_validators());
+						network::Network::create(5_u8, &Validator::current_validators());
 
 					// Define nodes
 					let node_1 = nodes.get(0).unwrap();

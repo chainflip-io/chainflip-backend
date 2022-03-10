@@ -134,6 +134,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 
+		/// Ends an epoch
 		type EpochExpiryHandler: EpochExpiry;
 	}
 
@@ -188,7 +189,6 @@ pub mod pallet {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				// LastExpiredEpoch::<T>::set(epoch_index);
 				T::EpochExpiryHandler::expire_epoch(epoch_index);
 			}
 
