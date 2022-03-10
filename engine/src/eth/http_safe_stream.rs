@@ -47,7 +47,7 @@ where
                     Err(e) => break Some((Err(e), state)),
                 };
 
-                if unsafe_block_number + U64::from(safety_margin) < state.last_head_fetched {
+                if unsafe_block_number + safety_margin < state.last_head_fetched {
                     break Some((Err(anyhow::Error::msg( format!("Fetched ETH block number ({}) is more than {} blocks behind the last fetched ETH block number ({})", unsafe_block_number, safety_margin, state.last_head_fetched))), state));
                 }
                 state.last_head_fetched = unsafe_block_number;
@@ -59,7 +59,7 @@ where
                     .saturating_sub(U64::from(safety_margin))
             } else {
                 // the last block yielded was safe, so the next is +1
-                state.last_block_yielded + U64::from(1)
+                state.last_block_yielded + 1
             };
             if next_block_to_yield + U64::from(safety_margin) <= state.last_head_fetched {
                 break Some((
