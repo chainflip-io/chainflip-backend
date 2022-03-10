@@ -181,7 +181,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		// If and only if *all* candidates agree on the same key, return success.
 		if let Some((key, votes)) = self.success_votes.iter().next() {
 			if *votes == self.candidate_count {
-				return KeygenOutcome::Success(key.clone())
+				return KeygenOutcome::Success(*key)
 			}
 		}
 

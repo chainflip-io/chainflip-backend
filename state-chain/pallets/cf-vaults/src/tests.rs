@@ -553,7 +553,7 @@ mod keygen_reporting {
 			1..=outcomes.len() as u64,
 		));
 
-		for (index, outcome) in outcomes.into_iter().enumerate() {
+		for (index, outcome) in outcomes.iter().enumerate() {
 			let id = 1 + index as u64;
 			match outcome {
 				ReportedOutcome::Success =>
