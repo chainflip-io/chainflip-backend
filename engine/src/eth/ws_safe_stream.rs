@@ -21,16 +21,16 @@ where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
-        last_block_yielded: U64,
+        last_block_pulled: Option<U64>,
         unsafe_block_headers: VecDeque<EthNumberBloom>,
     }
-    let init_data = StreamAndBlocks {
+    let init_state = StreamAndBlocks {
         stream: Box::pin(header_stream),
-        last_block_yielded: U64::from(0),
+        last_block_pulled: None,
         unsafe_block_headers: Default::default(),
     };
 
-    Box::pin(stream::unfold(init_data, move |mut state| async move {
+    Box::pin(stream::unfold(init_state, move |mut state| async move {
         loop {
             if let Some(header) = state.stream.next().await {
                 // NB: Here we are returning the head error, as if it were a block error
@@ -48,22 +48,27 @@ where
                 };
 
                 // Terminate stream if we have skipped into the future
-                let is_first_iteration = state.last_block_yielded == U64::from(0);
-                if !is_first_iteration
-                    && current_block_number > state.last_block_yielded + safety_margin + 1
-                {
-                    break None;
+                if let Some(last_block_pulled) = state.last_block_pulled {
+                    if current_block_number > last_block_pulled + 1 {
+                        break None;
+                    }
                 }
+
+                state.last_block_pulled = Some(current_block_number);
 
                 if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
                     let last_unsafe_block_number = last_unsafe_block_header.block_number;
                     assert!(current_block_number <= last_unsafe_block_number + 1);
-                    if current_block_number <= last_unsafe_block_number {
-                        // if we receive two of the same block number then we still need to drop the first
-                        let reorg_depth =
-                            (last_unsafe_block_number - current_block_number) + U64::from(1);
 
-                        (0..reorg_depth.as_u64()).for_each(|_| {
+                    // if we receive two of the same block number then we still need to drop the first
+                    // hence + 1
+                    let reorg_depth =
+                        ((last_unsafe_block_number + 1) - current_block_number).as_u64();
+
+                    if reorg_depth > safety_margin {
+                        break None;
+                    } else if reorg_depth > 0 {
+                        (0..reorg_depth).for_each(|_| {
                             state.unsafe_block_headers.pop_back();
                         });
                     }
@@ -78,7 +83,6 @@ where
                     if header.block_number.saturating_add(U64::from(safety_margin))
                         <= current_block_number
                     {
-                        state.last_block_yielded = header.block_number;
                         break Some((
                             Ok(state
                                 .unsafe_block_headers
@@ -294,6 +298,35 @@ pub mod tests {
         assert_eq!(
             stream.next().await.unwrap().unwrap(),
             first_block.unwrap().into()
+        );
+
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn safe_stream_terminates_when_reorg_further_back_than_safety_margin() {
+        let first_block = block_header(1, 11);
+        let second_block = block_header(2, 12);
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            second_block.clone(),
+            block_header(4, 13),
+            block_header(6, 14),
+            block_header(41, 4),
+            block_header(51, 5),
+            block_header(61, 6),
+        ]);
+
+        let mut stream = safe_ws_head_stream(header_stream, 2);
+
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            first_block.unwrap().into()
+        );
+
+        assert_eq!(
+            stream.next().await.unwrap().unwrap(),
+            second_block.unwrap().into()
         );
 
         assert!(stream.next().await.is_none());
