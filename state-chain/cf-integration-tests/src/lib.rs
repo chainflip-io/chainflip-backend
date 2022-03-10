@@ -1325,4 +1325,139 @@ mod tests {
 				});
 		}
 	}
+
+	mod bond {
+		use super::*;
+		use cf_traits::{EpochInfo, HistoricalEpoch, StakeTransfer};
+		use pallet_cf_validator::EpochHistory;
+		use state_chain_runtime::Validator;
+
+		// Returns the highest bond for an validator from all currently active epochs
+		fn get_max_bond(account_id: &AccountId) -> u128 {
+			let epochs = EpochHistory::<Runtime>::active_epochs_for_validator(account_id);
+			epochs
+				.iter()
+				.map(|epoch| EpochHistory::<Runtime>::epoch_bond(*epoch))
+				.max()
+				.expect("validator not bonded")
+				.into()
+		}
+
+		// Returns the real current bond of a validator
+		fn get_current_validator_bond(account_id: &AccountId) -> u128 {
+			Flip::locked_balance(account_id)
+		}
+
+		// Shows which validators are bonded
+		fn show_bonds(accoutns: Vec<&AccountId>, epoch: u32) {
+			println!("Current Epoch: {:?}", epoch);
+			for account in accoutns {
+				let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(account);
+				println!("validator: {:?}, epochs: {:?}", account, active_epochs);
+			}
+		}
+
+		// Checks if the validator is bonded to the highest MAB
+		fn check_bond_integrity(accounts: Vec<&AccountId>) {
+			for account in accounts {
+				// If an validator is bonded at all we ignore it
+				if !EpochHistory::<Runtime>::active_epochs_for_validator(account).is_empty() {
+					assert_eq!(get_max_bond(account), get_current_validator_bond(account));
+				}
+			}
+		}
+
+		#[test]
+		fn check_bonds_during_epoch_transition() {
+			const EPOCH_BLOCKS: BlockNumber = 100;
+			const ACTIVE_SET_SIZE: u32 = 3;
+			const GENESIS_BALANCE: FlipBalance = 1;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.accounts(vec![
+					(AccountId::from(ALICE), GENESIS_BALANCE),
+					(AccountId::from(BOB), GENESIS_BALANCE),
+					(AccountId::from(CHARLIE), GENESIS_BALANCE),
+				])
+				.max_validators(ACTIVE_SET_SIZE)
+				.build()
+				.execute_with(|| {
+					let (mut testnet, nodes) =
+						network::Network::create(5 as u8, &Validator::current_validators());
+
+					// Define nodes
+					let node_1 = nodes.get(0).unwrap();
+					let node_2 = nodes.get(1).unwrap();
+					let node_3 = nodes.get(2).unwrap();
+					let node_4 = nodes.get(3).unwrap();
+					let node_5 = nodes.get(4).unwrap();
+
+					// Stake the nodes
+					testnet.stake_manager_contract.stake(node_1.clone(), 6);
+					testnet.stake_manager_contract.stake(node_2.clone(), 6);
+					testnet.stake_manager_contract.stake(node_3.clone(), 5);
+					testnet.stake_manager_contract.stake(node_4.clone(), 2);
+					testnet.stake_manager_contract.stake(node_5.clone(), 1);
+
+					// Epoch 1
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(1);
+
+					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						3,
+						Validator::current_validators().len(),
+						"we should have 3 active validator"
+					);
+
+					// Epoch 2
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					let current_validators = Validator::current_validators();
+					show_bonds(vec![node_1, node_2, node_3, node_4, node_5], 2);
+					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
+
+					// Expect node 1, 2, 3 with the highest stake in the validator set
+					assert!(current_validators.contains(node_1));
+					assert!(current_validators.contains(node_2));
+					assert!(current_validators.contains(node_3));
+
+					// Restake node 4 and 5
+					testnet.stake_manager_contract.stake(node_3.clone(), 7);
+					testnet.stake_manager_contract.stake(node_4.clone(), 9);
+					testnet.stake_manager_contract.stake(node_5.clone(), 9);
+
+					// Epoch 3
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(1);
+					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
+					show_bonds(vec![node_1, node_2, node_3, node_4, node_5], 3);
+					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
+					let current_validators = Validator::current_validators();
+
+					// Expect node 4 and 5 in the new validator set
+					assert!(current_validators.contains(node_3));
+					assert!(current_validators.contains(node_4));
+					assert!(current_validators.contains(node_5));
+
+					// Lower the stake again
+					testnet.stake_manager_contract.stake(node_3.clone(), 6);
+					testnet.stake_manager_contract.stake(node_4.clone(), 6);
+					testnet.stake_manager_contract.stake(node_5.clone(), 6);
+
+					// Epoch 4
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					show_bonds(vec![node_1, node_2, node_3, node_4, node_5], 4);
+					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
+					assert_eq!(4, Validator::epoch_index(), "We should be in the next epoch");
+
+					// Expect node 4 and 5 in the new validator set
+					let current_validators = Validator::current_validators();
+
+					assert!(current_validators.contains(node_3));
+					assert!(current_validators.contains(node_4));
+					check_bond_integrity(vec![node_1, node_2, node_3, node_4, node_5]);
+				});
+		}
+	}
 }
