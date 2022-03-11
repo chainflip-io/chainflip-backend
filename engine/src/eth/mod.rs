@@ -788,7 +788,8 @@ pub trait EthObserver {
 
         let eth_head_stream = eth_ws_rpc.subscribe_new_heads().await?;
 
-        let safe_ws_head_stream = safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN);
+        let safe_ws_head_stream =
+            safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN, &logger);
 
         let safe_ws_block_events = self
             .block_events_stream_from_head_stream(
@@ -804,6 +805,7 @@ pub trait EthObserver {
             eth_http_rpc.clone(),
             HTTP_POLL_INTERVAL,
             ETH_BLOCK_SAFETY_MARGIN,
+            &logger,
         )
         .await;
 
