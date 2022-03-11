@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, *};
-use cf_traits::{AuctionError, IsOutgoing};
+use cf_traits::IsOutgoing;
 use frame_support::{assert_noop, assert_ok};
 use sp_runtime::traits::Zero;
 
@@ -90,7 +90,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 	new_test_ext().execute_with(|| {
 		let epoch = 10;
 		initialise_validator(epoch);
-		MockAuctioneer::set_run_behaviour(Err(AuctionError::NotEnoughBidders));
+		MockAuctioneer::set_run_behaviour(Err("auction failed"));
 		run_to_block(epoch);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);

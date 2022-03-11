@@ -216,7 +216,7 @@ pub mod pallet {
 						}
 					},
 					Err(e) =>
-						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e),
+						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
 					match T::VaultRotator::get_keygen_status() {
