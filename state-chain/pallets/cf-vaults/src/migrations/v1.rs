@@ -85,6 +85,24 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static str> {
 	ensure!(StorageVersion::get::<Pallet<T, I>>() == releases::V0, "Expected storage version V0.");
 
+	ensure!(
+		have_storage_value(
+			PALLET_NAME_V0,
+			b"Vaults",
+			[100u32.blake2_128_concat(), ChainId::Ethereum.blake2_128_concat()]
+				.concat()
+				.as_slice()
+		),
+		"🏯 Can't find Ethereum vault."
+	);
+	ensure!(
+		have_storage_value(
+			PALLET_NAME_V0,
+			b"ChainNonces",
+			ChainId::Ethereum.blake2_128_concat().as_slice()
+		),
+		"🏯 Can't find Ethereum nonce."
+	);
 	let pre_migration_id_counter: u64 =
 		get_storage_value(b"Vaults", b"KeygenCeremonyIdCounter", b"").unwrap_or_else(|| {
 			log::warn!("🏯 Couldn't extract old id counter, assuming default");

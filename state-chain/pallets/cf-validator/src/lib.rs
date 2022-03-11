@@ -32,9 +32,10 @@ pub mod releases {
 	use frame_support::traits::StorageVersion;
 	// Genesis version
 	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - adds Bond, Validator and LastExpiredEpoch storage items, kills the Force storage
-	// item
+	/// Version 1 - adds Bond and Validator.
 	pub const V1: StorageVersion = StorageVersion::new(1);
+	/// Version 2 - Add LastExpiredEpoch, kill the Force storage item
+	pub const V2: StorageVersion = StorageVersion::new(2);
 }
 
 pub type ValidatorSize = u32;
@@ -91,7 +92,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(releases::V2)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -241,9 +242,9 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				releases::V1.put::<Pallet<T>>();
-				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V2.put::<Pallet<T>>();
+				migrations::v2::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			} else {
 				T::DbWeight::get().reads(1)
 			}
@@ -251,8 +252,8 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::pre_migrate::<T, Self>()
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v2::pre_migrate::<T, Self>()
 			} else {
 				Ok(())
 			}
@@ -261,7 +262,7 @@ pub mod pallet {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
 			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::post_migrate::<T, Self>()
+				migrations::v2::post_migrate::<T, Self>()
 			} else {
 				Ok(())
 			}
