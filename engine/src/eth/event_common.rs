@@ -77,7 +77,7 @@ mod tests {
                 .unwrap();
 
         let event = EventWithCommon::decode(
-            &key_manager.decode_log_closure().unwrap(),
+            key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
                 topics: vec![H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")

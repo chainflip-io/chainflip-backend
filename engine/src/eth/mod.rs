@@ -739,7 +739,7 @@ pub trait EthObserver {
                 .fuse();
                 let eth_rpc_c = eth_rpc.clone();
 
-                let decode_log_fn = Arc::new(self.decode_log_closure()?);
+                let decode_log_fn = self.decode_log_closure()?;
 
                 // convert from heads to events
                 let events = past_and_fut_heads.then(move |header| {
@@ -1077,7 +1077,7 @@ pub trait EthObserver {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>;
+    ) -> Result<Arc<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>>;
 
     async fn handle_event<RpcClient>(
         &self,

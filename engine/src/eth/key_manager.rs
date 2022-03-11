@@ -145,13 +145,13 @@ impl EthObserver for KeyManager {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>
+    ) -> Result<Arc<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>>
     {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
-        Ok(Box::new(
+        Ok(Arc::new(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
                 Ok(if signature == key_change.signature {
                     let log = key_change.event.parse_log(raw_log)?;
@@ -164,7 +164,7 @@ impl EthObserver for KeyManager {
                     KeyManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
                 })
             },
-        ))
+        )))
     }
 
     fn get_contract_address(&self) -> H160 {

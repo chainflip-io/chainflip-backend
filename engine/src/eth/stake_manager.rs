@@ -146,7 +146,7 @@ impl EthObserver for StakeManager {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>
+    ) -> Result<Arc<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>>
     {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
@@ -156,7 +156,7 @@ impl EthObserver for StakeManager {
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
-        Ok(Box::new(
+        Ok(Arc::new(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
@@ -212,7 +212,7 @@ impl EthObserver for StakeManager {
                     StakeManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
                 })
             },
-        ))
+        )))
     }
 }
 
