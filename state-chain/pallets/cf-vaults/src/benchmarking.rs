@@ -53,7 +53,10 @@ benchmarks_instance_pallet! {
 		}
 
 		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
+			VaultRotationStatus::<T, I>::AwaitingKeygen {
+				keygen_ceremony_id: CEREMONY_ID,
+				response_status: keygen_response_status
+			},
 		);
 	} : {
 		Pallet::<T, I>::on_initialize(5u32.into());
@@ -70,11 +73,17 @@ benchmarks_instance_pallet! {
 
 		for i in 0..120 {
 			let validator_id = account("doogle", i, 0);
-			let _result = keygen_response_status.add_success_vote(&validator_id, aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..]));
+			let _result = keygen_response_status.add_success_vote(
+				&validator_id,
+				aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..])
+			);
 		}
 
 		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
+			VaultRotationStatus::<T, I>::AwaitingKeygen {
+				keygen_ceremony_id: CEREMONY_ID,
+				response_status: keygen_response_status
+			},
 		);
 	} : {
 		Pallet::<T, I>::on_initialize(5u32.into());
@@ -88,7 +97,10 @@ benchmarks_instance_pallet! {
 		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
 
 		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen { keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
+			VaultRotationStatus::<T, I>::AwaitingKeygen {
+				keygen_ceremony_id: CEREMONY_ID,
+				response_status: keygen_response_status
+			},
 		);
 		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&[0xbb; 33][..]));
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
@@ -106,7 +118,10 @@ benchmarks_instance_pallet! {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
-		let call = Call::<T, I>::vault_key_rotated(new_public_key, 5u64, Decode::decode(&mut &TX_HASH[..]).unwrap());
+		let call = Call::<T, I>::vault_key_rotated(
+			new_public_key, 5u64,
+			Decode::decode(&mut &TX_HASH[..]).unwrap()
+		);
 		let origin = T::EnsureWitnessed::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
