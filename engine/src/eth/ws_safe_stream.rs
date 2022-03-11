@@ -187,7 +187,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn returns_one_when_two_in_inner_but_one_safety_then_no_more() {
+    async fn returns_two_when_three_in_inner_with_one_safety_then_no_more() {
         let first_block = block_header(1, 0);
         let second_block = block_header(2, 1);
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
@@ -317,7 +317,7 @@ pub mod tests {
     // The stream continues after a series of blocks, where we error on expected X, and then fetch X
     // e.g. if the stream is Ok(10), Ok(11), Err, Ok(12) - will work fine
     #[tokio::test]
-    async fn safe_stream_continues_after_error_block_no_skip_no_safety() {
+    async fn safe_stream_terminates_after_on_error_block_no_safety() {
         let first_block = block_header(1, 11);
         let second_block_after_err = block_header(2, 12);
 
@@ -332,17 +332,10 @@ pub mod tests {
         assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
 
         assert!(stream.next().await.is_none());
-
-        // assert_eq!(
-        //     stream.next().await.unwrap().unwrap(),
-        //     second_block_after_err.unwrap().into()
-        // );
-
-        // assert!(stream.next().await.is_none());
     }
 
     #[tokio::test]
-    async fn safe_stream_continues_after_error_block_no_skip_with_safety() {
+    async fn safe_stream_terminates_on_error_block_with_safety() {
         let first_block = block_header(1, 11);
         let second_block_after_err = block_header(2, 12);
 
@@ -356,84 +349,14 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 2);
 
-        // NB: we get the error first, since we have not reached safe block before we get the error head
-        assert!(stream.next().await.is_none());
-
-        // assert_eq!(
-        //     stream.next().await.unwrap().unwrap(),
-        //     first_block.unwrap().into()
-        // );
-
-        // assert_eq!(
-        //     stream.next().await.unwrap().unwrap(),
-        //     second_block_after_err.unwrap().into()
-        // );
-
-        // assert!(stream.next().await.is_none());
-    }
-
-    // If the input stream returns as: Ok(11), Err, Err, Ok(13). Then we will terminate the stream
-    // because we have effectively skipped blocks. Errors do not count as blocks
-    #[tokio::test]
-    async fn safe_stream_terminates_over_error_block_in_gap_no_safety() {
-        let first_block = block_header(1, 11);
-
-        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
-            first_block.clone(),
-            // Err is in place of block 12
-            Err(web3::Error::Internal),
-            Err(web3::Error::Internal),
-            block_header(3, 13),
-        ]);
-
-        let mut stream = safe_ws_head_stream(header_stream, 0);
-
-        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
-        assert!(stream.next().await.is_none());
-
-        // assert!(stream.next().await.unwrap().is_err());
-        // assert!(stream.next().await.unwrap().is_err());
-
-        // stream terminated after skipped blocks, doesn't matter that error blocks were "in place of" block 12
-    }
-
-    #[tokio::test]
-    async fn safe_stream_passes_through_error_header_no_safety() {
-        // just any web3 error
-        let first_block = block_header(1, 11);
-        let error_block = Err(web3::Error::Internal);
-
-        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
-            first_block.clone(),
-            error_block.clone(),
-        ]);
-
-        let mut stream = safe_ws_head_stream(header_stream, 0);
-
-        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
-
-        assert!(stream.next().await.is_none());
-    }
-
-    #[tokio::test]
-    async fn safe_stream_returns_on_error_header_with_safety() {
-        let first_block = block_header(1, 11);
-        let error_block = Err(web3::Error::Internal);
-
-        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
-            first_block.clone(),
-            error_block.clone(),
-        ]);
-
-        let mut stream = safe_ws_head_stream(header_stream, 1);
-
+        // terminate before getting a block, since the first block is not beyond our safety margin
         assert!(stream.next().await.is_none());
     }
 
     // Ensure we return the errors when we don't have a block number,
     // in the same way as the error of pulling the header from the ws stream itself
     #[tokio::test]
-    async fn safe_stream_returns_error_within_header_with_safety() {
+    async fn safe_stream_terminates_when_error_in_header_with_safety() {
         let first_block = block_header(1, 11);
         let mut second_block = block_header(1, 11).unwrap();
         second_block.number = None;
