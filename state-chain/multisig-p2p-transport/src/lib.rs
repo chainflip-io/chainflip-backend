@@ -984,7 +984,7 @@ mod tests {
 			Ok(_)
 		));
 
-		tokio::time::sleep(Duration::from_millis(50)); // See below
+		tokio::time::sleep(Duration::from_millis(50)).await; // See below
 
 		// Peer gets sent message
 
@@ -999,7 +999,7 @@ mod tests {
 			Ok(_)
 		));
 
-		tokio::time::sleep(Duration::from_millis(50)); // See below
+		tokio::time::sleep(Duration::from_millis(50)).await; // See below
 
 		// Retry failed message sends
 
@@ -1023,7 +1023,7 @@ mod tests {
 			Ok(_)
 		));
 
-		tokio::time::sleep(Duration::from_millis(50)); // See below
+		tokio::time::sleep(Duration::from_millis(50)).await; // See below
 
 		// Partially unreserved peers cause message to be not be sent
 
@@ -1046,7 +1046,7 @@ mod tests {
 
 		// Need to make sure async spawned senders finish sending before checking expectations, we
 		// currently don't have a better method
-		tokio::time::sleep(Duration::from_millis(50));
+		tokio::time::sleep(Duration::from_millis(50)).await;
 	}
 
 	#[tokio::test]
