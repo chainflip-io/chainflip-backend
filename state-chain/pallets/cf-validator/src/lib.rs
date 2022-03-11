@@ -79,6 +79,8 @@ impl<T> Default for RotationStatus<T> {
 }
 
 type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
+type VanityName = Vec<u8>;
+pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 pub type Percentage = u8;
 #[frame_support::pallet]
@@ -155,6 +157,8 @@ pub mod pallet {
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 		/// Ratio of claim period updated \[percentage\]
 		ClaimPeriodUpdated(Percentage),
+		/// Vanity Name for a validator has been set
+		VanityNameSet(ValidatorIdOf<T>, VanityName),
 	}
 
 	#[pallet::error]
@@ -169,6 +173,10 @@ pub mod pallet {
 		InvalidAccountPeerMappingSignature,
 		/// Invalid claim period
 		InvalidClaimPeriod,
+		/// Vanity name length exceeds the limit of 64 characters
+		NameTooLong,
+		/// Invalid characters in the name
+		InvalidCharactersInName,
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -476,6 +484,22 @@ pub mod pallet {
 				Ok(().into())
 			})
 		}
+
+		#[pallet::weight(10000)]
+		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			//let validator_id: ValidatorIdOf<T> = account_id;
+			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
+			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
+			let mut validators: sp_std::collections::btree_map::BTreeMap<
+				ValidatorIdOf<T>,
+				VanityName,
+			> = ValidatorNames::<T>::get();
+			validators.insert(account_id.clone(), name.clone());
+			ValidatorNames::<T>::put(validators);
+			Self::deposit_event(Event::VanityNameSet(account_id, name));
+			Ok(().into())
+		}
 	}
 
 	/// Percentage of epoch we allow claims
@@ -517,6 +541,14 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
 	pub type Validators<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
+
+	/// Vanity names of the validators stored as a Map with the current validator IDs as key
+	#[pallet::storage]
+	pub type ValidatorNames<T: Config> = StorageValue<
+		_,
+		sp_std::collections::btree_map::BTreeMap<ValidatorIdOf<T>, VanityName>,
+		ValueQuery,
+	>;
 
 	/// The current bond
 	#[pallet::storage]
