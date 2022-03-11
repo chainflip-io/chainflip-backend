@@ -20,9 +20,9 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::decode_shared_event_closure;
 use super::event_common::EventWithCommon;
 use super::EthObserver;
+use super::{decode_shared_event_closure, DecodeLogClosure};
 
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
@@ -143,10 +143,7 @@ impl EthObserver for KeyManager {
         }
     }
 
-    fn decode_log_closure(
-        &self,
-    ) -> Result<Arc<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>>
-    {
+    fn decode_log_closure(&self) -> Result<Arc<DecodeLogClosure<Self::EventParameters>>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
         let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;

@@ -727,17 +727,16 @@ pub trait EthObserver {
                         // we want to consume the past logs stream first, terminating if any of these logs are an error
                         if let Some(result_past_log) = past_heads.next().await {
                             if let Ok(past_log) = result_past_log {
-                                return Some((past_log, (past_heads, safe_head_stream)));
+                                Some((past_log, (past_heads, safe_head_stream)))
                             } else {
-                                return None;
+                                None
                             }
                         } else {
                             // the past logs were consumed, now we consume the "future" logs
-                            if let Some(future_log) = safe_head_stream.next().await {
-                                return Some((future_log, (past_heads, safe_head_stream)));
-                            } else {
-                                return None;
-                            }
+                            safe_head_stream
+                                .next()
+                                .await
+                                .map(|future_log| (future_log, (past_heads, safe_head_stream)))
                         }
                     },
                 )
@@ -789,7 +788,7 @@ pub trait EthObserver {
         let eth_head_stream = eth_ws_rpc.subscribe_new_heads().await?;
 
         let safe_ws_head_stream =
-            safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN, &logger);
+            safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN, logger);
 
         let safe_ws_block_events = self
             .block_events_stream_from_head_stream(
@@ -805,7 +804,7 @@ pub trait EthObserver {
             eth_http_rpc.clone(),
             HTTP_POLL_INTERVAL,
             ETH_BLOCK_SAFETY_MARGIN,
-            &logger,
+            logger,
         )
         .await;
 
@@ -1137,9 +1136,7 @@ pub trait EthObserver {
         )))
     }
 
-    fn decode_log_closure(
-        &self,
-    ) -> Result<Arc<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>>;
+    fn decode_log_closure(&self) -> Result<Arc<DecodeLogClosure<Self::EventParameters>>>;
 
     async fn handle_event<RpcClient>(
         &self,
@@ -1151,6 +1148,9 @@ pub trait EthObserver {
 
     fn get_contract_address(&self) -> H160;
 }
+
+pub type DecodeLogClosure<EventParameters> =
+    Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send + Sync>;
 
 /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
 #[derive(Debug, PartialEq)]

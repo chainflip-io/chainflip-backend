@@ -22,7 +22,10 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 
-use super::{decode_shared_event_closure, event_common::EventWithCommon, EthObserver, SharedEvent};
+use super::{
+    decode_shared_event_closure, event_common::EventWithCommon, DecodeLogClosure, EthObserver,
+    SharedEvent,
+};
 
 /// A wrapper for the StakeManager Ethereum contract.
 pub struct StakeManager {
@@ -144,10 +147,7 @@ impl EthObserver for StakeManager {
         self.deployed_address
     }
 
-    fn decode_log_closure(
-        &self,
-    ) -> Result<Arc<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>>
-    {
+    fn decode_log_closure(&self) -> Result<Arc<DecodeLogClosure<Self::EventParameters>>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
