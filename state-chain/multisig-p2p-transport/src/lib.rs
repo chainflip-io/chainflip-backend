@@ -30,6 +30,7 @@ use std::{
 	marker::Send,
 	net::Ipv6Addr,
 	pin::Pin,
+	time::Duration,
 };
 use tokio::sync::mpsc::{error::TrySendError, Sender};
 
@@ -39,6 +40,8 @@ use mockall::automock;
 /// The identifier for our protocol, required to distinguish it from other protocols running on the
 /// substrate p2p network.
 pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
+pub const RETRY_SEND_PERIOD: Duration = Duration::from_secs(30);
+const RETRY_SEND_ATTEMPTS: usize = 10;
 
 /// Required by substrate to register and configure the protocol.
 pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
@@ -82,6 +85,7 @@ pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	message_sender_spawner: sc_service::SpawnTaskHandle,
 	state: Arc<RwLock<P2PValidatorNetworkNodeState>>,
 	p2p_network_service: Arc<P2PNetworkService>,
+	retry_send_period: Duration,
 	_phantom: std::marker::PhantomData<MetaData>,
 }
 
@@ -103,7 +107,7 @@ pub trait PeerNetwork {
 	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_reserved_peer(&self, peer_id: PeerId);
 	/// Write notification to network to peer id, over protocol
-	async fn write_notification(&self, who: PeerId, message: Vec<u8>);
+	async fn try_send_notification(&self, who: PeerId, message: &Vec<u8>) -> bool;
 	/// Network event stream
 	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>>;
 }
@@ -145,8 +149,19 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 		}
 	}
 
-	async fn write_notification(&self, target: PeerId, message: Vec<u8>) {
-		self.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, message);
+	async fn try_send_notification(&self, target: PeerId, message: &Vec<u8>) -> bool {
+		async move {
+			self.notification_sender(target, CHAINFLIP_P2P_PROTOCOL_NAME)
+				.ok()?
+				.ready()
+				.await
+				.ok()?
+				.send(message.clone())
+				.ok()?;
+			Some(())
+		}
+		.await
+		.is_some()
 	}
 
 	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>> {
@@ -221,9 +236,20 @@ impl<
 			let (sender, mut receiver) = tokio::sync::mpsc::channel(16);
 			state.reserved_peers.insert(peer_id.clone(), (port, ip_address, sender));
 			let p2p_network_service = self.p2p_network_service.clone();
+			let retry_send_period = self.retry_send_period;
 			self.message_sender_spawner.spawn("cf-peer-message-sender", async move {
 				while let Some(message) = receiver.recv().await {
-					p2p_network_service.write_notification(peer_id, message).await;
+					// TODO: Logic here can be improved to effectively only send when you have a
+					// strong indication it will succeed (By using the connect and disconnect
+					// notifications) Also it is not ideal to drop new messages, better to drop old
+					// messages.
+					for _i in 0..RETRY_SEND_ATTEMPTS {
+						if p2p_network_service.try_send_notification(peer_id, &message).await {
+							break
+						} else {
+							tokio::time::sleep(retry_send_period).await;
+						}
+					}
 				}
 			});
 			self.p2p_network_service.reserve_peer(peer_id, port, ip_address);
@@ -239,6 +265,7 @@ pub fn new_p2p_validator_network_node<
 	p2p_network_service: Arc<PN>,
 	message_sender_spawner: sc_service::SpawnTaskHandle,
 	subscription_task_executor: impl Spawn + Send + Sync + 'static,
+	retry_send_period: Duration,
 ) -> (RpcRequestHandler<MetaData, PN>, impl futures::Future<Output = ()>) {
 	let state = Arc::new(RwLock::new(P2PValidatorNetworkNodeState::default()));
 
@@ -427,6 +454,7 @@ pub fn new_p2p_validator_network_node<
 				notification_rpc_subscription_manager: SubscriptionManager::new(Arc::new(
 					subscription_task_executor,
 				)),
+				retry_send_period,
 				_phantom: std::marker::PhantomData::<MetaData>::default(),
 			}
 		},
@@ -531,8 +559,8 @@ mod tests {
 			self.lock().remove_reserved_peer(peer_id)
 		}
 
-		async fn write_notification(&self, target: PeerId, message: Vec<u8>) {
-			self.lock().write_notification(target, message).await;
+		async fn try_send_notification(&self, target: PeerId, message: &Vec<u8>) -> bool {
+			self.lock().try_send_notification(target, message).await
 		}
 
 		fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>> {
@@ -565,6 +593,7 @@ mod tests {
 			network_expectations.clone(),
 			message_sender_spawn_handle,
 			sc_rpc::testing::TaskExecutor,
+			Duration::from_secs(0),
 		);
 
 		let internal_state = rpc_request_handler.state.clone();
@@ -935,16 +964,16 @@ mod tests {
 
 		network_expectations
 			.lock()
-			.expect_write_notification()
+			.expect_try_send_notification()
 			.with(eq(peer_0), eq(message.clone()))
 			.times(1)
-			.return_const(());
+			.return_const(true);
 		network_expectations
 			.lock()
-			.expect_write_notification()
+			.expect_try_send_notification()
 			.with(eq(peer_1), eq(message.clone()))
 			.times(1)
-			.return_const(());
+			.return_const(true);
 		assert!(matches!(
 			client
 				.send_message(
@@ -959,10 +988,33 @@ mod tests {
 
 		network_expectations
 			.lock()
-			.expect_write_notification()
+			.expect_try_send_notification()
 			.with(eq(peer_0), eq(message.clone()))
 			.times(1)
-			.return_const(());
+			.return_const(true);
+		assert!(matches!(
+			client.send_message(vec![peer_0_transferable.clone()], message.clone()).await,
+			Ok(_)
+		));
+
+		// Retry failed message sends
+
+		network_expectations
+			.lock()
+			.expect_try_send_notification()
+			.with(eq(peer_0), eq(message.clone()))
+			.times({
+				const FAILED_SENDS: usize = RETRY_SEND_ATTEMPTS - 1;
+				assert!(FAILED_SENDS > 0);
+				FAILED_SENDS
+			})
+			.return_const(false);
+		network_expectations
+			.lock()
+			.expect_try_send_notification()
+			.with(eq(peer_0), eq(message.clone()))
+			.times(1)
+			.return_const(true);
 		assert!(matches!(
 			client.send_message(vec![peer_0_transferable.clone()], message.clone()).await,
 			Ok(_)
