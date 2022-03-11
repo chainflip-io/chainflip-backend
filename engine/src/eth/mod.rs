@@ -598,7 +598,7 @@ impl fmt::Display for TransportProtocol {
 #[derive(Debug)]
 pub struct BlockEvents<EventParameters: Debug> {
     pub block_number: u64,
-    pub events: Option<Vec<EventWithCommon<EventParameters>>>,
+    pub events: Option<Result<Vec<EventWithCommon<EventParameters>>>>,
 }
 
 // Specify a default type for the mock
@@ -606,12 +606,12 @@ pub struct BlockEvents<EventParameters: Debug> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
+    // Only returns error when decode_log_closure returns an error
     async fn get_block_events_for_block<EthRpc>(
         &self,
         header: EthNumberBloom,
         eth_rpc: EthRpc,
         contract_address: H160,
-        logger: slog::Logger,
     ) -> Result<BlockEvents<Self::EventParameters>>
     where
         EthRpc: EthRpcApi + Clone + 'static + Send + Sync,
@@ -619,70 +619,49 @@ pub trait EthObserver {
         let block_number = header.block_number;
         let mut contract_bloom = Bloom::default();
         contract_bloom.accrue(Input::Raw(&contract_address.0));
-        let decode_log_fn = self.decode_log_closure()?;
+
+        let decode_log_fn = self
+            .decode_log_closure()
+            .context("Failed to get the decode log closure")?;
 
         // if we have logs for this block, fetch them.
-        if header.logs_bloom.contains_bloom(&contract_bloom) {
-            match eth_rpc
-                .get_logs(
-                    FilterBuilder::default()
-                        // from_block *and* to_block are *inclusive*
-                        .from_block(BlockNumber::Number(block_number))
-                        .to_block(BlockNumber::Number(block_number))
-                        .address(vec![contract_address])
-                        .build(),
-                )
-                .await
-            {
-                Ok(logs) => {
-                    match logs
-                        .into_iter()
-                        .map(
-                            move |unparsed_log| -> Result<
-                                EventWithCommon<Self::EventParameters>,
-                                anyhow::Error,
-                            > {
-                                EventWithCommon::<Self::EventParameters>::decode(
-                                    &decode_log_fn,
-                                    unparsed_log,
-                                )
-                            },
-                        )
-                        .collect::<Result<Vec<_>>>()
-                    {
-                        Ok(events) => Ok(BlockEvents {
-                            block_number: block_number.as_u64(),
-                            events: Some(events),
-                        }),
-                        Err(err) => {
-                            slog::error!(
-                                logger,
-                                "Failed to decode ETH logs for block `{}`: {}",
-                                block_number,
-                                err,
-                            );
-                            Err(err)
-                        }
-                    }
-                }
-                Err(err) => {
-                    slog::error!(
-                        logger,
-                        "Failed to request ETH logs for block `{}`: {}",
-                        block_number,
-                        err,
-                    );
-                    // we expected there to be logs, but failed to fetch them
-                    Err(err)
-                }
-            }
+        let events = if header.logs_bloom.contains_bloom(&contract_bloom) {
+            Some(
+                eth_rpc
+                    .get_logs(
+                        FilterBuilder::default()
+                            // from_block *and* to_block are *inclusive*
+                            .from_block(BlockNumber::Number(block_number))
+                            .to_block(BlockNumber::Number(block_number))
+                            .address(vec![contract_address])
+                            .build(),
+                    )
+                    .await
+                    .and_then(|logs| {
+                        logs.into_iter()
+                            .map(
+                                move |unparsed_log| -> Result<
+                                    EventWithCommon<Self::EventParameters>,
+                                    anyhow::Error,
+                                > {
+                                    EventWithCommon::<Self::EventParameters>::decode(
+                                        &decode_log_fn,
+                                        unparsed_log,
+                                    )
+                                },
+                            )
+                            .collect::<Result<Vec<_>>>()
+                    }),
+            )
         } else {
             // we know there won't be interesting logs, so don't fetch for events
-            Ok(BlockEvents {
-                block_number: block_number.as_u64(),
-                events: None,
-            })
-        }
+            None
+        };
+
+        Ok(BlockEvents {
+            block_number: block_number.as_u64(),
+            events,
+        })
     }
 
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
@@ -695,16 +674,14 @@ pub trait EthObserver {
         logger: slog::Logger,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Send + '_>>>
     where
-        BlockHeaderStream: Stream<Item = Result<EthNumberBloom>> + 'static + Send,
+        BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
         EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
     {
         let from_block = U64::from(from_block);
         let mut safe_head_stream = Box::pin(safe_head_stream);
 
         // only allow pulling from the stream once we are actually at our from_block number
-        while let Some(current_best_safe_block_header) = safe_head_stream.next().await {
-            let best_safe_block_header = current_best_safe_block_header
-                .context("Could not get first safe ETH block header")?;
+        while let Some(best_safe_block_header) = safe_head_stream.next().await {
             let best_safe_block_number = best_safe_block_header.block_number;
             // we only want to start observing once we reach the from_block specified
             if best_safe_block_number < from_block {
@@ -719,33 +696,56 @@ pub trait EthObserver {
 
                 let eth_rpc_c = eth_rpc.clone();
 
-                // block log stream for contract instead of this.
-                let past_logs = stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64())
-                    .then(move |block_number| {
-                        let eth_rpc = eth_rpc_c.clone();
-                        async move {
-                            eth_rpc
-                                .block(U64::from(block_number))
-                                .await
-                                .and_then(|block| block.try_into())
-                        }
-                    });
+                let past_heads = Box::pin(
+                    stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64()).then(
+                        move |block_number| {
+                            let eth_rpc = eth_rpc_c.clone();
+                            async move {
+                                eth_rpc
+                                    .block(U64::from(block_number))
+                                    .await
+                                    .and_then(|block| {
+                                        let number_bloom: Result<EthNumberBloom> = block.try_into();
+                                        number_bloom
+                                    })
+                            }
+                        },
+                    ),
+                );
 
-                return Ok(Box::pin(past_logs.chain(safe_head_stream).then(
-                    move |result_header| {
-                        let eth_rpc = eth_rpc.clone();
-                        let logger = logger.clone();
-                        async move {
-                            self.get_block_events_for_block(
-                                result_header?,
-                                eth_rpc,
-                                contract_address,
-                                logger,
-                            )
-                            .await
+                let past_and_fut_heads = stream::unfold(
+                    (past_heads, safe_head_stream),
+                    |(mut past_heads, mut safe_head_stream)| async {
+                        // we want to consume the past logs stream first, terminating if any of these logs are an error
+                        if let Some(result_past_log) = past_heads.next().await {
+                            if let Ok(past_log) = result_past_log {
+                                return Some((past_log, (past_heads, safe_head_stream)));
+                            } else {
+                                return None;
+                            }
+                        } else {
+                            // the past logs were consumed, now we consume the "future" logs
+                            if let Some(future_log) = safe_head_stream.next().await {
+                                return Some((future_log, (past_heads, safe_head_stream)));
+                            } else {
+                                return None;
+                            }
                         }
                     },
-                )));
+                )
+                .fuse();
+                let eth_rpc_c = eth_rpc.clone();
+
+                // convert from heads to events
+                let events = past_and_fut_heads.then(move |header| {
+                    let eth_rpc = eth_rpc_c.clone();
+                    async move {
+                        self.get_block_events_for_block(header, eth_rpc, contract_address)
+                            .await
+                    }
+                });
+
+                return Ok(Box::pin(events));
             }
         }
         Err(anyhow::Error::msg("No events in ETH safe head stream"))
@@ -974,10 +974,12 @@ pub trait EthObserver {
             result_block_events: Result<BlockEvents<EventParameters>>,
         ) -> Result<Option<BlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
+            let has_yielded = merged_stream_state.last_block_yielded != 0;
 
             let result_opt_block_events = if let Ok(block_events) = result_block_events {
-                // WHAT IF THIS SKIPS BLOCKS
-                if block_events.block_number > merged_stream_state.last_block_yielded {
+                if !has_yielded
+                    || block_events.block_number == merged_stream_state.last_block_yielded + 1
+                {
                     Ok(Some(block_events))
                 } else if block_events.block_number <= protocol_state.last_block_pulled {
                     slog::warn!(
@@ -990,6 +992,10 @@ pub trait EthObserver {
                     );
                     Ok(None)
                 } else {
+                    assert!(
+                        has_yielded
+                            && block_events.block_number <= merged_stream_state.last_block_yielded
+                    );
                     protocol_state.last_block_pulled = block_events.block_number;
                     slog::trace!(
                         merged_stream_state.logger,
@@ -1067,6 +1073,7 @@ pub trait EthObserver {
                         Ok(opt_block_events) => {
                             if let Some(block_events) = opt_block_events {
                                 if let Some(events) = block_events.events {
+                                    // TODO: We should handle the failure on decoding in the do_for_protocol
                                     slog::info!(
                                         stream_state.merged_stream_state.logger,
                                         "ETH block: {} contains interesting events",
@@ -1268,12 +1275,10 @@ mod merged_stream_tests {
     ) -> Result<BlockEvents<KeyManagerEvent>> {
         Ok(BlockEvents {
             block_number,
-            events: Some(
-                log_indices
-                    .into_iter()
-                    .map(|index| key_change(block_number, index))
-                    .collect(),
-            ),
+            events: Some(Ok(log_indices
+                .into_iter()
+                .map(|index| key_change(block_number, index))
+                .collect())),
         })
     }
 

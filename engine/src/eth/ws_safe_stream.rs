@@ -12,7 +12,7 @@ use anyhow::Result;
 pub fn safe_ws_head_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
-) -> impl Stream<Item = Result<EthNumberBloom>>
+) -> impl Stream<Item = EthNumberBloom>
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
@@ -38,13 +38,13 @@ where
                 // it looks like the error was at block 10
                 let current_header = match header {
                     Ok(header) => header,
-                    Err(e) => break Some((Err(e.into()), state)),
+                    Err(e) => break None,
                 };
                 let current_block_number = match current_header.number.ok_or_else(|| {
                     anyhow::Error::msg("Latest WS block header does not have a block number.")
                 }) {
                     Ok(number) => number,
-                    Err(err) => break Some((Err(err), state)),
+                    Err(err) => break None,
                 };
 
                 // Terminate stream if we have skipped into the future
@@ -84,10 +84,10 @@ where
                         <= current_block_number
                     {
                         break Some((
-                            Ok(state
+                            state
                                 .unsafe_block_headers
                                 .pop_front()
-                                .expect("already checked for item above")),
+                                .expect("already checked for item above"),
                             state,
                         ));
                     } else {
@@ -182,10 +182,7 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 0);
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
         assert!(stream.next().await.is_none());
     }
 
@@ -201,14 +198,8 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 1);
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            second_block.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
+        assert_eq!(stream.next().await.unwrap(), second_block.unwrap().into());
         assert!(stream.next().await.is_none());
     }
 
@@ -225,11 +216,11 @@ pub mod tests {
         let mut stream = safe_ws_head_stream(header_stream, 0);
 
         assert_eq!(
-            stream.next().await.unwrap().unwrap(),
+            stream.next().await.unwrap(),
             first_block.clone().unwrap().into()
         );
         assert_eq!(
-            stream.next().await.unwrap().unwrap(),
+            stream.next().await.unwrap(),
             first_block_prime.unwrap().into()
         );
         assert!(stream.next().await.is_none());
@@ -250,11 +241,11 @@ pub mod tests {
         let mut stream = safe_ws_head_stream(header_stream, 1);
 
         assert_eq!(
-            stream.next().await.unwrap().unwrap(),
+            stream.next().await.unwrap(),
             first_block_prime.unwrap().into()
         );
         assert_eq!(
-            stream.next().await.unwrap().unwrap(),
+            stream.next().await.unwrap(),
             second_block_prime.unwrap().into()
         );
         assert!(stream.next().await.is_none());
@@ -277,7 +268,7 @@ pub mod tests {
         let mut stream = safe_ws_head_stream(header_stream, 2);
 
         assert_eq!(
-            stream.next().await.unwrap().unwrap(),
+            stream.next().await.unwrap(),
             first_block_prime.unwrap().into()
         );
         assert!(stream.next().await.is_none());
@@ -295,10 +286,7 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 1);
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
 
         assert!(stream.next().await.is_none());
     }
@@ -319,15 +307,9 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 2);
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            second_block.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), second_block.unwrap().into());
 
         assert!(stream.next().await.is_none());
     }
@@ -347,19 +329,16 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 0);
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
-
-        assert!(stream.next().await.unwrap().is_err());
-
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            second_block_after_err.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
 
         assert!(stream.next().await.is_none());
+
+        // assert_eq!(
+        //     stream.next().await.unwrap().unwrap(),
+        //     second_block_after_err.unwrap().into()
+        // );
+
+        // assert!(stream.next().await.is_none());
     }
 
     #[tokio::test]
@@ -378,19 +357,19 @@ pub mod tests {
         let mut stream = safe_ws_head_stream(header_stream, 2);
 
         // NB: we get the error first, since we have not reached safe block before we get the error head
-        assert!(stream.next().await.unwrap().is_err());
-
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
-
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            second_block_after_err.unwrap().into()
-        );
-
         assert!(stream.next().await.is_none());
+
+        // assert_eq!(
+        //     stream.next().await.unwrap().unwrap(),
+        //     first_block.unwrap().into()
+        // );
+
+        // assert_eq!(
+        //     stream.next().await.unwrap().unwrap(),
+        //     second_block_after_err.unwrap().into()
+        // );
+
+        // assert!(stream.next().await.is_none());
     }
 
     // If the input stream returns as: Ok(11), Err, Err, Ok(13). Then we will terminate the stream
@@ -409,16 +388,13 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 0);
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
+        assert!(stream.next().await.is_none());
 
-        assert!(stream.next().await.unwrap().is_err());
-        assert!(stream.next().await.unwrap().is_err());
+        // assert!(stream.next().await.unwrap().is_err());
+        // assert!(stream.next().await.unwrap().is_err());
 
         // stream terminated after skipped blocks, doesn't matter that error blocks were "in place of" block 12
-        assert!(stream.next().await.is_none());
     }
 
     #[tokio::test]
@@ -434,12 +410,9 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 0);
 
-        assert_eq!(
-            stream.next().await.unwrap().unwrap(),
-            first_block.unwrap().into()
-        );
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
 
-        assert!(stream.next().await.unwrap().is_err());
+        assert!(stream.next().await.is_none());
     }
 
     #[tokio::test]
@@ -454,7 +427,7 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 1);
 
-        assert!(stream.next().await.unwrap().is_err());
+        assert!(stream.next().await.is_none());
     }
 
     // Ensure we return the errors when we don't have a block number,
@@ -472,6 +445,6 @@ pub mod tests {
 
         let mut stream = safe_ws_head_stream(header_stream, 1);
 
-        assert!(stream.next().await.unwrap().is_err());
+        assert!(stream.next().await.is_none());
     }
 }
