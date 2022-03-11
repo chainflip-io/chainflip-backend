@@ -611,7 +611,6 @@ pub struct CleanBlockEvents<EventParameters: Debug> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    // Only returns error when decode_log_closure returns an error
     async fn get_block_events_for_block<EthRpc>(
         &self,
         header: EthNumberBloom,
