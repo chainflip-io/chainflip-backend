@@ -952,6 +952,7 @@ pub trait EthObserver {
             logger: &slog::Logger,
         ) -> Result<CleanBlockEvents<EventParameters>> {
             while let Some(block_events) = protocol_stream.next().await {
+                protocol_state.last_block_pulled = block_events.block_number;
                 match block_events.block_number.cmp(&next_block_to_yield) {
                     Ordering::Equal => {
                         // we want to yield this one :)
