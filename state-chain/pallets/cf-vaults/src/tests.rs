@@ -1,6 +1,7 @@
 use crate::{
-	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, KeygenOutcome,
-	KeygenResolutionPendingSince, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
+	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, FailureVoters,
+	KeygenOutcome, KeygenResolutionPendingSince, PendingVaultRotation, SuccessVoters, Vault,
+	VaultRotationStatus, Vaults,
 };
 use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, Chainflip, EpochInfo};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -11,6 +12,13 @@ fn last_event() -> Event {
 		.pop()
 		.expect("Event expected")
 		.event
+}
+
+macro_rules! assert_last_event {
+	($pat:pat) => {
+		let event = last_event();
+		assert!(matches!(last_event(), Event::VaultsPallet($pat)), "Unexpected event {:?}", event);
+	};
 }
 
 fn current_ceremony_id() -> CeremonyId {
@@ -207,6 +215,12 @@ fn keygen_report_success() {
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		);
+
+		assert_last_event!(crate::Event::KeygenSuccess(..));
+
+		// Voting has been cleared.
+		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
+		assert!(!FailureVoters::<MockRuntime, _>::exists());
 	})
 }
 
@@ -294,6 +308,12 @@ fn keygen_report_failure() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		assert_eq!(MockOfflineReporter::get_reported(), vec![CHARLIE]);
+
+		assert_last_event!(crate::Event::KeygenFailure(..));
+
+		// Voting has been cleared.
+		assert!(SuccessVoters::<MockRuntime, _>::iter_keys().next().is_none());
+		assert!(!FailureVoters::<MockRuntime, _>::exists());
 	})
 }
 

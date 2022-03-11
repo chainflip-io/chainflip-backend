@@ -181,6 +181,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		// If and only if *all* candidates agree on the same key, return success.
 		if let Some((key, votes)) = self.success_votes.iter().next() {
 			if *votes == self.candidate_count {
+				SuccessVoters::<T, I>::remove_all(None);
 				return KeygenOutcome::Success(*key)
 			}
 		}
@@ -201,6 +202,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			},
 			Some(KeygenOutcome::Failure(mut blamed)) => {
 				to_punish.append(&mut blamed);
+				FailureVoters::<T, I>::kill();
 				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
 					for dissenter in key_dissenters {
 						to_punish.insert(dissenter);
