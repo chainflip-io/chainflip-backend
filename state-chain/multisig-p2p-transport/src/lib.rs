@@ -243,12 +243,17 @@ impl<
 					// strong indication it will succeed (By using the connect and disconnect
 					// notifications) Also it is not ideal to drop new messages, better to drop old
 					// messages.
-					for _i in 0..RETRY_SEND_ATTEMPTS {
+					let mut attempts = RETRY_SEND_ATTEMPTS;
+					while 0 < attempts {
 						if p2p_network_service.try_send_notification(peer_id, &message).await {
 							break
 						} else {
+							attempts -= 1;
 							tokio::time::sleep(retry_send_period).await;
 						}
+					}
+					if 0 == attempts {
+						log::info!("Dropping message for peer {}", peer_id);
 					}
 				}
 			});
