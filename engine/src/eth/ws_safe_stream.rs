@@ -38,13 +38,13 @@ where
                 // it looks like the error was at block 10
                 let current_header = match header {
                     Ok(header) => header,
-                    Err(e) => break None,
+                    Err(_) => break None,
                 };
                 let current_block_number = match current_header.number.ok_or_else(|| {
                     anyhow::Error::msg("Latest WS block header does not have a block number.")
                 }) {
                     Ok(number) => number,
-                    Err(err) => break None,
+                    Err(_) => break None,
                 };
 
                 // Terminate stream if we have skipped into the future
