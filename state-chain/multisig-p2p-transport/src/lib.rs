@@ -984,6 +984,8 @@ mod tests {
 			Ok(_)
 		));
 
+		tokio::time::sleep(Duration::from_millis(50)); // See below
+
 		// Peer gets sent message
 
 		network_expectations
@@ -996,6 +998,8 @@ mod tests {
 			client.send_message(vec![peer_0_transferable.clone()], message.clone()).await,
 			Ok(_)
 		));
+
+		tokio::time::sleep(Duration::from_millis(50)); // See below
 
 		// Retry failed message sends
 
@@ -1020,6 +1024,8 @@ mod tests {
 			Ok(_)
 		));
 
+		tokio::time::sleep(Duration::from_millis(50)); // See below
+
 		// Partially unreserved peers cause message to be not be sent
 
 		assert!(matches!(
@@ -1039,9 +1045,9 @@ mod tests {
 			Err(_)
 		));
 
-		// Need to make sure spawned senders finish before checking expectations, we currently don't
-		// have a better method
-		tokio::time::sleep(Duration::from_millis(100));
+		// Need to make sure async spawned senders finish sending before checking expectations, we
+		// currently don't have a better method
+		tokio::time::sleep(Duration::from_millis(50));
 	}
 
 	#[tokio::test]
