@@ -1036,10 +1036,7 @@ mod tests {
 			.lock()
 			.expect_try_send_notification()
 			.with(eq(peer_0), eq(message.clone()))
-			.times({
-				assert!(RETRY_SEND_ATTEMPTS > 1);
-				RETRY_SEND_ATTEMPTS - 1
-			})
+			.times(RETRY_SEND_ATTEMPTS - 1)
 			.return_const(false);
 		network_expectations
 			.lock()
