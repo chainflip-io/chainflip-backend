@@ -4688,6 +4688,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "log 0.4.14",
  "mockall 0.10.2",
+ "predicates 2.1.1",
  "sc-network",
  "sc-rpc",
  "sc-service",

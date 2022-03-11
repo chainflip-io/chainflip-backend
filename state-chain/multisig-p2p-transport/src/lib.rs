@@ -107,7 +107,7 @@ pub trait PeerNetwork {
 	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_reserved_peer(&self, peer_id: PeerId);
 	/// Write notification to network to peer id, over protocol
-	async fn try_send_notification(&self, who: PeerId, message: &Vec<u8>) -> bool;
+	async fn try_send_notification(&self, who: PeerId, message: &[u8]) -> bool;
 	/// Network event stream
 	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>>;
 }
@@ -149,14 +149,14 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 		}
 	}
 
-	async fn try_send_notification(&self, target: PeerId, message: &Vec<u8>) -> bool {
+	async fn try_send_notification(&self, target: PeerId, message: &[u8]) -> bool {
 		async move {
 			self.notification_sender(target, CHAINFLIP_P2P_PROTOCOL_NAME)
 				.ok()?
 				.ready()
 				.await
 				.ok()?
-				.send(message.clone())
+				.send(message)
 				.ok()?;
 			Some(())
 		}
@@ -234,7 +234,7 @@ impl<
 			}
 		} else {
 			let (sender, mut receiver) = tokio::sync::mpsc::channel(16);
-			state.reserved_peers.insert(peer_id.clone(), (port, ip_address, sender));
+			state.reserved_peers.insert(peer_id, (port, ip_address, sender));
 			let p2p_network_service = self.p2p_network_service.clone();
 			let retry_send_period = self.retry_send_period;
 			self.message_sender_spawner.spawn("cf-peer-message-sender", async move {
@@ -545,8 +545,32 @@ mod tests {
 	use futures::Future;
 	use jsonrpc_core::MetaIoHandler;
 	use jsonrpc_core_client::transports::local;
-	use mockall::{predicate::eq, Sequence};
+	use mockall::{Predicate, Sequence};
+	use predicates::reflection::PredicateReflection;
 	use tokio::sync::{Mutex, MutexGuard};
+
+	// Allows equality predicate between differing types
+	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+	pub struct EqPredicate<T> {
+		constant: T,
+	}
+	impl<T: std::fmt::Debug, P: ?Sized> Predicate<P> for EqPredicate<T>
+	where
+		P: std::fmt::Debug + PartialEq<T>,
+	{
+		fn eval(&self, variable: &P) -> bool {
+			variable.eq(&self.constant)
+		}
+	}
+	impl<T: std::fmt::Debug> PredicateReflection for EqPredicate<T> {}
+	impl<T: std::fmt::Debug> std::fmt::Display for EqPredicate<T> {
+		fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+			write!(f, "var {:?}", self.constant)
+		}
+	}
+	fn eq<T>(constant: T) -> EqPredicate<T> {
+		EqPredicate { constant }
+	}
 
 	struct LockedMockPeerNetwork(Mutex<MockPeerNetwork>);
 	impl LockedMockPeerNetwork {
@@ -564,7 +588,7 @@ mod tests {
 			self.lock().remove_reserved_peer(peer_id)
 		}
 
-		async fn try_send_notification(&self, target: PeerId, message: &Vec<u8>) -> bool {
+		async fn try_send_notification(&self, target: PeerId, message: &[u8]) -> bool {
 			self.lock().try_send_notification(target, message).await
 		}
 
