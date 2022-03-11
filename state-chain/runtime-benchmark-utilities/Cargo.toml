@@ -1,6 +1,6 @@
 [package]
 name = "cf-runtime-benchmark-utilities"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2018"
 authors = ['Chainflip <https://chainflip.io>']
 description = "Utilities to help write benchmarks for the Chainflip runtime."

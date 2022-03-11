@@ -2,7 +2,7 @@
 authors = ["Chainflip <https://chainflip.io>"]
 edition = "2018"
 name = "insert-genesis-keyshare"
-version = "0.1.0"
+version = "0.3.0"
 
 [dependencies]
 anyhow = "1.0"
