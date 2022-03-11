@@ -146,7 +146,8 @@ impl EthObserver for StakeManager {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>
+    {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;

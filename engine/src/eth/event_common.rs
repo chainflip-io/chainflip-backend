@@ -1,7 +1,7 @@
 use anyhow::Result;
 use sp_core::U256;
 
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 use web3::{
     ethabi::RawLog,
     types::{Log, H256},
@@ -32,7 +32,7 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
 
 impl<EventParameters: Debug> EventWithCommon<EventParameters> {
     pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>>(
-        decode_log: &LogDecoder,
+        decode_log: Arc<LogDecoder>,
         log: Log,
     ) -> Result<Self> {
         Ok(Self {

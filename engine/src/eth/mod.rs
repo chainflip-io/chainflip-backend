@@ -51,7 +51,7 @@ use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
     api::SubscriptionStream,
-    ethabi::{self, Address, Contract, Event},
+    ethabi::{self, Address, Contract, Event, RawLog},
     signing::{Key, SecretKeyRef},
     types::{
         Block, BlockHeader, BlockNumber, Bytes, CallRequest, Filter, FilterBuilder, Log,
@@ -612,17 +612,20 @@ pub trait EthObserver {
         header: EthNumberBloom,
         eth_rpc: EthRpc,
         contract_address: H160,
-    ) -> Result<BlockEvents<Self::EventParameters>>
+        decode_log_fn: Arc<
+            Box<
+                dyn Fn(H256, RawLog) -> Result<<Self as EthObserver>::EventParameters>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    ) -> BlockEvents<Self::EventParameters>
     where
         EthRpc: EthRpcApi + Clone + 'static + Send + Sync,
     {
         let block_number = header.block_number;
         let mut contract_bloom = Bloom::default();
         contract_bloom.accrue(Input::Raw(&contract_address.0));
-
-        let decode_log_fn = self
-            .decode_log_closure()
-            .context("Failed to get the decode log closure")?;
 
         // if we have logs for this block, fetch them.
         let events = if header.logs_bloom.contains_bloom(&contract_bloom) {
@@ -645,7 +648,7 @@ pub trait EthObserver {
                                     anyhow::Error,
                                 > {
                                     EventWithCommon::<Self::EventParameters>::decode(
-                                        &decode_log_fn,
+                                        decode_log_fn.clone(),
                                         unparsed_log,
                                     )
                                 },
@@ -658,10 +661,10 @@ pub trait EthObserver {
             None
         };
 
-        Ok(BlockEvents {
+        BlockEvents {
             block_number: block_number.as_u64(),
             events,
-        })
+        }
     }
 
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
@@ -672,7 +675,7 @@ pub trait EthObserver {
         safe_head_stream: BlockHeaderStream,
         eth_rpc: EthRpc,
         logger: slog::Logger,
-    ) -> Result<Pin<Box<dyn Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Send + '_>>>
+    ) -> Result<Pin<Box<dyn Stream<Item = BlockEvents<Self::EventParameters>> + Send + '_>>>
     where
         BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
         EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
@@ -736,12 +739,20 @@ pub trait EthObserver {
                 .fuse();
                 let eth_rpc_c = eth_rpc.clone();
 
+                let decode_log_fn = Arc::new(self.decode_log_closure()?);
+
                 // convert from heads to events
                 let events = past_and_fut_heads.then(move |header| {
                     let eth_rpc = eth_rpc_c.clone();
+                    let decode_log_fn = decode_log_fn.clone();
                     async move {
-                        self.get_block_events_for_block(header, eth_rpc, contract_address)
-                            .await
+                        self.get_block_events_for_block(
+                            header,
+                            eth_rpc,
+                            contract_address,
+                            decode_log_fn,
+                        )
+                        .await
                     }
                 });
 
@@ -816,10 +827,9 @@ pub trait EthObserver {
         logger: slog::Logger,
     ) -> Result<Pin<Box<dyn Stream<Item = EventWithCommon<Self::EventParameters>> + Send + 'a>>>
     where
-        BlockEventsStreamWs:
-            Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send + 'a,
+        BlockEventsStreamWs: Stream<Item = BlockEvents<Self::EventParameters>> + Unpin + Send + 'a,
         BlockEventsStreamHttp:
-            Stream<Item = Result<BlockEvents<Self::EventParameters>>> + Unpin + Send + 'a,
+            Stream<Item = BlockEvents<Self::EventParameters>> + Unpin + Send + 'a,
     {
         #[derive(Debug)]
         struct ProtocolState {
@@ -964,87 +974,91 @@ pub trait EthObserver {
         /// Ok(None) => Something mundane occurred, just ignore and continue in the unfold stream
         /// Err => only occurs when the recovery fails => Terminate the unfold stream
         async fn do_for_protocol<
-            BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
+            BlockEventsStream: Stream<Item = BlockEvents<EventParameters>> + Unpin,
             EventParameters: Debug,
         >(
             merged_stream_state: &mut MergedStreamState<EventParameters>,
             protocol_state: &mut ProtocolState,
             other_protocol_state: &mut ProtocolState,
             other_protocol_stream: BlockEventsStream,
-            result_block_events: Result<BlockEvents<EventParameters>>,
+            block_events: BlockEvents<EventParameters>,
         ) -> Result<Option<BlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
             let has_yielded = merged_stream_state.last_block_yielded != 0;
 
-            let result_opt_block_events = if let Ok(block_events) = result_block_events {
-                if !has_yielded
-                    || block_events.block_number == merged_stream_state.last_block_yielded + 1
-                {
-                    Ok(Some(block_events))
-                } else if block_events.block_number <= protocol_state.last_block_pulled {
-                    slog::warn!(
-                        &merged_stream_state.logger,
-                        #SAFE_PROTOCOL_STREAM_JUMP_BACK,
-                        "Unexpected: ETH {} stream last returned {}, but now returned {}",
-                        protocol_state.protocol,
-                        protocol_state.last_block_pulled,
-                        block_events.block_number
-                    );
-                    Ok(None)
-                } else {
-                    assert!(
-                        has_yielded
-                            && block_events.block_number <= merged_stream_state.last_block_yielded
-                    );
-                    protocol_state.last_block_pulled = block_events.block_number;
-                    slog::trace!(
-                        merged_stream_state.logger,
-                        "Ignoring BlockEvents for block number {} from {}, already produced by other stream",
-                        block_events.block_number, protocol_state.protocol
-                    );
-                    Ok(None)
-                }
-            } else {
-                // We got an error block
+            // DO THE LOGIC
 
-                let we_yielded_last_block =
-                    protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
+            return Err(anyhow::Error::msg("TODO"));
 
-                // if we yieled the last one i.e. we are the stream ahead, we let the other stream progress to try and recover
-                if we_yielded_last_block {
-                    Ok(Some(
-                        catch_up_other_stream(
-                            other_protocol_state,
-                            other_protocol_stream,
-                            next_block_to_yield,
-                            &merged_stream_state.logger,
-                        )
-                        .await?,
-                    ))
-                } else {
-                    slog::error!(
-                        merged_stream_state.logger,
-                        "Failed to fetch block from {} stream. Expecting to successfully get block for {}",
-                        protocol_state.protocol,
-                        next_block_to_yield
-                    );
-                    Ok(None)
-                }
-            };
+            // let result_opt_block_events = if let Ok(block_events) = result_block_events {
+            //     if !has_yielded
+            //         || block_events.block_number == merged_stream_state.last_block_yielded + 1
+            //     {
+            //         Ok(Some(block_events))
+            //     } else if block_events.block_number <= protocol_state.last_block_pulled {
+            //         slog::warn!(
+            //             &merged_stream_state.logger,
+            //             #SAFE_PROTOCOL_STREAM_JUMP_BACK,
+            //             "Unexpected: ETH {} stream last returned {}, but now returned {}",
+            //             protocol_state.protocol,
+            //             protocol_state.last_block_pulled,
+            //             block_events.block_number
+            //         );
+            //         Ok(None)
+            //     } else {
+            //         assert!(
+            //             has_yielded
+            //                 && block_events.block_number <= merged_stream_state.last_block_yielded
+            //         );
+            //         protocol_state.last_block_pulled = block_events.block_number;
+            //         slog::trace!(
+            //             merged_stream_state.logger,
+            //             "Ignoring BlockEvents for block number {} from {}, already produced by other stream",
+            //             block_events.block_number, protocol_state.protocol
+            //         );
+            //         Ok(None)
+            //     }
+            // } else {
+            //     // We got an error block
 
-            // we're going to yield, so update the state accordingly
-            if let Ok(Some(block_events)) = &result_opt_block_events {
-                merged_stream_state.last_block_yielded = block_events.block_number;
-                protocol_state.last_block_pulled = block_events.block_number;
-                log_when_stream_behind(
-                    protocol_state,
-                    other_protocol_state,
-                    merged_stream_state,
-                    block_events,
-                );
-            }
+            //     let we_yielded_last_block =
+            //         protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
 
-            result_opt_block_events
+            //     // if we yieled the last one i.e. we are the stream ahead, we let the other stream progress to try and recover
+            //     if we_yielded_last_block {
+            //         Ok(Some(
+            //             catch_up_other_stream(
+            //                 other_protocol_state,
+            //                 other_protocol_stream,
+            //                 next_block_to_yield,
+            //                 &merged_stream_state.logger,
+            //             )
+            //             .await?,
+            //         ))
+            //     } else {
+            //         slog::error!(
+            //             merged_stream_state.logger,
+            //             "Failed to fetch block from {} stream. Expecting to successfully get block for {}",
+            //             protocol_state.protocol,
+            //             next_block_to_yield
+            //         );
+            //         Ok(None)
+            //     }
+            // };
+
+            // // we're going to yield, so update the state accordingly
+            // if let Ok(Some(block_events)) = &result_opt_block_events {
+            //     merged_stream_state.last_block_yielded = block_events.block_number;
+            //     protocol_state.last_block_pulled = block_events.block_number;
+            //     log_when_stream_behind(
+            //         protocol_state,
+            //         other_protocol_state,
+            //         merged_stream_state,
+            //         block_events,
+            //     );
+            // }
+
+            // result_opt_block_events
         }
 
         Ok(Box::pin(stream::unfold(
@@ -1059,46 +1073,46 @@ pub trait EthObserver {
 
                     let iter_result;
                     tokio::select! {
-                        Some(result_block_events) = stream_state.ws_stream.next() => {
-                            iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, result_block_events).await;
+                        Some(block_events) = stream_state.ws_stream.next() => {
+                            iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, block_events).await;
 
                         }
-                        Some(result_block_events) = stream_state.http_stream.next() => {
-                            iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, result_block_events).await;
+                        Some(block_events) = stream_state.http_stream.next() => {
+                            iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, block_events).await;
                         }
                         else => break None
                     }
 
-                    match iter_result {
-                        Ok(opt_block_events) => {
-                            if let Some(block_events) = opt_block_events {
-                                if let Some(events) = block_events.events {
-                                    // TODO: We should handle the failure on decoding in the do_for_protocol
-                                    slog::info!(
-                                        stream_state.merged_stream_state.logger,
-                                        "ETH block: {} contains interesting events",
-                                        block_events.block_number
-                                    );
-                                    stream_state.merged_stream_state.events_to_yield =
-                                        events.into_iter().collect();
-                                } else {
-                                    slog::debug!(
-                                        stream_state.merged_stream_state.logger,
-                                        "ETH block {} contains no interesting events",
-                                        block_events.block_number
-                                    );
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            slog::error!(
-                                stream_state.merged_stream_state.logger,
-                                "Error in ETH merged event stream: {}",
-                                err
-                            );
-                            break None;
-                        }
-                    }
+                    // match iter_result {
+                    //     Ok(opt_block_events) => {
+                    //         if let Some(block_events) = opt_block_events {
+                    //             if let Some(events) = block_events.events {
+                    //                 // TODO: We should handle the failure on decoding in the do_for_protocol
+                    //                 slog::info!(
+                    //                     stream_state.merged_stream_state.logger,
+                    //                     "ETH block: {} contains interesting events",
+                    //                     block_events.block_number
+                    //                 );
+                    //                 stream_state.merged_stream_state.events_to_yield =
+                    //                     events.into_iter().collect();
+                    //             } else {
+                    //                 slog::debug!(
+                    //                     stream_state.merged_stream_state.logger,
+                    //                     "ETH block {} contains no interesting events",
+                    //                     block_events.block_number
+                    //                 );
+                    //             }
+                    //         }
+                    //     }
+                    //     Err(err) => {
+                    //         slog::error!(
+                    //             stream_state.merged_stream_state.logger,
+                    //             "Error in ETH merged event stream: {}",
+                    //             err
+                    //         );
+                    //         break None;
+                    //     }
+                    // }
                 }
             },
         )))
@@ -1106,7 +1120,7 @@ pub trait EthObserver {
 
     fn decode_log_closure(
         &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>>;
+    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send + Sync>>;
 
     async fn handle_event<RpcClient>(
         &self,
