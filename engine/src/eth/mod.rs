@@ -907,22 +907,8 @@ pub trait EthObserver {
                 }
             }
 
-            println!(
-                "Last block yielded: {}. Other last block pulled: {}",
-                merged_stream_state.last_block_yielded, other_protocol_state.last_block_pulled
-            );
             let blocks_behind =
                 merged_stream_state.last_block_yielded - other_protocol_state.last_block_pulled;
-
-            println!(
-                "Called log when stream behind when {} yielded",
-                protocol_state.protocol
-            );
-
-            println!(
-                "blocks behind: {}, other protocol last pulled: {}",
-                blocks_behind, other_protocol_state.last_block_pulled
-            );
 
             // we don't want to log on the first iteration
             if other_protocol_state.last_block_pulled != 0
