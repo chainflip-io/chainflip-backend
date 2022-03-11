@@ -45,7 +45,7 @@ where
                         Ok(block_number) => break block_number,
                         Err(_) => {
                             // TODO: Add logging
-                            tokio::time::sleep(HTTP_POLL_INTERVAL).await;
+                            tokio::time::sleep(poll_interval).await;
                         }
                     };
                 };
@@ -70,7 +70,7 @@ where
                     if let Ok(block) = state.eth_http_rpc.block(next_block_to_yield).await {
                         break block;
                     } else {
-                        tokio::time::sleep(HTTP_POLL_INTERVAL).await;
+                        tokio::time::sleep(poll_interval).await;
                     }
                 };
                 let number_bloom: EthNumberBloom = if let Ok(number_bloom) = block.try_into() {
@@ -402,7 +402,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn return_error_on_bad_block_number_poll() {
+    async fn stalls_on_bad_block_number_poll() {
         let mut mock_eth_http_rpc_client = MockEthHttpRpcClient::new();
 
         let mut seq = Sequence::new();
@@ -458,7 +458,6 @@ pub mod tests {
             };
         }
 
-        assert!(stream.next().await.is_none());
         assert_eq!(
             stream.next().await.unwrap().block_number,
             U64::from(block_number_after_error - ETH_BLOCK_SAFETY_MARGIN)
@@ -466,7 +465,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn return_error_on_good_block_number_bad_block_fetch_with_safety() {
+    async fn stall_when_failed_to_fetch_safe_block() {
         let mut mock_eth_http_rpc_client = MockEthHttpRpcClient::new();
 
         let mut seq = Sequence::new();
@@ -524,12 +523,10 @@ pub mod tests {
             U64::from(first_block - safety_margin)
         );
 
-        assert!(stream.next().await.is_none());
-
-        // assert_eq!(
-        //     stream.next().await.unwrap().block_number,
-        //     // no safety margin
-        //     U64::from(second_block - safety_margin)
-        // );
+        assert_eq!(
+            stream.next().await.unwrap().block_number,
+            // no safety margin
+            U64::from(second_block - safety_margin)
+        );
     }
 }
