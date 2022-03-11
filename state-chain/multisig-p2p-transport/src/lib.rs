@@ -1008,9 +1008,8 @@ mod tests {
 			.expect_try_send_notification()
 			.with(eq(peer_0), eq(message.clone()))
 			.times({
-				const FAILED_SENDS: usize = RETRY_SEND_ATTEMPTS - 1;
-				assert!(FAILED_SENDS > 0);
-				FAILED_SENDS
+				assert!(RETRY_SEND_ATTEMPTS > 1);
+				RETRY_SEND_ATTEMPTS - 1
 			})
 			.return_const(false);
 		network_expectations
