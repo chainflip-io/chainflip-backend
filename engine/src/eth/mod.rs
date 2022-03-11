@@ -925,54 +925,51 @@ pub trait EthObserver {
 
         async fn catch_up_other_stream<
             EventParameters: Debug,
-            BlockEventsStream: Stream<Item = Result<BlockEvents<EventParameters>>> + Unpin,
+            BlockEventsStream: Stream<Item = BlockEvents<EventParameters>> + Unpin,
         >(
             protocol_state: &mut ProtocolState,
             mut protocol_stream: BlockEventsStream,
             next_block_to_yield: u64,
             logger: &slog::Logger,
         ) -> Result<BlockEvents<EventParameters>> {
-            while let Some(result_block_events) = protocol_stream.next().await {
-                match result_block_events {
-                    Ok(block_events) => match block_events.block_number.cmp(&next_block_to_yield) {
-                        Ordering::Equal => {
-                            slog::info!(
-                                logger,
-                                "ETH {} stream has caught up and returned block `{}`",
-                                protocol_state.protocol,
-                                block_events.block_number
-                            );
-                            return Ok(block_events);
+            while let Some(block_events) = protocol_stream.next().await {
+                match block_events.block_number.cmp(&next_block_to_yield) {
+                    Ordering::Equal => {
+                        // we want to yield this one :)
+                        match &block_events.events {
+                            Some(events) => match events {
+                                Ok(_) => return Ok(block_events),
+                                Err(err) => {
+                                    return Err(anyhow::Error::msg(format!("ETH {} stream failed with error, on block {} that we were recovering from: {}", protocol_state.protocol, block_events.block_number, err)));
+                                }
+                            },
+                            None => {
+                                // We can only enter into recovery if the logs were Some()
+                                // so if we get None here, for the same block, that is bad.
+                                return Err(anyhow::Error::msg(format!("ETH {} stream did not detect logs for block {}, when attempting to recover.", protocol_state.protocol, block_events.block_number)));
+                            }
                         }
-                        Ordering::Less => {
-                            slog::trace!(logger, "ETH {} stream pulled block `{}` but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
-                        }
-                        Ordering::Greater => {
-                            panic!(
-                                "ETH {} stream skipped blocks. Next block to yield was `{}` but got block `{}`. This should not occur",
-                                protocol_state.protocol,
-                                next_block_to_yield,
-                                block_events.block_number
-                            );
-                        }
-                    },
-                    Err(err) => {
-                        return Err(anyhow::Error::msg(
-                            format!("ETH {} stream has failed after pulling block `{}` while attempting to recover. Error: {}", protocol_state.protocol, protocol_state.last_block_pulled, err),
-                        ));
+                    }
+                    Ordering::Less => {
+                        slog::trace!(logger, "ETH {} stream pulled block `{}` but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
+                    }
+                    Ordering::Greater => {
+                        panic!(
+                            "ETH {} stream skipped blocks. Next block to yield was `{}` but got block `{}`. This should not occur",
+                            protocol_state.protocol,
+                            next_block_to_yield,
+                            block_events.block_number
+                        );
                     }
                 }
             }
+
             Err(anyhow::Error::msg(format!(
                 "ETH {} stream failed to yield any values when attempting to recover",
                 protocol_state.protocol,
             )))
         }
 
-        /// Returns a block only if we are ready to yield this particular block
-        /// Ok(Some) => Yield from unfold stream
-        /// Ok(None) => Something mundane occurred, just ignore and continue in the unfold stream
-        /// Err => only occurs when the recovery fails => Terminate the unfold stream
         async fn do_for_protocol<
             BlockEventsStream: Stream<Item = BlockEvents<EventParameters>> + Unpin,
             EventParameters: Debug,
@@ -986,79 +983,39 @@ pub trait EthObserver {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
             let has_yielded = merged_stream_state.last_block_yielded != 0;
 
-            // DO THE LOGIC
-
-            return Err(anyhow::Error::msg("TODO"));
-
-            // let result_opt_block_events = if let Ok(block_events) = result_block_events {
-            //     if !has_yielded
-            //         || block_events.block_number == merged_stream_state.last_block_yielded + 1
-            //     {
-            //         Ok(Some(block_events))
-            //     } else if block_events.block_number <= protocol_state.last_block_pulled {
-            //         slog::warn!(
-            //             &merged_stream_state.logger,
-            //             #SAFE_PROTOCOL_STREAM_JUMP_BACK,
-            //             "Unexpected: ETH {} stream last returned {}, but now returned {}",
-            //             protocol_state.protocol,
-            //             protocol_state.last_block_pulled,
-            //             block_events.block_number
-            //         );
-            //         Ok(None)
-            //     } else {
-            //         assert!(
-            //             has_yielded
-            //                 && block_events.block_number <= merged_stream_state.last_block_yielded
-            //         );
-            //         protocol_state.last_block_pulled = block_events.block_number;
-            //         slog::trace!(
-            //             merged_stream_state.logger,
-            //             "Ignoring BlockEvents for block number {} from {}, already produced by other stream",
-            //             block_events.block_number, protocol_state.protocol
-            //         );
-            //         Ok(None)
-            //     }
-            // } else {
-            //     // We got an error block
-
-            //     let we_yielded_last_block =
-            //         protocol_state.last_block_pulled == merged_stream_state.last_block_yielded;
-
-            //     // if we yieled the last one i.e. we are the stream ahead, we let the other stream progress to try and recover
-            //     if we_yielded_last_block {
-            //         Ok(Some(
-            //             catch_up_other_stream(
-            //                 other_protocol_state,
-            //                 other_protocol_stream,
-            //                 next_block_to_yield,
-            //                 &merged_stream_state.logger,
-            //             )
-            //             .await?,
-            //         ))
-            //     } else {
-            //         slog::error!(
-            //             merged_stream_state.logger,
-            //             "Failed to fetch block from {} stream. Expecting to successfully get block for {}",
-            //             protocol_state.protocol,
-            //             next_block_to_yield
-            //         );
-            //         Ok(None)
-            //     }
-            // };
-
-            // // we're going to yield, so update the state accordingly
-            // if let Ok(Some(block_events)) = &result_opt_block_events {
-            //     merged_stream_state.last_block_yielded = block_events.block_number;
-            //     protocol_state.last_block_pulled = block_events.block_number;
-            //     log_when_stream_behind(
-            //         protocol_state,
-            //         other_protocol_state,
-            //         merged_stream_state,
-            //         block_events,
-            //     );
-            // }
-
-            // result_opt_block_events
+            // we only care about yielding if we're at the next block
+            if !has_yielded
+                || block_events.block_number == merged_stream_state.last_block_yielded + 1
+            {
+                // we want to yield IF the block is successful
+                // if it's not successful we want to try the other stream
+                match &block_events.events {
+                    Some(result_events) => match result_events {
+                        Ok(events) => {
+                            // yield, if we are at high enough block number
+                            Ok(Some(block_events))
+                        }
+                        Err(err) => Ok(Some(
+                            catch_up_other_stream(
+                                other_protocol_state,
+                                other_protocol_stream,
+                                next_block_to_yield,
+                                &merged_stream_state.logger,
+                            )
+                            .await?,
+                        )),
+                    },
+                    None => {
+                        // not an interesting block, but we still want to yield it
+                        Ok(Some(block_events))
+                    }
+                }
+            } else if block_events.block_number > next_block_to_yield {
+                Err(anyhow::Error::msg("Merged stream cannot skip blocks!"))
+            } else {
+                // we're just behind, so we continue on happily
+                Ok(None)
+            }
         }
 
         Ok(Box::pin(stream::unfold(
