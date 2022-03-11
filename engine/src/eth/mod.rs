@@ -22,10 +22,7 @@ use crate::{
         http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
         ws_safe_stream::safe_ws_head_stream,
     },
-    logging::{
-        COMPONENT_KEY, ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED,
-        SAFE_PROTOCOL_STREAM_JUMP_BACK,
-    },
+    logging::{COMPONENT_KEY, ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED},
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
@@ -595,10 +592,18 @@ impl fmt::Display for TransportProtocol {
 }
 
 /// Contains None events if the logs bloom says there's nothing interesting in that block
+/// Ok if the logs decode successfully, error if not
 #[derive(Debug)]
 pub struct BlockEvents<EventParameters: Debug> {
     pub block_number: u64,
     pub events: Option<Result<Vec<EventWithCommon<EventParameters>>>>,
+}
+
+/// Same as BlockEvents, but does not contain an Error, as they will have be cleaned out / recovered from
+#[derive(Debug)]
+pub struct CleanBlockEvents<EventParameters: Debug> {
+    pub block_number: u64,
+    pub events: Option<Vec<EventWithCommon<EventParameters>>>,
 }
 
 // Specify a default type for the mock
@@ -879,7 +884,7 @@ pub trait EthObserver {
             other_protocol_state: &ProtocolState,
             merged_stream_state: &MergedStreamState<EventParameters>,
             // the current block events
-            block_events: &BlockEvents<EventParameters>,
+            block_events: &CleanBlockEvents<EventParameters>,
         ) {
             match protocol_state.protocol {
                 TransportProtocol::Http => {
@@ -902,8 +907,22 @@ pub trait EthObserver {
                 }
             }
 
+            println!(
+                "Last block yielded: {}. Other last block pulled: {}",
+                merged_stream_state.last_block_yielded, other_protocol_state.last_block_pulled
+            );
             let blocks_behind =
                 merged_stream_state.last_block_yielded - other_protocol_state.last_block_pulled;
+
+            println!(
+                "Called log when stream behind when {} yielded",
+                protocol_state.protocol
+            );
+
+            println!(
+                "blocks behind: {}, other protocol last pulled: {}",
+                blocks_behind, other_protocol_state.last_block_pulled
+            );
 
             // we don't want to log on the first iteration
             if other_protocol_state.last_block_pulled != 0
@@ -923,7 +942,7 @@ pub trait EthObserver {
             }
         }
 
-        async fn catch_up_other_stream<
+        async fn recover_with_other_stream<
             EventParameters: Debug,
             BlockEventsStream: Stream<Item = BlockEvents<EventParameters>> + Unpin,
         >(
@@ -931,14 +950,19 @@ pub trait EthObserver {
             mut protocol_stream: BlockEventsStream,
             next_block_to_yield: u64,
             logger: &slog::Logger,
-        ) -> Result<BlockEvents<EventParameters>> {
+        ) -> Result<CleanBlockEvents<EventParameters>> {
             while let Some(block_events) = protocol_stream.next().await {
                 match block_events.block_number.cmp(&next_block_to_yield) {
                     Ordering::Equal => {
                         // we want to yield this one :)
-                        match &block_events.events {
+                        match block_events.events {
                             Some(events) => match events {
-                                Ok(_) => return Ok(block_events),
+                                Ok(events) => {
+                                    return Ok(CleanBlockEvents {
+                                        block_number: block_events.block_number,
+                                        events: Some(events),
+                                    })
+                                }
                                 Err(err) => {
                                     return Err(anyhow::Error::msg(format!("ETH {} stream failed with error, on block {} that we were recovering from: {}", protocol_state.protocol, block_events.block_number, err)));
                                 }
@@ -979,43 +1003,79 @@ pub trait EthObserver {
             other_protocol_state: &mut ProtocolState,
             other_protocol_stream: BlockEventsStream,
             block_events: BlockEvents<EventParameters>,
-        ) -> Result<Option<BlockEvents<EventParameters>>> {
+        ) -> Result<Option<CleanBlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
             let has_yielded = merged_stream_state.last_block_yielded != 0;
+            let has_pulled = protocol_state.last_block_pulled != 0;
 
             // we only care about yielding if we're at the next block
-            if !has_yielded
+            let result_opt_block_events = if !has_yielded
                 || block_events.block_number == merged_stream_state.last_block_yielded + 1
             {
                 // we want to yield IF the block is successful
                 // if it's not successful we want to try the other stream
-                match &block_events.events {
+                match block_events.events {
                     Some(result_events) => match result_events {
                         Ok(events) => {
                             // yield, if we are at high enough block number
-                            Ok(Some(block_events))
+                            Ok(Some(CleanBlockEvents {
+                                block_number: block_events.block_number,
+                                events: Some(events),
+                            }))
                         }
-                        Err(err) => Ok(Some(
-                            catch_up_other_stream(
-                                other_protocol_state,
-                                other_protocol_stream,
-                                next_block_to_yield,
-                                &merged_stream_state.logger,
-                            )
-                            .await?,
-                        )),
+                        Err(err) => {
+                            slog::error!(
+                                merged_stream_state.logger,
+                                "ETH {} stream failed to get events for ETH block `{}`: {}",
+                                protocol_state.protocol,
+                                block_events.block_number,
+                                err
+                            );
+                            Ok(Some(
+                                recover_with_other_stream(
+                                    other_protocol_state,
+                                    other_protocol_stream,
+                                    next_block_to_yield,
+                                    &merged_stream_state.logger,
+                                )
+                                .await?,
+                            ))
+                        }
                     },
                     None => {
                         // not an interesting block, but we still want to yield it
-                        Ok(Some(block_events))
+                        Ok(Some(CleanBlockEvents {
+                            block_number: block_events.block_number,
+                            events: None,
+                        }))
                     }
                 }
-            } else if block_events.block_number > next_block_to_yield {
-                Err(anyhow::Error::msg("Merged stream cannot skip blocks!"))
+            } else if has_pulled
+                && (block_events.block_number != protocol_state.last_block_pulled + 1)
+            {
+                Err(anyhow::Error::msg(format!("ETH {} stream is expected to be a contiguous sequence of block events. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number)))
+            } else if has_yielded && block_events.block_number > next_block_to_yield {
+                // this can only happen at the start. E.g. if one streams first item to yield is 8, it yields
+                // then we poll this stream, it's first item is 12. We haven't skipped. Just one stream started ahead
+                Err(anyhow::Error::msg("Input streams to merged stream started at different block numbers. Terminating"))
             } else {
-                // we're just behind, so we continue on happily
+                slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_events.block_number, next_block_to_yield);
                 Ok(None)
+            };
+
+            protocol_state.last_block_pulled = block_events.block_number;
+
+            if let Ok(Some(clean_block_events)) = &result_opt_block_events {
+                merged_stream_state.last_block_yielded = clean_block_events.block_number;
+                log_when_stream_behind(
+                    protocol_state,
+                    other_protocol_state,
+                    merged_stream_state,
+                    clean_block_events,
+                );
             }
+
+            result_opt_block_events
         }
 
         Ok(Box::pin(stream::unfold(
@@ -1040,36 +1100,35 @@ pub trait EthObserver {
                         else => break None
                     }
 
-                    // match iter_result {
-                    //     Ok(opt_block_events) => {
-                    //         if let Some(block_events) = opt_block_events {
-                    //             if let Some(events) = block_events.events {
-                    //                 // TODO: We should handle the failure on decoding in the do_for_protocol
-                    //                 slog::info!(
-                    //                     stream_state.merged_stream_state.logger,
-                    //                     "ETH block: {} contains interesting events",
-                    //                     block_events.block_number
-                    //                 );
-                    //                 stream_state.merged_stream_state.events_to_yield =
-                    //                     events.into_iter().collect();
-                    //             } else {
-                    //                 slog::debug!(
-                    //                     stream_state.merged_stream_state.logger,
-                    //                     "ETH block {} contains no interesting events",
-                    //                     block_events.block_number
-                    //                 );
-                    //             }
-                    //         }
-                    //     }
-                    //     Err(err) => {
-                    //         slog::error!(
-                    //             stream_state.merged_stream_state.logger,
-                    //             "Error in ETH merged event stream: {}",
-                    //             err
-                    //         );
-                    //         break None;
-                    //     }
-                    // }
+                    match iter_result {
+                        Ok(opt_clean_block_events) => {
+                            if let Some(clean_block_events) = opt_clean_block_events {
+                                if let Some(events) = clean_block_events.events {
+                                    slog::info!(
+                                        stream_state.merged_stream_state.logger,
+                                        "ETH block: {} contains interesting events",
+                                        clean_block_events.block_number
+                                    );
+                                    stream_state.merged_stream_state.events_to_yield =
+                                        events.into_iter().collect();
+                                } else {
+                                    slog::debug!(
+                                        stream_state.merged_stream_state.logger,
+                                        "ETH block {} contains no interesting events",
+                                        clean_block_events.block_number
+                                    );
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            slog::error!(
+                                stream_state.merged_stream_state.logger,
+                                "Error in ETH merged event stream: {}",
+                                err
+                            );
+                            break None;
+                        }
+                    }
                 }
             },
         )))
@@ -1243,21 +1302,28 @@ mod merged_stream_tests {
     fn block_events_with_event(
         block_number: u64,
         log_indices: Vec<u8>,
-    ) -> Result<BlockEvents<KeyManagerEvent>> {
-        Ok(BlockEvents {
+    ) -> BlockEvents<KeyManagerEvent> {
+        BlockEvents {
             block_number,
             events: Some(Ok(log_indices
                 .into_iter()
                 .map(|index| key_change(block_number, index))
                 .collect())),
-        })
+        }
     }
 
-    fn block_events_no_events(block_number: u64) -> Result<BlockEvents<KeyManagerEvent>> {
-        Ok(BlockEvents {
+    fn block_events_error(block_number: u64) -> BlockEvents<KeyManagerEvent> {
+        BlockEvents {
+            block_number,
+            events: Some(Err(anyhow::Error::msg("NOOOO"))),
+        }
+    }
+
+    fn block_events_no_events(block_number: u64) -> BlockEvents<KeyManagerEvent> {
+        BlockEvents {
             block_number,
             events: None,
-        })
+        }
     }
 
     // Generate a stream for each protocol, that, when selected upon, will return
@@ -1267,12 +1333,12 @@ mod merged_stream_tests {
     // alternatingly
     fn interleaved_streams(
         // contains the streams in the order they will return
-        items: Vec<(Result<BlockEvents<KeyManagerEvent>>, TransportProtocol)>,
+        items: Vec<(BlockEvents<KeyManagerEvent>, TransportProtocol)>,
     ) -> (
         // ws
-        impl Stream<Item = Result<BlockEvents<KeyManagerEvent>>>,
+        impl Stream<Item = BlockEvents<KeyManagerEvent>>,
         // http
-        impl Stream<Item = Result<BlockEvents<KeyManagerEvent>>>,
+        impl Stream<Item = BlockEvents<KeyManagerEvent>>,
     ) {
         assert!(!items.is_empty(), "should have at least one item");
 
@@ -1300,7 +1366,7 @@ mod merged_stream_tests {
             protocol_last_returned = protocol;
         }
 
-        let delayed_stream = |items: Vec<(Result<BlockEvents<KeyManagerEvent>>, Duration)>| {
+        let delayed_stream = |items: Vec<(BlockEvents<KeyManagerEvent>, Duration)>| {
             let items = items.into_iter();
             Box::pin(stream::unfold(items, |mut items| async move {
                 if let Some((i, d)) = items.next() {
@@ -1345,7 +1411,6 @@ mod merged_stream_tests {
         let log_index = 0;
         let safe_ws_block_events_stream = Box::pin(stream::iter([
             block_events_with_event(key_change_1, vec![log_index]),
-            // no events in these blocks
             block_events_no_events(11),
             block_events_no_events(12),
             block_events_with_event(key_change_2, vec![log_index]),
@@ -1406,53 +1471,7 @@ mod merged_stream_tests {
     }
 
     #[tokio::test]
-    async fn merged_stream_handles_behind_stream() {
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        let key_change_1 = 10;
-        let key_change_2 = 13;
-        let log_index = 0;
-
-        // websockets is a block behind
-        let safe_ws_block_events_stream = Box::pin(stream::iter([
-            block_events_no_events(9),
-            block_events_with_event(key_change_1, vec![log_index]),
-            block_events_no_events(11),
-            block_events_no_events(12),
-            block_events_with_event(13, vec![log_index]),
-        ]));
-        // http is a block ahead
-        let safe_http_block_events_stream = Box::pin(stream::iter([
-            block_events_with_event(key_change_1, vec![log_index]),
-            block_events_no_events(11),
-            block_events_no_events(12),
-            block_events_with_event(key_change_2, vec![log_index]),
-            block_events_no_events(14),
-        ]));
-
-        let mut stream = key_manager
-            .merged_block_events_stream(
-                safe_ws_block_events_stream,
-                safe_http_block_events_stream,
-                logger,
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(
-            stream.next().await.unwrap(),
-            key_change(key_change_1, log_index)
-        );
-        assert_eq!(
-            stream.next().await.unwrap(),
-            key_change(key_change_2, log_index)
-        );
-        assert!(stream.next().await.is_none());
-    }
-
-    #[tokio::test]
-    async fn merged_stream_handles_logs_in_same_tx() {
+    async fn merged_stream_handles_multiple_events_in_same_block() {
         let key_manager = test_km_contract();
         let logger = new_test_logger();
 
@@ -1591,7 +1610,7 @@ mod merged_stream_tests {
     }
 
     #[tokio::test]
-    async fn merged_stream_continues_when_one_stream_jumps_back_in_blocks() {
+    async fn merged_stream_terminates_if_a_stream_moves_backwards() {
         let key_manager = test_km_contract();
         let logger = new_test_logger();
 
@@ -1599,17 +1618,18 @@ mod merged_stream_tests {
             block_events_with_event(12, vec![0]),
             block_events_no_events(13),
             block_events_with_event(14, vec![2]),
+            // We jump back here
+            block_events_no_events(13),
             block_events_no_events(15),
             block_events_with_event(16, vec![0]),
         ]));
 
         let http_stream = Box::pin(stream::iter([
             block_events_with_event(12, vec![0]),
-            // stream glitches :(
-            block_events_with_event(7, vec![2]),
-            // recovers back to where it was
             block_events_no_events(13),
             block_events_with_event(14, vec![2]),
+            // We jump back here
+            block_events_no_events(13),
             block_events_no_events(15),
             block_events_with_event(16, vec![0]),
         ]));
@@ -1620,11 +1640,7 @@ mod merged_stream_tests {
             .unwrap();
 
         assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
-        // TODO: Work out a reliable way to check that it's logged.
-        // this is currently difficult because tokio::select polls randomly
         assert_eq!(stream.next().await.unwrap(), key_change(14, 2));
-
-        assert_eq!(stream.next().await.unwrap(), key_change(16, 0));
         assert!(stream.next().await.is_none());
     }
 
@@ -1634,11 +1650,14 @@ mod merged_stream_tests {
         let logger = new_test_logger();
 
         let ws_stream = Box::pin(stream::iter([
+            block_events_no_events(8),
+            block_events_no_events(9),
+            block_events_no_events(10),
+            block_events_no_events(11),
             block_events_with_event(12, vec![0]),
             block_events_with_event(13, vec![0]),
-            // expecting block 14
-            Err(anyhow::Error::msg("NOOOO")),
-            // NB: We jump from 14 to 15
+            // Error block here
+            block_events_error(14),
             block_events_with_event(15, vec![0]),
             block_events_with_event(16, vec![0]),
         ]));
@@ -1652,83 +1671,43 @@ mod merged_stream_tests {
             block_events_with_event(12, vec![0]),
             block_events_with_event(13, vec![0]),
             block_events_with_event(14, vec![0]),
-        ]));
-
-        let mut stream = key_manager
-            .merged_block_events_stream(ws_stream, http_stream, logger)
-            .await
-            .unwrap();
-
-        assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
-
-        assert_eq!(stream.next().await.unwrap(), key_change(13, 0));
-
-        assert_eq!(stream.next().await.unwrap(), key_change(14, 0));
-
-        // Gets the blocks from WS after HTTP catches up and lets it recover
-        assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
-
-        assert_eq!(stream.next().await.unwrap(), key_change(16, 0));
-        assert!(stream.next().await.is_none());
-    }
-
-    // test 2 blocks the same
-
-    #[tokio::test]
-    async fn single_stream_returns_previously_expected_block_after_erroring() {
-        let key_manager = test_km_contract();
-        let logger = new_test_logger();
-
-        let ws_stream = Box::pin(stream::iter([
-            block_events_with_event(12, vec![0]),
-            Err(anyhow::Error::msg("NOOOO")),
-            // returns the old one intsead of jumping like in the previous test
-            block_events_with_event(13, vec![0]),
-            block_events_with_event(14, vec![0]),
             block_events_with_event(15, vec![0]),
             block_events_with_event(16, vec![0]),
         ]));
 
-        // http is behind, but then catches up and saves the day
-        let http_stream = Box::pin(stream::iter([
-            block_events_no_events(9),
-            block_events_no_events(10),
-            block_events_no_events(11),
-            block_events_with_event(12, vec![0]),
-            block_events_with_event(13, vec![0]),
-            block_events_with_event(14, vec![0]),
-        ]));
-
         let mut stream = key_manager
             .merged_block_events_stream(ws_stream, http_stream, logger)
             .await
             .unwrap();
 
         assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
+
         assert_eq!(stream.next().await.unwrap(), key_change(13, 0));
+
         assert_eq!(stream.next().await.unwrap(), key_change(14, 0));
 
         // Gets the blocks from WS after HTTP catches up and lets it recover
         assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
+
         assert_eq!(stream.next().await.unwrap(), key_change(16, 0));
         assert!(stream.next().await.is_none());
     }
 
-    // handle when one of the streams doesn't even start - we won't get notified of that currently
+    // // handle when one of the streams doesn't even start - we won't get notified of that currently
 
     #[tokio::test]
-    async fn merged_stream_exits_when_both_stream_fail_to_get_block() {
+    async fn merged_stream_exits_when_both_streams_have_error_events_for_a_block() {
         let key_manager = test_km_contract();
         let logger = new_test_logger();
 
         let ws_stream = Box::pin(stream::iter([
             block_events_with_event(11, vec![0]),
-            Err(anyhow::Error::msg("NOOO")),
+            block_events_error(12),
         ]));
 
         let http_stream = Box::pin(stream::iter([
             block_events_with_event(11, vec![0]),
-            Err(anyhow::Error::msg("NOOO, except this time it's worse :(")),
+            block_events_error(12),
         ]));
 
         let mut stream = key_manager
