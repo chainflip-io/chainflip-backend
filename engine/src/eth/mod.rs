@@ -28,7 +28,7 @@ use crate::{
 };
 use ethbloom::{Bloom, Input};
 use futures::{
-    stream::{self, Fuse},
+    stream::{self},
     StreamExt, TryFutureExt,
 };
 use pallet_cf_vaults::BlockHeightWindow;
@@ -854,9 +854,9 @@ pub trait EthObserver {
             EventParameters: Debug,
         > {
             ws_state: ProtocolState,
-            ws_stream: Fuse<BlockEventsStreamWs>,
+            ws_stream: BlockEventsStreamWs,
             http_state: ProtocolState,
-            http_stream: Fuse<BlockEventsStreamHttp>,
+            http_stream: BlockEventsStreamHttp,
             merged_stream_state: MergedStreamState<EventParameters>,
         }
 
@@ -866,12 +866,12 @@ pub trait EthObserver {
                     last_block_pulled: 0,
                     protocol: TransportProtocol::Ws,
                 },
-                ws_stream: safe_ws_block_events_stream.fuse(),
+                ws_stream: safe_ws_block_events_stream,
                 http_state: ProtocolState {
                     last_block_pulled: 0,
                     protocol: TransportProtocol::Http,
                 },
-                http_stream: safe_http_block_events_stream.fuse(),
+                http_stream: safe_http_block_events_stream,
                 merged_stream_state: MergedStreamState {
                     last_block_yielded: 0,
                     events_to_yield: VecDeque::new(),

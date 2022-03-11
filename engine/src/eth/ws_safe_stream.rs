@@ -115,7 +115,7 @@ where
                 break None;
             }
         }
-    }))
+    }).fuse())
 }
 
 #[cfg(test)]
