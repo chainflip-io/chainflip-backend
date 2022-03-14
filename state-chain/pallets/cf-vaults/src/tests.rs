@@ -290,7 +290,7 @@ fn keygen_report_failure() {
 			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 
-		// A resolution is still pending - we 100% response rate.
+		// A resolution is still pending - we expect 100% response rate.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
