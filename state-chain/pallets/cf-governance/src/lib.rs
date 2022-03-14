@@ -18,8 +18,8 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 mod old_storage {
-	pub fn take_old_id() -> u32 {
-		let id = ProposalCount::get().unwrap_or_default();
+	pub fn take_old_id() -> Option<u32> {
+		let id = ProposalCount::get();
 		ProposalCount::kill();
 		id
 	}
@@ -134,7 +134,9 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			ProposalIdCounter::<T>::put(crate::old_storage::take_old_id());
+			if let Some(old) = crate::old_storage::take_old_id() {
+				ProposalIdCounter::<T>::put(old);
+			}
 			0
 		}
 
@@ -145,6 +147,8 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
+			assert!(ProposalIdCounter::<T>::get() > 0);
+			assert!(false, "prop: {:?}", ProposalIdCounter::<T>::get());
 			Ok(())
 		}
 	}
