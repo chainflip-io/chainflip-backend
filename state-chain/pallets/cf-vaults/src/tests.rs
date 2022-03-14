@@ -652,7 +652,7 @@ mod keygen_reporting {
 			assert!(matches!(
 				get_outcome(
 					&n_times([(17, ReportedOutcome::Failure), (7, ReportedOutcome::Timeout)]),
-					|id| if id < 17 { [23] } else { [24] }
+					|id| if id < 17 { [17] } else { [24] }
 				),
 				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
 			));
