@@ -587,7 +587,10 @@ mod keygen_reporting {
 			}
 		}
 
-		status.resolve_keygen_outcome()
+		let outcome = status.resolve_keygen_outcome();
+		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
+		assert!(!FailureVoters::<MockRuntime, _>::exists());
+		outcome
 	}
 
 	/// Keygen can *only* succeed if *all* participants are in agreement.
@@ -647,12 +650,21 @@ mod keygen_reporting {
 	#[test]
 	fn test_failure_dissent() {
 		new_test_ext().execute_with(|| {
+			// A keygen where no consensus is reached. Half think we failed, half think we suceeded.
+			assert!(matches!(
+				get_outcome(
+					&n_times([(3, ReportedOutcome::Failure), (3, ReportedOutcome::Success)]),
+					|_| [4, 5, 6]
+				),
+				KeygenOutcome::Failure(blamed) if blamed.is_empty()
+			));
+
 			// A keygen where more than `threshold` nodes have reported failure, but there is no
 			// final agreement on the guilty parties. Only unresponsive nodes will be reported.
 			assert!(matches!(
 				get_outcome(
 					&n_times([(17, ReportedOutcome::Failure), (7, ReportedOutcome::Timeout)]),
-					|id| if id < 17 { [17] } else { [24] }
+					|id| if id < 16 { [17] } else { [16] }
 				),
 				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
 			));
@@ -666,7 +678,7 @@ mod keygen_reporting {
 						(2, ReportedOutcome::Success),
 						(2, ReportedOutcome::Timeout)
 					]),
-					|id| if id < 17 { [23] } else { [24] }
+					|id| if id < 16 { [17] } else { [16] }
 				),
 				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
 			));
@@ -680,9 +692,9 @@ mod keygen_reporting {
 						(2, ReportedOutcome::Success),
 						(2, ReportedOutcome::Timeout)
 					]),
-					|id| if id == 18 { [1] } else { [18] }
+					|id| if id > 16 { [1, 2] } else { [17, 18] }
 				),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(17..=24)
 			));
 		});
 	}
