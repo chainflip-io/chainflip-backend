@@ -17,6 +17,15 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+mod old_storage {
+	pub fn take_old_id() -> u32 {
+		let id = ProposalCount::get().unwrap_or_default();
+		ProposalCount::kill();
+		id
+	}
+	frame_support::generate_storage_alias!(Governance, ProposalCount => Value<u32>);
+}
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -122,6 +131,21 @@ pub mod pallet {
 			// Execute all proposals which reached threshold in the last block
 			let execution_weight = Self::execute_proposals();
 			active_proposal_weight + execution_weight
+		}
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			ProposalIdCounter::<T>::put(crate::old_storage::take_old_id());
+			0
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			Ok(())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			Ok(())
 		}
 	}
 
