@@ -471,7 +471,7 @@ fn test_setting_vanity_names_() {
 		assert_ok!(ValidatorPallet::set_vanity_name(Origin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
 		let vanity_names = crate::ValidatorNames::<Test>::get();
 		for (validator_id, name) in &vanity_names {
-			println!("{:?}: \"{:?}\"", validator_id, sp_std::str::from_utf8(&name).unwrap());
+			println!("{:?}: \"{:?}\"", validator_id, sp_std::str::from_utf8(name).unwrap());
 		}
 		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), [0xfe, 0xff].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
 		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
