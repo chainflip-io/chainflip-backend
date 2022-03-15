@@ -3,7 +3,7 @@ use crate::{
 	KeygenResolutionPendingSince, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::AggKey;
-use cf_traits::{Chainflip, EpochInfo};
+use cf_traits::{Chainflip, EpochInfo, KeygenStatus, VaultRotator};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
@@ -20,19 +20,18 @@ const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB,
 fn no_candidates_is_noop_and_error() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			VaultsPallet::start_vault_rotation(vec![]),
+			<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]),
 			Error::<MockRuntime, _>::EmptyValidatorSet
 		);
-		assert!(VaultsPallet::no_active_chain_vault_rotations());
 	});
 }
 
 #[test]
 fn keygen_request_emitted() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		// Confirm we have a new vault rotation process running
-		assert!(!VaultsPallet::no_active_chain_vault_rotations());
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 		// Check the event emitted
 		assert_eq!(
 			last_event(),
@@ -48,9 +47,9 @@ fn keygen_request_emitted() {
 #[test]
 fn only_one_concurrent_request_per_chain() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		assert_noop!(
-			VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()),
+			<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()),
 			Error::<MockRuntime, _>::DuplicateRotationRequest
 		);
 	});
@@ -62,7 +61,7 @@ fn keygen_success() {
 		let new_agg_key =
 			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
 
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
 		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
@@ -71,6 +70,10 @@ fn keygen_success() {
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
 		);
+
+		// VaultRotator signals correct state.
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), None);
+		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 	});
 }
 
@@ -79,7 +82,7 @@ fn keygen_failure() {
 	new_test_ext().execute_with(|| {
 		const BAD_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
 
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
@@ -89,11 +92,12 @@ fn keygen_failure() {
 		// KeygenAborted event emitted.
 		assert_eq!(last_event(), PalletEvent::KeygenFailure(ceremony_id).into());
 
-		// All rotations have been aborted.
-		assert!(VaultsPallet::no_active_chain_vault_rotations());
-
 		// Bad validators have been reported.
 		assert_eq!(MockOfflineReporter::get_reported(), BAD_CANDIDATES);
+
+		// VaultRotator signals correct state.
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Failed));
+		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 	});
 }
 
@@ -126,7 +130,8 @@ fn keygen_report_success() {
 		let new_agg_key =
 			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
 
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -181,6 +186,7 @@ fn keygen_report_success() {
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -198,6 +204,9 @@ fn keygen_report_success() {
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
 		);
+
+		// VaultRotator signals correct state.
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), None);
 	})
 }
 
@@ -207,7 +216,8 @@ fn keygen_report_failure() {
 		let new_agg_key =
 			AggKey::from_pubkey_compressed(GENESIS_ETHEREUM_AGG_PUB_KEY.map(|x| x + 1));
 
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -217,6 +227,7 @@ fn keygen_report_failure() {
 			ceremony_id,
 			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 
 		// Can't report twice.
 		assert_noop!(
@@ -262,6 +273,7 @@ fn keygen_report_failure() {
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -276,13 +288,16 @@ fn keygen_report_failure() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		assert_eq!(MockOfflineReporter::get_reported(), vec![CHARLIE]);
+
+		// VaultRotator signals correct state.
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Failed));
 	})
 }
 
 #[test]
 fn test_grace_period() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -325,7 +340,7 @@ fn vault_key_rotated() {
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
 
