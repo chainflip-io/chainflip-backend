@@ -489,7 +489,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
-		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
+		Flip: pallet_cf_flip::{Pallet, Call, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
 		Staking: pallet_cf_staking::{Pallet, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
