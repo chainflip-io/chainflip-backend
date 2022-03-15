@@ -462,3 +462,22 @@ fn register_peer_id() {
 		);
 	});
 }
+
+#[test]
+fn test_setting_vanity_names_() {
+	new_test_ext().execute_with(|| {
+		let validators = DUMMY_GENESIS_VALIDATORS;
+		
+		assert_ok!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Test Validator 1".as_bytes().to_vec()));
+		//assert_ok!(ValidatorPallet::set_vanity_name(Origin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
+
+		let vanity_names = crate::ValidatorNames::<Test>::get();
+
+		for (validator_id, name) in &vanity_names {
+			println!("{:?}: \"{:?}\"", validator_id, name);
+		}
+
+		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), [0xc3, 0xb1].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
+		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::InvalidCharactersInName);
+	});
+}
