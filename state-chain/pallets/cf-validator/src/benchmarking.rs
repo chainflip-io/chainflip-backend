@@ -59,6 +59,14 @@ benchmarks! {
 		assert!(MappedPeers::<T>::contains_key(&public));
 		assert!(AccountPeerMapping::<T>::contains_key(&caller));
 	}
+
+	set_vanity_name {
+		let caller: T::AccountId = whitelisted_caller();
+		let name = str::repeat("x", 64).as_bytes().to_vec();
+	}: _(RawOrigin::Signed(caller.clone()), name.clone())
+	verify {
+		assert_eq!(ValidatorNames::<T>::get().get(&caller), Some(&name));
+	}
 }
 
 // TODO: add the test execution we we've a solution for the register_peer_id benchmark
