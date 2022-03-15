@@ -710,11 +710,7 @@ mod tests {
 
 				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
 
-				assert_eq!(
-					EthereumVault::keygen_ceremony_id_counter(),
-					0,
-					"no key generation requests"
-				);
+				assert_eq!(Validator::ceremony_id_counter(), 0, "no key generation requests");
 
 				assert_eq!(EthereumVault::chain_nonce(), 0, "nonce not incremented");
 

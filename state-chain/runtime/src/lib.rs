@@ -180,6 +180,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type OfflineReporter = Reputation;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
@@ -454,6 +455,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = EthereumVault;
 	type OfflineReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;

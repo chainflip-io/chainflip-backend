@@ -7,8 +7,8 @@
 use cf_chains::{eth::set_agg_key_with_agg_key::SetAggKeyWithAggKey, Chain, ChainCrypto, Ethereum};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, KeygenStatus, Nonce, NonceProvider,
-	SigningContext, ThresholdSigner, VaultRotator,
+	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider, KeygenStatus, Nonce,
+	NonceProvider, SigningContext, ThresholdSigner, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -34,9 +34,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// Id type used for the Keygen ceremony.
-pub type CeremonyId = u64;
-
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum KeygenOutcome<Key, Id> {
 	/// Keygen succeeded with the enclosed public threshold key.
@@ -51,6 +48,7 @@ impl<Key, Id: Ord> Default for KeygenOutcome<Key, Id> {
 	}
 }
 
+pub type CeremonyId = u64;
 pub type KeygenOutcomeFor<T, I = ()> =
 	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
@@ -269,6 +267,9 @@ pub mod pallet {
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
 
+		/// Ceremony Id source for keygen ceremonies.
+		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
@@ -339,11 +340,6 @@ pub mod pallet {
 			migrations::post_migration_checks::<T, I>()
 		}
 	}
-
-	/// Counter for generating unique ceremony ids for the keygen ceremony.
-	#[pallet::storage]
-	#[pallet::getter(fn keygen_ceremony_id_counter)]
-	pub(super) type KeygenCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// A map of vaults by epoch.
 	#[pallet::storage]
@@ -623,10 +619,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
 		ensure!(!PendingVaultRotation::<T, I>::exists(), Error::<T, I>::DuplicateRotationRequest);
 
-		let ceremony_id = KeygenCeremonyIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
+		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::new(
 			ceremony_id,

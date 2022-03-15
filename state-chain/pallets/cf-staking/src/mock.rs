@@ -2,7 +2,9 @@ use crate as pallet_cf_staking;
 use cf_chains::{
 	eth, eth::register_claim::RegisterClaim, AlwaysVerifiesCoin, ChainCrypto, Ethereum,
 };
-use cf_traits::{impl_mock_waived_fees, WaivedFees};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::ceremony_id_provider::MockCeremonyIdProvider, WaivedFees,
+};
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
 use sp_runtime::{
@@ -106,6 +108,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
+	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();
 }
