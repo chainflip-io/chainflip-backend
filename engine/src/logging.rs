@@ -44,14 +44,21 @@ pub mod utils {
             Level::Trace => "[0;35m",
         };
 
+        //Only show the tag if its not empty
+        let tag_string = if record.tag().is_empty() {
+            "".to_string()
+        } else {
+            format!("[{}], ", record.tag())
+        };
+
         // Print the readable log
         println!(
-            "\x1b{}[{}]\x1b[0m {} {} - {}",
+            "\x1b{}[{}]\x1b[0m {} ({}{})",
             level_color,
             record.level(),
-            record.tag(),
+            record.msg(),
+            tag_string,
             record.module(),
-            record.msg()
         );
 
         // Print the location of the log call if its a Warning or above
