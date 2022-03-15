@@ -11,18 +11,32 @@ thread_local! {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Mock;
 
-// Helper function to clear the confirmation result
-pub fn clear_confirmation() {
-	KEYGEN_STATUS.with(|l| *l.borrow_mut() = None);
-}
-
 impl Mock {
-	pub fn error_on_start_vault_rotation() {
-		ERROR_ON_START.with(|cell| *cell.borrow_mut() = true);
+	pub fn set_status(s: Option<KeygenStatus>) {
+		KEYGEN_STATUS.with(|cell| *cell.borrow_mut() = s);
 	}
-	fn reset_error_on_start() {
-		ERROR_ON_START.with(|cell| *cell.borrow_mut() = false);
+
+	fn get_status() -> Option<KeygenStatus> {
+		KEYGEN_STATUS.with(|l| (*l.borrow()).clone())
 	}
+
+	pub fn set_failed() {
+		Self::set_status(Some(KeygenStatus::Failed))
+	}
+
+	pub fn set_busy() {
+		Self::set_status(Some(KeygenStatus::Busy))
+	}
+
+	pub fn set_rotation_complete() {
+		assert_eq!(Self::get_status(), Some(KeygenStatus::Busy));
+		Self::set_status(None);
+	}
+
+	pub fn set_error_on_start(e: bool) {
+		ERROR_ON_START.with(|cell| *cell.borrow_mut() = e);
+	}
+
 	fn error_on_start() -> bool {
 		ERROR_ON_START.with(|cell| *cell.borrow())
 	}
@@ -36,15 +50,18 @@ impl VaultRotator for Mock {
 		_candidates: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::RotationError> {
 		if Self::error_on_start() {
-			Self::reset_error_on_start();
 			return DispatchError::Other("failure").into()
 		}
 
-		KEYGEN_STATUS.with(|l| *l.borrow_mut() = Some(KeygenStatus::Busy));
+		Self::set_status(Some(KeygenStatus::Busy));
 		Ok(())
 	}
 
 	fn get_keygen_status() -> Option<KeygenStatus> {
-		KEYGEN_STATUS.with(|l| (*l.borrow()).clone())
+		Self::get_status()
+	}
+
+	fn finalise_rotation() {
+		Self::set_status(None);
 	}
 }

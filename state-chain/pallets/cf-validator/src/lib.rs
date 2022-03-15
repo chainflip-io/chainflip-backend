@@ -220,12 +220,16 @@ pub mod pallet {
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
 					match T::VaultRotator::get_keygen_status() {
-						None => Self::update_rotation_status(RotationStatus::VaultsRotated(
-							auction_result,
-						)),
+						// `None` can be read as a synonym for 'Complete' or 'Success'
+						None => {
+							Self::update_rotation_status(RotationStatus::VaultsRotated(
+								auction_result,
+							));
+							T::VaultRotator::finalise_rotation();
+						},
 						Some(KeygenStatus::Failed) => {
 							Self::deposit_event(Event::RotationAborted);
-							Self::update_rotation_status(RotationStatus::Idle);
+							Self::update_rotation_status(RotationStatus::RunAuction);
 						},
 						Some(KeygenStatus::Busy) =>
 							log::debug!(target: "cf-validator", "awaiting vault rotation"),

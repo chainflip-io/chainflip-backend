@@ -11,7 +11,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo,
 	},
 	AuctionError, AuctionResult, Bid, BidderProvider, Chainflip, ChainflipAccount,
-	ChainflipAccountData, IsOnline, IsOutgoing, QualifyValidator, VaultRotator,
+	ChainflipAccountData, IsOnline, IsOutgoing, KeygenStatus, QualifyValidator, VaultRotator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -198,32 +198,6 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	}
 }
 
-thread_local! {
-	pub static START_VAULT_ROTATION: RefCell<Result<(), &'static str>> = RefCell::new(Ok(()));
-}
-pub struct MockVaultRotator;
-impl MockVaultRotator {
-	pub fn set_start_vault_rotation(result: Result<(), &'static str>) {
-		START_VAULT_ROTATION.with(|cell| *cell.borrow_mut() = result);
-	}
-}
-
-impl VaultRotator for MockVaultRotator {
-	type ValidatorId = ValidatorId;
-	type RotationError = &'static str;
-
-	/// Start a vault rotation with the following `candidates`
-	fn start_vault_rotation(
-		_candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::RotationError> {
-		START_VAULT_ROTATION.with(|cell| *cell.borrow())
-	}
-
-	fn get_keygen_status() -> Option<cf_traits::KeygenStatus> {
-		None
-	}
-}
-
 pub struct MockQualifyValidator;
 impl QualifyValidator for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
@@ -250,6 +224,8 @@ impl Chainflip for Test {
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 }
+
+pub type MockVaultRotator = cf_traits::mocks::vault_rotation::Mock;
 
 impl Config for Test {
 	type Event = Event;
@@ -326,6 +302,12 @@ pub fn run_to_block(n: u64) {
 		System::set_block_number(System::block_number() + 1);
 		Session::on_initialize(System::block_number());
 		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
+		// Simulate succesful vault rotation.
+		if matches!(RotationPhase::<Test>::get(), RotationStatus::AwaitingVaults(..)) &&
+			MockVaultRotator::get_keygen_status() == Some(KeygenStatus::Busy)
+		{
+			MockVaultRotator::set_rotation_complete()
+		}
 	}
 }
 

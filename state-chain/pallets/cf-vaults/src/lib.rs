@@ -384,7 +384,7 @@ pub mod pallet {
 		/// The Keygen ceremony has been aborted \[ceremony_id\]
 		KeygenAborted(CeremonyId),
 		/// The vault has been rotated
-		VaultsRotated,
+		VaultRotated,
 		/// The new public key witnessed externally was not the expected one \[key\]
 		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
 		/// A validator has reported that keygen was successful \[validator_id\]
@@ -610,14 +610,6 @@ impl<T: Config<I>, I: 'static> NonceProvider<Ethereum> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn no_active_chain_vault_rotations() -> bool {
-		if let Some(status) = PendingVaultRotation::<T, I>::get() {
-			matches!(status, VaultRotationStatus::<T, I>::Complete { .. })
-		} else {
-			true
-		}
-	}
-
 	fn start_vault_rotation(candidates: Vec<T::ValidatorId>) -> DispatchResult {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
@@ -643,16 +635,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
-		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
-		KeygenResolutionPendingSince::<T, I>::kill();
-
 		T::ThresholdSigner::request_transaction_signature(SetAggKeyWithAggKey::new_unsigned(
 			<Self as NonceProvider<Ethereum>>::next_nonce(),
 			new_public_key,
 		));
+
+		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
+		KeygenResolutionPendingSince::<T, I>::kill();
+
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
+		// TODO: Failure of one keygen should cause failure of all keygens.
+		StatusOfKeygen::<T, I>::set(None);
 	}
 
 	fn on_keygen_failure(
@@ -684,17 +679,15 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Get the status of the current key generation
 	fn get_keygen_status() -> Option<KeygenStatus> {
-		if Pallet::<T, I>::no_active_chain_vault_rotations() {
-			// The 'exit' point for the pallet, no rotations left to process
-			PendingVaultRotation::<T, I>::kill();
-			StatusOfKeygen::<T, I>::set(None);
-
-			Self::deposit_event(Event::<T, I>::VaultsRotated);
-		}
-
 		StatusOfKeygen::<T, I>::get()
+	}
+
+	fn finalise_rotation() {
+		PendingVaultRotation::<T, I>::kill();
+		StatusOfKeygen::<T, I>::set(None);
+
+		Self::deposit_event(Event::<T, I>::VaultRotated);
 	}
 }
 

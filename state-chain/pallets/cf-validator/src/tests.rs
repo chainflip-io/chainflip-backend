@@ -94,6 +94,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		run_to_block(epoch);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
+		assert_eq!(RotationPhase::<Test>::get(), RotationStatus::RunAuction);
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::epoch_index(),
 			GENESIS_EPOCH,
@@ -101,9 +102,8 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		);
 		// The auction now runs
 		MockAuctioneer::set_run_behaviour(Ok(Default::default()));
-
-		move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
-		assert_next_epoch();
+		move_forward_blocks(1);
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::AwaitingVaults(..)));
 	});
 }
 
@@ -112,16 +112,46 @@ fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 	new_test_ext().execute_with(|| {
 		let epoch = 10;
 		initialise_validator(epoch);
-		MockVaultRotator::set_start_vault_rotation(Err("failure"));
+		MockVaultRotator::set_error_on_start(true);
 		run_to_block(epoch);
+
 		// Move forward a few blocks, vault rotations would be failing with "failure"
 		move_forward_blocks(100);
+		assert_eq!(RotationPhase::<Test>::get(), RotationStatus::RunAuction);
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::epoch_index(),
 			GENESIS_EPOCH,
 			"we should still be in the first epoch"
 		);
-		MockVaultRotator::set_start_vault_rotation(Ok(()));
+
+		// No more errors, rotation should start.
+		MockVaultRotator::set_error_on_start(false);
+		move_forward_blocks(1);
+		assert!(
+			matches!(RotationPhase::<Test>::get(), RotationStatus::AwaitingVaults(..)),
+			"Got {:?}",
+			RotationPhase::<Test>::get()
+		);
+
+		// If the rotation fails, we go back to RunAuction.
+		MockVaultRotator::set_failed();
+		move_forward_blocks(1);
+		assert_eq!(RotationPhase::<Test>::get(), RotationStatus::RunAuction);
+		move_forward_blocks(1);
+		assert!(
+			matches!(RotationPhase::<Test>::get(), RotationStatus::AwaitingVaults(..)),
+			"Got {:?}",
+			RotationPhase::<Test>::get()
+		);
+
+		// Now the rotation completes.
+		move_forward_blocks(1);
+		assert!(
+			matches!(RotationPhase::<Test>::get(), RotationStatus::VaultsRotated(..)),
+			"Got {:?}",
+			RotationPhase::<Test>::get()
+		);
+
 		move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
 		assert_next_epoch();
 	});
