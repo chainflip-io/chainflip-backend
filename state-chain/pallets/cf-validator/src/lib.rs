@@ -485,7 +485,7 @@ pub mod pallet {
 			})
 		}
 
-		#[pallet::weight(10000)]
+		#[pallet::weight(T::ValidatorWeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
