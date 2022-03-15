@@ -4,17 +4,26 @@
 use super::*;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
 benchmarks! {
 	set_blocks_for_epoch {
 		let b = 2_u32;
-	}: _(RawOrigin::Root, b.into())
+		let call = Call::<T>::set_blocks_for_epoch(b.into());
+		let o = T::EnsureGovernance::successful_origin();
+	}: {
+		call.dispatch_bypass_filter(o)?
+	}
 	verify {
 		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
 	}
 	force_rotation {
-	}: _(RawOrigin::Root)
+		let call = Call::<T>::force_rotation();
+		let o = T::EnsureGovernance::successful_origin();
+	}: {
+		call.dispatch_bypass_filter(o)?
+	}
 	verify {
 		assert_eq!(Pallet::<T>::rotation_phase(), RotationStatus::RunAuction)
 	}
