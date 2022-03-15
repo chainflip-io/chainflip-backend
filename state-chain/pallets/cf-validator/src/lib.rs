@@ -488,7 +488,6 @@ pub mod pallet {
 		#[pallet::weight(10000)]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			//let validator_id: ValidatorIdOf<T> = account_id;
 			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
 			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
 			let mut validators: sp_std::collections::btree_map::BTreeMap<
@@ -544,6 +543,7 @@ pub mod pallet {
 
 	/// Vanity names of the validators stored as a Map with the current validator IDs as key
 	#[pallet::storage]
+	#[pallet::getter(fn validator_names)]
 	pub type ValidatorNames<T: Config> = StorageValue<
 		_,
 		sp_std::collections::btree_map::BTreeMap<ValidatorIdOf<T>, VanityName>,
