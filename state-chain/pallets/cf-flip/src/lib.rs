@@ -197,6 +197,11 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	pub fn liquid(&self) -> Balance {
 		self.stake.saturating_sub(self.validator_bond)
 	}
+
+	// The current validator bond
+	pub fn bond(&self) -> Balance {
+		self.validator_bond
+	}
 }
 
 /// Convenient alias for [SignedImbalance].
@@ -404,9 +409,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type Handler = T::StakeHandler;
 
 	fn locked_balance(account_id: &T::AccountId) -> Self::Balance {
-		let total = Account::<T>::get(account_id).total();
-		let liquid = Account::<T>::get(account_id).liquid();
-		total.saturating_sub(liquid)
+		Account::<T>::get(account_id).bond()
 	}
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {

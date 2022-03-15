@@ -715,9 +715,7 @@ impl<T: Config> Pallet<T> {
 
 		// Remember in which epoch an validator was active
 		for validator in new_validators.iter() {
-			HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
-				epochs.push(new_epoch);
-			});
+			EpochHistory::<T>::activate_epoch(validator, new_epoch);
 		}
 
 		// Handler for a new epoch
@@ -750,6 +748,12 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	fn remove_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
 		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
 			active_epochs.retain(|&x| x != epoch);
+		});
+	}
+
+	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
+		HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
+			epochs.push(epoch);
 		});
 	}
 }
