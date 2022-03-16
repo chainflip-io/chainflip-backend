@@ -12,7 +12,7 @@ use crate as pallet_cf_vaults;
 
 use super::*;
 use cf_chains::{eth, ChainCrypto};
-use cf_traits::Chainflip;
+use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, Chainflip};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -135,6 +135,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type OfflineReporter = MockOfflineReporter;
 	type SigningContext = MockEthSigningContext;
 	type ThresholdSigner = MockThresholdSigner;
+	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }

@@ -4,7 +4,7 @@ use std::{
 	iter::{FromIterator, IntoIterator},
 };
 
-use crate::{self as pallet_cf_threshold_signature, mock::*, Error};
+use crate::{self as pallet_cf_threshold_signature, mock::*, CeremonyId, Error};
 use cf_traits::Chainflip;
 use frame_support::{
 	assert_noop, assert_ok,
@@ -41,6 +41,10 @@ fn tick(cfes: &[MockCfe]) {
 			cfe.process_event(event_record.event.clone());
 		}
 	}
+}
+
+fn current_ceremony_id() -> CeremonyId {
+	<Test as crate::Config<Instance1>>::CeremonyIdProvider::get()
 }
 
 impl MockCfe {
@@ -132,7 +136,7 @@ fn happy_path() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -155,7 +159,7 @@ fn fail_path_with_timeout() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -211,7 +215,7 @@ fn fail_path_no_timeout() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -279,7 +283,7 @@ fn test_not_enough_signers_for_threshold() {
 		.with_pending_request("Woof!")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = DogeThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let request_context = DogeThresholdSigner::pending_request(ceremony_id).unwrap();
 			assert!(request_context.retry_scheduled);
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;

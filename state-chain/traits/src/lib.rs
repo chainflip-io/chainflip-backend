@@ -172,9 +172,11 @@ pub type ActiveValidatorRange = (u32, u32);
 pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
+	type Error: Into<DispatchError>;
 
 	/// Run an auction by qualifying a validator
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError>;
+	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error>;
+
 	/// Update validator status for the winners
 	fn update_validator_status(winners: &[Self::ValidatorId]);
 }
@@ -204,12 +206,6 @@ pub trait VaultRotator {
 	fn get_keygen_status() -> Option<KeygenStatus>;
 }
 
-/// An error has occurred during an auction
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
-pub enum AuctionError {
-	/// Insufficient number of bidders
-	NotEnoughBidders,
-}
 /// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
@@ -665,4 +661,10 @@ pub trait Bonding {
 	type ValidatorId;
 	/// Update the bond of an validator
 	fn bond_validator(validator: &Self::ValidatorId);
+}
+pub trait CeremonyIdProvider {
+	type CeremonyId;
+
+	/// Get the next ceremony id in the sequence.
+	fn next_ceremony_id() -> Self::CeremonyId;
 }

@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -4678,6 +4678,7 @@ name = "multisig-p2p-transport"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bincode",
  "bs58",
  "futures 0.3.17",
@@ -4687,8 +4688,10 @@ dependencies = [
  "jsonrpc-pubsub",
  "log 0.4.14",
  "mockall 0.10.2",
+ "predicates 2.1.1",
  "sc-network",
  "sc-rpc",
+ "sc-service",
  "serde 1.0.130",
  "serde_json",
  "sp-core",
