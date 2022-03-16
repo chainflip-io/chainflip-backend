@@ -27,6 +27,7 @@ pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
 use sp_std::prelude::*;
+use sp_std::collections::btree_map::BTreeMap;
 
 pub mod releases {
 	use frame_support::traits::StorageVersion;
@@ -157,7 +158,7 @@ pub mod pallet {
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 		/// Ratio of claim period updated \[percentage\]
 		ClaimPeriodUpdated(Percentage),
-		/// Vanity Name for a validator has been set
+		/// Vanity Name for a validator has been set \[validator_id, vanity_name\]
 		VanityNameSet(ValidatorIdOf<T>, VanityName),
 	}
 
@@ -490,12 +491,12 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
 			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-			let mut validators: sp_std::collections::btree_map::BTreeMap<
+			let mut validators: BTreeMap<
 				ValidatorIdOf<T>,
 				VanityName,
-			> = ValidatorNames::<T>::get();
+			> = VanityNames::<T>::get();
 			validators.insert(account_id.clone(), name.clone());
-			ValidatorNames::<T>::put(validators);
+			VanityNames::<T>::put(validators);
 			Self::deposit_event(Event::VanityNameSet(account_id, name));
 			Ok(().into())
 		}
@@ -543,8 +544,8 @@ pub mod pallet {
 
 	/// Vanity names of the validators stored as a Map with the current validator IDs as key
 	#[pallet::storage]
-	#[pallet::getter(fn validator_names)]
-	pub type ValidatorNames<T: Config> = StorageValue<
+	#[pallet::getter(fn vanity_names)]
+	pub type VanityNames<T: Config> = StorageValue<
 		_,
 		sp_std::collections::btree_map::BTreeMap<ValidatorIdOf<T>, VanityName>,
 		ValueQuery,
