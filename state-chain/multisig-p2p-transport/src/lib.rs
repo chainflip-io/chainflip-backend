@@ -244,7 +244,7 @@ impl<
 					// notifications) Also it is not ideal to drop new messages, better to drop old
 					// messages.
 					let mut attempts = RETRY_SEND_ATTEMPTS;
-					while 0 < attempts {
+					while attempts > 0 {
 						if p2p_network_service.try_send_notification(peer_id, &message).await {
 							break
 						} else {
