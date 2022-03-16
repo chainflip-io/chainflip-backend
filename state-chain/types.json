@@ -93,7 +93,7 @@
   "Ipv6Addr": "u128",
   "KeygenOutcome": {
     "_enum": {
-      "Success": "Vec<u8>",
+      "Success": "AggKey",
       "Failure": "BTreeSet<ValidatorId>"
     }
   },
