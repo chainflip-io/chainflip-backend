@@ -117,10 +117,13 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			EpochValidatorCount::<T>::insert(
-				T::EpochInfo::epoch_index(),
-				upgrade::old_num_validators(),
-			);
+			if <Pallet<T> as GetStorageVersion>::on_chain_storage_version() < STORAGE_VERSION {
+				EpochValidatorCount::<T>::insert(
+					T::EpochInfo::epoch_index(),
+					upgrade::old_num_validators(),
+				);
+				STORAGE_VERSION.put::<Self>();
+			}
 			0
 		}
 	}
