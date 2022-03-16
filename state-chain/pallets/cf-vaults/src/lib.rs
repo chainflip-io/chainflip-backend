@@ -83,7 +83,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	/// The success threshold is the smallest number of respondents able to reach consensus.
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
-	pub fn success_threshold(&self) -> u32 {
+	fn success_threshold(&self) -> u32 {
 		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
