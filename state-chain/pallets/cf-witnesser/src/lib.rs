@@ -25,12 +25,24 @@ use frame_support::{
 	},
 	ensure,
 	pallet_prelude::Member,
-	traits::EnsureOrigin,
+	traits::{EnsureOrigin, StorageVersion},
 	Hashable,
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 use utilities::success_threshold_from_share_count;
+
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
+mod upgrade {
+	pub fn old_num_validators() -> u32 {
+		NumValidators::take().unwrap_or_default()
+	}
+
+	frame_support::generate_storage_alias!(
+		Witnesser, NumValidators => Value<u32>
+	);
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -78,6 +90,7 @@ pub mod pallet {
 	pub(super) type VoteCount = u32;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator.
@@ -102,7 +115,18 @@ pub mod pallet {
 
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if <Pallet<T> as GetStorageVersion>::on_chain_storage_version() < STORAGE_VERSION {
+				EpochValidatorCount::<T>::insert(
+					T::EpochInfo::epoch_index(),
+					upgrade::old_num_validators(),
+				);
+				STORAGE_VERSION.put::<Self>();
+			}
+			0
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
