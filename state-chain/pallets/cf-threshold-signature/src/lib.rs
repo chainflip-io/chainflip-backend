@@ -19,7 +19,7 @@ use cf_chains::{Chain, ChainCrypto};
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	Chainflip, KeyProvider, SignerNomination, SigningContext,
+	CeremonyIdProvider, Chainflip, KeyProvider, SignerNomination, SigningContext,
 };
 use frame_support::traits::{EnsureOrigin, Get};
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
@@ -159,6 +159,9 @@ pub mod pallet {
 		/// For reporting bad actors.
 		type OfflineReporter: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
 
+		/// CeremonyId source.
+		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+
 		/// Timeout after which we consider a threshold signature ceremony to have failed.
 		#[pallet::constant]
 		type ThresholdFailureTimeout: Get<Self::BlockNumber>;
@@ -175,11 +178,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	/// A counter to generate fresh ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn signing_ceremony_id_counter)]
-	pub type SigningCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// Stores the context required for processing live requests.
 	#[pallet::storage]
@@ -437,10 +435,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Emits a request event, stores its context, and returns its id.
 	fn request_attempt(context: T::SigningContext, attempt: u8) -> u64 {
 		// Get a new id.
-		let id = SigningCeremonyIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
+		let id = T::CeremonyIdProvider::next_ceremony_id();
 
 		// Get the current signing key.
 		let key_id = T::KeyProvider::current_key_id();

@@ -15,9 +15,9 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	ActiveValidatorRange, AuctionError, AuctionResult, Auctioneer, BackupValidators,
-	BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	EpochInfo, KeygenExclusionSet, QualifyValidator, RemainingBid, StakeHandler,
+	ActiveValidatorRange, AuctionResult, Auctioneer, BackupValidators, BidderProvider, Chainflip,
+	ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo, KeygenExclusionSet,
+	QualifyValidator, RemainingBid, StakeHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -139,8 +139,10 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Invalid range used for the active validator range
+		/// Invalid range used for the active validator range.
 		InvalidRange,
+		/// Not enough bidders were available to resolve the auction.
+		NotEnoughBidders,
 	}
 
 	#[pallet::call]
@@ -211,12 +213,13 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> Auctioneer for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
+	type Error = Error<T>;
 
 	// Resolve an auction.  Bids are taken and are qualified. In doing so a `AuctionResult` is
 	// returned with the winners of the auction and the MAB.  Unsuccessful bids are grouped for
 	// potential backup validator candidates.  If we are in an emergency rotation then the strategy
 	// of grouping is modified to avoid a superminority of low collateralised nodes.
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError> {
+	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Error<T>> {
 		let mut bids = T::BidderProvider::get_bidders();
 		// Determine if this validator is qualified for bidding
 		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
@@ -224,14 +227,14 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		let (min_number_of_validators, max_number_of_validators) =
 			ActiveValidatorSizeRange::<T>::get();
 		// Final rule - Confirm we have our set size
-		if number_of_bidders < min_number_of_validators {
+		ensure!(number_of_bidders >= min_number_of_validators, {
 			log::error!(
 				"[cf-auction] insufficient bidders to proceed. {} < {}",
 				number_of_bidders,
 				min_number_of_validators
 			);
-			return Err(AuctionError::NotEnoughBidders)
-		};
+			Error::<T>::NotEnoughBidders
+		});
 
 		bids.sort_unstable_by_key(|k| k.1);
 		bids.reverse();

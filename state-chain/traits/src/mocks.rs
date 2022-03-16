@@ -1,4 +1,5 @@
 #![cfg(feature = "std")]
+pub mod ceremony_id_provider;
 pub mod chainflip_account;
 pub mod ensure_origin_mock;
 pub mod ensure_witnessed;
