@@ -26,8 +26,7 @@ use frame_support::{
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
-use sp_std::prelude::*;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub mod releases {
 	use frame_support::traits::StorageVersion;
@@ -491,10 +490,7 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
 			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-			let mut validators: BTreeMap<
-				ValidatorIdOf<T>,
-				VanityName,
-			> = VanityNames::<T>::get();
+			let mut validators: BTreeMap<ValidatorIdOf<T>, VanityName> = VanityNames::<T>::get();
 			validators.insert(account_id.clone(), name.clone());
 			VanityNames::<T>::put(validators);
 			Self::deposit_event(Event::VanityNameSet(account_id, name));
