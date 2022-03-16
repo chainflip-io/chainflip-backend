@@ -70,9 +70,8 @@ fn keygen_success() {
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
 		);
-
 		// VaultRotator signals correct state.
-		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), None);
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 	});
 }
@@ -205,8 +204,8 @@ fn keygen_report_success() {
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_key
 		);
 
-		// VaultRotator signals correct state.
-		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), None);
+		// VaultRotator signals correct state. We're still busy because we have yet to broadcast.
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 	})
 }
 
@@ -343,6 +342,7 @@ fn vault_key_rotated() {
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = VaultsPallet::keygen_ceremony_id_counter();
 		VaultsPallet::on_keygen_success(ceremony_id, new_agg_key);
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), Some(KeygenStatus::Busy));
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
@@ -350,6 +350,8 @@ fn vault_key_rotated() {
 			ROTATION_BLOCK_NUMBER,
 			TX_HASH.into(),
 		));
+
+		assert_eq!(<VaultsPallet as VaultRotator>::get_keygen_status(), None);
 
 		// Can't repeat.
 		assert_noop!(

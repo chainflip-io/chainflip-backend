@@ -558,6 +558,7 @@ pub mod pallet {
 			);
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+			StatusOfKeygen::<T, I>::set(None);
 
 			Ok(().into())
 		}
@@ -646,8 +647,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
-		// TODO: Failure of one keygen should cause failure of all keygens.
-		StatusOfKeygen::<T, I>::set(None);
 	}
 
 	fn on_keygen_failure(
