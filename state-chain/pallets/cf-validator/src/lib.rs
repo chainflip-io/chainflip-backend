@@ -558,11 +558,8 @@ pub mod pallet {
 	/// Vanity names of the validators stored as a Map with the current validator IDs as key
 	#[pallet::storage]
 	#[pallet::getter(fn vanity_names)]
-	pub type VanityNames<T: Config> = StorageValue<
-		_,
-		sp_std::collections::btree_map::BTreeMap<ValidatorIdOf<T>, VanityName>,
-		ValueQuery,
-	>;
+	pub type VanityNames<T: Config> =
+		StorageValue<_, BTreeMap<ValidatorIdOf<T>, VanityName>, ValueQuery>;
 
 	/// The current bond
 	#[pallet::storage]
