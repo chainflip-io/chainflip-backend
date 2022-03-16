@@ -1,20 +1,53 @@
 # Substrate Troubleshooting
 
-This is a living document with tips, gotchas and general subtrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue. 
+This is a living document with tips, gotchas and general subtrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue.
 
-Please add anything you think will save your colleagues' precious time. 
+Please add anything you think will save your colleagues' precious time.
 
-If you come across anything that is inaccurate or incomplete, please edit the document accordingly. 
+If you come across anything that is inaccurate or incomplete, please edit the document accordingly.
 
-As of yet there is no real structure - this isn't intended to be a document to read from start to finish, it's not a tutorial. But your entries should be searchable, so write your entries with SEO in mind. 
-
+As of yet there is no real structure - this isn't intended to be a document to read from start to finish, it's not a tutorial. But your entries should be searchable, so write your entries with SEO in mind.
 
 ## Runtime upgrades / Try-runtime
 
-### General tips
+First, build the runtime node with all features enabled:
+
+```sh
+cargo build --release --all-features
+```
+
+Then run a variation of the following command:
+
+```sh
+./target/release/chainflip-node try-runtime
+    --chain soundcheck
+    --url wss://bashful-release.chainflip.xyz
+    --block-at 0x2a2a0264206de0dd78d45f45ef42533fcdf847ec0ad11201c6b0feec7083d872
+        on-runtime-upgrade
+            live
+            --snapshot-path .state-snapshot
+```
+
+To save time, you can then use the state snapshot in subsequent runs:
+
+```sh
+./target/release/chainflip-node try-runtime
+    --block-at 0x2a2a0264206de0dd78d45f45ef42533fcdf847ec0ad11201c6b0feec7083d872
+        on-runtime-upgrade
+            snap
+            --snapshot-path .state-snapshot
+```
+
+### General tips and guidelines
 
 - There are some useful storage conversion utilities in `frame_support::storage::migration`.
 - Don't forget the add the `#[pallet::storage_version(..)]` decorator.
+- Use the `ensure!` macro in pre- and post-upgrade check to get meaningful error messages.
+
+You can write the runtime upgrade as part of the Chainflip runtime rather than using the
+pallet hooks. Depending on the situation, one or the other option might be easier or more
+appropriate. For example, migrations that span multiple pallets are easier to write as a
+runtime-level migration.
 
 ### Storage migration / OnRuntimeUpgrade hook doesn't execute
 
@@ -24,14 +57,14 @@ Make sure you are testing against a network that is at a lower version number!
 
 ### Pre and Post upgrade hooks don't execute
 
-Make sure to add `my-pallet/try-runtime` in the runtime's Cargo.toml, otherwise the feature will not be activated for the pallet when the runtime is compiled. 
+Make sure to add `my-pallet/try-runtime` in the runtime's Cargo.toml, otherwise the feature will not be activated for the pallet when the runtime is compiled.
 
 ## Benchmarks
 
 ### Compile the node with benchmark features enabled
 
 ```bash
-$ cargo build --release --features runtime-benchmarks
+cargo build --release --features runtime-benchmarks
 ```
 
 ### Generating weight files
@@ -39,7 +72,7 @@ $ cargo build --release --features runtime-benchmarks
 To generate or update a single weight file for pallet run:
 
 ```bash
-$ source state-chain/scripts/benchmark.sh {palletname e.x: broadcast}
+source state-chain/scripts/benchmark.sh {palletname e.x: broadcast}
 ```
 
 ### Chainflip-Node is not compiling with benchmark features enabled
@@ -47,7 +80,7 @@ $ source state-chain/scripts/benchmark.sh {palletname e.x: broadcast}
 Due to a compiler bug, you have to clean the state-chain after every successful compiler run:
 
 ```bash
-$ cargo clean -p chainflip-node
+cargo clean -p chainflip-node
 ```
 
 ### Debug Benchmarks in VSCode
@@ -100,8 +133,9 @@ error[E0432]: unresolved import `sp_core::to_substrate_wasm_fn_return_value`
 ```
 
 To execute the benchmarks as tests run:
+
 ```bash
-$ cargo test --lib --all-features
+cargo test --lib --all-features
 ```
 
 > **_NOTE:_**  When you run your benchmark with the tests it's **NOT** running against the runtime but the mocks. If you make different assumptions in your mock it can be possible that the tests will fail.

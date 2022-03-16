@@ -4,21 +4,22 @@ use futures::{stream, Stream};
 use sp_core::H256;
 use web3::types::{Block, U64};
 
-use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
+use crate::{constants::ETH_BLOCK_SAFETY_MARGIN, eth::EthHttpRpcApi};
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
-use super::EthHttpRpcApi;
-
-pub async fn safe_polling_http_head_stream<EthHttpRpc: EthHttpRpcApi>(
-    eth_http_rpc: EthHttpRpc,
+pub async fn safe_polling_http_head_stream<HttpRpc>(
+    eth_http_rpc: HttpRpc,
     poll_interval: Duration,
     logger: slog::Logger,
-) -> impl Stream<Item = Block<H256>> {
-    struct StreamState<EthHttpRpc> {
+) -> impl Stream<Item = Block<H256>>
+where
+    HttpRpc: EthHttpRpcApi,
+{
+    struct StreamState<HttpRpc> {
         last_block_yielded: U64,
         last_head_fetched: U64,
-        eth_http_rpc: EthHttpRpc,
+        eth_http_rpc: HttpRpc,
         logger: slog::Logger,
     }
 
@@ -97,7 +98,7 @@ pub mod tests {
     const TEST_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
     use crate::{
-        eth::{mocks::MockEthHttpRpc, BlockHeaderable},
+        eth::{BlockHeaderable, MockEthHttpRpcApi},
         logging::test_utils::new_test_logger,
     };
 
@@ -114,7 +115,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn returns_best_safe_block_immediately() {
-        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+        let mut mock_eth_http_rpc = MockEthHttpRpcApi::new();
 
         let logger = new_test_logger();
 
@@ -140,7 +141,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn does_not_return_until_chain_head_is_beyond_safety_margin() {
-        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+        let mut mock_eth_http_rpc = MockEthHttpRpcApi::new();
 
         let logger = new_test_logger();
 
@@ -169,7 +170,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn does_not_return_block_until_progress() {
-        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+        let mut mock_eth_http_rpc = MockEthHttpRpcApi::new();
 
         let logger = new_test_logger();
 
@@ -229,7 +230,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn catches_up_if_polling_skipped_a_block_number() {
-        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+        let mut mock_eth_http_rpc = MockEthHttpRpcApi::new();
 
         let logger = new_test_logger();
 
@@ -290,7 +291,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn if_block_number_decreases_from_last_request_wait_until_back_to_prev_latest_block() {
-        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+        let mut mock_eth_http_rpc = MockEthHttpRpcApi::new();
 
         let logger = new_test_logger();
 
@@ -353,7 +354,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn if_block_numbers_increment_by_one_progresses_at_block_margin() {
-        let mut mock_eth_http_rpc = MockEthHttpRpc::new();
+        let mut mock_eth_http_rpc = MockEthHttpRpcApi::new();
 
         let logger = new_test_logger();
 

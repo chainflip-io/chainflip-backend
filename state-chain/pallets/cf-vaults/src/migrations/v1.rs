@@ -1,9 +1,9 @@
 use crate::migrations::v1::v0_types::{VaultRotationStatusV0, VaultV0};
 
 use super::*;
+use frame_support::{storage::migration::*, StorageHasher};
 #[cfg(feature = "try-runtime")]
-use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-use frame_support::{storage::migration::*, Hashable};
+use frame_support::{traits::OnRuntimeUpgradeHelpersExt, Hashable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::convert::{TryFrom, TryInto};
 
@@ -29,20 +29,27 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 	// accessors.
 	// If the conversion between old and new fails (it shouldn't!), we print an error and
 	// continue.
-	for (epoch, old_vault) in
-		storage_key_iter_with_suffix::<EpochIndex, VaultV0<T, I>, Blake2_128Concat>(
-			PALLET_NAME_V1,
-			b"Vaults",
-			ChainId::Ethereum.blake2_128_concat().as_slice(),
-		)
-		.drain()
-	{
-		old_vault
-			.try_into()
-			.map(|new_vault: Vault<T::Chain>| Vaults::<T, I>::insert(epoch, new_vault))
-			.unwrap_or_else(|e| {
-				log::error!("Unable to convert Vault from V0 to V1: {:?}", e);
-			});
+	for epoch in 0..=CurrentEpochIndex::<T>::get() {
+		let hash = [
+			epoch.using_encoded(<Blake2_128Concat as StorageHasher>::hash),
+			ChainId::Ethereum.using_encoded(<Blake2_128Concat as StorageHasher>::hash),
+		]
+		.concat();
+
+		if let Some(old_vault) =
+			take_storage_value::<VaultV0<T, I>>(PALLET_NAME_V1, b"Vaults", &hash[..])
+		{
+			old_vault
+				.try_into()
+				.map(|new_vault: Vault<T::Chain>| {
+					Vaults::<T, I>::insert(epoch, new_vault);
+				})
+				.unwrap_or_else(|e| {
+					log::error!("Unable to convert Vault from V0 to V1: {:?}", e);
+				});
+		} else {
+			log::info!("No vault for epoch {:?}, skipping storage migration.", epoch);
+		}
 	}
 
 	// The Nonce value needs to be moved from a double map to simple map.
@@ -91,6 +98,24 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static str> {
 	ensure!(StorageVersion::get::<Pallet<T, I>>() == releases::V0, "Expected storage version V0.");
 
+	ensure!(
+		have_storage_value(
+			PALLET_NAME_V0,
+			b"Vaults",
+			[100u32.blake2_128_concat(), ChainId::Ethereum.blake2_128_concat()]
+				.concat()
+				.as_slice()
+		),
+		"🏯 Can't find Ethereum vault at hash {:?}."
+	);
+	ensure!(
+		have_storage_value(
+			PALLET_NAME_V0,
+			b"ChainNonces",
+			ChainId::Ethereum.blake2_128_concat().as_slice()
+		),
+		"🏯 Can't find Ethereum nonce."
+	);
 	let pre_migration_id_counter: u64 =
 		get_storage_value(b"Vaults", b"KeygenCeremonyIdCounter", b"").unwrap_or_else(|| {
 			log::warn!("🏯 Couldn't extract old id counter, assuming default");
@@ -105,20 +130,22 @@ pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static s
 #[cfg(feature = "try-runtime")]
 pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static str> {
 	ensure!(StorageVersion::get::<Pallet<T, I>>() == releases::V1, "Expected storage version V1.");
+	ensure!(
+		Vaults::<T, I>::contains_key(CurrentEpochIndex::<T>::get()),
+		"💥 No vault for current epoch!"
+	);
 
 	let pre_migration_id_counter: u64 = Pallet::<T, I>::get_temp_storage("id_counter")
 		.ok_or("No id_counter written during the pre-migration checks")?;
 
-	let post_migration_id_counter = KeygenCeremonyIdCounter::<T, I>::get();
+	ensure!(
+		pre_migration_id_counter + 1 == T::CeremonyIdProvider::next_ceremony_id(),
+		"🏯 KeygenCeremonyIdCounter pre/post migration inconsistentcy."
+	);
 
 	log::info!(
-		"🏯 KeygenCeremonyIdCounter checked; Pre-migration: {}, Post-migration: {}",
+		"🏯 KeygenCeremonyIdCounter checked; Pre-migration ceremony Id: {}",
 		pre_migration_id_counter,
-		post_migration_id_counter
-	);
-	ensure!(
-		pre_migration_id_counter == post_migration_id_counter,
-		"CeremonyId counter has changed!"
 	);
 	Ok(())
 }

@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 mod chainflip;
 pub mod constants;
+mod migrations;
 #[cfg(test)]
 mod tests;
 use cf_chains::{eth, Ethereum};
@@ -16,6 +17,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use migrations::DeleteRewardsPallet;
 pub use pallet_cf_environment::cfe::CfeSettings;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -102,7 +104,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 107,
+	spec_version: 112,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 2,
@@ -176,6 +178,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ApiCall = eth::api::EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
 	type OfflineReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 }
@@ -453,6 +456,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type TargetChain = cf_chains::Ethereum;
 	type KeyProvider = EthereumVault;
 	type OfflineReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
@@ -491,7 +495,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
-		Flip: pallet_cf_flip::{Pallet, Event<T>, Storage, Config<T>},
+		Flip: pallet_cf_flip::{Pallet, Call, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
 		Staking: pallet_cf_staking::{Pallet, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
@@ -541,7 +545,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
-	(),
+	migrations::VersionedMigration<DeleteRewardsPallet, 112>,
 >;
 
 impl_runtime_apis! {
@@ -671,7 +675,10 @@ impl_runtime_apis! {
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
 		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
 			// Use unwrap here otherwise the error is swallowed silently.
-			let weight = Executive::try_runtime_upgrade().unwrap();
+			let weight = Executive::try_runtime_upgrade().map_err(|e| {
+				log::error!("{}", e);
+				e
+			})?;
 			Ok((weight, BlockWeights::get().max_block))
 		}
 	}

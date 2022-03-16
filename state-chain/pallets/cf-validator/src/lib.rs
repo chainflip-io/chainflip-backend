@@ -32,9 +32,10 @@ pub mod releases {
 	use frame_support::traits::StorageVersion;
 	// Genesis version
 	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - adds Bond, Validator and LastExpiredEpoch storage items, kills the Force storage
-	// item
+	/// Version 1 - adds Bond and Validator.
 	pub const V1: StorageVersion = StorageVersion::new(1);
+	/// Version 2 - Add LastExpiredEpoch, kill the Force storage item
+	pub const V2: StorageVersion = StorageVersion::new(2);
 }
 
 pub type ValidatorSize = u32;
@@ -78,6 +79,22 @@ impl<T> Default for RotationStatus<T> {
 	}
 }
 
+/// Id type used for the Keygen and Signing ceremonies.
+pub type CeremonyId = u64;
+
+pub struct CeremonyIdProvider<T>(PhantomData<T>);
+
+impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
+	type CeremonyId = CeremonyId;
+
+	fn next_ceremony_id() -> Self::CeremonyId {
+		CeremonyIdCounter::<T>::mutate(|id| {
+			*id += 1;
+			*id
+		})
+	}
+}
+
 type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
 
 pub type Percentage = u8;
@@ -91,7 +108,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(releases::V2)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -215,7 +232,7 @@ pub mod pallet {
 						}
 					},
 					Err(e) =>
-						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e),
+						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
 					match T::VaultRotator::get_keygen_status() {
@@ -241,9 +258,9 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				releases::V1.put::<Pallet<T>>();
-				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				releases::V2.put::<Pallet<T>>();
+				migrations::v2::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			} else {
 				T::DbWeight::get().reads(1)
 			}
@@ -251,8 +268,8 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::pre_migrate::<T, Self>()
+			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
+				migrations::v2::pre_migrate::<T, Self>()
 			} else {
 				Ok(())
 			}
@@ -261,7 +278,7 @@ pub mod pallet {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
 			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::post_migrate::<T, Self>()
+				migrations::v2::post_migrate::<T, Self>()
 			} else {
 				Ok(())
 			}
@@ -402,12 +419,24 @@ pub mod pallet {
 			// TODO Consider ensuring is non-private IP / valid IP
 
 			let account_id = ensure_signed(origin)?;
+
+			// Note this signature verify doesn't need replay protection as you need the
+			// account_id's private key to pass the above ensure_signed which has replay protection.
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
 
-			if let Some((_, existing_peer_id, _, _)) = AccountPeerMapping::<T>::get(&account_id) {
+			if let Some((_, existing_peer_id, existing_port, existing_ip_address)) =
+				AccountPeerMapping::<T>::get(&account_id)
+			{
+				if (existing_peer_id, existing_port, existing_ip_address) ==
+					(peer_id, port, ip_address)
+				{
+					// Mapping hasn't changed
+					return Ok(().into())
+				}
+
 				if existing_peer_id != peer_id {
 					ensure!(
 						!MappedPeers::<T>::contains_key(&peer_id),
@@ -540,6 +569,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochExpiries<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+
+	/// Counter for generating unique ceremony ids.
+	#[pallet::storage]
+	#[pallet::getter(fn ceremony_id_counter)]
+	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {

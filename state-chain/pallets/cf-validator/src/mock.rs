@@ -10,8 +10,8 @@ use cf_traits::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo,
 	},
-	AuctionError, AuctionResult, Bid, BidderProvider, Chainflip, ChainflipAccount,
-	ChainflipAccountData, IsOnline, IsOutgoing, QualifyValidator, VaultRotator,
+	AuctionResult, Bid, BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountData,
+	IsOnline, IsOutgoing, QualifyValidator, VaultRotator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -108,11 +108,12 @@ impl pallet_session::Config for Test {
 pub struct MockAuctioneer;
 
 thread_local! {
-	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, AuctionError>> = RefCell::new(Ok(Default::default()));
+	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, &'static str>> = RefCell::new(Ok(Default::default()));
+	pub static AUCTION_WINNERS: RefCell<Option<Vec<ValidatorId>>> = RefCell::new(None);
 }
 
 impl MockAuctioneer {
-	pub fn set_run_behaviour(behaviour: Result<AuctionResult<ValidatorId, Amount>, AuctionError>) {
+	pub fn set_run_behaviour(behaviour: Result<AuctionResult<ValidatorId, Amount>, &'static str>) {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| {
 			*cell.borrow_mut() = behaviour;
 		});
@@ -122,12 +123,17 @@ impl MockAuctioneer {
 impl Auctioneer for MockAuctioneer {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
+	type Error = &'static str;
 
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, AuctionError> {
+	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error> {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| (*cell.borrow()).clone())
 	}
 
-	fn update_validator_status(_winners: &[Self::ValidatorId]) {}
+	fn update_validator_status(winners: &[Self::ValidatorId]) {
+		AUCTION_WINNERS.with(|cell| {
+			*cell.borrow_mut() = Some(winners.to_vec());
+		});
+	}
 }
 
 pub struct MockIsOutgoing;

@@ -1,14 +1,16 @@
 use std::{collections::BTreeSet, iter::FromIterator, marker::PhantomData};
 
 use crate::{
-	self as pallet_cf_threshold_signature, EnsureThresholdSigned, LiveCeremonies, OpenRequests,
-	RequestId,
+	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,
+	OpenRequests, RequestId,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
 	ChainCrypto,
 };
-use cf_traits::{AsyncResult, Chainflip, ThresholdSigner};
+use cf_traits::{
+	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, ThresholdSigner,
+};
 use codec::{Decode, Encode};
 use frame_support::{
 	instances::Instance1,
@@ -195,6 +197,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
 	type OfflineReporter = MockOfflineReporter;
+	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();

@@ -4,8 +4,8 @@ use cf_chains::{eth::api::EthereumApi, mocks::MockTransactionBuilder, ChainAbi, 
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
 	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
-		key_provider::MockKeyProvider,
+		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
+		epoch_info::MockEpochInfo, key_provider::MockKeyProvider,
 	},
 	Chainflip, NonceProvider,
 };
@@ -158,6 +158,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider<Ethereum, <Self as Chainflip>::KeyId>;
 	type OfflineReporter = MockOfflineReporter;
+	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();
@@ -193,6 +194,7 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Event = Event;
 	type Chain = Ethereum;
 	type OfflineReporter = MockOfflineReporter;
+	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type ApiCall = EthereumApi;

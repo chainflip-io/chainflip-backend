@@ -18,7 +18,7 @@ use codec::{Decode, Encode};
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
 	offline_conditions::{OfflineCondition, OfflineReporter},
-	AsyncResult, Chainflip, KeyProvider, SignerNomination,
+	AsyncResult, CeremonyIdProvider, Chainflip, KeyProvider, SignerNomination,
 };
 use frame_support::{
 	ensure,
@@ -167,6 +167,9 @@ pub mod pallet {
 
 		/// For reporting bad actors.
 		type OfflineReporter: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
+
+		/// CeremonyId source.
+		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
 
 		/// Timeout after which we consider a threshold signature ceremony to have failed.
 		#[pallet::constant]
@@ -515,10 +518,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		attempt: AttemptCount,
 	) -> CeremonyId {
 		// Get a new ceremony id.
-		let ceremony_id = SigningCeremonyIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
+		// Get a new id.
+		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 		OpenRequests::<T, I>::insert(ceremony_id, (request_id, attempt, payload.clone()));
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
 

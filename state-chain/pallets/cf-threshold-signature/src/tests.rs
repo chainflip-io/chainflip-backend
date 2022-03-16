@@ -60,6 +60,10 @@ fn tick(cfes: &[MockCfe]) {
 	}
 }
 
+fn current_ceremony_id() -> CeremonyId {
+	<Test as crate::Config<Instance1>>::CeremonyIdProvider::get()
+}
+
 impl MockCfe {
 	fn process_event(&self, event: Event) {
 		match event {
@@ -149,7 +153,7 @@ fn happy_path_no_callback() {
 		.with_request(b"OHAI")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = MockEthereumThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let (request_id, ..) = MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
@@ -179,7 +183,7 @@ fn happy_path_with_callback() {
 		.with_request_and_callback(b"OHAI", MockCallback::new)
 		.build()
 		.execute_with(|| {
-			let ceremony_id = MockEthereumThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let (request_id, ..) = MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
@@ -210,7 +214,7 @@ fn fail_path_with_timeout() {
 		.with_request(b"OHAI")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = MockEthereumThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let (request_id, attempt, _) =
 				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
@@ -269,7 +273,7 @@ fn fail_path_no_timeout() {
 		.with_request(b"OHAI")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = MockEthereumThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let (request_id, attempt, _) =
 				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
@@ -340,7 +344,7 @@ fn test_not_enough_signers_for_threshold() {
 		.with_request(b"OHAI")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = MockEthereumThresholdSigner::signing_ceremony_id_counter();
+			let ceremony_id = current_ceremony_id();
 			let request_context =
 				MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert!(request_context.retry_scheduled);

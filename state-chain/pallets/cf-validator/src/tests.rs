@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, *};
-use cf_traits::{AuctionError, IsOutgoing};
+use cf_traits::IsOutgoing;
 use frame_support::{assert_noop, assert_ok};
 use sp_runtime::traits::Zero;
 
@@ -90,7 +90,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 	new_test_ext().execute_with(|| {
 		let epoch = 10;
 		initialise_validator(epoch);
-		MockAuctioneer::set_run_behaviour(Err(AuctionError::NotEnoughBidders));
+		MockAuctioneer::set_run_behaviour(Err("auction failed"));
 		run_to_block(epoch);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
@@ -220,6 +220,13 @@ fn should_rotate_at_epoch() {
 			"the new validators are now validating"
 		);
 		assert_eq!(min_bid(), bond, "bond should be updated");
+
+		let auction_winners = AUCTION_WINNERS
+			.with(|cell| (*cell.borrow()).clone())
+			.expect("no value for auction winners is provided!");
+
+		// Expect new_validators to be auction winners as well
+		assert_eq!(new_validators, auction_winners);
 	});
 }
 
@@ -428,6 +435,30 @@ fn register_peer_id() {
 		assert_eq!(
 			ValidatorPallet::validator_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 11))
+		);
+
+		// Updating only the ip address works
+		assert_ok!(ValidatorPallet::register_peer_id(
+			Origin::signed(BOB),
+			bob_peer_public_key,
+			40043,
+			12,
+			bob_peer_keypair.sign(&BOB.encode()[..]),
+		));
+		assert_eq!(
+			last_event(),
+			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+				BOB,
+				bob_peer_public_key,
+				40043,
+				12
+			)),
+			"should emit event on register peer id"
+		);
+		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
+		assert_eq!(
+			ValidatorPallet::validator_peer_id(&BOB),
+			Some((BOB, bob_peer_public_key, 40043, 12))
 		);
 	});
 }

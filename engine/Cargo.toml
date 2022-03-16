@@ -2,7 +2,7 @@
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = "2018"
 name = "chainflip-engine"
-version = "0.1.0"
+version = "0.3.0"
 
 [package.metadata.deb]
 depends = "$auto"
@@ -24,6 +24,7 @@ bs58 = "0.4"
 config = "0.11.0"
 crossbeam-channel = "0.5.1"
 failure = "0.1.8"
+fs_extra = "1.2.0"
 futures = "0.3.14"
 futures-core = "0.3.14"
 futures-util = "0.3.14"
