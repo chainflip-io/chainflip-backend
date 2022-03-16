@@ -74,7 +74,7 @@ benchmarks! {
 		let name = str::repeat("x", 64).as_bytes().to_vec();
 	}: _(RawOrigin::Signed(caller.clone()), name.clone())
 	verify {
-		assert_eq!(ValidatorNames::<T>::get().get(&caller), Some(&name));
+		assert_eq!(VanityNames::<T>::get().get(&caller), Some(&name));
 	}
 }
 
