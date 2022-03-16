@@ -87,6 +87,11 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
+	/// The blame threshold is the number of blame votes that result in punishment.
+	fn blame_threshold(&self) -> u32 {
+		self.success_threshold()
+	}
+
 	/// Accumulate a success vote into the keygen status.
 	///
 	/// Does not mutate on the error case.
@@ -159,7 +164,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				.iter()
 				.filter_map(
 					|(id, vote_count)| {
-						if *vote_count >= self.success_threshold() {
+						if *vote_count >= self.blame_threshold() {
 							Some(id)
 						} else {
 							None
