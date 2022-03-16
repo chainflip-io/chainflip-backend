@@ -22,9 +22,9 @@ use keygen::{
         VerifyComplaints5,
     },
     keygen_frost::{
-        derive_aggregate_pubkey, derive_local_pubkeys_for_parties, generate_shares_and_commitment,
-        validate_commitments, verify_share, DKGCommitment, DKGUnverifiedCommitment, IncomingShares,
-        OutgoingShares,
+        check_high_degree_commitments, derive_aggregate_pubkey, derive_local_pubkeys_for_parties,
+        generate_shares_and_commitment, validate_commitments, verify_share, DKGCommitment,
+        DKGUnverifiedCommitment, IncomingShares, OutgoingShares,
     },
 };
 
@@ -727,6 +727,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
                     self.shares.0.insert(sender_idx, share);
                 }
 
+                // Sanity check (failing this should not be possible due to the
+                // hash commitment stage at the beginning of the ceremony)
+                if check_high_degree_commitments(&self.commitments) {
+                    return StageResult::Error(
+                        vec![],
+                        anyhow::Error::msg("High degree coefficient is zero"),
+                    );
+                }
                 let keygen_result_info =
                     compute_keygen_result_info(self.common, self.shares, &self.commitments);
 

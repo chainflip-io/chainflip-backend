@@ -119,6 +119,10 @@ impl Point {
             .0
     }
 
+    pub fn is_point_at_infinity(&self) -> bool {
+        self.0.is_zero()
+    }
+
     pub fn as_bytes(&self) -> GenericArray<u8, <Secp256k1Point as ECPoint>::CompressedPointLength> {
         self.0.serialize_compressed()
     }
