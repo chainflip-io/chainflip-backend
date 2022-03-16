@@ -9,8 +9,11 @@
   "ActiveValidatorRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
-  "AggKey": "Vec<u8>",
-  "AggKeyFor": "Vec<u8>",
+  "AggKey": {
+    "public_key": "[u8; 32]",
+    "parity_bit": "ParityBit"
+  },
+  "AggKeyFor": "AggKey",
   "Amount": "u128",
   "AttemptCount": "u32",
   "AuctionError": {
@@ -132,6 +135,12 @@
   },
   "OnlineCredits": "BlockNumber",
   "OnlineCreditsFor": "BlockNumber",
+  "ParityBit": {
+    "_enum": [
+      "Odd",
+      "Even"
+    ]
+  },
   "PayloadFor": "[u8; 32]",
   "Percentage": "u8",
   "PercentageRange": {
