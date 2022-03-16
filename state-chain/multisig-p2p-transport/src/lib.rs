@@ -40,7 +40,7 @@ use mockall::automock;
 /// The identifier for our protocol, required to distinguish it from other protocols running on the
 /// substrate p2p network.
 pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
-pub const RETRY_SEND_PERIOD: Duration = Duration::from_secs(30);
+pub const RETRY_SEND_INTERVAL: Duration = Duration::from_secs(30);
 const RETRY_SEND_ATTEMPTS: usize = 10;
 
 /// Required by substrate to register and configure the protocol.

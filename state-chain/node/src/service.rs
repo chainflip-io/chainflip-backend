@@ -217,7 +217,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			network.clone(),
 			task_manager.spawn_handle(),
 			sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
-			multisig_p2p_transport::RETRY_SEND_PERIOD,
+			multisig_p2p_transport::RETRY_SEND_INTERVAL,
 		);
 
 	let rpc_extensions_builder = {
