@@ -650,7 +650,7 @@ pub trait HistoricalEpoch {
 	/// Sets the last expired epoch
 	fn set_last_expired_epoch(epoch: EpochIndex);
 	/// Removes an validator from an epoch
-	fn remove_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
+	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
 	/// Activates an epch for an validator
 	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
 }

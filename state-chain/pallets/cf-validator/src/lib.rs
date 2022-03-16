@@ -745,7 +745,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 		LastExpiredEpoch::<T>::set(epoch);
 	}
 
-	fn remove_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
+	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
 		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
 			active_epochs.retain(|&x| x != epoch);
 		});

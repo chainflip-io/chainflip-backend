@@ -71,7 +71,7 @@ impl EpochExpiry for EpochExpiryHandler {
 	fn expire_epoch(epoch: EpochIndex) {
 		EpochHistory::<Runtime>::set_last_expired_epoch(epoch);
 		for validator in EpochHistory::<Runtime>::epoch_validators(epoch).iter() {
-			EpochHistory::<Runtime>::remove_epoch(validator, epoch);
+			EpochHistory::<Runtime>::deactivate_epoch(validator, epoch);
 			BondManager::bond_validator(validator);
 		}
 	}
