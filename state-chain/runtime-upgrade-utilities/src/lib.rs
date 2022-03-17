@@ -48,7 +48,7 @@ where
 			<P as GetStorageVersion>::current_storage_version() >= TO
 		{
 			log::info!(
-				"✅ {:?}: Applying storage migration from version {:?} to {:?}.",
+				"✅ {}: Applying storage migration from version {:?} to {:?}.",
 				P::name(),
 				FROM,
 				TO
@@ -58,7 +58,7 @@ where
 			w + RuntimeDbWeight::default().reads_writes(1, 1)
 		} else {
 			log::info!(
-				"⏭ {:?}: Skipping storage migration from version {:?} to {:?} - consider removing this from the pallet.",
+				"⏭ {}: Skipping storage migration from version {:?} to {:?} - consider removing this from the pallet.",
 				P::name(),
 				FROM,
 				TO
@@ -86,7 +86,12 @@ where
 		if <P as GetStorageVersion>::on_chain_storage_version() == TO {
 			U::post_upgrade()
 		} else {
-			log::error!("Expected post-upgrade storage version {:?}, found {:?}.", FROM, TO);
+			log::error!(
+				"💥 {}: Expected post-upgrade storage version {:?}, found {:?}.",
+				P::name(),
+				TO,
+				<P as GetStorageVersion>::on_chain_storage_version()
+			);
 			Err("Pallet storage migration version mismatch.")
 		}
 	}
