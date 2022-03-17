@@ -43,8 +43,8 @@ benchmarks_instance_pallet! {
 
 		add_online_validators::<T, _>(all_accounts);
 
-		let ceremony_id = Pallet::<T, I>::request_signature(<T::SigningContext as BenchmarkDefault>::benchmark_default());
-		let signature = <SignatureFor<T, I> as BenchmarkDefault>::benchmark_default();
+		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_default());
+		let signature = SignatureFor::<T, I>::benchmark_default();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
 		let last_event = frame_system::Pallet::<T>::events().pop().unwrap().event;
@@ -57,9 +57,9 @@ benchmarks_instance_pallet! {
 
 		add_online_validators::<T, _>(all_accounts);
 
-		let ceremony_id = Pallet::<T, I>::request_signature(<T::SigningContext as BenchmarkDefault>::benchmark_default());
+		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_default());
 
-		let mut threshold_set = PendingRequests::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
+		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
 		let reporter = threshold_set.next().unwrap();
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize))
@@ -76,13 +76,12 @@ benchmarks_instance_pallet! {
 			.map(|id| (id, a))
 			.collect();
 
-		let completed_response_context = RequestContext::<T, I> {
-			attempt: 0,
-			retry_scheduled: true,
-			remaining_respondents: Default::default(),
+		let completed_response_context = CeremonyContext::<T, I> {
+			retry_scheduled:true,
+			remaining_respondents:Default::default(),
 			blame_counts,
-			participant_count: a,
-			chain_signing_context: T::SigningContext::benchmark_default(),
+			participant_count:a,
+			_phantom: Default::default()
 		};
 	} : {
 		let _ = completed_response_context.offenders();

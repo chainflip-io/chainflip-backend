@@ -2,7 +2,7 @@
 
 pub mod mocks;
 
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
@@ -308,13 +308,10 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// A nonce.
-pub type Nonce = u64;
-
 /// Provides a unqiue nonce for some [Chain].
-pub trait NonceProvider<C: Chain> {
+pub trait NonceProvider<Abi: ChainAbi> {
 	/// Get the next nonce.
-	fn next_nonce() -> Nonce;
+	fn next_nonce() -> Abi::Nonce;
 }
 
 pub trait IsOnline {
@@ -461,48 +458,84 @@ pub trait KeyProvider<C: ChainCrypto> {
 }
 
 /// Api trait for pallets that need to sign things.
-pub trait ThresholdSigner<T>
+pub trait ThresholdSigner<C>
 where
-	T: Chainflip,
+	C: ChainCrypto,
 {
-	type Context: SigningContext<T>;
+	type RequestId: Member + Parameter + Copy;
+	type Error: Into<DispatchError>;
+	type Callback: UnfilteredDispatchable;
 
 	/// Initiate a signing request and return the request id.
-	fn request_signature(context: Self::Context) -> u64;
+	fn request_signature(payload: C::Payload) -> Self::RequestId;
 
-	/// Initiate a transaction signing request and return the request id.
-	fn request_transaction_signature<Tx: Into<Self::Context>>(transaction: Tx) -> u64 {
-		Self::request_signature(transaction.into())
+	/// Register a callback to be dispatched when the signature is available. Can fail if the
+	/// provided request_id does not exist.
+	fn register_callback(
+		request_id: Self::RequestId,
+		on_signature_ready: Self::Callback,
+	) -> Result<(), Self::Error>;
+
+	/// Attempt to retrieve a requested signature.
+	fn signature_result(request_id: Self::RequestId) -> AsyncResult<C::ThresholdSignature>;
+
+	/// Request a signature and register a callback for when the signature is available.
+	///
+	/// Since the callback is registered immediately, it should never fail.
+	///
+	/// Note that the `callback_generator` closure is *not* the callback. It is what *generates*
+	/// the callback based on the request id.
+	fn request_signature_with_callback(
+		payload: C::Payload,
+		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
+	) -> Self::RequestId {
+		let id = Self::request_signature(payload);
+		Self::register_callback(id, callback_generator(id)).unwrap_or_else(|e| {
+			log::error!(
+				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
+				e.into()
+			);
+		});
+		id
 	}
 }
 
-/// Types, methods and state for requesting and processing a threshold signature.
-pub trait SigningContext<T: Chainflip> {
-	/// The chain that this context applies to.
-	type Chain: Chain + ChainCrypto;
-	/// The callback that will be dispatched when we receive the signature.
-	type Callback: UnfilteredDispatchable<Origin = T::Origin>;
-	/// The origin that is authorised to dispatch the callback, ie. the origin that represents
-	/// a valid, verifiied, threshold signature.
-	type ThresholdSignatureOrigin: Into<T::Origin>;
+/// A result type for asynchronous operations.
+#[derive(Clone, Copy, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
+pub enum AsyncResult<R> {
+	/// Result is ready.
+	Ready(R),
+	/// Result is requested but not available. (still being generated)
+	Pending,
+	/// Result is void. (not yet requested or has already been used)
+	Void,
+}
 
-	/// Returns the signing payload.
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload;
-
-	/// Returns the callback to be triggered on success.
-	fn resolve_callback(
-		&self,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback;
-
-	/// Dispatches the success callback.
-	fn dispatch_callback(
-		&self,
-		origin: Self::ThresholdSignatureOrigin,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> DispatchResultWithPostInfo {
-		self.resolve_callback(signature).dispatch_bypass_filter(origin.into())
+impl<R> AsyncResult<R> {
+	/// Returns `Ok(result: R)` if the `R` is ready, otherwise executes the supplied closure and
+	/// returns the Err(closure_result: E).
+	pub fn ready_or_else<E>(self, e: impl FnOnce(Self) -> E) -> Result<R, E> {
+		match self {
+			AsyncResult::Ready(s) => Ok(s),
+			_ => Err(e(self)),
+		}
 	}
+}
+
+impl<R> Default for AsyncResult<R> {
+	fn default() -> Self {
+		Self::Void
+	}
+}
+
+/// Something that is capable of encoding and broadcasting native blockchain api calls to external
+/// chains.
+pub trait Broadcaster<Api: ChainAbi> {
+	/// Supported api calls for this chain.
+	type ApiCall: ApiCall<Api>;
+
+	/// Request a threshold signature and then build and broadcast the outbound api call.
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
 }
 
 pub mod offline_conditions {

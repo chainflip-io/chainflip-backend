@@ -1,5 +1,7 @@
-use crate::{mock::*, BlockEmissions, Pallet};
-use pallet_cf_flip::Pallet as Flip;
+use crate::{mock::*, BlockEmissions, LastMintBlock, Pallet};
+use cf_traits::{Issuance, RewardsDistribution};
+use frame_support::traits::{Imbalance, OnInitialize};
+use pallet_cf_flip::{FlipIssuance, Pallet as Flip};
 
 type Emissions = Pallet<Test>;
 
@@ -88,12 +90,45 @@ fn test_duplicate_emission_should_be_noop() {
 #[test]
 fn should_calculate_block_emissions() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
-		// At genesis we have no emissions calculated
-		assert_eq!(Emissions::validator_emission_per_block(), 0);
-		assert_eq!(Emissions::backup_validator_emission_per_block(), 0);
-		Emissions::calculate_block_emissions();
-		// Emissions updated in storage
+		// Block emissions are calculated at genesis.
 		assert!(Emissions::validator_emission_per_block() > 0);
 		assert!(Emissions::backup_validator_emission_per_block() > 0);
+	});
+}
+
+#[test]
+fn should_mint() {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
+		let before = Flip::<Test>::total_issuance();
+		Emissions::mint_rewards_for_block(MINT_INTERVAL);
+		assert_eq!(LastMintBlock::<Test>::get(), MINT_INTERVAL);
+		let after = Flip::<Test>::total_issuance();
+		assert!(after > before, "Expected {:?} > {:?}", after, before);
+	});
+}
+
+#[test]
+fn test_reward_distribution() {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
+		let before = Flip::<Test>::total_issuance();
+		let reward = FlipIssuance::mint(1_000);
+		assert!(reward.peek() > 0);
+		<MockRewardsDistribution as RewardsDistribution>::distribute(reward);
+		let after = Flip::<Test>::total_issuance();
+		assert!(after > before, "Expected {:?} > {:?}", after, before);
+	});
+}
+
+#[test]
+fn should_mint_and_initiate_broadcast() {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
+		let before = Flip::<Test>::total_issuance();
+		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL);
+		let after = Flip::<Test>::total_issuance();
+		assert!(after > before, "Expected {:?} > {:?}", after, before);
+		assert_eq!(
+			MockBroadcast::get_called().unwrap().new_total_supply,
+			Flip::<Test>::total_issuance()
+		);
 	});
 }
