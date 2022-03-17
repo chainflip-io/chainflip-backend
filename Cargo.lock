@@ -867,6 +867,7 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "log 0.4.14",
+ "sp-io",
  "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
 ]
 
