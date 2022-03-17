@@ -80,6 +80,16 @@ mod tests {
 			}
 		}
 
+		// Representation of the state-chain cmd tool
+		pub struct Cli;
+
+		impl Cli {
+			// Activates an account to become a validator in the next epoch
+			pub fn activate_account(account: NodeId) {
+				assert_ok!(state_chain_runtime::Staking::activate_account(Origin::signed(account)));
+			}
+		}
+
 		pub struct Signer {
 			agg_secret_key: SecretKey,
 			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
@@ -809,6 +819,12 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+
+					// Activate the accounts
+					for node in &nodes {
+						network::Cli::activate_account(node.clone());
+					}
+
 					// Move to start of auction
 					testnet.move_forward_blocks(1);
 
@@ -876,6 +892,11 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
+
+					// Activate the accounts
+					for node in &nodes {
+						network::Cli::activate_account(node.clone());
+					}
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
@@ -1006,6 +1027,7 @@ mod tests {
 							1,
 							ETH_ZERO_ADDRESS
 						));
+						network::Cli::activate_account(node.clone());
 					}
 
 					let end_of_claim_period =
@@ -1134,6 +1156,7 @@ mod tests {
 					);
 
 					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
+					let active_nodes = testnet.filter_nodes(ChainflipAccountState::Validator);
 					// An initial stake which is superior to the genesis stakes
 					// The current validators would have been rewarded on us leaving the current
 					// epoch so let's up the stakes for the passive nodes.
@@ -1151,6 +1174,11 @@ mod tests {
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
+
+					// Activate the accounts
+					for node in [active_nodes.clone(), passive_nodes.clone()].concat() {
+						network::Cli::activate_account(node);
+					}
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
@@ -1245,6 +1273,12 @@ mod tests {
 
 					// Start an auction and wait for rotation
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
+
+					// Activate the accounts
+					for node in &nodes {
+						network::Cli::activate_account(node.clone());
+					}
+
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 					assert_eq!(
