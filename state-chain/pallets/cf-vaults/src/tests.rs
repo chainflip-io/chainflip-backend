@@ -1,6 +1,7 @@
 use crate::{
-	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, KeygenOutcome,
-	KeygenResolutionPendingSince, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
+	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, FailureVoters,
+	KeygenOutcome, KeygenResolutionPendingSince, PendingVaultRotation, SuccessVoters, Vault,
+	VaultRotationStatus, Vaults,
 };
 use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, Chainflip, EpochInfo};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -11,6 +12,13 @@ fn last_event() -> Event {
 		.pop()
 		.expect("Event expected")
 		.event
+}
+
+macro_rules! assert_last_event {
+	($pat:pat) => {
+		let event = last_event();
+		assert!(matches!(last_event(), Event::VaultsPallet($pat)), "Unexpected event {:?}", event);
+	};
 }
 
 fn current_ceremony_id() -> CeremonyId {
@@ -186,6 +194,18 @@ fn keygen_report_success() {
 			KeygenOutcome::Success(NEW_AGG_PUB_KEY)
 		));
 
+		// A resolution is still pending - we 100% response rate.
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		VaultsPallet::on_initialize(1);
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+
+		// Charlie agrees.
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(CHARLIE),
+			ceremony_id,
+			KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+		));
+
 		// This time we should have enough votes for consensus.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
@@ -195,6 +215,12 @@ fn keygen_report_success() {
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		);
+
+		assert_last_event!(crate::Event::KeygenSuccess(..));
+
+		// Voting has been cleared.
+		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
+		assert!(!FailureVoters::<MockRuntime, _>::exists());
 	})
 }
 
@@ -264,12 +290,30 @@ fn keygen_report_failure() {
 			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 
+		// A resolution is still pending - we expect 100% response rate.
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		VaultsPallet::on_initialize(1);
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+
+		// Charlie agrees.
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(CHARLIE),
+			ceremony_id,
+			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+		));
+
 		// This time we should have enough votes for consensus.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		assert_eq!(MockOfflineReporter::get_reported(), vec![CHARLIE]);
+
+		assert_last_event!(crate::Event::KeygenFailure(..));
+
+		// Voting has been cleared.
+		assert!(SuccessVoters::<MockRuntime, _>::iter_keys().next().is_none());
+		assert!(!FailureVoters::<MockRuntime, _>::exists());
 	})
 }
 
@@ -389,17 +433,17 @@ mod keygen_reporting {
 	use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
 	macro_rules! assert_ok_no_repeat {
-		($ex:expr) => {
+		($ex:expr) => {{
 			assert_ok!($ex);
 			assert_err!($ex, Error::<MockRuntime, _>::InvalidRespondent);
-		};
+		}};
 	}
 
 	macro_rules! assert_success_outcome {
 		($ex:expr) => {
-			let outcome: Option<KeygenOutcomeFor<MockRuntime>> = $ex;
+			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
 			assert!(
-				matches!(outcome, Some(KeygenOutcome::Success(_))),
+				matches!(outcome, KeygenOutcome::Success(_)),
 				"Expected success, got: {:?}",
 				outcome
 			);
@@ -408,19 +452,12 @@ mod keygen_reporting {
 
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
-			let outcome: Option<KeygenOutcomeFor<MockRuntime>> = $ex;
+			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
 			assert!(
-				matches!(outcome, Some(KeygenOutcome::Failure(_))),
+				matches!(outcome, KeygenOutcome::Failure(_)),
 				"Expected failure, got: {:?}",
 				outcome
 			);
-		};
-	}
-
-	macro_rules! assert_no_outcome {
-		($ex:expr) => {
-			let outcome: Option<KeygenOutcomeFor<MockRuntime>> = $ex;
-			assert!(matches!(outcome, None), "Expected `None`, got: {:?}", outcome);
 		};
 	}
 
@@ -469,201 +506,290 @@ mod keygen_reporting {
 		);
 	}
 
-	fn simple_success(
-		num_candidates: u32,
-		num_successes: u32,
-	) -> Option<KeygenOutcomeFor<MockRuntime>> {
-		get_outcome_simple(num_candidates, num_successes, 0, 0)
+	fn n_times<T: Copy>(things: impl IntoIterator<Item = (usize, T)>) -> Vec<T> {
+		things
+			.into_iter()
+			.flat_map(|(n, thing)| std::iter::repeat(thing).take(n).collect::<Vec<_>>())
+			.collect()
 	}
 
-	fn simple_failure(
-		num_candidates: u32,
-		num_failures: u32,
-	) -> Option<KeygenOutcomeFor<MockRuntime>> {
-		get_outcome_simple(num_candidates, 0, num_failures, 0)
+	fn unanimous(num_candidates: usize, outcome: ReportedOutcome) -> KeygenOutcomeFor<MockRuntime> {
+		get_outcome(&n_times([(num_candidates, outcome)]), |_| [])
 	}
 
-	fn get_outcome_simple(
-		num_candidates: u32,
-		num_successes: u32,
-		num_failures: u32,
-		num_bad_keys: u32,
-	) -> Option<KeygenOutcomeFor<MockRuntime>> {
-		get_outcome(num_candidates, num_successes, num_failures, num_bad_keys, |_| [1])
+	fn unanimous_success(num_candidates: usize) -> KeygenOutcomeFor<MockRuntime> {
+		unanimous(num_candidates, ReportedOutcome::Success)
 	}
 
-	/// Generate a report given:
-	///   - the total number of candidates
-	///   - the total number of success reports
-	///   - the total number of failure reports
-	///   - the total number of false success reports
-	///   - a generator function `id -> [id]` for determining the blamed validators `[id]` for
-	///     validator `id`
-	fn get_outcome<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
-		num_candidates: u32,
-		mut num_successes: u32,
-		mut num_failures: u32,
-		mut num_bad_keys: u32,
+	fn unanimous_failure(num_candidates: usize) -> KeygenOutcomeFor<MockRuntime> {
+		unanimous(num_candidates, ReportedOutcome::Failure)
+	}
+
+	fn get_outcome_simple<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
+		num_successes: usize,
+		num_failures: usize,
+		num_bad_keys: usize,
+		num_timeouts: usize,
 		report_gen: F,
-	) -> Option<KeygenOutcome<AggKeyFor<MockRuntime>, u64>> {
+	) -> KeygenOutcomeFor<MockRuntime> {
+		get_outcome(
+			n_times([
+				(num_successes, ReportedOutcome::Success),
+				(num_failures, ReportedOutcome::Failure),
+				(num_bad_keys, ReportedOutcome::BadKey),
+				(num_timeouts, ReportedOutcome::Timeout),
+			])
+			.as_slice(),
+			report_gen,
+		)
+	}
+
+	#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+	enum ReportedOutcome {
+		Success,
+		BadKey,
+		Failure,
+		Timeout,
+	}
+
+	fn reported_outcomes(outcomes: &[u8]) -> Vec<ReportedOutcome> {
+		outcomes
+			.iter()
+			.map(|o| match *o as char {
+				's' => ReportedOutcome::Success,
+				'b' => ReportedOutcome::BadKey,
+				'f' => ReportedOutcome::Failure,
+				't' => ReportedOutcome::Timeout,
+				invalid => panic!("Invalid char {:?} in outcomes.", invalid),
+			})
+			.collect()
+	}
+
+	fn get_outcome<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
+		outcomes: &[ReportedOutcome],
+		report_gen: F,
+	) -> KeygenOutcome<AggKeyFor<MockRuntime>, u64> {
 		let mut status = KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(
-			1..=(num_candidates as u64),
+			1..=outcomes.len() as u64,
 		));
 
-		let num_responses = num_successes + num_failures + num_bad_keys;
-		assert!(
-			num_responses <= num_candidates,
-			"Can't have more responses than candidates: {} + {} + {} > {}.",
-			num_successes,
-			num_failures,
-			num_bad_keys,
-			num_candidates
-		);
-
-		for id in 1..=(num_responses as u64) {
-			if num_successes > 0 {
-				assert_ok_no_repeat!(status.add_success_vote(&id, NEW_AGG_PUB_KEY));
-				num_successes -= 1;
-			} else if num_bad_keys > 0 {
-				assert_ok_no_repeat!(status.add_success_vote(&id, *b"bad!"));
-				num_bad_keys -= 1;
-			} else if num_failures > 0 {
-				assert_ok_no_repeat!(
+		for (index, outcome) in outcomes.iter().enumerate() {
+			let id = 1 + index as u64;
+			match outcome {
+				ReportedOutcome::Success =>
+					assert_ok_no_repeat!(status.add_success_vote(&id, NEW_AGG_PUB_KEY)),
+				ReportedOutcome::BadKey =>
+					assert_ok_no_repeat!(status.add_success_vote(&id, *b"bad!")),
+				ReportedOutcome::Failure => assert_ok_no_repeat!(
 					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)))
-				);
-				num_failures -= 1;
-			} else {
-				panic!("Should not reach here.")
+				),
+				ReportedOutcome::Timeout => {},
 			}
 		}
-		status.consensus_outcome()
+
+		let outcome = status.resolve_keygen_outcome();
+		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
+		assert!(!FailureVoters::<MockRuntime, _>::exists());
+		outcome
+	}
+
+	/// Keygen can *only* succeed if *all* participants are in agreement.
+	#[test]
+	fn test_success_consensus() {
+		new_test_ext().execute_with(|| {
+			for n in 3..200 {
+				// Full agreement.
+				assert_success_outcome!(unanimous_success(n));
+				// Any dissenters cause failure.
+				assert_failure_outcome!(get_outcome_simple(n - 1, 1, 0, 0, |_| []));
+				assert_failure_outcome!(get_outcome_simple(5, 0, 1, 0, |_| []));
+				assert_failure_outcome!(get_outcome_simple(5, 0, 0, 1, |_| []));
+			}
+		});
 	}
 
 	#[test]
-	fn test_success_consensus() {
-		// Simple happy-path cases.
-		assert_success_outcome!(simple_success(6, 6));
-		assert_success_outcome!(simple_success(6, 5));
-		assert_success_outcome!(simple_success(6, 4));
-		assert_success_outcome!(simple_success(7, 7));
-		assert_success_outcome!(simple_success(8, 8));
-		assert_success_outcome!(simple_success(9, 9));
-
-		assert_success_outcome!(simple_success(147, 147));
-		assert_success_outcome!(simple_success(148, 148));
-		assert_success_outcome!(simple_success(149, 149));
-		assert_success_outcome!(simple_success(150, 150));
-		assert_success_outcome!(simple_success(151, 151));
-
-		// Minority dissent has no effect.
-		assert_success_outcome!(get_outcome_simple(6, 5, 1, 0));
-		assert_success_outcome!(get_outcome_simple(6, 4, 1, 1));
-		assert_success_outcome!(get_outcome_simple(6, 4, 2, 0));
+	fn test_success_dissent() {
+		new_test_ext().execute_with(|| {
+			for n in 3..200 {
+				for dissent in
+					[ReportedOutcome::BadKey, ReportedOutcome::Failure, ReportedOutcome::Timeout]
+				{
+					let outcome = get_outcome(
+						&n_times([(n - 1, ReportedOutcome::Success), (1, dissent)]),
+						|_| [],
+					);
+					assert!(
+						matches!(
+							outcome.clone(),
+							KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([n as u64])
+						),
+						"Expected Failure([{:?}]), got: {:?}.",
+						n,
+						outcome
+					);
+				}
+			}
+		});
 	}
 
 	#[test]
 	fn test_failure_consensus() {
-		// Simple happy-path cases.
-		assert_failure_outcome!(simple_failure(6, 6));
-		assert_failure_outcome!(simple_failure(6, 5));
-		assert_failure_outcome!(simple_failure(6, 4));
-		assert_failure_outcome!(simple_failure(7, 7));
-		assert_failure_outcome!(simple_failure(8, 8));
-		assert_failure_outcome!(simple_failure(9, 9));
-
-		assert_failure_outcome!(simple_failure(147, 147));
-		assert_failure_outcome!(simple_failure(148, 148));
-		assert_failure_outcome!(simple_failure(149, 149));
-		assert_failure_outcome!(simple_failure(150, 150));
-		assert_failure_outcome!(simple_failure(151, 151));
-
-		// Minority dissent has no effect.
-		assert_failure_outcome!(get_outcome_simple(6, 2, 4, 0));
-		assert_failure_outcome!(get_outcome_simple(6, 1, 4, 1));
-		assert_failure_outcome!(get_outcome_simple(6, 1, 5, 0));
-		assert_failure_outcome!(get_outcome_simple(6, 0, 6, 0));
+		new_test_ext().execute_with(|| {
+			for n in 3..200 {
+				// Full agreement.
+				assert_failure_outcome!(unanimous_failure(n));
+				// Minority dissent has no effect.
+				assert_failure_outcome!(get_outcome_simple(0, n - 1, 1, 0, |_| []));
+				assert_failure_outcome!(get_outcome_simple(1, n - 1, 0, 0, |_| []));
+				assert_failure_outcome!(get_outcome_simple(0, n - 1, 0, 1, |_| []));
+			}
+		});
 	}
 
 	#[test]
-	fn test_no_consensus() {
-		// No outcome until there is threshold agreement.
-		assert_no_outcome!(get_outcome_simple(6, 1, 0, 0));
-		assert_no_outcome!(get_outcome_simple(6, 2, 0, 0));
-		assert_no_outcome!(get_outcome_simple(6, 3, 0, 0));
-		assert_no_outcome!(get_outcome_simple(6, 3, 0, 1));
-		assert_success_outcome!(get_outcome_simple(6, 4, 0, 0));
-		assert_success_outcome!(get_outcome_simple(6, 4, 0, 1));
-		assert_success_outcome!(get_outcome_simple(6, 6, 0, 0));
+	fn test_failure_dissent() {
+		new_test_ext().execute_with(|| {
+			// A keygen where no consensus is reached. Half think we failed, half think we suceeded.
+			assert!(matches!(
+				get_outcome(
+					&n_times([(3, ReportedOutcome::Failure), (3, ReportedOutcome::Success)]),
+					|_| [4, 5, 6]
+				),
+				KeygenOutcome::Failure(blamed) if blamed.is_empty()
+			));
 
-		assert_no_outcome!(get_outcome_simple(6, 0, 1, 0));
-		assert_no_outcome!(get_outcome_simple(6, 0, 2, 0));
-		assert_no_outcome!(get_outcome_simple(6, 0, 3, 0));
-		assert_no_outcome!(get_outcome_simple(6, 1, 3, 0));
-		assert_failure_outcome!(get_outcome_simple(6, 1, 4, 0));
-		assert_failure_outcome!(get_outcome_simple(6, 0, 4, 0));
-		assert_failure_outcome!(get_outcome_simple(6, 0, 5, 0));
-		assert_failure_outcome!(get_outcome_simple(6, 0, 6, 0));
+			// A keygen where more than `threshold` nodes have reported failure, but there is no
+			// final agreement on the guilty parties. Only unresponsive nodes will be reported.
+			assert!(matches!(
+				get_outcome(
+					&n_times([(17, ReportedOutcome::Failure), (7, ReportedOutcome::Timeout)]),
+					|id| if id < 16 { [17] } else { [16] }
+				),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
+			));
 
-		// Failure if there is no other option (ie. deadlock).
-		assert_no_outcome!(get_outcome_simple(6, 3, 0, 2));
-		assert_no_outcome!(get_outcome_simple(6, 3, 2, 0));
-		assert_no_outcome!(get_outcome_simple(6, 3, 1, 1));
-		assert_no_outcome!(get_outcome_simple(6, 3, 1, 1));
-		assert_no_outcome!(get_outcome_simple(6, 2, 3, 0));
+			// As above, but some nodes have reported the wrong outcome.
+			assert!(matches!(
+				get_outcome(
+					&n_times([
+						(17, ReportedOutcome::Failure),
+						(3, ReportedOutcome::BadKey),
+						(2, ReportedOutcome::Success),
+						(2, ReportedOutcome::Timeout)
+					]),
+					|id| if id < 16 { [17] } else { [16] }
+				),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
+			));
 
-		// Failure if we reach full response count with no consensus.
-		assert_failure_outcome!(get_outcome_simple(6, 3, 0, 3));
-		assert_failure_outcome!(get_outcome_simple(6, 3, 1, 2));
-		assert_failure_outcome!(get_outcome_simple(6, 3, 2, 1));
-		assert_failure_outcome!(get_outcome_simple(6, 2, 3, 1));
-		assert_failure_outcome!(get_outcome_simple(6, 3, 3, 0));
-		assert_failure_outcome!(get_outcome_simple(6, 2, 3, 1));
-
-		// A keygen where more than `threshold` nodes have reported failure, but there is no final
-		// agreement on the guilty parties.
-		assert_no_outcome!(get_outcome(25, 0, 17, 0, |id| if id < 10 { 17..25 } else { 20..25 }));
+			// As above, but some nodes have additionally been voted on.
+			assert!(matches!(
+				get_outcome(
+					&n_times([
+						(18, ReportedOutcome::Failure),
+						(2, ReportedOutcome::BadKey),
+						(2, ReportedOutcome::Success),
+						(2, ReportedOutcome::Timeout)
+					]),
+					|id| if id > 16 { [1, 2] } else { [17, 18] }
+				),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(17..=24)
+			));
+		});
 	}
 
 	#[test]
 	fn test_blaming_aggregation() {
-		// First five candidates all report candidate 6.
-		let outcome = get_outcome(6, 0, 5, 1, |_| [6]);
-		assert!(
-			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6]))
-		);
+		new_test_ext().execute_with(|| {
+			// First five candidates all report candidate 6, candidate 6 unresponsive.
+			assert!(matches!(
+				get_outcome(&reported_outcomes(b"ffffft"), |_| [6]),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+			));
 
-		// Candidates don't agree.
-		let outcome = get_outcome(6, 0, 5, 1, |id| [id + 1]);
-		assert!(matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed.is_empty()));
+			// First five candidates all report candidate 6, candidate 6 reports 1.
+			assert!(matches!(
+				get_outcome(&reported_outcomes(b"ffffft"), |id| if id == 6 { [1] } else { [6] }),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+			));
 
-		// Candidates agree but not enough to report.
-		let outcome = get_outcome(6, 0, 5, 1, |id| if id < 4 { [6] } else { [id + 1] });
-		assert!(matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed.is_empty()));
+			// First five candidates all report nobody, candidate 6 unresponsive.
+			assert!(matches!(
+				get_outcome(&reported_outcomes(b"ffffft"), |_| []),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+			));
 
-		// Candidates agree on one but not all.
-		let outcome = get_outcome(6, 0, 5, 1, |id| if id < 5 { [6] } else { [id + 1] });
-		assert!(
-			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6]))
-		);
+			// Candidates 3 and 6 unresponsive.
+			assert!(matches!(
+				get_outcome(&reported_outcomes(b"fftfft"), |_| []),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([3, 6])
+			));
 
-		// Candidates agree on multiple offenders.
-		let outcome = get_outcome(12, 0, 12, 0, |id| if id < 9 { [11, 12] } else { [1, 2] });
-		assert!(
-			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([11, 12]))
-		);
+			// One candidate unresponsive, one blamed by majority.
+			assert!(matches!(
+				get_outcome(&reported_outcomes(b"ffffftf"), |id| if id != 3 { [3] } else { [4] }),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([3, 6])
+			));
 
-		// Overlapping agreement.
-		let outcome = get_outcome(12, 0, 12, 0, |id| {
-			if id < 5 {
-				[11, 12]
-			} else if id < 9 {
-				[1, 11]
-			} else {
-				[1, 2]
-			}
+			// One candidate unresponsive, one rogue blames everyone else.
+			assert!(matches!(
+				get_outcome(&reported_outcomes(b"ffffftf"), |id| {
+					if id != 3 {
+						vec![3, 6]
+					} else {
+						vec![1, 2, 4, 5, 6, 7]
+					}
+				}),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([3, 6])
+			));
+
+			let failures = |n| n_times([(n, ReportedOutcome::Failure)]);
+
+			// Candidates don't agree.
+			assert!(matches!(
+				get_outcome(&failures(6), |id| [(id + 1) % 6]),
+				KeygenOutcome::Failure(blamed) if blamed.is_empty()
+			));
+
+			// Candidate agreement is below reporting threshold.
+			assert!(matches!(
+				get_outcome(&failures(6), |id| if id < 4 { [6] } else { [2] }),
+				KeygenOutcome::Failure(blamed) if blamed.is_empty()
+			));
+
+			// Candidates agreement just above threshold.
+			assert!(matches!(
+				get_outcome(&failures(6), |id| if id == 6 { [1] } else { [6] }),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+			));
+
+			// Candidates agree on multiple offenders.
+			assert!(matches!(
+				get_outcome(&failures(12), |id| if id < 9 { [11, 12] } else { [1, 2] }),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([11, 12])
+			));
+
+			// Overlapping agreement - no agreement on the entire set but in aggregate we can
+			// determine offenders.
+			assert!(matches!(
+				get_outcome(&failures(12), |id| {
+					if id < 5 {
+						[11, 12]
+					} else if id < 9 {
+						[1, 11]
+					} else {
+						[1, 2]
+					}
+				}),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([1, 11])
+			));
+
+			// Unresponsive and dissenting nodes are reported.
+			assert!(matches!(
+				get_outcome(&reported_outcomes(b"tfffsfffbffft"), |_| []),
+				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([1, 5, 9, 13])
+			));
 		});
-		assert!(
-			matches!(outcome.unwrap(), KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([1, 11]))
-		);
 	}
 }
