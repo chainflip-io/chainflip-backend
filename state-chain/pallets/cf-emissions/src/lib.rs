@@ -18,17 +18,11 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - adds MintInterval storage items
-	pub const V1: StorageVersion = StorageVersion::new(1);
-}
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
-use frame_support::traits::{Get, Imbalance};
+use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, Zero},
@@ -100,7 +94,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
@@ -164,29 +158,17 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				releases::V1.put::<Pallet<T>>();
-				migrations::v1::migrate::<T>();
-				return T::WeightInfo::on_runtime_upgrade_v1()
-			}
-			T::WeightInfo::on_runtime_upgrade()
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
+
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::pre_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::post_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
