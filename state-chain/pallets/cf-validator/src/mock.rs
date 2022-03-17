@@ -256,7 +256,7 @@ pub struct MockEpochExpiryHandler;
 
 impl EpochExpiry for MockEpochExpiryHandler {
 	fn expire_epoch(_: cf_traits::EpochIndex) {
-		todo!()
+		unimplemented!()
 	}
 }
 

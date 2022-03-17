@@ -660,7 +660,7 @@ pub trait EpochExpiry {
 pub trait Bonding {
 	type ValidatorId;
 	/// Update the bond of an validator
-	fn bond_validator(validator: &Self::ValidatorId);
+	fn update_validator_bond(validator: &Self::ValidatorId);
 }
 pub trait CeremonyIdProvider {
 	type CeremonyId;

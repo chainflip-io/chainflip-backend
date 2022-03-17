@@ -27,7 +27,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Update the the bond of all validators for the new epoch
 		for validator in new_validators {
-			BondManager::bond_validator(validator);
+			BondManager::update_validator_bond(validator);
 		}
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(
@@ -72,7 +72,7 @@ impl EpochExpiry for EpochExpiryHandler {
 		EpochHistory::<Runtime>::set_last_expired_epoch(epoch);
 		for validator in EpochHistory::<Runtime>::epoch_validators(epoch).iter() {
 			EpochHistory::<Runtime>::deactivate_epoch(validator, epoch);
-			BondManager::bond_validator(validator);
+			BondManager::update_validator_bond(validator);
 		}
 	}
 }
@@ -81,7 +81,7 @@ pub struct BondManager;
 
 impl Bonding for BondManager {
 	type ValidatorId = AccountId;
-	fn bond_validator(validator: &Self::ValidatorId) {
+	fn update_validator_bond(validator: &Self::ValidatorId) {
 		let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(validator);
 		if active_epochs.is_empty() {
 			Flip::set_validator_bond(validator, 0u128);

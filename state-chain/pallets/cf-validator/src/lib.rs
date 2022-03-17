@@ -578,17 +578,17 @@ pub mod pallet {
 	/// A map between an epoch and an vector of validators (participating in this epoch)
 	#[pallet::storage]
 	pub type HistoricalValidators<T: Config> =
-		StorageMap<_, Blake2_128Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// A map between an epoch and the bonded balance (MAB)
 	#[pallet::storage]
 	pub type HistoricalBonds<T: Config> =
-		StorageMap<_, Blake2_128Concat, EpochIndex, T::Amount, ValueQuery>;
+		StorageMap<_, Twox64Concat, EpochIndex, T::Amount, ValueQuery>;
 
 	/// A map between an validator and an vector of epoch he attended
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
-		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
+		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
 	/// Counter for generating unique ceremony ids.
 	#[pallet::storage]
 	#[pallet::getter(fn ceremony_id_counter)]
