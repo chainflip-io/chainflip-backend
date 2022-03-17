@@ -372,14 +372,14 @@ fn test_retirement() {
 
 		// Try again with some stake, should succeed this time.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, 100, ETH_ZERO_ADDRESS, TX_HASH));
-		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
 
+		// Expect the account to be retired by default
 		assert!(Staking::is_retired(&ALICE).unwrap());
 
-		// Can't retire if already retired
+		// Can't retire if retired
 		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyRetired);
 
-		// Reactivate the account
+		// Activate the account
 		assert_ok!(Staking::activate_account(Origin::signed(ALICE)));
 
 		// Already activated, can't do so again
@@ -388,10 +388,7 @@ fn test_retirement() {
 			<Error<Test>>::AlreadyActive
 		);
 
-		assert_event_stack!(
-			Event::Staking(crate::Event::AccountActivated(_)),
-			Event::Staking(crate::Event::AccountRetired(_))
-		);
+		assert_event_stack!(Event::Staking(crate::Event::AccountActivated(_)));
 	});
 }
 

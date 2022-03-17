@@ -556,7 +556,7 @@ impl<T: Config> Pallet<T> {
 		let new_total = T::Flip::credit_stake(account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
-		AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
+		AccountRetired::<T>::mutate(&account_id, |retired| *retired = true);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
