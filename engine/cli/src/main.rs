@@ -63,6 +63,7 @@ async fn run_cli() -> Result<()> {
         }
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
         Retire {} => retire_account(&cli_settings, &logger).await,
+        Activate {} => activate_account(&cli_settings, &logger).await,
         Query { block_hash } => request_block(block_hash, &cli_settings).await,
     }
 }
@@ -278,6 +279,16 @@ async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result
         .await
         .expect("Could not retire account");
     println!("Account retired at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let tx_hash = state_chain_client
+        .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account(), logger)
+        .await
+        .expect("Could not activate account");
+    println!("Account activated at tx {:#x}.", tx_hash);
     Ok(())
 }
 
