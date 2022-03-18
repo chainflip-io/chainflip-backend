@@ -553,6 +553,8 @@ pub mod offline_conditions {
 		InvalidTransactionAuthored,
 		/// A transaction failed on transmission
 		TransactionFailedOnTransmission,
+		/// A validator missed their authorship slot.
+		MissedAuthorshipSlot,
 	}
 
 	pub trait OfflinePenalty {
@@ -677,4 +679,10 @@ pub trait CeremonyIdProvider {
 
 	/// Get the next ceremony id in the sequence.
 	fn next_ceremony_id() -> Self::CeremonyId;
+}
+
+/// Something that is able to provide block authorship slots that were missed.
+pub trait MissedAuthorshipSlots {
+	/// Get a list of slots that were missed.
+	fn missed_slots() -> Vec<u64>;
 }

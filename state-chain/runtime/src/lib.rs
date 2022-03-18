@@ -161,6 +161,8 @@ impl pallet_cf_validator::Config for Runtime {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
+	type OfflineReporter = Reputation;
 }
 
 impl pallet_cf_environment::Config for Runtime {
