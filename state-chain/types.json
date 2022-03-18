@@ -31,6 +31,7 @@
     "to": "Option<u64>"
   },
   "BlockNumber": "u32",
+  "BoundedBTreeSet": "BTreeSet",
   "BroadcastAttemptId": "u64",
   "BroadcastId": "u32",
   "BroadcastStage": {
@@ -157,6 +158,27 @@
     "blocks": "BlockNumber"
   },
   "ReputationPoints": "i32",
+  "RequestContext": {
+    "attempt_id": "u8",
+    "retry_scheduled": "bool",
+    "remaining_respondents": "BTreeSet<ValidatorId>",
+    "blame_counts": "BTreeMap<ValidatorId, u32>",
+    "participant_count": "u32",
+    "chain_signing_context": "SigningContext"
+  },
+  "TransactionSigningAttempt": {
+    "broadcast_id": "BroadcastId",
+    "attempt_count": "AttemptCount",
+    "unsigned_tx": "UnsignedTransactionFor",
+    "nominee": "ValidatorId"
+  },
+  "TransmissionAttempt": {
+    "broadcast_id": "BroadcastId",
+    "attempt_count": "AttemptCount",
+    "unsigned_tx": "UnsignedTransactionFor",
+    "signer": "ValidatorId",
+    "signed_tx": "SignedTransactionFor"
+  },
   "ReserveId": "[u8;4]",
   "Retired": "bool",
   "RotationStatus": {
@@ -181,6 +203,13 @@
   "Signature": "SignatureFor",
   "SignatureFor": "SchnorrVerificationComponents",
   "SignerIdFor": "EthereumAddress",
+  "SigningContext": {
+    "_enum": [
+      "PostClaimSignature",
+      "SetAggKeyWithAggKey",
+      "UpdateFlipSupply"
+    ]
+  },
   "SigData": {
     "msg_hash": "H256",
     "sig": "Uint",
