@@ -649,6 +649,8 @@ pub trait HistoricalEpoch {
 	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
 	/// Activates an epch for an validator
 	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
+	/// Returns the bond active bond for a validator
+	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
 }
 
 /// Handles the expiry of an epoch
@@ -659,8 +661,9 @@ pub trait EpochExpiry {
 /// Handles the bonding logic
 pub trait Bonding {
 	type ValidatorId;
+	type Amount;
 	/// Update the bond of an validator
-	fn update_validator_bond(validator: &Self::ValidatorId);
+	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount);
 }
 pub trait CeremonyIdProvider {
 	type CeremonyId;

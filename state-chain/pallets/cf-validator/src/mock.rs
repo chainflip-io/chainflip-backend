@@ -252,11 +252,15 @@ impl Chainflip for Test {
 	type EpochInfo = MockEpochInfo;
 }
 
-pub struct MockEpochExpiryHandler;
+pub struct MockBonder;
 
-impl EpochExpiry for MockEpochExpiryHandler {
-	fn expire_epoch(_: cf_traits::EpochIndex) {
-		unimplemented!()
+impl Bonding for MockBonder {
+	type ValidatorId = ValidatorId;
+
+	type Amount = Amount;
+
+	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {
+		todo!()
 	}
 }
 
@@ -270,7 +274,7 @@ impl Config for Test {
 	type VaultRotator = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type EpochExpiryHandler = MockEpochExpiryHandler;
+	type Bonder = MockBonder;
 }
 
 /// Session pallet requires a set of validators at genesis.

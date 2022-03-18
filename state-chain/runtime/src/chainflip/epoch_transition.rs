@@ -1,11 +1,8 @@
-use cf_traits::{
-	BlockEmissions, Bonding, EmissionsTrigger, EpochExpiry, EpochTransitionHandler, FlipBalance,
-};
+use cf_traits::{BlockEmissions, Bonding, EmissionsTrigger, EpochTransitionHandler, FlipBalance};
+use pallet_cf_flip::Bonder;
 
-use crate::{chainflip::EpochHistory, AccountId, Emissions, Flip, Runtime, Validator, Witnesser};
-use cf_traits::{
-	Chainflip, ChainflipAccount, ChainflipAccountStore, EpochIndex, EpochInfo, HistoricalEpoch,
-};
+use crate::{chainflip::EpochHistory, AccountId, Emissions, Runtime, Validator, Witnesser};
+use cf_traits::{Chainflip, ChainflipAccount, ChainflipAccountStore, EpochInfo, HistoricalEpoch};
 
 use crate::chainflip::PhantomData;
 
@@ -27,7 +24,8 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Update the the bond of all validators for the new epoch
 		for validator in new_validators {
-			BondManager::update_validator_bond(validator);
+			let bond = EpochHistory::<Runtime>::active_bond(validator);
+			Bonder::<Runtime>::update_validator_bond(validator, bond);
 		}
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(
@@ -61,39 +59,6 @@ impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
 		let epoch_index = Validator::epoch_index();
 		for validator in new_validators {
 			ChainflipAccountStore::<Runtime>::update_last_active_epoch(validator, epoch_index);
-		}
-	}
-}
-
-pub struct EpochExpiryHandler;
-
-impl EpochExpiry for EpochExpiryHandler {
-	fn expire_epoch(epoch: EpochIndex) {
-		EpochHistory::<Runtime>::set_last_expired_epoch(epoch);
-		for validator in EpochHistory::<Runtime>::epoch_validators(epoch).iter() {
-			EpochHistory::<Runtime>::deactivate_epoch(validator, epoch);
-			BondManager::update_validator_bond(validator);
-		}
-	}
-}
-
-pub struct BondManager;
-
-impl Bonding for BondManager {
-	type ValidatorId = AccountId;
-	fn update_validator_bond(validator: &Self::ValidatorId) {
-		let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(validator);
-		if active_epochs.is_empty() {
-			Flip::set_validator_bond(validator, 0u128);
-		} else {
-			Flip::set_validator_bond(
-				validator,
-				active_epochs
-					.iter()
-					.map(|bond| EpochHistory::<Runtime>::epoch_bond(*bond))
-					.max()
-					.expect("we expect at least one active epoch"),
-			);
 		}
 	}
 }

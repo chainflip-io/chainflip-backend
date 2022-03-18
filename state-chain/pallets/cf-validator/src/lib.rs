@@ -28,8 +28,7 @@ use sp_core::ed25519;
 use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-use cf_traits::EpochExpiry;
-
+use cf_traits::Bonding;
 pub mod releases {
 	use frame_support::traits::StorageVersion;
 	// Genesis version
@@ -104,8 +103,9 @@ pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
+
 	use super::*;
-	use cf_traits::{ChainflipAccount, ChainflipAccountState, KeygenStatus, VaultRotator};
+	use cf_traits::{Bonding, ChainflipAccount, ChainflipAccountState, KeygenStatus, VaultRotator};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -153,8 +153,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 
-		/// Ends an epoch
-		type EpochExpiryHandler: EpochExpiry;
+		/// Updates the bond for a validator
+		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
 	}
 
 	#[pallet::event]
@@ -214,7 +214,7 @@ pub mod pallet {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				T::EpochExpiryHandler::expire_epoch(epoch_index);
+				Self::expire_epoch(epoch_index);
 			}
 
 			match RotationPhase::<T>::get() {
@@ -768,6 +768,15 @@ impl<T: Config> Pallet<T> {
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
 	}
+
+	fn expire_epoch(epoch: EpochIndex) {
+		EpochHistory::<T>::set_last_expired_epoch(epoch);
+		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
+			EpochHistory::<T>::deactivate_epoch(validator, epoch);
+			let bond = EpochHistory::<T>::active_bond(validator);
+			T::Bonder::update_validator_bond(validator, bond);
+		}
+	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
@@ -802,6 +811,14 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 		HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
 			epochs.push(epoch);
 		});
+	}
+
+	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount {
+		Self::active_epochs_for_validator(validator)
+			.iter()
+			.map(|epoch| Self::epoch_bond(*epoch))
+			.max()
+			.unwrap_or(Self::Amount::from(0_u32))
 	}
 }
 

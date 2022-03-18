@@ -17,7 +17,7 @@ mod on_charge_transaction;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_traits::{Slashing, StakeHandler};
+use cf_traits::{Bonding, Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -383,6 +383,18 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}
 }
+
+pub struct Bonder<T>(PhantomData<T>);
+
+impl<T: Config> Bonding for Bonder<T> {
+	type ValidatorId = T::AccountId;
+	type Amount = T::Balance;
+
+	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount) {
+		Pallet::<T>::set_validator_bond(validator, bond);
+	}
+}
+
 pub struct FlipIssuance<T>(PhantomData<T>);
 
 impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
