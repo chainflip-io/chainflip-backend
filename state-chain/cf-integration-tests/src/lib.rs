@@ -1176,7 +1176,7 @@ mod tests {
 					);
 
 					// Activate the accounts
-					for node in [active_nodes.clone(), passive_nodes.clone()].concat() {
+					for node in [active_nodes, passive_nodes.clone()].concat() {
 						network::Cli::activate_account(node);
 					}
 
