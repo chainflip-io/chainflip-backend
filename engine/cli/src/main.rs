@@ -51,11 +51,10 @@ async fn run_cli() -> Result<()> {
             eth_address,
             should_register_claim,
         } => {
-            let cleaned_eth_address = clean_eth_address(&eth_address)
-                .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?;
             request_claim(
                 amount,
-                cleaned_eth_address,
+                clean_eth_address(&eth_address)
+                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
                 &cli_settings,
                 should_register_claim,
                 &logger,
