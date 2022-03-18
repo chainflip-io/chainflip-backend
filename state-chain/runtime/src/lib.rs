@@ -1,14 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
 mod chainflip;
 pub mod constants;
 mod migrations;
 #[cfg(test)]
 mod tests;
-use cf_chains::Ethereum;
+use cf_chains::{eth, Ethereum};
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
 	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
@@ -165,6 +163,8 @@ impl pallet_cf_validator::Config for Runtime {
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type Bonder = Bonder<Runtime>;
+	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
+	type OfflineReporter = Reputation;
 }
 
 impl pallet_cf_environment::Config for Runtime {
@@ -179,9 +179,9 @@ parameter_types! {
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Chain = Ethereum;
+	type ApiCall = eth::api::EthereumApi;
+	type Broadcaster = EthereumBroadcaster;
 	type OfflineReporter = Reputation;
-	type SigningContext = chainflip::EthereumSigningContext;
-	type ThresholdSigner = EthereumThresholdSigner;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
@@ -363,17 +363,18 @@ impl pallet_cf_witnesser::Config for Runtime {
 
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
-	type Balance = FlipBalance;
+	type ThresholdCallable = Call;
 	type StakerId = AccountId;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type Balance = FlipBalance;
 	type Flip = Flip;
 	type NonceProvider = EthereumVault;
-	type SigningContext = chainflip::EthereumSigningContext;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
+	type RegisterClaim = eth::api::EthereumApi;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_cf_governance::Config for Runtime {
@@ -389,14 +390,15 @@ impl pallet_cf_governance::Config for Runtime {
 
 impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
+	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;
+	type ApiCall = eth::api::EthereumApi;
+	type Broadcaster = EthereumBroadcaster;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = EthereumVault;
-	type SigningContext = chainflip::EthereumSigningContext;
-	type ThresholdSigner = EthereumThresholdSigner;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
@@ -452,9 +454,10 @@ parameter_types! {
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type RuntimeOrigin = Origin;
+	type ThresholdCallable = Call;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
-	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = EthereumVault;
 	type OfflineReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
@@ -471,8 +474,11 @@ parameter_types! {
 
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type Call = Call;
 	type TargetChain = cf_chains::Ethereum;
-	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
+	type ApiCall = eth::api::EthereumApi;
+	type ThresholdSigner = EthereumThresholdSigner;
+	type TransactionBuilder = chainflip::EthTransactionBuilder;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type OfflineReporter = Reputation;
 	type EnsureThresholdSigned =

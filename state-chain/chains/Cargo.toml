@@ -73,7 +73,6 @@ std = [
     'sp-std/std',
     'secp256k1'
 ]
-mocks = []
 runtime-benchmarks = [
     'cf-runtime-benchmark-utilities/runtime-benchmarks',
     'frame-support/runtime-benchmarks',

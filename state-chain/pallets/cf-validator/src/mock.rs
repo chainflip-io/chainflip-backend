@@ -234,6 +234,30 @@ impl QualifyValidator for MockQualifyValidator {
 	}
 }
 
+thread_local! {
+	pub static MISSED_SLOTS: RefCell<Vec<u64>> = RefCell::new(Default::default());
+}
+
+pub struct MockMissedAuthorshipSlots;
+
+impl MockMissedAuthorshipSlots {
+	pub fn set(slots: Vec<u64>) {
+		MISSED_SLOTS.with(|cell| *cell.borrow_mut() = slots)
+	}
+
+	pub fn get() -> Vec<u64> {
+		MISSED_SLOTS.with(|cell| cell.borrow().clone())
+	}
+}
+
+impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
+	fn missed_slots() -> Vec<u64> {
+		Self::get()
+	}
+}
+
+cf_traits::impl_mock_offline_conditions!(ValidatorId);
+
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u32 = 2;
@@ -275,6 +299,8 @@ impl Config for Test {
 	type ChainflipAccount = MockChainflipAccount;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type Bonder = MockBonder;
+	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
+	type OfflineReporter = MockOfflineReporter;
 }
 
 /// Session pallet requires a set of validators at genesis.

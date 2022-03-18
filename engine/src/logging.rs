@@ -46,12 +46,16 @@ pub mod utils {
 
         // Print the readable log
         println!(
-            "\x1b{}[{}]\x1b[0m {} {} - {}",
+            "\x1b{}[{}]\x1b[0m {} {}",
             level_color,
             record.level(),
-            record.tag(),
-            record.module(),
-            record.msg()
+            record.msg(),
+            // Only show the tag if its not empty
+            if !record.tag().is_empty() {
+                format!("([{}], {})", record.tag(), record.module())
+            } else {
+                format!("({})", record.module())
+            }
         );
 
         // Print the location of the log call if its a Warning or above

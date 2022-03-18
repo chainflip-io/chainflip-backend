@@ -16,8 +16,9 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, QualifyValidator,
+	offline_conditions::OfflineCondition, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyValidator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -105,7 +106,10 @@ pub type Percentage = u8;
 pub mod pallet {
 
 	use super::*;
-	use cf_traits::{Bonding, ChainflipAccount, ChainflipAccountState, KeygenStatus, VaultRotator};
+	use cf_traits::{
+		offline_conditions::OfflineReporter, ChainflipAccount, ChainflipAccountState, KeygenStatus,
+		VaultRotator,
+	};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -148,6 +152,12 @@ pub mod pallet {
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
+		/// For retrieving missed authorship slots.
+		type MissedAuthorshipSlots: MissedAuthorshipSlots;
+
+		/// For reporting missed authorship slots.
+		type OfflineReporter: OfflineReporter<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
@@ -216,6 +226,21 @@ pub mod pallet {
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
 				LastExpiredEpoch::<T>::set(epoch_index);
 				Self::expire_epoch(epoch_index);
+			}
+
+			// Punish any validators that missed their authorship slot.
+			for slot in T::MissedAuthorshipSlots::missed_slots() {
+				let validator_index = slot % <Self as EpochInfo>::active_validator_count() as u64;
+				if let Some(id) =
+					<Self as EpochInfo>::current_validators().get(validator_index as usize)
+				{
+					T::OfflineReporter::report(OfflineCondition::MissedAuthorshipSlot, id);
+				} else {
+					log::error!(
+						"Invalid slot index {:?} when processing missed authorship slots.",
+						slot
+					);
+				}
 			}
 
 			match RotationPhase::<T>::get() {

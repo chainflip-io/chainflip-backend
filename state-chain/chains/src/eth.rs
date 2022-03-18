@@ -1,7 +1,5 @@
 //! Types and functions that are common to ethereum.
-pub mod register_claim;
-pub mod set_agg_key_with_agg_key;
-pub mod update_flip_supply;
+pub mod api;
 
 use codec::{Decode, Encode};
 pub use ethabi::{
@@ -625,18 +623,6 @@ pub fn verify_transaction(
 	}
 
 	unsigned.match_against_recovered(decoded_tx)
-}
-
-/// Represents calls to Chainflip contracts requiring a threshold signature.
-pub trait ChainflipContractCall {
-	/// Whether or not the call has been signed.
-	fn has_signature(&self) -> bool;
-
-	/// The payload data over which the threshold signature should be made.
-	fn signing_payload(&self) -> H256;
-
-	/// Abi-encode the call with a provided signature.
-	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8>;
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default)]
