@@ -936,7 +936,7 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "structopt",
- "tokio 1.13.0",
+ "tokio",
  "utilities",
  "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
 ]
@@ -960,7 +960,6 @@ dependencies = [
  "dyn-clone",
  "env_logger 0.9.0",
  "ethbloom",
- "failure",
  "frame-support",
  "frame-system",
  "fs_extra",
@@ -1022,8 +1021,7 @@ dependencies = [
  "substrate-subxt",
  "tempdir",
  "thiserror",
- "tokio 1.13.0",
- "tokio-compat-02",
+ "tokio",
  "tokio-stream",
  "url 1.7.2",
  "utilities",
@@ -2056,28 +2054,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "failure"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
-dependencies = [
- "backtrace",
- "failure_derive",
-]
-
-[[package]]
-name = "failure_derive"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
-
-[[package]]
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2782,7 +2758,7 @@ dependencies = [
  "http",
  "indexmap",
  "slab",
- "tokio 1.13.0",
+ "tokio",
  "tokio-util",
  "tracing",
 ]
@@ -3017,7 +2993,7 @@ dependencies = [
  "itoa",
  "pin-project-lite 0.2.7",
  "socket2 0.4.2",
- "tokio 1.13.0",
+ "tokio",
  "tower-service",
  "tracing",
  "want",
@@ -3035,7 +3011,7 @@ dependencies = [
  "log 0.4.14",
  "rustls",
  "rustls-native-certs",
- "tokio 1.13.0",
+ "tokio",
  "tokio-rustls",
  "webpki",
 ]
@@ -3049,7 +3025,7 @@ dependencies = [
  "derive_builder",
  "dns-lookup",
  "hyper 0.14.14",
- "tokio 1.13.0",
+ "tokio",
  "tower-service",
  "tracing",
 ]
@@ -3063,7 +3039,7 @@ dependencies = [
  "bytes 1.1.0",
  "hyper 0.14.14",
  "native-tls",
- "tokio 1.13.0",
+ "tokio",
  "tokio-native-tls",
 ]
 
@@ -3299,7 +3275,7 @@ dependencies = [
  "log 0.4.14",
  "serde 1.0.130",
  "serde_json",
- "tokio 1.13.0",
+ "tokio",
  "url 1.7.2",
  "websocket",
 ]
@@ -3399,7 +3375,7 @@ dependencies = [
  "jsonrpc-core",
  "lazy_static",
  "log 0.4.14",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
  "tokio-util",
  "unicase 2.6.0",
@@ -3437,7 +3413,7 @@ dependencies = [
  "serde 1.0.130",
  "serde_json",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "url 2.2.2",
 ]
 
@@ -3502,7 +3478,7 @@ dependencies = [
  "serde_json",
  "soketto 0.6.0",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "tokio-rustls",
  "tokio-util",
  "url 2.2.2",
@@ -4696,7 +4672,7 @@ dependencies = [
  "serde_json",
  "sp-core",
  "sp-runtime",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
 ]
 
@@ -5553,7 +5529,7 @@ dependencies = [
  "libc",
  "log 0.4.14",
  "rand 0.7.3",
- "tokio 1.13.0",
+ "tokio",
  "winapi 0.3.9",
 ]
 
@@ -6150,7 +6126,7 @@ dependencies = [
  "hyper-system-resolver",
  "pin-project-lite 0.2.7",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "tracing",
  "tracing-futures",
  "trust-dns-client",
@@ -6649,7 +6625,7 @@ dependencies = [
  "serde 1.0.130",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.13.0",
+ "tokio",
  "tokio-native-tls",
  "url 2.2.2",
  "wasm-bindgen",
@@ -6980,7 +6956,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "tiny-bip39",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -8986,7 +8962,7 @@ dependencies = [
  "hyper 0.14.14",
  "log 0.4.14",
  "prometheus",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9262,18 +9238,6 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "0.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6703a273949a90131b290be1fe7b039d0fc884aa1935860dfcbe056f28cd8092"
-dependencies = [
- "bytes 0.5.6",
- "num_cpus",
- "pin-project-lite 0.1.12",
- "slab",
-]
-
-[[package]]
-name = "tokio"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "588b2d10a336da58d877567cd8fb8a14b463e2104910f8132cd054b4b96e29ee"
@@ -9301,20 +9265,6 @@ dependencies = [
  "bytes 0.4.12",
  "futures 0.1.31",
  "tokio-io",
-]
-
-[[package]]
-name = "tokio-compat-02"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7d4237822b7be8fff0a7a27927462fad435dcb6650f95cea9e946bf6bdc7e07"
-dependencies = [
- "bytes 0.5.6",
- "once_cell",
- "pin-project-lite 0.2.7",
- "tokio 0.2.25",
- "tokio 1.13.0",
- "tokio-stream",
 ]
 
 [[package]]
@@ -9356,7 +9306,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9385,7 +9335,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls",
- "tokio 1.13.0",
+ "tokio",
  "webpki",
 ]
 
@@ -9397,7 +9347,7 @@ checksum = "50145484efff8818b5ccd256697f36863f587da82cf8b409c53adf1e840798e3"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.7",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9447,7 +9397,7 @@ dependencies = [
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite 0.2.7",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9606,7 +9556,7 @@ dependencies = [
  "rand 0.8.4",
  "thiserror",
  "time 0.3.7",
- "tokio 1.13.0",
+ "tokio",
  "trust-dns-proto",
 ]
 
@@ -9631,7 +9581,7 @@ dependencies = [
  "smallvec 1.7.0",
  "thiserror",
  "tinyvec",
- "tokio 1.13.0",
+ "tokio",
  "url 2.2.2",
 ]
 
@@ -10275,7 +10225,7 @@ dependencies = [
  "serde_json",
  "soketto 0.7.0",
  "tiny-keccak",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
  "tokio-util",
  "url 2.2.2",
@@ -10309,7 +10259,7 @@ dependencies = [
  "serde_json",
  "soketto 0.7.0",
  "tiny-keccak",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
  "tokio-util",
  "url 2.2.2",
@@ -10324,7 +10274,7 @@ checksum = "1f6d8d1636b2627fe63518d5a9b38a569405d9c9bc665c43c9c341de57227ebb"
 dependencies = [
  "native-tls",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "url 2.2.2",
 ]
 
