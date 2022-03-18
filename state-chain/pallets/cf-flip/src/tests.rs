@@ -517,6 +517,44 @@ mod test_slashing {
 			// Check if the diff between the balances is the expected slash
 			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);
 			check_balance_integrity();
+			assert_eq!(
+				System::events()
+					.into_iter()
+					.map(|r| r.event)
+					.filter_map(|e| {
+						if let Event::Flip(inner) = e {
+							Some(inner)
+						} else {
+							None
+						}
+					})
+					.last()
+					.unwrap(),
+				crate::Event::<Test>::SlashingPerformed(ALICE, EXPECTED_SLASH),
+			);
+			// Test case where the slashing rate is set to 0. SlashingPerformed event should still
+			// be emitted.
+			SlashingRate::<Test>::set(0);
+			let initial_balance: u128 = Flip::total_balance_of(&ALICE);
+			FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE);
+			let balance_after = Flip::total_balance_of(&ALICE);
+			assert_eq!(initial_balance - balance_after, 0);
+			check_balance_integrity();
+			assert_eq!(
+				System::events()
+					.into_iter()
+					.map(|r| r.event)
+					.filter_map(|e| {
+						if let Event::Flip(inner) = e {
+							Some(inner)
+						} else {
+							None
+						}
+					})
+					.last()
+					.unwrap(),
+				crate::Event::<Test>::SlashingPerformed(ALICE, 0),
+			);
 		});
 	}
 }
