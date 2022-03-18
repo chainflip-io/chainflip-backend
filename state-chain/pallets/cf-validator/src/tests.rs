@@ -486,6 +486,32 @@ fn historical_epochs() {
 }
 
 #[test]
+fn highest_bond() {
+	new_test_ext().execute_with(|| {
+		// Epoch 1
+		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
+		HistoricalValidators::<Test>::insert(1, vec![ALICE]);
+		HistoricalBonds::<Test>::insert(1, 10);
+		// Epoch 2
+		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
+		HistoricalValidators::<Test>::insert(2, vec![ALICE]);
+		HistoricalBonds::<Test>::insert(2, 30);
+		// Epoch 3
+		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
+		HistoricalValidators::<Test>::insert(3, vec![ALICE]);
+		HistoricalBonds::<Test>::insert(3, 20);
+		// Expect the bond of epoch 2
+		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
+		// Deactivate all epochs
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 1);
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 2);
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 3);
+		// Expect the bond to be zero if there is no epoch the validator is active in
+		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 0);
+	});
+}
+
+#[test]
 fn test_setting_vanity_names_() {
 	new_test_ext().execute_with(|| {
 		let validators: &[u64] = &[123, 456, 789, 101112];
