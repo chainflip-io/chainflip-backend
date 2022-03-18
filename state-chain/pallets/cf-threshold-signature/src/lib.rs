@@ -81,18 +81,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> CeremonyContext<T, I> {
-		/// Based on the current state of the ceremony, defines whether we have reached a point
-		/// where enough respondents have reported a failure of the ceremony such that we can
-		/// schedule a retry.
-		pub fn countdown_initiation_threshold_reached(&self) -> bool {
-			// The number of responses at which we start a timeout to allow other participants to
-			// respond.
-			let response_threshold = self.participant_count / 10 + 1;
-
-			self.remaining_respondents.len() <=
-				(self.participant_count - response_threshold) as usize
-		}
-
 		/// Based on the reported blame_counts, decide which nodes should be reported for failure.
 		///
 		/// We assume that at least 2/3 of participants need to blame a node for it to be reliable.
@@ -447,9 +435,7 @@ pub mod pallet {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
-						if !context.retry_scheduled &&
-							context.countdown_initiation_threshold_reached()
-						{
+						if !context.retry_scheduled {
 							context.retry_scheduled = true;
 							Self::schedule_retry(id, T::ThresholdFailureTimeout::get());
 						}
