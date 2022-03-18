@@ -16,8 +16,10 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyValidator,
+	offence_reporting::{Offence, OffenceReporter},
+	AsyncResult, AuctionResult, Auctioneer, ChainflipAccount, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyValidator, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -105,10 +107,6 @@ pub type Percentage = u8;
 pub mod pallet {
 
 	use super::*;
-	use cf_traits::{
-		offence_reporting::{Offence, OffenceReporter},
-		ChainflipAccount, KeygenStatus, VaultRotator,
-	};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -273,16 +271,22 @@ pub mod pallet {
 						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
-					match T::VaultRotator::get_keygen_status() {
-						None => Self::update_rotation_status(RotationStatus::VaultsRotated(
-							auction_result,
-						)),
-						Some(KeygenStatus::Failed) => {
+					match T::VaultRotator::get_vault_rotation_outcome() {
+						AsyncResult::Ready(SuccessOrFailure::Success) => {
+							Self::update_rotation_status(RotationStatus::VaultsRotated(
+								auction_result,
+							));
+						},
+						AsyncResult::Ready(SuccessOrFailure::Failure) => {
 							Self::deposit_event(Event::RotationAborted);
 							Self::update_rotation_status(RotationStatus::Idle);
 						},
-						Some(KeygenStatus::Busy) =>
-							log::debug!(target: "cf-validator", "awaiting vault rotation"),
+						AsyncResult::Void => {
+							log::error!(target: "cf-validator", "no vault rotation pending, returning to auction state");
+						},
+						AsyncResult::Pending => {
+							log::debug!(target: "cf-validator", "awaiting vault rotations");
+						},
 					},
 				RotationStatus::VaultsRotated(auction_result) => {
 					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));

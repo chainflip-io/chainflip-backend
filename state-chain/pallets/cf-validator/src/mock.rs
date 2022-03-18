@@ -8,10 +8,10 @@ use frame_support::{
 use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo,
+		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
 	},
 	AuctionResult, Bid, BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountData,
-	IsOnline, IsOutgoing, QualifyValidator, VaultRotator,
+	IsOnline, IsOutgoing, QualifyValidator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -199,32 +199,6 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	}
 }
 
-thread_local! {
-	pub static START_VAULT_ROTATION: RefCell<Result<(), &'static str>> = RefCell::new(Ok(()));
-}
-pub struct MockVaultRotator;
-impl MockVaultRotator {
-	pub fn set_start_vault_rotation(result: Result<(), &'static str>) {
-		START_VAULT_ROTATION.with(|cell| *cell.borrow_mut() = result);
-	}
-}
-
-impl VaultRotator for MockVaultRotator {
-	type ValidatorId = ValidatorId;
-	type RotationError = &'static str;
-
-	/// Start a vault rotation with the following `candidates`
-	fn start_vault_rotation(
-		_candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::RotationError> {
-		START_VAULT_ROTATION.with(|cell| *cell.borrow())
-	}
-
-	fn get_keygen_status() -> Option<cf_traits::KeygenStatus> {
-		None
-	}
-}
-
 pub struct MockQualifyValidator;
 impl QualifyValidator for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
@@ -306,15 +280,29 @@ impl Config for Test {
 pub const DUMMY_GENESIS_VALIDATORS: &[u64] = &[u64::MAX];
 pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 pub const MINIMUM_ACTIVE_BID_AT_GENESIS: Amount = 1;
-pub const BLOCKS_TO_SESSION_ROTATION: u64 = 4;
+pub const EPOCH_DURATION: u64 = 10;
 
-pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	// Initialise the auctioneer with an auction result
-	MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
-		winners: DUMMY_GENESIS_VALIDATORS.to_vec(),
-		minimum_active_bid: MINIMUM_ACTIVE_BID_AT_GENESIS,
-	}));
+pub(crate) struct TestExternalitiesWithCheck {
+	ext: sp_io::TestExternalities,
+}
 
+impl TestExternalitiesWithCheck {
+	fn check_invariants() {
+		assert_eq!(Validators::<Test>::get(), Session::validators(),);
+	}
+
+	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
+		self.ext.execute_with(|| {
+			System::set_block_number(1);
+			Self::check_invariants();
+			let r = execute();
+			Self::check_invariants();
+			r
+		})
+	}
+}
+
+pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 	let config = GenesisConfig {
 		system: SystemConfig::default(),
 		session: SessionConfig {
@@ -324,35 +312,19 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 				.collect(),
 		},
 		validator_pallet: ValidatorPalletConfig {
-			blocks_per_epoch: 0,
+			blocks_per_epoch: EPOCH_DURATION,
 			bond: MINIMUM_ACTIVE_BID_AT_GENESIS,
 			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
 		},
 	};
 
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+	let ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
-	ext.execute_with(|| {
-		System::set_block_number(1);
-	});
-
-	ext
+	TestExternalitiesWithCheck { ext }
 }
 
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
-}
-
-pub fn old_validators() -> Vec<u64> {
-	OLD_VALIDATORS.with(|l| l.borrow().to_vec())
-}
-
-pub fn outgoing_validators() -> Vec<u64> {
-	old_validators()
-		.iter()
-		.filter(|old_validator| !current_validators().contains(old_validator))
-		.cloned()
-		.collect()
 }
 
 pub fn min_bid() -> Amount {

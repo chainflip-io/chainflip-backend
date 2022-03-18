@@ -1,7 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod async_result;
 pub mod mocks;
 pub mod offence_reporting;
+
+pub use async_result::AsyncResult;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
@@ -189,10 +192,10 @@ pub trait BackupValidators {
 	fn backup_validators() -> Vec<Self::ValidatorId>;
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub enum KeygenStatus {
-	Busy,
-	Failed,
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum SuccessOrFailure {
+	Success,
+	Failure,
 }
 
 /// Rotating vaults
@@ -204,7 +207,7 @@ pub trait VaultRotator {
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
 	/// Get the status of the current key generation
-	fn get_keygen_status() -> Option<KeygenStatus>;
+	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure>;
 }
 
 /// Handler for Epoch life cycle events.
@@ -491,34 +494,6 @@ where
 			);
 		});
 		id
-	}
-}
-
-/// A result type for asynchronous operations.
-#[derive(Clone, Copy, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
-pub enum AsyncResult<R> {
-	/// Result is ready.
-	Ready(R),
-	/// Result is requested but not available. (still being generated)
-	Pending,
-	/// Result is void. (not yet requested or has already been used)
-	Void,
-}
-
-impl<R> AsyncResult<R> {
-	/// Returns `Ok(result: R)` if the `R` is ready, otherwise executes the supplied closure and
-	/// returns the Err(closure_result: E).
-	pub fn ready_or_else<E>(self, e: impl FnOnce(Self) -> E) -> Result<R, E> {
-		match self {
-			AsyncResult::Ready(s) => Ok(s),
-			_ => Err(e(self)),
-		}
-	}
-}
-
-impl<R> Default for AsyncResult<R> {
-	fn default() -> Self {
-		Self::Void
 	}
 }
 

@@ -1,9 +1,12 @@
 use crate::{
 	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, FailureVoters,
-	KeygenOutcome, KeygenResolutionPendingSince, PendingVaultRotation, SuccessVoters, Vault,
-	VaultRotationStatus, Vaults,
+	KeygenOutcome, KeygenResolutionPendingSince, PendingVaultRotation, RotationOutcome,
+	SuccessVoters, Vault, VaultRotationStatus, Vaults,
 };
-use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, Chainflip, EpochInfo};
+use cf_traits::{
+	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
+	SuccessOrFailure, VaultRotator,
+};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
@@ -34,16 +37,15 @@ fn no_candidates_is_noop_and_error() {
 			VaultsPallet::start_vault_rotation(vec![]),
 			Error::<MockRuntime, _>::EmptyValidatorSet
 		);
-		assert!(VaultsPallet::no_active_chain_vault_rotations());
 	});
 }
 
 #[test]
 fn keygen_request_emitted() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(VaultsPallet::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		// Confirm we have a new vault rotation process running
-		assert!(!VaultsPallet::no_active_chain_vault_rotations());
+		assert_eq!(VaultsPallet::rotation_outcome(), AsyncResult::Pending);
 		// Check the event emitted
 		assert_eq!(
 			last_event(),
@@ -97,8 +99,11 @@ fn keygen_failure() {
 		// KeygenAborted event emitted.
 		assert_eq!(last_event(), PalletEvent::KeygenFailure(ceremony_id).into());
 
-		// All rotations have been aborted.
-		assert!(VaultsPallet::no_active_chain_vault_rotations());
+		// Outcome is ready.
+		assert_eq!(
+			RotationOutcome::<MockRuntime>::get(),
+			AsyncResult::Ready(SuccessOrFailure::Failure)
+		);
 
 		// Bad validators have been reported.
 		assert_eq!(MockOffenceReporter::get_reported(), BAD_CANDIDATES);

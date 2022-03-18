@@ -7,8 +7,8 @@
 use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_traits::{
 	offence_reporting::{Offence, OffenceReporter},
-	Broadcaster, CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider,
-	KeygenStatus, NonceProvider, VaultRotator,
+	AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex,
+	KeyProvider, NonceProvider, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -281,6 +281,8 @@ pub mod releases {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_traits::SuccessOrFailure;
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -416,11 +418,11 @@ pub mod pallet {
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	/// Status of the key generation.
+	/// Stores the outcome of a vault rotation.
 	#[pallet::storage]
-	#[pallet::getter(fn keygen_status)]
-	pub(super) type StatusOfKeygen<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, KeygenStatus, OptionQuery>;
+	#[pallet::getter(fn rotation_outcome)]
+	pub(super) type RotationOutcome<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, AsyncResult<SuccessOrFailure>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -605,6 +607,7 @@ pub mod pallet {
 				},
 			);
 
+			RotationOutcome::<T, I>::put(AsyncResult::Ready(SuccessOrFailure::Success));
 			Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
 
 			Ok(().into())
@@ -659,14 +662,6 @@ impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn no_active_chain_vault_rotations() -> bool {
-		if let Some(status) = PendingVaultRotation::<T, I>::get() {
-			matches!(status, VaultRotationStatus::<T, I>::Complete { .. })
-		} else {
-			true
-		}
-	}
-
 	fn start_vault_rotation(candidates: Vec<T::ValidatorId>) -> DispatchResult {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
@@ -717,7 +712,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// state.
 		PendingVaultRotation::<T, I>::kill();
 		// TODO: Failure of one keygen should cause failure of all keygens.
-		StatusOfKeygen::<T, I>::put(KeygenStatus::Failed);
+		RotationOutcome::<T, I>::put(AsyncResult::Ready(SuccessOrFailure::Failure));
 	}
 
 	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {
@@ -732,22 +727,15 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type RotationError = DispatchError;
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
+		// TODO: Ensure RotationOutcome is not Pending?
 		Self::start_vault_rotation(candidates)?;
-		StatusOfKeygen::<T, I>::put(KeygenStatus::Busy);
+		RotationOutcome::<T, I>::put(AsyncResult::Pending);
 		Ok(())
 	}
 
 	/// Get the status of the current key generation
-	fn get_keygen_status() -> Option<KeygenStatus> {
-		if Pallet::<T, I>::no_active_chain_vault_rotations() {
-			// The 'exit' point for the pallet, no rotations left to process
-			PendingVaultRotation::<T, I>::kill();
-			StatusOfKeygen::<T, I>::set(None);
-
-			Self::deposit_event(Event::<T, I>::VaultsRotated);
-		}
-
-		StatusOfKeygen::<T, I>::get()
+	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure> {
+		RotationOutcome::<T, I>::get()
 	}
 }
 
