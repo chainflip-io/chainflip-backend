@@ -153,7 +153,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 
-		/// Updates the bond for a validator
+		/// Updates the bond of a validator
 		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
 	}
 
@@ -214,6 +214,7 @@ pub mod pallet {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
+				LastExpiredEpoch::<T>::set(epoch_index);
 				Self::expire_epoch(epoch_index);
 			}
 
@@ -770,7 +771,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn expire_epoch(epoch: EpochIndex) {
-		EpochHistory::<T>::set_last_expired_epoch(epoch);
 		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
 			let bond = EpochHistory::<T>::active_bond(validator);
@@ -795,10 +795,6 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 
 	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
 		HistoricalActiveEpochs::<T>::get(id)
-	}
-
-	fn set_last_expired_epoch(epoch: EpochIndex) {
-		LastExpiredEpoch::<T>::set(epoch);
 	}
 
 	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {

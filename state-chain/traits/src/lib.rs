@@ -643,8 +643,6 @@ pub trait HistoricalEpoch {
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	/// All epochs an validator is active in
 	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
-	/// Sets the last expired epoch
-	fn set_last_expired_epoch(epoch: EpochIndex);
 	/// Removes an validator from an epoch
 	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
 	/// Activates an epch for an validator
