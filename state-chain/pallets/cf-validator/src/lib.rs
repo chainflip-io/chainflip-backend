@@ -839,7 +839,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 			.iter()
 			.map(|epoch| Self::epoch_bond(*epoch))
 			.max()
-			.unwrap_or(Self::Amount::from(0_u32))
+			.unwrap_or_else(|| Self::Amount::from(0_u32))
 	}
 }
 
