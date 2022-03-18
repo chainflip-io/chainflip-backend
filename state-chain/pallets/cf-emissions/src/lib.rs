@@ -2,8 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::eth::update_flip_supply::UpdateFlipSupply;
-use cf_traits::{NonceProvider, SigningContext, ThresholdSigner};
+use cf_chains::UpdateFlipSupply;
+use cf_traits::{Broadcaster, NonceProvider};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -31,7 +31,7 @@ use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, UniqueSaturatedInto, Zero},
 	SaturatedConversion,
 };
 
@@ -44,7 +44,7 @@ type BasisPoints = u32;
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::Ethereum;
+	use cf_chains::ChainAbi;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
@@ -55,6 +55,12 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// The host chain to which we broadcast supply updates.
+		///
+		/// In practice this is always [Ethereum] but making this configurable simplifies
+		/// testing.
+		type HostChain: ChainAbi;
+
 		/// The Flip token denomination.
 		type FlipBalance: Member
 			+ FullCodec
@@ -62,8 +68,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ AtLeast32BitUnsigned
-			+ UniqueSaturatedFrom<Self::BlockNumber>
-			+ Into<cf_chains::eth::Uint>;
+			+ UniqueSaturatedFrom<Self::BlockNumber>;
 
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
@@ -81,18 +86,18 @@ pub mod pallet {
 			Surplus = Self::Surplus,
 		>;
 
+		/// An outgoing api call that supports UpdateFlipSupply.
+		type ApiCall: UpdateFlipSupply<Self::HostChain>;
+
+		/// Transaction broadcaster for the host chain.
+		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
+
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
-
-		/// Top-level Ethereum signing context needs to support `UpdateFlipSupply`.
-		type SigningContext: From<UpdateFlipSupply> + SigningContext<Self, Chain = Ethereum>;
-
-		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type NonceProvider: NonceProvider<Self::HostChain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -287,6 +292,7 @@ pub mod pallet {
 			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
 			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
 			MintInterval::<T>::put(T::BlockNumber::from(100_u32));
+			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
 	}
 }
@@ -309,15 +315,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Updates the total supply on the ETH blockchain
 	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
-		// TODO: extend the BlockNumber type in a nice to avoid this parse here
-		let block_as_u32: u32 = block_number.saturated_into();
-		let transaction = UpdateFlipSupply::new_unsigned(
-			T::NonceProvider::next_nonce(),
-			total_supply,
-			block_as_u32,
-		);
 		// Emit a threshold signature request.
-		T::ThresholdSigner::request_transaction_signature(transaction);
+		// TODO: See if we can replace an old request if there is one.
+		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
+			T::NonceProvider::next_nonce(),
+			total_supply.unique_saturated_into(),
+			block_number.saturated_into(),
+		));
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to

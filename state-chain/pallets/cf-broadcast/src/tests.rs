@@ -1,12 +1,15 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId,
 	BroadcastAttemptIdCounter, BroadcastId, BroadcastIdToAttemptIdLookup, BroadcastRetryQueue,
-	BroadcastStage, Error, Event as BroadcastEvent, Instance1, PayloadToBroadcastIdLookup,
+	BroadcastStage, Error, Event as BroadcastEvent, Instance1, SignatureToBroadcastIdLookup,
 	TransmissionFailure,
+};
+use cf_chains::{
+	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
+	ChainAbi,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
-use sp_core::H256;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Scenario {
@@ -81,7 +84,7 @@ impl MockCfe {
 	fn handle_transaction_signature_request(
 		attempt_id: BroadcastAttemptId,
 		nominee: u64,
-		_unsigned_tx: MockUnsignedTx,
+		unsigned_tx: MockUnsignedTransaction,
 		scenario: Scenario,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
@@ -90,8 +93,8 @@ impl MockCfe {
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(nominee + 1).into(),
 				attempt_id,
-				MockSignedTx::Valid,
-				()
+				unsigned_tx.clone().signed(Validity::Valid),
+				Validity::Valid
 			),
 			Error::<Test, Instance1>::InvalidSigner
 		);
@@ -99,11 +102,11 @@ impl MockCfe {
 		assert_ok!(MockBroadcast::transaction_ready_for_transmission(
 			RawOrigin::Signed(nominee).into(),
 			attempt_id,
+			unsigned_tx.signed(Validity::Valid),
 			match scenario {
-				Scenario::BadSigner => MockSignedTx::Invalid,
-				_ => MockSignedTx::Valid,
-			},
-			()
+				Scenario::BadSigner => Validity::Invalid,
+				_ => Validity::Valid,
+			}
 		));
 	}
 
@@ -116,7 +119,7 @@ impl MockCfe {
 				MockBroadcast::transmission_failure(Origin::root(), attempt_id, failure, [0xcf; 4])
 			},
 			Scenario::SignatureAccepted => {
-				MockBroadcast::signature_accepted(Origin::root(), H256::default())
+				MockBroadcast::signature_accepted(Origin::root(), MockThresholdSignature::default())
 			},
 			_ => unimplemented!(),
 		});
@@ -130,7 +133,7 @@ fn test_broadcast_happy_path() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID).is_some()
 		);
@@ -154,7 +157,10 @@ fn test_broadcast_happy_path() {
 		assert_eq!(COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), BROADCAST_ID);
 
 		// Check if the storage was cleaned up successfully
-		assert!(PayloadToBroadcastIdLookup::<Test, Instance1>::get(H256::default()).is_none());
+		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
+			MockThresholdSignature::default()
+		)
+		.is_none());
 		assert!(BroadcastIdToAttemptIdLookup::<Test, Instance1>::get(BROADCAST_ID).is_none());
 	})
 }
@@ -165,7 +171,7 @@ fn test_broadcast_rejected() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -205,7 +211,7 @@ fn test_broadcast_rejected() {
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
 		for _ in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
@@ -233,7 +239,7 @@ fn test_broadcast_failed() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -268,7 +274,7 @@ fn test_bad_signature() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -297,8 +303,9 @@ fn test_invalid_id_is_noop() {
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(0).into(),
 				0,
-				MockSignedTx::Valid,
-				()
+				<<MockEthereum as ChainAbi>::UnsignedTransaction>::default()
+					.signed(Validity::Valid),
+				Validity::Valid
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
@@ -325,7 +332,7 @@ fn test_signature_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
@@ -384,7 +391,7 @@ fn test_transmission_request_expiry() {
 		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
 
 		// Initiate broadcast and pass the signing stage;
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		MockCfe::respond(Scenario::HappyPath);
 
 		// Simulate the expiry hook for the next block.
@@ -435,7 +442,7 @@ fn no_validators_available() {
 	new_test_ext().execute_with(|| {
 		// Simulate that no validator is currently online
 		NOMINATION.with(|cell| *cell.borrow_mut() = None);
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		// Check the retry queue
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 	});
@@ -449,7 +456,7 @@ fn no_validators_available() {
 fn missing_transaction_transmission() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
-		assert_ok!(MockBroadcast::start_broadcast(Origin::root(), H256::default(), MockUnsignedTx));
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(1).is_some());
 		assert_eq!(BroadcastAttemptIdCounter::<Test, Instance1>::get(), 1_u64);
 
@@ -491,7 +498,10 @@ fn missing_transaction_transmission() {
 		assert_eq!(COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()), 1);
 
 		// Check if the storage was cleaned up successfully
-		assert!(PayloadToBroadcastIdLookup::<Test, Instance1>::get(H256::default()).is_none());
+		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
+			MockThresholdSignature::default()
+		)
+		.is_none());
 		assert!(BroadcastIdToAttemptIdLookup::<Test, Instance1>::get(1).is_none());
 	});
 }

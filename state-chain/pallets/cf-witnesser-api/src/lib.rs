@@ -72,7 +72,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*id, tx_hash.clone())
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*id, *tx_hash)
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_transmission_success(
@@ -97,7 +97,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_failure(*id, failure.clone(), tx_hash.clone())
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_failure(*id, failure.clone(), *tx_hash)
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_transmission_failure(

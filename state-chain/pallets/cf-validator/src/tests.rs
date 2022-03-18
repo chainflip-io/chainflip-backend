@@ -476,3 +476,38 @@ fn test_setting_vanity_names_() {
 		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
 	});
 }
+
+#[test]
+fn test_missing_author_punishment() {
+	new_test_ext().execute_with(|| {
+		//-- TODO: it shouldn't be this difficult to add some validators.
+
+		initialise_validator(100);
+		let authority_set = vec![1, 2, 3, 4];
+		MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
+			winners: authority_set.clone(),
+			minimum_active_bid: Zero::zero(),
+		}));
+
+		// Force an auction at the next block
+		assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
+		move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::current_validators(),
+			authority_set,
+			"a new set of validators should be now validating"
+		);
+		assert_next_epoch();
+
+		//---
+
+		// Use a large offset to ensure the modulo math selects the correct validators.
+		let offset = 4 * 123456;
+		MockMissedAuthorshipSlots::set(vec![1 + offset, 2 + offset]);
+		move_forward_blocks(1);
+		assert_eq!(
+			MockOfflineReporter::get_reported(),
+			ValidatorPallet::validators().get(1..=2).unwrap().to_vec()
+		)
+	})
+}

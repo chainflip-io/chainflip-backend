@@ -33,7 +33,7 @@ To save time, you can then use the state snapshot in subsequent runs:
 ```sh
 ./target/release/chainflip-node try-runtime
     --block-at 0x2a2a0264206de0dd78d45f45ef42533fcdf847ec0ad11201c6b0feec7083d872
-        on-runtime-upgrade 
+        on-runtime-upgrade
             snap
             --snapshot-path .state-snapshot
 ```

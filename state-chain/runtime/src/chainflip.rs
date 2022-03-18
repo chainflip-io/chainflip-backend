@@ -1,43 +1,36 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod chain_instances;
+mod missed_authorship_slots;
 mod signer_nomination;
+pub use missed_authorship_slots::MissedAuraSlots;
 use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
-use super::{
-	AccountId, Authorship, Call, Emissions, Environment, Flip, FlipBalance, Reputation, Runtime,
-	Validator, Witnesser,
-};
 use crate::{
-	Auction, BlockNumber, EmergencyRotationPercentageRange, HeartbeatBlockInterval, System,
+	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
+	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
+	Witnesser,
 };
 use cf_chains::{
-	eth::{
-		self, register_claim::RegisterClaim, set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-		update_flip_supply::UpdateFlipSupply, Address, ChainflipContractCall,
-	},
-	ChainCrypto, Ethereum,
+	eth::{self, api::EthereumApi},
+	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
 	offline_conditions::{OfflineCondition, ReputationPoints},
 	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
 	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardsDistribution, SigningContext, StakeHandler,
-	StakeTransfer,
+	Heartbeat, Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
 };
-use codec::{Decode, Encode};
-use frame_support::{instances::*, weights::Weight};
+use frame_support::weights::Weight;
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
 use pallet_cf_auction::HandleStakes;
-use pallet_cf_broadcast::BroadcastConfig;
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
-	RuntimeDebug,
 };
 use sp_std::{cmp::min, marker::PhantomData, prelude::*};
 
@@ -225,111 +218,6 @@ impl Heartbeat for ChainflipHeartbeat {
 	}
 }
 
-// Supported Ethereum signing operations.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum EthereumSigningContext {
-	PostClaimSignature(RegisterClaim),
-	SetAggKeyWithAggKeyBroadcast(SetAggKeyWithAggKey),
-	UpdateFlipSupply(UpdateFlipSupply),
-}
-
-impl From<RegisterClaim> for EthereumSigningContext {
-	fn from(call: RegisterClaim) -> Self {
-		EthereumSigningContext::PostClaimSignature(call)
-	}
-}
-
-impl From<SetAggKeyWithAggKey> for EthereumSigningContext {
-	fn from(call: SetAggKeyWithAggKey) -> Self {
-		EthereumSigningContext::SetAggKeyWithAggKeyBroadcast(call)
-	}
-}
-
-impl From<UpdateFlipSupply> for EthereumSigningContext {
-	fn from(call: UpdateFlipSupply) -> Self {
-		EthereumSigningContext::UpdateFlipSupply(call)
-	}
-}
-
-impl SigningContext<Runtime> for EthereumSigningContext {
-	type Chain = cf_chains::Ethereum;
-	type Callback = Call;
-	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Runtime, Instance1>;
-
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
-		match self {
-			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
-			Self::SetAggKeyWithAggKeyBroadcast(ref call) => call.signing_payload(),
-			Self::UpdateFlipSupply(ref call) => call.signing_payload(),
-		}
-	}
-
-	fn resolve_callback(
-		&self,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		match self {
-			Self::PostClaimSignature(claim) =>
-				pallet_cf_staking::Call::<Runtime>::post_claim_signature(
-					claim.node_id.into(),
-					signature,
-				)
-				.into(),
-			Self::SetAggKeyWithAggKeyBroadcast(call) =>
-				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
-					self.get_payload(),
-					contract_call_to_unsigned_tx(
-						call.clone(),
-						&signature,
-						Environment::key_manager_address().into(),
-					),
-				)),
-			Self::UpdateFlipSupply(call) =>
-				Call::EthereumBroadcaster(pallet_cf_broadcast::Call::<_, _>::start_broadcast(
-					self.get_payload(),
-					contract_call_to_unsigned_tx(
-						call.clone(),
-						&signature,
-						Environment::stake_manager_address().into(),
-					),
-				)),
-		}
-	}
-}
-
-fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
-	call: C,
-	signature: &eth::SchnorrVerificationComponents,
-	contract_address: Address,
-) -> eth::UnsignedTransaction {
-	eth::UnsignedTransaction {
-		chain_id: Environment::ethereum_chain_id(),
-		contract: contract_address,
-		data: call.abi_encode_with_signature(signature),
-		..Default::default()
-	}
-}
-
-pub struct EthereumBroadcastConfig;
-
-impl BroadcastConfig for EthereumBroadcastConfig {
-	type Chain = Ethereum;
-	type UnsignedTransaction = eth::UnsignedTransaction;
-	type SignedTransaction = eth::RawSignedTransaction;
-	type TransactionHash = eth::TransactionHash;
-	type SignerId = eth::Address;
-
-	fn verify_transaction(
-		unsigned_tx: &Self::UnsignedTransaction,
-		signed_tx: &Self::SignedTransaction,
-		address: &Self::SignerId,
-	) -> Option<()> {
-		eth::verify_transaction(unsigned_tx, signed_tx, address)
-			.map_err(|e| log::info!("Ethereum signed transaction verification failed: {:?}.", e))
-			.ok()
-	}
-}
-
 /// Checks if the caller can execute free transactions
 pub struct WaivedFees;
 
@@ -354,6 +242,35 @@ impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
 			OfflineCondition::ParticipateKeygenFailed => (15, true),
 			OfflineCondition::InvalidTransactionAuthored => (15, false),
 			OfflineCondition::TransactionFailedOnTransmission => (15, false),
+			OfflineCondition::MissedAuthorshipSlot => (15, true),
+		}
+	}
+}
+
+pub struct EthTransactionBuilder;
+
+impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
+	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainAbi>::UnsignedTransaction {
+		let data = signed_call.encoded();
+		match signed_call {
+			EthereumApi::SetAggKeyWithAggKey(_) => eth::UnsignedTransaction {
+				chain_id: Environment::ethereum_chain_id(),
+				contract: Environment::key_manager_address().into(),
+				data,
+				..Default::default()
+			},
+			EthereumApi::RegisterClaim(_) => eth::UnsignedTransaction {
+				chain_id: Environment::ethereum_chain_id(),
+				contract: Environment::stake_manager_address().into(),
+				data,
+				..Default::default()
+			},
+			EthereumApi::UpdateFlipSupply(_) => eth::UnsignedTransaction {
+				chain_id: Environment::ethereum_chain_id(),
+				contract: Environment::stake_manager_address().into(),
+				data,
+				..Default::default()
+			},
 		}
 	}
 }
