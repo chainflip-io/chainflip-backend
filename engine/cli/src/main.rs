@@ -18,7 +18,7 @@ use web3::types::H160;
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
-use utilities::clean_eth_address;
+use utilities::{clean_eth_address, is_zero_address};
 
 mod settings;
 
@@ -51,10 +51,11 @@ async fn run_cli() -> Result<()> {
             eth_address,
             should_register_claim,
         } => {
+            let cleaned_eth_address = clean_eth_address(&eth_address)
+                .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?;
             request_claim(
                 amount,
-                clean_eth_address(&eth_address)
-                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
+                cleaned_eth_address,
                 &cli_settings,
                 should_register_claim,
                 &logger,
@@ -95,6 +96,11 @@ async fn request_claim(
     should_register_claim: bool,
     logger: &slog::Logger,
 ) -> Result<()> {
+    if is_zero_address(eth_address) {
+        println!("FATAL: Cannot submit a claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead.");
+        return Ok(());
+    }
+
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(

@@ -50,6 +50,10 @@ pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
     Ok(eth_address)
 }
 
+pub fn is_zero_address(cleaned_eth_address: [u8; 20]) -> bool {
+    cleaned_eth_address.eq(&hex::decode("0000000000000000000000000000000000000000").unwrap()[0..20])
+}
+
 #[test]
 fn cleans_eth_address() {
     // fail too short
