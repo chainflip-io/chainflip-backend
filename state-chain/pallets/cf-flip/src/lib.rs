@@ -41,7 +41,7 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{StakeHandler, WaivedFees};
-	use frame_support::{pallet_prelude::*, tests::Config};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	/// A 4-byte identifier for different reserves.
