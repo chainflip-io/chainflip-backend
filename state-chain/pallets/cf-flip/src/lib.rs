@@ -41,7 +41,7 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{StakeHandler, WaivedFees};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, tests::Config};
 	use frame_system::pallet_prelude::*;
 
 	/// A 4-byte identifier for different reserves.
@@ -127,6 +127,8 @@ pub mod pallet {
 			T::Balance,
 			T::Balance,
 		),
+		// Slashing has been performed. [account_id, amount]
+		SlashingPerformed(T::AccountId, T::Balance),
 	}
 
 	#[pallet::error]
@@ -481,10 +483,6 @@ where
 	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Get the slashing rate
 		let slashing_rate: T::Balance = SlashingRate::<T>::get();
-		// Check that the slashing rate is not zero, no need to slash if this is set to zero, right
-		if slashing_rate == Zero::zero() {
-			return
-		}
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get blocks_offline as Balance
@@ -497,5 +495,6 @@ where
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
+		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed(account_id.clone(), total_burn));
 	}
 }
