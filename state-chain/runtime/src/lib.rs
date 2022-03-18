@@ -171,7 +171,7 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 parameter_types! {
-	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
+	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD_BLOCKS;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
