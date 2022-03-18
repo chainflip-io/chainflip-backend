@@ -85,7 +85,7 @@ where
         })
         .collect();
 
-    // Timeout during this broadcast verification stage
+    // Too few messages during this broadcast verification stage
     if verification_messages.len() <= threshold {
         slog::warn!(
             logger,
@@ -93,7 +93,7 @@ where
         );
 
         // TODO: consider blaming the parties that didn't send broadcast verification messages
-        // Are we going to be in trouble if we report more parties than other nodes?
+        // (one thing to consider is whether we are going to be in trouble if we report more parties than other nodes?)
         return Err((vec![], BroadcastFailureReason::InsufficientMessages));
     }
 
@@ -110,32 +110,17 @@ where
     // Assume Some(x) are all the same (there is no inconsistency), do we have enough non-None messages for all parties?
     // yes: if we end up failing anyway, then it must be due to inconsistency
     // no: due to "too few messages"
-    let mut insufficient_messages = false;
-
-    for idx in &participating_idxs {
+    let insufficient_messages = participating_idxs.iter().any(|idx| {
         // Find out how many messages of this id are None (timeout on the broadcast)
-        let missing_broadcast_messages: BTreeSet<usize> = verification_messages
+        let missing_broadcast_messages = verification_messages
             .iter()
-            .filter_map(|(i, m)| {
-                if m.data[idx].is_none() {
-                    Some(*i)
-                } else {
-                    None
-                }
-            })
-            .collect();
+            .filter(|(_, m)| m.data[idx].is_none())
+            .count();
 
-        // Find out how many ids didn't send anything during this broadcast verification
-        let missing_verification_messages = participating_idxs.len() - verification_messages.len();
-
-        // Check if combined total (this stage and the prev) of missing messages for this idx is enough to cause a failure
-        if missing_verification_messages + missing_broadcast_messages.len()
-            >= num_parties - threshold
-        {
-            insufficient_messages = true;
-            break;
-        }
-    }
+        // Check if the missing messages for this idx is enough to cause a failure.
+        // Note: This check is for the combined total of missing messages from broadcast and verification.
+        verification_messages.len() - missing_broadcast_messages <= threshold
+    });
 
     let mut agreed_on_values = HashMap::<usize, T>::new();
 
