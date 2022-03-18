@@ -362,10 +362,7 @@ fn changing_range() {
 			)),
 		);
 		// We throw up an error if we try to set it to the current
-		assert_noop!(
-			AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)),
-			Error::<Test>::InvalidRange
-		);
+		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
 		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (3, 3)));
 	});
 }

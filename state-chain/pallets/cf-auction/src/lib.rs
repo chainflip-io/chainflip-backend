@@ -197,8 +197,9 @@ impl<T: Config> Pallet<T> {
 		let (low, high) = range;
 		ensure!(high >= low && low >= T::MinValidators::get(), Error::<T>::InvalidRange);
 		let old = ActiveValidatorSizeRange::<T>::get();
-		ensure!(old != range, Error::<T>::InvalidRange);
-		ActiveValidatorSizeRange::<T>::put(range);
+		if old != range {
+			ActiveValidatorSizeRange::<T>::put(range);
+		}
 		Ok(old)
 	}
 }
