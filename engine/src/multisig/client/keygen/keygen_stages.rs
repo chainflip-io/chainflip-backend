@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::multisig::client::common::broadcast_failure_to_stage_result_error;
 use crate::multisig::client::{self, KeygenResultInfo};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
@@ -28,6 +29,8 @@ use keygen::{
 
 use super::KeygenOptions;
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
+
+type KeygenStageResult = StageResult<KeygenData, KeygenResultInfo>;
 
 /// Stage 1: Sample a secret, generate sharing polynomial coefficients for it
 /// and a ZKP of the secret. Broadcast commitments to the coefficients and the ZKP.
@@ -75,10 +78,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for AwaitCommitments1
         matches!(m, KeygenData::Verify2(_))
     }
 
-    fn process(
-        self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         // We have received commitments from everyone, for now just need to
         // go through another round to verify consistent broadcasts
 
@@ -134,14 +134,15 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
     fn process(
         self,
         messages: std::collections::HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    ) -> KeygenStageResult {
         let commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
+            Err((blamed_parties, abort_reason)) => {
+                return broadcast_failure_to_stage_result_error(
                     blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of initial commitments"),
-                )
+                    abort_reason,
+                    "initial commitments",
+                );
             }
         };
 
@@ -222,10 +223,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
         matches!(m, KeygenData::Complaints4(_))
     }
 
-    fn process(
-        self,
-        incoming_shares: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, incoming_shares: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         // As the messages for this stage are sent in secret, it is possible
         // for a malicious party to send us invalid data (or not send anything
         // at all) without us being able to prove that. Because of that, we
@@ -300,10 +298,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for ComplaintsStage4 
         matches!(m, KeygenData::VerifyComplaints5(_))
     }
 
-    fn process(
-        self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let processor = VerifyComplaintsBroadcastStage5 {
             common: self.common.clone(),
             received_complaints: messages,
@@ -341,16 +336,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
         matches!(data, KeygenData::BlameResponse6(_))
     }
 
-    fn process(
-        self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
+            Err((blamed_parties, abort_reason)) => {
+                return broadcast_failure_to_stage_result_error(
                     blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of complaints"),
+                    abort_reason,
+                    "complaints",
                 );
             }
         };
@@ -516,10 +509,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
         matches!(data, KeygenData::VerifyBlameResponses7(_))
     }
 
-    fn process(
-        self,
-        blame_responses: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, blame_responses: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
             blame_responses,
@@ -556,10 +546,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
         false
     }
 
-    fn process(
-        mut self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(mut self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         slog::debug!(
             self.common.logger,
             "Processing verifications for blame responses"
@@ -567,10 +554,11 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
+            Err((blamed_parties, abort_reason)) => {
+                return broadcast_failure_to_stage_result_error(
                     blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of blame response"),
+                    abort_reason,
+                    "blame response",
                 );
             }
         };
