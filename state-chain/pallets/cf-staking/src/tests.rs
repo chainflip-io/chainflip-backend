@@ -562,6 +562,24 @@ fn claim_with_withdrawal_address() {
 }
 
 #[test]
+fn cannot_claim_to_zero_address() {
+	new_test_ext().execute_with(|| {
+		const STAKE: u128 = 45;
+		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+		// Stake some FLIP, we use the zero address here to denote that we should be
+		// able to claim to any address in future
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		// Claim it - expect to fail because the address is the zero address
+		assert_noop!(
+			Staking::claim(Origin::signed(ALICE), STAKE, ETH_ZERO_ADDRESS),
+			<Error<Test>>::InvalidClaim
+		);
+		// Try it again with a non-zero address - expect to succeed
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+	});
+}
+
+#[test]
 fn stake_with_provided_withdrawal_only_on_first_attempt() {
 	// Check if the branching of the stake process is working probably
 	new_test_ext().execute_with(|| {
