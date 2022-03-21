@@ -192,6 +192,11 @@ pub mod pallet {
 	pub type PendingCeremonies<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, CeremonyContext<T, I>>;
 
+	/// Stores when an ceremony is timeout
+	#[pallet::storage]
+	pub type SignatureTimeout<T, I = ()> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<CeremonyId>>;
+
 	/// A mapping from ceremony_id to its current ceremony_id.
 	///
 	/// Technically a payload is associated with an entire request, however since it's accessed on
@@ -266,6 +271,12 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let mut num_retries = 0;
+
+			// Check the expiry block
+			// if Some(timedout) = SignatureTimeout.get(block) {
+			//    scedule retry
+			//
+			// }
 
 			// Process pending retries.
 			for ceremony_id in RetryQueues::<T, I>::take(current_block) {
