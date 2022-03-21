@@ -1356,14 +1356,17 @@ mod merged_stream_tests {
 
         let delayed_stream = |items: Vec<(BlockEvents<KeyManagerEvent>, Duration)>| {
             let items = items.into_iter();
-            Box::pin(stream::unfold(items, |mut items| async move {
-                if let Some((i, d)) = items.next() {
-                    tokio::time::sleep(d).await;
-                    Some((i, items))
-                } else {
-                    None
-                }
-            }))
+            Box::pin(
+                stream::unfold(items, |mut items| async move {
+                    if let Some((i, d)) = items.next() {
+                        tokio::time::sleep(d).await;
+                        Some((i, items))
+                    } else {
+                        None
+                    }
+                })
+                .fuse(),
+            )
         };
 
         (delayed_stream(ws_items), delayed_stream(http_items))
@@ -1559,13 +1562,19 @@ mod merged_stream_tests {
         assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
         tag_cache.clear();
 
+        println!("http returned test");
+
         assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
         assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
         tag_cache.clear();
 
+        println!("ws returned test");
+
         assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
         assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
         tag_cache.clear();
+
+        println!("ws returned test");
 
         assert!(stream.next().await.is_none());
     }
