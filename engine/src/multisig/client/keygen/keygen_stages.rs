@@ -604,50 +604,52 @@ impl VerifyBlameResponsesBroadcastStage7 {
         &self,
         blame_responses: HashMap<usize, BlameResponse6>,
     ) -> Result<HashMap<usize, ShamirShare>, Vec<usize>> {
-        // For each party, the indexes as which secret shares
+        use itertools::Itertools;
+        // For each party, the indexes at which secret shares
         // should be revealed
         let mut expected_blame_responses = derive_expected_blame_response_indexes(&self.complaints);
 
-        let mut shares_for_us = HashMap::<usize, ShamirShare>::new();
-        let mut bad_parties = vec![];
+        let (shares_for_us, bad_parties): (Vec<_>, Vec<_>) = blame_responses
+            .iter()
+            .map(|(sender_idx, response)| {
+                let expected_idxs = expected_blame_responses
+                    .remove(sender_idx)
+                    .unwrap_or_default();
 
-        'sender: for (sender_idx, response) in blame_responses {
-            // Check that indexes in responses match those in complaints
+                if !is_blame_response_complete(response, &expected_idxs) {
+                    slog::warn!(
+                        self.common.logger,
+                        "Incomplete blame response from party: {}",
+                        sender_idx
+                    );
 
-            // Note: for parties who weren't blamed we will get an empty vec,
-            // and check that the response is also empty
-            let expected_idxs = expected_blame_responses
-                .remove(&sender_idx)
-                .unwrap_or_default();
+                    return Err(sender_idx);
+                }
 
-            if !is_blame_response_complete(&response, &expected_idxs) {
-                bad_parties.push(sender_idx);
-                continue;
-            }
-
-            for (dest_idx, share) in response.0 {
-                let commitment = &self.commitments[&sender_idx];
-
-                if verify_share(&share, commitment, dest_idx) {
-                    // if the share is meant for us, save it
-                    if dest_idx == self.common.own_idx {
-                        shares_for_us.insert(sender_idx, share);
-                    }
-                } else {
+                if !response.0.iter().all(|(dest_idx, share)| {
+                    verify_share(share, &self.commitments[sender_idx], *dest_idx)
+                }) {
                     slog::warn!(
                         self.common.logger,
                         "Invalid secret share in a blame response from party: {}",
                         sender_idx
                     );
 
-                    bad_parties.push(sender_idx);
-                    // No reason to look at any other share from this sender
-                    continue 'sender;
+                    return Err(sender_idx);
                 }
-            }
-        }
+
+                Ok((*sender_idx, response.0.get(&self.common.own_idx)))
+            })
+            .partition_result();
 
         if bad_parties.is_empty() {
+            let shares_for_us = shares_for_us
+                .into_iter()
+                .filter_map(|(sender_idx, opt_share)| {
+                    opt_share.map(|share| (sender_idx, share.clone()))
+                })
+                .collect();
+
             Ok(shares_for_us)
         } else {
             Err(bad_parties)
