@@ -520,9 +520,8 @@ mod test_slashing {
 			assert_eq!(
 				System::events()
 					.into_iter()
-					.map(|r| r.event)
-					.filter_map(|e| {
-						if let Event::Flip(inner) = e {
+					.filter_map(|r| {
+						if let Event::Flip(inner) = r.event {
 							Some(inner)
 						} else {
 							None
@@ -543,9 +542,8 @@ mod test_slashing {
 			assert_eq!(
 				System::events()
 					.into_iter()
-					.map(|r| r.event)
-					.filter_map(|e| {
-						if let Event::Flip(inner) = e {
+					.filter_map(|r| {
+						if let Event::Flip(inner) = r.event {
 							Some(inner)
 						} else {
 							None

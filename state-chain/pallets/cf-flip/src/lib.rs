@@ -116,18 +116,18 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Some imbalance could not be settled and the remainder will be reverted. [reverted_to,
-		/// amount]
+		/// Some imbalance could not be settled and the remainder will be reverted. /[reverted_to,
+		/// amount/]
 		RemainingImbalance(ImbalanceSource<T::AccountId>, T::Balance),
 
-		/// An imbalance has been settled. [source, dest, amount_settled, amount_reverted]
+		/// An imbalance has been settled. /[source, dest, amount_settled, amount_reverted/]
 		BalanceSettled(
 			ImbalanceSource<T::AccountId>,
 			ImbalanceSource<T::AccountId>,
 			T::Balance,
 			T::Balance,
 		),
-		// Slashing has been performed. [account_id, amount]
+		/// Slashing has been performed. /[account_id, amount/]
 		SlashingPerformed(T::AccountId, T::Balance),
 	}
 
