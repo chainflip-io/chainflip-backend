@@ -89,7 +89,9 @@ where
     if verification_messages.len() <= threshold {
         slog::warn!(
             logger,
-            "Not enough messages received during broadcast verification",
+            "Not enough messages received during broadcast verification ({}/{})",
+            verification_messages.len(),
+            num_parties,
         );
 
         // TODO: consider blaming the parties that didn't send broadcast verification messages
@@ -111,15 +113,12 @@ where
     // yes: if we end up failing anyway, then it must be due to inconsistency
     // no: due to "too few messages"
     let insufficient_messages = participating_idxs.iter().any(|idx| {
-        // Find out how many messages of this id are None (timeout on the broadcast)
-        let missing_broadcast_messages = verification_messages
+        // Check if we have enough delivered messages for each idx to reach the threshold + 1
+        verification_messages
             .iter()
-            .filter(|(_, m)| m.data[idx].is_none())
-            .count();
-
-        // Check if the missing messages for this idx is enough to cause a failure.
-        // Note: This check is for the combined total of missing messages from broadcast and verification.
-        verification_messages.len() - missing_broadcast_messages <= threshold
+            .filter(|(_, m)| m.data[idx].is_some())
+            .count()
+            <= threshold
     });
 
     let mut agreed_on_values = HashMap::<usize, T>::new();
