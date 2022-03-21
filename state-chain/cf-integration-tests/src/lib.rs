@@ -22,6 +22,7 @@ mod tests {
 	use sp_runtime::AccountId32;
 
 	type NodeId = AccountId32;
+	const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 	const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 	const TX_HASH: EthTransactionHash = [211u8; 32];
 
@@ -1022,11 +1023,7 @@ mod tests {
 
 					// We should be able to claim stake out of an auction
 					for node in &nodes {
-						assert_ok!(Staking::claim(
-							Origin::signed(node.clone()),
-							1,
-							ETH_ZERO_ADDRESS
-						));
+						assert_ok!(Staking::claim(Origin::signed(node.clone()), 1, ETH_DUMMY_ADDR));
 						network::Cli::activate_account(node.clone());
 					}
 
@@ -1040,7 +1037,7 @@ mod tests {
 							Staking::claim(
 								Origin::signed(node.clone()),
 								stake_amount,
-								ETH_ZERO_ADDRESS
+								ETH_DUMMY_ADDR
 							),
 							Error::<Runtime>::AuctionPhase
 						);
@@ -1066,7 +1063,7 @@ mod tests {
 					// TODO implement Claims in Contract/Network
 					for node in &nodes {
 						assert_noop!(
-							Staking::claim(Origin::signed(node.clone()), 1, ETH_ZERO_ADDRESS),
+							Staking::claim(Origin::signed(node.clone()), 1, ETH_DUMMY_ADDR),
 							Error::<Runtime>::PendingClaim
 						);
 					}

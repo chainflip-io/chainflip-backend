@@ -53,8 +53,7 @@ async fn run_cli() -> Result<()> {
         } => {
             request_claim(
                 amount,
-                clean_eth_address(&eth_address)
-                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
+                &eth_address,
                 &cli_settings,
                 should_register_claim,
                 &logger,
@@ -91,11 +90,21 @@ async fn request_block(
 
 async fn request_claim(
     amount: f64,
-    eth_address: [u8; 20],
+    eth_address: &str,
     settings: &CLISettings,
     should_register_claim: bool,
     logger: &slog::Logger,
 ) -> Result<()> {
+    let eth_address = clean_eth_address(eth_address)
+        .map_err(|error| anyhow::Error::msg(format!("You supplied an invalid ETH address: {}", error)))
+        .and_then(|eth_address|
+            if eth_address == [0; 20] {
+                Err(anyhow::Error::msg("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
+            } else {
+                Ok(eth_address)
+            }
+        )?;
+
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(
