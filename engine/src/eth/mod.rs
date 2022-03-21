@@ -956,7 +956,7 @@ pub trait EthObserver {
                             },
                             None => {
                                 // We can only enter into recovery if the logs were Some()
-                                // so if we get None here, for the same block, that is bad.
+                                // so if we get None here, for the same block, there is an inconsistency on that block number between the streams
                                 return Err(anyhow::Error::msg(format!("ETH {} stream did not detect logs for block {}, when attempting to recover.", protocol_state.protocol, block_events.block_number)));
                             }
                         }
@@ -1050,7 +1050,9 @@ pub trait EthObserver {
             } else if merged_has_yielded && block_events.block_number > next_block_to_yield {
                 // this can only happen at the start. E.g. if one streams first item to yield is 8, it yields
                 // then we poll this stream, it's first item is 12. We haven't skipped. Just one stream started ahead
-                Err(anyhow::Error::msg("Input streams to merged stream started at different block numbers. Terminating"))
+                Err(anyhow::Error::msg(
+                    "Input streams to merged stream started at different block numbers. This should not occur.",
+                ))
             } else {
                 slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_events.block_number, next_block_to_yield);
                 Ok(None)
@@ -1115,7 +1117,7 @@ pub trait EthObserver {
                         Err(err) => {
                             slog::error!(
                                 stream_state.merged_stream_state.logger,
-                                "Error in ETH merged event stream: {}",
+                                "Terminating ETH merged event stream due to error: {}",
                                 err
                             );
                             break None;
