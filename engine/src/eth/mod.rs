@@ -880,20 +880,20 @@ pub trait EthObserver {
             };
 
         fn log_when_stream_behind<EventParameters: Debug>(
-            protocol_state: &ProtocolState,
-            other_protocol_state: &ProtocolState,
+            yielding_stream_state: &ProtocolState,
+            non_yielding_stream_state: &ProtocolState,
             merged_stream_state: &MergedStreamState<EventParameters>,
             // the current block events
             block_events: &CleanBlockEvents<EventParameters>,
         ) {
-            match protocol_state.protocol {
+            match yielding_stream_state.protocol {
                 TransportProtocol::Http => {
                     slog::info!(
                         merged_stream_state.logger,
                         #ETH_HTTP_STREAM_RETURNED,
                         "ETH block {} returning from {} stream",
                         block_events.block_number,
-                        protocol_state.protocol
+                        yielding_stream_state.protocol
                     );
                 }
                 TransportProtocol::Ws => {
@@ -902,17 +902,18 @@ pub trait EthObserver {
                         #ETH_WS_STREAM_RETURNED,
                         "ETH block {} returning from {} stream",
                         block_events.block_number,
-                        protocol_state.protocol
+                        yielding_stream_state.protocol
                     );
                 }
             }
 
-            let blocks_behind =
-                merged_stream_state.last_block_yielded - other_protocol_state.last_block_pulled;
+            let blocks_behind = merged_stream_state.last_block_yielded
+                - non_yielding_stream_state.last_block_pulled;
 
             // we don't want to log on the first iteration
-            if other_protocol_state.last_block_pulled != 0
-                && ((other_protocol_state.last_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
+            if non_yielding_stream_state.last_block_pulled != 0
+                && ((non_yielding_stream_state.last_block_pulled
+                    + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
                     <= block_events.block_number)
                 && (blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
             {
@@ -920,10 +921,10 @@ pub trait EthObserver {
                     merged_stream_state.logger,
                     #ETH_STREAM_BEHIND,
                     "{} stream at ETH block `{}` but {} stream at ETH block `{}`",
-                    protocol_state.protocol,
+                    yielding_stream_state.protocol,
                     block_events.block_number,
-                    other_protocol_state.protocol,
-                    other_protocol_state.last_block_pulled,
+                    non_yielding_stream_state.protocol,
+                    non_yielding_stream_state.last_block_pulled,
                 );
             }
         }
