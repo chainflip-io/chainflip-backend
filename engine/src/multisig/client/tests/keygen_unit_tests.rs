@@ -365,7 +365,7 @@ async fn should_abort_on_blames_at_invalid_indexes() {
 
     let bad_node_id = &ACCOUNT_IDS[1];
     for message in stage_4_messages.get_mut(bad_node_id).unwrap().values_mut() {
-        *message = keygen::Complaints4(vec![1, usize::MAX]);
+        *message = keygen::Complaints4([1, usize::MAX].iter().copied().collect());
     }
 
     let stage_5_messages = keygen_ceremony
