@@ -992,11 +992,11 @@ pub trait EthObserver {
             block_events: BlockEvents<EventParameters>,
         ) -> Result<Option<CleanBlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
-            let has_yielded = merged_stream_state.last_block_yielded != 0;
+            let merged_has_yielded = merged_stream_state.last_block_yielded != 0;
             let has_pulled = protocol_state.last_block_pulled != 0;
 
             // we only care about yielding if we're at the next block
-            let result_opt_block_events = if !has_yielded
+            let result_opt_block_events = if !merged_has_yielded
                 || block_events.block_number == merged_stream_state.last_block_yielded + 1
             {
                 // we want to yield IF the block is successful
@@ -1041,7 +1041,7 @@ pub trait EthObserver {
                 && (block_events.block_number != protocol_state.last_block_pulled + 1)
             {
                 Err(anyhow::Error::msg(format!("ETH {} stream is expected to be a contiguous sequence of block events. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number)))
-            } else if has_yielded && block_events.block_number > next_block_to_yield {
+            } else if merged_has_yielded && block_events.block_number > next_block_to_yield {
                 // this can only happen at the start. E.g. if one streams first item to yield is 8, it yields
                 // then we poll this stream, it's first item is 12. We haven't skipped. Just one stream started ahead
                 Err(anyhow::Error::msg("Input streams to merged stream started at different block numbers. Terminating"))
@@ -1079,7 +1079,6 @@ pub trait EthObserver {
                     tokio::select! {
                         Some(block_events) = stream_state.ws_stream.next() => {
                             iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, block_events).await;
-
                         }
                         Some(block_events) = stream_state.http_stream.next() => {
                             iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, block_events).await;
