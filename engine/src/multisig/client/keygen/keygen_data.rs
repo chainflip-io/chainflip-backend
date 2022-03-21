@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -62,7 +62,7 @@ pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
 /// only be recovered by collecting shares from all (N-1) nodes, which would
 /// require collusion of N-1 nodes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlameResponse6(pub HashMap<usize, ShamirShare>);
+pub struct BlameResponse6(pub BTreeMap<usize, ShamirShare>);
 
 pub type VerifyBlameResponses7 = BroadcastVerificationMessage<BlameResponse6>;
 

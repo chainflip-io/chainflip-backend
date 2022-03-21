@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client::{self, KeygenResultInfo};
@@ -26,6 +26,7 @@ use keygen::{
     },
 };
 
+use super::keygen_frost::ShamirShare;
 use super::KeygenOptions;
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
 
@@ -522,6 +523,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
     ) -> StageResult<KeygenData, KeygenResultInfo> {
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
+            complaints: self.complaints,
             blame_responses,
             shares: self.shares,
             commitments: self.commitments,
@@ -535,6 +537,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
 
 struct VerifyBlameResponsesBroadcastStage7 {
     common: CeremonyCommon,
+    complaints: HashMap<usize, Complaints4>,
     // Blame responses received from other parties in the previous communication round
     blame_responses: HashMap<usize, Option<BlameResponse6>>,
     shares: IncomingShares,
@@ -542,6 +545,117 @@ struct VerifyBlameResponsesBroadcastStage7 {
 }
 
 derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7);
+
+fn derive_expected_blame_response_indexes(
+    complaints: &HashMap<usize, Complaints4>,
+) -> HashMap<usize, BTreeSet<usize>> {
+    let mut expected: HashMap<usize, BTreeSet<usize>> = HashMap::new();
+
+    for (blamer_idx, Complaints4(blamed_idxs)) in complaints {
+        for blamed_idx in blamed_idxs {
+            expected.entry(*blamed_idx).or_default().insert(*blamer_idx);
+        }
+    }
+
+    expected
+}
+
+/// Checks if the blame response contains all (and only) expected indexes
+fn is_blame_response_complete(
+    response: &BlameResponse6,
+    expected_share_idxs: &BTreeSet<usize>,
+) -> bool {
+    // BTreeSet<T> is just a BTreeMap<T, ()>, so the elements
+    // are expected to be in the same order
+    response.0.keys().into_iter().eq(expected_share_idxs.iter())
+}
+
+#[cfg(test)]
+#[test]
+fn test_derive_expected_blame_response_indexes() {
+    use std::iter::FromIterator;
+
+    let complaints: HashMap<usize, Complaints4> = [
+        (1, Complaints4(vec![])),
+        (2, Complaints4(vec![1, 3])),
+        (3, Complaints4(vec![1])),
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
+    let expected: HashMap<usize, BTreeSet<usize>> = {
+        let set1 = BTreeSet::from_iter([2, 3].iter().copied());
+        let set2 = BTreeSet::from_iter([2].iter().copied());
+        [(1, set1), (3, set2)].iter().cloned().collect()
+    };
+
+    assert_eq!(
+        derive_expected_blame_response_indexes(&complaints),
+        expected
+    );
+}
+
+impl VerifyBlameResponsesBroadcastStage7 {
+    /// Check that blame responses contain all (and only) the requested shares, and that all the shares are valid.
+    /// If all responses are valid, returns shares destined for us along with the corresponding index. Otherwise,
+    /// returns a list of party indexes who provided invalid responses.
+    fn check_blame_responses(
+        &self,
+        blame_responses: HashMap<usize, BlameResponse6>,
+    ) -> Result<HashMap<usize, ShamirShare>, Vec<usize>> {
+        use itertools::Itertools;
+        // For each party, the indexes at which secret shares
+        // should be revealed
+        let mut expected_blame_responses = derive_expected_blame_response_indexes(&self.complaints);
+
+        let (shares_for_us, bad_parties): (Vec<_>, Vec<_>) = blame_responses
+            .iter()
+            .map(|(sender_idx, response)| {
+                let expected_idxs = expected_blame_responses
+                    .remove(sender_idx)
+                    .unwrap_or_default();
+
+                if !is_blame_response_complete(response, &expected_idxs) {
+                    slog::warn!(
+                        self.common.logger,
+                        "Incomplete blame response from party: {}",
+                        sender_idx
+                    );
+
+                    return Err(sender_idx);
+                }
+
+                if !response.0.iter().all(|(dest_idx, share)| {
+                    verify_share(share, &self.commitments[sender_idx], *dest_idx)
+                }) {
+                    slog::warn!(
+                        self.common.logger,
+                        "Invalid secret share in a blame response from party: {}",
+                        sender_idx
+                    );
+
+                    return Err(sender_idx);
+                }
+
+                Ok((*sender_idx, response.0.get(&self.common.own_idx)))
+            })
+            .partition_result();
+
+        if bad_parties.is_empty() {
+            let shares_for_us = shares_for_us
+                .into_iter()
+                .filter_map(|(sender_idx, opt_share)| {
+                    opt_share.map(|share| (sender_idx, share.clone()))
+                })
+                .collect();
+
+            Ok(shares_for_us)
+        } else {
+            Err(bad_parties)
+        }
+    }
+}
 
 impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameResponsesBroadcastStage7 {
     type Message = VerifyBlameResponses7;
@@ -575,40 +689,21 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
             }
         };
 
-        let mut bad_parties = vec![];
-
-        for (sender_idx, response) in verified_responses {
-            for (dest_idx, share) in response.0 {
-                let commitment = &self.commitments[&sender_idx];
-
-                if verify_share(&share, commitment, dest_idx) {
-                    // if the share is meant for us, save it
-                    if dest_idx == self.common.own_idx {
-                        self.shares.0.insert(sender_idx, share);
-                    }
-                } else {
-                    slog::warn!(
-                        self.common.logger,
-                        "[{}] Invalid secret share in a blame response from party: {}",
-                        self.common.own_idx,
-                        sender_idx
-                    );
-
-                    bad_parties.push(sender_idx);
+        match self.check_blame_responses(verified_responses) {
+            Ok(shares_for_us) => {
+                for (sender_idx, share) in shares_for_us {
+                    self.shares.0.insert(sender_idx, share);
                 }
+
+                let keygen_result_info =
+                    compute_keygen_result_info(self.common, self.shares, &self.commitments);
+
+                StageResult::Done(keygen_result_info)
             }
-        }
-
-        if bad_parties.is_empty() {
-            let keygen_result_info =
-                compute_keygen_result_info(self.common, self.shares, &self.commitments);
-
-            StageResult::Done(keygen_result_info)
-        } else {
-            StageResult::Error(
+            Err(bad_parties) => StageResult::Error(
                 bad_parties,
                 anyhow::Error::msg("Invalid secret share in a blame response"),
-            )
+            ),
         }
     }
 }
