@@ -28,7 +28,7 @@ where
         logger: slog::Logger,
     }
 
-    let init_data = StreamState {
+    let init_state = StreamState {
         last_block_yielded: U64::from(0),
         last_head_fetched: U64::from(0),
         eth_http_rpc,
@@ -36,7 +36,7 @@ where
     };
 
     Box::pin(
-        stream::unfold(init_data, move |mut state| async move {
+        stream::unfold(init_state, move |mut state| async move {
             loop {
                 let is_first_iteration = state.last_block_yielded == U64::from(0)
                     && state.last_head_fetched == U64::from(0);
