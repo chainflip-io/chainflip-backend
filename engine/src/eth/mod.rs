@@ -981,6 +981,12 @@ pub trait EthObserver {
             )))
         }
 
+        // Returns Error if:
+        // 1. the protocol stream does not return a contiguous sequence of blocks
+        // 2. the protocol streams have not started at the same block
+        // 3. failure in `recover_with_other_stream`
+        // When returning Ok, will return None if:
+        // 1. the protocol stream is behind the next block to yield
         async fn do_for_protocol<
             BlockEventsStream: Stream<Item = BlockEvents<EventParameters>> + Unpin,
             EventParameters: Debug,
@@ -997,7 +1003,7 @@ pub trait EthObserver {
 
             // we only care about yielding if we're at the next block
             let result_opt_block_events = if !merged_has_yielded
-                || block_events.block_number == merged_stream_state.last_block_yielded + 1
+                || block_events.block_number == next_block_to_yield
             {
                 // we want to yield IF the block is successful
                 // if it's not successful we want to try the other stream
