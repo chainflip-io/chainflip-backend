@@ -108,7 +108,7 @@ pub mod pallet {
 
 	/// Store the list of staked accounts and whether or not they are retired
 	#[pallet::storage]
-	pub(super) type AccountRetired<T: Config> =
+	pub type AccountRetired<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
 	#[pallet::storage]

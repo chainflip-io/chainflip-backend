@@ -43,6 +43,7 @@ mod tests {
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
+		use pallet_cf_staking::AccountRetired;
 		use pallet_cf_vaults::KeygenOutcome;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -87,7 +88,7 @@ mod tests {
 		impl Cli {
 			// Activates an account to become a validator in the next epoch
 			pub fn activate_account(account: NodeId) {
-				assert_ok!(state_chain_runtime::Staking::activate_account(Origin::signed(account)));
+				AccountRetired::<Runtime>::insert(account, false);
 			}
 		}
 
@@ -1010,6 +1011,7 @@ mod tests {
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
 						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
+						network::Cli::activate_account(node.clone());
 					}
 
 					// Move forward one block to process events
@@ -1024,7 +1026,6 @@ mod tests {
 					// We should be able to claim stake out of an auction
 					for node in &nodes {
 						assert_ok!(Staking::claim(Origin::signed(node.clone()), 1, ETH_DUMMY_ADDR));
-						network::Cli::activate_account(node.clone());
 					}
 
 					let end_of_claim_period =
