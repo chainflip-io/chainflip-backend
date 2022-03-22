@@ -749,6 +749,19 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	}
 }
 
+impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
+	type ValidatorId = <T as Chainflip>::ValidatorId;
+	type Amount = <T as Chainflip>::Amount;
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		_new_validators: &[Self::ValidatorId],
+		_new_bond: Self::Amount,
+	) {
+		PendingVaultRotation::<T, I>::kill();
+	}
+}
+
 /// Takes three arguments: a pattern, a variable expression and an error literal.
 ///
 /// If the variable matches the pattern, returns it, otherwise returns an error. The pattern may

@@ -5323,6 +5323,7 @@ name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",

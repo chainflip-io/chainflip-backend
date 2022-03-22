@@ -31,7 +31,7 @@ use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 };
-use sp_std::{cmp::min, marker::PhantomData, prelude::*};
+use sp_std::{cmp::min, prelude::*};
 
 use cf_traits::RuntimeUpgrade;
 
