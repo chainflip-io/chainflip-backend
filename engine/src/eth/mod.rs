@@ -37,7 +37,6 @@ use slog::o;
 use sp_core::{H160, U256};
 use std::{
     cmp::Ordering,
-    collections::VecDeque,
     convert::{TryFrom, TryInto},
     fmt::{self, Debug},
     pin::Pin,
@@ -842,47 +841,40 @@ pub trait EthObserver {
             protocol: TransportProtocol,
         }
         #[derive(Debug)]
-        struct MergedStreamState<EventParameters: Debug> {
+        struct MergedStreamState {
             last_block_yielded: u64,
             logger: slog::Logger,
-            events_to_yield: VecDeque<EventWithCommon<EventParameters>>,
         }
 
-        struct StreamState<
-            BlockEventsStreamWs: Stream,
-            BlockEventsStreamHttp: Stream,
-            EventParameters: Debug,
-        > {
+        struct StreamState<BlockEventsStreamWs: Stream, BlockEventsStreamHttp: Stream> {
             ws_state: ProtocolState,
             ws_stream: BlockEventsStreamWs,
             http_state: ProtocolState,
             http_stream: BlockEventsStreamHttp,
-            merged_stream_state: MergedStreamState<EventParameters>,
+            merged_stream_state: MergedStreamState,
         }
 
-        let init_state =
-            StreamState::<BlockEventsStreamWs, BlockEventsStreamHttp, Self::EventParameters> {
-                ws_state: ProtocolState {
-                    last_block_pulled: 0,
-                    protocol: TransportProtocol::Ws,
-                },
-                ws_stream: safe_ws_block_events_stream,
-                http_state: ProtocolState {
-                    last_block_pulled: 0,
-                    protocol: TransportProtocol::Http,
-                },
-                http_stream: safe_http_block_events_stream,
-                merged_stream_state: MergedStreamState {
-                    last_block_yielded: 0,
-                    events_to_yield: VecDeque::new(),
-                    logger,
-                },
-            };
+        let init_state = StreamState::<BlockEventsStreamWs, BlockEventsStreamHttp> {
+            ws_state: ProtocolState {
+                last_block_pulled: 0,
+                protocol: TransportProtocol::Ws,
+            },
+            ws_stream: safe_ws_block_events_stream,
+            http_state: ProtocolState {
+                last_block_pulled: 0,
+                protocol: TransportProtocol::Http,
+            },
+            http_stream: safe_http_block_events_stream,
+            merged_stream_state: MergedStreamState {
+                last_block_yielded: 0,
+                logger,
+            },
+        };
 
         fn log_when_stream_behind<EventParameters: Debug>(
             yielding_stream_state: &ProtocolState,
             non_yielding_stream_state: &ProtocolState,
-            merged_stream_state: &MergedStreamState<EventParameters>,
+            merged_stream_state: &MergedStreamState,
             // the current block events
             block_events: &CleanBlockEvents<EventParameters>,
         ) {
@@ -993,7 +985,7 @@ pub trait EthObserver {
             BlockEventsStream: Stream<Item = BlockEvents<EventParameters>> + Unpin,
             EventParameters: Debug,
         >(
-            merged_stream_state: &mut MergedStreamState<EventParameters>,
+            merged_stream_state: &mut MergedStreamState,
             protocol_state: &mut ProtocolState,
             other_protocol_state: &mut ProtocolState,
             other_protocol_stream: BlockEventsStream,
@@ -1096,12 +1088,6 @@ pub trait EthObserver {
             init_state,
             |mut stream_state| async move {
                 loop {
-                    if let Some(event_to_yield) =
-                        stream_state.merged_stream_state.events_to_yield.pop_front()
-                    {
-                        break Some((event_to_yield, stream_state));
-                    }
-
                     let iter_result;
                     tokio::select! {
                         Some(block_events) = stream_state.ws_stream.next() => {
@@ -1122,8 +1108,7 @@ pub trait EthObserver {
                                         "ETH block {} contains interesting events",
                                         clean_block_events.block_number
                                     );
-                                    stream_state.merged_stream_state.events_to_yield =
-                                        events.into_iter().collect();
+                                    break Some((stream::iter(events), stream_state));
                                 } else {
                                     slog::debug!(
                                         stream_state.merged_stream_state.logger,
@@ -1144,7 +1129,7 @@ pub trait EthObserver {
                     }
                 }
             },
-        )))
+        ).flatten()))
     }
 
     fn decode_log_closure(&self) -> Result<Arc<DecodeLogClosure<Self::EventParameters>>>;
