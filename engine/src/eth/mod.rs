@@ -29,7 +29,7 @@ use crate::{
 use ethbloom::{Bloom, Input};
 use futures::{
     stream::{self},
-    StreamExt, TryFutureExt,
+    Future, StreamExt, TryFutureExt,
 };
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
@@ -590,19 +590,19 @@ impl fmt::Display for TransportProtocol {
     }
 }
 
-/// Contains None events if the logs bloom says there's nothing interesting in that block
+/// Contains empty vec when no interesting events
 /// Ok if the logs decode successfully, error if not
 #[derive(Debug)]
 pub struct BlockEvents<EventParameters: Debug> {
     pub block_number: u64,
-    pub events: Option<Result<Vec<EventWithCommon<EventParameters>>>>,
+    pub events: Result<Vec<EventWithCommon<EventParameters>>>,
 }
 
-/// Same as BlockEvents, but does not contain an Error, as they will have be cleaned out / recovered from
+/// Just contains an empty vec if there are no events
 #[derive(Debug)]
 pub struct CleanBlockEvents<EventParameters: Debug> {
     pub block_number: u64,
-    pub events: Option<Vec<EventWithCommon<EventParameters>>>,
+    pub events: Vec<EventWithCommon<EventParameters>>,
 }
 
 // Specify a default type for the mock
@@ -632,36 +632,34 @@ pub trait EthObserver {
 
         // if we have logs for this block, fetch them.
         let events = if header.logs_bloom.contains_bloom(&contract_bloom) {
-            Some(
-                eth_rpc
-                    .get_logs(
-                        FilterBuilder::default()
-                            // from_block *and* to_block are *inclusive*
-                            .from_block(BlockNumber::Number(block_number))
-                            .to_block(BlockNumber::Number(block_number))
-                            .address(vec![contract_address])
-                            .build(),
-                    )
-                    .await
-                    .and_then(|logs| {
-                        logs.into_iter()
-                            .map(
-                                move |unparsed_log| -> Result<
-                                    EventWithCommon<Self::EventParameters>,
-                                    anyhow::Error,
-                                > {
-                                    EventWithCommon::<Self::EventParameters>::decode(
-                                        decode_log_fn.clone(),
-                                        unparsed_log,
-                                    )
-                                },
-                            )
-                            .collect::<Result<Vec<_>>>()
-                    }),
-            )
+            eth_rpc
+                .get_logs(
+                    FilterBuilder::default()
+                        // from_block *and* to_block are *inclusive*
+                        .from_block(BlockNumber::Number(block_number))
+                        .to_block(BlockNumber::Number(block_number))
+                        .address(vec![contract_address])
+                        .build(),
+                )
+                .await
+                .and_then(|logs| {
+                    logs.into_iter()
+                        .map(
+                            move |unparsed_log| -> Result<
+                                EventWithCommon<Self::EventParameters>,
+                                anyhow::Error,
+                            > {
+                                EventWithCommon::<Self::EventParameters>::decode(
+                                    decode_log_fn.clone(),
+                                    unparsed_log,
+                                )
+                            },
+                        )
+                        .collect::<Result<Vec<_>>>()
+                })
         } else {
             // we know there won't be interesting logs, so don't fetch for events
-            None
+            Ok(vec![])
         };
 
         BlockEvents {
@@ -886,21 +884,14 @@ pub trait EthObserver {
                     Ordering::Equal => {
                         // we want to yield this one :)
                         match block_events.events {
-                            Some(events) => match events {
-                                Ok(events) => {
-                                    return Ok(CleanBlockEvents {
-                                        block_number: block_events.block_number,
-                                        events: Some(events),
-                                    })
-                                }
-                                Err(err) => {
-                                    return Err(anyhow::Error::msg(format!("ETH {} stream failed with error, on block {} that we were recovering from: {}", protocol_state.protocol, block_events.block_number, err)));
-                                }
-                            },
-                            None => {
-                                // We can only enter into recovery if the logs were Some()
-                                // so if we get None here, for the same block, there is an inconsistency on that block number between the streams
-                                return Err(anyhow::Error::msg(format!("ETH {} stream did not detect logs for block {}, when attempting to recover.", protocol_state.protocol, block_events.block_number)));
+                            Ok(events) => {
+                                return Ok(CleanBlockEvents {
+                                    block_number: block_events.block_number,
+                                    events,
+                                })
+                            }
+                            Err(err) => {
+                                return Err(anyhow::Error::msg(format!("ETH {} stream failed with error, on block {} that we were recovering from: {}", protocol_state.protocol, block_events.block_number, err)));
                             }
                         }
                     }
@@ -925,6 +916,32 @@ pub trait EthObserver {
             )))
         }
 
+        async fn anything<
+            EventParameters: Debug,
+            C: Fn() -> F,
+            T,
+            F: Future<Output = Option<(BlockEvents<EventParameters>, T)>>,
+        >(
+            fut_fn_opt_block_events: C,
+            next_block_to_yield: u64,
+        ) -> Option<(BlockEvents<EventParameters>, T)> {
+            while let Some((block_events, t)) = fut_fn_opt_block_events().await {
+                match block_events.block_number.cmp(&next_block_to_yield) {
+                    Ordering::Equal => {
+                        // yield
+                        return Some((block_events, t));
+                    }
+                    Ordering::Less => {
+                        // ignore because we're behind
+                    }
+                    Ordering::Greater => {
+                        panic!("Input streams to merged stream started at different block numbers. This should not occur.");
+                    }
+                }
+            }
+            None
+        }
+
         // Returns Error if:
         // 1. the protocol stream does not return a contiguous sequence of blocks
         // 2. the protocol streams have not started at the same block
@@ -938,68 +955,88 @@ pub trait EthObserver {
             merged_stream_state: &mut MergedStreamState,
             protocol_state: &mut ProtocolState,
             other_protocol_state: &mut ProtocolState,
-            other_protocol_stream: BlockEventsStream,
+            mut other_protocol_stream: BlockEventsStream,
             block_events: BlockEvents<EventParameters>,
         ) -> Result<Option<CleanBlockEvents<EventParameters>>> {
             let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
             let merged_has_yielded = merged_stream_state.last_block_yielded != 0;
             let has_pulled = protocol_state.last_block_pulled != 0;
 
-            // we only care about yielding if we're at the next block
-            let result_opt_block_events = if !merged_has_yielded
-                || block_events.block_number == next_block_to_yield
-            {
-                // we want to yield IF the block is successful
-                // if it's not successful we want to try the other stream
-                match block_events.events {
-                    Some(result_events) => match result_events {
-                        Ok(events) => {
-                            // yield, if we are at high enough block number
-                            Ok(Some(CleanBlockEvents {
-                                block_number: block_events.block_number,
-                                events: Some(events),
-                            }))
-                        }
-                        Err(err) => Ok(Some(
-                            recover_with_other_stream(
-                                other_protocol_state,
-                                other_protocol_stream,
-                                next_block_to_yield,
-                                &merged_stream_state.logger,
-                            )
-                            .await?,
-                        )),
-                    },
-                    None => {
-                        // not an interesting block, but we still want to yield it
-                        Ok(Some(CleanBlockEvents {
-                            block_number: block_events.block_number,
-                            events: None,
-                        }))
-                    }
-                }
-            } else if has_pulled
-                && (block_events.block_number != protocol_state.last_block_pulled + 1)
-            {
-                panic!("ETH {} stream is expected to be a contiguous sequence of block events. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number);
-            } else if merged_has_yielded && block_events.block_number > next_block_to_yield {
-                // this can only happen at the start. E.g. if one streams first item to yield is 8, it yields
-                // then we poll this stream, it's first item is 12. We haven't skipped. Just one stream started ahead
-                Err(anyhow::Error::msg(
-                    "Input streams to merged stream started at different block numbers. This should not occur.",
-                ))
-            } else {
-                Ok(None)
-            };
+            assert!(!has_pulled
+                || (block_events.block_number == protocol_state.last_block_pulled + 1), "ETH {} stream is expected to be a contiguous sequence of block events. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number);
 
             protocol_state.last_block_pulled = block_events.block_number;
 
-            if let Ok(Some(clean_block_events)) = &result_opt_block_events {
-                merged_stream_state.last_block_yielded = clean_block_events.block_number;
-                // switch the order of the protocols if we recovered
-            }
+            let opt_block_events = if merged_has_yielded {
+                match block_events.block_number.cmp(&next_block_to_yield) {
+                    Ordering::Equal => {
+                        // yield
+                        Some(block_events)
+                    }
+                    Ordering::Less => {
+                        // ignore because we're behind
+                        None
+                    }
+                    Ordering::Greater => {
+                        panic!("Input streams to merged stream started at different block numbers. This should not occur.");
+                    }
+                }
+            } else {
+                // yield
+                Some(block_events)
+            };
 
-            result_opt_block_events
+            if let Some(block_events) = opt_block_events {
+                match block_events.events {
+                    Ok(events) => {
+                        // yield, if we are at high enough block number
+                        Ok(Some(CleanBlockEvents {
+                            block_number: block_events.block_number,
+                            events,
+                        }))
+                    }
+                    Err(err) => {
+                        while let Some(block_events) = other_protocol_stream.next().await {
+                            other_protocol_state.last_block_pulled = block_events.block_number;
+                            match block_events.block_number.cmp(&next_block_to_yield) {
+                                Ordering::Equal => {
+                                    // we want to yield this one :)
+                                    match block_events.events {
+                                        Ok(events) => {
+                                            return Ok(Some(CleanBlockEvents {
+                                                block_number: block_events.block_number,
+                                                events,
+                                            }))
+                                        }
+                                        Err(err) => {
+                                            return Err(anyhow::Error::msg(format!("ETH {} stream failed with error, on block {} that we were recovering from: {}", other_protocol_state.protocol, block_events.block_number, err)));
+                                        }
+                                    }
+                                }
+                                Ordering::Less => {
+                                    // ignore
+                                }
+                                Ordering::Greater => {
+                                    // This is ensured by the safe streams
+                                    panic!(
+                                        "ETH {} stream skipped blocks. Next block to yield was `{}` but got block `{}`. This should not occur",
+                                        other_protocol_state.protocol,
+                                        next_block_to_yield,
+                                        block_events.block_number
+                                    );
+                                }
+                            }
+                        }
+
+                        return Err(anyhow::Error::msg(format!(
+                            "ETH {} stream terminated when attempting to recover",
+                            other_protocol_state.protocol,
+                        )));
+                    }
+                }
+            } else {
+                Ok(None)
+            }
         }
 
         Ok(Box::pin(stream::unfold(
@@ -1019,9 +1056,8 @@ pub trait EthObserver {
                     match next_clean_block_events {
                         Ok(opt_clean_block_events) => {
                             if let Some(clean_block_events) = opt_clean_block_events {
-                                if let Some(events) = clean_block_events.events {
-                                    break Some((stream::iter(events), stream_state));
-                                }
+                                stream_state.merged_stream_state.last_block_yielded = clean_block_events.block_number;
+                                break Some((stream::iter(clean_block_events.events), stream_state));
                             }
                         }
                         Err(err) => {
@@ -1205,24 +1241,24 @@ mod merged_stream_tests {
     ) -> BlockEvents<KeyManagerEvent> {
         BlockEvents {
             block_number,
-            events: Some(Ok(log_indices
+            events: Ok(log_indices
                 .into_iter()
                 .map(|index| key_change(block_number, index))
-                .collect())),
+                .collect()),
         }
     }
 
     fn block_events_error(block_number: u64) -> BlockEvents<KeyManagerEvent> {
         BlockEvents {
             block_number,
-            events: Some(Err(anyhow::Error::msg("NOOOO"))),
+            events: Err(anyhow::Error::msg("NOOOO")),
         }
     }
 
     fn block_events_no_events(block_number: u64) -> BlockEvents<KeyManagerEvent> {
         BlockEvents {
             block_number,
-            events: None,
+            events: Ok(vec![]),
         }
     }
 
