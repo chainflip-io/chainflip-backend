@@ -561,13 +561,11 @@ pub mod tests {
 
         assert_eq!(
             stream.next().await.unwrap().block_number,
-            // no safety margin
             U64::from(first_block - safety_margin)
         );
 
         assert_eq!(
             stream.next().await.unwrap().block_number,
-            // no safety margin
             U64::from(second_block - safety_margin)
         );
     }
