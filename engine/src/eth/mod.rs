@@ -978,7 +978,7 @@ pub trait EthObserver {
             }
 
             Err(anyhow::Error::msg(format!(
-                "ETH {} stream failed to yield any values when attempting to recover",
+                "ETH {} stream terminated when attempting to recover",
                 protocol_state.protocol,
             )))
         }
@@ -1055,7 +1055,7 @@ pub trait EthObserver {
             } else if has_pulled
                 && (block_events.block_number != protocol_state.last_block_pulled + 1)
             {
-                Err(anyhow::Error::msg(format!("ETH {} stream is expected to be a contiguous sequence of block events. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number)))
+                panic!("ETH {} stream is expected to be a contiguous sequence of block events. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number);
             } else if merged_has_yielded && block_events.block_number > next_block_to_yield {
                 // this can only happen at the start. E.g. if one streams first item to yield is 8, it yields
                 // then we poll this stream, it's first item is 12. We haven't skipped. Just one stream started ahead
@@ -1627,6 +1627,7 @@ mod merged_stream_tests {
     }
 
     #[tokio::test]
+    #[should_panic]
     async fn merged_stream_terminates_if_a_stream_moves_backwards() {
         let key_manager = test_km_contract();
         let logger = new_test_logger();
@@ -1656,9 +1657,9 @@ mod merged_stream_tests {
             .await
             .unwrap();
 
-        assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
-        assert_eq!(stream.next().await.unwrap(), key_change(14, 2));
-        assert!(stream.next().await.is_none());
+        stream.next().await.unwrap();
+        stream.next().await.unwrap();
+        stream.next().await.unwrap();
     }
 
     #[tokio::test]
