@@ -15,48 +15,49 @@ pub mod releases {
 	pub const V1: StorageVersion = StorageVersion::new(1);
 }
 
+use cf_traits::{
+	offence_reporting::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
+};
+
 pub mod weights;
 pub use weights::WeightInfo;
 
 use frame_support::{pallet_prelude::*, sp_std::convert::TryInto};
 pub use pallet::*;
 use sp_runtime::traits::Zero;
+use sp_std::ops::Neg;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 
+/// The credits one earns being online, equivalent to a blocktime online
+pub type OnlineCreditsFor<T> = <T as frame_system::Config>::BlockNumber;
+/// Reputation of a validator
+#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct Reputation<OnlineCredits> {
+	online_credits: OnlineCredits,
+	pub reputation_points: ReputationPoints,
+}
+
+/// A reputation penalty as a ratio of points penalised over number of blocks
+#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct ReputationPenalty<BlockNumber> {
+	pub points: ReputationPoints,
+	pub blocks: BlockNumber,
+}
+
+type ReputationOf<T> = Reputation<<T as frame_system::Config>::BlockNumber>;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		offence_reporting::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
-	};
 	use frame_system::pallet_prelude::*;
-	use sp_std::ops::Neg;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::storage_version(releases::V1)]
 	pub struct Pallet<T>(_);
-
-	/// The credits one earns being online, equivalent to a blocktime online
-	pub type OnlineCreditsFor<T> = <T as frame_system::Config>::BlockNumber;
-	/// Reputation of a validator
-	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-	pub struct Reputation<OnlineCredits> {
-		online_credits: OnlineCredits,
-		pub reputation_points: ReputationPoints,
-	}
-
-	/// A reputation penalty as a ratio of points penalised over number of blocks
-	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-	pub struct ReputationPenalty<BlockNumber> {
-		pub points: ReputationPoints,
-		pub blocks: BlockNumber,
-	}
-
-	type ReputationOf<T> = Reputation<<T as frame_system::Config>::BlockNumber>;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Chainflip {
@@ -244,149 +245,145 @@ pub mod pallet {
 			ReputationPointPenalty::<T>::put(ReputationPenalty { points: 1, blocks: 10u32.into() });
 		}
 	}
+}
 
-	/// Implementation of `OffenceReporter` reporting on `Offence` with specified number
-	/// of reputation points
-	impl<T: Config> OffenceReporter for Pallet<T> {
-		type ValidatorId = T::ValidatorId;
-		type Penalty = T::Penalty;
+/// Implementation of `OffenceReporter` reporting on `Offence` with specified number
+/// of reputation points
+impl<T: Config> OffenceReporter for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	type Penalty = T::Penalty;
 
-		fn report(condition: Offence, validator_id: &Self::ValidatorId) {
-			// Confirm validator is present
-			if !Reputations::<T>::contains_key(validator_id) {
-				log::error!(
-					target: "cf-reputation",
-					"Cannot find Validator {:?} to report.",
-					validator_id
-				);
-				return
-			}
+	fn report(condition: Offence, validator_id: &Self::ValidatorId) {
+		// Confirm validator is present
+		if !Reputations::<T>::contains_key(validator_id) {
+			log::error!(
+				target: "cf-reputation",
+				"Cannot find Validator {:?} to report.",
+				validator_id
+			);
+			return
+		}
 
-			let (penalty, to_ban) = Self::Penalty::penalty(&condition);
+		let (penalty, to_ban) = Self::Penalty::penalty(&condition);
 
-			if to_ban {
-				T::Banned::ban(validator_id);
-			}
+		if to_ban {
+			T::Banned::ban(validator_id);
+		}
 
-			if condition == Offence::ParticipateKeygenFailed {
-				T::KeygenExclusionSet::add_to_set(validator_id.clone());
-			}
+		if condition == Offence::ParticipateKeygenFailed {
+			T::KeygenExclusionSet::add_to_set(validator_id.clone());
+		}
 
-			Self::deposit_event(Event::OffencePenalty((*validator_id).clone(), condition, penalty));
+		Self::deposit_event(Event::OffencePenalty((*validator_id).clone(), condition, penalty));
 
-			Self::update_reputation(validator_id, penalty.neg());
+		Self::update_reputation(validator_id, penalty.neg());
+	}
+}
+
+impl<T: Config> Heartbeat for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	type BlockNumber = T::BlockNumber;
+
+	/// A heartbeat is submitted and in doing so the validator is credited the blocks for this
+	/// heartbeat interval.  These block credits are transformed to reputation points based on
+	/// the accrual ratio.
+	fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
+		// Check if this validator has reputation
+		if !Reputations::<T>::contains_key(&validator_id) {
+			// Credit this validator with the blocks for this interval and set 0 reputation
+			// points
+			Reputations::<T>::insert(
+				validator_id,
+				Reputation { online_credits: Self::online_credit_reward(), reputation_points: 0 },
+			);
+		} else {
+			// Update reputation points for this validator
+			Reputations::<T>::mutate(
+				validator_id,
+				|Reputation { online_credits, reputation_points }| {
+					*online_credits += Self::online_credit_reward();
+					let (rewarded_points, credits) = AccrualRatio::<T>::get();
+					// If we have hit a number of credits to earn reputation points
+					if *online_credits >= credits {
+						// Swap these credits for reputation
+						*online_credits -= credits;
+						// Update reputation
+						*reputation_points += rewarded_points;
+					}
+				},
+			);
 		}
 	}
 
-	impl<T: Config> Heartbeat for Pallet<T> {
-		type ValidatorId = T::ValidatorId;
-		type BlockNumber = T::BlockNumber;
+	/// For those that we are still *awaiting* on will be penalised reputation points and any
+	/// online credits earned will be set to zero.  In other words we expect continued liveness
+	/// before we earn points.
+	/// Once the reputation points fall below zero slashing comes into play and is delegated to
+	/// the `Slashing` trait.
+	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
+		// Penalise those that are missing this heartbeat
+		for validator_id in network_state.offline {
+			let reputation_points = Reputations::<T>::mutate(
+				&validator_id,
+				|Reputation { online_credits, reputation_points }| {
+					if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
+						// Update reputation points
+						let ReputationPenalty { points, blocks } =
+							ReputationPointPenalty::<T>::get();
+						let interval: u32 =
+							T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
+						let blocks: u32 = blocks.try_into().unwrap_or(0);
 
-		/// A heartbeat is submitted and in doing so the validator is credited the blocks for this
-		/// heartbeat interval.  These block credits are transformed to reputation points based on
-		/// the accrual ratio.
-		fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
-			// Check if this validator has reputation
-			if !Reputations::<T>::contains_key(&validator_id) {
-				// Credit this validator with the blocks for this interval and set 0 reputation
-				// points
-				Reputations::<T>::insert(
-					validator_id,
-					Reputation {
-						online_credits: Self::online_credit_reward(),
-						reputation_points: 0,
-					},
-				);
-			} else {
-				// Update reputation points for this validator
-				Reputations::<T>::mutate(
-					validator_id,
-					|Reputation { online_credits, reputation_points }| {
-						*online_credits += Self::online_credit_reward();
-						let (rewarded_points, credits) = AccrualRatio::<T>::get();
-						// If we have hit a number of credits to earn reputation points
-						if *online_credits >= credits {
-							// Swap these credits for reputation
-							*online_credits -= credits;
-							// Update reputation
-							*reputation_points += rewarded_points;
-						}
-					},
-				);
-			}
-		}
+						let penalty =
+							(points.saturating_mul(interval as i32).checked_div(blocks as i32))
+								.unwrap_or_else(|| {
+									log::error!(
+										"Unexpected penalty calculation error {:?}: {:?}.",
+										interval,
+										blocks
+									);
+									0
+								});
 
-		/// For those that we are still *awaiting* on will be penalised reputation points and any
-		/// online credits earned will be set to zero.  In other words we expect continued liveness
-		/// before we earn points.
-		/// Once the reputation points fall below zero slashing comes into play and is delegated to
-		/// the `Slashing` trait.
-		fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
-			// Penalise those that are missing this heartbeat
-			for validator_id in network_state.offline {
-				let reputation_points = Reputations::<T>::mutate(
-					&validator_id,
-					|Reputation { online_credits, reputation_points }| {
-						if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
-							// Update reputation points
-							let ReputationPenalty { points, blocks } =
-								ReputationPointPenalty::<T>::get();
-							let interval: u32 =
-								T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
-							let blocks: u32 = blocks.try_into().unwrap_or(0);
+						*reputation_points = Pallet::<T>::clamp_reputation_points(
+							(*reputation_points).saturating_sub(penalty),
+						);
+						// Reset the credits earned as being online consecutively
+						*online_credits = Zero::zero();
+					}
 
-							let penalty =
-								(points.saturating_mul(interval as i32).checked_div(blocks as i32))
-									.unwrap_or_else(|| {
-										log::error!(
-											"Unexpected penalty calculation error {:?}: {:?}.",
-											interval,
-											blocks
-										);
-										0
-									});
+					*reputation_points
+				},
+			);
 
-							*reputation_points = Pallet::<T>::clamp_reputation_points(
-								(*reputation_points).saturating_sub(penalty),
-							);
-							// Reset the credits earned as being online consecutively
-							*online_credits = Zero::zero();
-						}
-
-						*reputation_points
-					},
-				);
-
-				if reputation_points < Zero::zero() ||
-					Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
-				{
-					// At this point we slash the validator by the amount of blocks offline
-					T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
-				}
+			if reputation_points < Zero::zero() ||
+				Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
+			{
+				// At this point we slash the validator by the amount of blocks offline
+				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
 		}
 	}
+}
 
-	impl<T: Config> Pallet<T> {
-		/// Return number of online credits for reward
-		fn online_credit_reward() -> OnlineCreditsFor<T> {
-			// Equivalent to the number of blocks used for the heartbeat
-			T::HeartbeatBlockInterval::get()
-		}
+impl<T: Config> Pallet<T> {
+	/// Return number of online credits for reward
+	fn online_credit_reward() -> OnlineCreditsFor<T> {
+		// Equivalent to the number of blocks used for the heartbeat
+		T::HeartbeatBlockInterval::get()
+	}
 
-		/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
-		fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
-			Reputations::<T>::mutate(validator_id, |Reputation { reputation_points, .. }| {
-				*reputation_points =
-					Pallet::<T>::clamp_reputation_points(*reputation_points + points);
-				T::DbWeight::get().reads_writes(1, 1)
-			})
-		}
+	/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
+	fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
+		Reputations::<T>::mutate(validator_id, |Reputation { reputation_points, .. }| {
+			*reputation_points = Pallet::<T>::clamp_reputation_points(*reputation_points + points);
+			T::DbWeight::get().reads_writes(1, 1)
+		})
+	}
 
-		/// Clamp reputation points to bounds defined in the pallet
-		fn clamp_reputation_points(reputation_points: i32) -> i32 {
-			let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
-			reputation_points.clamp(floor, ceiling)
-		}
+	/// Clamp reputation points to bounds defined in the pallet
+	fn clamp_reputation_points(reputation_points: i32) -> i32 {
+		let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
+		reputation_points.clamp(floor, ceiling)
 	}
 }
