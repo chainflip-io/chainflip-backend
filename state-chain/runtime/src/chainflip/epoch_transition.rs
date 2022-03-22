@@ -1,8 +1,7 @@
-use cf_traits::{BlockEmissions, Bonding, EmissionsTrigger, EpochTransitionHandler, FlipBalance};
-use pallet_cf_flip::Bonder;
+use cf_traits::{BlockEmissions, EmissionsTrigger, EpochTransitionHandler, FlipBalance};
 
-use crate::{chainflip::EpochHistory, AccountId, Emissions, Runtime, Validator, Witnesser};
-use cf_traits::{Chainflip, ChainflipAccount, ChainflipAccountStore, EpochInfo, HistoricalEpoch};
+use crate::{AccountId, Emissions, Runtime, Validator, Witnesser};
+use cf_traits::{Chainflip, ChainflipAccount, ChainflipAccountStore, EpochInfo};
 
 use crate::chainflip::PhantomData;
 

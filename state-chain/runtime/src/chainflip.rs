@@ -26,7 +26,7 @@ use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchIn
 
 use pallet_cf_auction::HandleStakes;
 
-use pallet_cf_validator::{EpochHistory, PercentageRange};
+use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
