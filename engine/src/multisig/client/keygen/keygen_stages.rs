@@ -536,7 +536,7 @@ fn is_blame_response_complete(
     response: &BlameResponse6,
     complaints: &HashMap<usize, Complaints4>,
 ) -> bool {
-    let epxected_idxs_iter = complaints
+    let expected_idxs_iter = complaints
         .iter()
         .filter_map(|(blamer_idx, Complaints4(blamed_idxs))| {
             if blamed_idxs.contains(&sender_idx) {
@@ -548,7 +548,7 @@ fn is_blame_response_complete(
         .sorted();
 
     // Note: the keys in BTreeMap are already sorted
-    Iterator::eq(response.0.keys(), epxected_idxs_iter)
+    Iterator::eq(response.0.keys(), expected_idxs_iter)
 }
 
 impl VerifyBlameResponsesBroadcastStage7 {
