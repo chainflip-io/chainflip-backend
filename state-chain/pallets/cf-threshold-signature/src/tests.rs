@@ -9,7 +9,7 @@ use crate::{
 	Error, RequestId,
 };
 use cf_chains::mocks::MockEthereum;
-use cf_traits::AsyncResult;
+use cf_traits::{AsyncResult, Chainflip};
 use frame_support::{
 	assert_noop, assert_ok,
 	instances::Instance1,
@@ -296,6 +296,7 @@ fn fail_path_no_timeout() {
 			// in 10 blocks' time.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
 			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() + 10;
+			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
 
@@ -411,5 +412,65 @@ mod unsigned_validation {
 				InvalidTransaction::Call.into()
 			);
 		});
+	}
+}
+
+#[cfg(test)]
+mod failure_reporting {
+	use super::*;
+	use crate::CeremonyContext;
+	use cf_traits::mocks::epoch_info::MockEpochInfo;
+
+	fn init_context(
+		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
+	) -> CeremonyContext<Test, Instance1> {
+		MockEpochInfo::set_validators(Vec::from_iter(validator_set));
+		CeremonyContext::<Test, Instance1> {
+			retry_scheduled: false,
+			remaining_respondents: BTreeSet::from_iter(validator_set),
+			blame_counts: Default::default(),
+			participant_count: 5,
+			_phantom: Default::default(),
+		}
+	}
+
+	fn report(context: &mut CeremonyContext<Test, Instance1>, reporter: u64, blamed: Vec<u64>) {
+		for i in blamed {
+			*context.blame_counts.entry(i).or_default() += 1;
+		}
+		context.remaining_respondents.remove(&reporter);
+	}
+
+	#[test]
+	fn basic_thresholds() {
+		let mut ctx = init_context([1, 2, 3, 4, 5]);
+
+		// First report, countdown threshold passed.
+		report(&mut ctx, 1, vec![2]);
+
+		// Second report, countdown threshold passed.
+		report(&mut ctx, 2, vec![1]);
+
+		// Third report, countdown threshold passed.
+		report(&mut ctx, 3, vec![1]);
+
+		// Status: 3 responses in, votes: [1:2, 2:1]
+		// Vote threshold not met, but two validators have failed to respond - they would be
+		// reported.
+		assert_eq!(ctx.offenders(), vec![4, 5], "Context was {:?}.", ctx);
+
+		// // Fourth report, reporting threshold passed.
+		report(&mut ctx, 4, vec![1]);
+
+		// Status: 4 responses in, votes: [1:3, 2:1]
+		// Vote threshold has not been met for validator `1`, and `5` has not responded.
+		// As things stand, [5] would be reported.
+		assert_eq!(ctx.offenders(), vec![5], "Context was {:?}.", ctx);
+
+		// Fifth report, reporting threshold passed.
+		report(&mut ctx, 5, vec![1, 2]);
+
+		// Status: 5 responses in, votes: [1:4, 2:2]. Only 1 has met the vote threshold.
+		assert_eq!(ctx.offenders(), vec![1], "Context was {:?}.", ctx);
 	}
 }
