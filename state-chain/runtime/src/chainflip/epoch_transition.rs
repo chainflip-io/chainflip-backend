@@ -23,10 +23,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Update the the bond of all validators for the new epoch
-		for validator in new_validators {
-			let bond = EpochHistory::<Runtime>::active_bond(validator);
-			Bonder::<Runtime>::update_validator_bond(validator, bond);
-		}
+		Validator::bond_validators_for_new_epoch(new_validators);
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(
 			old_validators,

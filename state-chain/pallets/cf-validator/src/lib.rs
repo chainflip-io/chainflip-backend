@@ -802,6 +802,13 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_validator_bond(validator, bond);
 		}
 	}
+
+	pub fn bond_validators_for_new_epoch(validators: &[ValidatorIdOf<T>]) {
+		for validator in validators {
+			let bond = EpochHistory::<T>::active_bond(validator);
+			T::Bonder::update_validator_bond(validator, bond);
+		}
+	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
