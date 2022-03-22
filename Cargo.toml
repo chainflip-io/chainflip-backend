@@ -23,6 +23,8 @@ members = [
   'state-chain/cf-integration-tests',
   'state-chain/runtime-benchmark-utilities',
   'state-chain/runtime-upgrade-utilities',
+  'state-chain/runtime-utilities',
+  'state-chain/runtime-utilities/macros',
   'state-chain/runtime',
   'state-chain/traits',
   'engine',
