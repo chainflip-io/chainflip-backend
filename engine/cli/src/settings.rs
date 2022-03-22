@@ -34,7 +34,7 @@ pub enum CFCommand {
     Rotate {},
     #[structopt(about = "Retire from Auction participation")]
     Retire {},
-    #[structopt(about = "Activates an account for the next Auction")]
+    #[structopt(about = "Activates an account for all future Auctions")]
     Activate {},
     #[structopt(about = "Submit a query to the State Chain")]
     Query {
