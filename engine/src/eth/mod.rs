@@ -966,6 +966,7 @@ pub trait EthObserver {
                         slog::trace!(logger, "ETH {} stream pulled block `{}` but still below the next block to yield of {}", protocol_state.protocol, block_events.block_number, next_block_to_yield)
                     }
                     Ordering::Greater => {
+                        // This is ensured by the safe streams
                         panic!(
                             "ETH {} stream skipped blocks. Next block to yield was `{}` but got block `{}`. This should not occur",
                             protocol_state.protocol,
