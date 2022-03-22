@@ -869,6 +869,56 @@ pub trait EthObserver {
             },
         };
 
+        fn log_when_stream_behind(
+            yielding_stream_state: &ProtocolState,
+            non_yielding_stream_state: &ProtocolState,
+            merged_stream_state: &MergedStreamState,
+            yielding_block_number: u64,
+        ) {
+            match yielding_stream_state.protocol {
+                TransportProtocol::Http => {
+                    slog::info!(
+                        merged_stream_state.logger,
+                        #ETH_HTTP_STREAM_RETURNED,
+                        "ETH block {} returning from {} stream",
+                        yielding_block_number,
+                        yielding_stream_state.protocol
+                    );
+                }
+                TransportProtocol::Ws => {
+                    slog::info!(
+                        merged_stream_state.logger,
+                        #ETH_WS_STREAM_RETURNED,
+                        "ETH block {} returning from {} stream",
+                        yielding_block_number,
+                        yielding_stream_state.protocol
+                    );
+                }
+            }
+
+            // We may be one ahead of the previously yielded block
+            let blocks_behind = merged_stream_state.last_block_yielded + 1
+                - non_yielding_stream_state.last_block_pulled;
+
+            // before we have pulled on each stream, we can't know if the other stream is behind
+            if non_yielding_stream_state.last_block_pulled != 0
+                && ((non_yielding_stream_state.last_block_pulled
+                    + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
+                    <= yielding_block_number)
+                && (blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
+            {
+                slog::warn!(
+                    merged_stream_state.logger,
+                    #ETH_STREAM_BEHIND,
+                    "ETH {} stream at block `{}` but {} stream at block `{}`",
+                    yielding_stream_state.protocol,
+                    yielding_block_number,
+                    non_yielding_stream_state.protocol,
+                    non_yielding_stream_state.last_block_pulled,
+                );
+            }
+        }
+
         // Returns Error if:
         // 1. the protocol stream does not return a contiguous sequence of blocks
         // 2. the protocol streams have not started at the same block
@@ -901,7 +951,7 @@ pub trait EthObserver {
                         Some(block_events)
                     }
                     Ordering::Less => {
-                        // ignore because we're behind
+                        slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_events.block_number, next_block_to_yield);
                         None
                     }
                     Ordering::Greater => {
@@ -917,12 +967,25 @@ pub trait EthObserver {
                 match block_events.events {
                     Ok(events) => {
                         // yield, if we are at high enough block number
+                        log_when_stream_behind(
+                            protocol_state,
+                            other_protocol_state,
+                            merged_stream_state,
+                            block_events.block_number,
+                        );
                         Ok(Some(CleanBlockEvents {
                             block_number: block_events.block_number,
                             events,
                         }))
                     }
                     Err(err) => {
+                        slog::error!(
+                            merged_stream_state.logger,
+                            "ETH {} stream failed to get events for ETH block `{}`. Attempting to recover. Error: {}",
+                            protocol_state.protocol,
+                            block_events.block_number,
+                            err
+                        );
                         while let Some(block_events) = other_protocol_stream.next().await {
                             other_protocol_state.last_block_pulled = block_events.block_number;
                             match block_events.block_number.cmp(&next_block_to_yield) {
@@ -930,10 +993,16 @@ pub trait EthObserver {
                                     // we want to yield this one :)
                                     match block_events.events {
                                         Ok(events) => {
+                                            log_when_stream_behind(
+                                                other_protocol_state,
+                                                protocol_state,
+                                                merged_stream_state,
+                                                block_events.block_number,
+                                            );
                                             return Ok(Some(CleanBlockEvents {
                                                 block_number: block_events.block_number,
                                                 events,
-                                            }))
+                                            }));
                                         }
                                         Err(err) => {
                                             return Err(anyhow::Error::msg(format!("ETH {} stream failed with error, on block {} that we were recovering from: {}", other_protocol_state.protocol, block_events.block_number, err)));
@@ -941,7 +1010,7 @@ pub trait EthObserver {
                                     }
                                 }
                                 Ordering::Less => {
-                                    // ignore
+                                    slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block `{}` but still below the next block to yield of {}", other_protocol_state.protocol, block_events.block_number, next_block_to_yield)
                                 }
                                 Ordering::Greater => {
                                     // This is ensured by the safe streams
@@ -988,6 +1057,11 @@ pub trait EthObserver {
                             }
                         }
                         Err(err) => {
+                            slog::error!(
+                                stream_state.merged_stream_state.logger,
+                                "Terminating ETH merged event stream due to error: {}",
+                                err
+                            );
                             break None;
                         }
                     }
