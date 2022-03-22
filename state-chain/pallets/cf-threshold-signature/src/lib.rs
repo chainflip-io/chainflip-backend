@@ -192,11 +192,6 @@ pub mod pallet {
 	pub type PendingCeremonies<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, CeremonyContext<T, I>>;
 
-	/// Stores when an ceremony is timeout
-	#[pallet::storage]
-	pub type SignatureTimeout<T, I = ()> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<CeremonyId>>;
-
 	/// A mapping from ceremony_id to its current ceremony_id.
 	///
 	/// Technically a payload is associated with an entire request, however since it's accessed on
@@ -272,12 +267,6 @@ pub mod pallet {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let mut num_retries = 0;
 
-			// Check the expiry block
-			// if Some(timedout) = SignatureTimeout.get(block) {
-			//    scedule retry
-			//
-			// }
-
 			// Process pending retries.
 			for ceremony_id in RetryQueues::<T, I>::take(current_block) {
 				if let Some(failed_ceremony_context) = PendingCeremonies::<T, I>::take(ceremony_id)
@@ -298,6 +287,7 @@ pub mod pallet {
 						// Initiate a new attempt.
 						Self::new_ceremony_attempt(request_id, payload, attempt.wrapping_add(1));
 
+						// Scedule a retry
 						Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
 					} else {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
@@ -446,14 +436,7 @@ pub mod pallet {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
-						if !context.retry_scheduled {
-							context.retry_scheduled = true;
-							Self::schedule_retry(id, T::ThresholdFailureTimeout::get());
-						}
-						if context.remaining_respondents.is_empty() {
-							// No more respondents waiting: we can retry on the next block.
-							Self::schedule_retry(id, 1u32.into());
-						}
+						Self::schedule_retry(id, T::ThresholdFailureTimeout::get());
 
 						Ok(())
 					})
@@ -500,9 +483,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		});
+
 		// Start a ceremony.
 		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
 
+		// Set retry timeout
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
 
 		(request_id, ceremony_id)
@@ -546,6 +531,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				nominees,
 				payload,
 			));
+
+			Self::schedule_retry(ceremony_id, T::ThresholdFailureTimeout::get());
 		} else {
 			// Store the context, schedule a retry for the next block.
 			PendingCeremonies::<T, I>::insert(
