@@ -14,7 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo},
-	offline_conditions::ReputationPoints,
+	offence_reporting::ReputationPoints,
 	Chainflip, Slashing,
 };
 
@@ -99,7 +99,7 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
-cf_traits::impl_mock_offline_conditions!(u64);
+cf_traits::impl_mock_offence_reporting!(u64);
 cf_traits::impl_mock_keygen_exclusion!(u64);
 
 impl Chainflip for Test {
@@ -116,7 +116,7 @@ impl Config for Test {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
-	type Penalty = MockOfflinePenalty;
+	type Penalty = MockOffencePenalty;
 	type WeightInfo = ();
 	type Banned = MockBanned;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;

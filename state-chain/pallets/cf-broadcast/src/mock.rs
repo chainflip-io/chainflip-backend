@@ -63,7 +63,7 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_offline_conditions!(u64);
+cf_traits::impl_mock_offence_reporting!(u64);
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
@@ -107,7 +107,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
 	type SignerNomination = MockNominator;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
