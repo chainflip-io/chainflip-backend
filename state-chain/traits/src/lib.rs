@@ -667,22 +667,22 @@ pub trait KeygenExclusionSet {
 	fn forgive_all();
 }
 
-/// Provides an intreface to all passed epochs
+/// Provides an interface to all passed epochs
 pub trait HistoricalEpoch {
 	type ValidatorId;
 	type EpochIndex;
 	type Amount;
-	/// All validators which were active in an epoch
+	/// All validators which were in an epoch's authority set.
 	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
-	/// All epochs an validator is active in
+	/// The unexpired epochs for which a validator was in the authority set.
 	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
-	/// Removes an validator from an epoch
+	/// Removes an epoch from a validator's list of active epochs.
 	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
-	/// Activates an epch for an validator
+	/// Add an epoch to a validator's list of active epochs.
 	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
-	/// Returns the bond active bond for a validator
+	///  Returns the amount of a validator's stake that is currently bonded.
 	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
 }
 
