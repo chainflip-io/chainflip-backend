@@ -902,7 +902,7 @@ pub trait EthObserver {
             let blocks_behind = merged_stream_state.last_block_yielded
                 - non_yielding_stream_state.last_block_pulled;
 
-            // we don't want to log on the first iteration
+            // before we have pulled on each stream, we can't know if the other stream is behind
             if non_yielding_stream_state.last_block_pulled != 0
                 && ((non_yielding_stream_state.last_block_pulled
                     + ETH_FALLING_BEHIND_MARGIN_BLOCKS)
@@ -912,7 +912,7 @@ pub trait EthObserver {
                 slog::warn!(
                     merged_stream_state.logger,
                     #ETH_STREAM_BEHIND,
-                    "{} stream at ETH block `{}` but {} stream at ETH block `{}`",
+                    "ETH {} stream at block `{}` but {} stream at block `{}`",
                     yielding_stream_state.protocol,
                     block_events.block_number,
                     non_yielding_stream_state.protocol,
@@ -1016,7 +1016,7 @@ pub trait EthObserver {
                         Err(err) => {
                             slog::error!(
                                 merged_stream_state.logger,
-                                "ETH {} stream failed to get events for ETH block `{}`: {}",
+                                "ETH {} stream failed to get events for ETH block `{}`. Attempting to recover. Error: {}",
                                 protocol_state.protocol,
                                 block_events.block_number,
                                 err
@@ -1088,18 +1088,17 @@ pub trait EthObserver {
             init_state,
             |mut stream_state| async move {
                 loop {
-                    let iter_result;
-                    tokio::select! {
+                    let next_clean_block_events = tokio::select! {
                         Some(block_events) = stream_state.ws_stream.next() => {
-                            iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, block_events).await;
+                            do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, block_events).await
                         }
                         Some(block_events) = stream_state.http_stream.next() => {
-                            iter_result = do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, block_events).await;
+                            do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, block_events).await
                         }
                         else => break None
-                    }
+                    };
 
-                    match iter_result {
+                    match next_clean_block_events {
                         Ok(opt_clean_block_events) => {
                             if let Some(clean_block_events) = opt_clean_block_events {
                                 if let Some(events) = clean_block_events.events {
