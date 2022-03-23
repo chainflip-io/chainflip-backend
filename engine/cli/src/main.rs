@@ -6,6 +6,7 @@ use chainflip_engine::{
     },
 };
 use futures::StreamExt;
+use pallet_cf_validator::{Percentage, RotationStatus, RotationStatusOf};
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::sr25519::Public as SrPublic;
@@ -94,6 +95,76 @@ async fn request_claim(
     should_register_claim: bool,
     logger: &slog::Logger,
 ) -> Result<()> {
+    let (_, mut block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+
+    // Are we in a valid Auction phase
+    // TODO: Deduplicate this logic (and getting) by using an RPC directly to the is_auction_phase call in the validator pallet
+    {
+        // Check that we actually can claim atm.
+        let block = block_stream
+            .next()
+            .await
+            .unwrap_or_else(|| Err(anyhow::Error::msg("Unable to pull item from block stream")))?;
+
+        let block_hash = block.hash();
+        let current_block_number = block.number;
+        let current_epoch_started_at: state_chain_runtime::BlockNumber = state_chain_client
+            .get_storage_value(block_hash, StorageKey(pallet_cf_validator::CurrentEpochStartedAt::<
+                state_chain_runtime::Runtime,
+            >::hashed_key().into()))
+            .await?;
+
+        let claim_period_as_percentage: Percentage = state_chain_client
+            .get_storage_value(block_hash, StorageKey(pallet_cf_validator::ClaimPeriodAsPercentage::<
+                state_chain_runtime::Runtime,
+            >::hashed_key().into()))
+            .await?;
+
+        let blocks_per_epoch: state_chain_runtime::BlockNumber = state_chain_client
+            .get_storage_value(
+                block_hash,
+                StorageKey(
+                    pallet_cf_validator::BlocksPerEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                        .into(),
+                ),
+            )
+            .await?;
+
+        let rotation_phase: RotationStatusOf<state_chain_runtime::Runtime> = state_chain_client
+            .get_storage_value(
+                block_hash,
+                StorageKey(
+                    pallet_cf_validator::RotationPhase::<state_chain_runtime::Runtime>::hashed_key(
+                    )
+                    .into(),
+                ),
+            )
+            .await?;
+
+        let is_auction_phase = {
+            if rotation_phase != RotationStatus::Idle {
+                true
+            } else {
+                // start + ((epoch_duration * percentage) / 100)
+                let last_block_for_claims = current_epoch_started_at.saturating_add(
+                    blocks_per_epoch
+                        .saturating_mul(claim_period_as_percentage.into())
+                        .checked_div(100u32)
+                        .unwrap_or_default(),
+                );
+
+                last_block_for_claims <= current_block_number
+            }
+        };
+
+        if is_auction_phase {
+            let next_auction_target = current_epoch_started_at + blocks_per_epoch;
+            return Err(anyhow::Error::msg(format!("You cannot claim during an auction. After the next auction, you can claim. The next auction is targetted to resolve at block number {}.", next_auction_target)));
+        }
+    }
+
+    // Sanitise data
+
     let eth_address = clean_eth_address(eth_address)
         .map_err(|error| anyhow::Error::msg(format!("You supplied an invalid ETH address: {}", error)))
         .and_then(|eth_address|
@@ -107,7 +178,7 @@ async fn request_claim(
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(
-        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`. You will send two transactions, a redeem and claim.",
+        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`. This will send two transactions, required to initiate the claim, a redeem and claim.",
         amount,
         atomic_amount,
         hex::encode(eth_address)
@@ -117,7 +188,7 @@ async fn request_claim(
         return Ok(());
     }
 
-    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    // Do the claim
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(

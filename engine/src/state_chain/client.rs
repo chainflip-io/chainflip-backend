@@ -675,7 +675,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
         Ok(value_changes
             .last()
-            .expect("Failed to find value in environment storage")
+            .ok_or_else(|| {
+                anyhow::Error::msg(format!(
+                    "No storage values exist for StorageKey `{:?}`",
+                    storage_key
+                ))
+            })?
             .to_owned())
     }
 
@@ -724,7 +729,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .data)
     }
 
-    /// Get the epoch number of the latest block
+    /// Get the latest epoch number at the provided block hash
     pub async fn epoch_at_block(
         &self,
         block_hash: state_chain_runtime::Hash,

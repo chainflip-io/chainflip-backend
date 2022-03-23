@@ -60,7 +60,7 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
-type RotationStatusOf<T> = RotationStatus<
+pub type RotationStatusOf<T> = RotationStatus<
 	AuctionResult<<T as frame_system::Config>::AccountId, <T as cf_traits::Chainflip>::Amount>,
 >;
 
@@ -542,7 +542,7 @@ pub mod pallet {
 	/// Percentage of epoch we allow claims
 	#[pallet::storage]
 	#[pallet::getter(fn claim_period_as_percentage)]
-	pub(super) type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
+	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// An emergency rotation has been requested
 	#[pallet::storage]
@@ -552,12 +552,12 @@ pub mod pallet {
 	/// The starting block number for the current epoch
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
-	pub(super) type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// The number of blocks an epoch runs for
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_number_of_blocks)]
-	pub(super) type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Current epoch index
 	#[pallet::storage]
@@ -647,6 +647,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			RotationPhase::<T>::set(RotationStatus::default());
 			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 
@@ -686,6 +687,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
+	// TODO: This logic is currently duplicated in the CLI. Using an RPC could fix this
 	fn is_auction_phase() -> bool {
 		if RotationPhase::<T>::get() != RotationStatus::Idle {
 			return true
