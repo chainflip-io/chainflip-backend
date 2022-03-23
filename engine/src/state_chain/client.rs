@@ -660,7 +660,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
-    pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
+    pub async fn get_storage_value<ValueType: Debug + Decode + Clone>(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,

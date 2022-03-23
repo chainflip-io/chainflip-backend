@@ -167,7 +167,7 @@ async fn request_claim(
                                     hex::encode(claim_cert.clone())
                                 );
                                 let chain_id = state_chain_client
-                                    .get_environment_value::<u64>(
+                                    .get_storage_value::<u64>(
                                         block_hash,
                                         StorageKey(
                                             pallet_cf_environment::EthereumChainId::<
@@ -180,7 +180,7 @@ async fn request_claim(
                                     .await
                                     .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
-                                    .get_environment_value(
+                                    .get_storage_value(
                                         block_hash,
                                         StorageKey(
                                             pallet_cf_environment::StakeManagerAddress::<
