@@ -1,7 +1,8 @@
-use crate::{Online, Runtime, Validator};
-use cf_traits::{Chainflip, EpochInfo};
+use crate::{Online, Reputation, Runtime, System, Validator};
+use cf_traits::{Chainflip, EpochInfo, IsOnline};
 use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
+use sp_runtime::traits::BlockNumberProvider;
 use sp_std::vec::Vec;
 
 /// Tries to select `n` items randomly from the provided Vec.
@@ -39,6 +40,18 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 	u64::from_be_bytes(bytes)
 }
 
+fn online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
+	let block_number = <System as BlockNumberProvider>::current_block_number();
+	<Validator as EpochInfo>::current_validators()
+		.iter()
+		.filter(|validator_id| {
+			!Reputation::is_suspended_at(block_number, validator_id) &&
+				Online::is_online(validator_id)
+		})
+		.cloned()
+		.collect()
+}
+
 /// Nominates pseudo-random signers based on the provided seed.
 pub struct RandomSignerNomination;
 
@@ -46,14 +59,15 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId> {
-		let online_validators = Online::online_validators();
-		select_one(seed_from_hashable(seed), online_validators)
+		select_one(seed_from_hashable(seed), online_validators())
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>> {
-		let threshold = <Validator as EpochInfo>::consensus_threshold();
-		let online_validators = Online::online_validators();
-		try_select_random_subset(seed_from_hashable(seed), threshold as usize, online_validators)
+		try_select_random_subset(
+			seed_from_hashable(seed),
+			<Validator as EpochInfo>::consensus_threshold() as usize,
+			online_validators(),
+		)
 	}
 }
 

@@ -432,7 +432,6 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type Penalty = OffencePenalty;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
-	type Banned = pallet_cf_online::Pallet<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
 	type KeygenExclusionSet = pallet_cf_online::Pallet<Self>;

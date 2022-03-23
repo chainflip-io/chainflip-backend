@@ -24,7 +24,7 @@ pub use weights::WeightInfo;
 
 use frame_support::{pallet_prelude::*, sp_std::convert::TryInto};
 pub use pallet::*;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
 use sp_std::ops::Neg;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -88,9 +88,6 @@ pub mod pallet {
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
-		/// Ban validators
-		type Banned: Banned<ValidatorId = Self::ValidatorId>;
-
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
@@ -144,6 +141,12 @@ pub mod pallet {
 	/// The number of reputation points we lose for every x blocks offline
 	pub(super) type ReputationPointPenalty<T: Config> =
 		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn suspensions)]
+	/// If the validator is suspended, contains the block number at which they will be released.
+	pub(super) type Suspensions<T: Config> =
+		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -264,10 +267,10 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 			return
 		}
 
-		let (penalty, to_ban) = Self::Penalty::penalty(&condition);
+		let (penalty, should_suspend) = Self::Penalty::penalty(&condition);
 
-		if to_ban {
-			T::Banned::ban(validator_id);
+		if should_suspend {
+			Self::suspend(validator_id);
 		}
 
 		if condition == Offence::ParticipateKeygenFailed {
@@ -385,5 +388,21 @@ impl<T: Config> Pallet<T> {
 	fn clamp_reputation_points(reputation_points: i32) -> i32 {
 		let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
 		reputation_points.clamp(floor, ceiling)
+	}
+
+	fn suspend(validator_id: &T::ValidatorId) {
+		let current_block_number = frame_system::Pallet::<T>::current_block_number();
+		let released_at = current_block_number.saturating_add(T::HeartbeatBlockInterval::get());
+
+		Suspensions::<T>::insert(validator_id, released_at);
+	}
+
+	// TODO: factor this out into an interface is_suspended(validator) -> bool
+	pub fn is_suspended_at(block_number: T::BlockNumber, validator_id: &T::ValidatorId) -> bool {
+		if let Some(absolution_block) = Suspensions::<T>::get(validator_id) {
+			block_number <= absolution_block
+		} else {
+			false
+		}
 	}
 }
