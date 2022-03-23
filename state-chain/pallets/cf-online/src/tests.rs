@@ -1,5 +1,5 @@
 use crate::mock::*;
-use cf_traits::{offence_reporting::Banned, EpochInfo, IsOnline, KeygenExclusionSet};
+use cf_traits::{EpochInfo, IsOnline, KeygenExclusionSet};
 use frame_support::assert_ok;
 
 // Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
@@ -96,24 +96,5 @@ fn non_validators_should_not_appear_in_network_state() {
 		assert!(MockHeartbeat::network_state().online.is_empty(), "Alice is now not online");
 
 		assert_eq!(MockHeartbeat::network_state().number_of_nodes(), 1, "We should have one node");
-	});
-}
-
-#[test]
-fn submitting_heartbeats_should_not_lift_ban() {
-	new_test_ext().execute_with(|| {
-		// Ban Alice
-		<OnlinePallet as Banned>::ban(&ALICE);
-		// Send a series of heartbeats over N blocks
-		let number_of_blocks = 10;
-		for block_number in 1..=number_of_blocks {
-			assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
-			run_to_block(block_number);
-			assert!(!<OnlinePallet as IsOnline>::is_online(&ALICE));
-		}
-		// Move to next interval
-		go_to_interval(1);
-		// Alice should be online
-		assert!(<OnlinePallet as IsOnline>::is_online(&ALICE));
 	});
 }

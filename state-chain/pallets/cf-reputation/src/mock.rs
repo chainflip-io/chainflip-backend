@@ -118,7 +118,6 @@ impl Config for Test {
 	type Slasher = MockSlasher;
 	type Penalty = MockOffencePenalty;
 	type WeightInfo = ();
-	type Banned = MockBanned;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
 	type KeygenExclusionSet = MockKeygenExclusion;

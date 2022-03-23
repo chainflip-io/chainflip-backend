@@ -256,7 +256,7 @@ fn reporting_participate_in_signing_offence_should_also_ban_validator() {
 		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
 		ReputationPallet::report(Offence::ParticipateSigningFailed, &ALICE);
 
-		assert!(MockBanned::is_banned(&ALICE));
+		assert!(ReputationPallet::is_suspended_at(System::current_block_number(), &ALICE));
 	});
 }
 
@@ -267,6 +267,6 @@ fn reporting_invalid_transaction_authored_offence_should_not_ban_validator() {
 		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
 		ReputationPallet::report(Offence::InvalidTransactionAuthored, &ALICE);
 
-		assert!(!MockBanned::is_banned(&ALICE));
+		assert!(!ReputationPallet::is_suspended_at(System::current_block_number(), &ALICE));
 	});
 }
