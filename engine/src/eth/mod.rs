@@ -29,7 +29,7 @@ use crate::{
 use ethbloom::{Bloom, Input};
 use futures::{
     stream::{self},
-    Future, StreamExt, TryFutureExt,
+    StreamExt, TryFutureExt,
 };
 use pallet_cf_vaults::BlockHeightWindow;
 use secp256k1::SecretKey;
@@ -610,64 +610,6 @@ pub struct CleanBlockEvents<EventParameters: Debug> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    async fn get_block_events_for_block<EthRpc>(
-        &self,
-        header: EthNumberBloom,
-        eth_rpc: EthRpc,
-        contract_address: H160,
-        decode_log_fn: Arc<
-            Box<
-                dyn Fn(H256, RawLog) -> Result<<Self as EthObserver>::EventParameters>
-                    + Send
-                    + Sync,
-            >,
-        >,
-    ) -> BlockEvents<Self::EventParameters>
-    where
-        EthRpc: EthRpcApi + Clone + 'static + Send + Sync,
-    {
-        let block_number = header.block_number;
-        let mut contract_bloom = Bloom::default();
-        contract_bloom.accrue(Input::Raw(&contract_address.0));
-
-        // if we have logs for this block, fetch them.
-        let events = if header.logs_bloom.contains_bloom(&contract_bloom) {
-            eth_rpc
-                .get_logs(
-                    FilterBuilder::default()
-                        // from_block *and* to_block are *inclusive*
-                        .from_block(BlockNumber::Number(block_number))
-                        .to_block(BlockNumber::Number(block_number))
-                        .address(vec![contract_address])
-                        .build(),
-                )
-                .await
-                .and_then(|logs| {
-                    logs.into_iter()
-                        .map(
-                            move |unparsed_log| -> Result<
-                                EventWithCommon<Self::EventParameters>,
-                                anyhow::Error,
-                            > {
-                                EventWithCommon::<Self::EventParameters>::decode(
-                                    decode_log_fn.clone(),
-                                    unparsed_log,
-                                )
-                            },
-                        )
-                        .collect::<Result<Vec<_>>>()
-                })
-        } else {
-            // we know there won't be interesting logs, so don't fetch for events
-            Ok(vec![])
-        };
-
-        BlockEvents {
-            block_number: block_number.as_u64(),
-            events,
-        }
-    }
-
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
     async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc>(
         &self,
@@ -742,19 +684,53 @@ pub trait EthObserver {
                 let decode_log_fn = self.decode_log_closure()?;
 
                 // convert from heads to events
-                let events = past_and_fut_heads.then(move |header| {
-                    let eth_rpc = eth_rpc_c.clone();
-                    let decode_log_fn = decode_log_fn.clone();
-                    async move {
-                        self.get_block_events_for_block(
-                            header,
-                            eth_rpc,
-                            contract_address,
-                            decode_log_fn,
-                        )
-                        .await
-                    }
-                });
+                let events = past_and_fut_heads
+                    .then(move |header| {
+                        let eth_rpc = eth_rpc_c.clone();
+
+                        async move {
+                            let block_number = header.block_number;
+                            let mut contract_bloom = Bloom::default();
+                            contract_bloom.accrue(Input::Raw(&contract_address.0));
+
+                            // if we have logs for this block, fetch them.
+                            let result_logs = if header.logs_bloom.contains_bloom(&contract_bloom) {
+                                eth_rpc
+                                    .get_logs(
+                                        FilterBuilder::default()
+                                            // from_block *and* to_block are *inclusive*
+                                            .from_block(BlockNumber::Number(block_number))
+                                            .to_block(BlockNumber::Number(block_number))
+                                            .address(vec![contract_address])
+                                            .build(),
+                                    )
+                                    .await
+                            } else {
+                                // we know there won't be interesting logs, so don't fetch for events
+                                Ok(vec![])
+                            };
+
+                            (block_number.as_u64(), result_logs)
+                        }
+                    })
+                    .map(move |(block_number, result_logs)| BlockEvents {
+                        block_number,
+                        events: result_logs.and_then(|logs| {
+                            logs.into_iter()
+                                .map(
+                                    |unparsed_log| -> Result<
+                                        EventWithCommon<Self::EventParameters>,
+                                        anyhow::Error,
+                                    > {
+                                        EventWithCommon::<Self::EventParameters>::decode(
+                                            &decode_log_fn,
+                                            unparsed_log,
+                                        )
+                                    },
+                                )
+                                .collect::<Result<Vec<_>>>()
+                        }),
+                    });
 
                 return Ok(Box::pin(events));
             }
@@ -1070,7 +1046,7 @@ pub trait EthObserver {
         ).flatten()))
     }
 
-    fn decode_log_closure(&self) -> Result<Arc<DecodeLogClosure<Self::EventParameters>>>;
+    fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
     async fn handle_event<RpcClient>(
         &self,
