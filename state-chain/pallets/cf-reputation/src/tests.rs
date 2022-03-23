@@ -1,6 +1,6 @@
 use crate::{mock::*, *};
 use cf_traits::{
-	mocks::epoch_info::Mock, offline_conditions::*, EpochInfo, Heartbeat, NetworkState,
+	mocks::epoch_info::Mock, offence_reporting::*, EpochInfo, Heartbeat, NetworkState,
 };
 use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 use sp_runtime::BuildStorage;
@@ -180,93 +180,69 @@ fn should_not_be_penalised_if_submitted_heartbeat() {
 }
 
 #[test]
-fn reporting_any_offline_condition_for_unknown_validator_should_produce_error() {
+fn reporting_any_offence_for_unknown_validator_should_produce_error() {
 	new_test_ext().execute_with(|| {
+		assert_storage_noop!(ReputationPallet::report(Offence::ParticipateSigningFailed, &BOB));
+		assert_storage_noop!(ReputationPallet::report(Offence::ParticipateKeygenFailed, &BOB));
 		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::ParticipateSigningFailed,
+			Offence::TransactionFailedOnTransmission,
 			&BOB
 		));
-		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::ParticipateKeygenFailed,
-			&BOB
-		));
-		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::TransactionFailedOnTransmission,
-			&BOB
-		));
-		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::InvalidTransactionAuthored,
-			&BOB
-		));
+		assert_storage_noop!(ReputationPallet::report(Offence::InvalidTransactionAuthored, &BOB));
 	});
 }
 
 #[test]
-fn reporting_any_offline_condition_for_known_validator_without_reputation_recorded_should_produce_error(
-) {
+fn reporting_any_offence_for_known_validator_without_reputation_recorded_should_produce_error() {
 	new_test_ext().execute_with(|| {
+		assert_storage_noop!(ReputationPallet::report(Offence::ParticipateSigningFailed, &ALICE));
+		assert_storage_noop!(ReputationPallet::report(Offence::ParticipateKeygenFailed, &ALICE));
 		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::ParticipateSigningFailed,
+			Offence::TransactionFailedOnTransmission,
 			&ALICE
 		));
-		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::ParticipateKeygenFailed,
-			&ALICE
-		));
-		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::TransactionFailedOnTransmission,
-			&ALICE
-		));
-		assert_storage_noop!(ReputationPallet::report(
-			OfflineCondition::InvalidTransactionAuthored,
-			&ALICE
-		));
+		assert_storage_noop!(ReputationPallet::report(Offence::InvalidTransactionAuthored, &ALICE));
 	});
 }
 
 #[test]
-fn reporting_any_offline_condition_should_penalise_reputation_points() {
+fn reporting_any_offence_should_penalise_reputation_points() {
 	new_test_ext().execute_with(|| {
 		<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
-		let offline_test = |offline_condition: OfflineCondition,
-		                    who: <Test as frame_system::Config>::AccountId| {
-			let (penalty, _) = MockOfflinePenalty::penalty(&offline_condition);
+		let offline_test = |offence: Offence, who: <Test as frame_system::Config>::AccountId| {
+			let (penalty, _) = MockOffencePenalty::penalty(&offence);
 			let points_before = reputation_points(who);
-			ReputationPallet::report(offline_condition.clone(), &who);
+			ReputationPallet::report(offence.clone(), &who);
 			assert_eq!(
 				reputation_points(who),
 				max(points_before - penalty, ReputationPointFloorAndCeiling::get().0)
 			);
 			assert_eq!(
 				last_event(),
-				mock::Event::ReputationPallet(crate::Event::OfflineConditionPenalty(
-					who,
-					offline_condition,
-					penalty
-				))
+				mock::Event::ReputationPallet(crate::Event::OffencePenalty(who, offence, penalty))
 			);
 		};
 		<ReputationPallet as Heartbeat>::on_heartbeat_interval(dead_network());
-		offline_test(OfflineCondition::ParticipateSigningFailed, ALICE);
-		offline_test(OfflineCondition::ParticipateKeygenFailed, ALICE);
-		offline_test(OfflineCondition::InvalidTransactionAuthored, ALICE);
-		offline_test(OfflineCondition::TransactionFailedOnTransmission, ALICE);
+		offline_test(Offence::ParticipateSigningFailed, ALICE);
+		offline_test(Offence::ParticipateKeygenFailed, ALICE);
+		offline_test(Offence::InvalidTransactionAuthored, ALICE);
+		offline_test(Offence::TransactionFailedOnTransmission, ALICE);
 	});
 }
 
 #[test]
-fn reporting_participate_in_signing_offline_condition_should_penalise_reputation_points() {
+fn reporting_participate_in_signing_offence_should_penalise_reputation_points() {
 	new_test_ext().execute_with(|| {
 		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
 		let points_before = reputation_points(ALICE);
-		ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, &ALICE);
-		let (penalty, _) = MockOfflinePenalty::penalty(&OfflineCondition::ParticipateSigningFailed);
+		ReputationPallet::report(Offence::ParticipateSigningFailed, &ALICE);
+		let (penalty, _) = MockOffencePenalty::penalty(&Offence::ParticipateSigningFailed);
 		assert_eq!(reputation_points(ALICE), points_before - penalty);
 		assert_eq!(
 			last_event(),
-			mock::Event::ReputationPallet(crate::Event::OfflineConditionPenalty(
+			mock::Event::ReputationPallet(crate::Event::OffencePenalty(
 				ALICE,
-				OfflineCondition::ParticipateSigningFailed,
+				Offence::ParticipateSigningFailed,
 				penalty
 			))
 		);
@@ -274,22 +250,22 @@ fn reporting_participate_in_signing_offline_condition_should_penalise_reputation
 }
 
 #[test]
-fn reporting_participate_in_signing_offline_condition_should_also_ban_validator() {
+fn reporting_participate_in_signing_offence_should_also_ban_validator() {
 	new_test_ext().execute_with(|| {
 		// Confirm a ban is called for this validator for this condition
 		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
-		ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, &ALICE);
+		ReputationPallet::report(Offence::ParticipateSigningFailed, &ALICE);
 
 		assert!(MockBanned::is_banned(&ALICE));
 	});
 }
 
 #[test]
-fn reporting_invalid_transaction_authored_offline_condition_should_not_ban_validator() {
+fn reporting_invalid_transaction_authored_offence_should_not_ban_validator() {
 	new_test_ext().execute_with(|| {
 		// We do not ban validators for authoring an invalid transaction
 		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
-		ReputationPallet::report(OfflineCondition::InvalidTransactionAuthored, &ALICE);
+		ReputationPallet::report(Offence::InvalidTransactionAuthored, &ALICE);
 
 		assert!(!MockBanned::is_banned(&ALICE));
 	});

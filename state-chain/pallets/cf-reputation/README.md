@@ -15,13 +15,14 @@ In the event that we found a percentage, `EmergencyRotationPercentageTrigger`, o
 an Emergency Rotation is requested via `EmergencyRotation::request_emergency_rotation()`
 
 ## Terminology
+
 - Validator: A node in our network that is producing blocks.
 - Heartbeat: A term used to measure the liveness of a validator.
 - Online credits: A credit accrued by being continuously online which inturn is used to earn.
   *reputation points*.  Failing to stay *online* results in losing all of their *online credits*.
 - Reputation points: A point system which allows validators to earn reputation by being *online*.
   They lose reputation points by being meeting one of the *offline conditions*.
-- Offline conditions: One of the following conditions: *missed heartbeat*, *failed to broadcast
+- Offences: One of the following: *missed heartbeat*, *failed to broadcast
   an output*, *failed to participate in a signing ceremony*, *not enough performance credits* and
   *contradicting self during signing ceremony*.  Each condition has its associated penalty in
   reputation points.

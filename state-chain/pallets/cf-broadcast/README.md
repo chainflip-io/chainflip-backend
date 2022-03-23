@@ -39,7 +39,7 @@ This pallet has a dependency on the `Chainflip` trait for core `Chainflip` type 
 Other notable required config traits:
 
 `SignerNomination`: For nominating a pseudo-random validator from the current active set to sign the transaction.
-`OfflineReporter`: For reporting bad actors, ie. nodes that fail to sign or that author an incorrect transaction.
+`OffenceReporter`: For reporting bad actors, ie. nodes that fail to sign or that author an incorrect transaction.
 
 ### Genesis Configuration
 

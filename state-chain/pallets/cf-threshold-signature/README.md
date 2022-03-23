@@ -32,7 +32,7 @@ This pallet has a dependency on the `Chainflip` trait for core `Chainflip` type 
 Other notable required config traits:
 
 `SignerNomination`: For nominating a set of pseudo-random validators from the current active set to perform the ceremony.
-`OfflineReporter`: For reporting bad actors, ie. nodes that somehow ruined the threshold signature ceremony.
+`OffenceReporter`: For reporting bad actors, ie. nodes that somehow ruined the threshold signature ceremony.
 `KeyProvider`: Something that provides the `KeyId` of the current active threshold signing key.
 
 ### Genesis Configuration

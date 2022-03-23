@@ -16,7 +16,7 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offline_conditions::OfflineCondition, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex,
+	offence_reporting::Offence, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex,
 	EpochInfo, EpochTransitionHandler, ExecutionCondition, MissedAuthorshipSlots, QualifyValidator,
 };
 use frame_support::{
@@ -104,7 +104,7 @@ pub type Percentage = u8;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		offline_conditions::OfflineReporter, ChainflipAccount, ChainflipAccountState, KeygenStatus,
+		offence_reporting::OffenceReporter, ChainflipAccount, ChainflipAccountState, KeygenStatus,
 		VaultRotator,
 	};
 	use frame_system::pallet_prelude::*;
@@ -154,7 +154,7 @@ pub mod pallet {
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
 
 		/// For reporting missed authorship slots.
-		type OfflineReporter: OfflineReporter<ValidatorId = ValidatorIdOf<Self>>;
+		type OffenceReporter: OffenceReporter<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
@@ -227,7 +227,7 @@ pub mod pallet {
 				if let Some(id) =
 					<Self as EpochInfo>::current_validators().get(validator_index as usize)
 				{
-					T::OfflineReporter::report(OfflineCondition::MissedAuthorshipSlot, id);
+					T::OffenceReporter::report(Offence::MissedAuthorshipSlot, id);
 				} else {
 					log::error!(
 						"Invalid slot index {:?} when processing missed authorship slots.",

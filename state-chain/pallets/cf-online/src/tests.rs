@@ -1,5 +1,5 @@
 use crate::mock::*;
-use cf_traits::{offline_conditions::Banned, EpochInfo, IsOnline, KeygenExclusionSet};
+use cf_traits::{offence_reporting::Banned, EpochInfo, IsOnline, KeygenExclusionSet};
 use frame_support::assert_ok;
 
 // Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
