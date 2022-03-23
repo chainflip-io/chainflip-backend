@@ -666,8 +666,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         storage_key: StorageKey,
     ) -> Result<ValueType> {
         let value_changes = self
-            .get_from_storage_with_key::<ValueType>(block_hash, storage_key)
-            .await?;
+            .get_from_storage_with_key::<ValueType>(block_hash, storage_key.clone())
+            .await
+            .context(format!(
+                "Failed to get storage value with key: {:?} at block hash {:#x}",
+                storage_key, block_hash
+            ))?;
 
         Ok(value_changes
             .last()
@@ -685,7 +689,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 block_hash,
                 self.events_storage_key.clone(),
             )
-            .await?;
+            .await
+            .context(format!(
+                "Failed to get events for block hash {:#x}",
+                block_hash
+            ))?;
         if let Some(events) = events.last() {
             Ok(events.to_owned())
         } else {

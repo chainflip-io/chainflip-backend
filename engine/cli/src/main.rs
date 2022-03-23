@@ -124,8 +124,7 @@ async fn request_claim(
             pallet_cf_staking::Call::claim(atomic_amount, eth_address),
             logger,
         )
-        .await
-        .expect("Failed to submit claim extrinsic");
+        .await?;
 
     println!(
         "Your claim has transaction hash: `{:#x}`. Waiting for your request to be confirmed...",
@@ -137,8 +136,7 @@ async fn request_claim(
 
     let events = state_chain_client
         .watch_submitted_extrinsic(tx_hash, block_stream)
-        .await
-        .expect("Failed to watch extrinsic");
+        .await?;
 
     for event in events {
         if let state_chain_runtime::Event::EthereumThresholdSigner(
@@ -149,12 +147,7 @@ async fn request_claim(
             'outer: while let Some(result_header) = block_stream.next().await {
                 let header = result_header.expect("Failed to get a valid block header");
                 let block_hash = header.hash();
-                let events = state_chain_client
-                    .get_events(block_hash)
-                    .await
-                    .unwrap_or_else(|e| {
-                        panic!("Failed to fetch events for block: {}, {}", header.number, e)
-                    });
+                let events = state_chain_client.get_events(block_hash).await?;
                 for (_phase, event, _) in events {
                     if let state_chain_runtime::Event::Staking(
                         pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
