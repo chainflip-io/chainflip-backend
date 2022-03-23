@@ -47,7 +47,7 @@ use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
 use web3::{
     api::SubscriptionStream,
-    ethabi::{self, Address, Contract, Event, RawLog},
+    ethabi::{self, Address, Contract, Event},
     signing::{Key, SecretKeyRef},
     types::{
         Block, BlockHeader, BlockNumber, Bytes, CallRequest, Filter, FilterBuilder, Log,
