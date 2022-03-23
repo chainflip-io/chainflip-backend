@@ -1,13 +1,11 @@
-use std::{
-    convert::{TryFrom, TryInto},
-    time::Duration,
-};
+use std::{convert::TryFrom, time::Duration};
 
 use futures::{stream, Stream};
 use slog::o;
+use tokio::time::Interval;
 use web3::types::U64;
 
-use crate::{eth::EthHttpRpcApi, logging::COMPONENT_KEY};
+use crate::{common::make_periodic_tick, eth::EthHttpRpcApi, logging::COMPONENT_KEY};
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -25,53 +23,65 @@ where
     HttpRpc: EthHttpRpcApi + EthRpcApi,
 {
     struct StreamState<HttpRpc> {
-        last_block_yielded: Option<U64>,
-        last_head_fetched: Option<U64>,
+        option_last_block_yielded: Option<U64>,
+        option_last_head_fetched: Option<U64>,
         eth_http_rpc: HttpRpc,
+        poll_interval: Interval,
         logger: slog::Logger,
     }
 
     let init_state = StreamState {
-        last_block_yielded: None,
-        last_head_fetched: None,
+        option_last_block_yielded: None,
+        option_last_head_fetched: None,
         eth_http_rpc,
+        poll_interval: make_periodic_tick(poll_interval),
         logger: logger.new(o!(COMPONENT_KEY => "ETH_HTTPSafeStream")),
     };
 
     Box::pin(
         stream::unfold(init_state, move |mut state| async move {
-            let eth_http_rpc = &state.eth_http_rpc;
-            let logger = &state.logger;
-            let get_unsafe_block_number = || async {
+            let StreamState {
+                option_last_block_yielded,
+                option_last_head_fetched,
+                eth_http_rpc,
+                poll_interval,
+                logger,
+            } = &mut state;
+
+            async fn get_unsafe_block_number<HttpRpc: EthHttpRpcApi + EthRpcApi>(
+                eth_http_rpc: &HttpRpc,
+                poll_interval: &mut Interval,
+                logger: &slog::Logger,
+            ) -> U64 {
                 loop {
                     match eth_http_rpc.block_number().await {
                         Ok(block_number) => break block_number,
                         Err(err) => {
                             slog::error!(logger, "Error fetching ETH block number: {}", err);
-                            tokio::time::sleep(poll_interval).await;
+                            poll_interval.tick().await;
                         }
                     };
                 }
-            };
+            }
 
-            let last_head_fetched = if let Some(last_head_fetched) = &mut state.last_head_fetched {
+            let last_head_fetched = if let Some(last_head_fetched) = option_last_head_fetched {
                 last_head_fetched
             } else {
-                state
-                    .last_head_fetched
-                    .insert(get_unsafe_block_number().await)
+                option_last_head_fetched
+                    .insert(get_unsafe_block_number(eth_http_rpc, poll_interval, logger).await)
             };
 
             // Only request the latest block number if we are out of blocks to yield
             while {
-                if let Some(last_block_yielded) = state.last_block_yielded {
-                    *last_head_fetched <= last_block_yielded + U64::from(safety_margin)
+                if let Some(last_block_yielded) = option_last_block_yielded {
+                    *last_head_fetched <= *last_block_yielded + U64::from(safety_margin)
                 } else {
                     *last_head_fetched < U64::from(safety_margin)
                 }
             } {
-                tokio::time::sleep(poll_interval).await;
-                let unsafe_block_number = get_unsafe_block_number().await;
+                poll_interval.tick().await;
+                let unsafe_block_number =
+                    get_unsafe_block_number(eth_http_rpc, poll_interval, logger).await;
 
                 // Fetched unsafe_block_number is more than `safety_margin` blocks behind the last fetched ETH block number (last_head_fetched)
                 if unsafe_block_number + safety_margin < *last_head_fetched {
@@ -81,9 +91,9 @@ where
                 *last_head_fetched = unsafe_block_number;
             }
 
-            let next_block_to_yield = if let Some(last_block_yielded) = state.last_block_yielded {
+            let next_block_to_yield = if let Some(last_block_yielded) = option_last_block_yielded {
                 // the last block yielded was safe, so the next is +1
-                last_block_yielded + 1
+                *last_block_yielded + 1
             } else {
                 last_head_fetched
                     .checked_sub(U64::from(safety_margin))
@@ -91,18 +101,18 @@ where
             };
 
             let block = loop {
-                match state.eth_http_rpc.block(next_block_to_yield).await {
+                match eth_http_rpc.block(next_block_to_yield).await {
                     Ok(block) => {
                         break block;
                     }
                     Err(err) => {
-                        slog::error!(state.logger, "Error fetching ETH block: {}", err);
-                        tokio::time::sleep(poll_interval).await;
+                        slog::error!(logger, "Error fetching ETH block: {}", err);
+                        poll_interval.tick().await;
                     }
                 }
             };
             let number_bloom = EthNumberBloom::try_from(block).ok()?;
-            state.last_block_yielded = Some(number_bloom.block_number);
+            *option_last_block_yielded = Some(number_bloom.block_number);
             Some((number_bloom, state))
         })
         .fuse(),
