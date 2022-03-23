@@ -115,10 +115,6 @@
     "aura": "[u8; 32]",
     "grandpa": "[u8; 32]"
   },
-  "Liveness": {
-    "last_heartbeat": "BlockNumber",
-    "banned_until": "BlockNumber"
-  },
   "LookupSource": "MultiAddress",
   "NetworkState": {
     "online": "u32",
