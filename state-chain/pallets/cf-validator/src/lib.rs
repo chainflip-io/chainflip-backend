@@ -688,6 +688,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	// TODO: This logic is currently duplicated in the CLI. Using an RPC could fix this
+	// https://github.com/chainflip-io/chainflip-backend/issues/1462
 	fn is_auction_phase() -> bool {
 		if RotationPhase::<T>::get() != RotationStatus::Idle {
 			return true

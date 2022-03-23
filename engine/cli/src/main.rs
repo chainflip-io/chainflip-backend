@@ -99,6 +99,7 @@ async fn request_claim(
 
     // Are we in a valid Auction phase
     // TODO: Deduplicate this logic (and getting) by using an RPC directly to the is_auction_phase call in the validator pallet
+    // https://github.com/chainflip-io/chainflip-backend/issues/1462
     {
         // Check that we actually can claim atm.
         let block = block_stream
