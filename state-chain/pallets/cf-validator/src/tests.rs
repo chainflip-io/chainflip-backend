@@ -554,7 +554,7 @@ fn test_missing_author_punishment() {
 		MockMissedAuthorshipSlots::set(vec![1 + offset, 2 + offset]);
 		move_forward_blocks(1);
 		assert_eq!(
-			MockOfflineReporter::get_reported(),
+			MockOffenceReporter::get_reported(),
 			ValidatorPallet::validators().get(1..=2).unwrap().to_vec()
 		)
 	})

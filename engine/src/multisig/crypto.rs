@@ -139,7 +139,7 @@ impl Scalar {
     }
 
     pub fn from_usize(a: usize) -> Self {
-        Scalar(ECScalar::from_bigint(&BigInt::from(a as u32)))
+        Scalar(ECScalar::from_bigint(&BigInt::from(a as u64)))
     }
 
     pub fn from_bytes(x: &[u8; 32]) -> Self {

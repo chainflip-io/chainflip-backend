@@ -21,7 +21,7 @@ use sp_std::vec::Vec;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		offline_conditions::Banned, Chainflip, EpochInfo, Heartbeat, IsOnline, KeygenExclusionSet,
+		offence_reporting::Banned, Chainflip, EpochInfo, Heartbeat, IsOnline, KeygenExclusionSet,
 		NetworkState, QualifyValidator,
 	};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;

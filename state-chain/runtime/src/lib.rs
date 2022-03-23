@@ -44,12 +44,12 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::{offline_conditions::ReputationPoints, ChainflipAccountData};
+use cf_traits::{offence_reporting::ReputationPoints, ChainflipAccountData};
 pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	OfflinePenalty,
+	OffencePenalty,
 };
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
@@ -164,7 +164,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
-	type OfflineReporter = Reputation;
+	type OffenceReporter = Reputation;
 }
 
 impl pallet_cf_environment::Config for Runtime {
@@ -173,7 +173,7 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 parameter_types! {
-	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD;
+	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD_BLOCKS;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -181,7 +181,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Chain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
-	type OfflineReporter = Reputation;
+	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
@@ -430,7 +430,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
-	type Penalty = OfflinePenalty;
+	type Penalty = OffencePenalty;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type Banned = pallet_cf_online::Pallet<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
@@ -459,7 +459,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type KeyProvider = EthereumVault;
-	type OfflineReporter = Reputation;
+	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
@@ -480,7 +480,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
 	type SignerNomination = chainflip::RandomSignerNomination;
-	type OfflineReporter = Reputation;
+	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type SigningTimeout = EthereumSigningTimeout;

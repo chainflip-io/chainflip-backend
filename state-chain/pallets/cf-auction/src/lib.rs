@@ -195,17 +195,11 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, Error<T>> {
 		let (low, high) = range;
-
-		if low >= high || low < T::MinValidators::get() {
-			return Err(Error::<T>::InvalidRange)
-		}
-
+		ensure!(high >= low && low >= T::MinValidators::get(), Error::<T>::InvalidRange);
 		let old = ActiveValidatorSizeRange::<T>::get();
-		if old == range {
-			return Err(Error::<T>::InvalidRange)
+		if old != range {
+			ActiveValidatorSizeRange::<T>::put(range);
 		}
-
-		ActiveValidatorSizeRange::<T>::put(range);
 		Ok(old)
 	}
 }

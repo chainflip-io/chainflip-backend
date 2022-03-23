@@ -580,6 +580,9 @@ impl<T: Config> Pallet<T> {
 		// Ensure we are claiming something
 		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
 
+		// Ensure that we're not claiming to the zero address
+		ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
+
 		// No new claim requests can be processed if we're currently in an auction phase.
 		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 

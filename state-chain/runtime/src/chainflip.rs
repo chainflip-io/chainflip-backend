@@ -16,7 +16,7 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	offline_conditions::{OfflineCondition, ReputationPoints},
+	offence_reporting::{Offence, ReputationPoints},
 	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	RewardsDistribution, StakeHandler, StakeTransfer,
 };
@@ -178,16 +178,16 @@ impl cf_traits::WaivedFees for WaivedFees {
 	}
 }
 
-pub struct OfflinePenalty;
+pub struct OffencePenalty;
 
-impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
-	fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool) {
+impl cf_traits::offence_reporting::OffencePenalty for OffencePenalty {
+	fn penalty(condition: &Offence) -> (ReputationPoints, bool) {
 		match condition {
-			OfflineCondition::ParticipateSigningFailed => (15, true),
-			OfflineCondition::ParticipateKeygenFailed => (15, true),
-			OfflineCondition::InvalidTransactionAuthored => (15, false),
-			OfflineCondition::TransactionFailedOnTransmission => (15, false),
-			OfflineCondition::MissedAuthorshipSlot => (15, true),
+			Offence::ParticipateSigningFailed => (15, true),
+			Offence::ParticipateKeygenFailed => (15, true),
+			Offence::InvalidTransactionAuthored => (15, false),
+			Offence::TransactionFailedOnTransmission => (15, false),
+			Offence::MissedAuthorshipSlot => (15, true),
 		}
 	}
 }
