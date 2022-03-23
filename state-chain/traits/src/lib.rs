@@ -567,16 +567,6 @@ pub trait QualifyValidator {
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// A *not* qualified validator
-pub struct NotQualifiedValidator<T>(PhantomData<T>);
-
-impl<T> QualifyValidator for NotQualifiedValidator<T> {
-	type ValidatorId = T;
-	fn is_qualified(_: &Self::ValidatorId) -> bool {
-		true
-	}
-}
-
 /// Qualify if the validator has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
