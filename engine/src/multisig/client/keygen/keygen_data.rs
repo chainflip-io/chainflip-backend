@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +50,7 @@ pub type SecretShare3 = ShamirShare;
 
 /// List of parties blamed for sending invalid secret shares
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Complaints4(pub Vec<usize>);
+pub struct Complaints4(pub BTreeSet<usize>);
 
 pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
 
