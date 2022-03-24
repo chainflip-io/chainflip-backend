@@ -790,6 +790,12 @@ impl<T: Config> Pallet<T> {
 			EpochHistory::<T>::activate_epoch(validator, new_epoch);
 		}
 
+		// Bound the validator
+		for validator in new_validators {
+			let bond = EpochHistory::<T>::active_bond(validator);
+			T::Bonder::update_validator_bond(validator, bond);
+		}
+
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
 	}
@@ -797,13 +803,6 @@ impl<T: Config> Pallet<T> {
 	fn expire_epoch(epoch: EpochIndex) {
 		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
-			let bond = EpochHistory::<T>::active_bond(validator);
-			T::Bonder::update_validator_bond(validator, bond);
-		}
-	}
-
-	pub fn bond_validators_for_new_epoch(validators: &[ValidatorIdOf<T>]) {
-		for validator in validators {
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
 		}

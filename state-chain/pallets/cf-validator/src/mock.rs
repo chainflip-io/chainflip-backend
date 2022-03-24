@@ -283,9 +283,7 @@ impl Bonding for MockBonder {
 
 	type Amount = Amount;
 
-	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {
-		todo!()
-	}
+	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
 impl Config for Test {

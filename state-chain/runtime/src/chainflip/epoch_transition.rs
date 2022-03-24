@@ -21,8 +21,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Emissions as BlockEmissions>::calculate_block_emissions();
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Update the the bond of all validators for the new epoch
-		Validator::bond_validators_for_new_epoch(new_validators);
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(
 			old_validators,
