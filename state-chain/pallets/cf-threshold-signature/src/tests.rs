@@ -236,7 +236,7 @@ fn fail_path_with_timeout() {
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 10;
 			assert!(!MockCallback::has_executed(request_id));
 			// We expect two retries. 1 inital + the one over reports from the CFE
-			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 2);
+			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 
 			// The offender has not yet been reported.
 			assert!(MockOffenceReporter::get_reported().is_empty());
@@ -288,7 +288,6 @@ fn fail_path_no_timeout() {
 			// Request is still in pending state but scheduled for retry.
 			let request_context =
 				MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-			assert!(request_context.retry_scheduled);
 
 			// Account 1 has 4 blame votes against it.
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 4)]));
@@ -298,7 +297,7 @@ fn fail_path_no_timeout() {
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
 			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() + 10;
 			assert!(!MockCallback::has_executed(request_id));
-			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
+			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 0);
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
 
 			// The offender has not yet been reported.
@@ -340,9 +339,7 @@ fn test_not_enough_signers_for_threshold() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let request_context =
-				MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-			assert!(request_context.retry_scheduled);
+			let _ = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 		});
@@ -427,7 +424,6 @@ mod failure_reporting {
 	) -> CeremonyContext<Test, Instance1> {
 		MockEpochInfo::set_validators(Vec::from_iter(validator_set));
 		CeremonyContext::<Test, Instance1> {
-			retry_scheduled: false,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,

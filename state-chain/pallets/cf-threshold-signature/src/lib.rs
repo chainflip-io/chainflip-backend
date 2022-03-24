@@ -68,8 +68,6 @@ pub mod pallet {
 	/// Metadata for a pending threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
-		/// Whether or not this request has been scheduled to be retried.
-		pub retry_scheduled: bool,
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each validator has received.
@@ -433,8 +431,6 @@ pub mod pallet {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
-						Self::schedule_retry(id, T::ThresholdFailureTimeout::get());
-
 						Ok(())
 					})
 			})?;
@@ -513,7 +509,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					retry_scheduled: false,
 					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
 					blame_counts: Default::default(),
 					participant_count: nominees.len() as u32,
@@ -535,7 +530,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					retry_scheduled: true,
 					remaining_respondents: Default::default(),
 					blame_counts: Default::default(),
 					participant_count: 0,
