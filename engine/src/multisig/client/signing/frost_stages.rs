@@ -108,11 +108,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
             Ok(comms) => comms,
             Err(abort_reason) => {
                 return abort_reason.to_stage_result_error("initial commitments");
-                // return broadcast_failure_to_stage_result_error(
-                //     blamed_parties,
-                //     abort_reason,
-                //     "initial commitments",
-                // );
             }
         };
 
