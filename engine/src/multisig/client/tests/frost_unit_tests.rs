@@ -340,7 +340,7 @@ async fn should_ignore_rts_if_not_participating() {
 }
 
 #[tokio::test]
-async fn should_ignore_rts_with_incsufficient_number_of_signers() {
+async fn should_ignore_rts_with_insufficient_number_of_signers() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let [test_node_id] = signing_ceremony.select_account_ids();
@@ -707,7 +707,6 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     signing_ceremony.complete().await;
 }
 
-// TODO: Come back and do this such that it signs with all parties
 #[tokio::test]
 async fn should_sign_with_all_parties() {
     let (key_id, _messages, nodes) = run_keygen(
@@ -738,15 +737,10 @@ async fn should_sign_with_all_parties() {
 
 mod timeout {
 
-    // TODO:
-    // - Same as the tests for `offline_party_should_be_reported_*`, but the nodes are reported if the majority can't agree on any one value
-    // (even if all values are `Some(...)` such as when a node does an inconsistent broadcast)
-    // - If timeout before the key is ready, the ceremony should be ignored, but need to ensure that
-    //    we return a response
-
     use super::*;
 
     /* TODO: Refactor once feature re-enabled
+    // [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
 
     // If timeout during an "unauthorised" ceremony, we report the nodes that attempted to start it
     // (i.e. whoever send stage data for the ceremony)
@@ -788,9 +782,9 @@ mod timeout {
         // ======================
 
         // The following tests cover:
-        // If timeout during a regular stage, but the majority of nodes can agree on all values,
+        // If timeout during a regular (broadcast) stage, but the majority of nodes can agree on all values,
         // we proceed with the ceremony and use the data received by the majority. If majority of nodes
-        // agree on a party timing out in the following stage (broadcast verification), the party gets reported
+        // agree on a party timing out in the following broadcast verification stage, the party gets reported
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage1() {
@@ -975,24 +969,24 @@ mod timeout {
         // ======================
 
         // The following tests cover:
-        // If timeout during a broadcast verification stage, and we don't have enough data to
-        // recover some of the parties messages, we report those parties (note that we can't report
-        // the parties that were responsible for the timeout in the first place as we would need
-        // another round of "voting" which can also timeout, and then we are back where we started)
+        // Timeout during both the broadcast & broadcast verification stages means that
+        // we don't have enough data to recover:
+        // The parties that timeout during the broadcast stage will be reported,
+        // but the parties the timeout during the verification stage will not
+        // because that would need another round of "voting" which can also timeout.
 
         #[tokio::test]
-        async fn report_if_cannot_agree_on_values_stage_2() {
+        async fn report_if_insufficient_messages_stage_2() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            // bad party 1 will timeout during a broadcast verification stage. It should be reported
+            // bad party 1 will timeout during a broadcast stage. It should be reported
             // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
-            // (Ideally it should be reported, but we can't due to the limitations of the protocol)
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
             let messages = signing_ceremony.request().await;
 
-            // bad party one times out here
+            // bad party 1 times out here
             let messages = signing_ceremony
                 .run_stage_with_non_sender::<frost::VerifyComm2, _, _>(
                     messages,
@@ -1000,7 +994,7 @@ mod timeout {
                 )
                 .await;
 
-            // bad party two times out here (NB: They are different parties)
+            // bad party 2 times out here (NB: They are different parties)
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
@@ -1009,12 +1003,11 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_cannot_agree_on_values_stage_4() {
+        async fn report_if_insufficient_messages_stage_4() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            // bad party 1 will timeout during a broadcast verification stage. It should be reported
+            // bad party 1 will timeout during a broadcast stage. It should be reported
             // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
-            // (Ideally it should be reported, but we can't due to the limitations of the protocol
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
@@ -1027,7 +1020,7 @@ mod timeout {
                 frost::LocalSig3
             );
 
-            // bad party one times out here
+            // bad party 1 times out here
             let messages = signing_ceremony
                 .run_stage_with_non_sender::<frost::VerifyLocalSig4, _, _>(
                     messages,
@@ -1035,7 +1028,7 @@ mod timeout {
                 )
                 .await;
 
-            // bad party two times out here (NB: They are different parties)
+            // bad party 2 times out here (NB: They are different parties)
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony

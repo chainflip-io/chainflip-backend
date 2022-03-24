@@ -225,7 +225,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
 /// time and during the blaming stage, the ceremony is aborted with these
 /// parties reported
 #[tokio::test]
-async fn should_report_on_invalid_blame_response() {
+async fn should_handle_invalid_blame_response6() {
     let mut ceremony = KeygenCeremonyRunner::new(
         new_nodes(
             ACCOUNT_IDS.iter().cloned(),
@@ -572,7 +572,7 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 // If one or more parties send invalid commitments, the ceremony should be aborted.
 // Fail on `validate_commitments` during `VerifyCommitmentsBroadcast2`.
 #[tokio::test]
-async fn should_handle_invalid_commitments() {
+async fn should_handle_invalid_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new(
         new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
         1,
@@ -754,9 +754,6 @@ mod timeout {
 
     use super::*;
 
-    // What should be tested w.r.t timeouts:
-
-    // 1. [todo] If timeout during a broadcast verification stage, and we have enough data, we can recover
     // TODO: more test cases
 
     mod during_broadcast_verification_stage {

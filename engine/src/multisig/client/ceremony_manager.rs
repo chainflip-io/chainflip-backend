@@ -76,14 +76,13 @@ impl CeremonyManager {
             if let Some(result) = state.try_expiring() {
                 // NOTE: we only respond (and consume the ceremony id)
                 //  if we have received a ceremony request from
-                // SC (i.e. the ceremony is "authorised")
-                // TODO: report nodes via a different extrinsic instead
+                // SC (i.e. the ceremony is "authorized")
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized() {
                     self.process_signing_ceremony_outcome(*ceremony_id, result);
                 } else {
+                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
-
                     self.signing_states.remove(ceremony_id);
                 }
             }
@@ -102,12 +101,12 @@ impl CeremonyManager {
                 // NOTE: we only consume the ceremony id
                 // if we have received a ceremony request from
                 // SC (i.e. the ceremony is "authorised")
-                // TODO: report nodes via a different extrinsic instead
                 if state.is_authorized() {
                     return self.process_keygen_ceremony_outcome(*ceremony_id, result).map(|key| {
                         (*ceremony_id, key)
                     })
                 } else {
+                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.keygen_states.remove(ceremony_id);
                 }
