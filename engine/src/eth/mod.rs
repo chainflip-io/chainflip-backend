@@ -611,7 +611,7 @@ pub struct CleanBlockEvents<EventParameters: Debug> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    fn contract_name(&self) -> String;
+    fn contract_name(&self) -> &'static str;
 
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
     async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc>(
@@ -848,7 +848,7 @@ pub trait EthObserver {
             },
         };
 
-        fn log_when_stream_behind(
+        fn log_when_yielding(
             yielding_stream_state: &ProtocolState,
             non_yielding_stream_state: &ProtocolState,
             merged_stream_state: &MergedStreamState,
@@ -946,7 +946,7 @@ pub trait EthObserver {
                 match block_events.events {
                     Ok(events) => {
                         // yield, if we are at high enough block number
-                        log_when_stream_behind(
+                        log_when_yielding(
                             protocol_state,
                             other_protocol_state,
                             merged_stream_state,
@@ -972,7 +972,7 @@ pub trait EthObserver {
                                     // we want to yield this one :)
                                     match block_events.events {
                                         Ok(events) => {
-                                            log_when_stream_behind(
+                                            log_when_yielding(
                                                 other_protocol_state,
                                                 protocol_state,
                                                 merged_stream_state,
