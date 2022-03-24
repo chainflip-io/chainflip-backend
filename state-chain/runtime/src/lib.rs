@@ -17,7 +17,6 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use migrations::DeleteRewardsPallet;
 pub use pallet_cf_environment::cfe::CfeSettings;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -548,7 +547,15 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
-	migrations::VersionedMigration<DeleteRewardsPallet, 112>,
+	// Note: the following run *before* all pallet migrations.
+	migrations::VersionedMigration<
+		(
+			migrations::DeleteRewardsPallet,
+			migrations::UnifyCeremonyIds,
+			migrations::refactor_offences::Migration,
+		),
+		112,
+	>,
 >;
 
 impl_runtime_apis! {
