@@ -1318,4 +1318,199 @@ mod tests {
 				});
 		}
 	}
+
+	mod bond {
+		use super::*;
+		use cf_traits::{EpochInfo, HistoricalEpoch, StakeTransfer};
+		use frame_system::RawOrigin;
+		use pallet_cf_validator::EpochHistory;
+		use state_chain_runtime::Validator;
+
+		// Helper function that checks the epochs of a validator against a list of expected
+		// epochs
+		fn ensure_epoch_activity(account: &AccountId, epochs: Vec<EpochIndex>) {
+			let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(account);
+			assert_eq!(epochs.len(), active_epochs.len(), "different list size!");
+			for epoch in epochs {
+				assert!(active_epochs.contains(&epoch), "missing epoch!");
+			}
+		}
+
+		// This should be the normal scenario. We define a network with a smaller active set size
+		// than nodes. During the test, the nodes bid each other out and expect an increase of the
+		// MAB.
+		#[test]
+		fn ensure_right_bond_during_epoch_tranisition() {
+			const EPOCH_BLOCKS: BlockNumber = 100;
+			const ACTIVE_SET_SIZE: u32 = 3;
+			const GENESIS_BALANCE: FlipBalance = 1;
+			const BOND_EPOCH_2: u128 = 31;
+			const BOND_EPOCH_3: u128 = 100;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.accounts(vec![
+					(AccountId::from(ALICE), GENESIS_BALANCE),
+					(AccountId::from(BOB), GENESIS_BALANCE),
+					(AccountId::from(CHARLIE), GENESIS_BALANCE),
+				])
+				.max_validators(ACTIVE_SET_SIZE)
+				.build()
+				.execute_with(|| {
+					let (mut testnet, nodes) =
+						network::Network::create(5_u8, &Validator::current_validators());
+					// Define 5 nodes
+					let node_1 = nodes.get(0).unwrap();
+					let node_2 = nodes.get(1).unwrap();
+					let node_3 = nodes.get(2).unwrap();
+					let node_4 = nodes.get(3).unwrap();
+					let node_5 = nodes.get(4).unwrap();
+
+					// Stake the nodes
+					testnet.stake_manager_contract.stake(node_1.clone(), 100);
+					testnet.stake_manager_contract.stake(node_2.clone(), 50);
+					testnet.stake_manager_contract.stake(node_3.clone(), 30);
+					testnet.stake_manager_contract.stake(node_4.clone(), 20);
+					testnet.stake_manager_contract.stake(node_5.clone(), 10);
+
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					// Expect the MAB to be the genesis balance
+					assert_eq!(1, Validator::bond());
+
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					// Current epoch bond is 31
+					assert_eq!(BOND_EPOCH_2, Validator::bond());
+
+					let current_validators = Validator::current_validators();
+					// Expect 3, 2 and 1 in the active set
+					assert!(current_validators.contains(node_1));
+					assert!(current_validators.contains(node_2));
+					assert!(current_validators.contains(node_3));
+
+					// Stake nodes 4/5 and bid out 2/3
+					testnet.stake_manager_contract.stake(node_4.clone(), 100);
+					testnet.stake_manager_contract.stake(node_5.clone(), 100);
+
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
+
+					// Bond has increased to 100
+					assert_eq!(BOND_EPOCH_3, Validator::bond());
+
+					let current_validators = Validator::current_validators();
+					// Expect 1, 4 and 5 in the active set
+					assert!(current_validators.contains(node_1));
+					assert!(current_validators.contains(node_4));
+					assert!(current_validators.contains(node_5));
+
+					// Check activity in epochs
+					ensure_epoch_activity(node_1, vec![2, 3]);
+					ensure_epoch_activity(node_2, vec![2]);
+					ensure_epoch_activity(node_3, vec![2]);
+					ensure_epoch_activity(node_4, vec![3]);
+					ensure_epoch_activity(node_5, vec![3]);
+
+					// We expect node_1 to be bonded for the epoch with the higher bond
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_1));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_2));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_3));
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_4));
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_5));
+				});
+		}
+
+		// In this scenario, we test the case when the MAB drops from one epoch to another. We
+		// expect the validators to be bonded for the epoch with the highest bond in which they are
+		// currently active. To simulate this scenario we have to extend the set size during the
+		// test to simulate a drop in the MAB.
+		#[test]
+		fn decreasing_mab_scenario() {
+			const EPOCH_BLOCKS: BlockNumber = 100;
+			const ACTIVE_SET_SIZE: u32 = 3;
+			const GENESIS_BALANCE: FlipBalance = 1;
+			const BOND_EPOCH_2: u128 = 31;
+			const BOND_EPOCH_3: u128 = 6;
+			super::genesis::default()
+				.blocks_per_epoch(EPOCH_BLOCKS)
+				.accounts(vec![
+					(AccountId::from(ALICE), GENESIS_BALANCE),
+					(AccountId::from(BOB), GENESIS_BALANCE),
+					(AccountId::from(CHARLIE), GENESIS_BALANCE),
+				])
+				.max_validators(ACTIVE_SET_SIZE)
+				.build()
+				.execute_with(|| {
+					let (mut testnet, nodes) =
+						network::Network::create(5_u8, &Validator::current_validators());
+
+					// Define 5 nodes
+					let node_1 = nodes.get(0).unwrap();
+					let node_2 = nodes.get(1).unwrap();
+					let node_3 = nodes.get(2).unwrap();
+					let node_4 = nodes.get(3).unwrap();
+					let node_5 = nodes.get(4).unwrap();
+
+					// Stake the first 3 nodes to be in the active set
+					testnet.stake_manager_contract.stake(node_1.clone(), 100);
+					testnet.stake_manager_contract.stake(node_2.clone(), 50);
+					testnet.stake_manager_contract.stake(node_3.clone(), 30);
+
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+					// Expect the MAB to be the genesis balance
+					assert_eq!(1, Validator::bond());
+
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					// Current epoch bond is 31
+					assert_eq!(BOND_EPOCH_2, Validator::bond());
+					let current_validators = Validator::current_validators();
+					// Expect the staked nodes to be in the active set
+					assert!(current_validators.contains(node_1));
+					assert!(current_validators.contains(node_2));
+					assert!(current_validators.contains(node_3));
+
+					// Increase the active set size to simulate an decrease of the MAB
+					assert_ok!(
+						Auction::set_active_validator_range(RawOrigin::Root.into(), (4, 5),)
+					);
+
+					// Stake nodes 4 and 5 with a lower amount then the current MAB
+					testnet.stake_manager_contract.stake(node_4.clone(), 5);
+					testnet.stake_manager_contract.stake(node_5.clone(), 5);
+
+					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
+					// Bond has decreased from 31 to 6
+					assert_eq!(BOND_EPOCH_3, Validator::bond());
+
+					let current_validators = Validator::current_validators();
+					// Expect all nodes to be in the active set
+					assert!(current_validators.contains(node_1));
+					assert!(current_validators.contains(node_2));
+					assert!(current_validators.contains(node_3));
+					assert!(current_validators.contains(node_4));
+					assert!(current_validators.contains(node_5));
+
+					// Expect Node 1, 2 and 3 to be active in 2 epochs
+					ensure_epoch_activity(node_1, vec![2, 3]);
+					ensure_epoch_activity(node_2, vec![2, 3]);
+					ensure_epoch_activity(node_3, vec![2, 3]);
+
+					// Expect node 3 and 4 to be active in 1 epoch
+					ensure_epoch_activity(node_4, vec![3]);
+					ensure_epoch_activity(node_5, vec![3]);
+
+					// Expect node 1, 2 and 3 to be be bonded for epoch 2
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_1));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_2));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_3));
+
+					// Expect node 1 and 2 to bonded for epoch 3
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_4));
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_5));
+				});
+		}
+	}
 }
