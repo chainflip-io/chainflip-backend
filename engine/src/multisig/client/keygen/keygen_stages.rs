@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::multisig::client::{self, KeygenResultInfo};
@@ -11,6 +11,7 @@ use client::{
     },
     keygen, ThresholdParameters,
 };
+use itertools::Itertools;
 
 use crate::multisig::crypto::{BigInt, BigIntConverter, KeyShare};
 
@@ -26,6 +27,7 @@ use keygen::{
     },
 };
 
+use super::keygen_frost::ShamirShare;
 use super::KeygenOptions;
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
 
@@ -231,7 +233,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
         // at all) without us being able to prove that. Because of that, we
         // can't simply terminate our protocol here.
 
-        let mut bad_parties = vec![];
+        let mut bad_parties = BTreeSet::new();
         let verified_shares: HashMap<usize, Self::Message> = incoming_shares
             .into_iter()
             .filter_map(|(sender_idx, share_opt)| {
@@ -245,7 +247,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
                             sender_idx
                         );
 
-                        bad_parties.push(sender_idx);
+                        bad_parties.insert(sender_idx);
                         None
                     }
                 } else {
@@ -255,7 +257,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
                         sender_idx
                     );
 
-                    bad_parties.push(sender_idx);
+                    bad_parties.insert(sender_idx);
                     None
                 }
             })
@@ -284,7 +286,7 @@ struct ComplaintsStage4 {
     /// Shares sent to us from other parties (secret)
     shares: IncomingShares,
     outgoing_shares: OutgoingShares,
-    complaints: Vec<usize>,
+    complaints: BTreeSet<usize>,
 }
 
 derive_display_as_type_name!(ComplaintsStage4);
@@ -368,24 +370,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
         let idxs_to_report: Vec<_> = verified_complaints
             .iter()
             .filter_map(|(idx_from, Complaints4(blamed_idxs))| {
-                // Ensure that complaints contain valid, non-duplicate indexes
-                let deduped_idxs = {
-                    let mut idxs = blamed_idxs.clone();
-                    idxs.sort_unstable();
-                    idxs.dedup();
-                    idxs
-                };
-
-                let has_duplicates = deduped_idxs.len() != blamed_idxs.len();
-
-                if has_duplicates {
-                    slog::warn!(
-                        self.common.logger,
-                        "Complaint had duplicates: {}",
-                        format_iterator(blamed_idxs)
-                    );
-                }
-
                 let has_invalid_idxs = !blamed_idxs.iter().all(|idx_blamed| {
                     if self.common.is_idx_valid(*idx_blamed) {
                         true
@@ -399,7 +383,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
                     }
                 });
 
-                if has_duplicates || has_invalid_idxs {
+                if has_invalid_idxs {
                     Some(*idx_from)
                 } else {
                     None
@@ -522,6 +506,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
     ) -> StageResult<KeygenData, KeygenResultInfo> {
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
+            complaints: self.complaints,
             blame_responses,
             shares: self.shares,
             commitments: self.commitments,
@@ -535,6 +520,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
 
 struct VerifyBlameResponsesBroadcastStage7 {
     common: CeremonyCommon,
+    complaints: HashMap<usize, Complaints4>,
     // Blame responses received from other parties in the previous communication round
     blame_responses: HashMap<usize, Option<BlameResponse6>>,
     shares: IncomingShares,
@@ -542,6 +528,80 @@ struct VerifyBlameResponsesBroadcastStage7 {
 }
 
 derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7);
+
+/// Checks for sender_idx that their blame response contains exactly
+/// a share for each party that blamed them
+fn is_blame_response_complete(
+    sender_idx: usize,
+    response: &BlameResponse6,
+    complaints: &HashMap<usize, Complaints4>,
+) -> bool {
+    let expected_idxs_iter = complaints
+        .iter()
+        .filter_map(|(blamer_idx, Complaints4(blamed_idxs))| {
+            if blamed_idxs.contains(&sender_idx) {
+                Some(blamer_idx)
+            } else {
+                None
+            }
+        })
+        .sorted();
+
+    // Note: the keys in BTreeMap are already sorted
+    Iterator::eq(response.0.keys(), expected_idxs_iter)
+}
+
+impl VerifyBlameResponsesBroadcastStage7 {
+    /// Check that blame responses contain all (and only) the requested shares, and that all the shares are valid.
+    /// If all responses are valid, returns shares destined for us along with the corresponding index. Otherwise,
+    /// returns a list of party indexes who provided invalid responses.
+    fn check_blame_responses(
+        &self,
+        blame_responses: HashMap<usize, BlameResponse6>,
+    ) -> Result<HashMap<usize, ShamirShare>, Vec<usize>> {
+        let (shares_for_us, bad_parties): (Vec<_>, Vec<_>) = blame_responses
+            .iter()
+            .map(|(sender_idx, response)| {
+                if !is_blame_response_complete(*sender_idx, response, &self.complaints) {
+                    slog::warn!(
+                        self.common.logger,
+                        "Incomplete blame response from party: {}",
+                        sender_idx
+                    );
+
+                    return Err(sender_idx);
+                }
+
+                if !response.0.iter().all(|(dest_idx, share)| {
+                    verify_share(share, &self.commitments[sender_idx], *dest_idx)
+                }) {
+                    slog::warn!(
+                        self.common.logger,
+                        "Invalid secret share in a blame response from party: {}",
+                        sender_idx
+                    );
+
+                    return Err(sender_idx);
+                }
+
+                Ok((*sender_idx, response.0.get(&self.common.own_idx)))
+            })
+            .partition_result();
+
+        if bad_parties.is_empty() {
+            let shares_for_us = shares_for_us
+                .into_iter()
+                .filter_map(|(sender_idx, opt_share)| {
+                    opt_share.map(|share| (sender_idx, share.clone()))
+                })
+                .collect();
+
+            Ok(shares_for_us)
+        } else {
+            Err(bad_parties)
+        }
+    }
+}
 
 impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameResponsesBroadcastStage7 {
     type Message = VerifyBlameResponses7;
@@ -575,40 +635,21 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
             }
         };
 
-        let mut bad_parties = vec![];
-
-        for (sender_idx, response) in verified_responses {
-            for (dest_idx, share) in response.0 {
-                let commitment = &self.commitments[&sender_idx];
-
-                if verify_share(&share, commitment, dest_idx) {
-                    // if the share is meant for us, save it
-                    if dest_idx == self.common.own_idx {
-                        self.shares.0.insert(sender_idx, share);
-                    }
-                } else {
-                    slog::warn!(
-                        self.common.logger,
-                        "[{}] Invalid secret share in a blame response from party: {}",
-                        self.common.own_idx,
-                        sender_idx
-                    );
-
-                    bad_parties.push(sender_idx);
+        match self.check_blame_responses(verified_responses) {
+            Ok(shares_for_us) => {
+                for (sender_idx, share) in shares_for_us {
+                    self.shares.0.insert(sender_idx, share);
                 }
+
+                let keygen_result_info =
+                    compute_keygen_result_info(self.common, self.shares, &self.commitments);
+
+                StageResult::Done(keygen_result_info)
             }
-        }
-
-        if bad_parties.is_empty() {
-            let keygen_result_info =
-                compute_keygen_result_info(self.common, self.shares, &self.commitments);
-
-            StageResult::Done(keygen_result_info)
-        } else {
-            StageResult::Error(
+            Err(bad_parties) => StageResult::Error(
                 bad_parties,
                 anyhow::Error::msg("Invalid secret share in a blame response"),
-            )
+            ),
         }
     }
 }

@@ -68,7 +68,7 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-cf_traits::impl_mock_offline_conditions!(u64);
+cf_traits::impl_mock_offence_reporting!(u64);
 
 impl Chainflip for MockRuntime {
 	type KeyId = Vec<u8>;
@@ -151,7 +151,7 @@ parameter_types! {
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Chain = MockEthereum;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();

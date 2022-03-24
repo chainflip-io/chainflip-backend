@@ -256,7 +256,7 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
-cf_traits::impl_mock_offline_conditions!(ValidatorId);
+cf_traits::impl_mock_offence_reporting!(ValidatorId);
 
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
@@ -287,7 +287,7 @@ impl Config for Test {
 	type ChainflipAccount = MockChainflipAccount;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 }
 
 /// Session pallet requires a set of validators at genesis.

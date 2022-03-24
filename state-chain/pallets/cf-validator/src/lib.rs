@@ -16,7 +16,7 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offline_conditions::OfflineCondition, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex,
+	offence_reporting::Offence, AuctionResult, Auctioneer, EmergencyRotation, EpochIndex,
 	EpochInfo, EpochTransitionHandler, ExecutionCondition, MissedAuthorshipSlots, QualifyValidator,
 };
 use frame_support::{
@@ -60,7 +60,7 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
-type RotationStatusOf<T> = RotationStatus<
+pub type RotationStatusOf<T> = RotationStatus<
 	AuctionResult<<T as frame_system::Config>::AccountId, <T as cf_traits::Chainflip>::Amount>,
 >;
 
@@ -104,7 +104,7 @@ pub type Percentage = u8;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		offline_conditions::OfflineReporter, ChainflipAccount, ChainflipAccountState, KeygenStatus,
+		offence_reporting::OffenceReporter, ChainflipAccount, ChainflipAccountState, KeygenStatus,
 		VaultRotator,
 	};
 	use frame_system::pallet_prelude::*;
@@ -154,7 +154,7 @@ pub mod pallet {
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
 
 		/// For reporting missed authorship slots.
-		type OfflineReporter: OfflineReporter<ValidatorId = ValidatorIdOf<Self>>;
+		type OffenceReporter: OffenceReporter<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
@@ -227,7 +227,7 @@ pub mod pallet {
 				if let Some(id) =
 					<Self as EpochInfo>::current_validators().get(validator_index as usize)
 				{
-					T::OfflineReporter::report(OfflineCondition::MissedAuthorshipSlot, id);
+					T::OffenceReporter::report(Offence::MissedAuthorshipSlot, id);
 				} else {
 					log::error!(
 						"Invalid slot index {:?} when processing missed authorship slots.",
@@ -542,7 +542,7 @@ pub mod pallet {
 	/// Percentage of epoch we allow claims
 	#[pallet::storage]
 	#[pallet::getter(fn claim_period_as_percentage)]
-	pub(super) type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
+	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// An emergency rotation has been requested
 	#[pallet::storage]
@@ -552,12 +552,12 @@ pub mod pallet {
 	/// The starting block number for the current epoch
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
-	pub(super) type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// The number of blocks an epoch runs for
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_number_of_blocks)]
-	pub(super) type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Current epoch index
 	#[pallet::storage]
@@ -647,6 +647,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			RotationPhase::<T>::set(RotationStatus::default());
 			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 
@@ -686,6 +687,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
+	// TODO: This logic is currently duplicated in the CLI. Using an RPC could fix this
+	// https://github.com/chainflip-io/chainflip-backend/issues/1462
 	fn is_auction_phase() -> bool {
 		if RotationPhase::<T>::get() != RotationStatus::Idle {
 			return true

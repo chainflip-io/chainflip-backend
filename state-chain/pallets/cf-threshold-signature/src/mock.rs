@@ -169,8 +169,8 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	}
 }
 
-// Mock OfflineReporter
-cf_traits::impl_mock_offline_conditions!(u64);
+// Mock OffenceReporter
+cf_traits::impl_mock_offence_reporting!(u64);
 
 pub fn sign(
 	payload: <MockEthereum as ChainCrypto>::Payload,
@@ -196,7 +196,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type TargetChain = MockEthereum;
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;

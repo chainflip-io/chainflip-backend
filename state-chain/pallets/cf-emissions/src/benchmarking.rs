@@ -42,19 +42,12 @@ benchmarks! {
 		 let mint_interval = Pallet::<T>::mint_interval();
 		 assert_eq!(mint_interval, (50 as u32).into());
 	}
-	// Benchmark for the runtime migration v1
-	on_runtime_upgrade_v1 {
-		releases::V0.put::<Pallet<T>>();
+	on_runtime_upgrade {
+		StorageVersion::new(0).put::<Pallet<T>>();
 	} : {
 		Pallet::<T>::on_runtime_upgrade();
 	} verify {
 		assert_eq!(MintInterval::<T>::get(), 100u32.into());
-	}
-	// Benchmark for a runtime upgrade in which we do nothing
-	on_runtime_upgrade {
-		releases::V1.put::<Pallet<T>>();
-	} : {
-		Pallet::<T>::on_runtime_upgrade();
 	}
 }
 

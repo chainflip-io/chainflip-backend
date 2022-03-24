@@ -101,7 +101,7 @@ fn keygen_failure() {
 		assert!(VaultsPallet::no_active_chain_vault_rotations());
 
 		// Bad validators have been reported.
-		assert_eq!(MockOfflineReporter::get_reported(), BAD_CANDIDATES);
+		assert_eq!(MockOffenceReporter::get_reported(), BAD_CANDIDATES);
 	});
 }
 
@@ -307,7 +307,7 @@ fn keygen_report_failure() {
 		VaultsPallet::on_initialize(1);
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
-		assert_eq!(MockOfflineReporter::get_reported(), vec![CHARLIE]);
+		assert_eq!(MockOffenceReporter::get_reported(), vec![CHARLIE]);
 
 		assert_last_event!(crate::Event::KeygenFailure(..));
 
@@ -341,7 +341,7 @@ fn test_grace_period() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// All non-responding candidates should have been reported.
-		assert_eq!(MockOfflineReporter::get_reported(), vec![BOB, CHARLIE]);
+		assert_eq!(MockOffenceReporter::get_reported(), vec![BOB, CHARLIE]);
 	});
 }
 

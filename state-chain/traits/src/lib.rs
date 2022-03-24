@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod mocks;
+pub mod offence_reporting;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
@@ -536,47 +537,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
-}
-
-pub mod offline_conditions {
-	use super::*;
-	pub type ReputationPoints = i32;
-
-	/// Conditions that cause a validator to be docked reputation points
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-	pub enum OfflineCondition {
-		/// There was a failure in participation during a signing
-		ParticipateSigningFailed,
-		/// There was a failure in participation during a key generation ceremony
-		ParticipateKeygenFailed,
-		/// An invalid transaction was authored
-		InvalidTransactionAuthored,
-		/// A transaction failed on transmission
-		TransactionFailedOnTransmission,
-		/// A validator missed their authorship slot.
-		MissedAuthorshipSlot,
-	}
-
-	pub trait OfflinePenalty {
-		fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool);
-	}
-
-	/// For reporting offline conditions.
-	pub trait OfflineReporter {
-		type ValidatorId;
-		type Penalty: OfflinePenalty;
-
-		/// Report the condition for validator
-		/// Returns `Ok(Weight)` else an error if the validator isn't valid
-		fn report(condition: OfflineCondition, validator_id: &Self::ValidatorId);
-	}
-
-	/// We report on nodes that should be banned
-	pub trait Banned {
-		type ValidatorId;
-		/// A validator to be banned
-		fn ban(validator_id: &Self::ValidatorId);
-	}
 }
 
 /// The heartbeat of the network

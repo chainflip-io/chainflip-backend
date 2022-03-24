@@ -172,6 +172,12 @@ pub trait StateChainRpcApi {
         extrinsic: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>,
     ) -> Result<sp_core::H256, RpcError>;
 
+    async fn storage(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Option<StorageData>>;
+
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
@@ -230,6 +236,18 @@ impl StateChainRpcApi for StateChainRpcClient {
             .context("latest_block_hash RPC API failed")?
             .ok_or_else(|| anyhow::Error::msg("Latest block hash could not be fetched"))?
             .hash())
+    }
+
+    async fn storage(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Option<StorageData>> {
+        self.state_rpc_client
+            .storage(storage_key, Some(block_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .context("storage RPC API failed")
     }
 
     async fn storage_events_at(
@@ -549,12 +567,28 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
+    pub async fn get_storage_value<ValueType: Decode + Debug + Default>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<ValueType> {
+        self.state_chain_rpc_client
+            .storage(block_hash, storage_key.clone())
+            .await
+            .context(format!(
+                "Failed to get storage value with key: {:?} at block hash {:#x}",
+                storage_key, block_hash
+            ))?
+            .map(|data| ValueType::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
+            .unwrap_or_else(|| Ok(ValueType::default()))
+    }
+
     async fn get_from_storage_with_key<StorageType: Decode + Debug>(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<Vec<StorageType>> {
-        let storage_updates: Vec<_> = self
+        Ok(self
             .state_chain_rpc_client
             .storage_events_at(Some(block_hash), storage_key)
             .await?
@@ -570,9 +604,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     })
             })
             .flatten()
-            .collect::<Result<_>>()?;
-
-        Ok(storage_updates)
+            .collect::<Result<_>>()?)
     }
 
     pub async fn get_storage_pairs<StorageType: Decode + Debug>(
@@ -660,21 +692,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(vaults.last().expect("should have a vault").to_owned())
     }
 
-    pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<ValueType> {
-        let value_changes = self
-            .get_from_storage_with_key::<ValueType>(block_hash, storage_key)
-            .await?;
-
-        Ok(value_changes
-            .last()
-            .expect("Failed to find value in environment storage")
-            .to_owned())
-    }
-
     /// Get all the events from a particular block
     pub async fn get_events(
         &self,
@@ -685,7 +702,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 block_hash,
                 self.events_storage_key.clone(),
             )
-            .await?;
+            .await
+            .context(format!(
+                "Failed to get events for block hash {:#x}",
+                block_hash
+            ))?;
         if let Some(events) = events.last() {
             Ok(events.to_owned())
         } else {
@@ -698,8 +719,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
-        let account_info = self
-            .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
+        Ok(self
+            .get_storage_value::<AccountInfo<Index, ChainflipAccountData>>(
                 block_hash,
                 StorageKey(
                     frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
@@ -707,31 +728,23 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     ),
                 ),
             )
-            .await?;
-
-        Ok(account_info
-            .last()
-            .expect("should have account data")
-            .to_owned()
+            .await?
             .data)
     }
 
-    /// Get the epoch number of the latest block
+    /// Get the latest epoch number at the provided block hash
     pub async fn epoch_at_block(
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
-        let epoch = self
-            .get_from_storage_with_key::<EpochIndex>(
-                block_hash,
-                StorageKey(
-                    pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
-                        .into(),
-                ),
-            )
-            .await?;
-
-        Ok(epoch.last().expect("should have epoch").to_owned())
+        self.get_storage_value::<EpochIndex>(
+            block_hash,
+            StorageKey(
+                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                    .into(),
+            ),
+        )
+        .await
     }
 
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {

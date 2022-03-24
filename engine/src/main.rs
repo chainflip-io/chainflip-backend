@@ -97,7 +97,7 @@ async fn main() {
     {
         // ensure configured eth node is pointing to the correct chain id
         let chain_id_from_sc = U256::from(state_chain_client
-        .get_environment_value::<u64>(
+        .get_storage_value::<u64>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
@@ -143,7 +143,7 @@ async fn main() {
     }
 
     let stake_manager_address = state_chain_client
-        .get_environment_value(
+        .get_storage_value(
             latest_block_hash,
             StorageKey(pallet_cf_environment::StakeManagerAddress::<
                 state_chain_runtime::Runtime,
@@ -155,7 +155,7 @@ async fn main() {
         StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
 
     let key_manager_address = state_chain_client
-        .get_environment_value(latest_block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
+        .get_storage_value(latest_block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
             state_chain_runtime::Runtime,
         >::hashed_key().into()))
         .await

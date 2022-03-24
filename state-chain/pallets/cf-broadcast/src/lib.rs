@@ -13,7 +13,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
-use cf_traits::{offline_conditions::*, Broadcaster, Chainflip, SignerNomination, ThresholdSigner};
+use cf_traits::{offence_reporting::*, Broadcaster, Chainflip, SignerNomination, ThresholdSigner};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Twox64Concat};
 use frame_system::pallet_prelude::OriginFor;
@@ -152,7 +152,7 @@ pub mod pallet {
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 
 		/// For reporting bad actors.
-		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
+		type OffenceReporter: OffenceReporter<ValidatorId = Self::ValidatorId>;
 
 		/// Ensure that only threshold signature consensus can trigger a broadcast.
 		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
@@ -367,7 +367,7 @@ pub mod pallet {
 				Self::report_and_schedule_retry(
 					&signing_attempt.nominee.clone(),
 					signing_attempt.into(),
-					OfflineCondition::InvalidTransactionAuthored,
+					Offence::InvalidTransactionAuthored,
 				)
 			}
 
@@ -432,7 +432,7 @@ pub mod pallet {
 					Self::report_and_schedule_retry(
 						&failed_attempt.signer.clone(),
 						failed_attempt.into(),
-						OfflineCondition::TransactionFailedOnTransmission,
+						Offence::TransactionFailedOnTransmission,
 					);
 				},
 				TransmissionFailure::TransactionFailed => {
@@ -607,9 +607,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn report_and_schedule_retry(
 		signer: &T::ValidatorId,
 		failed: FailedBroadcastAttempt<T, I>,
-		offline_condition: OfflineCondition,
+		offence: Offence,
 	) {
-		T::OfflineReporter::report(offline_condition, signer);
+		T::OffenceReporter::report(offence, signer);
 		Self::schedule_retry(failed);
 	}
 

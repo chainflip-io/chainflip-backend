@@ -17,7 +17,7 @@ use codec::{Decode, Encode};
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
-	offline_conditions::{OfflineCondition, OfflineReporter},
+	offence_reporting::{Offence, OffenceReporter},
 	AsyncResult, CeremonyIdProvider, Chainflip, KeyProvider, SignerNomination,
 };
 use frame_support::{
@@ -154,7 +154,7 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 
 		/// For reporting bad actors.
-		type OfflineReporter: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type OffenceReporter: OffenceReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
 
 		/// CeremonyId source.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
@@ -274,10 +274,7 @@ pub mod pallet {
 					num_retries += 1;
 					// Report the offenders.
 					for offender in failed_ceremony_context.offenders() {
-						T::OfflineReporter::report(
-							OfflineCondition::ParticipateSigningFailed,
-							&offender,
-						);
+						T::OffenceReporter::report(Offence::ParticipateSigningFailed, &offender);
 					}
 
 					// Clean up old ceremony and start a new one.
