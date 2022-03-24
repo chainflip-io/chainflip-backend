@@ -1,5 +1,5 @@
 use crate::mock::*;
-use cf_traits::{EpochInfo, IsOnline, KeygenExclusionSet};
+use cf_traits::{EpochInfo, IsOnline};
 use frame_support::assert_ok;
 
 // Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
@@ -14,17 +14,6 @@ fn submit_heartbeat_for_current_interval(nodes: &[<Test as frame_system::Config>
 // Move a heartbeat intervals forward with no heartbeat sent
 fn go_to_interval(interval: u64) {
 	run_to_block((interval * HEARTBEAT_BLOCK_INTERVAL) + 1);
-}
-
-#[test]
-fn should_exclude_keygen_failures() {
-	new_test_ext().execute_with(|| {
-		<OnlinePallet as KeygenExclusionSet>::add_to_set(ALICE);
-		assert!(<OnlinePallet as KeygenExclusionSet>::is_excluded(&ALICE));
-		assert!(!<OnlinePallet as KeygenExclusionSet>::is_excluded(&BOB));
-		<OnlinePallet as KeygenExclusionSet>::forgive_all();
-		assert!(!<OnlinePallet as KeygenExclusionSet>::is_excluded(&ALICE));
-	});
 }
 
 #[test]

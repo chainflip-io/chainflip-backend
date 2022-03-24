@@ -19,7 +19,6 @@ pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	convert::TryFrom,
 	iter::{FromIterator, Iterator},
 	prelude::*,
 };
@@ -632,6 +631,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
 		fn build(&self) {
+			use sp_std::convert::TryFrom;
+
 			let public_key = AggKeyFor::<T, I>::try_from(self.vault_key.clone())
 				// Note: Can't use expect() here without some type shenanigans, but would give
 				// clearer error messages.

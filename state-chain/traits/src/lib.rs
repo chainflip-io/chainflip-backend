@@ -606,17 +606,6 @@ pub trait RuntimeUpgrade {
 	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
 }
 
-pub trait KeygenExclusionSet {
-	type ValidatorId;
-
-	/// Add this validator to the key generation exclusion set
-	fn add_to_set(validator_id: Self::ValidatorId);
-	/// Is this validator excluded?
-	fn is_excluded(validator_id: &Self::ValidatorId) -> bool;
-	/// Clear the exclusion set
-	fn forgive_all();
-}
-
 /// Provides an interface to all passed epochs
 pub trait HistoricalEpoch {
 	type ValidatorId;

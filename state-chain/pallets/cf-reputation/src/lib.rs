@@ -10,7 +10,7 @@ mod tests;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 use cf_traits::{
-	offence_reporting::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
+	offence_reporting::*, Chainflip, EpochTransitionHandler, Heartbeat, NetworkState, Slashing,
 };
 
 pub mod weights;
@@ -22,7 +22,7 @@ use frame_support::{
 };
 pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero};
-use sp_std::ops::Neg;
+use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, ops::Neg, prelude::*};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -87,9 +87,6 @@ pub mod pallet {
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
-
-		/// Key generation exclusion set
-		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::hooks]
@@ -133,6 +130,10 @@ pub mod pallet {
 	#[pallet::getter(fn suspensions)]
 	/// If the validator is suspended, contains the block number at which they will be released.
 	pub type Suspensions<T: Config> = StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn keygen_exclusion_set)]
+	pub type KeygenExclusionSet<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -262,7 +263,7 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 		}
 
 		if condition == Offence::ParticipateKeygenFailed {
-			T::KeygenExclusionSet::add_to_set(validator_id.clone());
+			KeygenExclusionSet::<T>::append(validator_id.clone());
 		}
 
 		Self::deposit_event(Event::OffencePenalty((*validator_id).clone(), condition, penalty));
@@ -355,6 +356,27 @@ impl<T: Config> Heartbeat for Pallet<T> {
 	}
 }
 
+impl<T: Config> EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	type Amount = T::Amount;
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		_new_validators: &[Self::ValidatorId],
+		_new_bond: Self::Amount,
+	) {
+		KeygenExclusionSet::<T>::kill();
+	}
+}
+
+pub struct KeygenExclusion<T>(PhantomData<T>);
+
+impl<T: Config> Get<BTreeSet<T::ValidatorId>> for KeygenExclusion<T> {
+	fn get() -> BTreeSet<T::ValidatorId> {
+		BTreeSet::<_>::from_iter(KeygenExclusionSet::<T>::get())
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// Return number of online credits for reward
 	fn online_credit_reward() -> OnlineCreditsFor<T> {
@@ -363,11 +385,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
-	fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
+	fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) {
 		Reputations::<T>::mutate(validator_id, |Reputation { reputation_points, .. }| {
 			*reputation_points = Pallet::<T>::clamp_reputation_points(*reputation_points + points);
 			T::DbWeight::get().reads_writes(1, 1)
-		})
+		});
 	}
 
 	/// Clamp reputation points to bounds defined in the pallet

@@ -1,5 +1,7 @@
 use crate::{mock::*, *};
-use cf_traits::mocks::chainflip_account::MockChainflipAccount;
+use cf_traits::mocks::{
+	chainflip_account::MockChainflipAccount, keygen_exclusion::MockKeygenExclusion,
+};
 use frame_support::{assert_noop, assert_ok};
 
 #[test]

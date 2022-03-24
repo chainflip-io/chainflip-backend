@@ -100,7 +100,6 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
 cf_traits::impl_mock_offence_reporting!(u64);
-cf_traits::impl_mock_keygen_exclusion!(u64);
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
@@ -120,7 +119,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
-	type KeygenExclusionSet = MockKeygenExclusion;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
