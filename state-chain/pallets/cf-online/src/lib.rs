@@ -73,13 +73,13 @@ pub mod pallet {
 
 	/// The last block numbers at which validators submitted a heartbeat.
 	#[pallet::storage]
-	#[pallet::getter(fn nodes)]
-	pub(super) type LastHeartbeat<T: Config> =
+	#[pallet::getter(fn last_heartbeat)]
+	pub type LastHeartbeat<T: Config> =
 		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn excluded_from_keygen)]
-	pub(super) type ExcludedFromKeygen<T: Config> =
+	pub type ExcludedFromKeygen<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, (), OptionQuery>;
 
 	#[pallet::call]

@@ -126,7 +126,7 @@ pub mod pallet {
 	/// The ratio at which one accrues Reputation points in exchange for online credits
 	#[pallet::storage]
 	#[pallet::getter(fn accrual_ratio)]
-	pub(super) type AccrualRatio<T: Config> =
+	pub type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, OnlineCreditsFor<T>), ValueQuery>;
 
 	/// A map tracking our validators.  We record the number of reputation points that they may
@@ -139,14 +139,13 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn reputation_point_penalty)]
 	/// The number of reputation points we lose for every x blocks offline
-	pub(super) type ReputationPointPenalty<T: Config> =
+	pub type ReputationPointPenalty<T: Config> =
 		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn suspensions)]
 	/// If the validator is suspended, contains the block number at which they will be released.
-	pub(super) type Suspensions<T: Config> =
-		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber>;
+	pub type Suspensions<T: Config> = StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
