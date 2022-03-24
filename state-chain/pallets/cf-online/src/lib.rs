@@ -71,12 +71,11 @@ pub mod pallet {
 		}
 	}
 
-	/// A map linking a node's validator id with the last block number at which they submitted a
-	/// heartbeat and if they are banned until which block they are banned.
+	/// The last block numbers at which validators submitted a heartbeat.
 	#[pallet::storage]
 	#[pallet::getter(fn nodes)]
 	pub(super) type LastHeartbeat<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, T::BlockNumber, OptionQuery>;
+		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn excluded_from_keygen)]
