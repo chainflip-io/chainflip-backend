@@ -3,6 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -11,9 +12,14 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+};
 pub use pallet::*;
 use sp_runtime::traits::Zero;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -27,6 +33,7 @@ pub mod pallet {
 	use sp_runtime::traits::Saturating;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
@@ -58,6 +65,20 @@ pub mod pallet {
 			}
 
 			T::WeightInfo::on_initialize_no_action()
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
