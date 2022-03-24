@@ -790,7 +790,7 @@ impl<T: Config> Pallet<T> {
 			EpochHistory::<T>::activate_epoch(validator, new_epoch);
 		}
 
-		// Bound the validator
+		// Bond the validators
 		for validator in new_validators {
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);

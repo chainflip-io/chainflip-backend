@@ -283,6 +283,7 @@ impl Bonding for MockBonder {
 
 	type Amount = Amount;
 
+	// Bond updates are tested in the integration tests
 	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
