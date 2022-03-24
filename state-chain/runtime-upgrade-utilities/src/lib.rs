@@ -24,18 +24,32 @@ pub struct VersionedMigration<
 #[cfg(feature = "try-runtime")]
 mod try_runtime_helpers {
 	use frame_support::{traits::PalletInfoAccess, Twox64Concat};
+	use sp_std::{
+		cmp::{max, min},
+		vec::Vec,
+	};
 
 	frame_support::generate_storage_alias!(
-		RuntimeUpgradeUtils, ExpectMigration => Map<((Vec<u8>, u16, u16), Twox64Concat), bool>
+		RuntimeUpgradeUtils, MigrationBounds => Map<(Vec<u8>, Twox64Concat), (u16, u16)>
 	);
 
-	pub fn expect_migration<T: PalletInfoAccess, const FROM: u16, const TO: u16>(expected: bool) {
-		ExpectMigration::insert((T::name().as_bytes(), FROM, TO), expected);
+	pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
+		MigrationBounds::mutate(T::name().as_bytes(), |bounds| {
+			*bounds = match bounds {
+				None => Some((FROM, TO)),
+				Some((lower, upper)) => Some((min(FROM, *(lower)), max(TO, *(upper)))),
+			}
+		});
 	}
 
-	pub fn migration_expected<T: PalletInfoAccess, const FROM: u16, const TO: u16>() -> bool {
-		ExpectMigration::get((T::name().as_bytes(), FROM, TO)).unwrap_or_default()
+	pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
+		MigrationBounds::get(T::name().as_bytes())
 	}
+}
+
+fn should_upgrade<P: GetStorageVersion, const FROM: u16, const TO: u16>() -> bool {
+	<P as GetStorageVersion>::on_chain_storage_version() == FROM &&
+		<P as GetStorageVersion>::current_storage_version() >= TO
 }
 
 impl<P, U, const FROM: u16, const TO: u16> OnRuntimeUpgrade for VersionedMigration<P, U, FROM, TO>
@@ -44,9 +58,7 @@ where
 	U: OnRuntimeUpgrade,
 {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		if <P as GetStorageVersion>::on_chain_storage_version() == FROM &&
-			<P as GetStorageVersion>::current_storage_version() >= TO
-		{
+		if should_upgrade::<P, FROM, TO>() {
 			log::info!(
 				"✅ {}: Applying storage migration from version {:?} to {:?}.",
 				P::name(),
@@ -69,31 +81,37 @@ where
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
-		if <P as GetStorageVersion>::on_chain_storage_version() == FROM {
-			try_runtime_helpers::expect_migration::<P, FROM, TO>(true);
-			U::pre_upgrade()
-		} else {
-			try_runtime_helpers::expect_migration::<P, FROM, TO>(false);
-			Ok(())
-		}
+		try_runtime_helpers::update_migration_bounds::<P, FROM, TO>();
+		U::pre_upgrade()?;
+		log::info!(
+			"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
+			P::name(),
+			FROM,
+			TO
+		);
+		Ok(())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
-		if !try_runtime_helpers::migration_expected::<P, FROM, TO>() {
-			return Ok(())
-		}
+		let (_, expected_version) =
+			try_runtime_helpers::get_migration_bounds::<P>().ok_or_else(|| {
+				log::error!("💥 {}: Expected a runtime storage upgrade.", P::name(),);
+				"🛑 Pallet expected a runtime storage upgrade."
+			})?;
 
-		if <P as GetStorageVersion>::on_chain_storage_version() == TO {
-			U::post_upgrade()
+		if <P as GetStorageVersion>::on_chain_storage_version() == expected_version {
+			U::post_upgrade()?;
+			log::info!("✅ {}: Post-upgrade checks ok.", P::name());
+			Ok(())
 		} else {
 			log::error!(
 				"💥 {}: Expected post-upgrade storage version {:?}, found {:?}.",
 				P::name(),
-				TO,
-				<P as GetStorageVersion>::on_chain_storage_version()
+				expected_version,
+				<P as GetStorageVersion>::on_chain_storage_version(),
 			);
-			Err("Pallet storage migration version mismatch.")
+			Err("🛑 Pallet storage migration version mismatch.")
 		}
 	}
 }
@@ -260,23 +278,23 @@ mod test_versioned_upgrade {
 
 		TestExternalities::new_empty().execute_with(|| {
 			assert_ok!(UpgradeFrom0To1::pre_upgrade());
-			assert!(try_runtime_helpers::migration_expected::<Pallet, 0, 1>());
+			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 			UpgradeFrom0To1::on_runtime_upgrade();
 			assert_ok!(UpgradeFrom0To1::post_upgrade());
 
-			// Post-migration should not run because no upgrade takes place.
+			// Post-migration runs even if upgrade is out of bounds.
 			DummyUpgrade::set_error_on_post_upgrade(true);
-			assert_ok!(UpgradeFrom0To1::pre_upgrade());
-			assert!(!try_runtime_helpers::migration_expected::<Pallet, 0, 1>());
-			UpgradeFrom0To1::on_runtime_upgrade();
-			assert_ok!(UpgradeFrom0To1::post_upgrade());
+			assert_ok!(UpgradeFrom2To3::pre_upgrade());
+			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 3)));
+			UpgradeFrom2To3::on_runtime_upgrade();
+			assert!(UpgradeFrom2To3::post_upgrade().is_err());
 		});
 
 		// Error on post-upgrade is propagated.
 		TestExternalities::new_empty().execute_with(|| {
 			DummyUpgrade::set_error_on_post_upgrade(true);
 			assert_ok!(UpgradeFrom0To1::pre_upgrade());
-			assert!(try_runtime_helpers::migration_expected::<Pallet, 0, 1>());
+			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 			UpgradeFrom0To1::on_runtime_upgrade();
 			assert_err!(UpgradeFrom0To1::post_upgrade(), "err");
 		});
