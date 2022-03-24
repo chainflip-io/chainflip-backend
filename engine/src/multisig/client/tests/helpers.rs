@@ -137,12 +137,13 @@ pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>>(
         .collect()
 }
 
-pub trait CeremonyRunnerStrategy<Output> {
+pub trait CeremonyRunnerStrategy {
+    type Output;
     type MappedOutcome: std::fmt::Debug;
     type InitialStageData;
     const CEREMONY_FAILED_TAG: &'static str;
 
-    fn post_successful_complete_check(&self, outcome: Output) -> Self::MappedOutcome;
+    fn post_successful_complete_check(&self, outcome: Self::Output) -> Self::MappedOutcome;
 
     fn multisig_instruction(&self) -> MultisigInstruction;
 }
@@ -162,8 +163,8 @@ where
         Into<MultisigData> + TryFrom<MultisigData, Error = MultisigData> + Clone + Display,
     Output: PartialEq + std::fmt::Debug,
     CeremonyOutcome<CeremonyId, Output>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
-    Self: CeremonyRunnerStrategy<Output>,
-    <Self as CeremonyRunnerStrategy<Output>>::InitialStageData:
+    Self: CeremonyRunnerStrategy<Output = Output>,
+    <Self as CeremonyRunnerStrategy>::InitialStageData:
         TryFrom<CeremonyData, Error = CeremonyData> + Clone,
 {
     pub fn inner_new(
@@ -331,16 +332,15 @@ where
 
     pub async fn try_gather_outcomes(
         &mut self,
-    ) -> Option<Result<<Self as CeremonyRunnerStrategy<Output>>::MappedOutcome, CeremonyError>>
-    {
+    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::MappedOutcome, CeremonyError>> {
         let outcomes = stream::iter(self.nodes.iter_mut())
             .then(|(account_id, node)| async move {
                 let outcome = node.try_recv_outcome().await?;
 
                 if outcome.result.is_err() {
-                    assert!(node.tag_cache.contains_tag(
-                        <Self as CeremonyRunnerStrategy<Output>>::CEREMONY_FAILED_TAG
-                    ));
+                    assert!(node
+                        .tag_cache
+                        .contains_tag(<Self as CeremonyRunnerStrategy>::CEREMONY_FAILED_TAG));
                 }
 
                 Some((account_id.clone(), outcome))
@@ -364,7 +364,7 @@ where
         )
     }
 
-    pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy<Output>>::MappedOutcome {
+    pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::MappedOutcome {
         assert_ok!(self.try_gather_outcomes().await.unwrap())
     }
 
@@ -393,11 +393,9 @@ where
         AccountId,
         HashMap<
             AccountId,
-            <CeremonyRunner<CeremonyData, Output, CeremonyRunnerData> as CeremonyRunnerStrategy<
-                Output,
-            >>::InitialStageData,
+            <CeremonyRunner<CeremonyData, Output, CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
         >,
-    > {
+    >{
         self.request_without_gather();
 
         self.gather_outgoing_messages().await
@@ -420,7 +418,8 @@ macro_rules! run_stages {
 pub(crate) use run_stages;
 
 pub type KeygenCeremonyRunner = CeremonyRunner<KeygenData, secp256k1::PublicKey, ()>;
-impl CeremonyRunnerStrategy<secp256k1::PublicKey> for KeygenCeremonyRunner {
+impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
+    type Output = secp256k1::PublicKey;
     type MappedOutcome = KeyId;
     type InitialStageData = keygen::Comm1;
     const CEREMONY_FAILED_TAG: &'static str = KEYGEN_CEREMONY_FAILED;
@@ -451,7 +450,8 @@ pub struct SigningCeremonyRunnerData {
 }
 pub type SigningCeremonyRunner =
     CeremonyRunner<SigningData, SchnorrSignature, SigningCeremonyRunnerData>;
-impl CeremonyRunnerStrategy<SchnorrSignature> for SigningCeremonyRunner {
+impl CeremonyRunnerStrategy for SigningCeremonyRunner {
+    type Output = SchnorrSignature;
     type MappedOutcome = SchnorrSignature;
     type InitialStageData = frost::Comm1;
     const CEREMONY_FAILED_TAG: &'static str = SIGNING_CEREMONY_FAILED;
