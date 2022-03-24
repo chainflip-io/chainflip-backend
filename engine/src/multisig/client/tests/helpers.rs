@@ -429,7 +429,8 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-pub type KeygenCeremonyRunner = CeremonyRunner<()>;
+pub struct KeygenCeremonyRunnerData {}
+pub type KeygenCeremonyRunner = CeremonyRunner<KeygenCeremonyRunnerData>;
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     type CeremonyData = KeygenData;
     type Output = secp256k1::PublicKey;
@@ -453,7 +454,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 }
 impl KeygenCeremonyRunner {
     pub fn new(nodes: HashMap<AccountId, Node>, ceremony_id: CeremonyId, rng: Rng) -> Self {
-        Self::inner_new(nodes, ceremony_id, (), rng)
+        Self::inner_new(nodes, ceremony_id, KeygenCeremonyRunnerData {}, rng)
     }
 }
 
