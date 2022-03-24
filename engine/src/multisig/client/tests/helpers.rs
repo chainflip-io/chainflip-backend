@@ -138,9 +138,16 @@ pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>>(
 }
 
 pub trait CeremonyRunnerStrategy {
-    type Output;
+    type CeremonyData: Into<MultisigData>
+        + TryFrom<MultisigData, Error = MultisigData>
+        + Clone
+        + Display;
+    type Output: PartialEq + std::fmt::Debug;
     type MappedOutcome: std::fmt::Debug;
-    type InitialStageData;
+    type InitialStageData: TryFrom<
+            <Self as CeremonyRunnerStrategy>::CeremonyData,
+            Error = <Self as CeremonyRunnerStrategy>::CeremonyData,
+        > + Clone;
     const CEREMONY_FAILED_TAG: &'static str;
 
     fn post_successful_complete_check(&self, outcome: Self::Output) -> Self::MappedOutcome;
@@ -148,24 +155,18 @@ pub trait CeremonyRunnerStrategy {
     fn multisig_instruction(&self) -> MultisigInstruction;
 }
 
-pub struct CeremonyRunner<CeremonyData, Output, CeremonyRunnerData> {
+pub struct CeremonyRunner<CeremonyRunnerData> {
     pub nodes: HashMap<AccountId, Node>,
     pub ceremony_id: CeremonyId,
     pub ceremony_runner_data: CeremonyRunnerData,
     pub rng: Rng,
-    _phantom: std::marker::PhantomData<(CeremonyData, Output)>,
 }
 
-impl<CeremonyData, Output, CeremonyRunnerData>
-    CeremonyRunner<CeremonyData, Output, CeremonyRunnerData>
+impl<CeremonyRunnerData> CeremonyRunner<CeremonyRunnerData>
 where
-    CeremonyData:
-        Into<MultisigData> + TryFrom<MultisigData, Error = MultisigData> + Clone + Display,
-    Output: PartialEq + std::fmt::Debug,
-    CeremonyOutcome<CeremonyId, Output>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
-    Self: CeremonyRunnerStrategy<Output = Output>,
-    <Self as CeremonyRunnerStrategy>::InitialStageData:
-        TryFrom<CeremonyData, Error = CeremonyData> + Clone,
+    Self: CeremonyRunnerStrategy,
+    CeremonyOutcome<CeremonyId, <Self as CeremonyRunnerStrategy>::Output>:
+        TryFrom<MultisigOutcome, Error = MultisigOutcome>,
 {
     pub fn inner_new(
         nodes: HashMap<AccountId, Node>,
@@ -178,7 +179,6 @@ where
             ceremony_id,
             ceremony_runner_data,
             rng,
-            _phantom: Default::default(),
         }
     }
 
@@ -197,7 +197,7 @@ where
             .unwrap()
     }
 
-    pub fn distribute_messages<StageData: Into<CeremonyData>>(
+    pub fn distribute_messages<StageData: Into<<Self as CeremonyRunnerStrategy>::CeremonyData>>(
         &mut self,
         stage_data: StageMessages<StageData>,
     ) {
@@ -208,7 +208,7 @@ where
         }
     }
 
-    pub fn distribute_message<StageData: Into<CeremonyData>>(
+    pub fn distribute_message<StageData: Into<<Self as CeremonyRunnerStrategy>::CeremonyData>>(
         &mut self,
         sender_id: &AccountId,
         receiver_id: &AccountId,
@@ -228,7 +228,9 @@ where
             );
     }
 
-    pub fn distribute_messages_with_non_sender<StageData: Into<CeremonyData>>(
+    pub fn distribute_messages_with_non_sender<
+        StageData: Into<<Self as CeremonyRunnerStrategy>::CeremonyData>,
+    >(
         &mut self,
         mut stage_data: StageMessages<StageData>,
         non_sender: &AccountId,
@@ -245,7 +247,7 @@ where
     }
 
     async fn gather_outgoing_messages<
-        NextStageData: TryFrom<CeremonyData, Error = Error> + Clone,
+        NextStageData: TryFrom<<Self as CeremonyRunnerStrategy>::CeremonyData, Error = Error> + Clone,
         Error: Display,
     >(
         &mut self,
@@ -260,11 +262,11 @@ where
                 ceremony_id, self_ceremony_id
             );
 
-            let ceremony_data = CeremonyData::try_from(data)
+            let ceremony_data = <Self as CeremonyRunnerStrategy>::CeremonyData::try_from(data)
                 .map_err(|err| {
                     format!(
                         "Expected outgoing ceremony data {}, got {:?}.",
-                        std::any::type_name::<CeremonyData>(),
+                        std::any::type_name::<<Self as CeremonyRunnerStrategy>::CeremonyData>(),
                         err
                     )
                 })
@@ -306,8 +308,8 @@ where
     }
 
     pub async fn run_stage<
-        NextStageData: TryFrom<CeremonyData, Error = Error> + Clone,
-        StageData: Into<CeremonyData>,
+        NextStageData: TryFrom<<Self as CeremonyRunnerStrategy>::CeremonyData, Error = Error> + Clone,
+        StageData: Into<<Self as CeremonyRunnerStrategy>::CeremonyData>,
         Error: Display,
     >(
         &mut self,
@@ -318,8 +320,8 @@ where
     }
 
     pub async fn run_stage_with_non_sender<
-        NextStageData: TryFrom<CeremonyData, Error = Error> + Clone,
-        StageData: Into<CeremonyData>,
+        NextStageData: TryFrom<<Self as CeremonyRunnerStrategy>::CeremonyData, Error = Error> + Clone,
+        StageData: Into<<Self as CeremonyRunnerStrategy>::CeremonyData>,
         Error: Display,
     >(
         &mut self,
@@ -345,10 +347,20 @@ where
 
                 Some((account_id.clone(), outcome))
             })
-            .collect::<Vec<Option<(AccountId, CeremonyOutcome<CeremonyId, Output>)>>>()
+            .collect::<Vec<
+                Option<(
+                    AccountId,
+                    CeremonyOutcome<CeremonyId, <Self as CeremonyRunnerStrategy>::Output>,
+                )>,
+            >>()
             .await
             .into_iter()
-            .collect::<Option<HashMap<AccountId, CeremonyOutcome<CeremonyId, Output>>>>()?;
+            .collect::<Option<
+                HashMap<
+                    AccountId,
+                    CeremonyOutcome<CeremonyId, <Self as CeremonyRunnerStrategy>::Output>,
+                >,
+            >>()?;
 
         let _ceremony_id = all_same(outcomes.iter().map(|(_account_id, outcome)| outcome.id))
             .expect("Inconsistent ceremony ids in the ceremony outcomes");
@@ -393,9 +405,9 @@ where
         AccountId,
         HashMap<
             AccountId,
-            <CeremonyRunner<CeremonyData, Output, CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
+            <CeremonyRunner<CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
         >,
-    >{
+    > {
         self.request_without_gather();
 
         self.gather_outgoing_messages().await
@@ -417,8 +429,9 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-pub type KeygenCeremonyRunner = CeremonyRunner<KeygenData, secp256k1::PublicKey, ()>;
+pub type KeygenCeremonyRunner = CeremonyRunner<()>;
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
+    type CeremonyData = KeygenData;
     type Output = secp256k1::PublicKey;
     type MappedOutcome = KeyId;
     type InitialStageData = keygen::Comm1;
@@ -448,9 +461,9 @@ pub struct SigningCeremonyRunnerData {
     pub key_id: KeyId,
     pub message_hash: MessageHash,
 }
-pub type SigningCeremonyRunner =
-    CeremonyRunner<SigningData, SchnorrSignature, SigningCeremonyRunnerData>;
+pub type SigningCeremonyRunner = CeremonyRunner<SigningCeremonyRunnerData>;
 impl CeremonyRunnerStrategy for SigningCeremonyRunner {
+    type CeremonyData = SigningData;
     type Output = SchnorrSignature;
     type MappedOutcome = SchnorrSignature;
     type InitialStageData = frost::Comm1;
