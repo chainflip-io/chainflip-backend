@@ -115,6 +115,10 @@ pub enum KeyManagerEvent {
 impl EthObserver for KeyManager {
     type EventParameters = KeyManagerEvent;
 
+    fn contract_name(&self) -> String {
+        "KeyManager".to_string()
+    }
+
     async fn handle_event<RpcClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,

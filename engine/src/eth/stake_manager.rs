@@ -97,6 +97,10 @@ pub enum StakeManagerEvent {
 impl EthObserver for StakeManager {
     type EventParameters = StakeManagerEvent;
 
+    fn contract_name(&self) -> String {
+        "StakeManager".to_string()
+    }
+
     async fn handle_event<RpcClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,

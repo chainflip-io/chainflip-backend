@@ -22,7 +22,7 @@ use crate::{
         http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
         ws_safe_stream::safe_ws_head_stream,
     },
-    logging::{COMPONENT_KEY, ETH_HTTP_STREAM_RETURNED, ETH_STREAM_BEHIND, ETH_WS_STREAM_RETURNED},
+    logging::{COMPONENT_KEY, ETH_HTTP_STREAM_YIELDED, ETH_STREAM_BEHIND, ETH_WS_STREAM_YIELDED},
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
@@ -109,7 +109,8 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     ContractObserver: 'static + EthObserver + Sync + Send,
     StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
 {
-    let logger = logger.new(o!(COMPONENT_KEY => "EthObserver"));
+    let logger =
+        logger.new(o!(COMPONENT_KEY => format!("{}-Observer", contract_observer.contract_name())));
     slog::info!(logger, "Starting");
 
     type TaskEndBlock = Arc<Mutex<Option<u64>>>;
@@ -610,6 +611,8 @@ pub struct CleanBlockEvents<EventParameters: Debug> {
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;
 
+    fn contract_name(&self) -> String;
+
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
     async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc>(
         &self,
@@ -855,7 +858,7 @@ pub trait EthObserver {
                 TransportProtocol::Http => {
                     slog::info!(
                         merged_stream_state.logger,
-                        #ETH_HTTP_STREAM_RETURNED,
+                        #ETH_HTTP_STREAM_YIELDED,
                         "ETH block {} returning from {} stream",
                         yielding_block_number,
                         yielding_stream_state.protocol
@@ -864,7 +867,7 @@ pub trait EthObserver {
                 TransportProtocol::Ws => {
                     slog::info!(
                         merged_stream_state.logger,
-                        #ETH_WS_STREAM_RETURNED,
+                        #ETH_WS_STREAM_YIELDED,
                         "ETH block {} returning from {} stream",
                         yielding_block_number,
                         yielding_stream_state.protocol
@@ -1186,7 +1189,7 @@ mod merged_stream_tests {
 
     use crate::logging::test_utils::new_test_logger;
     use crate::logging::test_utils::new_test_logger_with_tag_cache;
-    use crate::logging::ETH_WS_STREAM_RETURNED;
+    use crate::logging::ETH_WS_STREAM_YIELDED;
 
     use super::key_manager::ChainflipKey;
     use super::key_manager::KeyManagerEvent;
@@ -1484,15 +1487,15 @@ mod merged_stream_tests {
             .unwrap();
 
         assert_eq!(stream.next().await.unwrap(), key_change(11, 0));
-        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_YIELDED));
         tag_cache.clear();
 
         assert_eq!(stream.next().await.unwrap(), key_change(12, 0));
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_YIELDED));
         tag_cache.clear();
 
         assert_eq!(stream.next().await.unwrap(), key_change(15, 0));
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_YIELDED));
         tag_cache.clear();
 
         assert!(stream.next().await.is_none());
@@ -1590,11 +1593,11 @@ mod merged_stream_tests {
             .unwrap();
 
         assert_eq!(stream.next().await.unwrap(), key_change(6, 0));
-        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_RETURNED));
+        assert!(tag_cache.contains_tag(ETH_HTTP_STREAM_YIELDED));
         tag_cache.clear();
 
         assert_eq!(stream.next().await.unwrap(), key_change(10, 4));
-        assert!(tag_cache.contains_tag(ETH_WS_STREAM_RETURNED));
+        assert!(tag_cache.contains_tag(ETH_WS_STREAM_YIELDED));
         tag_cache.clear();
 
         assert!(stream.next().await.is_none());

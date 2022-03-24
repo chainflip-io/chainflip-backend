@@ -12,8 +12,8 @@ pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 
 // ==== Logging Eth Observer constants ====
-pub const ETH_HTTP_STREAM_RETURNED: &str = "eth-observer-http";
-pub const ETH_WS_STREAM_RETURNED: &str = "eth-observer-ws";
+pub const ETH_HTTP_STREAM_YIELDED: &str = "eth-observer-http-yielded";
+pub const ETH_WS_STREAM_YIELDED: &str = "eth-observer-ws-yielded";
 pub const ETH_STREAM_BEHIND: &str = "eth-stream-behind";
 
 // ==== Logging Trace/Debug Tag constants ====
