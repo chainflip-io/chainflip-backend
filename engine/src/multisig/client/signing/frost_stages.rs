@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::multisig::client::{self, common::broadcast_failure_to_stage_result_error, signing};
+use crate::multisig::client::{self, signing};
 
 use client::common::{
     broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
@@ -106,12 +106,13 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
         let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err((blamed_parties, abort_reason)) => {
-                return broadcast_failure_to_stage_result_error(
-                    blamed_parties,
-                    abort_reason,
-                    "initial commitments",
-                );
+            Err(abort_reason) => {
+                return abort_reason.to_stage_result_error("initial commitments");
+                // return broadcast_failure_to_stage_result_error(
+                //     blamed_parties,
+                //     abort_reason,
+                //     "initial commitments",
+                // );
             }
         };
 
@@ -219,12 +220,8 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
         let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
-            Err((blamed_parties, abort_reason)) => {
-                return broadcast_failure_to_stage_result_error(
-                    blamed_parties,
-                    abort_reason,
-                    "local signatures",
-                );
+            Err(abort_reason) => {
+                return abort_reason.to_stage_result_error("local signatures");
             }
         };
 

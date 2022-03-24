@@ -8,10 +8,40 @@ use super::StageResult;
 
 #[derive(PartialEq, Debug)]
 pub enum BroadcastFailureReason {
-    // Enough missing messages from broadcast + verification to stop consensus
-    InsufficientMessages,
-    // Consensus could not be reached for one or more parties due to differing values
-    Inconsistency,
+    /// Enough missing messages from broadcast + verification to stop consensus (contains blamed parties)
+    InsufficientMessages(BTreeSet<usize>),
+    /// Not enough broadcast verification messages received to continue verification (contains blamed parties)
+    InsufficientVerificationMessages(BTreeSet<usize>),
+    /// Consensus could not be reached for one or more parties due to differing values (contains blamed parties)
+    Inconsistency(BTreeSet<usize>),
+}
+
+impl BroadcastFailureReason {
+    /// Builds the StageResult with a specific error message using the BroadcastFailureReason and stage_name
+    pub fn to_stage_result_error<D, Result>(&self, stage_name: &str) -> StageResult<D, Result> {
+        match self {
+            BroadcastFailureReason::InsufficientMessages(blamed_parties) => StageResult::Error(
+                blamed_parties.iter().cloned().collect(),
+                anyhow::Error::msg(format!(
+                    "Insufficient messages received in broadcast of {}",
+                    stage_name
+                )),
+            ),
+            BroadcastFailureReason::InsufficientVerificationMessages(blamed_parties) => {
+                StageResult::Error(
+                    blamed_parties.iter().cloned().collect(),
+                    anyhow::Error::msg(format!(
+                        "Insufficient broadcast verification messages received for {}",
+                        stage_name
+                    )),
+                )
+            }
+            BroadcastFailureReason::Inconsistency(blamed_parties) => StageResult::Error(
+                blamed_parties.iter().cloned().collect(),
+                anyhow::Error::msg(format!("Inconsistent broadcast of {}", stage_name)),
+            ),
+        }
+    }
 }
 
 /// Data received by a single party for a given
@@ -54,7 +84,7 @@ where
 pub fn verify_broadcasts<T>(
     verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<T>>>,
     logger: &slog::Logger,
-) -> Result<HashMap<usize, T>, (Vec<usize>, BroadcastFailureReason)>
+) -> Result<HashMap<usize, T>, BroadcastFailureReason>
 where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
 {
@@ -87,16 +117,11 @@ where
 
     // Too few messages during this broadcast verification stage
     if verification_messages.len() <= threshold {
-        slog::warn!(
-            logger,
-            "Not enough messages received during broadcast verification ({}/{})",
-            verification_messages.len(),
-            num_parties,
-        );
-
         // TODO: consider blaming the parties that didn't send broadcast verification messages
         // (one thing to consider is whether we are going to be in trouble if we report more parties than other nodes?)
-        return Err((vec![], BroadcastFailureReason::InsufficientMessages));
+        return Err(BroadcastFailureReason::InsufficientVerificationMessages(
+            BTreeSet::new(),
+        ));
     }
 
     // This should not panic due to the check above (`check_verification_message_indexes`)
@@ -123,7 +148,7 @@ where
 
     let mut agreed_on_values = HashMap::<usize, T>::new();
 
-    let mut blamed_parties = vec![];
+    let mut blamed_parties = BTreeSet::new();
 
     // Check that the values are agreed on by the threshold majority.
     // This will find inconsistency within the values
@@ -142,44 +167,27 @@ where
         {
             agreed_on_values.insert(*idx, data);
         } else {
-            blamed_parties.push(*idx);
+            blamed_parties.insert(*idx);
         }
     }
 
     if blamed_parties.is_empty() {
         Ok(agreed_on_values)
-    } else if insufficient_messages {
-        Err((blamed_parties, BroadcastFailureReason::InsufficientMessages))
     } else {
-        // If the failure was not due to "InsufficientMessages",
-        // then it must be caused by (or at least partially caused by) inconsistency.
-        Err((blamed_parties, BroadcastFailureReason::Inconsistency))
+        Err(if insufficient_messages {
+            BroadcastFailureReason::InsufficientMessages(blamed_parties)
+        } else {
+            // If the failure was not due to "InsufficientMessages",
+            // then it must be caused by (or at least partially caused by) inconsistency.
+            BroadcastFailureReason::Inconsistency(blamed_parties)
+        })
     }
-}
-
-/// Builds the anyhow error message using the BroadcastFailureReason and stage name
-pub fn broadcast_failure_to_stage_result_error<D, Result>(
-    blamed_parties: Vec<usize>,
-    abort_reason: BroadcastFailureReason,
-    stage_name: &str,
-) -> StageResult<D, Result> {
-    StageResult::Error(
-        blamed_parties,
-        match abort_reason {
-            BroadcastFailureReason::Inconsistency => {
-                anyhow::Error::msg(format!("Inconsistent broadcast of {}", stage_name))
-            }
-            BroadcastFailureReason::InsufficientMessages => anyhow::Error::msg(format!(
-                "Insufficient messages received in broadcast of {}",
-                stage_name
-            )),
-        },
-    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logging::test_utils::new_test_logger;
     use std::collections::BTreeSet;
 
     /// Transforms the (more concise) test data into the expected "shape";
@@ -208,28 +216,14 @@ mod tests {
     /// to make it *NOT* sensitive to the order of elements)
     fn check_broadcast_verification(
         verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<i32>>>,
-        expected: Result<Vec<(usize, i32)>, (Vec<usize>, BroadcastFailureReason)>,
+        expected: Result<Vec<(usize, i32)>, BroadcastFailureReason>,
     ) {
-        let logger = crate::logging::test_utils::new_test_logger();
-        let res = verify_broadcasts(verification_messages, &logger).map_err(
-            |(reported_idxs, failure_reason)| {
-                (
-                    reported_idxs.iter().copied().collect::<BTreeSet<usize>>(),
-                    failure_reason,
-                )
-            },
+        let expected = expected.map(|values| values.into_iter().collect::<HashMap<_, _>>());
+
+        assert_eq!(
+            verify_broadcasts(verification_messages, &new_test_logger()),
+            expected
         );
-
-        let expected = expected
-            .map(|values| values.into_iter().collect::<HashMap<_, _>>())
-            .map_err(|(reported_idxs, failure_reason)| {
-                (
-                    reported_idxs.iter().copied().collect::<BTreeSet<usize>>(),
-                    failure_reason,
-                )
-            });
-
-        assert_eq!(res, expected);
     }
 
     #[test]
@@ -264,7 +258,9 @@ mod tests {
         // Expect parties 2 and 4 to be reported
         check_broadcast_verification(
             all_messages,
-            Err((vec![2, 4], BroadcastFailureReason::Inconsistency)),
+            Err(BroadcastFailureReason::Inconsistency(
+                vec![2, 4].iter().copied().collect(),
+            )),
         );
     }
 
@@ -283,7 +279,9 @@ mod tests {
         // Expect party 2 to be reported
         check_broadcast_verification(
             all_messages,
-            Err((vec![2], BroadcastFailureReason::InsufficientMessages)),
+            Err(BroadcastFailureReason::InsufficientMessages(
+                vec![2].iter().copied().collect(),
+            )),
         );
     }
 
@@ -301,7 +299,9 @@ mod tests {
         // Expect no parties to be reported
         check_broadcast_verification(
             all_messages,
-            Err((vec![], BroadcastFailureReason::InsufficientMessages)),
+            Err(BroadcastFailureReason::InsufficientVerificationMessages(
+                BTreeSet::new(),
+            )),
         );
     }
 

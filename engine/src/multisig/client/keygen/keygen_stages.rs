@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::multisig::client::common::broadcast_failure_to_stage_result_error;
 use crate::multisig::client::{self, KeygenResultInfo};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
@@ -137,12 +136,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
     ) -> KeygenStageResult {
         let commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err((blamed_parties, abort_reason)) => {
-                return broadcast_failure_to_stage_result_error(
-                    blamed_parties,
-                    abort_reason,
-                    "initial commitments",
-                );
+            Err(abort_reason) => {
+                return abort_reason.to_stage_result_error("initial commitments");
             }
         };
 
@@ -339,12 +334,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err((blamed_parties, abort_reason)) => {
-                return broadcast_failure_to_stage_result_error(
-                    blamed_parties,
-                    abort_reason,
-                    "complaints",
-                );
+            Err(abort_reason) => {
+                return abort_reason.to_stage_result_error("complaints");
             }
         };
 
@@ -554,12 +545,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err((blamed_parties, abort_reason)) => {
-                return broadcast_failure_to_stage_result_error(
-                    blamed_parties,
-                    abort_reason,
-                    "blame response",
-                );
+            Err(abort_reason) => {
+                return abort_reason.to_stage_result_error("blame response");
             }
         };
 

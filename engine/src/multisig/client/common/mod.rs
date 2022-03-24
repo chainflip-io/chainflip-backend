@@ -4,9 +4,7 @@ mod ceremony_stage;
 
 pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
-pub use broadcast_verification::{
-    broadcast_failure_to_stage_result_error, BroadcastFailureReason, BroadcastVerificationMessage,
-};
+pub use broadcast_verification::{BroadcastFailureReason, BroadcastVerificationMessage};
 
 use std::sync::Arc;
 
