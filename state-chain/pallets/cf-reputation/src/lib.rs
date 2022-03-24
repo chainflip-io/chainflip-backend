@@ -18,11 +18,10 @@ pub use weights::WeightInfo;
 
 use frame_support::{
 	pallet_prelude::*,
-	sp_std::convert::TryInto,
 	traits::{OnRuntimeUpgrade, StorageVersion},
 };
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
+use sp_runtime::traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero};
 use sp_std::ops::Neg;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -148,10 +147,12 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// An invalid amount of reputation points set for the accrual ratio
+		/// An invalid amount of reputation points set for the accrual ratio.
 		InvalidAccrualReputationPoints,
-		/// An invalid amount of online credits for the accrual ratio
+		/// An invalid amount of online credits for the accrual ratio.
 		InvalidAccrualOnlineCredits,
+		/// The block in a reputation point penalty must be non-zero.
+		InvalidReputationPenalty,
 	}
 
 	#[pallet::call]
@@ -202,8 +203,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			value: ReputationPenalty<BlockNumberFor<T>>,
 		) -> DispatchResultWithPostInfo {
-			// Ensure we are root when setting this
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(value.blocks > Zero::zero(), Error::<T>::InvalidReputationPenalty);
 			ReputationPointPenalty::<T>::put(value.clone());
 			Self::deposit_event(Event::ReputationPointPenaltyUpdated(value));
 			Ok(().into())
@@ -321,8 +322,8 @@ impl<T: Config> Heartbeat for Pallet<T> {
 						let ReputationPenalty { points, blocks } =
 							ReputationPointPenalty::<T>::get();
 						let interval: u32 =
-							T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
-						let blocks: u32 = blocks.try_into().unwrap_or(0);
+							T::HeartbeatBlockInterval::get().unique_saturated_into();
+						let blocks: u32 = blocks.unique_saturated_into();
 
 						let penalty =
 							(points.saturating_mul(interval as i32).checked_div(blocks as i32))
@@ -346,9 +347,7 @@ impl<T: Config> Heartbeat for Pallet<T> {
 				},
 			);
 
-			if reputation_points < Zero::zero() ||
-				Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
-			{
+			if reputation_points < Zero::zero() {
 				// At this point we slash the validator by the amount of blocks offline
 				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
