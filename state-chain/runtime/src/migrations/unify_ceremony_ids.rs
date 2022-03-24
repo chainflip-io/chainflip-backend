@@ -13,7 +13,7 @@ generate_storage_alias!(
 );
 
 generate_storage_alias!(
-	EthereumVault, KeygenCeremonyIdCounter => Value<CeremonyId>
+	Vaults, KeygenCeremonyIdCounter => Value<CeremonyId>
 );
 
 impl OnRuntimeUpgrade for UnifyCeremonyIds {

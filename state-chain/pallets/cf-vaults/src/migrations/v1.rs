@@ -138,10 +138,15 @@ pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static 
 	let pre_migration_id_counter: u64 = Pallet::<T, I>::get_temp_storage("id_counter")
 		.ok_or("No id_counter written during the pre-migration checks")?;
 
-	ensure!(
-		pre_migration_id_counter + 1 == T::CeremonyIdProvider::next_ceremony_id(),
-		"🏯 KeygenCeremonyIdCounter pre/post migration inconsistentcy."
-	);
+	let next = T::CeremonyIdProvider::next_ceremony_id();
+	ensure!(pre_migration_id_counter + 1 <= next, {
+		log::error!(
+			"KeygenCeremonyIdCounter pre-migration: {:?} / next: {:?}.",
+			pre_migration_id_counter,
+			next
+		);
+		"🏯 KeygenCeremonyIdCounter pre/post migration inconsistency."
+	});
 
 	log::info!(
 		"🏯 KeygenCeremonyIdCounter checked; Pre-migration ceremony Id: {}",
