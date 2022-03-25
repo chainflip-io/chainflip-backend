@@ -162,13 +162,13 @@ impl KeyDB for PersistentKeyDB {
 
                 // deserialize the `KeygenResultInfo`
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
-                    Ok(keygen_info) => {
+                    Ok(keygen_result_info) => {
                         slog::debug!(
                             self.logger,
                             "Loaded key_info (key_id: {}) from database",
                             key_id
                         );
-                        Some((key_id, keygen_info))
+                        Some((key_id, keygen_result_info))
                     }
                     Err(err) => {
                         slog::error!(
@@ -379,13 +379,13 @@ fn load_keys_using_kvdb(
         .map(|(key_id, key_info)| {
             let key_id: KeyId = KeyId(key_id.into());
             match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
-                Ok(keygen_info) => {
+                Ok(keygen_result_info) => {
                     slog::debug!(
                         logger,
                         "Loaded key_info (key_id: {}) from kvdb database",
                         key_id
                     );
-                    Ok((key_id, keygen_info))
+                    Ok((key_id, keygen_result_info))
                 }
                 Err(err) => Err(anyhow::Error::msg(format!(
                     "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
