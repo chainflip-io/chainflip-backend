@@ -1,8 +1,7 @@
 use crate::{
-	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId,
-	BroadcastAttemptIdCounter, BroadcastId, BroadcastIdToAttemptIdLookup, BroadcastRetryQueue,
-	BroadcastStage, Error, Event as BroadcastEvent, Instance1, SignatureToBroadcastIdLookup,
-	TransmissionFailure,
+	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
+	BroadcastIdToAttemptIdLookup, BroadcastRetryQueue, BroadcastStage, Error,
+	Event as BroadcastEvent, Instance1, SignatureToBroadcastIdLookup, TransmissionFailure,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -168,13 +167,14 @@ fn test_broadcast_happy_path() {
 #[test]
 fn test_broadcast_rejected() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
+		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = (1, 0);
 
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
+				.broadcast_attempt
 				.attempt_count == 0
 		);
 
@@ -199,6 +199,7 @@ fn test_broadcast_rejected() {
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID + 1)
 				.unwrap()
+				.broadcast_attempt
 				.attempt_count == 1
 		);
 
@@ -236,13 +237,14 @@ fn test_abort_after_max_attempt_reached() {
 fn test_broadcast_failed() {
 	new_test_ext().execute_with(|| {
 		const BROADCAST_ID: BroadcastId = 1;
-		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
+		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = (BROADCAST_ID, 0);
 
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
+				.broadcast_attempt
 				.attempt_count == 0
 		);
 
@@ -278,6 +280,7 @@ fn test_bad_signature() {
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
+				.broadcast_attempt
 				.attempt_count == 0
 		);
 
@@ -329,13 +332,14 @@ fn test_invalid_id_is_noop() {
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
 		const BROADCAST_ID: BroadcastId = 1;
-		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = 1;
+		const BROADCAST_ATTEMPT_ID: BroadcastAttemptId = (BROADCAST_ID, 0);
 
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
+				.broadcast_attempt
 				.attempt_count == 0
 		);
 
@@ -348,6 +352,7 @@ fn test_signature_request_expiry() {
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID)
 				.unwrap()
+				.broadcast_attempt
 				.attempt_count == 0
 		);
 
@@ -368,9 +373,10 @@ fn test_signature_request_expiry() {
 			// New attempt is live with same broadcast_id and incremented attempt_count.
 			assert!({
 				let new_attempt =
-					AwaitingTransactionSignature::<Test, Instance1>::get(BROADCAST_ATTEMPT_ID + 1)
+					AwaitingTransactionSignature::<Test, Instance1>::get((BROADCAST_ATTEMPT_ID, 1))
 						.unwrap();
-				new_attempt.attempt_count == 1 && new_attempt.broadcast_id == BROADCAST_ID
+				new_attempt.broadcast_attempt.attempt_count == 1 &&
+					new_attempt.broadcast_attempt.broadcast_id == BROADCAST_ID
 			});
 		};
 

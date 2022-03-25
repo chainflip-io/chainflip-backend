@@ -36,7 +36,21 @@ pub type BroadcastId = u32;
 pub type AttemptCount = u32;
 
 /// A unique id for each broadcast attempt
-pub type BroadcastAttemptId = (BroadcastId, AttemptCount);
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct BroadcastAttemptId {
+	broadcast_id: BroadcastId,
+	attempt_count: AttemptCount,
+}
+
+impl sp_std::fmt::Display for BroadcastAttemptId {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		write!(
+			f,
+			"BroadcastAttemptId(broadcast_id: {}, attempt_count: {})",
+			self.broadcast_id, self.attempt_count
+		)
+	}
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -239,7 +253,7 @@ pub mod pallet {
 			for (stage, attempt_id) in expiries.iter() {
 				let notify_and_retry = |attempt: BroadcastAttempt<T, I>| {
 					Self::deposit_event(Event::<T, I>::BroadcastAttemptExpired(
-						*attempt_id,
+						attempt_id.clone(),
 						*stage,
 					));
 					Self::retry_failed_broadcast(attempt);
@@ -294,12 +308,12 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(attempt_id)
+			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(attempt_id.clone())
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			ensure!(signing_attempt.nominee == signer.into(), Error::<T, I>::InvalidSigner);
 
-			AwaitingTransactionSignature::<T, I>::remove(attempt_id);
+			AwaitingTransactionSignature::<T, I>::remove(attempt_id.clone());
 
 			if T::TargetChain::verify_signed_transaction(
 				&signing_attempt.broadcast_attempt.unsigned_tx,
@@ -309,14 +323,17 @@ pub mod pallet {
 			.is_ok()
 			{
 				AwaitingTransmission::<T, I>::insert(
-					attempt_id,
+					attempt_id.clone(),
 					TransmissionAttempt {
 						broadcast_attempt: signing_attempt.broadcast_attempt,
 						signer: signing_attempt.nominee.clone(),
 						signed_tx: signed_tx.clone(),
 					},
 				);
-				Self::deposit_event(Event::<T, I>::TransmissionRequest(attempt_id, signed_tx));
+				Self::deposit_event(Event::<T, I>::TransmissionRequest(
+					attempt_id.clone(),
+					signed_tx,
+				));
 
 				// Schedule expiry.
 				let expiry_block =
@@ -326,9 +343,8 @@ pub mod pallet {
 				});
 			} else {
 				log::warn!(
-					"Unable to verify tranaction signature for broadcast attempt_id ({}, {})",
-					attempt_id.0,
-					attempt_id.1
+					"Unable to verify tranaction signature for broadcast attempt id {}",
+					attempt_id
 				);
 				Self::report_and_schedule_retry(
 					&signing_attempt.nominee.clone(),
@@ -467,7 +483,7 @@ pub mod pallet {
 			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
 				match BroadcastIdToAttemptIdLookup::<T, I>::take(broadcast_id) {
 					Some(attempt_id)
-						if AwaitingTransmission::<T, I>::take(attempt_id).is_some() =>
+						if AwaitingTransmission::<T, I>::take(attempt_id.clone()).is_some() =>
 						Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id)),
 					_ => (),
 				}
@@ -525,13 +541,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		unsigned_tx: UnsignedTransactionFor<T, I>,
 	) {
 		// Get a new id
-		let attempt_id = (broadcast_id, attempt_count + 1);
+		let attempt_id = BroadcastAttemptId { broadcast_id, attempt_count };
 
 		// Update the lookup table
-		BroadcastIdToAttemptIdLookup::<T, I>::insert(broadcast_id, attempt_id);
+		BroadcastIdToAttemptIdLookup::<T, I>::insert(broadcast_id, attempt_id.clone());
 
 		// Seed based on the input data of the extrinsic
-		let seed = (attempt_id, unsigned_tx.clone()).encode();
+		let seed = (attempt_id.clone(), unsigned_tx.clone()).encode();
 
 		// Select a signer for this broadcast.
 		let nominated_signer = T::SignerNomination::nomination_with_seed(seed);
@@ -539,7 +555,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Check if there is an nominated signer
 		if let Some(nominated_signer) = nominated_signer {
 			AwaitingTransactionSignature::<T, I>::insert(
-				attempt_id,
+				attempt_id.clone(),
 				TransactionSigningAttempt::<T, I> {
 					broadcast_attempt: BroadcastAttempt {
 						broadcast_id,
@@ -553,7 +569,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Schedule expiry.
 			let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
-				entries.push((BroadcastStage::TransactionSigning, attempt_id))
+				entries.push((BroadcastStage::TransactionSigning, attempt_id.clone()))
 			});
 
 			// Emit the transaction signing request.
