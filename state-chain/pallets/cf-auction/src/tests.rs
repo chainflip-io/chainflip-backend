@@ -402,3 +402,33 @@ fn should_exclude_bad_validators_in_next_auction() {
 		);
 	});
 }
+
+#[test]
+fn should_exclude_excluded_from_keygen_set() {
+	new_test_ext().execute_with(|| {
+		// Generate bids with half of these being reported as bad validators
+		let number_of_bidders = 10;
+		generate_bids(number_of_bidders, BIDDER_GROUP_A);
+
+		// Split the good from the bad
+		let (good_bidders, bad_bidders): (Vec<ValidatorId>, Vec<ValidatorId>) =
+			MockBidderProvider::get_bidders()
+				.iter()
+				.map(|(id, _)| *id)
+				.partition(|id| *id % 2 == 0);
+
+		MockKeygenExclusion::<Test>::set(bad_bidders);
+
+		// Confirm we just have the good bidders in our new auction result
+		assert_eq!(
+			<AuctionPallet as Auctioneer>::resolve_auction()
+				.expect("we should have an auction")
+				.winners,
+			good_bidders
+				.iter()
+				.take(MAX_VALIDATOR_SIZE as usize)
+				.cloned()
+				.collect::<Vec<_>>(),
+		);
+	});
+}
