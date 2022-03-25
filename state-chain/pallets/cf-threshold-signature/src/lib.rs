@@ -431,6 +431,11 @@ pub mod pallet {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
+						if context.remaining_respondents.is_empty() {
+							// No more respondents waiting: we can retry on the next block.
+							Self::schedule_retry(id, 1u32.into());
+						}
+
 						Ok(())
 					})
 			})?;

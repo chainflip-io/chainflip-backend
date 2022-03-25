@@ -297,7 +297,7 @@ fn fail_path_no_timeout() {
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
 			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() + 10;
 			assert!(!MockCallback::has_executed(request_id));
-			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 0);
+			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
 
 			// The offender has not yet been reported.
