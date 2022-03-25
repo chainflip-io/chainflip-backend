@@ -9,16 +9,24 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod migrations;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
 use cf_traits::{offence_reporting::*, Broadcaster, Chainflip, SignerNomination, ThresholdSigner};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchResultWithPostInfo, traits::Get, Twox64Concat};
+use frame_support::{
+	dispatch::DispatchResultWithPostInfo,
+	traits::{Get, OnRuntimeUpgrade, StorageVersion},
+	Twox64Concat,
+};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{marker::PhantomData, prelude::*};
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 /// The reasons for which a broadcast might fail.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -158,6 +166,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
