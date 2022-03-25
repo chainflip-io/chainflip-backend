@@ -1,7 +1,6 @@
 use crate::{mock::*, Error, *};
 use cf_traits::{mocks::vault_rotation::MockVaultRotator, VaultRotator};
 use frame_support::{assert_noop, assert_ok};
-use sp_runtime::traits::Zero;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -507,22 +506,11 @@ fn test_setting_vanity_names_() {
 #[test]
 fn test_missing_author_punishment() {
 	new_test_ext().execute_with(|| {
-		//-- TODO: it shouldn't be this difficult to add some validators.
-
-		let authority_set = vec![1, 2, 3, 4];
-		MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
-			winners: authority_set,
-			minimum_active_bid: Zero::zero(),
+		RotationPhase::<Test>::set(RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
+			winners: vec![1, 2, 3, 4],
+			..Default::default()
 		}));
-
-		// Force an auction at the next block
-		assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-		move_forward_blocks(1);
-		MockVaultRotator::succeed();
-		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
-		assert_next_epoch();
-
-		//---
+		move_forward_blocks(2);
 
 		// Use a large offset to ensure the modulo math selects the correct validators.
 		let offset = 4 * 123456;
