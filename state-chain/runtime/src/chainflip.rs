@@ -8,8 +8,8 @@ pub use signer_nomination::RandomSignerNomination;
 
 use crate::{
 	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
-	Witnesser,
+	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Online, Reputation, Runtime, System,
+	Validator, Witnesser,
 };
 use cf_chains::{
 	eth::{self, api::EthereumApi},
@@ -17,9 +17,9 @@ use cf_chains::{
 };
 use cf_traits::{
 	offence_reporting::{Offence, ReputationPoints},
-	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
-	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
+	BackupValidators, BlockEmissions, BondRotation, Chainflip, EmergencyRotation, EmissionsTrigger,
+	EpochInfo, EpochTransitionHandler, Heartbeat, Issuance, KeygenExclusionSet, NetworkState,
+	RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -32,7 +32,7 @@ use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
 };
-use sp_std::{cmp::min, marker::PhantomData, prelude::*};
+use sp_std::{cmp::min, prelude::*};
 
 use cf_traits::RuntimeUpgrade;
 
@@ -70,32 +70,13 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			new_bond,
 		);
 
-		<AccountStateManager<Runtime> as EpochTransitionHandler>::on_new_epoch(
+		<Validator as EpochTransitionHandler>::on_new_epoch(
 			old_validators,
 			new_validators,
 			new_bond,
 		);
 
-		<pallet_cf_online::Pallet<Runtime> as cf_traits::KeygenExclusionSet>::forgive_all();
-	}
-}
-
-pub struct AccountStateManager<T>(PhantomData<T>);
-
-impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
-	type ValidatorId = AccountId;
-	type Amount = T::Amount;
-
-	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		_new_bid: Self::Amount,
-	) {
-		// Update the last active epoch for the new validating set
-		let epoch_index = Validator::epoch_index();
-		for validator in new_validators {
-			ChainflipAccountStore::<Runtime>::update_last_active_epoch(validator, epoch_index);
-		}
+		<Online as KeygenExclusionSet>::forgive_all();
 	}
 }
 
