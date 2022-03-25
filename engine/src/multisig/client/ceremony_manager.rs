@@ -21,7 +21,7 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
+use crate::multisig::{KeygenRequest, KeygenOutcome, MessageHash, SigningOutcome};
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions};
@@ -218,15 +218,15 @@ impl CeremonyManager {
     pub fn on_keygen_request(
         &mut self,
         rng: Rng,
-        keygen_info: KeygenInfo,
+        keygen_request: KeygenRequest,
         keygen_options: KeygenOptions,
     ) {
         // TODO: Consider similarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
 
-        let KeygenInfo {
+        let KeygenRequest {
             ceremony_id,
             signers,
-        } = keygen_info;
+        } = keygen_request;
 
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 

@@ -45,12 +45,12 @@ pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::CeremonyManager,
-    signing::{frost::SigningData, PendingSigningInfo},
+    signing::{frost::SigningData, PendingSigningRequest},
 };
 
 pub use keygen::KeygenOptions;
 
-use super::{KeygenInfo, SigningInfo};
+use super::{KeygenRequest, SigningRequest};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
@@ -184,7 +184,7 @@ where
     pub ceremony_manager: CeremonyManager,
     multisig_outcome_sender: MultisigOutcomeSender,
     /// Requests awaiting a key
-    pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningInfo>>,
+    pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningRequest>>,
     keygen_options: KeygenOptions,
     logger: slog::Logger,
 }
@@ -222,16 +222,16 @@ where
         slog::trace!(self.logger, "Checking for expired multisig states");
         self.ceremony_manager.cleanup();
 
-        // cleanup stale signing_info in pending_requests_to_sign
+        // cleanup stale signing_request in pending_requests_to_sign
         let logger = &self.logger;
 
         let mut expired_ceremony_ids = vec![];
 
         self.pending_requests_to_sign
-            .retain(|key_id, pending_signing_infos| {
-                pending_signing_infos.retain(|pending| {
+            .retain(|key_id, pending_signing_requests| {
+                pending_signing_requests.retain(|pending| {
                     if pending.should_expire_at < Instant::now() {
-                        let ceremony_id = pending.signing_info.ceremony_id;
+                        let ceremony_id = pending.signing_request.ceremony_id;
 
                         slog::warn!(
                             logger,
@@ -246,7 +246,7 @@ where
                     }
                     true
                 });
-                !pending_signing_infos.is_empty()
+                !pending_signing_requests.is_empty()
             });
 
         for id in expired_ceremony_ids {
@@ -263,10 +263,10 @@ where
         }
     }
 
-    fn single_party_keygen(&mut self, keygen_info: KeygenInfo) {
+    fn single_party_keygen(&mut self, keygen_request: KeygenRequest) {
         slog::info!(self.logger, "Performing solo keygen");
 
-        if !keygen_info.signers.contains(&self.my_account_id) {
+        if !keygen_request.signers.contains(&self.my_account_id) {
             slog::warn!(
                 self.logger,
                 "Keygen request ignored: we are not among participants"
@@ -308,23 +308,23 @@ where
                 // This is not going to be used in solo ceremonies
                 party_public_keys: vec![public_key],
             }),
-            validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(&keygen_info.signers)),
+            validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(&keygen_request.signers)),
             params,
         };
 
-        self.on_key_generated(keygen_info.ceremony_id, key_result_info);
+        self.on_key_generated(keygen_request.ceremony_id, key_result_info);
     }
 
     fn single_party_signing(
         &mut self,
-        sign_info: SigningInfo,
+        signing_request: SigningRequest,
         keygen_result_info: KeygenResultInfo,
     ) {
         use crate::multisig::crypto::{Point, Scalar};
 
         slog::info!(self.logger, "Performing solo signing");
 
-        if !sign_info.signers.contains(&self.my_account_id) {
+        if !signing_request.signers.contains(&self.my_account_id) {
             slog::warn!(
                 self.logger,
                 "Signing request ignored: we are not among participants"
@@ -347,7 +347,7 @@ where
             key.y,
             r,
             nonce,
-            &sign_info.data.0,
+            &signing_request.data.0,
         );
 
         let sig = SchnorrSignature {
@@ -357,7 +357,7 @@ where
 
         self.multisig_outcome_sender
             .send(MultisigOutcome::Signing(SigningOutcome {
-                id: sign_info.ceremony_id,
+                id: signing_request.ceremony_id,
                 result: Ok(sig),
             }))
             .unwrap();
@@ -370,32 +370,32 @@ where
         rng: &mut Rng,
     ) {
         match instruction {
-            MultisigInstruction::Keygen(keygen_info) => {
+            MultisigInstruction::Keygen(keygen_request) => {
                 use rand_legacy::{Rng as _, SeedableRng};
 
                 slog::info!(
                     self.logger,
                     "Received a keygen request, participants: {}",
-                    format_iterator(&keygen_info.signers);
-                    CEREMONY_ID_KEY => keygen_info.ceremony_id
+                    format_iterator(&keygen_request.signers);
+                    CEREMONY_ID_KEY => keygen_request.ceremony_id
                 );
                 let rng = Rng::from_seed(rng.gen());
 
-                if keygen_info.signers.len() == 1 {
-                    self.single_party_keygen(keygen_info);
+                if keygen_request.signers.len() == 1 {
+                    self.single_party_keygen(keygen_request);
                 } else {
                     self.ceremony_manager
-                        .on_keygen_request(rng, keygen_info, self.keygen_options);
+                        .on_keygen_request(rng, keygen_request, self.keygen_options);
                 }
             }
-            MultisigInstruction::Sign(sign_info) => {
-                let key_id = &sign_info.key_id;
+            MultisigInstruction::Sign(signing_request) => {
+                let key_id = &signing_request.key_id;
 
                 slog::debug!(
                     self.logger,
                     "Received a request to sign, message_hash: {}, signers: {}",
-                    sign_info.data, format_iterator(&sign_info.signers);
-                    CEREMONY_ID_KEY => sign_info.ceremony_id
+                    signing_request.data, format_iterator(&signing_request.signers);
+                    CEREMONY_ID_KEY => signing_request.ceremony_id
                 );
 
                 let key = self.key_store.get_key(key_id).cloned();
@@ -403,15 +403,15 @@ where
                     Some(keygen_result_info) => {
                         use rand_legacy::{Rng as _, SeedableRng};
                         let rng = Rng::from_seed(rng.gen());
-                        if sign_info.signers.len() == 1 {
-                            self.single_party_signing(sign_info, keygen_result_info);
+                        if signing_request.signers.len() == 1 {
+                            self.single_party_signing(signing_request, keygen_result_info);
                         } else {
                             self.ceremony_manager.on_request_to_sign(
                                 rng,
-                                sign_info.data,
+                                signing_request.data,
                                 keygen_result_info,
-                                sign_info.signers,
-                                sign_info.ceremony_id,
+                                signing_request.signers,
+                                signing_request.ceremony_id,
                             );
                         }
                     }
@@ -421,14 +421,14 @@ where
                         slog::debug!(
                             self.logger,
                             "Delaying a request to sign for unknown key: {:?}",
-                            sign_info.key_id;
-                            CEREMONY_ID_KEY => sign_info.ceremony_id
+                            signing_request.key_id;
+                            CEREMONY_ID_KEY => signing_request.ceremony_id
                         );
 
                         self.pending_requests_to_sign
-                            .entry(sign_info.key_id.clone())
+                            .entry(signing_request.key_id.clone())
                             .or_default()
-                            .push(PendingSigningInfo::new(sign_info));
+                            .push(PendingSigningRequest::new(signing_request));
                     }
                 }
             }
@@ -442,11 +442,11 @@ where
             .remove(&KeyId(key_info.key.get_public_key_bytes()))
         {
             for pending in reqs {
-                let signing_info = pending.signing_info;
+                let signing_request = pending.signing_request;
                 slog::debug!(
                     self.logger,
                     "Processing a pending request to sign";
-                    CEREMONY_ID_KEY => signing_info.ceremony_id
+                    CEREMONY_ID_KEY => signing_request.ceremony_id
                 );
 
                 use rand_legacy::FromEntropy;
@@ -455,10 +455,10 @@ where
 
                 self.ceremony_manager.on_request_to_sign(
                     rng,
-                    signing_info.data,
+                    signing_request.data,
                     key_info.clone(),
-                    signing_info.signers,
-                    signing_info.ceremony_id,
+                    signing_request.signers,
+                    signing_request.ceremony_id,
                 )
             }
         }

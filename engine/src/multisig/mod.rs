@@ -30,7 +30,7 @@ pub use db::{KeyDB, PersistentKeyDB};
 #[cfg(test)]
 pub use db::KeyDBMock;
 
-pub use self::client::{keygen::KeygenInfo, signing::SigningInfo};
+pub use self::client::{keygen::KeygenRequest, signing::SigningRequest};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
@@ -53,8 +53,8 @@ impl std::fmt::Display for KeyId {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
-    Keygen(KeygenInfo),
-    Sign(SigningInfo),
+    Keygen(KeygenRequest),
+    Sign(SigningRequest),
 }
 
 /// Start the multisig client, which listens for p2p messages and instructions from the SC

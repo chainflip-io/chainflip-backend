@@ -13,8 +13,8 @@ use crate::{
     eth::{EthBroadcaster, EthRpcApi},
     logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
-        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
-        SigningInfo, SigningOutcome,
+        KeyId, KeygenRequest, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
+        SigningRequest, SigningOutcome,
     },
     multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
@@ -266,7 +266,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     ),
                                                 ) => {
                                                     let gen_new_key_event = MultisigInstruction::Keygen(
-                                                        KeygenInfo::new(ceremony_id, validator_candidates),
+                                                        KeygenRequest::new(ceremony_id, validator_candidates),
                                                     );
 
                                                     multisig_instruction_sender
@@ -282,7 +282,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         payload,
                                                     ),
                                                 ) if validators.contains(&state_chain_client.our_account_id) => {
-                                                    let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
+                                                    let sign_tx = MultisigInstruction::Sign(SigningRequest::new(
                                                         ceremony_id,
                                                         KeyId(key_id),
                                                         MessageHash(payload.to_fixed_bytes()),

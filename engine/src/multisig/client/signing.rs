@@ -19,21 +19,21 @@ use state_chain_runtime::AccountId;
 use super::common::KeygenResult;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SigningInfo {
+pub struct SigningRequest {
     pub data: MessageHash,
     pub ceremony_id: CeremonyId,
     pub key_id: KeyId,
     pub signers: Vec<AccountId>,
 }
 
-impl SigningInfo {
+impl SigningRequest {
     pub fn new(
         ceremony_id: CeremonyId,
         key_id: KeyId,
         data: MessageHash,
         signers: Vec<AccountId>,
     ) -> Self {
-        SigningInfo {
+        SigningRequest {
             data,
             ceremony_id,
             key_id,
@@ -42,18 +42,18 @@ impl SigningInfo {
     }
 }
 
-/// A wrapper around SigningInfo that contains the timeout info for cleanup
+/// A wrapper around SigningRequest that contains the timeout info for cleanup
 #[derive(Debug)]
-pub struct PendingSigningInfo {
+pub struct PendingSigningRequest {
     pub should_expire_at: Instant,
-    pub signing_info: SigningInfo,
+    pub signing_request: SigningRequest,
 }
 
-impl PendingSigningInfo {
-    pub fn new(signing_info: SigningInfo) -> Self {
-        PendingSigningInfo {
+impl PendingSigningRequest {
+    pub fn new(signing_request: SigningRequest) -> Self {
+        PendingSigningRequest {
             should_expire_at: Instant::now() + PENDING_SIGN_DURATION,
-            signing_info,
+            signing_request,
         }
     }
 

@@ -10,7 +10,7 @@ pub use helpers::{
 
 use lazy_static::lazy_static;
 
-use crate::multisig::KeygenInfo;
+use crate::multisig::KeygenRequest;
 
 use state_chain_runtime::AccountId;
 

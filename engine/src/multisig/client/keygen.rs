@@ -21,7 +21,7 @@ use state_chain_runtime::AccountId;
 
 /// Information necessary for the multisig client to start a new keygen ceremony
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct KeygenInfo {
+pub struct KeygenRequest {
     pub ceremony_id: CeremonyId,
     pub signers: Vec<AccountId>,
 }
@@ -54,9 +54,9 @@ impl KeygenOptions {
     }
 }
 
-impl KeygenInfo {
+impl KeygenRequest {
     pub fn new(ceremony_id: CeremonyId, signers: Vec<AccountId>) -> Self {
-        KeygenInfo {
+        KeygenRequest {
             ceremony_id,
             signers,
         }

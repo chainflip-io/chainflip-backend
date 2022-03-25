@@ -392,9 +392,9 @@ async fn should_ignore_keygen_request_if_not_participating() {
 
     // Send the keygen request
     let ceremony_id = 1;
-    let keygen_info = KeygenInfo::new(ceremony_id, keygen_ids);
+    let keygen_request = KeygenRequest::new(ceremony_id, keygen_ids);
     node.client.process_multisig_instruction(
-        MultisigInstruction::Keygen(keygen_info),
+        MultisigInstruction::Keygen(keygen_request),
         &mut Rng::from_entropy(),
     );
 
@@ -427,12 +427,12 @@ async fn should_ignore_duplicate_keygen_request() {
     keygen_ids[1] = unknown_id;
 
     // Send another keygen request with the same ceremony_id but different signers
-    let keygen_info = KeygenInfo::new(ceremony.ceremony_id, keygen_ids);
+    let keygen_request = KeygenRequest::new(ceremony.ceremony_id, keygen_ids);
     ceremony
         .get_mut_node(&node_id)
         .client
         .process_multisig_instruction(
-            MultisigInstruction::Keygen(keygen_info),
+            MultisigInstruction::Keygen(keygen_request),
             &mut Rng::from_entropy(),
         );
 
@@ -632,9 +632,9 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
         KeygenOptions::allowing_high_pubkey(),
     );
 
-    let keygen_info = KeygenInfo::new(ceremony_id, keygen_ids);
+    let keygen_request = KeygenRequest::new(ceremony_id, keygen_ids);
     node.client.process_multisig_instruction(
-        MultisigInstruction::Keygen(keygen_info),
+        MultisigInstruction::Keygen(keygen_request),
         &mut Rng::from_entropy(),
     );
 
@@ -661,7 +661,7 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
 
     // use the same ceremony id as was used in the previous ceremony
     let dup_keygen_req =
-        MultisigInstruction::Keygen(KeygenInfo::new(ceremony_id, ACCOUNT_IDS.clone()));
+        MultisigInstruction::Keygen(KeygenRequest::new(ceremony_id, ACCOUNT_IDS.clone()));
     node.client
         .process_multisig_instruction(dup_keygen_req, &mut Rng::from_entropy());
 

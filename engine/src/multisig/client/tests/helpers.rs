@@ -47,7 +47,7 @@ use crate::{
             MultisigClient, MultisigMessage, MultisigOutcome,
         },
         crypto::Point,
-        KeyDBMock, KeygenInfo, SigningInfo,
+        KeyDBMock, KeygenRequest, SigningRequest,
     },
 };
 
@@ -446,7 +446,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     }
 
     fn multisig_instruction(&self) -> MultisigInstruction {
-        MultisigInstruction::Keygen(KeygenInfo {
+        MultisigInstruction::Keygen(KeygenRequest {
             ceremony_id: self.ceremony_id,
             signers: self.nodes.keys().cloned().collect(),
         })
@@ -477,7 +477,7 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
     }
 
     fn multisig_instruction(&self) -> MultisigInstruction {
-        MultisigInstruction::Sign(SigningInfo::new(
+        MultisigInstruction::Sign(SigningRequest::new(
             self.ceremony_id,
             self.ceremony_runner_data.key_id.clone(),
             self.ceremony_runner_data.message_hash.clone(),
@@ -525,8 +525,8 @@ impl SigningCeremonyRunner {
         )
     }
 
-    pub fn signing_info(&self) -> SigningInfo {
-        SigningInfo::new(
+    pub fn signing_request(&self) -> SigningRequest {
+        SigningRequest::new(
             self.ceremony_id,
             self.ceremony_runner_data.key_id.clone(),
             self.ceremony_runner_data.message_hash.clone(),
