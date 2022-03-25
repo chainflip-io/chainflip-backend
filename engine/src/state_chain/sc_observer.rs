@@ -304,8 +304,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                 ) if validator_id == state_chain_client.our_account_id => {
                                                     slog::debug!(
                                                         logger,
-                                                        "Received signing request with attempt_id {} for transaction: {:?}",
-                                                        attempt_id,
+                                                        "Received signing request with attempt_id ({}, {}) for transaction: {:?}",
+                                                        attempt_id.0,
+                                                        attempt_id.1,
                                                         unsigned_tx,
                                                     );
                                                     match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
@@ -330,8 +331,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                             // infallible.
                                                             slog::error!(
                                                                 logger,
-                                                                "TransactionSigningRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
+                                                                "TransactionSigningRequest attempt_id ({}, {}) failed: {:?}",
+                                                                attempt_id.0,
+                                                                attempt_id.1,
                                                                 e
                                                             );
                                                         }
@@ -350,8 +352,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         Ok(tx_hash) => {
                                                             slog::debug!(
                                                                 logger,
-                                                                "Successful TransmissionRequest attempt_id {}, tx_hash: {:#x}",
-                                                                attempt_id,
+                                                                "Successful TransmissionRequest attempt_id ({}, {}), tx_hash: {:#x}",
+                                                                attempt_id.0,
+                                                                attempt_id.1,
                                                                 tx_hash
                                                             );
                                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
@@ -361,8 +364,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         Err(e) => {
                                                             slog::error!(
                                                                 logger,
-                                                                "TransmissionRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
+                                                                "TransmissionRequest attempt_id ({}, {}) failed: {:?}",
+                                                                attempt_id.0,
+                                                                attempt_id.1
                                                                 e
                                                             );
                                                             // TODO: Fill in the transaction hash with the real one

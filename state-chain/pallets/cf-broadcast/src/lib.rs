@@ -29,14 +29,14 @@ pub enum TransmissionFailure {
 	TransactionFailed,
 }
 
-/// A unique id for each broadcast attempt.
-pub type BroadcastAttemptId = u64;
-
 /// A unique id for each broadcast.
 pub type BroadcastId = u32;
 
 /// The number of broadcast attempts that were made before this one.
 pub type AttemptCount = u32;
+
+/// A unique id for each broadcast attempt
+pub type BroadcastAttemptId = (BroadcastId, AttemptCount);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -146,10 +146,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	/// A counter for incrementing the broadcast attempt id.
-	#[pallet::storage]
-	pub type BroadcastAttemptIdCounter<T, I = ()> = StorageValue<_, BroadcastAttemptId, ValueQuery>;
 
 	/// A counter for incrementing the broadcast id.
 	#[pallet::storage]
@@ -329,7 +325,11 @@ pub mod pallet {
 					entries.push((BroadcastStage::Transmission, attempt_id))
 				});
 			} else {
-				log::warn!("Unable to verify tranaction signature for attempt {}", attempt_id);
+				log::warn!(
+					"Unable to verify tranaction signature for broadcast attempt_id ({}, {})",
+					attempt_id.0,
+					attempt_id.1
+				);
 				Self::report_and_schedule_retry(
 					&signing_attempt.nominee.clone(),
 					signing_attempt.broadcast_attempt,
@@ -524,11 +524,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		attempt_count: AttemptCount,
 		unsigned_tx: UnsignedTransactionFor<T, I>,
 	) {
-		// Get a new id.
-		let attempt_id = BroadcastAttemptIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
+		// Get a new id
+		let attempt_id = (broadcast_id, attempt_count + 1);
 
 		// Update the lookup table
 		BroadcastIdToAttemptIdLookup::<T, I>::insert(broadcast_id, attempt_id);
@@ -569,8 +566,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// In this case all validators are currently offline. We just do
 			// nothing in this case and wait until someone comes up again.
 			log::warn!("No online validators at the moment.");
-			let failed =
-				BroadcastAttempt::<T, I> { broadcast_id, attempt_count, unsigned_tx };
+			let failed = BroadcastAttempt::<T, I> { broadcast_id, attempt_count, unsigned_tx };
 			Self::schedule_retry(failed);
 		}
 	}
