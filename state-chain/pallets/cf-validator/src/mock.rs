@@ -332,11 +332,13 @@ pub fn min_bid() -> Amount {
 }
 
 pub fn run_to_block(n: u64) {
+	assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), Session::validators());
 	while System::block_number() < n {
 		Session::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		Session::on_initialize(System::block_number());
 		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
+		assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), Session::validators());
 	}
 }
 
