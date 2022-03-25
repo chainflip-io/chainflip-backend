@@ -279,7 +279,7 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(SuccessOrFailure::Failure) => {
 							Self::deposit_event(Event::RotationAborted);
-							Self::update_rotation_status(RotationStatus::Idle);
+							Self::update_rotation_status(RotationStatus::RunAuction);
 						},
 						AsyncResult::Void => {
 							log::error!(target: "cf-validator", "no vault rotation pending, returning to auction state");

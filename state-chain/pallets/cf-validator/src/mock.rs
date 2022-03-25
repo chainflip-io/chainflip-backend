@@ -338,6 +338,7 @@ pub fn run_to_block(n: u64) {
 		System::set_block_number(System::block_number() + 1);
 		Session::on_initialize(System::block_number());
 		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
+		MockVaultRotator::on_initialise();
 		assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), Session::validators());
 	}
 }

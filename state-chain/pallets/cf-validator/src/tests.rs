@@ -103,18 +103,49 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 	new_test_ext().execute_with(|| {
 		MockVaultRotator::set_error_on_start(true);
-		run_to_block(EPOCH_DURATION);
-		// Move forward a few blocks, vault rotations would be failing with "failure"
-		move_forward_blocks(100);
+		RotationPhase::<Test>::set(RotationStatusOf::<Test>::RunAuction);
+		// Move forward a few blocks, vault rotations fail because the vault rotator can't start.
+		// We keep trying to resolve the auction.
+		move_forward_blocks(10);
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::epoch_index(),
 			GENESIS_EPOCH,
 			"we should still be in the first epoch"
 		);
+		assert_eq!(ValidatorPallet::rotation_phase(), RotationStatus::RunAuction);
+
+		// Allow vault rotations to progress.
+		// The keygen ceremony will fail.
 		MockVaultRotator::set_error_on_start(false);
-		move_forward_blocks(1);
-		MockVaultRotator::succeed();
-		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
+		MockVaultRotator::failing();
+
+		for i in 0..10 {
+			move_forward_blocks(1);
+			assert!(matches!(
+				ValidatorPallet::rotation_phase(),
+				RotationStatus::AwaitingVaults(..)
+			));
+			move_forward_blocks(1);
+			assert_eq!(
+				ValidatorPallet::rotation_phase(),
+				RotationStatus::RunAuction,
+				"Status is {:?} at iteration {:?}",
+				ValidatorPallet::rotation_phase(),
+				i
+			);
+		}
+
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH,
+			"we should still be in the first epoch"
+		);
+
+		// Allow keygen to succeed.
+		MockVaultRotator::succeeding();
+
+		// Four blocks - one for auction, one for keygen, one for each session rotation.
+		move_forward_blocks(4);
 		assert_next_epoch();
 	});
 }
@@ -139,26 +170,6 @@ fn should_rotate_when_forced() {
 		assert!(matches!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction));
 	});
 }
-
-// #[test]
-// fn should_have_outgoers_after_rotation() {
-// 	new_test_ext().execute_with(|| {
-// 		let epoch = 10;
-// 		initialise_validator(epoch);
-// 		MockAuctioneer::set_run_behaviour(Ok(Default::default()));
-// 		run_to_block(epoch);
-// 		move_forward_blocks(BLOCKS_TO_SESSION_ROTATION);
-// 		assert_next_epoch();
-// 		let outgoing_validators = outgoing_validators();
-// 		assert_eq!(
-// 			outgoing_validators, DUMMY_GENESIS_VALIDATORS,
-// 			"outgoers should be the genesis validators"
-// 		);
-// 		for outgoer in &outgoing_validators {
-// 			assert!(MockIsOutgoing::is_outgoing(outgoer));
-// 		}
-// 	});
-// }
 
 #[test]
 fn should_rotate_at_epoch() {
@@ -189,7 +200,6 @@ fn should_rotate_at_epoch() {
 			RotationPhase::<Test>::get(),
 			RotationStatusOf::<Test>::AwaitingVaults(..)
 		));
-		MockVaultRotator::succeed();
 		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
 		assert_next_epoch();
 		assert_eq!(
