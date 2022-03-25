@@ -16,9 +16,9 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offence_reporting::Offence, AuctionResult, Auctioneer, Chainflip, ChainflipAccount,
-	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, MissedAuthorshipSlots, QualifyValidator,
+	offence_reporting::Offence, AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountData,
+	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	ExecutionCondition, MissedAuthorshipSlots, QualifyValidator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -884,16 +884,16 @@ impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	}
 }
 
-impl<T: Config + Chainflip + frame_system::Config<AccountData = ChainflipAccountData>>
-	EpochTransitionHandler for Pallet<T>
+impl<T: Config + frame_system::Config<AccountData = ChainflipAccountData>> EpochTransitionHandler
+	for Pallet<T>
 {
 	type ValidatorId = ValidatorIdOf<T>;
-	type Amount = T::Amount;
+	type Amount = ();
 
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
-		_new_bid: Self::Amount,
+		_new_bond: Self::Amount,
 	) {
 		// Update the last active epoch for the new validating set
 		let epoch_index = Pallet::<T>::epoch_index();

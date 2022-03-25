@@ -17,6 +17,8 @@ pub use pallet::*;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
+use cf_traits::{EpochTransitionHandler, KeygenExclusionSet};
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -208,5 +210,18 @@ pub mod pallet {
 		fn forgive_all() {
 			ExcludedFromKeygen::<T>::remove_all(None);
 		}
+	}
+}
+
+impl<T: Config> EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = <T as frame_system::Config>::AccountId;
+	type Amount = ();
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		_new_validators: &[Self::ValidatorId],
+		_new_bid: Self::Amount,
+	) {
+		<Self as KeygenExclusionSet>::forgive_all();
 	}
 }

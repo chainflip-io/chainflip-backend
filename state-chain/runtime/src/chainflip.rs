@@ -17,9 +17,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	offence_reporting::{Offence, ReputationPoints},
-	BackupValidators, BlockEmissions, BondRotation, Chainflip, EmergencyRotation, EmissionsTrigger,
-	EpochInfo, EpochTransitionHandler, Heartbeat, Issuance, KeygenExclusionSet, NetworkState,
-	RewardsDistribution, StakeHandler, StakeTransfer,
+	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, Heartbeat,
+	Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -47,7 +46,6 @@ impl Chainflip for Runtime {
 
 pub struct ChainflipEpochTransitions;
 
-/// Trigger emissions on epoch transitions.
 impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
@@ -57,26 +55,11 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		new_validators: &[Self::ValidatorId],
 		new_bond: Self::Amount,
 	) {
-		// Calculate block emissions on every epoch
-		<Emissions as BlockEmissions>::calculate_block_emissions();
-		// Process any outstanding emissions.
-		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Update the bond of all validators for the new epoch
-		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
-		// Update the list of validators in the witnesser.
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<Validator as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<Online as KeygenExclusionSet>::forgive_all();
+		<Emissions as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
+		<Flip as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, new_bond);
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
+		<Validator as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
+		<Online as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
 	}
 }
 

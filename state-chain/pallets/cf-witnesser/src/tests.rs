@@ -128,11 +128,11 @@ fn can_continue_to_witness_for_old_epochs() {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
 		// Run through a few epochs; 1, 2 and 3
 		MockEpochInfo::incr_epoch(); // 1 - Alice
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], ());
 		MockEpochInfo::incr_epoch(); // 2 - Alice
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], Default::default());
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA], ());
 		MockEpochInfo::incr_epoch(); // 3 - Bob
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[BOBSON], Default::default());
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[BOBSON], ());
 
 		let current_epoch = MockEpochInfo::epoch_index();
 

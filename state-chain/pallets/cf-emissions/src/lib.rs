@@ -20,7 +20,9 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
+use cf_traits::{
+	BlockEmissions, EmissionsTrigger, EpochTransitionHandler, Issuance, RewardsDistribution,
+};
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
@@ -378,5 +380,21 @@ impl<T: Config> EmissionsTrigger for Pallet<T> {
 	fn trigger_emissions() {
 		let current_block_number = frame_system::Pallet::<T>::block_number();
 		Self::mint_rewards_for_block(current_block_number);
+	}
+}
+
+impl<T: Config> EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = <T as frame_system::Config>::AccountId;
+	type Amount = ();
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		_new_validators: &[Self::ValidatorId],
+		_new_bid: Self::Amount,
+	) {
+		// Calculate block emissions on every epoch
+		Self::calculate_block_emissions();
+		// Process any outstanding emissions.
+		Self::trigger_emissions();
 	}
 }

@@ -17,7 +17,7 @@ mod on_charge_transaction;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_traits::{Slashing, StakeHandler};
+use cf_traits::{BondRotation, Chainflip, EpochTransitionHandler, Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -496,5 +496,19 @@ where
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
 		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed(account_id.clone(), total_burn));
+	}
+}
+
+impl<T: Config + Chainflip> EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = <T as frame_system::Config>::AccountId;
+	type Amount = <T as Config>::Balance;
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		new_validators: &[Self::ValidatorId],
+		new_bond: Self::Amount,
+	) {
+		// Update the bond of all validators for the new epoch
+		<Self as BondRotation>::update_validator_bonds(new_validators, new_bond);
 	}
 }

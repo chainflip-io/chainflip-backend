@@ -358,13 +358,14 @@ where
 
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
+	type Amount = ();
 
 	fn on_new_epoch(
 		_old_validators: &[Self::ValidatorId],
 		new_validators: &[Self::ValidatorId],
 		_new_bond: Self::Amount,
 	) {
+		// Update the list of validators in the witnesser.
 		let epoch = T::EpochInfo::epoch_index();
 
 		let mut total = 0;
