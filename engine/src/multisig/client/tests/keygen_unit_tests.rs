@@ -23,7 +23,7 @@ use crate::testing::assert_ok;
 
 use super::*;
 
-use crate::logging::KEYGEN_REQUEST_IGNORED;
+use crate::logging::{KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED};
 
 /// If all nodes are honest and behave as expected we should
 /// generate a key without entering a blaming stage
@@ -599,22 +599,33 @@ async fn should_handle_invalid_comm1() {
 }
 
 // Keygen aborts if the key is not compatible with the contract at VerifyCommitmentsBroadcast2
-// TODO: Once we are able to seed the keygen (deterministic crypto), this test can be replaced
-// with a proper test that has a known incompatible aggkey.
 #[tokio::test]
 async fn should_handle_not_compatible_keygen() {
-    let mut counter = 0;
-    loop {
-        if let Err(()) = run_keygen_with_err_on_high_pubkey(ACCOUNT_IDS.clone()).await {
-            break;
-        } else {
-            // We have a 50/50 chance of failing each time, so we should have failed keygen within 40 tries
-            // But it has a 0.0000000001% chance of failing this test as a false positive.
-            counter += 1;
-            assert!(
-                counter < 40,
-                "Should have failed keygen with high pub key by now"
-            )
+    // Use a known seed that will produce a contract non-compatible key
+    // Note: This seed may need to be updated if keygen changes the way it uses the rng.
+    const NON_COMPATIBLE_KEYGEN_SEED: [u8; 32] = [11u8; 32];
+
+    let mut ceremony = KeygenCeremonyRunner::new(
+        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::default()),
+        1,
+        Rng::from_seed(NON_COMPATIBLE_KEYGEN_SEED),
+    );
+    let messages = ceremony.request().await;
+    let messages = ceremony
+        .run_stage::<keygen::VerifyComm2, _, _>(messages)
+        .await;
+    ceremony.distribute_messages(messages);
+
+    match ceremony.try_complete_with_error(&[]).await {
+        Some(_) => {
+            for node in ceremony.nodes.values() {
+                assert!(node.tag_cache.contains_tag(KEYGEN_REJECTED_INCOMPATIBLE));
+            }
+        }
+        None => {
+            panic!(
+                "Keygen was supposed to fail with an incompatible key. Maybe try a different seed."
+            );
         }
     }
 }
