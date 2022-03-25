@@ -854,63 +854,6 @@ mod timeout {
         }
 
         // ======================
-
-        // ======================
-
-        // The following tests cover:
-        // If timeout during a regular stage, and the majority of nodes didn't receive the data
-        // from some nodes (i.e. they vote on value `None`), those nodes are reported
-
-        #[tokio::test]
-        async fn offline_party_should_be_reported_stage1() {
-            let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
-
-            let messages = signing_ceremony.request().await;
-
-            let [non_sending_party_id] = signing_ceremony.select_account_ids();
-
-            // non sending party sends to no one
-            let messages = signing_ceremony
-                .run_stage_with_non_sender::<frost::VerifyComm2, _, _>(
-                    messages,
-                    &non_sending_party_id,
-                )
-                .await;
-            signing_ceremony.distribute_messages(messages);
-            signing_ceremony
-                .complete_with_error(&[non_sending_party_id])
-                .await;
-        }
-
-        #[tokio::test]
-        async fn offline_party_should_be_reported_stage3() {
-            let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
-
-            let messages = signing_ceremony.request().await;
-
-            let messages = helpers::run_stages!(
-                signing_ceremony,
-                messages,
-                frost::VerifyComm2,
-                frost::LocalSig3
-            );
-
-            let [non_sending_party_id] = signing_ceremony.select_account_ids();
-
-            // non sending party sends to no one
-            let messages = signing_ceremony
-                .run_stage_with_non_sender::<frost::VerifyLocalSig4, _, _>(
-                    messages,
-                    &non_sending_party_id,
-                )
-                .await;
-            signing_ceremony.distribute_messages(messages);
-            signing_ceremony
-                .complete_with_error(&[non_sending_party_id])
-                .await;
-        }
-
-        // ======================
     }
 
     mod during_broadcast_verification_stage {
