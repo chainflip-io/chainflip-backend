@@ -36,7 +36,7 @@ pub type BroadcastId = u32;
 pub type AttemptCount = u32;
 
 /// A unique id for each broadcast attempt
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default, Copy)]
 pub struct BroadcastAttemptId {
 	broadcast_id: BroadcastId,
 	attempt_count: AttemptCount,

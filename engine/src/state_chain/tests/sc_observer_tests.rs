@@ -8,6 +8,7 @@ use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use codec::Encode;
 use frame_system::{AccountInfo, Phase};
 use mockall::predicate::{self, eq};
+use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_validator::CurrentEpoch;
 use pallet_cf_vaults::{BlockHeightWindow, Vault, Vaults};
 use sp_core::{
@@ -1104,7 +1105,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         Phase::ApplyExtrinsic(0),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                0,
+                                BroadcastAttemptId::default(),
                                 AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                                 UnsignedTransaction::default(),
                             ),
@@ -1116,7 +1117,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         Phase::ApplyExtrinsic(1),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                0,
+                                BroadcastAttemptId::default(),
                                 AccountId32::new([1; 32]),
                                 UnsignedTransaction::default(),
                             ),
