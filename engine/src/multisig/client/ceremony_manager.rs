@@ -278,7 +278,7 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(initial_stage, validator_map, self.outcome_sender.clone()) {
+        match state.on_ceremony_request(initial_stage, validator_map) {
             Ok(Some(result)) => {
                 self.process_keygen_ceremony_outcome(ceremony_id, result);
             }
@@ -367,7 +367,6 @@ impl CeremonyManager {
         match state.on_ceremony_request(
             initial_stage,
             key_info.validator_map,
-            self.outcome_sender.clone(),
         ) {
             Ok(Some(result)) => {
                 self.process_signing_ceremony_outcome(ceremony_id, result);

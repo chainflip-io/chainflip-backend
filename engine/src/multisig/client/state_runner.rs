@@ -15,7 +15,6 @@ use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender
 
 pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: MultisigOutcomeSender,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
@@ -51,7 +50,6 @@ where
         &mut self,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: MultisigOutcomeSender,
     ) -> Result<Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>>> {
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
@@ -62,7 +60,6 @@ where
         self.inner = Some(StateAuthorised {
             stage: Some(stage),
             idx_mapping,
-            result_sender,
         });
 
         // Unlike other state transitions, we don't take into account
