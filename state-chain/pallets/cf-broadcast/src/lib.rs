@@ -542,11 +542,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt_id.clone(), unsigned_tx.clone()).encode();
 
-		// Select a signer for this broadcast.
-		let nominated_signer = T::SignerNomination::nomination_with_seed(seed);
-
 		// Check if there is an nominated signer
-		if let Some(nominated_signer) = nominated_signer {
+		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionSignature::<T, I>::insert(
 				broadcast_attempt_id.broadcast_id,
@@ -576,11 +573,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// In this case all validators are currently offline. We just do
 			// nothing in this case and wait until someone comes up again.
 			log::warn!("No online validators at the moment.");
-			let failed = BroadcastAttempt::<T, I> {
+			Self::schedule_retry(BroadcastAttempt::<T, I> {
 				broadcast_attempt_id: next_broadcast_attempt_id,
 				unsigned_tx,
-			};
-			Self::schedule_retry(failed);
+			});
 		}
 	}
 
