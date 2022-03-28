@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 
@@ -71,6 +72,7 @@ tag = 'merge-config-option'
 default = ['std']
 std = [
     'cf-traits/std',
+    'cf-runtime-upgrade-utilities/std',
     'codec/std',
     'scale-info/std',
     'frame-support/std',
@@ -84,4 +86,7 @@ runtime-benchmarks = [
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = [
+    'frame-support/try-runtime',
+    'cf-runtime-upgrade-utilities/try-runtime',
+]

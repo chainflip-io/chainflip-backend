@@ -1,9 +1,10 @@
-use cf_traits::{BlockEmissions, EmissionsTrigger, EpochTransitionHandler, FlipBalance};
+use cf_traits::{
+	BlockEmissions, Chainflip, ChainflipAccount, ChainflipAccountStore, EmissionsTrigger,
+	EpochInfo, EpochTransitionHandler, FlipBalance,
+};
+use sp_std::marker::PhantomData;
 
 use crate::{AccountId, Emissions, Reputation, Runtime, Validator, Witnesser};
-use cf_traits::{Chainflip, ChainflipAccount, ChainflipAccountStore, EpochInfo};
-
-use crate::chainflip::PhantomData;
 
 pub struct ChainflipEpochTransitions;
 

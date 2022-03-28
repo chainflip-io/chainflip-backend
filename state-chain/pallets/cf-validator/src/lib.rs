@@ -16,12 +16,14 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	AuctionResult, Auctioneer, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyValidator,
+	offence_reporting::{Offence, OffenceReporter},
+	AsyncResult, AuctionResult, Auctioneer, ChainflipAccount, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyValidator, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
-	traits::{EstimateNextSessionRotation, OnKilledAccount},
+	traits::{EstimateNextSessionRotation, OnKilledAccount, OnRuntimeUpgrade, StorageVersion},
 };
 pub use pallet::*;
 use sp_core::ed25519;
@@ -29,15 +31,8 @@ use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturati
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use cf_traits::Bonding;
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	/// Version 1 - adds Bond and Validator.
-	pub const V1: StorageVersion = StorageVersion::new(1);
-	/// Version 2 - Add LastExpiredEpoch, kill the Force storage item
-	pub const V2: StorageVersion = StorageVersion::new(2);
-}
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -105,17 +100,13 @@ pub type Percentage = u8;
 pub mod pallet {
 
 	use super::*;
-	use cf_traits::{
-		offence_reporting::{Offence, OffenceReporter},
-		ChainflipAccount, KeygenStatus, VaultRotator,
-	};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V2)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -210,13 +201,6 @@ pub mod pallet {
 		InvalidCharactersInName,
 	}
 
-	impl<T: Config> Pallet<T> {
-		pub(crate) fn update_rotation_status(new_status: RotationStatusOf<T>) {
-			RotationPhase::<T>::put(new_status.clone());
-			Self::deposit_event(Event::RotationStatusUpdated(new_status));
-		}
-	}
-
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -249,7 +233,7 @@ pub mod pallet {
 						let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 						let diff = block_number.saturating_sub(current_epoch_started_at);
 						if diff >= blocks_per_epoch {
-							Self::update_rotation_status(RotationStatus::RunAuction);
+							Self::set_rotation_status(RotationStatus::RunAuction);
 						}
 					}
 				},
@@ -257,7 +241,7 @@ pub mod pallet {
 					Ok(auction_result) => {
 						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
 						{
-							Ok(_) => Self::update_rotation_status(RotationStatus::AwaitingVaults(
+							Ok(_) => Self::set_rotation_status(RotationStatus::AwaitingVaults(
 								auction_result,
 							)),
 							// We are assuming here that this is unlikely as the only reason it
@@ -273,53 +257,46 @@ pub mod pallet {
 						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
-					match T::VaultRotator::get_keygen_status() {
-						None => Self::update_rotation_status(RotationStatus::VaultsRotated(
-							auction_result,
-						)),
-						Some(KeygenStatus::Failed) => {
-							Self::deposit_event(Event::RotationAborted);
-							Self::update_rotation_status(RotationStatus::Idle);
+					match T::VaultRotator::get_vault_rotation_outcome() {
+						AsyncResult::Ready(SuccessOrFailure::Success) => {
+							Self::set_rotation_status(RotationStatus::VaultsRotated(
+								auction_result,
+							));
 						},
-						Some(KeygenStatus::Busy) =>
-							log::debug!(target: "cf-validator", "awaiting vault rotation"),
+						AsyncResult::Ready(SuccessOrFailure::Failure) => {
+							Self::deposit_event(Event::RotationAborted);
+							Self::set_rotation_status(RotationStatus::RunAuction);
+						},
+						AsyncResult::Void => {
+							log::error!(target: "cf-validator", "no vault rotation pending, returning to auction state");
+						},
+						AsyncResult::Pending => {
+							log::debug!(target: "cf-validator", "awaiting vault rotations");
+						},
 					},
 				RotationStatus::VaultsRotated(auction_result) => {
-					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
+					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(auction_result) => {
 					T::Auctioneer::update_validator_status(&auction_result.winners);
-					Self::update_rotation_status(RotationStatus::Idle);
+					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
 			0
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				releases::V2.put::<Pallet<T>>();
-				migrations::v2::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			} else {
-				T::DbWeight::get().reads(1)
-			}
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v2::pre_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v2::post_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
@@ -399,7 +376,7 @@ pub mod pallet {
 				RotationPhase::<T>::get() == RotationStatus::Idle,
 				Error::<T>::RotationInProgress
 			);
-			Self::update_rotation_status(RotationStatus::RunAuction);
+			Self::set_rotation_status(RotationStatus::RunAuction);
 
 			Ok(().into())
 		}
@@ -624,7 +601,7 @@ pub mod pallet {
 	/// A map storing the expiry block numbers for old epochs
 	#[pallet::storage]
 	pub type EpochExpiries<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
 	/// A map between an epoch and an vector of validators (participating in this epoch)
 	#[pallet::storage]
@@ -640,6 +617,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
+
 	/// Counter for generating unique ceremony ids.
 	#[pallet::storage]
 	#[pallet::getter(fn ceremony_id_counter)]
@@ -812,6 +790,11 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_validator_bond(validator, bond);
 		}
 	}
+
+	fn set_rotation_status(new_status: RotationStatusOf<T>) {
+		RotationPhase::<T>::put(new_status.clone());
+		Self::deposit_event(Event::RotationStatusUpdated(new_status));
+	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
@@ -926,7 +909,7 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			Self::update_rotation_status(RotationStatus::RunAuction);
+			Self::set_rotation_status(RotationStatus::RunAuction);
 		}
 	}
 

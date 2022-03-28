@@ -15,6 +15,13 @@
   },
   "AggKeyFor": "AggKey",
   "Amount": "u128",
+  "AsyncResult": {
+    "_enum": [
+      "Void",
+      "Pending",
+      "Ready"
+    ]
+  },
   "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
@@ -104,12 +111,6 @@
     "SuccessVotes": "BTreeMap<AggKeyFor, u32>",
     "BlameVotes": "BTreeMap<ValidatorId, u32>"
   },
-  "KeygenStatus": {
-    "_enum": [
-      "Busy",
-      "Failed"
-    ]
-  },
   "KeyId": "Vec<u8>",
   "Keys": {
     "aura": "[u8; 32]",
@@ -194,6 +195,12 @@
   },
   "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
+  "SuccessOrFailure": {
+    "_enum": [
+      "Success",
+      "Failure"
+    ]
+  },
   "ThresholdSignature": "ThresholdSignatureFor",
   "ThresholdSignatureFor": "SchnorrVerificationComponents",
   "Timestamp": "u64",

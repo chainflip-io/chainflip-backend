@@ -5,10 +5,11 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
+use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::{Offence, OffenceReporter},
-	Broadcaster, CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider,
-	KeygenStatus, NonceProvider, VaultRotator,
+	AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex,
+	EpochTransitionHandler, KeyProvider, NonceProvider, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -238,11 +239,12 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 }
 
 /// The current status of a vault rotation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, EnumVariant)]
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T, I> },
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
 	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionHash },
+	Failed,
 }
 
 impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
@@ -323,7 +325,7 @@ pub mod pallet {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let mut weight = T::DbWeight::get().reads(1);
 
-			if !KeygenResolutionPendingSince::<T, I>::exists() {
+			if Self::get_vault_rotation_outcome() != AsyncResult::Pending {
 				return weight
 			}
 
@@ -359,6 +361,7 @@ pub mod pallet {
 							Self::on_keygen_failure(keygen_ceremony_id, offenders);
 						},
 					}
+					KeygenResolutionPendingSince::<T, I>::kill();
 				}
 			}
 
@@ -415,12 +418,6 @@ pub mod pallet {
 	#[pallet::getter(fn keygen_resolution_pending_since)]
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
-	/// Status of the key generation.
-	#[pallet::storage]
-	#[pallet::getter(fn keygen_status)]
-	pub(super) type StatusOfKeygen<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, KeygenStatus, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -659,38 +656,8 @@ impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn no_active_chain_vault_rotations() -> bool {
-		if let Some(status) = PendingVaultRotation::<T, I>::get() {
-			matches!(status, VaultRotationStatus::<T, I>::Complete { .. })
-		} else {
-			true
-		}
-	}
-
-	fn start_vault_rotation(candidates: Vec<T::ValidatorId>) -> DispatchResult {
-		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
-		ensure!(!PendingVaultRotation::<T, I>::exists(), Error::<T, I>::DuplicateRotationRequest);
-
-		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
-
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::new(
-			ceremony_id,
-			BTreeSet::from_iter(candidates.clone()),
-		));
-
-		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
-		// block
-		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
-
-		Pallet::<T, I>::deposit_event(Event::KeygenRequest(ceremony_id, candidates));
-
-		Ok(())
-	}
-
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
-		KeygenResolutionPendingSince::<T, I>::kill();
 
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
@@ -698,6 +665,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				new_public_key,
 			),
 		);
+
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
@@ -707,17 +675,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ceremony_id: CeremonyId,
 		offenders: impl IntoIterator<Item = T::ValidatorId>,
 	) {
+		Self::deposit_event(Event::KeygenFailure(ceremony_id));
+
 		for offender in offenders {
 			T::OffenceReporter::report(Offence::ParticipateKeygenFailed, &offender);
 		}
 
-		Self::deposit_event(Event::KeygenFailure(ceremony_id));
-		KeygenResolutionPendingSince::<T, I>::kill();
-		// TODO: Instead of deleting the storage entirely, we should probably reset to some initial
-		// state.
-		PendingVaultRotation::<T, I>::kill();
-		// TODO: Failure of one keygen should cause failure of all keygens.
-		StatusOfKeygen::<T, I>::put(KeygenStatus::Failed);
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
 	}
 
 	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {
@@ -732,22 +696,39 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type RotationError = DispatchError;
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
-		Self::start_vault_rotation(candidates)?;
-		StatusOfKeygen::<T, I>::put(KeygenStatus::Busy);
+		// Main entry point for the pallet
+		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
+		ensure!(
+			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
+			Error::<T, I>::DuplicateRotationRequest
+		);
+
+		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
+
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::new(
+			ceremony_id,
+			BTreeSet::from_iter(candidates.clone()),
+		));
+
+		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
+		// block
+		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
+
+		Pallet::<T, I>::deposit_event(Event::KeygenRequest(ceremony_id, candidates));
 		Ok(())
 	}
 
 	/// Get the status of the current key generation
-	fn get_keygen_status() -> Option<KeygenStatus> {
-		if Pallet::<T, I>::no_active_chain_vault_rotations() {
-			// The 'exit' point for the pallet, no rotations left to process
-			PendingVaultRotation::<T, I>::kill();
-			StatusOfKeygen::<T, I>::set(None);
-
-			Self::deposit_event(Event::<T, I>::VaultsRotated);
+	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure> {
+		match PendingVaultRotation::<T, I>::decode_variant() {
+			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
+			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
+			Some(VaultRotationStatusVariant::Complete) =>
+				AsyncResult::Ready(SuccessOrFailure::Success),
+			Some(VaultRotationStatusVariant::Failed) =>
+				AsyncResult::Ready(SuccessOrFailure::Failure),
+			None => AsyncResult::Void,
 		}
-
-		StatusOfKeygen::<T, I>::get()
 	}
 }
 
@@ -765,6 +746,19 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
 			.expect("We can't exist without a vault")
 			.public_key
+	}
+}
+
+impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
+	type ValidatorId = <T as Chainflip>::ValidatorId;
+	type Amount = <T as Chainflip>::Amount;
+
+	fn on_new_epoch(
+		_old_validators: &[Self::ValidatorId],
+		_new_validators: &[Self::ValidatorId],
+		_new_bond: Self::Amount,
+	) {
+		PendingVaultRotation::<T, I>::kill();
 	}
 }
 
