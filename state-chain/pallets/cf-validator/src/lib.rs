@@ -23,7 +23,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	traits::{EstimateNextSessionRotation, OnKilledAccount},
+	traits::{EstimateNextSessionRotation, OnKilledAccount, OnRuntimeUpgrade, StorageVersion},
 };
 pub use pallet::*;
 use sp_core::ed25519;
@@ -31,15 +31,8 @@ use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturati
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use cf_traits::Bonding;
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	/// Version 1 - adds Bond and Validator.
-	pub const V1: StorageVersion = StorageVersion::new(1);
-	/// Version 2 - Add LastExpiredEpoch, kill the Force storage item
-	pub const V2: StorageVersion = StorageVersion::new(2);
-}
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -113,7 +106,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V2)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -293,30 +286,17 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				releases::V2.put::<Pallet<T>>();
-				migrations::v2::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			} else {
-				T::DbWeight::get().reads(1)
-			}
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v2::pre_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v2::post_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
