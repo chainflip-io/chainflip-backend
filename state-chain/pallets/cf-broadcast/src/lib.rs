@@ -174,15 +174,9 @@ pub mod pallet {
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
 
 	/// Live transaction signing requests.
-	/// CAN WE USE BROADCAST ID HERE TOO???
 	#[pallet::storage]
-	pub type AwaitingTransactionSignature<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		BroadcastAttemptId,
-		TransactionSigningAttempt<T, I>,
-		OptionQuery,
-	>;
+	pub type AwaitingTransactionSignature<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, TransactionSigningAttempt<T, I>, OptionQuery>;
 
 	/// Lookup table between Signature -> Broadcast
 	#[pallet::storage]
@@ -266,7 +260,7 @@ pub mod pallet {
 				match stage {
 					BroadcastStage::TransactionSigning => {
 						if let Some(attempt) =
-							AwaitingTransactionSignature::<T, I>::take(attempt_id)
+							AwaitingTransactionSignature::<T, I>::take(attempt_id.broadcast_id)
 						{
 							notify_and_retry(attempt.broadcast_attempt);
 						}
@@ -314,13 +308,14 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			let signing_attempt =
-				AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id.clone())
-					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(
+				broadcast_attempt_id.broadcast_id.clone(),
+			)
+			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			ensure!(signing_attempt.nominee == signer.into(), Error::<T, I>::InvalidSigner);
 
-			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id.clone());
+			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id.broadcast_id);
 
 			if T::TargetChain::verify_signed_transaction(
 				&signing_attempt.broadcast_attempt.unsigned_tx,
@@ -560,9 +555,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Check if there is an nominated signer
 		if let Some(nominated_signer) = nominated_signer {
-			// instead of inserting, we may want to mutate
+			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionSignature::<T, I>::insert(
-				next_broadcast_attempt_id.clone(),
+				broadcast_attempt_id.broadcast_id,
 				TransactionSigningAttempt::<T, I> {
 					broadcast_attempt: BroadcastAttempt {
 						broadcast_attempt_id: next_broadcast_attempt_id,
@@ -571,9 +566,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					nominee: nominated_signer.clone(),
 				},
 			);
-
-			// remove the old one
-			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
 
 			// Schedule expiry.
 			let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
