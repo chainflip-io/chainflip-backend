@@ -621,7 +621,7 @@ pub mod pallet {
 	/// A map storing the expiry block numbers for old epochs
 	#[pallet::storage]
 	pub type EpochExpiries<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
 	/// A map between an epoch and an vector of validators (participating in this epoch)
 	#[pallet::storage]
@@ -637,6 +637,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
+
 	/// Counter for generating unique ceremony ids.
 	#[pallet::storage]
 	#[pallet::getter(fn ceremony_id_counter)]
