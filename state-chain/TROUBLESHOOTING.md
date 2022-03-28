@@ -19,25 +19,21 @@ cargo build --release --all-features
 Then run a variation of the following command:
 
 ```sh
-./target/release/chainflip-node try-runtime
-    --execution Native
-    --chain soundcheck
-    --url wss://bashful-release.chainflip.xyz
-    --block-at 0x2a2a0264206de0dd78d45f45ef42533fcdf847ec0ad11201c6b0feec7083d872
-        on-runtime-upgrade
-            live
-            --snapshot-path .state-snapshot
+./target/release/chainflip-node try-runtime \
+    --execution Native \
+    --chain soundcheck \
+    --url wss://bashful-release.chainflip.xyz \
+    --block-at 0xb79f8bc9fb11028d60b21d141735544ebf7a45c97516256fbfe05a68fc4bfc27 on-runtime-upgrade live \
+    --snapshot-path .state-snapshot
 ```
 
 To save time, you can then use the state snapshot in subsequent runs:
 
 ```sh
-./target/release/chainflip-node try-runtime
-    --execution Native
-    --block-at 0x2a2a0264206de0dd78d45f45ef42533fcdf847ec0ad11201c6b0feec7083d872
-        on-runtime-upgrade
-            snap
-            --snapshot-path .state-snapshot
+./target/release/chainflip-node try-runtime \
+    --execution Native \
+    --block-at 0xb79f8bc9fb11028d60b21d141735544ebf7a45c97516256fbfe05a68fc4bfc27 on-runtime-upgrade snap \
+    --snapshot-path .state-snapshot
 ```
 
 ### General tips and guidelines
