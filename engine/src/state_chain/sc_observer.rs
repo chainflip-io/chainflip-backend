@@ -13,8 +13,8 @@ use crate::{
     eth::{EthBroadcaster, EthRpcApi},
     logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
-        KeyId, KeygenRequest, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
-        SigningRequest, SigningOutcome,
+        KeyId, KeygenOutcome, KeygenRequest, MessageHash, MultisigInstruction, MultisigOutcome,
+        SigningOutcome, SigningRequest,
     },
     multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
@@ -57,13 +57,19 @@ async fn process_multisig_outcome<RpcClient>(
             }
         },
         MultisigOutcome::Keygen(KeygenOutcome { id, result }) => match result {
-            Ok(pubkey) => {
+            Ok(keygen_result_info) => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_vaults::Call::report_keygen_outcome(
                             id,
                             pallet_cf_vaults::KeygenOutcome::Success(
-                                cf_chains::eth::AggKey::from_pubkey_compressed(pubkey.serialize()),
+                                cf_chains::eth::AggKey::from_pubkey_compressed(
+                                    keygen_result_info
+                                        .key
+                                        .get_public_key()
+                                        .get_element()
+                                        .serialize(),
+                                ),
                             ),
                         ),
                         logger,

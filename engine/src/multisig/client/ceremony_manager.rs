@@ -21,10 +21,11 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{KeygenRequest, KeygenOutcome, MessageHash, SigningOutcome};
+use crate::multisig::{KeygenOutcome, KeygenRequest, MessageHash, SigningOutcome};
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions};
+use super::{MultisigData, MultisigMessage};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
@@ -183,7 +184,7 @@ impl CeremonyManager {
         &mut self,
         ceremony_id: CeremonyId,
         result: Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>,
-    ) -> Option<KeygenResultInfo> {
+    ) {
         self.keygen_states.remove(&ceremony_id);
         self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
         slog::debug!(
@@ -192,7 +193,14 @@ impl CeremonyManager {
         );
 
         match result {
-            Ok(keygen_result_info) => Some(keygen_result_info),
+            Ok(keygen_result_info) => {
+                self.outcome_sender
+                    .send(MultisigOutcome::Keygen(KeygenOutcome::success(
+                        ceremony_id,
+                        keygen_result_info,
+                    )))
+                    .unwrap();
+            }
             Err((blamed_parties, reason)) => {
                 slog::warn!(
                     self.logger,
@@ -209,7 +217,6 @@ impl CeremonyManager {
                         result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
                     }))
                     .unwrap();
-                None
             }
         }
     }
@@ -372,6 +379,31 @@ impl CeremonyManager {
         };
     }
 
+    /// Process message from another validator
+    pub fn process_p2p_message(&mut self, sender_id: AccountId, message: MultisigMessage) {
+        match message {
+            MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Keygen(data),
+            } => {
+                // NOTE: we should be able to process Keygen messages
+                // even when we are "signing"... (for example, if we want to
+                // generate a new key)
+                self.process_keygen_data(sender_id, ceremony_id, data);
+            }
+            MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Signing(data),
+            } => {
+                // NOTE: we should be able to process Signing messages
+                // even when we are generating a new key (for example,
+                // we should be able to receive phase1 messages before we've
+                // finalized the signing key locally)
+                self.process_signing_data(sender_id, ceremony_id, data);
+            }
+        }
+    }
+
     /// Process data for a signing ceremony arriving from a peer
     pub fn process_signing_data(
         &mut self,
@@ -413,7 +445,7 @@ impl CeremonyManager {
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: KeygenData,
-    ) -> Option<KeygenResultInfo> {
+    ) {
         if self
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
@@ -423,7 +455,7 @@ impl CeremonyManager {
                 "Ignoring keygen data from old ceremony id {}",
                 ceremony_id
             );
-            return None;
+            return;
         }
 
         let logger = &self.logger;
@@ -432,9 +464,9 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
 
-        state
-            .process_message(sender_id, data)
-            .and_then(|res| self.process_keygen_ceremony_outcome(ceremony_id, res))
+        if let Some(result) = state.process_message(sender_id, data) {
+            self.process_keygen_ceremony_outcome(ceremony_id, result);
+        }
     }
 }
 

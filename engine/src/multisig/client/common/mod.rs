@@ -14,7 +14,7 @@ use crate::multisig::crypto::{KeyShare, Point};
 
 use super::{utils::PartyIdxMapping, ThresholdParameters};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeygenResult {
     pub key_share: KeyShare,
     pub party_public_keys: Vec<Point>,

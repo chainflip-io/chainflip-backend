@@ -1,7 +1,7 @@
 //! Multisig signing and keygen
 
 /// Multisig client
-mod client;
+pub mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 /// Storage for the keys
@@ -75,12 +75,29 @@ where
 
     slog::info!(logger, "Starting");
 
+    let (inner_multisig_outcome_sender, mut inner_multisig_outcome_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (keygen_request_sender, mut keygen_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (signing_request_sender, mut signing_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     let mut client = MultisigClient::new(
-        my_account_id,
+        my_account_id.clone(),
         db,
-        multisig_outcome_sender,
-        outgoing_p2p_message_sender,
+        multisig_outcome_sender.clone(),
+        keygen_request_sender,
+        signing_request_sender,
         keygen_options,
+        &logger,
+    );
+
+    use crate::multisig::client::ceremony_manager::CeremonyManager;
+
+    let mut ceremony_manager = CeremonyManager::new(
+        my_account_id,
+        inner_multisig_outcome_sender,
+        outgoing_p2p_message_sender,
         &logger,
     );
 
@@ -94,13 +111,34 @@ where
         loop {
             tokio::select! {
                 Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
-                    client.process_p2p_message(sender_id, message);
+                    ceremony_manager.process_p2p_message(sender_id, message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
                     client.process_multisig_instruction(msg, &mut rng);
                 }
                 _ = cleanup_tick.tick() => {
+                    slog::trace!(logger, "Checking for expired multisig states");
+                    ceremony_manager.cleanup();
                     client.cleanup();
+                }
+                Some((rng, request, options)) = keygen_request_receiver.recv() => {
+                    ceremony_manager.on_keygen_request(rng, request, options);
+                }
+                Some((rng, data, keygen_result_info, signers, ceremony_id)) = signing_request_receiver.recv() => {
+                    ceremony_manager.on_request_to_sign(rng, data, keygen_result_info, signers, ceremony_id);
+                }
+                Some(multisig_outcome) = inner_multisig_outcome_receiver.recv() => {
+                    match multisig_outcome {
+                        MultisigOutcome::Signing(outcome) => {
+                            multisig_outcome_sender.send(MultisigOutcome::Signing(outcome)).unwrap();
+                        },
+                        MultisigOutcome::Keygen(outcome) => {
+                            if let Ok(keygen_result_info) = &outcome.result {
+                                client.on_key_generated(keygen_result_info.clone());
+                            }
+                            multisig_outcome_sender.send(MultisigOutcome::Keygen(outcome)).unwrap();
+                        },
+                    }
                 }
             }
         }
