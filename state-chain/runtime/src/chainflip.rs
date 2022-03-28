@@ -1,5 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod chain_instances;
+pub mod epoch_transition;
 mod missed_authorship_slots;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -8,8 +9,7 @@ pub use signer_nomination::RandomSignerNomination;
 
 use crate::{
 	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Online, Reputation, Runtime, System,
-	Validator, Witnesser,
+	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
 };
 use cf_chains::{
 	eth::{self, api::EthereumApi},
@@ -17,8 +17,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	offence_reporting::{Offence, ReputationPoints},
-	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, Heartbeat,
-	Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
+	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -42,25 +42,6 @@ impl Chainflip for Runtime {
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = Validator;
-}
-
-pub struct ChainflipEpochTransitions;
-
-impl EpochTransitionHandler for ChainflipEpochTransitions {
-	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
-
-	fn on_new_epoch(
-		old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		new_bond: Self::Amount,
-	) {
-		<Emissions as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
-		<Flip as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, new_bond);
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
-		<Validator as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
-		<Online as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators, ());
-	}
 }
 
 pub struct ChainflipStakeHandler;

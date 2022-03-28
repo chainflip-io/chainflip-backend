@@ -276,6 +276,17 @@ impl Chainflip for Test {
 	type EpochInfo = MockEpochInfo;
 }
 
+pub struct MockBonder;
+
+impl Bonding for MockBonder {
+	type ValidatorId = ValidatorId;
+
+	type Amount = Amount;
+
+	// Bond updates are tested in the integration tests
+	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
@@ -286,6 +297,7 @@ impl Config for Test {
 	type VaultRotator = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
 }

@@ -232,16 +232,6 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
-/// Trait for rotate bond after epoch.
-pub trait BondRotation {
-	type AccountId;
-	type Balance;
-
-	/// Sets the validator bond for all new_validator to the new_bond and
-	/// the bond for all old validators to zero.
-	fn update_validator_bonds(new_validators: &[Self::AccountId], new_bond: Self::Balance);
-}
-
 /// Provide feedback on staking
 pub trait StakeHandler {
 	type ValidatorId;
@@ -254,6 +244,9 @@ pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
 	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+
+	/// The amount of locked tokens in the current epoch - aka the bond
+	fn locked_balance(account_id: &Self::AccountId) -> Self::Balance;
 
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
@@ -634,6 +627,37 @@ pub trait KeygenExclusionSet {
 	fn forgive_all();
 }
 
+/// Provides an interface to all passed epochs
+pub trait HistoricalEpoch {
+	type ValidatorId;
+	type EpochIndex;
+	type Amount;
+	/// All validators which were in an epoch's authority set.
+	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
+	/// The bond for an epoch
+	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
+	/// The unexpired epochs for which a validator was in the authority set.
+	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	/// Removes an epoch from a validator's list of active epochs.
+	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
+	/// Add an epoch to a validator's list of active epochs.
+	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
+	///  Returns the amount of a validator's stake that is currently bonded.
+	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
+}
+
+/// Handles the expiry of an epoch
+pub trait EpochExpiry {
+	fn expire_epoch(epoch: EpochIndex);
+}
+
+/// Handles the bonding logic
+pub trait Bonding {
+	type ValidatorId;
+	type Amount;
+	/// Update the bond of an validator
+	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount);
+}
 pub trait CeremonyIdProvider {
 	type CeremonyId;
 

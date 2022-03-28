@@ -17,7 +17,7 @@ mod on_charge_transaction;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_traits::{BondRotation, Chainflip, EpochTransitionHandler, Slashing, StakeHandler};
+use cf_traits::{Bonding, Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -198,6 +198,11 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	/// Excludes the bond.
 	pub fn liquid(&self) -> Balance {
 		self.stake.saturating_sub(self.validator_bond)
+	}
+
+	// The current validator bond
+	pub fn bond(&self) -> Balance {
+		self.validator_bond
 	}
 }
 
@@ -380,6 +385,18 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}
 }
+
+pub struct Bonder<T>(PhantomData<T>);
+
+impl<T: Config> Bonding for Bonder<T> {
+	type ValidatorId = T::AccountId;
+	type Amount = T::Balance;
+
+	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount) {
+		Pallet::<T>::set_validator_bond(validator, bond);
+	}
+}
+
 pub struct FlipIssuance<T>(PhantomData<T>);
 
 impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
@@ -400,25 +417,14 @@ impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 	}
 }
 
-impl<T: Config> cf_traits::BondRotation for Pallet<T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
-
-	fn update_validator_bonds(new_validators: &[T::AccountId], new_bond: T::Balance) {
-		Account::<T>::iter().for_each(|(account, _)| {
-			if new_validators.contains(&account) {
-				Self::set_validator_bond(&account, new_bond);
-			} else {
-				Self::set_validator_bond(&account, T::Balance::zero());
-			}
-		});
-	}
-}
-
 impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 	type Handler = T::StakeHandler;
+
+	fn locked_balance(account_id: &T::AccountId) -> Self::Balance {
+		Account::<T>::get(account_id).bond()
+	}
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
@@ -496,19 +502,5 @@ where
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
 		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed(account_id.clone(), total_burn));
-	}
-}
-
-impl<T: Config + Chainflip> EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = <T as frame_system::Config>::AccountId;
-	type Amount = <T as Config>::Balance;
-
-	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		new_bond: Self::Amount,
-	) {
-		// Update the bond of all validators for the new epoch
-		<Self as BondRotation>::update_validator_bonds(new_validators, new_bond);
 	}
 }
