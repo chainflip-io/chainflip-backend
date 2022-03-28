@@ -522,11 +522,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// when we take will we always be taking with the same attempt count
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
-
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
 
-		Self::start_broadcast_attempt(broadcast_attempt_id, unsigned_tx);
+		Self::start_broadcast_attempt(
+			BroadcastAttemptId { broadcast_id, attempt_count: 0 },
+			unsigned_tx,
+		);
 	}
 
 	fn start_broadcast_attempt(
