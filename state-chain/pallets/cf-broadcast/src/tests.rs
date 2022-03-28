@@ -57,7 +57,7 @@ impl MockCfe {
 						// Ignore the request.
 						return
 					}
-					Self::handle_broadcast_request(attempt_id, scenario);
+					Self::handle_broadcast_request(attempt_id.broadcast_id, scenario);
 				},
 				BroadcastEvent::BroadcastComplete(broadcast_id) => {
 					COMPLETED_BROADCASTS.with(|cell| cell.borrow_mut().push(broadcast_id));
@@ -111,19 +111,15 @@ impl MockCfe {
 		));
 	}
 
-	// TODO: use broadcast id
 	// Simulate different outcomes.
-	fn handle_broadcast_request(attempt_id: BroadcastAttemptId, scenario: Scenario) {
+	fn handle_broadcast_request(broadcast_id: BroadcastId, scenario: Scenario) {
 		assert_ok!(match scenario {
-			Scenario::HappyPath => MockBroadcast::transmission_success(
-				Origin::root(),
-				attempt_id.broadcast_id,
-				[0xcf; 4]
-			),
+			Scenario::HappyPath =>
+				MockBroadcast::transmission_success(Origin::root(), broadcast_id, [0xcf; 4]),
 			Scenario::TransmissionFailure(failure) => {
 				MockBroadcast::transmission_failure(
 					Origin::root(),
-					attempt_id.broadcast_id,
+					broadcast_id,
 					failure,
 					[0xcf; 4],
 				)
