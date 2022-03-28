@@ -107,7 +107,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
         let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(abort_reason) => {
-                return abort_reason.to_stage_result_error("initial commitments");
+                return abort_reason.into_stage_result_error("initial commitments");
             }
         };
 
@@ -216,7 +216,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
         let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
             Err(abort_reason) => {
-                return abort_reason.to_stage_result_error("local signatures");
+                return abort_reason.into_stage_result_error("local signatures");
             }
         };
 

@@ -17,11 +17,11 @@ pub enum BroadcastFailureReason {
 }
 
 impl BroadcastFailureReason {
-    /// Builds the StageResult with a specific error message using the BroadcastFailureReason and stage_name
-    pub fn to_stage_result_error<D, Result>(&self, stage_name: &str) -> StageResult<D, Result> {
+    /// Turns the `BroadcastFailureReason` into a `StageResult` with a specific error message containing the stage_name
+    pub fn into_stage_result_error<D, Result>(self, stage_name: &str) -> StageResult<D, Result> {
         match self {
             BroadcastFailureReason::InsufficientMessages(reported_parties) => StageResult::Error(
-                reported_parties.iter().cloned().collect(),
+                reported_parties.into_iter().collect(),
                 anyhow::Error::msg(format!(
                     "Insufficient messages received in broadcast of {}",
                     stage_name
@@ -29,7 +29,7 @@ impl BroadcastFailureReason {
             ),
             BroadcastFailureReason::InsufficientVerificationMessages(reported_parties) => {
                 StageResult::Error(
-                    reported_parties.iter().cloned().collect(),
+                    reported_parties.into_iter().collect(),
                     anyhow::Error::msg(format!(
                         "Insufficient broadcast verification messages received for {}",
                         stage_name
@@ -37,7 +37,7 @@ impl BroadcastFailureReason {
                 )
             }
             BroadcastFailureReason::Inconsistency(reported_parties) => StageResult::Error(
-                reported_parties.iter().cloned().collect(),
+                reported_parties.into_iter().collect(),
                 anyhow::Error::msg(format!("Inconsistent broadcast of {}", stage_name)),
             ),
         }

@@ -137,7 +137,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
         let commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(abort_reason) => {
-                return abort_reason.to_stage_result_error("initial commitments");
+                return abort_reason.into_stage_result_error("initial commitments");
             }
         };
 
@@ -335,7 +335,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
         let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(abort_reason) => {
-                return abort_reason.to_stage_result_error("complaints");
+                return abort_reason.into_stage_result_error("complaints");
             }
         };
 
@@ -546,7 +546,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(abort_reason) => {
-                return abort_reason.to_stage_result_error("blame response");
+                return abort_reason.into_stage_result_error("blame response");
             }
         };
 
