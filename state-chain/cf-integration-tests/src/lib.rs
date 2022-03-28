@@ -1400,6 +1400,13 @@ mod tests {
 					let node_4 = nodes.get(3).unwrap();
 					let node_5 = nodes.get(4).unwrap();
 
+					// Activate accounts
+					network::Cli::activate_account(node_1.clone());
+					network::Cli::activate_account(node_2.clone());
+					network::Cli::activate_account(node_3.clone());
+					network::Cli::activate_account(node_4.clone());
+					network::Cli::activate_account(node_5.clone());
+
 					// Stake the nodes
 					testnet.stake_manager_contract.stake(node_1.clone(), 100);
 					testnet.stake_manager_contract.stake(node_2.clone(), 50);
@@ -1485,6 +1492,13 @@ mod tests {
 					let node_3 = nodes.get(2).unwrap();
 					let node_4 = nodes.get(3).unwrap();
 					let node_5 = nodes.get(4).unwrap();
+
+					// Activate accounts
+					network::Cli::activate_account(node_1.clone());
+					network::Cli::activate_account(node_2.clone());
+					network::Cli::activate_account(node_3.clone());
+					network::Cli::activate_account(node_4.clone());
+					network::Cli::activate_account(node_5.clone());
 
 					// Stake the first 3 nodes to be in the active set
 					testnet.stake_manager_contract.stake(node_1.clone(), 100);
