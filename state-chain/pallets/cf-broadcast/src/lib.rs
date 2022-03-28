@@ -189,7 +189,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, BroadcastId, TransmissionAttempt<T, I>, OptionQuery>;
 
 	/// The list of failed broadcasts pending retry.
-	// Why do we need this extra Failed BroadcastAttemptStruct
 	#[pallet::storage]
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
