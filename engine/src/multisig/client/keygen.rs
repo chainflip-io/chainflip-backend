@@ -15,7 +15,7 @@ pub use keygen_data::{
 
 pub use keygen_frost::HashContext;
 
-pub use keygen_stages::{is_contract_compatible, AwaitCommitments1};
+pub use keygen_stages::{is_contract_compatible, HashCommitments1};
 
 use state_chain_runtime::AccountId;
 
