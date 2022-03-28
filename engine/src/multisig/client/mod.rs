@@ -443,8 +443,11 @@ where
         }
     }
 
-    /// Process requests to sign that required the key in `key_info`
-    fn process_pending_requests_to_sign(&mut self, key_info: KeygenResultInfo) {
+    pub fn on_key_generated(&mut self, key_info: KeygenResultInfo) {
+        self.key_store
+            .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
+
+        // Process requests to sign that required the key in `key_info`
         if let Some(reqs) = self
             .pending_requests_to_sign
             .remove(&KeyId(key_info.key.get_public_key_bytes()))
@@ -470,12 +473,6 @@ where
                 ));
             }
         }
-    }
-
-    pub fn on_key_generated(&mut self, key_info: KeygenResultInfo) {
-        self.key_store
-            .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
-        self.process_pending_requests_to_sign(key_info);
     }
 }
 
