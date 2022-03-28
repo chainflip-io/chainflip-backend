@@ -521,7 +521,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id
 		});
 
-		// when we take will we always be taking with the same attempt count
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
 
 		Self::start_broadcast_attempt(
