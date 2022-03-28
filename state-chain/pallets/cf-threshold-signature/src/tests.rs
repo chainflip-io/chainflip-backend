@@ -241,7 +241,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 
 			// The offender has not yet been reported.
-			assert!(MockOfflineReporter::get_reported().is_empty());
+			assert!(MockOffenceReporter::get_reported().is_empty());
 
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
@@ -252,7 +252,7 @@ fn fail_path_with_timeout() {
 			assert!(MockEthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
-			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
+			assert_eq!(MockOffenceReporter::get_reported(), vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
 			let context = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);
@@ -307,7 +307,7 @@ fn fail_path_no_timeout() {
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
 
 			// The offender has not yet been reported.
-			assert!(MockOfflineReporter::get_reported().is_empty());
+			assert!(MockOffenceReporter::get_reported().is_empty());
 
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
@@ -318,7 +318,7 @@ fn fail_path_no_timeout() {
 			assert!(MockEthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// We did reach the reporting threshold, participant 1 was reported.
-			assert_eq!(MockOfflineReporter::get_reported(), vec![1]);
+			assert_eq!(MockOffenceReporter::get_reported(), vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
 			let pending = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);

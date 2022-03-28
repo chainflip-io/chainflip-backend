@@ -203,7 +203,7 @@ fn test_broadcast_rejected() {
 		);
 
 		// The nominee was not reported.
-		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
+		assert_eq!(MockOffenceReporter::get_reported(), vec![RANDOM_NOMINEE]);
 	})
 }
 
@@ -292,7 +292,7 @@ fn test_bad_signature() {
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// The nominee was reported.
-		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
+		assert_eq!(MockOffenceReporter::get_reported(), vec![RANDOM_NOMINEE]);
 	})
 }
 

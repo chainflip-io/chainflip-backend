@@ -30,7 +30,7 @@ mod migrations;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		offline_conditions::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
+		offence_reporting::*, Chainflip, Heartbeat, KeygenExclusionSet, NetworkState, Slashing,
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
@@ -82,7 +82,7 @@ pub mod pallet {
 		>;
 
 		/// Penalise
-		type Penalty: OfflinePenalty;
+		type Penalty: OffencePenalty;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -148,7 +148,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An offline condition has been met
-		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
+		OffencePenalty(T::ValidatorId, Offence, ReputationPoints),
 		/// The accrual rate for our reputation points has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
 		/// The value for ReputationPointPenalty has been updated
@@ -245,13 +245,13 @@ pub mod pallet {
 		}
 	}
 
-	/// Implementation of `OfflineReporter` reporting on `OfflineCondition` with specified number
+	/// Implementation of `OffenceReporter` reporting on `Offence` with specified number
 	/// of reputation points
-	impl<T: Config> OfflineReporter for Pallet<T> {
+	impl<T: Config> OffenceReporter for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 		type Penalty = T::Penalty;
 
-		fn report(condition: OfflineCondition, validator_id: &Self::ValidatorId) {
+		fn report(condition: Offence, validator_id: &Self::ValidatorId) {
 			// Confirm validator is present
 			if !Reputations::<T>::contains_key(validator_id) {
 				log::error!(
@@ -268,15 +268,11 @@ pub mod pallet {
 				T::Banned::ban(validator_id);
 			}
 
-			if condition == OfflineCondition::ParticipateKeygenFailed {
+			if condition == Offence::ParticipateKeygenFailed {
 				T::KeygenExclusionSet::add_to_set(validator_id.clone());
 			}
 
-			Self::deposit_event(Event::OfflineConditionPenalty(
-				(*validator_id).clone(),
-				condition,
-				penalty,
-			));
+			Self::deposit_event(Event::OffencePenalty((*validator_id).clone(), condition, penalty));
 
 			Self::update_reputation(validator_id, penalty.neg());
 		}

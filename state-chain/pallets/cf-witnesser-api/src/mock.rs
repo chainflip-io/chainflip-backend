@@ -143,7 +143,7 @@ impl Chainflip for Test {
 }
 
 cf_traits::impl_mock_signer_nomination!(u64);
-cf_traits::impl_mock_offline_conditions!(u64);
+cf_traits::impl_mock_offence_reporting!(u64);
 
 parameter_types! {
 	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
@@ -157,7 +157,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type TargetChain = Ethereum;
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider<Ethereum, <Self as Chainflip>::KeyId>;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
@@ -178,7 +178,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type TransactionBuilder = MockTransactionBuilder<Ethereum, EthereumApi>;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type SignerNomination = MockSignerNomination;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
@@ -193,7 +193,7 @@ parameter_types! {
 impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Event = Event;
 	type Chain = Ethereum;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Test>;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;

@@ -6,7 +6,7 @@
 
 use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_traits::{
-	offline_conditions::{OfflineCondition, OfflineReporter},
+	offence_reporting::{Offence, OffenceReporter},
 	Broadcaster, CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, KeyProvider,
 	KeygenStatus, NonceProvider, VaultRotator,
 };
@@ -305,7 +305,7 @@ pub mod pallet {
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
 		/// For reporting misbehaving validators.
-		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
+		type OffenceReporter: OffenceReporter<ValidatorId = Self::ValidatorId>;
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
@@ -707,7 +707,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		offenders: impl IntoIterator<Item = T::ValidatorId>,
 	) {
 		for offender in offenders {
-			T::OfflineReporter::report(OfflineCondition::ParticipateKeygenFailed, &offender);
+			T::OffenceReporter::report(Offence::ParticipateKeygenFailed, &offender);
 		}
 
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));

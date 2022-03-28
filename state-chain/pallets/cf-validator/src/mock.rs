@@ -256,7 +256,7 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
-cf_traits::impl_mock_offline_conditions!(ValidatorId);
+cf_traits::impl_mock_offence_reporting!(ValidatorId);
 
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
@@ -276,6 +276,17 @@ impl Chainflip for Test {
 	type EpochInfo = MockEpochInfo;
 }
 
+pub struct MockBonder;
+
+impl Bonding for MockBonder {
+	type ValidatorId = ValidatorId;
+
+	type Amount = Amount;
+
+	// Bond updates are tested in the integration tests
+	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
@@ -286,8 +297,9 @@ impl Config for Test {
 	type VaultRotator = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 }
 
 /// Session pallet requires a set of validators at genesis.

@@ -73,7 +73,7 @@ impl system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_offline_conditions!(u64);
+cf_traits::impl_mock_offence_reporting!(u64);
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;

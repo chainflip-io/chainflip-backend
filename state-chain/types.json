@@ -125,7 +125,7 @@
     "offline": "u32"
   },
   "Nonce": "u64",
-  "OfflineCondition": {
+  "Offence": {
     "_enum": [
       "ParticipateSigningFailed",
       "ParticipateKeygenFailed",

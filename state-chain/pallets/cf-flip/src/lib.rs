@@ -17,7 +17,7 @@ mod on_charge_transaction;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_traits::{Slashing, StakeHandler};
+use cf_traits::{Bonding, Slashing, StakeHandler};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -116,17 +116,19 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Some imbalance could not be settled and the remainder will be reverted. [reverted_to,
-		/// amount]
+		/// Some imbalance could not be settled and the remainder will be reverted. /[reverted_to,
+		/// amount/]
 		RemainingImbalance(ImbalanceSource<T::AccountId>, T::Balance),
 
-		/// An imbalance has been settled. [source, dest, amount_settled, amount_reverted]
+		/// An imbalance has been settled. /[source, dest, amount_settled, amount_reverted/]
 		BalanceSettled(
 			ImbalanceSource<T::AccountId>,
 			ImbalanceSource<T::AccountId>,
 			T::Balance,
 			T::Balance,
 		),
+		/// Slashing has been performed. /[account_id, amount/]
+		SlashingPerformed(T::AccountId, T::Balance),
 	}
 
 	#[pallet::error]
@@ -196,6 +198,11 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	/// Excludes the bond.
 	pub fn liquid(&self) -> Balance {
 		self.stake.saturating_sub(self.validator_bond)
+	}
+
+	// The current validator bond
+	pub fn bond(&self) -> Balance {
+		self.validator_bond
 	}
 }
 
@@ -378,6 +385,18 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}
 }
+
+pub struct Bonder<T>(PhantomData<T>);
+
+impl<T: Config> Bonding for Bonder<T> {
+	type ValidatorId = T::AccountId;
+	type Amount = T::Balance;
+
+	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount) {
+		Pallet::<T>::set_validator_bond(validator, bond);
+	}
+}
+
 pub struct FlipIssuance<T>(PhantomData<T>);
 
 impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
@@ -398,25 +417,14 @@ impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 	}
 }
 
-impl<T: Config> cf_traits::BondRotation for Pallet<T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
-
-	fn update_validator_bonds(new_validators: &[T::AccountId], new_bond: T::Balance) {
-		Account::<T>::iter().for_each(|(account, _)| {
-			if new_validators.contains(&account) {
-				Self::set_validator_bond(&account, new_bond);
-			} else {
-				Self::set_validator_bond(&account, T::Balance::zero());
-			}
-		});
-	}
-}
-
 impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 	type Handler = T::StakeHandler;
+
+	fn locked_balance(account_id: &T::AccountId) -> Self::Balance {
+		Account::<T>::get(account_id).bond()
+	}
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
@@ -481,10 +489,6 @@ where
 	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Get the slashing rate
 		let slashing_rate: T::Balance = SlashingRate::<T>::get();
-		// Check that the slashing rate is not zero, no need to slash if this is set to zero, right
-		if slashing_rate == Zero::zero() {
-			return
-		}
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get blocks_offline as Balance
@@ -497,5 +501,6 @@ where
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
+		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed(account_id.clone(), total_burn));
 	}
 }

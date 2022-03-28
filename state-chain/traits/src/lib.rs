@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod mocks;
+pub mod offence_reporting;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
@@ -231,16 +232,6 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
-/// Trait for rotate bond after epoch.
-pub trait BondRotation {
-	type AccountId;
-	type Balance;
-
-	/// Sets the validator bond for all new_validator to the new_bond and
-	/// the bond for all old validators to zero.
-	fn update_validator_bonds(new_validators: &[Self::AccountId], new_bond: Self::Balance);
-}
-
 /// Provide feedback on staking
 pub trait StakeHandler {
 	type ValidatorId;
@@ -253,6 +244,9 @@ pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
 	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+
+	/// The amount of locked tokens in the current epoch - aka the bond
+	fn locked_balance(account_id: &Self::AccountId) -> Self::Balance;
 
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
@@ -538,47 +532,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
 }
 
-pub mod offline_conditions {
-	use super::*;
-	pub type ReputationPoints = i32;
-
-	/// Conditions that cause a validator to be docked reputation points
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-	pub enum OfflineCondition {
-		/// There was a failure in participation during a signing
-		ParticipateSigningFailed,
-		/// There was a failure in participation during a key generation ceremony
-		ParticipateKeygenFailed,
-		/// An invalid transaction was authored
-		InvalidTransactionAuthored,
-		/// A transaction failed on transmission
-		TransactionFailedOnTransmission,
-		/// A validator missed their authorship slot.
-		MissedAuthorshipSlot,
-	}
-
-	pub trait OfflinePenalty {
-		fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool);
-	}
-
-	/// For reporting offline conditions.
-	pub trait OfflineReporter {
-		type ValidatorId;
-		type Penalty: OfflinePenalty;
-
-		/// Report the condition for validator
-		/// Returns `Ok(Weight)` else an error if the validator isn't valid
-		fn report(condition: OfflineCondition, validator_id: &Self::ValidatorId);
-	}
-
-	/// We report on nodes that should be banned
-	pub trait Banned {
-		type ValidatorId;
-		/// A validator to be banned
-		fn ban(validator_id: &Self::ValidatorId);
-	}
-}
-
 /// The heartbeat of the network
 pub trait Heartbeat {
 	type ValidatorId: Default;
@@ -674,6 +627,37 @@ pub trait KeygenExclusionSet {
 	fn forgive_all();
 }
 
+/// Provides an interface to all passed epochs
+pub trait HistoricalEpoch {
+	type ValidatorId;
+	type EpochIndex;
+	type Amount;
+	/// All validators which were in an epoch's authority set.
+	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
+	/// The bond for an epoch
+	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
+	/// The unexpired epochs for which a validator was in the authority set.
+	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	/// Removes an epoch from a validator's list of active epochs.
+	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
+	/// Add an epoch to a validator's list of active epochs.
+	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
+	///  Returns the amount of a validator's stake that is currently bonded.
+	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
+}
+
+/// Handles the expiry of an epoch
+pub trait EpochExpiry {
+	fn expire_epoch(epoch: EpochIndex);
+}
+
+/// Handles the bonding logic
+pub trait Bonding {
+	type ValidatorId;
+	type Amount;
+	/// Update the bond of an validator
+	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount);
+}
 pub trait CeremonyIdProvider {
 	type CeremonyId;
 

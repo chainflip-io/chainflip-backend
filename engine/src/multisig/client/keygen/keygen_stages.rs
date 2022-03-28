@@ -11,6 +11,7 @@ use client::{
     },
     keygen, ThresholdParameters,
 };
+use itertools::Itertools;
 
 use crate::multisig::crypto::{BigInt, BigIntConverter, KeyShare};
 
@@ -29,6 +30,8 @@ use keygen::{
 use super::keygen_frost::ShamirShare;
 use super::KeygenOptions;
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
+
+type KeygenStageResult = StageResult<KeygenData, KeygenResultInfo>;
 
 /// Stage 1: Sample a secret, generate sharing polynomial coefficients for it
 /// and a ZKP of the secret. Broadcast commitments to the coefficients and the ZKP.
@@ -76,10 +79,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for AwaitCommitments1
         matches!(m, KeygenData::Verify2(_))
     }
 
-    fn process(
-        self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         // We have received commitments from everyone, for now just need to
         // go through another round to verify consistent broadcasts
 
@@ -135,14 +135,11 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
     fn process(
         self,
         messages: std::collections::HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    ) -> KeygenStageResult {
         let commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
-                    blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of initial commitments"),
-                )
+            Err(abort_reason) => {
+                return abort_reason.into_stage_result_error("initial commitments");
             }
         };
 
@@ -223,16 +220,13 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
         matches!(m, KeygenData::Complaints4(_))
     }
 
-    fn process(
-        self,
-        incoming_shares: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, incoming_shares: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         // As the messages for this stage are sent in secret, it is possible
         // for a malicious party to send us invalid data (or not send anything
         // at all) without us being able to prove that. Because of that, we
         // can't simply terminate our protocol here.
 
-        let mut bad_parties = vec![];
+        let mut bad_parties = BTreeSet::new();
         let verified_shares: HashMap<usize, Self::Message> = incoming_shares
             .into_iter()
             .filter_map(|(sender_idx, share_opt)| {
@@ -246,7 +240,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
                             sender_idx
                         );
 
-                        bad_parties.push(sender_idx);
+                        bad_parties.insert(sender_idx);
                         None
                     }
                 } else {
@@ -256,7 +250,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
                         sender_idx
                     );
 
-                    bad_parties.push(sender_idx);
+                    bad_parties.insert(sender_idx);
                     None
                 }
             })
@@ -285,7 +279,7 @@ struct ComplaintsStage4 {
     /// Shares sent to us from other parties (secret)
     shares: IncomingShares,
     outgoing_shares: OutgoingShares,
-    complaints: Vec<usize>,
+    complaints: BTreeSet<usize>,
 }
 
 derive_display_as_type_name!(ComplaintsStage4);
@@ -301,10 +295,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for ComplaintsStage4 
         matches!(m, KeygenData::VerifyComplaints5(_))
     }
 
-    fn process(
-        self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let processor = VerifyComplaintsBroadcastStage5 {
             common: self.common.clone(),
             received_complaints: messages,
@@ -342,17 +333,11 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
         matches!(data, KeygenData::BlameResponse6(_))
     }
 
-    fn process(
-        self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
-                    blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of complaints"),
-                );
+            Err(abort_reason) => {
+                return abort_reason.into_stage_result_error("complaints");
             }
         };
 
@@ -369,24 +354,6 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
         let idxs_to_report: Vec<_> = verified_complaints
             .iter()
             .filter_map(|(idx_from, Complaints4(blamed_idxs))| {
-                // Ensure that complaints contain valid, non-duplicate indexes
-                let deduped_idxs = {
-                    let mut idxs = blamed_idxs.clone();
-                    idxs.sort_unstable();
-                    idxs.dedup();
-                    idxs
-                };
-
-                let has_duplicates = deduped_idxs.len() != blamed_idxs.len();
-
-                if has_duplicates {
-                    slog::warn!(
-                        self.common.logger,
-                        "Complaint had duplicates: {}",
-                        format_iterator(blamed_idxs)
-                    );
-                }
-
                 let has_invalid_idxs = !blamed_idxs.iter().all(|idx_blamed| {
                     if self.common.is_idx_valid(*idx_blamed) {
                         true
@@ -400,7 +367,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
                     }
                 });
 
-                if has_duplicates || has_invalid_idxs {
+                if has_invalid_idxs {
                     Some(*idx_from)
                 } else {
                     None
@@ -517,10 +484,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
         matches!(data, KeygenData::VerifyBlameResponses7(_))
     }
 
-    fn process(
-        self,
-        blame_responses: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(self, blame_responses: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
             complaints: self.complaints,
@@ -546,54 +510,26 @@ struct VerifyBlameResponsesBroadcastStage7 {
 
 derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7);
 
-fn derive_expected_blame_response_indexes(
-    complaints: &HashMap<usize, Complaints4>,
-) -> HashMap<usize, BTreeSet<usize>> {
-    let mut expected: HashMap<usize, BTreeSet<usize>> = HashMap::new();
-
-    for (blamer_idx, Complaints4(blamed_idxs)) in complaints {
-        for blamed_idx in blamed_idxs {
-            expected.entry(*blamed_idx).or_default().insert(*blamer_idx);
-        }
-    }
-
-    expected
-}
-
-/// Checks if the blame response contains all (and only) expected indexes
+/// Checks for sender_idx that their blame response contains exactly
+/// a share for each party that blamed them
 fn is_blame_response_complete(
+    sender_idx: usize,
     response: &BlameResponse6,
-    expected_share_idxs: &BTreeSet<usize>,
+    complaints: &HashMap<usize, Complaints4>,
 ) -> bool {
-    // BTreeSet<T> is just a BTreeMap<T, ()>, so the elements
-    // are expected to be in the same order
-    response.0.keys().into_iter().eq(expected_share_idxs.iter())
-}
+    let expected_idxs_iter = complaints
+        .iter()
+        .filter_map(|(blamer_idx, Complaints4(blamed_idxs))| {
+            if blamed_idxs.contains(&sender_idx) {
+                Some(blamer_idx)
+            } else {
+                None
+            }
+        })
+        .sorted();
 
-#[cfg(test)]
-#[test]
-fn test_derive_expected_blame_response_indexes() {
-    use std::iter::FromIterator;
-
-    let complaints: HashMap<usize, Complaints4> = [
-        (1, Complaints4(vec![])),
-        (2, Complaints4(vec![1, 3])),
-        (3, Complaints4(vec![1])),
-    ]
-    .iter()
-    .cloned()
-    .collect();
-
-    let expected: HashMap<usize, BTreeSet<usize>> = {
-        let set1 = BTreeSet::from_iter([2, 3].iter().copied());
-        let set2 = BTreeSet::from_iter([2].iter().copied());
-        [(1, set1), (3, set2)].iter().cloned().collect()
-    };
-
-    assert_eq!(
-        derive_expected_blame_response_indexes(&complaints),
-        expected
-    );
+    // Note: the keys in BTreeMap are already sorted
+    Iterator::eq(response.0.keys(), expected_idxs_iter)
 }
 
 impl VerifyBlameResponsesBroadcastStage7 {
@@ -604,19 +540,10 @@ impl VerifyBlameResponsesBroadcastStage7 {
         &self,
         blame_responses: HashMap<usize, BlameResponse6>,
     ) -> Result<HashMap<usize, ShamirShare>, Vec<usize>> {
-        use itertools::Itertools;
-        // For each party, the indexes at which secret shares
-        // should be revealed
-        let mut expected_blame_responses = derive_expected_blame_response_indexes(&self.complaints);
-
         let (shares_for_us, bad_parties): (Vec<_>, Vec<_>) = blame_responses
             .iter()
             .map(|(sender_idx, response)| {
-                let expected_idxs = expected_blame_responses
-                    .remove(sender_idx)
-                    .unwrap_or_default();
-
-                if !is_blame_response_complete(response, &expected_idxs) {
+                if !is_blame_response_complete(*sender_idx, response, &self.complaints) {
                     slog::warn!(
                         self.common.logger,
                         "Incomplete blame response from party: {}",
@@ -670,10 +597,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
         false
     }
 
-    fn process(
-        mut self,
-        messages: HashMap<usize, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    fn process(mut self, messages: HashMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         slog::debug!(
             self.common.logger,
             "Processing verifications for blame responses"
@@ -681,11 +605,8 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
-                    blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of blame response"),
-                );
+            Err(abort_reason) => {
+                return abort_reason.into_stage_result_error("blame response");
             }
         };
 

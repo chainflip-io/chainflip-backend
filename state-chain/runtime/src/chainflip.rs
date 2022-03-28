@@ -1,5 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod chain_instances;
+pub mod epoch_transition;
 mod missed_authorship_slots;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -9,17 +10,15 @@ pub use signer_nomination::RandomSignerNomination;
 use crate::{
 	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
 	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
-	Witnesser,
 };
 use cf_chains::{
 	eth::{self, api::EthereumApi},
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	offline_conditions::{OfflineCondition, ReputationPoints},
-	BackupValidators, BlockEmissions, BondRotation, Chainflip, ChainflipAccount,
-	ChainflipAccountStore, EmergencyRotation, EmissionsTrigger, EpochInfo, EpochTransitionHandler,
-	Heartbeat, Issuance, NetworkState, RewardsDistribution, StakeHandler, StakeTransfer,
+	offence_reporting::{Offence, ReputationPoints},
+	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -43,60 +42,6 @@ impl Chainflip for Runtime {
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = Validator;
-}
-
-pub struct ChainflipEpochTransitions;
-
-/// Trigger emissions on epoch transitions.
-impl EpochTransitionHandler for ChainflipEpochTransitions {
-	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
-
-	fn on_new_epoch(
-		old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		new_bond: Self::Amount,
-	) {
-		// Calculate block emissions on every epoch
-		<Emissions as BlockEmissions>::calculate_block_emissions();
-		// Process any outstanding emissions.
-		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Update the bond of all validators for the new epoch
-		<Flip as BondRotation>::update_validator_bonds(new_validators, new_bond);
-		// Update the list of validators in the witnesser.
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<AccountStateManager<Runtime> as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<pallet_cf_online::Pallet<Runtime> as cf_traits::KeygenExclusionSet>::forgive_all();
-	}
-}
-
-pub struct AccountStateManager<T>(PhantomData<T>);
-
-impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
-	type ValidatorId = AccountId;
-	type Amount = T::Amount;
-
-	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		_new_bid: Self::Amount,
-	) {
-		// Update the last active epoch for the new validating set
-		let epoch_index = Validator::epoch_index();
-		for validator in new_validators {
-			ChainflipAccountStore::<Runtime>::update_last_active_epoch(validator, epoch_index);
-		}
-	}
 }
 
 pub struct ChainflipStakeHandler;
@@ -233,16 +178,16 @@ impl cf_traits::WaivedFees for WaivedFees {
 	}
 }
 
-pub struct OfflinePenalty;
+pub struct OffencePenalty;
 
-impl cf_traits::offline_conditions::OfflinePenalty for OfflinePenalty {
-	fn penalty(condition: &OfflineCondition) -> (ReputationPoints, bool) {
+impl cf_traits::offence_reporting::OffencePenalty for OffencePenalty {
+	fn penalty(condition: &Offence) -> (ReputationPoints, bool) {
 		match condition {
-			OfflineCondition::ParticipateSigningFailed => (15, true),
-			OfflineCondition::ParticipateKeygenFailed => (15, true),
-			OfflineCondition::InvalidTransactionAuthored => (15, false),
-			OfflineCondition::TransactionFailedOnTransmission => (15, false),
-			OfflineCondition::MissedAuthorshipSlot => (15, true),
+			Offence::ParticipateSigningFailed => (15, true),
+			Offence::ParticipateKeygenFailed => (15, true),
+			Offence::InvalidTransactionAuthored => (15, false),
+			Offence::TransactionFailedOnTransmission => (15, false),
+			Offence::MissedAuthorshipSlot => (15, true),
 		}
 	}
 }
