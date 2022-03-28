@@ -65,7 +65,6 @@ pub fn start_client<S>(
     multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
 ) -> impl futures::Future
@@ -102,10 +101,6 @@ where
                 }
                 _ = cleanup_tick.tick() => {
                     client.cleanup();
-                }
-                Ok(()) = &mut shutdown_rx => {
-                    slog::info!(logger, "MultisigClient stopped due to shutdown request!");
-                    break;
                 }
             }
         }

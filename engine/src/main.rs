@@ -73,7 +73,6 @@ async fn main() {
     let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger)
         .expect("Failed to open database");
 
-    let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
     let (multisig_instruction_sender, multisig_instruction_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     // TODO: Merge this into the MultisigInstruction channel
@@ -173,7 +172,6 @@ async fn main() {
             multisig_outcome_sender,
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
-            shutdown_client_rx,
             multisig::KeygenOptions::default(),
             &root_logger,
         ),
