@@ -48,11 +48,12 @@ use cf_traits::{offence_reporting::ReputationPoints, ChainflipAccountData};
 pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler, OffencePenalty,
+	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
+	OffencePenalty,
 };
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
-use pallet_cf_flip::FlipSlasher;
+use pallet_cf_flip::{Bonder, FlipSlasher};
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -161,6 +162,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type OffenceReporter = Reputation;
 }

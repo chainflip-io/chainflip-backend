@@ -1,21 +1,22 @@
 use std::collections::VecDeque;
 
 use futures::{stream, Stream};
-use sp_core::H160;
-use web3::types::{BlockHeader, BlockNumber, FilterBuilder, Log, U64};
-
-use ethbloom::{Bloom, Input};
+use slog::o;
+use web3::types::{BlockHeader, U64};
 
 use futures::StreamExt;
 
-use crate::eth::BlockHeaderable;
+use crate::logging::COMPONENT_KEY;
 
-use super::EthRpcApi;
+use super::EthNumberBloom;
 
-pub fn safe_eth_log_header_stream<BlockHeaderStream>(
+use anyhow::Result;
+
+pub fn safe_ws_head_stream<BlockHeaderStream>(
     header_stream: BlockHeaderStream,
     safety_margin: u64,
-) -> impl Stream<Item = BlockHeader>
+    logger: &slog::Logger,
+) -> impl Stream<Item = EthNumberBloom>
 where
     BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
 {
@@ -24,46 +25,83 @@ where
         BlockHeaderStream: Stream<Item = Result<BlockHeader, web3::Error>>,
     {
         stream: BlockHeaderStream,
-        unsafe_block_headers: VecDeque<BlockHeader>,
+        last_block_pulled: Option<U64>,
+        unsafe_block_headers: VecDeque<EthNumberBloom>,
+        logger: slog::Logger,
     }
-    let init_data = StreamAndBlocks {
+    let init_state = StreamAndBlocks {
         stream: Box::pin(header_stream),
+        last_block_pulled: None,
         unsafe_block_headers: Default::default(),
+        logger: logger.new(o!(COMPONENT_KEY => "ETH_WSSafeStream")),
     };
 
-    Box::pin(stream::unfold(init_data, move |mut state| async move {
+    Box::pin(stream::unfold(init_state, move |mut state| async move {
         loop {
             if let Some(header) = state.stream.next().await {
-                let header = header.unwrap();
-                let number = header.number.unwrap();
+                let current_header = match header {
+                    Ok(header) => header,
+                    Err(err) => {
+                        slog::error!(
+                            state.logger,
+                            "Terminating stream. Error pulling head from stream: {}",
+                            err
+                        );
+                        break None;
+                    }
+                };
+                let current_block_number = match current_header.number {
+                    Some(number) => number,
+                    None => {
+                        slog::error!(
+                            state.logger,
+                            "Termintaing stream. Latest WS block header does not have a block number."
+                        );
+                        break None;
+                    }
+                };
+
+                // Terminate stream if we have skipped into the future
+                if let Some(last_block_pulled) = state.last_block_pulled {
+                    if current_block_number > last_block_pulled + 1 {
+                        break None;
+                    }
+                }
+
+                state.last_block_pulled = Some(current_block_number);
 
                 if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
-                    let last_unsafe_block_number = last_unsafe_block_header.number().unwrap();
-                    assert!(number <= last_unsafe_block_number + 1);
-                    if number <= last_unsafe_block_number {
-                        // if we receive two of the same block number then we still need to drop the first
-                        let reorg_depth = (last_unsafe_block_number - number) + U64::from(1);
+                    let last_unsafe_block_number = last_unsafe_block_header.block_number;
+                    assert!(current_block_number <= last_unsafe_block_number + 1);
 
-                        (0..reorg_depth.as_u64()).for_each(|_| {
+                    // if we receive two of the same block number then we still need to drop the first
+                    // hence + 1
+                    let reorg_depth =
+                        ((last_unsafe_block_number + 1) - current_block_number).as_u64();
+
+                    if reorg_depth > safety_margin {
+                        break None;
+                    } else if reorg_depth > 0 {
+                        (0..reorg_depth).for_each(|_| {
                             state.unsafe_block_headers.pop_back();
                         });
                     }
                 }
 
-                state.unsafe_block_headers.push_back(header);
+                state.unsafe_block_headers.push_back(EthNumberBloom {
+                    block_number: current_block_number,
+                    logs_bloom: current_header.logs_bloom,
+                });
 
                 if let Some(header) = state.unsafe_block_headers.front() {
-                    if header
-                        .number
-                        .expect("all blocks on the chain have block numbers")
-                        .saturating_add(U64::from(safety_margin))
-                        <= number
+                    if header.block_number.saturating_add(U64::from(safety_margin))
+                        <= current_block_number
                     {
                         break Some((
                             state
                                 .unsafe_block_headers
                                 .pop_front()
-                                .expect("already put an item above"),
+                                .expect("already checked for item above"),
                             state,
                         ));
                     } else {
@@ -77,71 +115,15 @@ where
                 break None;
             }
         }
-    }))
-}
-
-pub async fn filtered_log_stream_by_contract<SafeBlockHeaderStream, EthBlockHeader, EthRpc>(
-    safe_eth_head_stream: SafeBlockHeaderStream,
-    eth_rpc: EthRpc,
-    contract_address: H160,
-    logger: slog::Logger,
-) -> impl Stream<Item = Log>
-where
-    SafeBlockHeaderStream: Stream<Item = EthBlockHeader>,
-    EthBlockHeader: BlockHeaderable + Clone,
-    EthRpc: EthRpcApi + Clone,
-{
-    let my_stream = safe_eth_head_stream
-        .filter_map(move |header| {
-            let block_number = header.number().unwrap();
-            slog::debug!(logger, "Observing ETH block: `{}`", block_number);
-            let eth_rpc = eth_rpc.clone();
-            let logger = logger.clone();
-            async move {
-                let mut contract_bloom = Bloom::default();
-                contract_bloom.accrue(Input::Raw(&contract_address.0));
-
-                if header
-                    .clone()
-                    .logs_bloom()
-                    .unwrap()
-                    .contains_bloom(&contract_bloom)
-                {
-                    match eth_rpc
-                        .get_logs(
-                            FilterBuilder::default()
-                                .from_block(BlockNumber::Number(block_number))
-                                .to_block(BlockNumber::Number(block_number))
-                                .address(vec![contract_address])
-                                .build(),
-                        )
-                        .await
-                    {
-                        Ok(logs) => Some(stream::iter(logs)),
-                        Err(err) => {
-                            slog::error!(
-                                logger,
-                                "Failed to request ETH logs for block `{}`: {}",
-                                block_number,
-                                err,
-                            );
-                            None
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
-        })
-        .flatten();
-
-    Box::pin(my_stream)
+    }).fuse())
 }
 
 #[cfg(test)]
 pub mod tests {
 
-    use sp_core::H256;
+    use sp_core::{H160, H256};
+
+    use crate::logging::test_utils::new_test_logger;
 
     use super::*;
 
@@ -171,11 +153,21 @@ pub mod tests {
         Ok(block_header)
     }
 
+    impl From<BlockHeader> for EthNumberBloom {
+        fn from(block_header: BlockHeader) -> Self {
+            EthNumberBloom {
+                block_number: block_header.number.unwrap(),
+                logs_bloom: block_header.logs_bloom,
+            }
+        }
+    }
+
     #[tokio::test]
     async fn returns_none_when_none_in_inner_no_safety() {
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 0);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 0, &logger);
 
         assert!(stream.next().await.is_none());
     }
@@ -184,7 +176,8 @@ pub mod tests {
     async fn returns_none_when_none_in_inner_with_safety() {
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 4);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 4, &logger);
 
         assert!(stream.next().await.is_none());
     }
@@ -194,7 +187,8 @@ pub mod tests {
         let header_stream =
             stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![block_header(1, 0)]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 4);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 4, &logger);
 
         assert!(stream.next().await.is_none());
     }
@@ -205,14 +199,15 @@ pub mod tests {
         let header_stream =
             stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![first_block.clone()]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 0);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 0, &logger);
 
-        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
         assert!(stream.next().await.is_none());
     }
 
     #[tokio::test]
-    async fn returns_one_when_two_in_inner_but_one_safety_then_no_more() {
+    async fn returns_two_when_three_in_inner_with_one_safety_then_no_more() {
         let first_block = block_header(1, 0);
         let second_block = block_header(2, 1);
         let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
@@ -221,10 +216,11 @@ pub mod tests {
             block_header(3, 2),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 1);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 1, &logger);
 
-        assert_eq!(stream.next().await.unwrap(), first_block.unwrap());
-        assert_eq!(stream.next().await.unwrap(), second_block.unwrap());
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
+        assert_eq!(stream.next().await.unwrap(), second_block.unwrap().into());
         assert!(stream.next().await.is_none());
     }
 
@@ -238,10 +234,17 @@ pub mod tests {
             first_block_prime.clone(),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 0);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 0, &logger);
 
-        assert_eq!(stream.next().await.unwrap(), first_block.clone().unwrap());
-        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap(),
+            first_block.clone().unwrap().into()
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            first_block_prime.unwrap().into()
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -257,10 +260,17 @@ pub mod tests {
             block_header(2, 2),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 1);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 1, &logger);
 
-        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
-        assert_eq!(stream.next().await.unwrap(), second_block_prime.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap(),
+            first_block_prime.unwrap().into()
+        );
+        assert_eq!(
+            stream.next().await.unwrap(),
+            second_block_prime.unwrap().into()
+        );
         assert!(stream.next().await.is_none());
     }
 
@@ -278,9 +288,115 @@ pub mod tests {
             block_header(2, 12),
         ]);
 
-        let mut stream = safe_eth_log_header_stream(header_stream, 2);
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 2, &logger);
 
-        assert_eq!(stream.next().await.unwrap(), first_block_prime.unwrap());
+        assert_eq!(
+            stream.next().await.unwrap(),
+            first_block_prime.unwrap().into()
+        );
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn safe_stream_terminates_when_input_stream_skips_into_future() {
+        let first_block = block_header(1, 11);
+
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            block_header(2, 12),
+            block_header(4, 14),
+        ]);
+
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 1, &logger);
+
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
+
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn safe_stream_terminates_when_reorg_further_back_than_safety_margin() {
+        let first_block = block_header(1, 11);
+        let second_block = block_header(2, 12);
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            second_block.clone(),
+            block_header(4, 13),
+            block_header(6, 14),
+            block_header(41, 4),
+            block_header(51, 5),
+            block_header(61, 6),
+        ]);
+
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 2, &logger);
+
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
+
+        assert_eq!(stream.next().await.unwrap(), second_block.unwrap().into());
+
+        assert!(stream.next().await.is_none());
+    }
+
+    // The stream continues after a series of blocks, where we error on expected X, and then fetch X
+    // e.g. if the stream is Ok(10), Ok(11), Err, Ok(12) - will work fine
+    #[tokio::test]
+    async fn safe_stream_terminates_after_on_error_block_no_safety() {
+        let first_block = block_header(1, 11);
+        let second_block_after_err = block_header(2, 12);
+
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            Err(web3::Error::Internal),
+            second_block_after_err.clone(),
+        ]);
+
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 0, &logger);
+
+        assert_eq!(stream.next().await.unwrap(), first_block.unwrap().into());
+
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn safe_stream_terminates_on_error_block_with_safety() {
+        let first_block = block_header(1, 11);
+        let second_block_after_err = block_header(2, 12);
+
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            Err(web3::Error::Internal),
+            second_block_after_err.clone(),
+            block_header(3, 13),
+            block_header(4, 14),
+        ]);
+
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 2, &logger);
+
+        // terminate before getting a block, since the first block is not beyond our safety margin
+        assert!(stream.next().await.is_none());
+    }
+
+    // Ensure we return the errors when we don't have a block number,
+    // in the same way as the error of pulling the header from the ws stream itself
+    #[tokio::test]
+    async fn safe_stream_terminates_when_error_in_header_with_safety() {
+        let first_block = block_header(1, 11);
+        let mut second_block = block_header(1, 11).unwrap();
+        second_block.number = None;
+
+        let header_stream = stream::iter::<Vec<Result<BlockHeader, web3::Error>>>(vec![
+            first_block.clone(),
+            Ok(second_block.clone()),
+        ]);
+
+        let logger = new_test_logger();
+        let mut stream = safe_ws_head_stream(header_stream, 1, &logger);
+
         assert!(stream.next().await.is_none());
     }
 }
