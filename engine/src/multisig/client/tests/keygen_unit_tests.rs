@@ -792,5 +792,33 @@ mod timeout {
             ceremony.distribute_messages(messages);
             ceremony.complete().await;
         }
+
+        #[tokio::test]
+        async fn recover_if_agree_on_values_stage5() {
+            let mut ceremony = KeygenCeremonyRunner::new(
+                new_nodes(
+                    ACCOUNT_IDS.iter().cloned(),
+                    KeygenOptions::allowing_high_pubkey(),
+                ),
+                1,
+                Rng::from_seed([8; 32]),
+            );
+
+            let messages = ceremony.request().await;
+
+            let messages = helpers::run_stages!(
+                ceremony,
+                messages,
+                VerifyComm2,
+                SecretShare3,
+                Complaints4,
+                VerifyComplaints5
+            );
+
+            let bad_node_id = ceremony.nodes.keys().next().unwrap().clone();
+            ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
+
+            ceremony.complete().await;
+        }
     }
 }

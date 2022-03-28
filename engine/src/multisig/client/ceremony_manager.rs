@@ -61,8 +61,9 @@ impl CeremonyManager {
 
     // This function is called periodically to check if any
     // ceremony should be aborted, reporting responsible parties
-    // and cleaning up any relevant data
-    pub fn cleanup(&mut self) {
+    // and cleaning up any relevant data.
+    // Returns any keys that completed during the `try_expiring` function
+    pub fn cleanup(&mut self) -> HashMap<CeremonyId, KeygenResultInfo> {
         // Copy the keys so we can iterate over them while at the same time
         // removing the elements as we go
         let signing_ids: Vec<_> = self.signing_states.keys().copied().collect();
@@ -90,24 +91,29 @@ impl CeremonyManager {
 
         let keygen_ids: Vec<_> = self.keygen_states.keys().copied().collect();
 
-        for ceremony_id in &keygen_ids {
+        // It is possible for the `try_expiring` function to cause a keygen ceremony to successfully finish,
+        // so we must collect and return any completed keys so they can be saved to disk later
+        keygen_ids.iter().filter_map(|ceremony_id| {
             let state = self
                 .keygen_states
                 .get_mut(ceremony_id)
                 .expect("state must exist");
             if let Some(result) = state.try_expiring() {
-                // NOTE: we only respond (and consume the ceremony id)
+                // NOTE: we only consume the ceremony id
                 // if we have received a ceremony request from
                 // SC (i.e. the ceremony is "authorised")
                 // TODO: report nodes via a different extrinsic instead
                 if state.is_authorized() {
-                    self.process_keygen_ceremony_outcome(*ceremony_id, result);
+                    if let Some(key) = self.process_keygen_ceremony_outcome(*ceremony_id, result) {
+                        return Some((*ceremony_id, key))
+                    }
                 } else {
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.keygen_states.remove(ceremony_id);
                 }
             }
-        }
+            None
+        }).collect()
     }
 
     fn map_ceremony_parties(
