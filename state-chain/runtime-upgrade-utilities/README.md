@@ -1,11 +1,29 @@
 # Runtime Upgrade Utilities
 
-This crate provides a `VersionedMigration` type that can be used to structure successive
-pallet storage migrations.
+This crate provides a `VersionedMigration` type that can be used to structure successive pallet storage migrations.
 
 ## Versioned Pallet Migrations
 
-1. Add a migrations module and pallet `StorageVersion` if you haven't done so already:
+1. Add this crate to the pallet's `Cargo.toml`.
+
+    ```toml
+    [dependencies]
+    # ...
+    cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+    
+    [features]
+    
+    std = [
+        # ...
+        'cf-runtime-upgrade-utilities/std',
+    ]
+    try-runtime = [
+        # ...
+        'cf-runtime-upgrade-utilities/try-runtime'
+    ]
+    ```
+
+2. Add a migrations module and pallet `StorageVersion` if you haven't done so already:
 
     ```rust
     mod migrations;
@@ -13,6 +31,7 @@ pallet storage migrations.
     // This import is required if not already present.
     use frame_support::traits::OnRuntimeUpgrade;
 
+    // Bump this if already present.
     pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
     #[frame_support::pallet]
@@ -20,7 +39,8 @@ pallet storage migrations.
         // [...]
 
         #[pallet::pallet]
-        #[pallet::storage_version(PALLET_VERSION)]  // <--- Add this
+        // Add this if not already present.
+        #[pallet::storage_version(PALLET_VERSION)]
         #[pallet::generate_store(pub (super) trait Store)]
         pub struct Pallet<T>(_);
 
@@ -28,7 +48,7 @@ pallet storage migrations.
     }
     ```
 
-2. Create `migrations.rs` based on the following template:
+3. Create `migrations.rs` based on the following template:
 
     ```rust
     pub mod my_migration;
@@ -39,7 +59,7 @@ pallet storage migrations.
         (VersionedMigration<crate::Pallet<T>, my_migration::Migration, 0, 1>,);
     ```
 
-3. Now create `migrations/my_migration.rs` with an implemtation of `OnRuntimeUpgrade`:
+4. Now create `migrations/my_migration.rs` with an implemtation of `OnRuntimeUpgrade`:
 
     ```rust
     use crate::*;
@@ -53,7 +73,7 @@ pallet storage migrations.
     }
     ```
 
-4. Copy the following boilerplate into the pallet hooks:
+5. Copy the following boilerplate into the pallet hooks:
 
     ```rust
         #[pallet::hooks]
@@ -76,7 +96,7 @@ pallet storage migrations.
         }
     ```
 
-5. Additional migrations can be added to the `PalletMigration` tuple. For example, the following defines migrations from version 0 through 4. Only the required migrations will be applied on-chain. For example, if the on-chain storage version is 2 and the pallet version is 4, the migrations `change_storage_type_b` and `purge_old_values` would be run, and the on-chain storage version would be updated to 4.
+6. Additional migrations can be added to the `PalletMigration` tuple. For example, the following defines migrations from version 0 through 4. Only the required migrations will be applied on-chain. For example, if the on-chain storage version is 2 and the pallet version is 4, the migrations `change_storage_type_b` and `purge_old_values` would be run, and the on-chain storage version would be updated to 4.
 
     ```rust
     pub mod rename_pallet_storage;
