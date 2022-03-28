@@ -106,11 +106,8 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
         let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
-                    blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of initial commitments"),
-                );
+            Err(abort_reason) => {
+                return abort_reason.into_stage_result_error("initial commitments");
             }
         };
 
@@ -218,11 +215,8 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
         let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
-            Err(blamed_parties) => {
-                return StageResult::Error(
-                    blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of local signatures"),
-                );
+            Err(abort_reason) => {
+                return abort_reason.into_stage_result_error("local signatures");
             }
         };
 
