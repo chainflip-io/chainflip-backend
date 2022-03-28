@@ -55,7 +55,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
 
     use cf_runtime_upgrade_utilities::VersionedMigration;
 
-    pub type PalletMigration<T> = ();
+    pub type PalletMigration<T> =
         (VersionedMigration<crate::Pallet<T>, my_migration::Migration, 0, 1>,);
     ```
 
