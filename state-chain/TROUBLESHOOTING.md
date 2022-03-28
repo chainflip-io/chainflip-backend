@@ -20,6 +20,7 @@ Then run a variation of the following command:
 
 ```sh
 ./target/release/chainflip-node try-runtime
+    --execution Native
     --chain soundcheck
     --url wss://bashful-release.chainflip.xyz
     --block-at 0x2a2a0264206de0dd78d45f45ef42533fcdf847ec0ad11201c6b0feec7083d872
@@ -32,6 +33,7 @@ To save time, you can then use the state snapshot in subsequent runs:
 
 ```sh
 ./target/release/chainflip-node try-runtime
+    --execution Native
     --block-at 0x2a2a0264206de0dd78d45f45ef42533fcdf847ec0ad11201c6b0feec7083d872
         on-runtime-upgrade
             snap
@@ -43,6 +45,7 @@ To save time, you can then use the state snapshot in subsequent runs:
 - There are some useful storage conversion utilities in `frame_support::storage::migration`.
 - Don't forget the add the `#[pallet::storage_version(..)]` decorator.
 - Use the `ensure!` macro in pre- and post-upgrade check to get meaningful error messages.
+- Use `--execution Native` to ensure that `Debug` variables are not replaced with `<wasm::stripped>`.
 
 You can write the runtime upgrade as part of the Chainflip runtime rather than using the
 pallet hooks. Depending on the situation, one or the other option might be easier or more

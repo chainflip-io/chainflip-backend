@@ -1,36 +1,22 @@
-crate::impl_mock_keygen_exclusion!(u64);
+use frame_support::traits::Get;
+use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, marker::PhantomData};
 
-#[macro_export]
-macro_rules! impl_mock_keygen_exclusion {
-	($validator_id:ty) => {
-		use $crate::KeygenExclusionSet;
+use crate::Chainflip;
 
-		pub struct MockKeygenExclusion;
+frame_support::generate_storage_alias!(
+	Test, KeygenExclusion<T: Chainflip> => Value<BTreeSet<T::ValidatorId>>
+);
 
-		thread_local! {
-			pub static EXCLUDED: std::cell::RefCell<std::collections::HashMap<$validator_id, ()>> = Default::default();
-		}
+pub struct MockKeygenExclusion<T>(PhantomData<T>);
 
-		impl KeygenExclusionSet for MockKeygenExclusion {
-			type ValidatorId = $validator_id;
+impl<T: Chainflip> MockKeygenExclusion<T> {
+	pub fn set(ids: Vec<T::ValidatorId>) {
+		KeygenExclusion::<T>::put(BTreeSet::<_>::from_iter(ids));
+	}
+}
 
-			fn add_to_set(validator_id: Self::ValidatorId) {
-				EXCLUDED.with(|cell| {
-					(*cell.borrow_mut()).insert(validator_id, ());
-				});
-			}
-
-			fn is_excluded(validator_id: &Self::ValidatorId) -> bool {
-				EXCLUDED.with(|cell| {
-					(*cell.borrow()).contains_key(validator_id)
-				})
-			}
-
-			fn forgive_all() {
-				EXCLUDED.with(|cell| {
-					*cell.borrow_mut() = Default::default();
-				});
-			}
-		}
-	};
+impl<T: Chainflip> Get<BTreeSet<T::ValidatorId>> for MockKeygenExclusion<T> {
+	fn get() -> BTreeSet<T::ValidatorId> {
+		KeygenExclusion::<T>::get()
+	}
 }

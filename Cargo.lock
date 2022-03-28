@@ -797,7 +797,7 @@ dependencies = [
  "secp256k1",
  "serde 1.0.130",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3/?rev=861cfcd)",
 ]
 
@@ -848,7 +848,7 @@ dependencies = [
  "sp-offchain",
  "sp-runtime",
  "sp-session",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-transaction-pool",
  "sp-version",
  "state-chain-runtime",
@@ -858,7 +858,15 @@ dependencies = [
 name = "cf-runtime-benchmark-utilities"
 version = "0.1.0"
 dependencies = [
- "sp-std 4.0.0-dev (git+https://github.com/paritytech/substrate.git?tag=monthly-2021-09+1)",
+ "sp-std",
+]
+
+[[package]]
+name = "cf-runtime-macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -868,7 +876,20 @@ dependencies = [
  "frame-support",
  "log 0.4.14",
  "sp-io",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
+]
+
+[[package]]
+name = "cf-runtime-utilities"
+version = "0.1.0"
+dependencies = [
+ "cf-runtime-macros",
+ "frame-support",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -882,8 +903,9 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "scale-info",
+ "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "utilities",
 ]
 
@@ -2264,7 +2286,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-runtime-interface",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-storage",
 ]
 
@@ -2304,7 +2326,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-arithmetic",
  "sp-npos-elections",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -2318,7 +2340,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-tracing",
 ]
 
@@ -2330,7 +2352,7 @@ dependencies = [
  "parity-scale-codec",
  "serde 1.0.130",
  "sp-core",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -2355,7 +2377,7 @@ dependencies = [
  "sp-runtime",
  "sp-staking",
  "sp-state-machine",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-tracing",
 ]
 
@@ -2405,7 +2427,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-version",
 ]
 
@@ -2420,7 +2442,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-core",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -2440,7 +2462,7 @@ dependencies = [
  "frame-support",
  "sp-api",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5077,7 +5099,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus-aura",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5091,7 +5113,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-authorship",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5099,6 +5121,7 @@ name = "pallet-cf-auction"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5109,7 +5132,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5128,7 +5151,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5149,7 +5172,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5161,7 +5184,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde 1.0.130",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5178,7 +5201,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5194,13 +5217,14 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
 name = "pallet-cf-online"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5211,13 +5235,14 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5230,7 +5255,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5250,7 +5275,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5272,7 +5297,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5280,6 +5305,7 @@ name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5291,7 +5317,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5299,6 +5325,7 @@ name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5310,7 +5337,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "utilities",
 ]
 
@@ -5329,7 +5356,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "utilities",
 ]
 
@@ -5353,7 +5380,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5375,7 +5402,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5390,7 +5417,7 @@ dependencies = [
  "sp-io",
  "sp-keyring",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5403,7 +5430,7 @@ dependencies = [
  "parity-scale-codec",
  "safe-mix",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5422,7 +5449,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-trie",
 ]
 
@@ -5443,7 +5470,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-staking",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -5459,7 +5486,7 @@ dependencies = [
  "sp-inherents",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-timestamp",
 ]
 
@@ -5476,7 +5503,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8156,7 +8183,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-state-machine",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-version",
  "thiserror",
 ]
@@ -8182,7 +8209,7 @@ dependencies = [
  "serde 1.0.130",
  "sp-core",
  "sp-io",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8195,7 +8222,7 @@ dependencies = [
  "parity-scale-codec",
  "serde 1.0.130",
  "sp-debug-derive",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "static_assertions",
 ]
 
@@ -8208,7 +8235,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-inherents",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8220,7 +8247,7 @@ dependencies = [
  "sp-api",
  "sp-inherents",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8255,7 +8282,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-version",
  "thiserror",
 ]
@@ -8273,7 +8300,7 @@ dependencies = [
  "sp-consensus-slots",
  "sp-inherents",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-timestamp",
 ]
 
@@ -8320,7 +8347,7 @@ dependencies = [
  "sp-debug-derive",
  "sp-externalities",
  "sp-runtime-interface",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-storage",
  "substrate-bip39",
  "thiserror",
@@ -8357,7 +8384,7 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-opt
 dependencies = [
  "environmental",
  "parity-scale-codec",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-storage",
 ]
 
@@ -8375,7 +8402,7 @@ dependencies = [
  "sp-core",
  "sp-keystore",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8388,7 +8415,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-core",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "thiserror",
 ]
 
@@ -8409,7 +8436,7 @@ dependencies = [
  "sp-maybe-compressed-blob",
  "sp-runtime-interface",
  "sp-state-machine",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
@@ -8464,7 +8491,7 @@ dependencies = [
  "sp-arithmetic",
  "sp-core",
  "sp-npos-elections-solution-type",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8524,7 +8551,7 @@ dependencies = [
  "sp-arithmetic",
  "sp-core",
  "sp-io",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8537,7 +8564,7 @@ dependencies = [
  "primitive-types",
  "sp-externalities",
  "sp-runtime-interface-proc-macro",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-storage",
  "sp-tracing",
  "sp-wasm-interface",
@@ -8575,7 +8602,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-staking",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8585,7 +8612,7 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-opt
 dependencies = [
  "parity-scale-codec",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8603,7 +8630,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-panic-handler",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-trie",
  "thiserror",
  "tracing",
@@ -8617,11 +8644,6 @@ version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option#e56346561e9c0082f3613b5b6f525d6203add611"
 
 [[package]]
-name = "sp-std"
-version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/substrate.git?tag=monthly-2021-09+1#20a9bbb1fe47fcd62fcd64b2fa32456b4f434aaf"
-
-[[package]]
 name = "sp-storage"
 version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option#e56346561e9c0082f3613b5b6f525d6203add611"
@@ -8631,7 +8653,7 @@ dependencies = [
  "ref-cast",
  "serde 1.0.130",
  "sp-debug-derive",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8644,7 +8666,7 @@ dependencies = [
  "sp-externalities",
  "sp-io",
  "sp-runtime-interface",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
 ]
 
 [[package]]
@@ -8659,7 +8681,7 @@ dependencies = [
  "sp-api",
  "sp-inherents",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "thiserror",
 ]
 
@@ -8675,7 +8697,7 @@ dependencies = [
  "serde 1.0.130",
  "serde_json",
  "slog",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -8701,7 +8723,7 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-trie",
 ]
 
@@ -8714,7 +8736,7 @@ dependencies = [
  "memory-db",
  "parity-scale-codec",
  "sp-core",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "trie-db",
  "trie-root",
 ]
@@ -8740,7 +8762,7 @@ dependencies = [
  "parity-wasm 0.42.2",
  "serde 1.0.130",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-version-proc-macro",
  "thiserror",
 ]
@@ -8763,7 +8785,7 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=merge-config-opt
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "wasmi",
 ]
 
@@ -8837,7 +8859,7 @@ dependencies = [
  "sp-offchain",
  "sp-runtime",
  "sp-session",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
@@ -9002,7 +9024,7 @@ dependencies = [
  "sp-core",
  "sp-rpc",
  "sp-runtime",
- "sp-std 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=merge-config-option)",
+ "sp-std",
  "sp-version",
  "substrate-subxt-proc-macro",
  "thiserror",

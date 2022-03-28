@@ -16,22 +16,19 @@ pub use weights::WeightInfo;
 
 use cf_traits::{
 	ActiveValidatorRange, AuctionResult, Auctioneer, BackupValidators, BidderProvider, Chainflip,
-	ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo, KeygenExclusionSet,
-	QualifyValidator, RemainingBid, StakeHandler,
+	ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo, QualifyValidator,
+	RemainingBid, StakeHandler,
 };
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::{One, Zero};
-use sp_std::{cmp::min, prelude::*};
+use sp_runtime::traits::One;
+use sp_std::{cmp::min, collections::btree_set::BTreeSet, prelude::*};
 
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - Remove AuctionPhase and LastAuctionResult
-	pub const V1: StorageVersion = StorageVersion::new(1);
-}
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -39,7 +36,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -58,7 +55,7 @@ pub mod pallet {
 		/// Qualify a validator
 		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
 		/// Key generation exclusion set
-		type KeygenExclusionSet: KeygenExclusionSet<ValidatorId = Self::ValidatorId>;
+		type KeygenExclusionSet: Get<BTreeSet<Self::ValidatorId>>;
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
@@ -74,30 +71,17 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				releases::V1.put::<Pallet<T>>();
-				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			} else {
-				T::DbWeight::get().reads(1)
-			}
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::pre_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::post_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
@@ -178,6 +162,8 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
+			use sp_runtime::traits::Zero;
+
 			Self { validator_size_range: (Zero::zero(), Zero::zero()) }
 		}
 	}
@@ -217,6 +203,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		let mut bids = T::BidderProvider::get_bidders();
 		// Determine if this validator is qualified for bidding
 		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
+		let excluded = T::KeygenExclusionSet::get();
+		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 		let number_of_bidders = bids.len() as u32;
 		let (min_number_of_validators, max_number_of_validators) =
 			ActiveValidatorSizeRange::<T>::get();

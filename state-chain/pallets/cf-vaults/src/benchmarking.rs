@@ -61,7 +61,10 @@ benchmarks_instance_pallet! {
 		Pallet::<T, I>::on_initialize(5u32.into());
 	}
 	verify {
-		assert!(!PendingVaultRotation::<T, I>::exists());
+		assert_eq!(
+			<Pallet::<T, I> as VaultRotator>::get_vault_rotation_outcome(),
+			AsyncResult::Ready(SuccessOrFailure::Failure)
+		);
 	}
 	on_initialize_success {
 		let current_block: T::BlockNumber = 0u32.into();
@@ -87,7 +90,10 @@ benchmarks_instance_pallet! {
 		Pallet::<T, I>::on_initialize(5u32.into());
 	}
 	verify {
-		assert!(PendingVaultRotation::<T, I>::exists());
+		assert_eq!(
+			PendingVaultRotation::<T, I>::decode_variant(),
+			Some(VaultRotationStatusVariant::AwaitingRotation),
+		);
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();

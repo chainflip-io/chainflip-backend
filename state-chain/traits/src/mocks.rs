@@ -40,7 +40,7 @@ impl<T: MockPallet> MockPalletStorage for T {
 		storage::hashed::put(
 			&<Twox64Concat as StorageHasher>::hash,
 			&storage_key(Self::PREFIX, store, k),
-			&v.encode(),
+			&v,
 		)
 	}
 

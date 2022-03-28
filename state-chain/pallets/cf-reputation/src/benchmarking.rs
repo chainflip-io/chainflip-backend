@@ -16,18 +16,9 @@ benchmarks! {
 		assert_eq!(ReputationPointPenalty::<T>::get(), ReputationPenalty { points: 1, blocks: (10 as u32).into() });
 	}
 	on_runtime_upgrade {
-		releases::V1.put::<Pallet<T>>();
 	} : {
-		Pallet::<T>::on_runtime_upgrade();
-	} verify {
-		assert_eq!(ReputationPointPenalty::<T>::get(), ReputationPenalty { points: 1, blocks: (10 as u32).into() });
+		<Pallet::<T> as Hooks<_>>::on_runtime_upgrade();
 	}
-	on_runtime_upgrade_v1 {
-		releases::V0.put::<Pallet<T>>();
-	} : {
-		Pallet::<T>::on_runtime_upgrade();
-	}
-
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

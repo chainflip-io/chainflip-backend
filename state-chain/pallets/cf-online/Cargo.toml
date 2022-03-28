@@ -14,6 +14,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Chainflip
 cf-traits = { path = '../../traits', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
 # Parity deps
@@ -67,13 +68,14 @@ tag = 'merge-config-option'
 [features]
 default = ['std']
 std = [
+    'cf-traits/std',
+    'cf-runtime-upgrade-utilities/std',
     'codec/std',
     'scale-info/std',
     'frame-support/std',
     'frame-system/std',
     'sp-std/std',
     'sp-runtime/std',
-    'cf-traits/std',
     'pallet-cf-validator/std',
 ]
 runtime-benchmarks = [
@@ -81,4 +83,7 @@ runtime-benchmarks = [
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = [
+	'frame-support/try-runtime',
+	'cf-runtime-upgrade-utilities/try-runtime'
+]
