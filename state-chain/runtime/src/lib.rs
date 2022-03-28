@@ -17,7 +17,6 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use migrations::DeleteRewardsPallet;
 pub use pallet_cf_environment::cfe::CfeSettings;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -140,7 +139,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-	type KeygenExclusionSet = pallet_cf_online::Pallet<Self>;
+	type KeygenExclusionSet = pallet_cf_reputation::KeygenExclusion<Self>;
 }
 
 // FIXME: These would be changed
@@ -432,10 +431,8 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type Penalty = OffencePenalty;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
-	type Banned = pallet_cf_online::Pallet<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
-	type KeygenExclusionSet = pallet_cf_online::Pallet<Self>;
 }
 
 impl pallet_cf_online::Config for Runtime {
@@ -549,7 +546,15 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPallets,
-	migrations::VersionedMigration<DeleteRewardsPallet, 112>,
+	// Note: the following run *before* all pallet migrations.
+	migrations::VersionedMigration<
+		(
+			migrations::DeleteRewardsPallet,
+			migrations::UnifyCeremonyIds,
+			migrations::refactor_offences::Migration,
+		),
+		112,
+	>,
 >;
 
 impl_runtime_apis! {

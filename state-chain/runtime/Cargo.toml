@@ -267,4 +267,7 @@ try-runtime = [
   "pallet-cf-auction/try-runtime",
   "pallet-cf-validator/try-runtime",
   "pallet-cf-vaults/try-runtime",
+  "pallet-cf-reputation/try-runtime",
+  "pallet-cf-online/try-runtime",
+  "pallet-cf-emissions/try-runtime",
 ]

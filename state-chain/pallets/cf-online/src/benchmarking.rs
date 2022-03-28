@@ -13,18 +13,14 @@ benchmarks! {
 	heartbeat {
 		let caller: T::AccountId = whitelisted_caller();
 		let validator_id: T::ValidatorId = caller.clone().into();
-		Nodes::<T>::insert(&validator_id, Liveness::<T>::default());
 	} : _(RawOrigin::Signed(caller))
 	verify {
-		let node = Nodes::<T>::get(&validator_id);
-		let current_block: T::BlockNumber = 1u32.into();
-		assert_eq!(node.last_heartbeat, current_block);
+		assert_eq!(LastHeartbeat::<T>::get(&validator_id), Some(1u32.into()));
 	}
 	submit_network_state {
 		for b in 1 .. MAX_VALIDATOR_AMOUNT {
 			let caller: T::AccountId  = account("doogle", b, b);
 			let validator_id: T::ValidatorId = caller.into();
-			Nodes::<T>::insert(&validator_id, Liveness::<T>::default());
 		}
 		// TODO: set the generated validators as active validators
 	} : {

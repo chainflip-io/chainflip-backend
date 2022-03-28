@@ -567,16 +567,6 @@ pub trait QualifyValidator {
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// A *not* qualified validator
-pub struct NotQualifiedValidator<T>(PhantomData<T>);
-
-impl<T> QualifyValidator for NotQualifiedValidator<T> {
-	type ValidatorId = T;
-	fn is_qualified(_: &Self::ValidatorId) -> bool {
-		true
-	}
-}
-
 /// Qualify if the validator has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
@@ -614,17 +604,6 @@ pub trait RuntimeUpgrade {
 	/// Applies the wasm code of a runtime upgrade and returns the
 	/// information about the execution
 	fn do_upgrade(code: Vec<u8>) -> DispatchResultWithPostInfo;
-}
-
-pub trait KeygenExclusionSet {
-	type ValidatorId;
-
-	/// Add this validator to the key generation exclusion set
-	fn add_to_set(validator_id: Self::ValidatorId);
-	/// Is this validator excluded?
-	fn is_excluded(validator_id: &Self::ValidatorId) -> bool;
-	/// Clear the exclusion set
-	fn forgive_all();
 }
 
 /// Provides an interface to all passed epochs

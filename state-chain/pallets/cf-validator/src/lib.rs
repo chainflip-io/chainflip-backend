@@ -107,7 +107,7 @@ pub mod pallet {
 	use super::*;
 	use cf_traits::{
 		offence_reporting::{Offence, OffenceReporter},
-		ChainflipAccount, ChainflipAccountState, KeygenStatus, VaultRotator,
+		ChainflipAccount, KeygenStatus, VaultRotator,
 	};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
@@ -666,6 +666,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			use cf_traits::ChainflipAccountState;
+
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
 			let genesis_validators = <pallet_session::Pallet<T>>::validators();

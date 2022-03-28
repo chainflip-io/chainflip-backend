@@ -29,10 +29,3 @@ pub trait OffenceReporter {
 	/// Returns `Ok(Weight)` else an error if the validator isn't valid
 	fn report(condition: Offence, validator_id: &Self::ValidatorId);
 }
-
-/// We report on nodes that should be banned
-pub trait Banned {
-	type ValidatorId;
-	/// A validator to be banned
-	fn ban(validator_id: &Self::ValidatorId);
-}

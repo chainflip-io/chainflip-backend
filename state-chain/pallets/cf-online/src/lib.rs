@@ -1,9 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
-
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -12,23 +12,25 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+};
 pub use pallet::*;
 use sp_runtime::traits::Zero;
-use sp_std::vec::Vec;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		offence_reporting::Banned, Chainflip, EpochInfo, Heartbeat, IsOnline, KeygenExclusionSet,
-		NetworkState, QualifyValidator,
-	};
+	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState, QualifyValidator};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::Saturating;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
@@ -47,12 +49,12 @@ pub mod pallet {
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		/// We check network liveness on every heartbeat interval and feed back the state of the
 		/// network as `NetworkState`.
-		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(current_block: T::BlockNumber) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				let network_state = Self::check_network_liveness(current_block);
+				let network_state = Self::current_network_state();
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
@@ -61,68 +63,45 @@ pub mod pallet {
 
 			T::WeightInfo::on_initialize_no_action()
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade()
+		}
 	}
 
+	/// A validator is considered online if fewer than [T::HeartbeatBlockInterval] blocks
+	/// have elapsed since their last heartbeat submission.
 	impl<T: Config> IsOnline for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
-		/// We verify if the node is online checking first if they are banned and if they are not
-		/// running a check against when they last submitted a heartbeat
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			match Nodes::<T>::try_get(validator_id) {
-				Ok(node) => {
-					let current_block_number = frame_system::Pallet::<T>::current_block_number();
-					!node.is_banned(current_block_number) &&
-						node.has_submitted_this_interval(current_block_number)
-				},
-				Err(_) => false,
-			}
+			Self::is_online_at(frame_system::Pallet::<T>::current_block_number(), validator_id)
 		}
 	}
 
-	// Data for tracking a node's liveness state.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
-	pub struct Liveness<T: Config> {
-		/// The last heartbeat received from this node
-		pub last_heartbeat: T::BlockNumber,
-		/// The block number this node is banned until
-		pub banned_until: T::BlockNumber,
-	}
-
-	impl<T: Config> Default for Liveness<T> {
-		fn default() -> Self {
-			Liveness { last_heartbeat: Zero::zero(), banned_until: Zero::zero() }
-		}
-	}
-
-	impl<T: Config> Liveness<T> {
-		pub fn has_submitted_this_interval(&self, current_block_number: T::BlockNumber) -> bool {
-			(current_block_number - self.last_heartbeat) < T::HeartbeatBlockInterval::get()
-		}
-
-		pub fn is_banned(&self, current_block_number: T::BlockNumber) -> bool {
-			self.banned_until > current_block_number
-		}
-	}
-
-	/// A map linking a node's validator id with the last block number at which they submitted a
-	/// heartbeat and if they are banned until which block they are banned.
+	/// The last block numbers at which validators submitted a heartbeat.
 	#[pallet::storage]
-	#[pallet::getter(fn nodes)]
-	pub(super) type Nodes<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, Liveness<T>, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn excluded_from_keygen)]
-	pub(super) type ExcludedFromKeygen<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, (), OptionQuery>;
+	#[pallet::getter(fn last_heartbeat)]
+	pub type LastHeartbeat<T: Config> =
+		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber, OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// A heartbeat is used to measure the liveness of a node. It is measured in blocks.
 		/// For every interval we expect at least one heartbeat from all nodes of the network.
-		/// Failing this they would be considered offline.  Banned validators can continue to submit
-		/// heartbeats so that when their ban has expired they would be considered online again.
+		/// Failing this they would be considered offline. Suspended validators can continue to
+		/// submit heartbeats so that when their suspension has expired they would be considered
+		/// online again.
 		///
 		/// ## Events
 		///
@@ -136,9 +115,7 @@ pub mod pallet {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
-			Nodes::<T>::mutate(&validator_id, |node| {
-				(*node).last_heartbeat = current_block_number;
-			});
+			LastHeartbeat::<T>::insert(&validator_id, current_block_number);
 
 			T::Heartbeat::heartbeat_submitted(&validator_id, current_block_number);
 			Ok(().into())
@@ -146,43 +123,20 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Check liveness of our nodes for this heartbeat interval and create a map of the state
-		/// of the network for those nodes that are validators.  Whether a validator is banned or
-		/// not has no bearing on this metric.
-		fn check_network_liveness(
-			current_block_number: BlockNumberFor<T>,
-		) -> NetworkState<T::ValidatorId> {
+		/// Partitions the validators based on whether they are considered online or offline.
+		fn current_network_state() -> NetworkState<T::ValidatorId> {
 			let (online, offline) =
-				T::EpochInfo::current_validators().into_iter().partition(|validator_id| {
-					match Nodes::<T>::try_get(validator_id) {
-						Ok(node) => node.has_submitted_this_interval(current_block_number),
-						Err(_) => false,
-					}
-				});
+				T::EpochInfo::current_validators().into_iter().partition(Self::is_online);
 
 			NetworkState { online, offline }
 		}
 
-		/// Get all of the Validators which match the condition of having submitted their
-		/// heartbeat this interval, and are not currently banned.
-		pub fn online_validators() -> Vec<T::ValidatorId> {
-			T::EpochInfo::current_validators()
-				.into_iter()
-				.filter(|validator_id| Self::is_online(validator_id))
-				.collect()
-		}
-	}
-
-	impl<T: Config> Banned for Pallet<T> {
-		type ValidatorId = T::ValidatorId;
-
-		fn ban(validator_id: &Self::ValidatorId) {
-			let current_block_number = frame_system::Pallet::<T>::current_block_number();
-			// Ban is one heartbeat interval from now
-			let ban = current_block_number.saturating_add(T::HeartbeatBlockInterval::get());
-			Nodes::<T>::mutate(validator_id, |node| {
-				(*node).banned_until = ban;
-			});
+		fn is_online_at(block_number: T::BlockNumber, validator_id: &T::ValidatorId) -> bool {
+			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+				block_number.saturating_sub(last_heartbeat) < T::HeartbeatBlockInterval::get()
+			} else {
+				false
+			}
 		}
 	}
 
@@ -190,23 +144,7 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 
 		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-			<Self as IsOnline>::is_online(validator_id)
-		}
-	}
-
-	impl<T: Config> KeygenExclusionSet for Pallet<T> {
-		type ValidatorId = T::ValidatorId;
-
-		fn add_to_set(validator_id: T::ValidatorId) {
-			ExcludedFromKeygen::<T>::insert(validator_id, ());
-		}
-
-		fn is_excluded(validator_id: &T::ValidatorId) -> bool {
-			ExcludedFromKeygen::<T>::contains_key(validator_id)
-		}
-
-		fn forgive_all() {
-			ExcludedFromKeygen::<T>::remove_all(None);
+			Self::is_online(validator_id)
 		}
 	}
 }

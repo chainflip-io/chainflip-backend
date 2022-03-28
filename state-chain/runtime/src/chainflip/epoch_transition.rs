@@ -1,6 +1,6 @@
 use cf_traits::{BlockEmissions, EmissionsTrigger, EpochTransitionHandler, FlipBalance};
 
-use crate::{AccountId, Emissions, Runtime, Validator, Witnesser};
+use crate::{AccountId, Emissions, Reputation, Runtime, Validator, Witnesser};
 use cf_traits::{Chainflip, ChainflipAccount, ChainflipAccountStore, EpochInfo};
 
 use crate::chainflip::PhantomData;
@@ -34,7 +34,11 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 			new_bond,
 		);
 
-		<pallet_cf_online::Pallet<Runtime> as cf_traits::KeygenExclusionSet>::forgive_all();
+		<Reputation as EpochTransitionHandler>::on_new_epoch(
+			old_validators,
+			new_validators,
+			new_bond,
+		);
 	}
 }
 
