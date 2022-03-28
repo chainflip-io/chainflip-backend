@@ -43,6 +43,7 @@ mod tests {
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
+		use pallet_cf_staking::AccountRetired;
 		use pallet_cf_vaults::KeygenOutcome;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -78,6 +79,16 @@ mod tests {
 			// Clear events
 			fn clear(&mut self) {
 				self.events.clear();
+			}
+		}
+
+		// Representation of the state-chain cmd tool
+		pub struct Cli;
+
+		impl Cli {
+			// Activates an account to become a validator in the next epoch
+			pub fn activate_account(account: NodeId) {
+				AccountRetired::<Runtime>::insert(account, false);
 			}
 		}
 
@@ -810,6 +821,12 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+
+					// Activate the accounts
+					for node in &nodes {
+						network::Cli::activate_account(node.clone());
+					}
+
 					// Move to start of auction
 					testnet.move_forward_blocks(1);
 
@@ -877,6 +894,11 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
+
+					// Activate the accounts
+					for node in &nodes {
+						network::Cli::activate_account(node.clone());
+					}
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
@@ -989,6 +1011,7 @@ mod tests {
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
 						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
+						network::Cli::activate_account(node.clone());
 					}
 
 					// Move forward one block to process events
@@ -1131,6 +1154,7 @@ mod tests {
 					);
 
 					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
+					let active_nodes = testnet.filter_nodes(ChainflipAccountState::Validator);
 					// An initial stake which is superior to the genesis stakes
 					// The current validators would have been rewarded on us leaving the current
 					// epoch so let's up the stakes for the passive nodes.
@@ -1148,6 +1172,11 @@ mod tests {
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
+
+					// Activate the accounts
+					for node in [active_nodes, passive_nodes.clone()].concat() {
+						network::Cli::activate_account(node);
+					}
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
@@ -1242,6 +1271,12 @@ mod tests {
 
 					// Start an auction and wait for rotation
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
+
+					// Activate the accounts
+					for node in &nodes {
+						network::Cli::activate_account(node.clone());
+					}
+
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 					assert_eq!(
@@ -1365,6 +1400,13 @@ mod tests {
 					let node_4 = nodes.get(3).unwrap();
 					let node_5 = nodes.get(4).unwrap();
 
+					// Activate accounts
+					network::Cli::activate_account(node_1.clone());
+					network::Cli::activate_account(node_2.clone());
+					network::Cli::activate_account(node_3.clone());
+					network::Cli::activate_account(node_4.clone());
+					network::Cli::activate_account(node_5.clone());
+
 					// Stake the nodes
 					testnet.stake_manager_contract.stake(node_1.clone(), 100);
 					testnet.stake_manager_contract.stake(node_2.clone(), 50);
@@ -1450,6 +1492,13 @@ mod tests {
 					let node_3 = nodes.get(2).unwrap();
 					let node_4 = nodes.get(3).unwrap();
 					let node_5 = nodes.get(4).unwrap();
+
+					// Activate accounts
+					network::Cli::activate_account(node_1.clone());
+					network::Cli::activate_account(node_2.clone());
+					network::Cli::activate_account(node_3.clone());
+					network::Cli::activate_account(node_4.clone());
+					network::Cli::activate_account(node_5.clone());
 
 					// Stake the first 3 nodes to be in the active set
 					testnet.stake_manager_contract.stake(node_1.clone(), 100);

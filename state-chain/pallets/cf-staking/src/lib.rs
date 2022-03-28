@@ -108,7 +108,7 @@ pub mod pallet {
 
 	/// Store the list of staked accounts and whether or not they are retired
 	#[pallet::storage]
-	pub(super) type AccountRetired<T: Config> =
+	pub type AccountRetired<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
 	#[pallet::storage]
@@ -558,16 +558,12 @@ impl<T: Config> Pallet<T> {
 	/// account if it is in retired state.
 	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
-			frame_system::Provider::<T>::created(account_id).unwrap_or_else(|e| {
-				// The standard impl of this in the system pallet never fails.
-				log::error!("Unexpected error when creating an account upon staking: {:?}", e);
-			});
+			// Creates an account
+			let _ = frame_system::Provider::<T>::created(account_id);
+			AccountRetired::<T>::insert(&account_id, true);
 		}
 
 		let new_total = T::Flip::credit_stake(account_id, amount);
-
-		// Staking implicitly activates the account. Ignore the error.
-		AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
