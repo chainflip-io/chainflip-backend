@@ -243,7 +243,7 @@ pub mod pallet {
 			let retries = BroadcastRetryQueue::<T, I>::take();
 			let retry_count = retries.len();
 			for failed in retries {
-				Self::retry_failed_broadcast(failed);
+				Self::start_broadcast_attempt(failed.broadcast_attempt_id, failed.unsigned_tx);
 			}
 
 			let expiries = Expiries::<T, I>::take(block_number);
@@ -253,7 +253,11 @@ pub mod pallet {
 						attempt_id.clone(),
 						*stage,
 					));
-					Self::retry_failed_broadcast(attempt);
+					// retry
+					Self::start_broadcast_attempt(
+						attempt.broadcast_attempt_id,
+						attempt.unsigned_tx,
+					);
 				};
 
 				match stage {
@@ -602,13 +606,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed.broadcast_attempt_id.broadcast_id,
 			));
 		}
-	}
-
-	/// Retry a failed attempt by starting anew with incremented attempt_count.
-	fn retry_failed_broadcast(failed: BroadcastAttempt<T, I>) {
-		// When we retry failed we should increment the storage of the awaiting signatures right?
-
-		Self::start_broadcast_attempt(failed.broadcast_attempt_id, failed.unsigned_tx);
 	}
 }
 
