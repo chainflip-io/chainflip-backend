@@ -381,14 +381,7 @@ pub mod pallet {
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			if let Some(payload) = SignatureToBroadcastIdLookup::<T, I>::iter()
-				.filter_map(|(payload, id)| {
-					if id == broadcast_attempt_id.broadcast_id {
-						Some(payload)
-					} else {
-						None
-					}
-				})
-				.next()
+				.find_map(|(payload, id)| if id == broadcast_id { Some(payload) } else { None })
 			{
 				SignatureToBroadcastIdLookup::<T, I>::remove(payload);
 			}
