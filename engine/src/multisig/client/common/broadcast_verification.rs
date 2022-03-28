@@ -8,11 +8,11 @@ use super::StageResult;
 
 #[derive(PartialEq, Debug)]
 pub enum BroadcastFailureReason {
-    /// Enough missing messages from broadcast + verification to stop consensus (contains blamed parties)
+    /// Enough missing messages from broadcast + verification to stop consensus (contains parties to report)
     InsufficientMessages(BTreeSet<usize>),
-    /// Not enough broadcast verification messages received to continue verification (contains blamed parties)
+    /// Not enough broadcast verification messages received to continue verification (contains parties to report)
     InsufficientVerificationMessages(BTreeSet<usize>),
-    /// Consensus could not be reached for one or more parties due to differing values (contains blamed parties)
+    /// Consensus could not be reached for one or more parties due to differing values (contains parties to report)
     Inconsistency(BTreeSet<usize>),
 }
 
@@ -20,24 +20,24 @@ impl BroadcastFailureReason {
     /// Builds the StageResult with a specific error message using the BroadcastFailureReason and stage_name
     pub fn to_stage_result_error<D, Result>(&self, stage_name: &str) -> StageResult<D, Result> {
         match self {
-            BroadcastFailureReason::InsufficientMessages(blamed_parties) => StageResult::Error(
-                blamed_parties.iter().cloned().collect(),
+            BroadcastFailureReason::InsufficientMessages(reported_parties) => StageResult::Error(
+                reported_parties.iter().cloned().collect(),
                 anyhow::Error::msg(format!(
                     "Insufficient messages received in broadcast of {}",
                     stage_name
                 )),
             ),
-            BroadcastFailureReason::InsufficientVerificationMessages(blamed_parties) => {
+            BroadcastFailureReason::InsufficientVerificationMessages(reported_parties) => {
                 StageResult::Error(
-                    blamed_parties.iter().cloned().collect(),
+                    reported_parties.iter().cloned().collect(),
                     anyhow::Error::msg(format!(
                         "Insufficient broadcast verification messages received for {}",
                         stage_name
                     )),
                 )
             }
-            BroadcastFailureReason::Inconsistency(blamed_parties) => StageResult::Error(
-                blamed_parties.iter().cloned().collect(),
+            BroadcastFailureReason::Inconsistency(reported_parties) => StageResult::Error(
+                reported_parties.iter().cloned().collect(),
                 anyhow::Error::msg(format!("Inconsistent broadcast of {}", stage_name)),
             ),
         }
@@ -117,7 +117,7 @@ where
 
     // Too few messages during this broadcast verification stage
     if verification_messages.len() <= threshold {
-        // TODO: consider blaming the parties that didn't send broadcast verification messages
+        // TODO: consider reporting the parties that didn't send broadcast verification messages
         // (one thing to consider is whether we are going to be in trouble if we report more parties than other nodes?)
         return Err(BroadcastFailureReason::InsufficientVerificationMessages(
             BTreeSet::new(),
@@ -148,7 +148,7 @@ where
 
     let mut agreed_on_values = HashMap::<usize, T>::new();
 
-    let mut blamed_parties = BTreeSet::new();
+    let mut reported_parties = BTreeSet::new();
 
     // Check that the values are agreed on by the threshold majority.
     // This will find inconsistency within the values
@@ -167,19 +167,19 @@ where
         {
             agreed_on_values.insert(*idx, data);
         } else {
-            blamed_parties.insert(*idx);
+            reported_parties.insert(*idx);
         }
     }
 
-    if blamed_parties.is_empty() {
+    if reported_parties.is_empty() {
         Ok(agreed_on_values)
     } else {
         Err(if insufficient_messages {
-            BroadcastFailureReason::InsufficientMessages(blamed_parties)
+            BroadcastFailureReason::InsufficientMessages(reported_parties)
         } else {
             // If the failure was not due to "InsufficientMessages",
             // then it must be caused by (or at least partially caused by) inconsistency.
-            BroadcastFailureReason::Inconsistency(blamed_parties)
+            BroadcastFailureReason::Inconsistency(reported_parties)
         })
     }
 }
