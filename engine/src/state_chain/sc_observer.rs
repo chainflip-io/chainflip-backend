@@ -355,7 +355,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                                 tx_hash
                                                             );
                                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
-                                                                attempt_id, tx_hash
+                                                                attempt_id.broadcast_id, tx_hash
                                                             )
                                                         }
                                                         Err(e) => {
@@ -367,7 +367,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                             );
                                                             // TODO: Fill in the transaction hash with the real one
                                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                                attempt_id, TransmissionFailure::TransactionRejected, Default::default()
+                                                                attempt_id.broadcast_id, TransmissionFailure::TransactionRejected, Default::default()
                                                             )
                                                         }
                                                     };

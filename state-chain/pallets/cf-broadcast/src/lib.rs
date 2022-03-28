@@ -46,8 +46,8 @@ pub type AttemptCount = u32;
 /// A unique id for each broadcast attempt
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default, Copy)]
 pub struct BroadcastAttemptId {
-	broadcast_id: BroadcastId,
-	attempt_count: AttemptCount,
+	pub broadcast_id: BroadcastId,
+	pub attempt_count: AttemptCount,
 }
 
 impl sp_std::fmt::Display for BroadcastAttemptId {
@@ -370,14 +370,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transmission_success())]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
-			// TODO: This can be broadcast id
-			broadcast_attempt_id: BroadcastAttemptId,
+			broadcast_id: BroadcastId,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// == Clean up storage items ==
-			AwaitingTransmission::<T, I>::take(broadcast_attempt_id.broadcast_id)
+			AwaitingTransmission::<T, I>::take(broadcast_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			if let Some(payload) = SignatureToBroadcastIdLookup::<T, I>::iter()
@@ -387,9 +386,7 @@ pub mod pallet {
 			}
 			// ====
 
-			Self::deposit_event(Event::<T, I>::BroadcastComplete(
-				broadcast_attempt_id.broadcast_id,
-			));
+			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
 
 			Ok(().into())
 		}
@@ -408,15 +405,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transmission_failure())]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,
-			// TODO: This can just be the BroadcastId
-			broadcast_attempt_id: BroadcastAttemptId,
+			broadcast_id: BroadcastId,
 			failure: TransmissionFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let TransmissionAttempt { broadcast_attempt, signer, .. } =
-				AwaitingTransmission::<T, I>::take(broadcast_attempt_id.broadcast_id)
+				AwaitingTransmission::<T, I>::take(broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			match failure {

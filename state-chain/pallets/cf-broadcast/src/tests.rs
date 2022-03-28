@@ -111,13 +111,22 @@ impl MockCfe {
 		));
 	}
 
+	// TODO: use broadcast id
 	// Simulate different outcomes.
 	fn handle_broadcast_request(attempt_id: BroadcastAttemptId, scenario: Scenario) {
 		assert_ok!(match scenario {
-			Scenario::HappyPath =>
-				MockBroadcast::transmission_success(Origin::root(), attempt_id, [0xcf; 4]),
+			Scenario::HappyPath => MockBroadcast::transmission_success(
+				Origin::root(),
+				attempt_id.broadcast_id,
+				[0xcf; 4]
+			),
 			Scenario::TransmissionFailure(failure) => {
-				MockBroadcast::transmission_failure(Origin::root(), attempt_id, failure, [0xcf; 4])
+				MockBroadcast::transmission_failure(
+					Origin::root(),
+					attempt_id.broadcast_id,
+					failure,
+					[0xcf; 4],
+				)
 			},
 			Scenario::SignatureAccepted => {
 				MockBroadcast::signature_accepted(Origin::root(), MockThresholdSignature::default())
@@ -305,17 +314,13 @@ fn test_invalid_id_is_noop() {
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
-			MockBroadcast::transmission_success(
-				Origin::root(),
-				BroadcastAttemptId::default(),
-				[0u8; 4]
-			),
+			MockBroadcast::transmission_success(Origin::root(), 0, [0u8; 4]),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
 			MockBroadcast::transmission_failure(
 				Origin::root(),
-				BroadcastAttemptId::default(),
+				0,
 				TransmissionFailure::TransactionFailed,
 				[0u8; 4]
 			),
