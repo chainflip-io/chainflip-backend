@@ -208,13 +208,6 @@ pub mod pallet {
 		InvalidCharactersInName,
 	}
 
-	impl<T: Config> Pallet<T> {
-		pub(crate) fn update_rotation_status(new_status: RotationStatusOf<T>) {
-			RotationPhase::<T>::put(new_status.clone());
-			Self::deposit_event(Event::RotationStatusUpdated(new_status));
-		}
-	}
-
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -247,7 +240,7 @@ pub mod pallet {
 						let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 						let diff = block_number.saturating_sub(current_epoch_started_at);
 						if diff >= blocks_per_epoch {
-							Self::update_rotation_status(RotationStatus::RunAuction);
+							Self::set_rotation_status(RotationStatus::RunAuction);
 						}
 					}
 				},
@@ -255,7 +248,7 @@ pub mod pallet {
 					Ok(auction_result) => {
 						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
 						{
-							Ok(_) => Self::update_rotation_status(RotationStatus::AwaitingVaults(
+							Ok(_) => Self::set_rotation_status(RotationStatus::AwaitingVaults(
 								auction_result,
 							)),
 							// We are assuming here that this is unlikely as the only reason it
@@ -273,13 +266,13 @@ pub mod pallet {
 				RotationStatus::AwaitingVaults(auction_result) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(SuccessOrFailure::Success) => {
-							Self::update_rotation_status(RotationStatus::VaultsRotated(
+							Self::set_rotation_status(RotationStatus::VaultsRotated(
 								auction_result,
 							));
 						},
 						AsyncResult::Ready(SuccessOrFailure::Failure) => {
 							Self::deposit_event(Event::RotationAborted);
-							Self::update_rotation_status(RotationStatus::RunAuction);
+							Self::set_rotation_status(RotationStatus::RunAuction);
 						},
 						AsyncResult::Void => {
 							log::error!(target: "cf-validator", "no vault rotation pending, returning to auction state");
@@ -289,11 +282,11 @@ pub mod pallet {
 						},
 					},
 				RotationStatus::VaultsRotated(auction_result) => {
-					Self::update_rotation_status(RotationStatus::SessionRotating(auction_result));
+					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(auction_result) => {
 					T::Auctioneer::update_validator_status(&auction_result.winners);
-					Self::update_rotation_status(RotationStatus::Idle);
+					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
 			0
@@ -403,7 +396,7 @@ pub mod pallet {
 				RotationPhase::<T>::get() == RotationStatus::Idle,
 				Error::<T>::RotationInProgress
 			);
-			Self::update_rotation_status(RotationStatus::RunAuction);
+			Self::set_rotation_status(RotationStatus::RunAuction);
 
 			Ok(().into())
 		}
@@ -816,6 +809,11 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_validator_bond(validator, bond);
 		}
 	}
+
+	fn set_rotation_status(new_status: RotationStatusOf<T>) {
+		RotationPhase::<T>::put(new_status.clone());
+		Self::deposit_event(Event::RotationStatusUpdated(new_status));
+	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
@@ -930,7 +928,7 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			Self::update_rotation_status(RotationStatus::RunAuction);
+			Self::set_rotation_status(RotationStatus::RunAuction);
 		}
 	}
 
