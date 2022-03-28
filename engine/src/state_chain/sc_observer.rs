@@ -13,7 +13,7 @@ use crate::{
     eth::{EthBroadcaster, EthRpcApi},
     logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
-        KeyId, KeygenOutcome, KeygenRequest, MessageHash, MultisigInstruction, MultisigOutcome,
+        KeyId, KeygenOutcome, KeygenRequest, MessageHash, MultisigRequest, MultisigOutcome,
         SigningOutcome, SigningRequest,
     },
     multisig_p2p::AccountPeerMappingChange,
@@ -103,7 +103,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster<EthRpc>,
-    multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
+    multisig_request_sender: UnboundedSender<MultisigRequest>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
         sp_core::ed25519::Public,
@@ -271,11 +271,11 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         validator_candidates,
                                                     ),
                                                 ) => {
-                                                    let gen_new_key_event = MultisigInstruction::Keygen(
+                                                    let gen_new_key_event = MultisigRequest::Keygen(
                                                         KeygenRequest::new(ceremony_id, validator_candidates),
                                                     );
 
-                                                    multisig_instruction_sender
+                                                    multisig_request_sender
                                                         .send(gen_new_key_event)
                                                         .map_err(|_| "Receiver should exist")
                                                         .unwrap();
@@ -288,7 +288,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         payload,
                                                     ),
                                                 ) if validators.contains(&state_chain_client.our_account_id) => {
-                                                    let sign_tx = MultisigInstruction::Sign(SigningRequest::new(
+                                                    let sign_tx = MultisigRequest::Sign(SigningRequest::new(
                                                         ceremony_id,
                                                         KeyId(key_id),
                                                         MessageHash(payload.to_fixed_bytes()),
@@ -296,7 +296,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                     ));
 
                                                     // The below will be replaced with one shot channels
-                                                    multisig_instruction_sender
+                                                    multisig_request_sender
                                                         .send(sign_tx)
                                                         .map_err(|_| "Receiver should exist")
                                                         .unwrap();

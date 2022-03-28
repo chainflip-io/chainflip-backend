@@ -14,7 +14,7 @@ use crate::{
         },
         crypto::Rng,
         tests::fixtures::MESSAGE_HASH,
-        KeyDBMock, MessageHash, MultisigInstruction, SigningRequest,
+        KeyDBMock, MessageHash, MultisigRequest, SigningRequest,
     },
     testing::assert_ok,
 };
@@ -246,8 +246,8 @@ async fn should_delay_rts_until_key_is_ready() {
 
     let message = MessageHash([0; 32]);
 
-    client.process_multisig_instruction(
-        MultisigInstruction::Sign(SigningRequest {
+    client.process_multisig_request(
+        MultisigRequest::Sign(SigningRequest {
             data: MessageHash([0; 32]),
             ceremony_id: 1,
             key_id,

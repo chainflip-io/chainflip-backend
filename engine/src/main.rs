@@ -5,7 +5,7 @@ use chainflip_engine::{
     },
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
+    multisig::{self, MultisigRequest, MultisigOutcome, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
@@ -73,9 +73,9 @@ async fn main() {
     let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger)
         .expect("Failed to open database");
 
-    let (multisig_instruction_sender, multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    // TODO: Merge this into the MultisigInstruction channel
+    let (multisig_request_sender, multisig_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigRequest>();
+    // TODO: Merge this into the MultisigRequest channel
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
@@ -168,7 +168,7 @@ async fn main() {
         multisig::start_client(
             state_chain_client.our_account_id.clone(),
             db,
-            multisig_instruction_receiver,
+            multisig_request_receiver,
             multisig_outcome_sender,
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
@@ -193,7 +193,7 @@ async fn main() {
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
-            multisig_instruction_sender,
+            multisig_request_sender,
             account_peer_mapping_change_sender,
             multisig_outcome_receiver,
             // send messages to these channels to start witnessing

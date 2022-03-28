@@ -52,16 +52,16 @@ impl std::fmt::Display for KeyId {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum MultisigInstruction {
+pub enum MultisigRequest {
     Keygen(KeygenRequest),
     Sign(SigningRequest),
 }
 
-/// Start the multisig client, which listens for p2p messages and instructions from the SC
+/// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<S>(
     my_account_id: AccountId,
     db: S,
-    mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
+    mut multisig_request_receiver: UnboundedReceiver<MultisigRequest>,
     multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
@@ -113,8 +113,8 @@ where
                 Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
                     ceremony_manager.process_p2p_message(sender_id, message);
                 }
-                Some(msg) = multisig_instruction_receiver.recv() => {
-                    client.process_multisig_instruction(msg, &mut rng);
+                Some(msg) = multisig_request_receiver.recv() => {
+                    client.process_multisig_request(msg, &mut rng);
                 }
                 _ = cleanup_tick.tick() => {
                     slog::trace!(logger, "Checking for expired multisig states");

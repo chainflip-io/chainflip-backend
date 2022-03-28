@@ -21,7 +21,7 @@ use crate::{
     common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
-    multisig::{client::utils::PartyIdxMapping, crypto::Rng, KeyDB, KeyId, MultisigInstruction},
+    multisig::{client::utils::PartyIdxMapping, crypto::Rng, KeyDB, KeyId, MultisigRequest},
 };
 
 use state_chain_runtime::AccountId;
@@ -369,14 +369,14 @@ where
             .unwrap();
     }
 
-    /// Process `instruction` issued internally (i.e. from SC or another local module)
-    pub fn process_multisig_instruction(
+    /// Process `request` issued internally (i.e. from SC or another local module)
+    pub fn process_multisig_request(
         &mut self,
-        instruction: MultisigInstruction,
+        request: MultisigRequest,
         rng: &mut Rng,
     ) {
-        match instruction {
-            MultisigInstruction::Keygen(keygen_request) => {
+        match request {
+            MultisigRequest::Keygen(keygen_request) => {
                 use rand_legacy::{Rng as _, SeedableRng};
 
                 slog::info!(
@@ -394,7 +394,7 @@ where
                         .send((rng, keygen_request, self.keygen_options));
                 }
             }
-            MultisigInstruction::Sign(signing_request) => {
+            MultisigRequest::Sign(signing_request) => {
                 let key_id = &signing_request.key_id;
 
                 slog::debug!(
