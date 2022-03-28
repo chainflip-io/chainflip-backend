@@ -179,16 +179,10 @@ pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
-	type Amount = Amount;
 
-	fn on_new_epoch(
-		old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		new_bond: Self::Amount,
-	) {
+	fn on_new_epoch(old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
 		OLD_VALIDATORS.with(|l| *l.borrow_mut() = old_validators.to_vec());
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
-		MIN_BID.with(|l| *l.borrow_mut() = new_bond);
 
 		for validator in new_validators {
 			MockChainflipAccount::update_last_active_epoch(

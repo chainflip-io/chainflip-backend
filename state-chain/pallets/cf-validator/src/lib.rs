@@ -129,10 +129,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A handler for epoch lifecycle events
-		type EpochTransitionHandler: EpochTransitionHandler<
-			ValidatorId = ValidatorIdOf<Self>,
-			Amount = Self::Amount,
-		>;
+		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
@@ -800,7 +797,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
+		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators);
 	}
 
 	fn expire_epoch(epoch: EpochIndex) {
