@@ -5121,6 +5121,7 @@ name = "pallet-cf-auction"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
