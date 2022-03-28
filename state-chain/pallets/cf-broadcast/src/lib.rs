@@ -586,24 +586,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn report_and_schedule_retry(
 		signer: &T::ValidatorId,
-		failed: BroadcastAttempt<T, I>,
+		failed_broadcast_attempt: BroadcastAttempt<T, I>,
 		offence: Offence,
 	) {
 		T::OffenceReporter::report(offence, signer);
-		Self::schedule_retry(failed);
+		Self::schedule_retry(failed_broadcast_attempt);
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
 	/// We will abort the broadcast once we have met the attempt threshold `MaximumAttempts`
-	fn schedule_retry(failed: BroadcastAttempt<T, I>) {
-		if failed.broadcast_attempt_id.attempt_count < T::MaximumAttempts::get() {
-			BroadcastRetryQueue::<T, I>::append(&failed);
+	fn schedule_retry(failed_broadcast_attempt: BroadcastAttempt<T, I>) {
+		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count < T::MaximumAttempts::get() {
+			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
 			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
-				failed.broadcast_attempt_id,
+				failed_broadcast_attempt.broadcast_attempt_id,
 			));
 		} else {
 			Self::deposit_event(Event::<T, I>::BroadcastAborted(
-				failed.broadcast_attempt_id.broadcast_id,
+				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			));
 		}
 	}
