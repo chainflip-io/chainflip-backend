@@ -815,7 +815,7 @@ mod timeout {
                 VerifyComplaints5
             );
 
-            let bad_node_id = ceremony.nodes.keys().next().unwrap().clone();
+            let [bad_node_id] = ceremony.select_account_ids();
             ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
 
             ceremony.complete().await;

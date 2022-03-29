@@ -62,8 +62,8 @@ impl CeremonyManager {
     // This function is called periodically to check if any
     // ceremony should be aborted, reporting responsible parties
     // and cleaning up any relevant data.
-    // Returns any keys that completed during the `try_expiring` function
-    pub fn cleanup(&mut self) -> HashMap<CeremonyId, KeygenResultInfo> {
+    // Returns any keys that completed during this timeout
+    pub fn check_timeout(&mut self) -> Vec<(CeremonyId, KeygenResultInfo)> {
         // Copy the keys so we can iterate over them while at the same time
         // removing the elements as we go
         let signing_ids: Vec<_> = self.signing_states.keys().copied().collect();
@@ -104,9 +104,9 @@ impl CeremonyManager {
                 // SC (i.e. the ceremony is "authorised")
                 // TODO: report nodes via a different extrinsic instead
                 if state.is_authorized() {
-                    if let Some(key) = self.process_keygen_ceremony_outcome(*ceremony_id, result) {
-                        return Some((*ceremony_id, key))
-                    }
+                    return self.process_keygen_ceremony_outcome(*ceremony_id, result).map(|key| {
+                        (*ceremony_id, key)
+                    })
                 } else {
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.keygen_states.remove(ceremony_id);

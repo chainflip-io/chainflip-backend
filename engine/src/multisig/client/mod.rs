@@ -220,7 +220,8 @@ where
     /// Clean up expired states
     pub fn cleanup(&mut self) {
         slog::trace!(self.logger, "Checking for expired multisig states");
-        for (ceremony_id, key) in self.ceremony_manager.cleanup() {
+        // Check for timed out ceremonies and process any that complete after timeout
+        for (ceremony_id, key) in self.ceremony_manager.check_timeout() {
             self.on_key_generated(ceremony_id, key);
         }
 
