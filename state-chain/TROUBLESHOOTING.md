@@ -16,14 +16,14 @@ First, build the runtime node with all features enabled:
 cargo build --release --all-features
 ```
 
-Then run a variation of the following command:
+Then run a variation of the following command.
 
 ```sh
 ./target/release/chainflip-node try-runtime \
     --execution Native \
     --chain soundcheck \
     --url wss://bashful-release.chainflip.xyz \
-    --block-at 0xb79f8bc9fb11028d60b21d141735544ebf7a45c97516256fbfe05a68fc4bfc27 on-runtime-upgrade live \
+    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> on-runtime-upgrade live \
     --snapshot-path .state-snapshot
 ```
 
@@ -32,7 +32,7 @@ To save time, you can then use the state snapshot in subsequent runs:
 ```sh
 ./target/release/chainflip-node try-runtime \
     --execution Native \
-    --block-at 0xb79f8bc9fb11028d60b21d141735544ebf7a45c97516256fbfe05a68fc4bfc27 on-runtime-upgrade snap \
+    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> on-runtime-upgrade snap \
     --snapshot-path .state-snapshot
 ```
 

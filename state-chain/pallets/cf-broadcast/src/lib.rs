@@ -284,6 +284,20 @@ pub mod pallet {
 				expiries.len() as u64 *
 					frame_support::weights::RuntimeDbWeight::default().reads_writes(1, 1)
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T, I>::post_upgrade()
+		}
 	}
 
 	#[pallet::call]
