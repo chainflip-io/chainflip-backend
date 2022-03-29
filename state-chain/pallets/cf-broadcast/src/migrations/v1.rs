@@ -18,6 +18,7 @@ mod v0 {
 
 	use crate::{AttemptCount, BroadcastId, Config, SignedTransactionFor, UnsignedTransactionFor};
 
+	#[cfg(feature = "try-runtime")]
 	pub type BroadcastAttemptId = u64;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]

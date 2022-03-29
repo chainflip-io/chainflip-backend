@@ -250,7 +250,7 @@ pub mod pallet {
 			for (stage, attempt_id) in expiries.iter() {
 				let notify_and_retry = |attempt: BroadcastAttempt<T, I>| {
 					Self::deposit_event(Event::<T, I>::BroadcastAttemptExpired(
-						attempt_id.clone(),
+						*attempt_id,
 						*stage,
 					));
 					// retry
@@ -325,10 +325,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(
-				broadcast_attempt_id.broadcast_id.clone(),
-			)
-			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			let signing_attempt =
+				AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id.broadcast_id)
+					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			ensure!(signing_attempt.nominee == signer.into(), Error::<T, I>::InvalidSigner);
 
@@ -345,12 +344,12 @@ pub mod pallet {
 					broadcast_attempt_id.broadcast_id,
 					TransmissionAttempt {
 						broadcast_attempt: signing_attempt.broadcast_attempt,
-						signer: signing_attempt.nominee.clone(),
+						signer: signing_attempt.nominee,
 						signed_tx: signed_tx.clone(),
 					},
 				);
 				Self::deposit_event(Event::<T, I>::TransmissionRequest(
-					broadcast_attempt_id.clone(),
+					broadcast_attempt_id,
 					signed_tx,
 				));
 
@@ -435,7 +434,7 @@ pub mod pallet {
 			match failure {
 				TransmissionFailure::TransactionRejected => {
 					Self::report_and_schedule_retry(
-						&signer.clone(),
+						&signer,
 						broadcast_attempt,
 						Offence::TransactionFailedOnTransmission,
 					);
@@ -554,7 +553,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		// Seed based on the input data of the extrinsic
-		let seed = (broadcast_attempt_id.clone(), unsigned_tx.clone()).encode();
+		let seed = (broadcast_attempt_id, unsigned_tx.clone()).encode();
 
 		// Check if there is an nominated signer
 		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed) {
@@ -573,8 +572,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Schedule expiry.
 			let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
-				entries
-					.push((BroadcastStage::TransactionSigning, next_broadcast_attempt_id.clone()))
+				entries.push((BroadcastStage::TransactionSigning, next_broadcast_attempt_id))
 			});
 
 			// Emit the transaction signing request.

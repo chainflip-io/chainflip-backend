@@ -93,7 +93,7 @@ impl MockCfe {
 		assert_noop!(
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(nominee + 1).into(),
-				attempt_id.clone(),
+				attempt_id,
 				unsigned_tx.clone().signed(Validity::Valid),
 				Validity::Valid
 			),
