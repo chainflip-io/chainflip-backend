@@ -10,8 +10,8 @@ use cf_traits::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionResult, Bid, BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountData,
-	IsOnline, IsOutgoing, QualifyValidator,
+	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing,
+	QualifyValidator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -27,13 +27,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type Amount = u128;
 pub type ValidatorId = u64;
-
-thread_local! {
-	pub static OLD_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static MIN_BID: RefCell<Amount> = RefCell::new(0);
-	pub static BIDDERS: RefCell<Vec<(u64, Amount)>> = RefCell::new(vec![]);
-}
 
 construct_runtime!(
 	pub enum Test where
@@ -164,26 +157,12 @@ impl ValidatorRegistration<ValidatorId> for Test {
 	}
 }
 
-pub struct MockBidderProvider;
-
-impl BidderProvider for MockBidderProvider {
-	type ValidatorId = ValidatorId;
-	type Amount = Amount;
-
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		BIDDERS.with(|cell| (*cell.borrow()).clone())
-	}
-}
-
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
-	fn on_new_epoch(old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
-		OLD_VALIDATORS.with(|l| *l.borrow_mut() = old_validators.to_vec());
-		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.to_vec());
-
+	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
 		for validator in new_validators {
 			MockChainflipAccount::update_last_active_epoch(
 				validator,
@@ -315,14 +294,6 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 	let ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	TestExternalitiesWithCheck { ext }
-}
-
-pub fn current_validators() -> Vec<u64> {
-	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
-}
-
-pub fn min_bid() -> Amount {
-	MIN_BID.with(|l| *l.borrow())
 }
 
 pub fn run_to_block(n: u64) {
