@@ -757,9 +757,6 @@ impl<T: Config> Pallet<T> {
 		// If we were in an emergency, mark as completed
 		Self::emergency_rotation_completed();
 
-		// Emit that a new epoch will be starting
-		Self::deposit_event(Event::NewEpoch(new_epoch));
-
 		// Save the epoch -> validators map
 		HistoricalValidators::<T>::insert(new_epoch, new_validators);
 
@@ -778,6 +775,9 @@ impl<T: Config> Pallet<T> {
 
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators);
+
+		// Emit that a new epoch will be starting
+		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
 
 	fn expire_epoch(epoch: EpochIndex) {
