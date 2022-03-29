@@ -183,7 +183,7 @@ fn should_rotate_at_epoch() {
 		}));
 
 		assert_eq!(
-			mock::current_validators(),
+			Validators::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
 			"the current validators should be the genesis validators"
 		);
@@ -207,7 +207,7 @@ fn should_rotate_at_epoch() {
 			new_validators,
 			"the new validators are now validating"
 		);
-		assert_eq!(min_bid(), new_bond, "bond should be updated");
+		assert_eq!(Bond::<Test>::get(), new_bond, "bond should be updated");
 
 		let auction_winners = AUCTION_WINNERS
 			.with(|cell| (*cell.borrow()).clone())
@@ -223,12 +223,12 @@ fn genesis() {
 	new_test_ext().execute_with(|| {
 		// We should have a set of validators on genesis with a minimum bid set
 		assert_eq!(
-			current_validators(),
+			Validators::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
 			"We should have a set of validators at genesis"
 		);
 		assert_eq!(
-			min_bid(),
+			Bond::<Test>::get(),
 			MINIMUM_ACTIVE_BID_AT_GENESIS,
 			"We should have a minimum bid at genesis"
 		);

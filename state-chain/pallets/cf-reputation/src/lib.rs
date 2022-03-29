@@ -358,13 +358,8 @@ impl<T: Config> Heartbeat for Pallet<T> {
 
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
 
-	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
-		_new_validators: &[Self::ValidatorId],
-		_new_bond: Self::Amount,
-	) {
+	fn on_new_epoch(_old_validators: &[Self::ValidatorId], _new_validators: &[Self::ValidatorId]) {
 		KeygenExclusionSet::<T>::kill();
 	}
 }

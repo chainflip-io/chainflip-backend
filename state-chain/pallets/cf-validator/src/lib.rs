@@ -17,9 +17,10 @@ mod migrations;
 
 use cf_traits::{
 	offence_reporting::{Offence, OffenceReporter},
-	AsyncResult, AuctionResult, Auctioneer, ChainflipAccount, EmergencyRotation, EpochIndex,
-	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyValidator, SuccessOrFailure, VaultRotator,
+	AsyncResult, AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountData,
+	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyValidator, SuccessOrFailure,
+	VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -111,7 +112,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config:
-		frame_system::Config
+		frame_system::Config<AccountData = ChainflipAccountData>
 		+ cf_traits::Chainflip
 		+ pallet_session::Config<ValidatorId = ValidatorIdOf<Self>>
 	{
@@ -119,10 +120,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A handler for epoch lifecycle events
-		type EpochTransitionHandler: EpochTransitionHandler<
-			ValidatorId = ValidatorIdOf<Self>,
-			Amount = Self::Amount,
-		>;
+		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
@@ -768,19 +766,18 @@ impl<T: Config> Pallet<T> {
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		// Remember in which epoch an validator was active
 		for validator in new_validators.iter() {
+			// Remember in which epoch an validator was active
 			EpochHistory::<T>::activate_epoch(validator, new_epoch);
-		}
-
-		// Bond the validators
-		for validator in new_validators {
+			// Bond the validators
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
+			// Update validator account state.
+			ChainflipAccountStore::<T>::update_last_active_epoch(validator, new_epoch);
 		}
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators, new_bond);
+		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators);
 	}
 
 	fn expire_epoch(epoch: EpochIndex) {

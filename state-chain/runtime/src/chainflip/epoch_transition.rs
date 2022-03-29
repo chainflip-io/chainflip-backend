@@ -1,63 +1,16 @@
-use cf_traits::{
-	BlockEmissions, Chainflip, ChainflipAccount, ChainflipAccountStore, EmissionsTrigger,
-	EpochInfo, EpochTransitionHandler, FlipBalance,
-};
-use sp_std::marker::PhantomData;
+use cf_traits::EpochTransitionHandler;
 
-use crate::{AccountId, Emissions, Reputation, Runtime, Validator, Witnesser};
+use crate::{AccountId, Emissions, EthereumVault, Reputation, Witnesser};
 
 pub struct ChainflipEpochTransitions;
 
-/// Trigger emissions on epoch transitions.
 impl EpochTransitionHandler for ChainflipEpochTransitions {
 	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
 
-	fn on_new_epoch(
-		old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		new_bond: Self::Amount,
-	) {
-		// Calculate block emissions on every epoch
-		<Emissions as BlockEmissions>::calculate_block_emissions();
-		// Process any outstanding emissions.
-		<Emissions as EmissionsTrigger>::trigger_emissions();
-		// Update the list of validators in the witnesser.
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<AccountStateManager<Runtime> as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-
-		<Reputation as EpochTransitionHandler>::on_new_epoch(
-			old_validators,
-			new_validators,
-			new_bond,
-		);
-	}
-}
-
-pub struct AccountStateManager<T>(PhantomData<T>);
-
-impl<T: Chainflip> EpochTransitionHandler for AccountStateManager<T> {
-	type ValidatorId = AccountId;
-	type Amount = T::Amount;
-
-	fn on_new_epoch(
-		_old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		_new_bid: Self::Amount,
-	) {
-		// Update the last active epoch for the new validating set
-		let epoch_index = Validator::epoch_index();
-		for validator in new_validators {
-			ChainflipAccountStore::<Runtime>::update_last_active_epoch(validator, epoch_index);
-		}
+	fn on_new_epoch(old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
+		<Emissions as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators);
+		<Witnesser as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators);
+		<Reputation as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators);
+		<EthereumVault as EpochTransitionHandler>::on_new_epoch(old_validators, new_validators);
 	}
 }

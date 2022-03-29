@@ -214,16 +214,11 @@ pub trait VaultRotator {
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
-	type Amount: Copy;
 	/// A new epoch has started
 	///
 	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
 	/// a `new_bond`
-	fn on_new_epoch(
-		old_validators: &[Self::ValidatorId],
-		new_validators: &[Self::ValidatorId],
-		new_bond: Self::Amount,
-	);
+	fn on_new_epoch(old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]);
 }
 
 /// Providing bidders for an auction
