@@ -854,7 +854,7 @@ mod tests {
 				});
 		}
 
-		#[allow(dead_code)]
+		#[test]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are
 		// set to 100
 		// - When the epoch is reached an auction is started and completed
@@ -1236,7 +1236,7 @@ mod tests {
 				});
 		}
 
-		#[allow(dead_code)]
+		#[test]
 		// A network is created with a set of validators and backup validators.
 		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
 		// with 20% going offline and forcing an emergency rotation in which a new set of validators
