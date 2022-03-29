@@ -9,12 +9,16 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<T>, PhantomData<I>);
 
 const PALLET_NAME: &[u8; 19] = b"EthereumBroadcaster";
 
+const BROADCAST_ATTEMPT_ID_COUNTER: &[u8; 25] = b"BroadcastAttemptIdCounter";
+
 // Contain types of old version to decode into
 mod v0 {
 	use codec::{Decode, Encode};
 	use frame_support::RuntimeDebug;
 
 	use crate::{AttemptCount, BroadcastId, Config, SignedTransactionFor, UnsignedTransactionFor};
+
+	pub type BroadcastAttemptId = u64;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct TransmissionAttempt<T: Config<I>, I: 'static> {
@@ -116,18 +120,34 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 		// No longer required, we can just use BroadcastId, or aggregate
 		// BroadcastAttemptId(BroadcastId, AttemptCount)
-		remove_storage_prefix(PALLET_NAME, b"BroadcastAttemptIdCounter", b"");
+		remove_storage_prefix(PALLET_NAME, BROADCAST_ATTEMPT_ID_COUNTER, b"");
 
 		T::DbWeight::get().reads_writes(num_read_writes, num_read_writes + 1)
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
+		use frame_support::migration::get_storage_value;
+		let broadcast_attempt_id_counter = get_storage_value::<v0::BroadcastAttemptId>(
+			PALLET_NAME,
+			BROADCAST_ATTEMPT_ID_COUNTER,
+			b"",
+		);
+		assert!(broadcast_attempt_id_counter.is_some(), "No BroadcastAttemptIdCounter");
 		Ok(())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
+		use frame_support::migration::get_storage_value;
+		let broadcast_attempt_id_counter = get_storage_value::<v0::BroadcastAttemptId>(
+			PALLET_NAME,
+			BROADCAST_ATTEMPT_ID_COUNTER,
+			b"",
+		);
+		// it should not exist
+
+		assert!(broadcast_attempt_id_counter.is_none(), "BroadcastAttemptIdCounter still exists");
 		Ok(())
 	}
 }
