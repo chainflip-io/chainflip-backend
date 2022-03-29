@@ -364,10 +364,7 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(
-            initial_stage,
-            key_info.validator_map,
-        ) {
+        match state.on_ceremony_request(initial_stage, key_info.validator_map) {
             Ok(Some(result)) => {
                 self.process_signing_ceremony_outcome(ceremony_id, result);
             }

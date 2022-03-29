@@ -1,3 +1,4 @@
+/* TODO NOW
 use crate::{
     logging,
     multisig::client::{keygen::KeygenOptions, MultisigClient},
@@ -8,7 +9,6 @@ use super::{
     standard_signing,
 };
 
-/* TODO NOW
 #[tokio::test]
 async fn check_signing_db() {
     // TODO: This uses an in-memory database mock, which might behave a

@@ -5,7 +5,7 @@ use chainflip_engine::{
     },
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigRequest, MultisigOutcome, PersistentKeyDB},
+    multisig::{self, MultisigOutcome, MultisigRequest, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,

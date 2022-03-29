@@ -11,7 +11,7 @@ use crate::{
 };
 use state_chain_runtime::AccountId;
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
+use super::{common::CeremonyStage, utils::PartyIdxMapping};
 
 pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,

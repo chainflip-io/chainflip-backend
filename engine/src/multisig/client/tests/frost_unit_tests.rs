@@ -1,5 +1,5 @@
 use crate::{
-    logging::{self, REQUEST_TO_SIGN_EXPIRED, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED},
+    logging::{self, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED},
     multisig::{
         client::{
             self,

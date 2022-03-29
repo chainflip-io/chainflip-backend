@@ -45,10 +45,10 @@ use crate::{
     multisig::{
         client::{
             keygen::{self, KeygenData},
-            MultisigClient, MultisigMessage, MultisigOutcome,
+            MultisigMessage, MultisigOutcome,
         },
         crypto::Point,
-        KeyDBMock, KeygenRequest,
+        KeygenRequest,
     },
 };
 
@@ -933,6 +933,7 @@ pub struct AllKeygenMessages {
     pub stage_7_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyBlameResponses7>>,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
     visitor: &'a mut CeremonyVisitor,
     ceremony: &'a mut KeygenCeremonyRunner,

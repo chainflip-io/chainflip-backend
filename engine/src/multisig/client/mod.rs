@@ -370,11 +370,7 @@ where
     }
 
     /// Process `request` issued internally (i.e. from SC or another local module)
-    pub fn process_multisig_request(
-        &mut self,
-        request: MultisigRequest,
-        rng: &mut Rng,
-    ) {
+    pub fn process_multisig_request(&mut self, request: MultisigRequest, rng: &mut Rng) {
         match request {
             MultisigRequest::Keygen(keygen_request) => {
                 use rand_legacy::{Rng as _, SeedableRng};
@@ -391,7 +387,9 @@ where
                     self.single_party_keygen(keygen_request);
                 } else {
                     self.keygen_request_sender
-                        .send((rng, keygen_request, self.keygen_options));
+                        .send((rng, keygen_request, self.keygen_options))
+                        .ok()
+                        .unwrap();
                 }
             }
             MultisigRequest::Sign(signing_request) => {
@@ -464,13 +462,15 @@ where
 
                 let rng = Rng::from_entropy();
 
-                self.signing_request_sender.send((
-                    rng,
-                    signing_request.data,
-                    key_info.clone(),
-                    signing_request.signers,
-                    signing_request.ceremony_id,
-                ));
+                self.signing_request_sender
+                    .send((
+                        rng,
+                        signing_request.data,
+                        key_info.clone(),
+                        signing_request.signers,
+                        signing_request.ceremony_id,
+                    ))
+                    .unwrap();
             }
         }
     }

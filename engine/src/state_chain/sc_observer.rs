@@ -13,7 +13,7 @@ use crate::{
     eth::{EthBroadcaster, EthRpcApi},
     logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
     multisig::{
-        KeyId, KeygenOutcome, KeygenRequest, MessageHash, MultisigRequest, MultisigOutcome,
+        KeyId, KeygenOutcome, KeygenRequest, MessageHash, MultisigOutcome, MultisigRequest,
         SigningOutcome, SigningRequest,
     },
     multisig_p2p::AccountPeerMappingChange,

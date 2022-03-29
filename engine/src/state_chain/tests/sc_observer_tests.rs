@@ -21,7 +21,7 @@ use web3::types::{Bytes, SignedTransaction};
 use crate::{
     eth::{EthBroadcaster, EthWsRpcClient, MockEthRpcApi},
     logging::{self, test_utils::new_test_logger},
-    multisig::{MultisigRequest, MultisigOutcome},
+    multisig::{MultisigOutcome, MultisigRequest},
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{
