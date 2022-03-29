@@ -243,7 +243,7 @@ pub mod pallet {
 			let retries = BroadcastRetryQueue::<T, I>::take();
 			let retry_count = retries.len();
 			for failed in retries {
-				Self::start_broadcast_attempt(failed.broadcast_attempt_id, failed.unsigned_tx);
+				Self::start_broadcast_attempt(failed);
 			}
 
 			let expiries = Expiries::<T, I>::take(block_number);
@@ -254,25 +254,22 @@ pub mod pallet {
 						*stage,
 					));
 					// retry
-					Self::start_broadcast_attempt(
-						attempt.broadcast_attempt_id,
-						attempt.unsigned_tx,
-					);
+					Self::start_broadcast_attempt(attempt);
 				};
 
 				match stage {
 					BroadcastStage::TransactionSigning => {
-						if let Some(attempt) =
+						if let Some(signing_attempt) =
 							AwaitingTransactionSignature::<T, I>::take(attempt_id.broadcast_id)
 						{
-							notify_and_retry(attempt.broadcast_attempt);
+							notify_and_retry(signing_attempt.broadcast_attempt);
 						}
 					},
 					BroadcastStage::Transmission => {
-						if let Some(attempt) =
+						if let Some(transmission_attempt) =
 							AwaitingTransmission::<T, I>::take(attempt_id.broadcast_id)
 						{
-							notify_and_retry(attempt.broadcast_attempt);
+							notify_and_retry(transmission_attempt.broadcast_attempt);
 						}
 					},
 				}
@@ -536,34 +533,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
 
-		Self::start_broadcast_attempt(
-			BroadcastAttemptId { broadcast_id, attempt_count: 0 },
+		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+			broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
 			unsigned_tx,
-		);
+		});
 	}
 
-	fn start_broadcast_attempt(
-		broadcast_attempt_id: BroadcastAttemptId,
-		unsigned_tx: UnsignedTransactionFor<T, I>,
-	) {
+	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		// increment the attempt
 		let next_broadcast_attempt_id = BroadcastAttemptId {
-			attempt_count: broadcast_attempt_id.attempt_count + 1,
-			broadcast_id: broadcast_attempt_id.broadcast_id,
+			attempt_count: broadcast_attempt.broadcast_attempt_id.attempt_count + 1,
+			broadcast_id: broadcast_attempt.broadcast_attempt_id.broadcast_id,
 		};
 
 		// Seed based on the input data of the extrinsic
-		let seed = (broadcast_attempt_id, unsigned_tx.clone()).encode();
+		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
+			.encode();
 
 		// Check if there is an nominated signer
 		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionSignature::<T, I>::insert(
-				broadcast_attempt_id.broadcast_id,
+				broadcast_attempt.broadcast_attempt_id.broadcast_id,
 				TransactionSigningAttempt::<T, I> {
 					broadcast_attempt: BroadcastAttempt {
 						broadcast_attempt_id: next_broadcast_attempt_id,
-						unsigned_tx: unsigned_tx.clone(),
+						unsigned_tx: broadcast_attempt.unsigned_tx.clone(),
 					},
 					nominee: nominated_signer.clone(),
 				},
@@ -579,7 +574,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
 				next_broadcast_attempt_id,
 				nominated_signer,
-				unsigned_tx,
+				broadcast_attempt.unsigned_tx,
 			));
 		} else {
 			// In this case all validators are currently offline. We just do
@@ -587,7 +582,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			log::warn!("No online validators at the moment.");
 			Self::schedule_retry(BroadcastAttempt::<T, I> {
 				broadcast_attempt_id: next_broadcast_attempt_id,
-				unsigned_tx,
+				unsigned_tx: broadcast_attempt.unsigned_tx,
 			});
 		}
 	}
