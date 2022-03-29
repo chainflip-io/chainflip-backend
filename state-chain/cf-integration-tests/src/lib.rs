@@ -302,6 +302,11 @@ mod tests {
 			}
 		}
 
+		pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId, seed: &str) {
+			setup_account(node_id, seed);
+			setup_peer_mapping(node_id, seed);
+		}
+
 		// Create an account, generate and register the session keys
 		pub(crate) fn setup_account(node_id: &NodeId, seed: &str) {
 			assert_ok!(frame_system::Provider::<Runtime>::created(node_id));
@@ -365,8 +370,7 @@ mod tests {
 					let node_id = network.next_node_id();
 					nodes.push(node_id.clone());
 					let seed = node_id.clone().to_string();
-					setup_account(&node_id, &seed);
-					setup_peer_mapping(&node_id, &seed);
+					setup_account_and_peer_mapping(&node_id, &seed);
 					network
 						.engines
 						.insert(node_id.clone(), Engine::new(node_id, network.signer.clone()));
@@ -770,7 +774,7 @@ mod tests {
 
 	mod epoch {
 		use super::{genesis::GENESIS_BALANCE, *};
-		use crate::tests::network::{setup_account, setup_peer_mapping};
+		use crate::tests::network::setup_account_and_peer_mapping;
 		use cf_traits::{
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
 		};
@@ -889,8 +893,7 @@ mod tests {
 					let late_staker = testnet.create_node();
 					testnet.set_active(&late_staker, true);
 					let seed = late_staker.to_string();
-					setup_account(&late_staker, &seed);
-					setup_peer_mapping(&late_staker, &seed);
+					setup_account_and_peer_mapping(&late_staker, &seed);
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
