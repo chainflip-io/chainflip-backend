@@ -231,12 +231,11 @@ mod tests {
 								// Participate in signing ceremony if requested.
 								// We only need one node to submit the unsigned transaction.
 								if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
-									// Sign with current key
-									let verification_components = (&*self.signer).borrow_mut().sign(payload);
 									state_chain_runtime::EthereumThresholdSigner::signature_success(
 										Origin::none(),
 										*ceremony_id,
-										verification_components,
+										// Sign with current key
+										(&*self.signer).borrow_mut().sign(payload),
 									).expect("should be able to submit threshold signature for Ethereum");
 								} };
 							},
@@ -245,16 +244,11 @@ mod tests {
 								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 									if let EngineState::Rotation = self.engine_state {
 										// If we rotating let's witness the keys being rotated on the contract
-										let ethereum_block_number: u64 = 100;
-										let tx_hash = [1u8; 32];
-
-										let public_key = (&*self.signer).borrow_mut().proposed_public_key();
-
 										state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
 											Origin::signed(self.node_id.clone()),
-											public_key,
-											ethereum_block_number,
-											tx_hash.into(),
+											(&*self.signer).borrow_mut().proposed_public_key(),
+											100,
+											[1u8; 32].into(),
 										).expect("should be able to vault key rotation for node");
 									}
 							},
@@ -274,13 +268,11 @@ mod tests {
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, validators)) => {
 								if validators.contains(&self.node_id) {
-									// Propose a new key
-									let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
-
 									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
-										KeygenOutcome::Success(public_key),
+										// Propose a new key
+										KeygenOutcome::Success((&*self.signer).borrow_mut().propose_new_public_key()),
 									).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 								}
 						},
