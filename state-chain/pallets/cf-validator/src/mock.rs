@@ -119,13 +119,19 @@ impl Auctioneer for MockAuctioneer {
 	type Error = &'static str;
 
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error> {
-		AUCTION_RUN_BEHAVIOUR.with(|cell| (*cell.borrow()).clone())
+		AUCTION_RUN_BEHAVIOUR.with(|cell| {
+			let run_behaviour = (*cell.borrow()).clone();
+			run_behaviour.and_then(|result| {
+				AUCTION_WINNERS.with(|cell| {
+					*cell.borrow_mut() = Some(result.winners.to_vec());
+				});
+				Ok(result)
+			})
+		})
 	}
 
 	fn update_backup_and_passive_states() {
-		// AUCTION_WINNERS.with(|cell| {
-		// 	*cell.borrow_mut() = Some(winners.to_vec());
-		// });
+		// no op
 	}
 }
 
