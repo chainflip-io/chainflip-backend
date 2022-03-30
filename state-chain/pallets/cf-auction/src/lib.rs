@@ -253,9 +253,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			}
 		}
 
-		let minimum_active_bid =
-			next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
-
 		let winners: Vec<_> = next_validator_group
 			.iter()
 			.map(|(validator_id, _)| (*validator_id).clone())
@@ -271,6 +268,9 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		BackupGroupSize::<T>::put(backup_group_size);
 
 		Self::deposit_event(Event::AuctionCompleted(winners.clone()));
+
+		let minimum_active_bid =
+			next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
 
 		Ok(AuctionResult { winners, minimum_active_bid })
 	}
