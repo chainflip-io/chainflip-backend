@@ -90,6 +90,7 @@ pub struct Node {
 
 pub fn new_node(account_id: AccountId, keygen_options: KeygenOptions) -> Node {
     let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
+    let logger = logger.new(slog::o!("account_id" => format!("{}",account_id)));
     let (multisig_outcome_sender, multisig_outcome_receiver) =
         tokio::sync::mpsc::unbounded_channel();
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
@@ -365,7 +366,10 @@ where
     }
 
     pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy<Output>>::MappedOutcome {
-        assert_ok!(self.try_gather_outcomes().await.unwrap())
+        assert_ok!(self
+            .try_gather_outcomes()
+            .await
+            .expect("Failed to get all ceremony outcomes"))
     }
 
     pub async fn try_complete_with_error(&mut self, bad_account_ids: &[AccountId]) -> Option<()> {

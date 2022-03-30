@@ -151,6 +151,7 @@ where
     }
 
     fn process_message(&mut self, signer_idx: usize, m: D) -> ProcessMessageResult {
+        println!("process_message: {}", &m);
         let m: P::Message = match m.try_into() {
             Ok(m) => m,
             Err(_) => {
