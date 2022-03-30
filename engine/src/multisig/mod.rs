@@ -87,7 +87,7 @@ where
 
     async move {
         // Stream outputs () approximately every ten seconds
-        let mut cleanup_tick = common::make_periodic_tick(Duration::from_secs(10));
+        let mut check_timeout_tick = common::make_periodic_tick(Duration::from_secs(10));
 
         use rand_legacy::FromEntropy;
         let mut rng = crypto::Rng::from_entropy();
@@ -100,8 +100,8 @@ where
                 Some(msg) = multisig_instruction_receiver.recv() => {
                     client.process_multisig_instruction(msg, &mut rng);
                 }
-                _ = cleanup_tick.tick() => {
-                    client.cleanup();
+                _ = check_timeout_tick.tick() => {
+                    client.check_timeout();
                 }
                 Ok(()) = &mut shutdown_rx => {
                     slog::info!(logger, "MultisigClient stopped due to shutdown request!");
