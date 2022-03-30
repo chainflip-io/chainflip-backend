@@ -875,6 +875,7 @@ mod tests {
 						ACTIVE_SET_SIZE as u8,
 						&Validator::current_validators(),
 					);
+					assert_eq!(nodes.len() as u32, ACTIVE_SET_SIZE);
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the
