@@ -415,10 +415,11 @@ async fn pending_rts_should_expire() {
     );
     signing_ceremony.request_without_gather();
 
+    // Timeout the rts but not the keygen
     signing_ceremony
         .get_mut_node(target_account_id)
         .client
-        .force_stage_timeout();
+        .force_pending_rts_timeout();
 
     // TODO: Complete the keygen ceremony above, to ensure we still don't progress,
     // even after the keygen is completed?
@@ -430,6 +431,18 @@ async fn pending_rts_should_expire() {
     assert!(signing_ceremony.nodes[target_account_id]
         .tag_cache
         .contains_tag(REQUEST_TO_SIGN_EXPIRED));
+
+    // Check that the correct signing outcome was sent
+    let outcome = signing_ceremony
+        .get_mut_node(target_account_id)
+        .try_recv_outcome()
+        .await
+        .expect("Failed to get signing outcome");
+
+    assert_eq!(
+        outcome,
+        client::SigningOutcome::timeout(signing_ceremony_id, vec![])
+    );
 }
 
 // Ignore unexpected messages at all stages. This includes:
