@@ -275,8 +275,8 @@ pub mod pallet {
 				RotationStatus::VaultsRotated(auction_result) => {
 					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
-				RotationStatus::SessionRotating(auction_result) => {
-					T::Auctioneer::update_validator_status(&auction_result.winners);
+				RotationStatus::SessionRotating(_) => {
+					T::Auctioneer::update_backup_and_passive_states();
 					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -770,7 +770,7 @@ impl<T: Config> Pallet<T> {
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
 			// Update validator account state.
-			ChainflipAccountStore::<T>::update_last_active_epoch(validator, new_epoch);
+			ChainflipAccountStore::<T>::update_validator_account_data(validator, new_epoch);
 		}
 
 		// Handler for a new epoch

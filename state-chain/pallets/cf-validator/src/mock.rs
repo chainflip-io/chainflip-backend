@@ -122,10 +122,10 @@ impl Auctioneer for MockAuctioneer {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| (*cell.borrow()).clone())
 	}
 
-	fn update_validator_status(winners: &[Self::ValidatorId]) {
-		AUCTION_WINNERS.with(|cell| {
-			*cell.borrow_mut() = Some(winners.to_vec());
-		});
+	fn update_backup_and_passive_states() {
+		// AUCTION_WINNERS.with(|cell| {
+		// 	*cell.borrow_mut() = Some(winners.to_vec());
+		// });
 	}
 }
 
@@ -164,7 +164,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
 		for validator in new_validators {
-			MockChainflipAccount::update_last_active_epoch(
+			MockChainflipAccount::update_validator_account_data(
 				validator,
 				ValidatorPallet::epoch_index(),
 			);

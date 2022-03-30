@@ -169,10 +169,7 @@ pub type ActiveValidatorRange = (u32, u32);
 /// Auctioneer
 ///
 /// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
-/// returned as an `AuctionResult` calling `run_aucion()`. The result would then be provided to
-/// `update_validator_status()` when have rotated the active set.  A new auction is ran on each call
-/// of `resolve_auction()` which discards the previous auction run.
-
+/// returned as an `AuctionResult` calling `run_auction()`.
 pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
@@ -181,8 +178,10 @@ pub trait Auctioneer {
 	/// Run an auction by qualifying a validator
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error>;
 
-	/// Update validator status for the winners
-	fn update_validator_status(winners: &[Self::ValidatorId]);
+	// TODO: there's probably a better place to put this (both in terms of being in this trait)
+	// and where it's called
+	/// Update the states of backup and passive nodes
+	fn update_backup_and_passive_states();
 }
 
 pub trait BackupValidators {
@@ -375,7 +374,7 @@ pub trait ChainflipAccount {
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
-	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex);
+	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex);
 }
 
 /// An outgoing node
@@ -405,9 +404,11 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
-	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
+	/// Set the last epoch number and set the account state to Validator
+	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).last_active_epoch = Some(index);
+			(*account_data).state = ChainflipAccountState::Validator;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}

@@ -275,10 +275,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		Ok(AuctionResult { winners, minimum_active_bid })
 	}
 
-	// Things have gone well and we have a set of 'Winners', congratulations.
-	// We are ready to call this an auction a day resetting the bidders in storage and
-	// setting the state ready for a new set of 'Bidders'
-	fn update_validator_status(winners: &[Self::ValidatorId]) {
+	// Update the state for backup and passive, as this can change every block
+	fn update_backup_and_passive_states() {
 		let update_status = |validators: Vec<T::ValidatorId>, state| {
 			for validator_id in validators {
 				T::ChainflipAccount::update_state(&validator_id.into(), state);
@@ -293,8 +291,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 
 		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 		HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
-
-		update_status(winners.to_vec(), ChainflipAccountState::Validator);
 
 		update_status(
 			backup_validators.iter().map(|(validator_id, _)| validator_id.clone()).collect(),
