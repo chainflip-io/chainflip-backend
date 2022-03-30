@@ -354,19 +354,23 @@ mod tests {
 
 			// Create a network which includes the validators in genesis of number of nodes
 			// and return a network and sorted list of nodes within
-			pub fn create(number_of_nodes: u8, nodes_to_include: &[NodeId]) -> (Self, Vec<NodeId>) {
+			pub fn create(
+				number_of_passive_nodes: u8,
+				existing_nodes: &[NodeId],
+			) -> (Self, Vec<NodeId>) {
 				let mut network: Network = Default::default();
 
 				// Include any nodes already *created* to the test network
-				for node in nodes_to_include {
+				for node in existing_nodes {
 					network.add_node(node);
+					// Only need to setup peer mapping as the AccountInfo is already set up if they
+					// are genesis nodes
 					setup_peer_mapping(node, &node.clone().to_string());
 				}
 
-				let remaining_nodes = number_of_nodes.saturating_sub(nodes_to_include.len() as u8);
-
+				// Create the passive nodes
 				let mut nodes = Vec::new();
-				for _ in 0..remaining_nodes {
+				for _ in 0..number_of_passive_nodes {
 					let node_id = network.next_node_id();
 					nodes.push(node_id.clone());
 					let seed = node_id.clone().to_string();
@@ -376,7 +380,7 @@ mod tests {
 						.insert(node_id.clone(), Engine::new(node_id, network.signer.clone()));
 				}
 
-				nodes.append(&mut nodes_to_include.to_vec());
+				nodes.append(&mut existing_nodes.to_vec());
 				nodes.sort();
 				(network, nodes)
 			}
@@ -652,7 +656,6 @@ mod tests {
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
-		pub const NUMBER_OF_VALIDATORS: u32 = 3;
 
 		pub fn default() -> ExtBuilder {
 			ExtBuilder::default()
@@ -804,9 +807,8 @@ mod tests {
 				.min_validators(5)
 				.build()
 				.execute_with(|| {
-					// A network with a set of passive nodes
 					let (mut testnet, nodes) =
-						network::Network::create(8, &Validator::current_validators());
+						network::Network::create(3, &Validator::current_validators());
 
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
@@ -864,18 +866,21 @@ mod tests {
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
-			const ACTIVE_SET_SIZE: u32 = 5;
+			const MAX_SET_SIZE: u32 = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(ACTIVE_SET_SIZE)
+				.max_validators(MAX_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					// A network with a set of passive nodes
-					let (mut testnet, nodes) = network::Network::create(
-						ACTIVE_SET_SIZE as u8,
-						&Validator::current_validators(),
-					);
-					assert_eq!(nodes.len() as u32, ACTIVE_SET_SIZE);
+					let genesis_validators = &Validator::current_validators();
+
+					let number_of_passive_nodes = MAX_SET_SIZE
+						.checked_sub(genesis_validators.len() as u32)
+						.expect("Max set size must be at least the number of genesis validators");
+
+					let (mut testnet, nodes) =
+						network::Network::create(number_of_passive_nodes as u8, genesis_validators);
+					assert_eq!(nodes.len() as u32, MAX_SET_SIZE);
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
 					// All nodes stake to be included in the next epoch which are witnessed on the
@@ -1007,10 +1012,8 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// Create the test network with some fresh nodes and the genesis validators
-					let (mut testnet, nodes) = network::Network::create(
-						MAX_VALIDATORS as u8,
-						&Validator::current_validators(),
-					);
+					let (mut testnet, nodes) =
+						network::Network::create(0, &Validator::current_validators());
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
@@ -1142,20 +1145,17 @@ mod tests {
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_VALIDATORS: u32 = 10;
-			const BACKUP_VALDATORS: u32 = genesis::NUMBER_OF_VALIDATORS;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_validators(MAX_VALIDATORS)
 				.build()
 				.execute_with(|| {
-					// Create MAX_VALIDATORS nodes and stake them above our genesis validators
-					// The result will be our newly created nodes will be validators and the
-					// genesis validators will become backup validators
+					// Create MAX_VALIDATORS passive nodes and stake them above our genesis
+					// validators The result will be our newly created nodes will be validators and
+					// the genesis validators will become backup validators
 					let mut genesis_validators = Validator::current_validators();
-					let (mut testnet, _) = network::Network::create(
-						(MAX_VALIDATORS + BACKUP_VALDATORS) as u8,
-						&genesis_validators,
-					);
+					let (mut testnet, _) =
+						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
 
 					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
 					let active_nodes = testnet.filter_nodes(ChainflipAccountState::Validator);
@@ -1396,7 +1396,7 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					let (mut testnet, nodes) =
-						network::Network::create(5_u8, &Validator::current_validators());
+						network::Network::create(2, &Validator::current_validators());
 					// Define 5 nodes
 					let node_1 = nodes.get(0).unwrap();
 					let node_2 = nodes.get(1).unwrap();
@@ -1488,7 +1488,7 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					let (mut testnet, nodes) =
-						network::Network::create(5_u8, &Validator::current_validators());
+						network::Network::create(2, &Validator::current_validators());
 
 					// Define 5 nodes
 					let node_1 = nodes.get(0).unwrap();
