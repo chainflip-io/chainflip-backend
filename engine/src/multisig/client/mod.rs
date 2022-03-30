@@ -217,13 +217,10 @@ where
         }
     }
 
-    /// Resolve any expired ceremonies and expired pending requests to sign
-    pub fn check_timeout(&mut self) {
+    /// Clean up expired states
+    pub fn cleanup(&mut self) {
         slog::trace!(self.logger, "Checking for expired multisig states");
-        // Check for timed out ceremonies and process any that complete after timeout
-        for (ceremony_id, key) in self.ceremony_manager.check_timeout() {
-            self.on_key_generated(ceremony_id, key);
-        }
+        self.ceremony_manager.cleanup();
 
         // cleanup stale signing_info in pending_requests_to_sign
         let logger = &self.logger;
@@ -546,6 +543,6 @@ where
             true
         });
 
-        self.check_timeout();
+        self.cleanup();
     }
 }
