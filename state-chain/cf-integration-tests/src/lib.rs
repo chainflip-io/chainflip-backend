@@ -348,7 +348,6 @@ mod tests {
 		impl Network {
 			pub fn next_node_id(&mut self) -> NodeId {
 				self.node_counter += 1;
-				// TODO improve this to not overflow
 				[self.node_counter as u8; 32].into()
 			}
 
