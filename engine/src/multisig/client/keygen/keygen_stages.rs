@@ -52,10 +52,7 @@ impl HashCommitments1 {
         keygen_options: KeygenOptions,
         context: HashContext,
     ) -> Self {
-        // Generate the secret polynomial and hash
-        // the first (all?) coefficient commitment.
-        // Broadcast that hash.
-
+        // Generate the secret polynomial and commit to it by hashing all public coefficients
         let params = ThresholdParameters::from_share_count(common.all_idxs.len());
 
         let (shares, own_commitment) =

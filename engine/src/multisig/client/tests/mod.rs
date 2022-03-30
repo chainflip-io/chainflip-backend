@@ -14,7 +14,7 @@ use crate::multisig::KeygenInfo;
 
 use state_chain_runtime::AccountId;
 
-pub const KEYGEN_STAGES: usize = 7;
+pub const KEYGEN_STAGES: usize = 9;
 pub const SIGNING_STAGES: usize = 4;
 
 lazy_static! {
