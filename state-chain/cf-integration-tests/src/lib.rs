@@ -1118,11 +1118,14 @@ mod tests {
 
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
-		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
+		use cf_traits::{
+			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, FlipBalance,
+			IsOnline, StakeTransfer,
+		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
-			Validator,
+			Runtime, Validator,
 		};
 		use std::collections::HashMap;
 
@@ -1148,14 +1151,15 @@ mod tests {
 					let (mut testnet, _) =
 						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
 
-					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
+					let mut init_passive_nodes =
+						testnet.filter_nodes(ChainflipAccountState::Passive);
 					let active_nodes = testnet.filter_nodes(ChainflipAccountState::Validator);
 					// An initial stake which is superior to the genesis stakes
 					// The current validators would have been rewarded on us leaving the current
 					// epoch so let's up the stakes for the passive nodes.
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
-					for node in &passive_nodes {
+					for node in &init_passive_nodes {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
@@ -1169,7 +1173,7 @@ mod tests {
 					);
 
 					// Activate the accounts
-					for node in [active_nodes, passive_nodes.clone()].concat() {
+					for node in [active_nodes, init_passive_nodes.clone()].concat() {
 						network::Cli::activate_account(node);
 					}
 
@@ -1185,12 +1189,19 @@ mod tests {
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
 
 					current_validators.sort();
-					passive_nodes.sort();
+					init_passive_nodes.sort();
 
 					assert_eq!(
-						passive_nodes, current_validators,
-						"our new testnet nodes should be the new validators"
+						init_passive_nodes, current_validators,
+						"our new initial passive nodes should be the new validators"
 					);
+
+					current_validators.iter().for_each(|account_id| {
+						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
+						assert_eq!(account_data.state, ChainflipAccountState::Validator);
+						// we were active in teh first epoch
+						assert_eq!(account_data.last_active_epoch, Some(2));
+					});
 
 					// assert list of backup validators as being the genesis validators
 					let mut current_backup_validators: Vec<NodeId> = Auction::remaining_bidders()
@@ -1206,6 +1217,13 @@ mod tests {
 						genesis_validators, current_backup_validators,
 						"we should have new backup validators"
 					);
+
+					current_backup_validators.iter().for_each(|account_id| {
+						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
+						assert_eq!(account_data.state, ChainflipAccountState::Backup);
+						// we were active in teh first epoch
+						assert_eq!(account_data.last_active_epoch, Some(1));
+					});
 
 					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
 						current_backup_validators
