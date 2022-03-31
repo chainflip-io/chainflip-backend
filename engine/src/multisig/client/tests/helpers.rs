@@ -718,9 +718,6 @@ pub async fn standard_keygen(
     let stage_3_messages = keygen_ceremony.run_stage(stage_2_messages.clone()).await;
     let stage_4_messages = keygen_ceremony.run_stage(stage_3_messages.clone()).await;
     let stage_5_messages = keygen_ceremony.run_stage(stage_4_messages.clone()).await;
-    // let stage_6_messages = keygen_ceremony.run_stage(stage_5_messages.clone()).await;
-    // let stage_7_messages = keygen_ceremony.run_stage(stage_6_messages.clone()).await;
-    // keygen_ceremony.distribute_messages(stage_7_messages.clone());
     keygen_ceremony.distribute_messages(stage_5_messages.clone());
     let key_id = keygen_ceremony.complete().await;
 
