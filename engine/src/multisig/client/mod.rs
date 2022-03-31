@@ -544,7 +544,7 @@ where
             }
         }
 
-        self.cleanup();
+        self.check_timeout();
     }
 
     pub fn force_pending_rts_timeout(&mut self) {
