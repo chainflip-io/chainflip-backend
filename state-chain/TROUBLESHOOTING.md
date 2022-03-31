@@ -23,8 +23,9 @@ Then run a variation of the following command.
     --execution Native \
     --chain soundcheck \
     --url wss://bashful-release.chainflip.xyz \
-    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> on-runtime-upgrade live \
-    --snapshot-path .state-snapshot
+    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> \
+        on-runtime-upgrade live \
+            --snapshot-path .state-snapshot
 ```
 
 To save time, you can then use the state snapshot in subsequent runs:
@@ -32,8 +33,9 @@ To save time, you can then use the state snapshot in subsequent runs:
 ```sh
 ./target/release/chainflip-node try-runtime \
     --execution Native \
-    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> on-runtime-upgrade snap \
-    --snapshot-path .state-snapshot
+    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> \
+        on-runtime-upgrade snap \
+            --snapshot-path .state-snapshot
 ```
 
 ### General tips and guidelines
