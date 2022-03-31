@@ -217,7 +217,7 @@ pub mod pallet {
 		BroadcastComplete(BroadcastId),
 		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_attempt_id\]
 		BroadcastRetryScheduled(BroadcastAttemptId),
-		/// A broadcast has failed irrecoverably. \[broadcast_id, attempt, failed_transaction\]
+		/// A broadcast has failed irrecoverably. \[broadcast_attempt_id, failed_transaction\]
 		BroadcastFailed(BroadcastAttemptId, UnsignedTransactionFor<T, I>),
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
 		/// stage. \[broadcast_attempt_id, stage\]
