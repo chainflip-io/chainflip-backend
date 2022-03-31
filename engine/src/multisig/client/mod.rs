@@ -535,23 +535,21 @@ where
     pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
 
-        self.pending_requests_to_sign.retain(|_, pending_infos| {
-            for pending in pending_infos {
-                pending.set_expiry_time(std::time::Instant::now());
+        for reqs in self.pending_requests_to_sign.values_mut() {
+            for req in reqs.iter_mut() {
+                req.set_expiry_time(std::time::Instant::now());
             }
-            true
-        });
+        }
 
         self.cleanup();
     }
 
     pub fn force_pending_rts_timeout(&mut self) {
-        self.pending_requests_to_sign.retain(|_, pending_infos| {
-            for pending in pending_infos {
-                pending.set_expiry_time(std::time::Instant::now());
+        for reqs in self.pending_requests_to_sign.values_mut() {
+            for req in reqs.iter_mut() {
+                req.set_expiry_time(std::time::Instant::now());
             }
-            true
-        });
+        }
 
         self.cleanup();
     }
