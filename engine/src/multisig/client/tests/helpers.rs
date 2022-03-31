@@ -55,11 +55,12 @@ use state_chain_runtime::AccountId;
 
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
-use super::ACCOUNT_IDS;
+use super::{
+    ACCOUNT_IDS, COMPATIBLE_KEYGEN_SEED, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+    DEFAULT_SIGNING_SEED, STAGE_FINISHED_OR_NOT_STARTED,
+};
 
 use crate::multisig::tests::fixtures::MESSAGE_HASH;
-
-pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 
@@ -447,6 +448,15 @@ impl KeygenCeremonyRunner {
     pub fn new(nodes: HashMap<AccountId, Node>, ceremony_id: CeremonyId, rng: Rng) -> Self {
         Self::inner_new(nodes, ceremony_id, (), rng)
     }
+
+    /// Create a keygen ceremony with all ACCOUNT_IDS and default parameters
+    pub fn new_with_default() -> Self {
+        KeygenCeremonyRunner::new(
+            new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
+            DEFAULT_KEYGEN_CEREMONY_ID,
+            Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
+        )
+    }
 }
 
 pub struct SigningCeremonyRunnerData {
@@ -529,16 +539,16 @@ pub async fn new_signing_ceremony_with_keygen() -> (SigningCeremonyRunner, HashM
 {
     let (key_id, _messages, nodes) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
     )
     .await;
 
     SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         nodes,
-        1,
+        DEFAULT_SIGNING_CEREMONY_ID,
         key_id,
         MESSAGE_HASH.clone(),
-        Rng::from_seed([4; 32]),
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
     )
 }
 
@@ -734,7 +744,8 @@ pub async fn run_keygen(
     nodes: HashMap<AccountId, Node>,
     ceremony_id: CeremonyId,
 ) -> (KeyId, StandardKeygenMessages, HashMap<AccountId, Node>) {
-    let keygen_ceremony = KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed([8; 32]));
+    let keygen_ceremony =
+        KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(COMPATIBLE_KEYGEN_SEED));
     standard_keygen(keygen_ceremony).await
 }
 
@@ -743,7 +754,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 ) -> Result<(KeyId, HashMap<AccountId, Node>), ()> {
     let mut keygen_ceremony = KeygenCeremonyRunner::new(
         new_nodes(account_ids, KeygenOptions::default()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         Rng::from_entropy(),
     );
     let stage_1_messages = keygen_ceremony.request().await;

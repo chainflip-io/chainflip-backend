@@ -4,8 +4,9 @@ use crate::multisig::{
     client::{
         keygen::{self, Complaints4, SecretShare3, VerifyComm2},
         tests::helpers::{
+            all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
             gen_invalid_keygen_comm1, new_node, new_nodes, recv_with_timeout, run_keygen,
-            split_messages_for, STAGE_FINISHED_OR_NOT_STARTED,
+            run_stages, split_messages_for, standard_keygen, KeygenCeremonyRunner,
         },
         utils::PartyIdxMapping,
         MultisigData,
@@ -14,23 +15,11 @@ use crate::multisig::{
     KeygenOptions, MultisigInstruction, MultisigMessage,
 };
 
-use super::helpers::{
-    self, all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage, standard_keygen,
-    KeygenCeremonyRunner,
-};
-
 use crate::testing::assert_ok;
 
 use super::*;
 
 use crate::logging::{KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED};
-
-/// Seeds
-// Note: These seeds may need to be updated if keygen changes the way it uses the rng.
-// A seed that will produce a contract compatible key
-const COMPATIBLE_KEYGEN_SEED: [u8; 32] = [8; 32];
-// A seed that will produce a contract non-compatible key
-const NON_COMPATIBLE_KEYGEN_SEED: [u8; 32] = [11u8; 32];
 
 /// If all nodes are honest and behave as expected we should
 /// generate a key without entering a blaming stage
@@ -38,19 +27,20 @@ const NON_COMPATIBLE_KEYGEN_SEED: [u8; 32] = [11u8; 32];
 async fn happy_path_results_in_valid_key() {
     let _ = run_keygen(
         new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
     )
     .await;
 }
 
 /// If keygen state expires before a formal request to keygen
-/// (from our SC), we should report initiators of that ceremony
+/// (from our SC), we should report initiators of that ceremony.
+/// TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
 #[tokio::test]
 #[ignore = "functionality disabled as SC does not expect this response"]
 async fn should_report_on_timeout_before_keygen_request() {
     let (_, messages, _nodes) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
     )
     .await;
 
@@ -66,7 +56,7 @@ async fn should_report_on_timeout_before_keygen_request() {
     node.client.process_p2p_message(
         ACCOUNT_IDS[1].clone(),
         MultisigMessage {
-            ceremony_id: 1,
+            ceremony_id: DEFAULT_KEYGEN_CEREMONY_ID,
             data: MultisigData::Keygen(
                 messages.stage_1_messages[&bad_account_id][good_account_id]
                     .clone()
@@ -89,18 +79,11 @@ async fn should_report_on_timeout_before_keygen_request() {
 
 #[tokio::test]
 async fn should_delay_comm1_before_keygen_request() {
-    let ceremony_id = 1;
-    let new_keygen_ceremony = || {
-        KeygenCeremonyRunner::new(
-            new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-            ceremony_id,
-            Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-        )
-    };
+    let new_with_default = || KeygenCeremonyRunner::new_with_default();
 
-    let (_, messages, _nodes) = standard_keygen(new_keygen_ceremony()).await;
+    let (_, messages, _nodes) = standard_keygen(new_with_default()).await;
 
-    let mut ceremony = new_keygen_ceremony();
+    let mut ceremony = new_with_default();
     let [test_id, late_id] = ceremony.select_account_ids();
 
     let (late_msg, early_msgs) =
@@ -131,15 +114,7 @@ async fn should_delay_comm1_before_keygen_request() {
 async fn should_delay_stage_data() {
     for_each_stage(
         1..KEYGEN_STAGES,
-        || {
-            Box::pin(async {
-                KeygenCeremonyRunner::new(
-                    new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-                    1,
-                    Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-                )
-            })
-        },
+        || Box::pin(async { KeygenCeremonyRunner::new_with_default() }),
         all_stages_with_single_invalid_share_keygen_coroutine,
         |stage_number, mut ceremony, (_key_id, messages, _type_messages)| async move {
             let target_account_id = &ACCOUNT_IDS[0];
@@ -191,18 +166,11 @@ async fn should_delay_stage_data() {
 /// share, so the ceremony should be successful in the end
 #[tokio::test]
 async fn should_enter_blaming_stage_on_invalid_secret_shares() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(
-            ACCOUNT_IDS.iter().cloned(),
-            KeygenOptions::allowing_high_pubkey(),
-        ),
-        1,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let messages = ceremony.request().await;
 
-    let mut messages = helpers::run_stages!(
+    let mut messages = run_stages!(
         ceremony,
         messages,
         keygen::VerifyComm2,
@@ -216,7 +184,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         .get_mut(&ACCOUNT_IDS[1])
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
-    let messages = helpers::run_stages!(
+    let messages = run_stages!(
         ceremony,
         messages,
         keygen::Complaints4,
@@ -233,14 +201,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
 /// parties reported
 #[tokio::test]
 async fn should_handle_invalid_blame_response6() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(
-            ACCOUNT_IDS.iter().cloned(),
-            KeygenOptions::allowing_high_pubkey(),
-        ),
-        1,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
     let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
         &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
     );
@@ -249,7 +210,7 @@ async fn should_handle_invalid_blame_response6() {
     // stage 1
     let messages = ceremony.request().await;
 
-    let mut messages = helpers::run_stages!(
+    let mut messages = run_stages!(
         ceremony,
         messages,
         keygen::VerifyComm2,
@@ -269,7 +230,7 @@ async fn should_handle_invalid_blame_response6() {
         .get_mut(&target_node_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
-    let mut messages = helpers::run_stages!(
+    let mut messages = run_stages!(
         ceremony,
         messages,
         keygen::Complaints4,
@@ -302,21 +263,14 @@ async fn should_handle_invalid_blame_response6() {
 /// get reported.
 #[tokio::test]
 async fn should_report_on_incomplete_blame_response() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(
-            ACCOUNT_IDS.iter().cloned(),
-            KeygenOptions::allowing_high_pubkey(),
-        ),
-        1,
-        Rng::from_seed([8; 32]),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let [bad_node_id_1, target_node_id] = ceremony.select_account_ids();
 
     // stage 1
     let messages = ceremony.request().await;
 
-    let mut messages = helpers::run_stages!(
+    let mut messages = run_stages!(
         ceremony,
         messages,
         keygen::VerifyComm2,
@@ -330,7 +284,7 @@ async fn should_report_on_incomplete_blame_response() {
         .get_mut(&target_node_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
-    let mut messages = helpers::run_stages!(
+    let mut messages = run_stages!(
         ceremony,
         messages,
         keygen::Complaints4,
@@ -352,17 +306,10 @@ async fn should_report_on_incomplete_blame_response() {
 
 #[tokio::test]
 async fn should_abort_on_blames_at_invalid_indexes() {
-    let mut keygen_ceremony = KeygenCeremonyRunner::new(
-        new_nodes(
-            ACCOUNT_IDS.iter().cloned(),
-            KeygenOptions::allowing_high_pubkey(),
-        ),
-        1,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-    );
+    let mut keygen_ceremony = KeygenCeremonyRunner::new_with_default();
     let messages = keygen_ceremony.request().await;
 
-    let mut stage_4_messages = helpers::run_stages!(
+    let mut stage_4_messages = run_stages!(
         keygen_ceremony,
         messages,
         keygen::VerifyComm2,
@@ -398,27 +345,23 @@ async fn should_ignore_keygen_request_if_not_participating() {
     keygen_ids[0] = unknown_id;
 
     // Send the keygen request
-    let ceremony_id = 1;
-    let keygen_info = KeygenInfo::new(ceremony_id, keygen_ids);
+    let keygen_info = KeygenInfo::new(DEFAULT_KEYGEN_CEREMONY_ID, keygen_ids);
     node.client.process_multisig_instruction(
         MultisigInstruction::Keygen(keygen_info),
         &mut Rng::from_entropy(),
     );
 
     // The request should have been ignored and the not started a ceremony
-    assert_ok!(node
-        .client
-        .ensure_ceremony_at_keygen_stage(STAGE_FINISHED_OR_NOT_STARTED, ceremony_id));
+    assert_ok!(node.client.ensure_ceremony_at_keygen_stage(
+        STAGE_FINISHED_OR_NOT_STARTED,
+        DEFAULT_KEYGEN_CEREMONY_ID
+    ));
     assert!(node.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
 
 #[tokio::test]
 async fn should_ignore_duplicate_keygen_request() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let messages = ceremony.request().await;
     let _messages = ceremony
@@ -461,23 +404,14 @@ async fn should_ignore_duplicate_keygen_request() {
 async fn should_ignore_unexpected_message_for_stage() {
     for_each_stage(
         1..=KEYGEN_STAGES,
-        || {
-            Box::pin(async {
-                KeygenCeremonyRunner::new(
-                    new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-                    1,
-                    Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-                )
-            })
-        },
+        || Box::pin(async { KeygenCeremonyRunner::new_with_default() }),
         all_stages_with_single_invalid_share_keygen_coroutine,
         |stage_number, mut ceremony, (_key_id, messages, _type_messages)| async move {
-            let target_account_id = &ACCOUNT_IDS[0];
-            let unexpected_message_sender = ACCOUNT_IDS[1].clone();
+            let [target_account_id, unexpected_message_sender] = &ceremony.select_account_ids();
             let (msg_from_1, other_msgs) = split_messages_for(
                 messages[stage_number - 1].clone(),
                 target_account_id,
-                &unexpected_message_sender,
+                unexpected_message_sender,
             );
 
             ceremony.distribute_messages(other_msgs.clone());
@@ -487,7 +421,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                 let (msg_from_1, _) = split_messages_for(
                     messages[ignored_stage_index].clone(),
                     target_account_id,
-                    &unexpected_message_sender,
+                    unexpected_message_sender,
                 );
                 ceremony.distribute_messages(msg_from_1);
             }
@@ -551,15 +485,11 @@ async fn should_ignore_unexpected_message_for_stage() {
 // Fail on `verify_broadcasts` during `VerifyCommitmentsBroadcast2`
 #[tokio::test]
 async fn should_handle_inconsistent_broadcast_comm1() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let mut messages = ceremony.request().await;
 
-    let bad_account_id = &ACCOUNT_IDS[1];
+    let [bad_account_id] = &ceremony.select_account_ids();
 
     // Make one of the nodes send different comm1 to most of the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
@@ -580,11 +510,7 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 // Fail on `validate_commitments` during `VerifyCommitmentsBroadcast2`.
 #[tokio::test]
 async fn should_handle_invalid_comm1() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let mut messages = ceremony.request().await;
 
@@ -607,16 +533,11 @@ async fn should_handle_invalid_comm1() {
 
 #[tokio::test]
 async fn should_handle_invalid_complaints4() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let messages = ceremony.request().await;
 
-    let mut messages =
-        helpers::run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+    let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
 
     let [bad_account_id] = ceremony.select_account_ids();
 
@@ -639,7 +560,7 @@ async fn should_handle_invalid_complaints4() {
 async fn should_handle_not_compatible_keygen() {
     let mut ceremony = KeygenCeremonyRunner::new(
         new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::default()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         Rng::from_seed(NON_COMPATIBLE_KEYGEN_SEED),
     );
     let messages = ceremony.request().await;
@@ -665,8 +586,6 @@ async fn should_handle_not_compatible_keygen() {
 // If the list of signers in the keygen request contains a duplicate id, the request should be ignored
 #[tokio::test]
 async fn should_ignore_keygen_request_with_duplicate_signer() {
-    let ceremony_id = 1;
-
     let mut keygen_ids = ACCOUNT_IDS.clone();
     keygen_ids[1] = keygen_ids[2].clone();
 
@@ -675,53 +594,53 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
         KeygenOptions::allowing_high_pubkey(),
     );
 
-    let keygen_info = KeygenInfo::new(ceremony_id, keygen_ids);
+    let keygen_info = KeygenInfo::new(DEFAULT_KEYGEN_CEREMONY_ID, keygen_ids);
     node.client.process_multisig_instruction(
         MultisigInstruction::Keygen(keygen_info),
         &mut Rng::from_entropy(),
     );
 
-    assert_ok!(node
-        .client
-        .ensure_ceremony_at_keygen_stage(STAGE_FINISHED_OR_NOT_STARTED, ceremony_id));
+    assert_ok!(node.client.ensure_ceremony_at_keygen_stage(
+        STAGE_FINISHED_OR_NOT_STARTED,
+        DEFAULT_KEYGEN_CEREMONY_ID
+    ));
     assert!(node.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
 
 #[tokio::test]
 async fn should_ignore_keygen_request_with_used_ceremony_id() {
-    let ceremony_id = 1;
-
     let (_, _messages, mut nodes) = run_keygen(
         new_nodes(
             ACCOUNT_IDS.iter().cloned(),
             KeygenOptions::allowing_high_pubkey(),
         ),
-        ceremony_id,
+        DEFAULT_KEYGEN_CEREMONY_ID,
     )
     .await;
 
     let node = nodes.get_mut(&ACCOUNT_IDS[0]).unwrap();
 
     // use the same ceremony id as was used in the previous ceremony
-    let dup_keygen_req =
-        MultisigInstruction::Keygen(KeygenInfo::new(ceremony_id, ACCOUNT_IDS.clone()));
+    let dup_keygen_req = MultisigInstruction::Keygen(KeygenInfo::new(
+        DEFAULT_KEYGEN_CEREMONY_ID,
+        ACCOUNT_IDS.clone(),
+    ));
     node.client
         .process_multisig_instruction(dup_keygen_req, &mut Rng::from_entropy());
 
-    assert_ok!(node
-        .client
-        .ensure_ceremony_at_keygen_stage(STAGE_FINISHED_OR_NOT_STARTED, ceremony_id));
+    assert_ok!(node.client.ensure_ceremony_at_keygen_stage(
+        STAGE_FINISHED_OR_NOT_STARTED,
+        DEFAULT_KEYGEN_CEREMONY_ID
+    ));
 
     assert!(node.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 }
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_used_ceremony_id() {
-    let ceremony_id = 1;
-
     let (_, messages, mut nodes) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        ceremony_id,
+        DEFAULT_KEYGEN_CEREMONY_ID,
     )
     .await;
 
@@ -733,7 +652,7 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     client.process_p2p_message(
         ACCOUNT_IDS[1].clone(),
         MultisigMessage {
-            ceremony_id,
+            ceremony_id: DEFAULT_KEYGEN_CEREMONY_ID,
             data: MultisigData::Keygen(
                 messages.stage_3_messages[&ACCOUNT_IDS[1]][&ACCOUNT_IDS[0]]
                     .clone()
@@ -750,11 +669,7 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
 
 #[tokio::test]
 async fn should_not_consume_ceremony_id_if_unauthorised() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
-        Rng::from_seed([4; 32]),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     {
         let [test_id, sender_id] = ceremony.select_account_ids();
@@ -807,14 +722,7 @@ mod timeout {
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage1() {
-            let mut ceremony = KeygenCeremonyRunner::new(
-                new_nodes(
-                    ACCOUNT_IDS.iter().cloned(),
-                    KeygenOptions::allowing_high_pubkey(),
-                ),
-                1,
-                Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-            );
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let mut messages = ceremony.request().await;
 
@@ -833,7 +741,7 @@ mod timeout {
                 .client
                 .force_stage_timeout();
 
-            let messages = helpers::run_stages!(
+            let messages = run_stages!(
                 ceremony,
                 messages,
                 VerifyComm2,
@@ -847,19 +755,12 @@ mod timeout {
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage4() {
-            let mut ceremony = KeygenCeremonyRunner::new(
-                new_nodes(
-                    ACCOUNT_IDS.iter().cloned(),
-                    KeygenOptions::allowing_high_pubkey(),
-                ),
-                1,
-                Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-            );
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let messages = ceremony.request().await;
 
             let mut messages =
-                helpers::run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+                run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
@@ -876,25 +777,18 @@ mod timeout {
                 .client
                 .force_stage_timeout();
 
-            let messages = helpers::run_stages!(ceremony, messages, VerifyComplaints5,);
+            let messages = run_stages!(ceremony, messages, VerifyComplaints5,);
             ceremony.distribute_messages(messages);
             ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage6() {
-            let mut ceremony = KeygenCeremonyRunner::new(
-                new_nodes(
-                    ACCOUNT_IDS.iter().cloned(),
-                    KeygenOptions::allowing_high_pubkey(),
-                ),
-                1,
-                Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-            );
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let messages = ceremony.request().await;
 
-            let mut messages = helpers::run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+            let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
 
             // Stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
             *messages
@@ -905,7 +799,7 @@ mod timeout {
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
-            let mut messages = helpers::run_stages!(
+            let mut messages = run_stages!(
                 ceremony,
                 messages,
                 Complaints4,
@@ -926,7 +820,7 @@ mod timeout {
                 .client
                 .force_stage_timeout();
 
-            let messages = helpers::run_stages!(ceremony, messages, VerifyBlameResponses7,);
+            let messages = run_stages!(ceremony, messages, VerifyBlameResponses7,);
             ceremony.distribute_messages(messages);
             ceremony.complete().await;
         }
@@ -938,24 +832,17 @@ mod timeout {
 
         #[tokio::test]
         async fn recover_if_agree_on_values_stage2() {
-            let mut ceremony = KeygenCeremonyRunner::new(
-                new_nodes(
-                    ACCOUNT_IDS.iter().cloned(),
-                    KeygenOptions::allowing_high_pubkey(),
-                ),
-                1,
-                Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-            );
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let messages = ceremony.request().await;
 
-            let messages = helpers::run_stages!(ceremony, messages, VerifyComm2,);
+            let messages = run_stages!(ceremony, messages, VerifyComm2,);
 
             let messages = ceremony
                 .run_stage_with_non_sender::<SecretShare3, _, _>(messages, &ACCOUNT_IDS[0].clone())
                 .await;
 
-            let messages = helpers::run_stages!(ceremony, messages, Complaints4, VerifyComplaints5);
+            let messages = run_stages!(ceremony, messages, Complaints4, VerifyComplaints5);
 
             ceremony.distribute_messages(messages);
             ceremony.complete().await;
@@ -963,18 +850,11 @@ mod timeout {
 
         #[tokio::test]
         async fn recover_if_agree_on_values_stage5() {
-            let mut ceremony = KeygenCeremonyRunner::new(
-                new_nodes(
-                    ACCOUNT_IDS.iter().cloned(),
-                    KeygenOptions::allowing_high_pubkey(),
-                ),
-                1,
-                Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-            );
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let messages = ceremony.request().await;
 
-            let messages = helpers::run_stages!(
+            let messages = run_stages!(
                 ceremony,
                 messages,
                 VerifyComm2,
@@ -991,18 +871,11 @@ mod timeout {
 
         #[tokio::test]
         async fn recover_if_agree_on_values_stage7() {
-            let mut ceremony = KeygenCeremonyRunner::new(
-                new_nodes(
-                    ACCOUNT_IDS.iter().cloned(),
-                    KeygenOptions::allowing_high_pubkey(),
-                ),
-                1,
-                Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
-            );
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let messages = ceremony.request().await;
 
-            let mut messages = helpers::run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+            let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
 
             // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
             *messages
@@ -1011,7 +884,7 @@ mod timeout {
                 .get_mut(&ACCOUNT_IDS[1])
                 .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
-            let messages = helpers::run_stages!(
+            let messages = run_stages!(
                 ceremony,
                 messages,
                 Complaints4,
