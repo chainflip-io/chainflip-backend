@@ -56,37 +56,33 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		);
 
 		let mut num_read_writes = 0;
-		let _ = signing_attempts_iter
-			.drain()
-			.into_iter()
-			.map(|(_, old_signing_attempt)| {
-				let tx_attempt = TransactionSigningAttempt::<T, I> {
-					broadcast_attempt: BroadcastAttempt {
-						broadcast_attempt_id: BroadcastAttemptId {
-							broadcast_id: old_signing_attempt.broadcast_id,
-							attempt_count: old_signing_attempt.attempt_count,
-						},
-						unsigned_tx: old_signing_attempt.unsigned_tx,
+		signing_attempts_iter.drain().into_iter().for_each(|(_, old_signing_attempt)| {
+			let tx_attempt = TransactionSigningAttempt::<T, I> {
+				broadcast_attempt: BroadcastAttempt {
+					broadcast_attempt_id: BroadcastAttemptId {
+						broadcast_id: old_signing_attempt.broadcast_id,
+						attempt_count: old_signing_attempt.attempt_count,
 					},
-					nominee: old_signing_attempt.nominee,
-				};
-				AwaitingTransactionSignature::insert(old_signing_attempt.broadcast_id, tx_attempt);
-				num_read_writes += 1;
-			})
-			.collect::<Vec<_>>();
+					unsigned_tx: old_signing_attempt.unsigned_tx,
+				},
+				nominee: old_signing_attempt.nominee,
+			};
+			AwaitingTransactionSignature::insert(old_signing_attempt.broadcast_id, tx_attempt);
+			num_read_writes += 1;
+		});
 
 		let transmission_attempts_iter =
 			storage_iter::<v0::TransmissionAttempt<T, I>>(PALLET_NAME, b"AwaitingTransmission");
 
-		let _ = transmission_attempts_iter
+		transmission_attempts_iter
 			.drain()
 			.into_iter()
-			.map(|(_, old_transmission_attempt)| {
+			.for_each(|(_, old_transmission_attempt)| {
 				let trans_attempt = TransmissionAttempt::<T, I> {
 					broadcast_attempt: BroadcastAttempt {
 						broadcast_attempt_id: BroadcastAttemptId {
 							broadcast_id: old_transmission_attempt.broadcast_id,
-							attempt_count: old_transmission_attempt.broadcast_id,
+							attempt_count: old_transmission_attempt.attempt_count,
 						},
 						unsigned_tx: old_transmission_attempt.unsigned_tx,
 					},
@@ -95,8 +91,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				};
 				num_read_writes += 1;
 				AwaitingTransmission::insert(old_transmission_attempt.broadcast_id, trans_attempt);
-			})
-			.collect::<Vec<_>>();
+			});
 
 		// remove storage prefix
 
