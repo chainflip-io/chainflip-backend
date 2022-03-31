@@ -69,9 +69,6 @@ This crate provides a `VersionedMigration` type that can be used to structure su
     pub struct Migration<T: Config>(PhantomData<T>);
 
     impl<T: Config> OnRuntimeUpgrade for Migration<T> {
-        // [...]
-    
-    impl<T: Config> OnRuntimeUpgrade for Migration<T> {
         fn on_runtime_upgrade() -> frame_support::weights::Weight {
             todo!()
         }
