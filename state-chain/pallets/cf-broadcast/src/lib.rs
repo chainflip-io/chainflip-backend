@@ -245,6 +245,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
+		/// The provided broadcast id is invalid
+		InvalidBroadcastId,
 		/// The provided broadcast attempt id is invalid.
 		InvalidBroadcastAttemptId,
 		/// The transaction signer is not signer who was nominated.
@@ -406,9 +408,10 @@ pub mod pallet {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// == Clean up storage items ==
+
 			let attempt_numbers =
-				BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_attempt_id.broadcast_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+				BroadcastIdToAttemptNumbers::<T, I>::get(broadcast_attempt_id.broadcast_id)
+					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 			for attempt_count in attempt_numbers {
 				AwaitingTransmission::<T, I>::take(BroadcastAttemptId {
 					broadcast_id: broadcast_attempt_id.broadcast_id,
@@ -416,6 +419,7 @@ pub mod pallet {
 				})
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 			}
+			BroadcastIdToAttemptNumbers::<T, I>::remove(broadcast_attempt_id.broadcast_id);
 
 			if let Some(payload) =
 				SignatureToBroadcastIdLookup::<T, I>::iter().find_map(|(payload, id)| {
@@ -437,6 +441,7 @@ pub mod pallet {
 		/// Nodes have witnessed that something went wrong during transmission. See
 		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be
 		/// reported.
+		/// If this fails
 		///
 		/// ## Events
 		///
@@ -529,7 +534,7 @@ pub mod pallet {
 			// Here we need to be able to get the accurate broadcast id from the payload
 			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
 				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 				for attempt_count in &attempt_numbers {
 					AwaitingTransmission::<T, I>::take(BroadcastAttemptId {

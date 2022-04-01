@@ -341,7 +341,7 @@ fn test_invalid_id_is_noop() {
 				BroadcastAttemptId::default(),
 				[0u8; 4]
 			),
-			Error::<Test, Instance1>::InvalidBroadcastAttemptId
+			Error::<Test, Instance1>::InvalidBroadcastId
 		);
 		assert_noop!(
 			MockBroadcast::transmission_failure(
@@ -356,7 +356,7 @@ fn test_invalid_id_is_noop() {
 }
 
 #[test]
-fn cfe_responds_success_already_expired_broadcast_attempt_id_is_noop() {
+fn cfe_responds_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 
@@ -409,6 +409,91 @@ fn cfe_responds_success_already_expired_broadcast_attempt_id_is_noop() {
 				broadcast_attempt_id,
 				tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid),
 				Validity::Valid,
+			),
+			Error::<Test, Instance1>::InvalidBroadcastAttemptId
+		);
+	});
+}
+
+#[test]
+fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attempt_id_is_noop() {
+	new_test_ext().execute_with(|| {
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+
+		// Initiate broadcast
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let tx_sig_request =
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+		assert!(tx_sig_request.broadcast_attempt.broadcast_attempt_id.attempt_count == 0);
+		let signed_tx = tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid);
+		let _ = MockBroadcast::transaction_ready_for_transmission(
+			RawOrigin::Signed(tx_sig_request.nominee).into(),
+			broadcast_attempt_id,
+			signed_tx.clone(),
+			Validity::Valid,
+		);
+
+		// Check for expiries, there should be one, TransactionSigning expiry
+		let current_block = System::block_number();
+		// we should have no expiries at this point, but in expiry blocks we should
+		assert_eq!(Expiries::<Test, Instance1>::get(current_block), vec![]);
+		let signing_expiry_block = current_block + SIGNING_EXPIRY_BLOCKS;
+
+		assert_eq!(
+			Expiries::<Test, Instance1>::get(signing_expiry_block),
+			vec![(BroadcastStage::TransactionSigning, broadcast_attempt_id)]
+		);
+
+		// Signer has signed the tx
+		assert_eq!(
+			System::events().pop().expect("an event").event,
+			Event::MockBroadcast(crate::Event::TransmissionRequest(
+				tx_sig_request.broadcast_attempt.broadcast_attempt_id,
+				signed_tx
+			))
+		);
+
+		// Simulate the expiry hook for the expected expiry block.
+		// The was an expiry on this block, but because the transaction signing was successful
+		// it was removed from storage, so we don't add another expiry. It succeeded
+		MockBroadcast::on_initialize(signing_expiry_block);
+		assert_eq!(Expiries::<Test, Instance1>::get(signing_expiry_block), vec![]);
+
+		// We added an awaiting transmission, and also an expiry for it
+		let transmission_attempt =
+			AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+		assert_eq!(transmission_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count, 0);
+		let transmission_expiry_block = current_block + TRANSMISSION_EXPIRY_BLOCKS;
+		assert_eq!(
+			Expiries::<Test, Instance1>::get(transmission_expiry_block),
+			vec![(BroadcastStage::Transmission, broadcast_attempt_id)]
+		);
+
+		println!("About to expire the transmission");
+		MockBroadcast::on_initialize(transmission_expiry_block);
+
+		// NB: Now, we have *started again*. We do not retry the tranmission alone, but ask to sign
+		// again
+		assert_eq!(
+			Expiries::<Test, Instance1>::get(signing_expiry_block),
+			vec![(BroadcastStage::TransactionSigning, broadcast_attempt_id.next_attempt())]
+		);
+
+		let transaction_signing_attempt = AwaitingTransactionSignature::<Test, Instance1>::get(
+			broadcast_attempt_id.next_attempt(),
+		)
+		.unwrap();
+		assert_eq!(
+			transaction_signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count,
+			1
+		);
+
+		// submit success for the non-incremented broadcast attempt id (that has expired)
+		assert_noop!(
+			MockBroadcast::transmission_success(
+				RawOrigin::Signed(tx_sig_request.nominee).into(),
+				broadcast_attempt_id,
+				Default::default(),
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
