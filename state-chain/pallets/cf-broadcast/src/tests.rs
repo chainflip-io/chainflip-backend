@@ -1,7 +1,8 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Instance1, SignatureToBroadcastIdLookup, TransmissionFailure,
+	Event as BroadcastEvent, Expiries, Instance1, SignatureToBroadcastIdLookup,
+	TransmissionFailure,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -84,6 +85,7 @@ impl MockCfe {
 
 	// Accepts an unsigned tx, making sure the nominee has been assigned.
 	fn handle_transaction_signature_request(
+		// TODO: Use BroadcastAttempt
 		attempt_id: BroadcastAttemptId,
 		nominee: u64,
 		unsigned_tx: MockUnsignedTransaction,
@@ -351,6 +353,66 @@ fn test_invalid_id_is_noop() {
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 	})
+}
+
+#[test]
+fn cfe_responds_success_already_expired_broadcast_attempt_id_is_noop() {
+	new_test_ext().execute_with(|| {
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+
+		// Initiate broadcast
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		assert!(
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id)
+				.unwrap()
+				.broadcast_attempt
+				.broadcast_attempt_id
+				.attempt_count == 0
+		);
+		let current_block = System::block_number();
+		// we should have no expiries at this point, but in expiry blocks we should
+		assert_eq!(Expiries::<Test, Instance1>::get(current_block), vec![]);
+		let expiry_block = current_block + SIGNING_EXPIRY_BLOCKS;
+		assert_eq!(
+			Expiries::<Test, Instance1>::get(expiry_block),
+			vec![(BroadcastStage::TransactionSigning, broadcast_attempt_id)]
+		);
+
+		// Simulate the expiry hook for the expected expiry block.
+		MockBroadcast::on_initialize(expiry_block);
+
+		// We expired the first one
+		assert!(
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
+		);
+		let tx_sig_request = AwaitingTransactionSignature::<Test, Instance1>::get(
+			broadcast_attempt_id.next_attempt(),
+		)
+		.unwrap();
+		assert_eq!(tx_sig_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 1);
+
+		// This is a little confusing. Because we don't progress in blocks. i.e.
+		// System::block_number() does not change
+		// so when we retry the expired transaction, the *new* expiry block for the retry is
+		// actually the same block since the current block number is unchanged
+		// the current block number + SIGNING_EXPIRY_BLOCKS is also unchanged
+		// but, the retry has the incremented attempt_count of course
+		assert_eq!(
+			Expiries::<Test, Instance1>::get(expiry_block),
+			vec![(BroadcastStage::TransactionSigning, broadcast_attempt_id.next_attempt())]
+		);
+
+		// The first attempt is already expired, but we're going to say it's ready for transmission
+		assert_noop!(
+			MockBroadcast::transaction_ready_for_transmission(
+				RawOrigin::Signed(tx_sig_request.nominee).into(),
+				broadcast_attempt_id,
+				tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid),
+				Validity::Valid,
+			),
+			Error::<Test, Instance1>::InvalidBroadcastAttemptId
+		);
+	});
 }
 
 #[test]
