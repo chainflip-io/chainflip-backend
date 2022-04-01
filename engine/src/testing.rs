@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use futures::{Future, FutureExt};
+
 /// Simply unwraps the value. Advantage of this is to make it clear in tests
 /// what we are testing
 macro_rules! assert_ok {
@@ -8,6 +10,16 @@ macro_rules! assert_ok {
     };
 }
 pub(crate) use assert_ok;
+
+/// Checks that a given future yields without producing a result (yet) / is blocked by something
+pub fn assert_future_cannot_complete(f: impl Future) {
+    assert!(f.now_or_never().is_none());
+}
+
+/// Checks if a given future either is ready, or will become ready on the next poll/without yielding
+pub fn assert_future_can_complete<I>(f: impl Future<Output = I>) -> I {
+    assert_ok!(f.now_or_never())
+}
 
 mod tests {
     #[test]

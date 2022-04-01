@@ -32,7 +32,7 @@ impl KeygenResult {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeygenResultInfo {
     pub key: Arc<KeygenResult>,
     pub validator_map: Arc<PartyIdxMapping>,

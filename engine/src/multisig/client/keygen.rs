@@ -5,9 +5,6 @@ mod keygen_stages;
 #[cfg(test)]
 pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
-use pallet_cf_vaults::CeremonyId;
-use serde::{Deserialize, Serialize};
-
 pub use keygen_data::{
     BlameResponse6, Comm1, Complaints4, KeygenData, SecretShare3, VerifyBlameResponses7,
     VerifyComm2, VerifyComplaints5,
@@ -16,15 +13,6 @@ pub use keygen_data::{
 pub use keygen_frost::HashContext;
 
 pub use keygen_stages::{is_contract_compatible, AwaitCommitments1};
-
-use state_chain_runtime::AccountId;
-
-/// Information necessary for the multisig client to start a new keygen ceremony
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct KeygenRequest {
-    pub ceremony_id: CeremonyId,
-    pub signers: Vec<AccountId>,
-}
 
 #[derive(Clone, Copy)] // TODO Doesn't need to derive Copy
 pub struct KeygenOptions {
@@ -50,15 +38,6 @@ impl KeygenOptions {
     pub fn allowing_high_pubkey() -> Self {
         Self {
             low_pubkey_only: false,
-        }
-    }
-}
-
-impl KeygenRequest {
-    pub fn new(ceremony_id: CeremonyId, signers: Vec<AccountId>) -> Self {
-        KeygenRequest {
-            ceremony_id,
-            signers,
         }
     }
 }

@@ -19,11 +19,14 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
     common::format_iterator,
+    constants::PENDING_SIGN_DURATION,
     eth::utils::pubkey_to_eth_addr,
     logging::{CEREMONY_ID_KEY, REQUEST_TO_SIGN_EXPIRED},
-    multisig::{client::utils::PartyIdxMapping, crypto::Rng, KeyDB, KeyId, MultisigRequest},
+    multisig::{client::utils::PartyIdxMapping, crypto::Rng, KeyDB, KeyId},
 };
 
+use async_trait::async_trait;
+use futures::Future;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
@@ -32,7 +35,7 @@ use pallet_cf_vaults::CeremonyId;
 
 use key_store::KeyStore;
 
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, RwLock};
 use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
@@ -42,11 +45,14 @@ pub use common::KeygenResultInfo;
 #[cfg(test)]
 pub use utils::ensure_unsorted;
 
-use self::signing::{frost::SigningData, PendingSigningRequest};
+use self::{
+    ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
+    signing::{frost::SigningData, PendingSigningRequest},
+};
 
 pub use keygen::KeygenOptions;
 
-use super::{KeygenRequest, MessageHash, SigningRequest};
+use super::MessageHash;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
@@ -109,88 +115,62 @@ pub struct MultisigMessage {
     data: MultisigData,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CeremonyAbortReason {
-    // Isn't used, but will once we re-enable unauthorised reporting this will be used again
-    Unauthorised,
-    Timeout,
-    Invalid,
+#[cfg(test)]
+use mockall::automock;
+
+/// The public interface to the multi-signature code
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub trait MultisigClientApi {
+    async fn keygen(
+        &self,
+        ceremony_id: CeremonyId,
+        participants: Vec<AccountId>,
+    ) -> Result<secp256k1::PublicKey, (Vec<AccountId>, anyhow::Error)>;
+    async fn sign(
+        &self,
+        ceremony_id: CeremonyId,
+        key_id: KeyId,
+        signers: Vec<AccountId>,
+        data: MessageHash,
+    ) -> Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>;
 }
 
-/// (Abort reason, reported ceremony ids)
-pub type CeremonyError = (CeremonyAbortReason, Vec<AccountId>);
-pub type CeremonyOutcomeResult<Output> = Result<Output, CeremonyError>;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CeremonyOutcome<Id, Output> {
-    pub id: Id,
-    pub result: CeremonyOutcomeResult<Output>,
+struct InnerMultisigClientState<KeyDatabase: KeyDB> {
+    key_store: KeyStore<KeyDatabase>,
+    pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningRequest>>,
 }
-impl<Id, Output> CeremonyOutcome<Id, Output> {
-    pub fn success(id: Id, output: Output) -> Self {
-        Self {
-            id,
-            result: Ok(output),
-        }
-    }
-    pub fn unauthorised(id: Id, bad_validators: Vec<AccountId>) -> Self {
-        Self {
-            id,
-            result: Err((CeremonyAbortReason::Unauthorised, bad_validators)),
-        }
-    }
-    pub fn timeout(id: Id, bad_validators: Vec<AccountId>) -> Self {
-        Self {
-            id,
-            result: Err((CeremonyAbortReason::Timeout, bad_validators)),
-        }
-    }
-    pub fn invalid(id: Id, bad_validators: Vec<AccountId>) -> Self {
-        Self {
-            id,
-            result: Err((CeremonyAbortReason::Invalid, bad_validators)),
-        }
-    }
-}
-
-/// The final result of a keygen ceremony
-pub type KeygenOutcome = CeremonyOutcome<CeremonyId, KeygenResultInfo>;
-/// The final result of a Signing ceremony
-pub type SigningOutcome = CeremonyOutcome<CeremonyId, SchnorrSignature>;
-
-pub type MultisigOutcomeSender = tokio::sync::mpsc::UnboundedSender<MultisigOutcome>;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum MultisigOutcome {
-    Signing(SigningOutcome),
-    Keygen(KeygenOutcome),
-}
-
-derive_try_from_variant!(SigningOutcome, MultisigOutcome::Signing, MultisigOutcome);
-derive_try_from_variant!(KeygenOutcome, MultisigOutcome::Keygen, MultisigOutcome);
 
 /// Multisig client is is responsible for persistently storing generated keys and
 /// delaying signing requests (delegating the actual ceremony management to sub components)
-pub struct MultisigClient<S>
+pub struct MultisigClient<KeyDatabase>
 where
-    S: KeyDB,
+    KeyDatabase: KeyDB,
 {
     my_account_id: AccountId,
-    key_store: KeyStore<S>,
-    multisig_outcome_sender: MultisigOutcomeSender,
-    // Used to forward requests to ceremony_manager
-    keygen_request_sender: UnboundedSender<(Rng, KeygenRequest, KeygenOptions)>,
-    signing_request_sender: UnboundedSender<(
+    keygen_request_sender: UnboundedSender<(
+        CeremonyId,
+        Vec<AccountId>,
+        KeygenOptions,
         Rng,
+        CeremonyResultSender<KeygenResultInfo>,
+    )>,
+    signing_request_sender: UnboundedSender<(
+        CeremonyId,
+        Vec<AccountId>,
         MessageHash,
         KeygenResultInfo,
-        Vec<AccountId>,
-        CeremonyId,
+        Rng,
+        CeremonyResultSender<SchnorrSignature>,
     )>,
-    /// Requests awaiting a key
-    pending_requests_to_sign: HashMap<KeyId, Vec<PendingSigningRequest>>,
+    inner_state: RwLock<InnerMultisigClientState<KeyDatabase>>,
     keygen_options: KeygenOptions,
     logger: slog::Logger,
+}
+
+enum RequestStatus<Output> {
+    Ready(Output),
+    WaitForOneshot(CeremonyResultReceiver<Output>),
 }
 
 impl<S> MultisigClient<S>
@@ -200,83 +180,257 @@ where
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        multisig_outcome_sender: MultisigOutcomeSender,
-        keygen_request_sender: UnboundedSender<(Rng, KeygenRequest, KeygenOptions)>,
-        signing_request_sender: UnboundedSender<(
+        keygen_request_sender: UnboundedSender<(
+            CeremonyId,
+            Vec<AccountId>,
+            KeygenOptions,
             Rng,
+            CeremonyResultSender<KeygenResultInfo>,
+        )>,
+        signing_request_sender: UnboundedSender<(
+            CeremonyId,
+            Vec<AccountId>,
             MessageHash,
             KeygenResultInfo,
-            Vec<AccountId>,
-            CeremonyId,
+            Rng,
+            CeremonyResultSender<SchnorrSignature>,
         )>,
         keygen_options: KeygenOptions,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
             my_account_id,
-            key_store: KeyStore::new(db),
-            multisig_outcome_sender,
+            inner_state: RwLock::new(InnerMultisigClientState {
+                key_store: KeyStore::new(db),
+                pending_requests_to_sign: Default::default(),
+            }),
             keygen_request_sender,
             signing_request_sender,
-            pending_requests_to_sign: Default::default(),
             keygen_options,
             logger: logger.clone(),
         }
     }
 
+    // This function is structued to simplify the writing of tests (i.e. should_delay_rts_until_key_is_ready).
+    // When the function is called it will send the request to the CeremonyManager/Backend immediately
+    // The function returns a future that will complete only once the CeremonyManager has finished
+    // the ceremony. This allows tests to split making the request and waiting for the result.
+    pub fn initiate_keygen(
+        &self,
+        ceremony_id: CeremonyId,
+        participants: Vec<AccountId>,
+    ) -> impl '_ + Future<Output = Result<secp256k1::PublicKey, (Vec<AccountId>, anyhow::Error)>>
+    {
+        assert!(participants.contains(&self.my_account_id));
+
+        slog::info!(
+            self.logger,
+            "Received a keygen request, participants: {}",
+            format_iterator(&participants);
+            CEREMONY_ID_KEY => ceremony_id
+        );
+
+        use rand_legacy::FromEntropy;
+        let rng = Rng::from_entropy();
+
+        let request = if participants.len() == 1 {
+            RequestStatus::Ready(self.single_party_keygen(rng))
+        } else {
+            let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+            self.keygen_request_sender
+                .send((
+                    ceremony_id,
+                    participants,
+                    self.keygen_options,
+                    rng,
+                    result_sender,
+                ))
+                .ok()
+                .unwrap();
+            RequestStatus::WaitForOneshot(result_receiver)
+        };
+
+        async move {
+            let result = match request {
+                RequestStatus::Ready(keygen_result_info) => Some(Ok(keygen_result_info)),
+                RequestStatus::WaitForOneshot(result_receiver) => result_receiver.await.ok(),
+            };
+
+            match result {
+                Some(Ok(keygen_result_info)) => {
+                    let key_id = KeyId(keygen_result_info.key.get_public_key_bytes());
+
+                    let mut inner_state = self.inner_state.write().await;
+
+                    inner_state
+                        .key_store
+                        .set_key(key_id.clone(), keygen_result_info.clone());
+
+                    // Process requests to sign that required the key in `key_info`
+                    if let Some(requests) = inner_state.pending_requests_to_sign.remove(&key_id) {
+                        for pending_request in requests {
+                            // Factor out TODO NOW
+
+                            slog::debug!(
+                                self.logger,
+                                "Processing a pending request to sign";
+                                CEREMONY_ID_KEY => pending_request.ceremony_id
+                            );
+                            if pending_request.signers.len() == 1 {
+                                pending_request
+                                    .result_sender
+                                    .send(Ok(self.single_party_signing(
+                                        pending_request.data,
+                                        keygen_result_info.clone(),
+                                        pending_request.rng,
+                                    )))
+                                    .unwrap();
+                            } else {
+                                self.signing_request_sender
+                                    .send((
+                                        pending_request.ceremony_id,
+                                        pending_request.signers,
+                                        pending_request.data,
+                                        keygen_result_info.clone(),
+                                        pending_request.rng,
+                                        pending_request.result_sender,
+                                    ))
+                                    .unwrap();
+                            }
+                        }
+                    }
+
+                    Ok(keygen_result_info.key.get_public_key().get_element())
+                }
+                Some(Err(error)) => Err(error),
+                None => Err((vec![], anyhow::Error::msg("Keygen ceremony ignored"))),
+            }
+        }
+    }
+
+    // Similarly to initiate_keygen this function is structued to simplify the writing of tests (i.e. should_delay_rts_until_key_is_ready).
+    // Once the async function is complete it will that sent the request to the CeremonyManager/Backend
+    // The function returns a second future that will complete only once the CeremonyManager has finished
+    // the ceremony. This allows tests to split making the request and waiting for the result.
+    pub async fn initiate_signing(
+        &self,
+        ceremony_id: CeremonyId,
+        key_id: KeyId,
+        signers: Vec<AccountId>,
+        data: MessageHash,
+    ) -> impl '_ + Future<Output = Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>> {
+        assert!(signers.contains(&self.my_account_id));
+
+        slog::debug!(
+            self.logger,
+            "Received a request to sign, message_hash: {}, signers: {}",
+            data, format_iterator(&signers);
+            CEREMONY_ID_KEY => ceremony_id
+        );
+
+        use rand_legacy::FromEntropy;
+        let rng = Rng::from_entropy();
+
+        let mut inner_state = self.inner_state.write().await;
+
+        let request = match inner_state.key_store.get_key(&key_id).cloned() {
+            Some(keygen_result_info) => {
+                drop(inner_state);
+
+                if signers.len() == 1 {
+                    RequestStatus::Ready(self.single_party_signing(data, keygen_result_info, rng))
+                } else {
+                    let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+                    self.signing_request_sender
+                        .send((
+                            ceremony_id,
+                            signers,
+                            data,
+                            keygen_result_info,
+                            rng,
+                            result_sender,
+                        ))
+                        .unwrap();
+                    RequestStatus::WaitForOneshot(result_receiver)
+                }
+            }
+            None => {
+                // The key is not ready, delay until either it is ready or timeout
+
+                slog::debug!(
+                    self.logger,
+                    "Delaying a request to sign for unknown key: {:?}",
+                    key_id;
+                    CEREMONY_ID_KEY => ceremony_id
+                );
+
+                let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+                inner_state
+                    .pending_requests_to_sign
+                    .entry(key_id)
+                    .or_default()
+                    .push(PendingSigningRequest {
+                        ceremony_id,
+                        signers,
+                        data,
+                        rng,
+                        should_expire_at: Instant::now() + PENDING_SIGN_DURATION,
+                        result_sender,
+                    });
+
+                RequestStatus::WaitForOneshot(result_receiver)
+            }
+        };
+
+        Box::pin(async move {
+            match request {
+                RequestStatus::Ready(signature) => Ok(signature),
+                RequestStatus::WaitForOneshot(result_receiver) => {
+                    if let Ok(result) = result_receiver.await {
+                        result
+                    } else {
+                        Err((vec![], anyhow::Error::msg("Keygen ceremony ignored")))
+                    }
+                }
+            }
+        })
+    }
+
     /// Clean up expired states
-    pub fn cleanup(&mut self) {
+    #[allow(clippy::unnecessary_filter_map)] // Clippy is wrong
+    pub async fn cleanup(&self) {
         // cleanup stale signing_request in pending_requests_to_sign
         let logger = &self.logger;
 
-        let mut expired_ceremony_ids = vec![];
+        let mut inner_state = self.inner_state.write().await;
 
-        self.pending_requests_to_sign
+        inner_state.pending_requests_to_sign
             .retain(|key_id, pending_signing_requests| {
-                pending_signing_requests.retain(|pending| {
-                    if pending.should_expire_at < Instant::now() {
-                        let ceremony_id = pending.signing_request.ceremony_id;
-
+                // TODO: Replace with drain_filter() once stablized
+                *pending_signing_requests = pending_signing_requests.drain(..).filter_map(|pending_signing_request| {
+                    if pending_signing_request.should_expire_at < Instant::now() {
+                        // TODO: Remove this logging and replace anyhow::Error with enum the has a variant for this case
                         slog::warn!(
                             logger,
                             #REQUEST_TO_SIGN_EXPIRED,
                             "Request to sign expired waiting for key id: {:?}",
                             key_id;
-                            CEREMONY_ID_KEY => ceremony_id,
+                            CEREMONY_ID_KEY => pending_signing_request.ceremony_id,
                         );
 
-                        expired_ceremony_ids.push(ceremony_id);
-                        return false;
+                        pending_signing_request.result_sender.send(Err((vec![], anyhow::Error::msg("Signing ceremony timed out before the associated key was generated.")))).unwrap();
+
+                        None
+                    } else {
+                        Some(pending_signing_request)
                     }
-                    true
-                });
+                }).collect();
                 !pending_signing_requests.is_empty()
             });
-
-        for id in expired_ceremony_ids {
-            if let Err(err) = self
-                .multisig_outcome_sender
-                .send(MultisigOutcome::Keygen(KeygenOutcome::timeout(id, vec![])))
-            {
-                slog::error!(
-                    self.logger,
-                    "Could not send KeygenOutcome::timeout: {}",
-                    err
-                );
-            }
-        }
     }
 
-    fn single_party_keygen(&mut self, keygen_request: KeygenRequest) {
+    fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo {
         slog::info!(self.logger, "Performing solo keygen");
-
-        if !keygen_request.signers.contains(&self.my_account_id) {
-            slog::warn!(
-                self.logger,
-                "Keygen request ignored: we are not among participants"
-            );
-            return;
-        }
 
         use crate::multisig::crypto::{KeyShare, Point, Scalar};
         use common::KeygenResult;
@@ -290,11 +444,7 @@ where
         const ALLOWING_HIGH_PUBKEY: bool = true;
 
         let (secret_key, public_key) = loop {
-            let secret_key = {
-                use rand_legacy::FromEntropy;
-                let mut rng = Rng::from_entropy();
-                Scalar::random(&mut rng)
-            };
+            let secret_key = Scalar::random(&mut rng);
 
             let public_key = Point::from_scalar(&secret_key);
 
@@ -303,7 +453,7 @@ where
             }
         };
 
-        let key_result_info = KeygenResultInfo {
+        KeygenResultInfo {
             key: Arc::new(KeygenResult {
                 key_share: KeyShare {
                     y: public_key,
@@ -312,39 +462,26 @@ where
                 // This is not going to be used in solo ceremonies
                 party_public_keys: vec![public_key],
             }),
-            validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(
-                &keygen_request.signers,
-            )),
+            validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(&[self
+                .my_account_id
+                .clone()])),
             params,
-        };
-
-        self.on_key_generated(key_result_info);
+        }
     }
 
     fn single_party_signing(
-        &mut self,
-        signing_request: SigningRequest,
+        &self,
+        data: MessageHash,
         keygen_result_info: KeygenResultInfo,
-    ) {
+        mut rng: Rng,
+    ) -> SchnorrSignature {
         use crate::multisig::crypto::{Point, Scalar};
 
         slog::info!(self.logger, "Performing solo signing");
 
-        if !signing_request.signers.contains(&self.my_account_id) {
-            slog::warn!(
-                self.logger,
-                "Signing request ignored: we are not among participants"
-            );
-            return;
-        }
-
         let key = &keygen_result_info.key.key_share;
 
-        let nonce = {
-            use rand_legacy::FromEntropy;
-            let mut rng = Rng::from_entropy();
-            Scalar::random(&mut rng)
-        };
+        let nonce = Scalar::random(&mut rng);
 
         let r = Point::from_scalar(&nonce);
 
@@ -353,139 +490,35 @@ where
             key.y,
             r,
             nonce,
-            &signing_request.data.0,
+            &data.0,
         );
 
-        let sig = SchnorrSignature {
+        SchnorrSignature {
             s: *sigma.as_bytes(),
             r: r.get_element(),
-        };
-
-        self.multisig_outcome_sender
-            .send(MultisigOutcome::Signing(SigningOutcome {
-                id: signing_request.ceremony_id,
-                result: Ok(sig),
-            }))
-            .unwrap();
-    }
-
-    /// Process `request` issued internally (i.e. from SC or another local module)
-    pub fn process_multisig_request(&mut self, request: MultisigRequest, rng: &mut Rng) {
-        match request {
-            MultisigRequest::Keygen(keygen_request) => {
-                use rand_legacy::{Rng as _, SeedableRng};
-
-                slog::info!(
-                    self.logger,
-                    "Received a keygen request, participants: {}",
-                    format_iterator(&keygen_request.signers);
-                    CEREMONY_ID_KEY => keygen_request.ceremony_id
-                );
-                let rng = Rng::from_seed(rng.gen());
-
-                if keygen_request.signers.len() == 1 {
-                    self.single_party_keygen(keygen_request);
-                } else {
-                    self.keygen_request_sender
-                        .send((rng, keygen_request, self.keygen_options))
-                        .ok()
-                        .unwrap();
-                }
-            }
-            MultisigRequest::Sign(signing_request) => {
-                let key_id = &signing_request.key_id;
-
-                slog::debug!(
-                    self.logger,
-                    "Received a request to sign, message_hash: {}, signers: {}",
-                    signing_request.data, format_iterator(&signing_request.signers);
-                    CEREMONY_ID_KEY => signing_request.ceremony_id
-                );
-
-                let key = self.key_store.get_key(key_id).cloned();
-                match key {
-                    Some(keygen_result_info) => {
-                        use rand_legacy::{Rng as _, SeedableRng};
-                        let rng = Rng::from_seed(rng.gen());
-                        if signing_request.signers.len() == 1 {
-                            self.single_party_signing(signing_request, keygen_result_info);
-                        } else {
-                            self.signing_request_sender
-                                .send((
-                                    rng,
-                                    signing_request.data,
-                                    keygen_result_info,
-                                    signing_request.signers,
-                                    signing_request.ceremony_id,
-                                ))
-                                .unwrap();
-                        }
-                    }
-                    None => {
-                        // The key is not ready, delay until either it is ready or timeout
-
-                        slog::debug!(
-                            self.logger,
-                            "Delaying a request to sign for unknown key: {:?}",
-                            signing_request.key_id;
-                            CEREMONY_ID_KEY => signing_request.ceremony_id
-                        );
-
-                        self.pending_requests_to_sign
-                            .entry(signing_request.key_id.clone())
-                            .or_default()
-                            .push(PendingSigningRequest::new(signing_request));
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn on_key_generated(&mut self, key_info: KeygenResultInfo) {
-        self.key_store
-            .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
-
-        // Process requests to sign that required the key in `key_info`
-        if let Some(reqs) = self
-            .pending_requests_to_sign
-            .remove(&KeyId(key_info.key.get_public_key_bytes()))
-        {
-            for pending in reqs {
-                let signing_request = pending.signing_request;
-                slog::debug!(
-                    self.logger,
-                    "Processing a pending request to sign";
-                    CEREMONY_ID_KEY => signing_request.ceremony_id
-                );
-
-                use rand_legacy::FromEntropy;
-
-                let rng = Rng::from_entropy();
-
-                self.signing_request_sender
-                    .send((
-                        rng,
-                        signing_request.data,
-                        key_info.clone(),
-                        signing_request.signers,
-                        signing_request.ceremony_id,
-                    ))
-                    .unwrap();
-            }
         }
     }
 }
 
-#[cfg(test)]
-impl<S> MultisigClient<S>
-where
-    S: KeyDB,
-{
-    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
-        self.key_store.get_key(key_id)
+#[async_trait]
+impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyDatabase> {
+    async fn keygen(
+        &self,
+        ceremony_id: CeremonyId,
+        participants: Vec<AccountId>,
+    ) -> Result<secp256k1::PublicKey, (Vec<AccountId>, anyhow::Error)> {
+        self.initiate_keygen(ceremony_id, participants).await
     }
 
-    pub fn get_db(&self) -> &S {
-        self.key_store.get_db()
+    async fn sign(
+        &self,
+        ceremony_id: CeremonyId,
+        key_id: KeyId,
+        signers: Vec<AccountId>,
+        data: MessageHash,
+    ) -> Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)> {
+        self.initiate_signing(ceremony_id, key_id, signers, data)
+            .await
+            .await
     }
 }

@@ -14,23 +14,18 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
 use slog::o;
 use state_chain_runtime::AccountId;
 
-pub use client::{
-    KeygenOptions, KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome,
-    SchnorrSignature, SigningOutcome,
-};
+pub use client::{KeygenOptions, MultisigClient, MultisigMessage, SchnorrSignature};
 
 pub use db::{KeyDB, PersistentKeyDB};
 
 #[cfg(test)]
 pub use db::KeyDBMock;
-
-pub use self::client::{keygen::KeygenRequest, signing::SigningRequest};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
@@ -51,23 +46,15 @@ impl std::fmt::Display for KeyId {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum MultisigRequest {
-    Keygen(KeygenRequest),
-    Sign(SigningRequest),
-}
-
 /// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<S>(
     my_account_id: AccountId,
     db: S,
-    mut multisig_request_receiver: UnboundedReceiver<MultisigRequest>,
-    multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
-) -> impl futures::Future
+) -> (Arc<MultisigClient<S>>, impl futures::Future)
 where
     S: KeyDB,
 {
@@ -75,72 +62,48 @@ where
 
     slog::info!(logger, "Starting");
 
-    let (inner_multisig_outcome_sender, mut inner_multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
     let (keygen_request_sender, mut keygen_request_receiver) =
         tokio::sync::mpsc::unbounded_channel();
     let (signing_request_sender, mut signing_request_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let mut client = MultisigClient::new(
+    let client = Arc::new(MultisigClient::new(
         my_account_id.clone(),
         db,
-        multisig_outcome_sender.clone(),
         keygen_request_sender,
         signing_request_sender,
         keygen_options,
         &logger,
-    );
+    ));
 
-    use crate::multisig::client::ceremony_manager::CeremonyManager;
+    (client.clone(), {
+        use crate::multisig::client::ceremony_manager::CeremonyManager;
 
-    let mut ceremony_manager = CeremonyManager::new(
-        my_account_id,
-        inner_multisig_outcome_sender,
-        outgoing_p2p_message_sender,
-        &logger,
-    );
+        let mut ceremony_manager =
+            CeremonyManager::new(my_account_id, outgoing_p2p_message_sender, &logger);
 
-    async move {
-        // Stream outputs () approximately every ten seconds
-        let mut cleanup_tick = common::make_periodic_tick(Duration::from_secs(10));
+        async move {
+            // Stream outputs () approximately every ten seconds
+            let mut cleanup_tick = common::make_periodic_tick(Duration::from_secs(10));
 
-        use rand_legacy::FromEntropy;
-        let mut rng = crypto::Rng::from_entropy();
-
-        loop {
-            tokio::select! {
-                Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
-                    ceremony_manager.process_p2p_message(sender_id, message);
-                }
-                Some(msg) = multisig_request_receiver.recv() => {
-                    client.process_multisig_request(msg, &mut rng);
-                }
-                _ = cleanup_tick.tick() => {
-                    slog::trace!(logger, "Checking for expired multisig states");
-                    ceremony_manager.cleanup();
-                    client.cleanup();
-                }
-                Some((rng, request, options)) = keygen_request_receiver.recv() => {
-                    ceremony_manager.on_keygen_request(rng, request, options);
-                }
-                Some((rng, data, keygen_result_info, signers, ceremony_id)) = signing_request_receiver.recv() => {
-                    ceremony_manager.on_request_to_sign(rng, data, keygen_result_info, signers, ceremony_id);
-                }
-                Some(multisig_outcome) = inner_multisig_outcome_receiver.recv() => {
-                    match multisig_outcome {
-                        MultisigOutcome::Signing(outcome) => {
-                            multisig_outcome_sender.send(MultisigOutcome::Signing(outcome)).unwrap();
-                        },
-                        MultisigOutcome::Keygen(outcome) => {
-                            if let Ok(keygen_result_info) = &outcome.result {
-                                client.on_key_generated(keygen_result_info.clone());
-                            }
-                            multisig_outcome_sender.send(MultisigOutcome::Keygen(outcome)).unwrap();
-                        },
+            loop {
+                tokio::select! {
+                    Some((ceremony_id, participants, keygen_options, rng, result_sender)) = keygen_request_receiver.recv() => {
+                        ceremony_manager.on_keygen_request(ceremony_id, participants, keygen_options, rng, result_sender);
+                    }
+                    Some((ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender)) = signing_request_receiver.recv() => {
+                        ceremony_manager.on_request_to_sign(ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender);
+                    }
+                    Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
+                        ceremony_manager.process_p2p_message(sender_id, message);
+                    }
+                    _ = cleanup_tick.tick() => {
+                        slog::trace!(logger, "Checking for expired multisig states");
+                        ceremony_manager.cleanup();
+                        client.cleanup().await;
                     }
                 }
             }
         }
-    }
+    })
 }

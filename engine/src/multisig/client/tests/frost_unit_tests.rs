@@ -14,14 +14,15 @@ use crate::{
         },
         crypto::Rng,
         tests::fixtures::MESSAGE_HASH,
-        KeyDBMock, MessageHash, MultisigRequest, SigningRequest,
+        KeyDBMock, MessageHash,
     },
-    testing::assert_ok,
+    testing::{assert_future_can_complete, assert_future_cannot_complete, assert_ok},
 };
-use client::MultisigClient;
+use client::{MultisigClient, SchnorrSignature};
 use rand_legacy::SeedableRng;
 
 use itertools::Itertools;
+use secp256k1::PublicKey;
 use tokio::sync::mpsc::error::TryRecvError;
 
 use super::helpers::{self, for_each_stage, run_keygen, standard_signing_coroutine};
@@ -108,7 +109,7 @@ async fn should_delay_comm1_before_rts() {
 async fn should_handle_invalid_local_sig() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let messages = signing_ceremony.request().await;
+    let (messages, result_receivers) = signing_ceremony.request().await;
     let mut messages = helpers::run_stages!(
         signing_ceremony,
         messages,
@@ -128,7 +129,7 @@ async fn should_handle_invalid_local_sig() {
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id])
+        .complete_with_error(&[bad_account_id], result_receivers)
         .await;
     assert!(signing_ceremony
         .nodes
@@ -140,7 +141,7 @@ async fn should_handle_invalid_local_sig() {
 async fn should_handle_inconsistent_broadcast_com1() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let mut messages = signing_ceremony.request().await;
+    let (mut messages, result_receivers) = signing_ceremony.request().await;
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
@@ -153,7 +154,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id])
+        .complete_with_error(&[bad_account_id], result_receivers)
         .await;
     assert!(signing_ceremony
         .nodes
@@ -165,7 +166,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 async fn should_handle_inconsistent_broadcast_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let messages = signing_ceremony.request().await;
+    let (messages, result_receivers) = signing_ceremony.request().await;
 
     let mut messages = helpers::run_stages!(
         signing_ceremony,
@@ -185,7 +186,7 @@ async fn should_handle_inconsistent_broadcast_sig3() {
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id])
+        .complete_with_error(&[bad_account_id], result_receivers)
         .await;
     assert!(signing_ceremony
         .nodes
@@ -198,7 +199,7 @@ async fn should_ignore_duplicate_rts() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
     let [test_id] = signing_ceremony.select_account_ids();
 
-    let messages = signing_ceremony.request().await;
+    let (messages, _result_receivers) = signing_ceremony.request().await;
 
     helpers::run_stages!(signing_ceremony, messages, frost::VerifyComm2,);
 
@@ -218,58 +219,69 @@ async fn should_ignore_duplicate_rts() {
 
 #[tokio::test]
 async fn should_delay_rts_until_key_is_ready() {
+    let logger = logging::test_utils::new_test_logger();
+
+    let account_id = &ACCOUNT_IDS[0];
     let (key_id, key_data, _, _) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone()),
         1,
         KeygenOptions::allowing_high_pubkey(),
     )
     .await;
-
-    let logger = logging::test_utils::new_test_logger();
-    let (multisig_outcome_sender, _multisig_outcome_receiver) =
+    let (keygen_request_sender, mut keygen_request_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (keygen_request_sender, _keygen_request_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (signing_request_sender, mut signing_request_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let account_id = &ACCOUNT_IDS[0];
-
-    let mut client = MultisigClient::new(
+    let client = MultisigClient::new(
         account_id.clone(),
         KeyDBMock::default(),
-        multisig_outcome_sender,
         keygen_request_sender,
         signing_request_sender,
         KeygenOptions::default(),
         &logger,
     );
 
-    let message = MessageHash([0; 32]);
+    // Send Keygen Request
+    let keygen_request_fut = client.initiate_keygen(1, ACCOUNT_IDS.to_vec());
 
-    client.process_multisig_request(
-        MultisigRequest::Sign(SigningRequest {
-            data: MessageHash([0; 32]),
-            ceremony_id: 1,
-            key_id,
-            signers: ACCOUNT_IDS.to_vec(),
-        }),
-        &mut Rng::from_seed([8; 32]),
-    );
+    // Fake completion of requests keygen (But the MultisigClient will not receive the result and handle it yet)
+    let (_, _, _, _, result_sender) = keygen_request_receiver.recv().await.unwrap();
+    result_sender
+        .send(Ok(key_data[account_id].clone()))
+        .unwrap();
 
+    // Send Sign Request
+    let mut signing_request_fut = client
+        .initiate_signing(1, key_id, ACCOUNT_IDS.to_vec(), MessageHash([0; 32]))
+        .await;
+
+    // Check Sign Request Has been Delayed
+    assert_future_cannot_complete(&mut signing_request_fut);
     assert_eq!(
         signing_request_receiver.try_recv().unwrap_err(),
         TryRecvError::Empty
     );
 
-    client.on_key_generated(key_data[account_id].clone());
+    // Wait for and handle keygen completion
+    assert_ok!(keygen_request_fut.await);
 
-    let (_, out_message, keygen_result_info, signers, ceremony_id) =
-        assert_ok!(signing_request_receiver.try_recv());
+    // Check Sign Request cannot return Until signature is provided
+    assert_future_cannot_complete(&mut signing_request_fut);
 
-    assert_eq!(message, out_message);
-    assert_eq!(ceremony_id, 1);
-    assert_eq!(keygen_result_info.key, key_data[account_id].key);
-    assert_eq!(signers, ACCOUNT_IDS.to_vec());
+    // Fake completion of requests keygen
+    let fake_signature = SchnorrSignature {
+        s: [0; 32],
+        r: PublicKey::from(unsafe { secp256k1::ffi::PublicKey::new() }),
+    };
+    let (_, _, _, _, _, result_sender) = signing_request_receiver.recv().await.unwrap();
+    result_sender.send(Ok(fake_signature.clone())).unwrap();
+
+    // Check sign request completes after signature is provided
+    assert_eq!(
+        assert_ok!(assert_future_can_complete(signing_request_fut)),
+        fake_signature
+    );
 }
 
 #[tokio::test]
@@ -283,7 +295,12 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     // Send the request to sign with a signer specified that is unknown
     let [test_node_id] = signing_ceremony.select_account_ids();
     let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(&test_node_id);
-    signing_ceremony_details.signers[1] = unknown_signer_id; // This test does not make sense as signers also exists in keygen_result_info (The request should not even contan this information)
+    helpers::modify_participants(
+        &mut signing_ceremony_details.signers,
+        test_node_id.clone(),
+        unknown_signer_id,
+    );
+
     let test_node = signing_ceremony.nodes.get_mut(&test_node_id).unwrap();
     test_node.request_signing(signing_ceremony_details);
 
@@ -296,6 +313,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 }
 
 #[tokio::test]
+#[should_panic]
 async fn should_ignore_rts_if_not_participating() {
     let (mut signing_ceremony, non_signing_nodes) = new_signing_ceremony_with_keygen().await;
 
@@ -308,15 +326,6 @@ async fn should_ignore_rts_if_not_participating() {
     // send the request to sign to the non_signing_node
     let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&account_id);
     non_signing_node.request_signing(signing_ceremony_details);
-
-    // The request to sign should not have started a ceremony
-    assert_ok!(non_signing_node.ensure_ceremony_at_signing_stage(
-        STAGE_FINISHED_OR_NOT_STARTED,
-        signing_ceremony.ceremony_id
-    ));
-    assert!(non_signing_node
-        .tag_cache
-        .contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
 #[tokio::test]
@@ -457,7 +466,19 @@ async fn should_ignore_rts_with_duplicate_signer() {
 
     // Send the request to sign with a duplicate id in the list of signers
     let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(&node_0_id);
-    signing_ceremony_details.signers[1] = signing_ceremony_details.signers[2].clone();
+
+    let dup_account_id = signing_ceremony_details
+        .signers
+        .iter()
+        .find(|account_id| **account_id != node_0_id)
+        .unwrap()
+        .clone();
+    helpers::modify_participants(
+        &mut signing_ceremony_details.signers,
+        node_0_id.clone(),
+        dup_account_id,
+    );
+
     let node = &mut signing_ceremony.nodes.get_mut(&node_0_id).unwrap();
     node.request_signing(signing_ceremony_details);
 
@@ -477,7 +498,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
 async fn should_ignore_rts_with_used_ceremony_id() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let messages = signing_ceremony.request().await;
+    let (messages, result_receivers) = signing_ceremony.request().await;
     let messages = helpers::run_stages!(
         signing_ceremony,
         messages,
@@ -487,7 +508,7 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     );
     // Finish a signing ceremony
     signing_ceremony.distribute_messages(messages);
-    signing_ceremony.complete().await;
+    signing_ceremony.complete(result_receivers).await;
 
     let account_id = signing_ceremony.nodes.keys().next().unwrap().clone();
 
@@ -584,7 +605,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
         .force_stage_timeout();
 
     // Do a signing ceremony as normal, using the default signing_ceremony
-    let messages = signing_ceremony.request().await;
+    let (messages, result_receivers) = signing_ceremony.request().await;
     let messages = helpers::run_stages!(
         signing_ceremony,
         messages,
@@ -595,7 +616,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     signing_ceremony.distribute_messages(messages);
 
     // completes successfully, because the ceremony_id was not consumed prior
-    signing_ceremony.complete().await;
+    signing_ceremony.complete(result_receivers).await;
 }
 
 // TODO: Come back and do this such that it signs with all parties
@@ -617,7 +638,7 @@ async fn should_sign_with_all_parties() {
         Rng::from_seed([4; 32]),
     );
 
-    let messages = signing_ceremony.request().await;
+    let (messages, result_receivers) = signing_ceremony.request().await;
     let messages = helpers::run_stages!(
         signing_ceremony,
         messages,
@@ -626,7 +647,7 @@ async fn should_sign_with_all_parties() {
         frost::VerifyLocalSig4
     );
     signing_ceremony.distribute_messages(messages);
-    signing_ceremony.complete().await;
+    signing_ceremony.complete(result_receivers).await;
 }
 
 mod timeout {
@@ -689,7 +710,7 @@ mod timeout {
         async fn recover_if_party_appears_offline_to_minority_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let mut messages = signing_ceremony.request().await;
+            let (mut messages, result_receivers) = signing_ceremony.request().await;
 
             let [non_sending_party_id, timed_out_party_id] = signing_ceremony.select_account_ids();
 
@@ -713,14 +734,14 @@ mod timeout {
                 frost::VerifyLocalSig4
             );
             signing_ceremony.distribute_messages(messages);
-            signing_ceremony.complete().await;
+            signing_ceremony.complete(result_receivers).await;
         }
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage3() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let messages = signing_ceremony.request().await;
+            let (messages, result_receivers) = signing_ceremony.request().await;
 
             let mut messages = helpers::run_stages!(
                 signing_ceremony,
@@ -747,7 +768,7 @@ mod timeout {
                 helpers::run_stages!(signing_ceremony, messages, frost::VerifyLocalSig4,);
 
             signing_ceremony.distribute_messages(messages);
-            signing_ceremony.complete().await;
+            signing_ceremony.complete(result_receivers).await;
         }
 
         // ======================
@@ -762,7 +783,7 @@ mod timeout {
         async fn offline_party_should_be_reported_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let messages = signing_ceremony.request().await;
+            let (messages, result_receivers) = signing_ceremony.request().await;
 
             let [non_sending_party_id] = signing_ceremony.select_account_ids();
 
@@ -775,7 +796,7 @@ mod timeout {
                 .await;
             signing_ceremony.distribute_messages(messages);
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id])
+                .complete_with_error(&[non_sending_party_id], result_receivers)
                 .await;
         }
 
@@ -783,7 +804,7 @@ mod timeout {
         async fn offline_party_should_be_reported_stage3() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let messages = signing_ceremony.request().await;
+            let (messages, result_receivers) = signing_ceremony.request().await;
 
             let messages = helpers::run_stages!(
                 signing_ceremony,
@@ -803,7 +824,7 @@ mod timeout {
                 .await;
             signing_ceremony.distribute_messages(messages);
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id])
+                .complete_with_error(&[non_sending_party_id], result_receivers)
                 .await;
         }
 
@@ -825,7 +846,7 @@ mod timeout {
 
             let bad_node_id = ceremony.nodes.keys().next().unwrap().clone();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
             let messages = ceremony
                 .run_stage::<frost::VerifyComm2, _, _>(messages)
                 .await;
@@ -838,7 +859,7 @@ mod timeout {
                 .run_stage::<frost::VerifyLocalSig4, _, _>(messages)
                 .await;
             ceremony.distribute_messages(messages);
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
 
         #[tokio::test]
@@ -847,7 +868,7 @@ mod timeout {
 
             let bad_node_id = ceremony.nodes.keys().next().unwrap().clone();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
             let messages = helpers::run_stages!(
                 ceremony,
                 messages,
@@ -858,7 +879,7 @@ mod timeout {
 
             ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
 
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
 
         // ======================
@@ -881,7 +902,7 @@ mod timeout {
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
-            let messages = signing_ceremony.request().await;
+            let (messages, result_receivers) = signing_ceremony.request().await;
 
             // bad party one times out here
             let messages = signing_ceremony
@@ -895,7 +916,7 @@ mod timeout {
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id_1])
+                .complete_with_error(&[non_sending_party_id_1], result_receivers)
                 .await
         }
 
@@ -909,7 +930,7 @@ mod timeout {
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
-            let messages = signing_ceremony.request().await;
+            let (messages, result_receivers) = signing_ceremony.request().await;
 
             let messages = helpers::run_stages!(
                 signing_ceremony,
@@ -930,7 +951,7 @@ mod timeout {
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id_1])
+                .complete_with_error(&[non_sending_party_id_1], result_receivers)
                 .await
         }
 

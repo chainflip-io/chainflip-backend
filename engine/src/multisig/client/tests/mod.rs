@@ -10,8 +10,6 @@ pub use helpers::{
 
 use lazy_static::lazy_static;
 
-use crate::multisig::KeygenRequest;
-
 use state_chain_runtime::AccountId;
 
 pub const KEYGEN_STAGES: usize = 7;

@@ -11,15 +11,18 @@ use crate::{
 };
 use state_chain_runtime::AccountId;
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping};
+use super::{
+    ceremony_manager::CeremonyResultSender, common::CeremonyStage, utils::PartyIdxMapping,
+};
 
 pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
+    pub result_sender: CeremonyResultSender<CeremonyResult>,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
 pub struct StateRunner<CeremonyData, CeremonyResult> {
-    inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
+    pub inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
     delayed_messages: BTreeMap<AccountId, CeremonyData>,
@@ -50,6 +53,7 @@ where
         &mut self,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
+        result_sender: CeremonyResultSender<CeremonyResult>,
     ) -> Result<Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>>> {
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
@@ -60,6 +64,7 @@ where
         self.inner = Some(StateAuthorised {
             stage: Some(stage),
             idx_mapping,
+            result_sender,
         });
 
         // Unlike other state transitions, we don't take into account

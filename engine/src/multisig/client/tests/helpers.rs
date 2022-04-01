@@ -15,7 +15,7 @@ use itertools::{Either, Itertools};
 use rand_legacy::{FromEntropy, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 use utilities::success_threshold_from_share_count;
 
 use crate::{
@@ -23,10 +23,9 @@ use crate::{
     logging::{KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, SIGNING_CEREMONY_FAILED},
     multisig::{
         client::{
-            ceremony_manager::CeremonyManager,
+            ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
             keygen::{HashContext, KeygenOptions, SecretShare3},
-            signing, CeremonyAbortReason, CeremonyError, CeremonyOutcome, KeygenResultInfo,
-            MultisigData, ThresholdParameters,
+            signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
         crypto::Rng,
         KeyId, MessageHash, SchnorrSignature,
@@ -45,10 +44,9 @@ use crate::{
     multisig::{
         client::{
             keygen::{self, KeygenData},
-            MultisigMessage, MultisigOutcome,
+            MultisigMessage,
         },
         crypto::Point,
-        KeygenRequest,
     },
 };
 
@@ -82,27 +80,18 @@ pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 
 pub struct Node {
     pub ceremony_manager: CeremonyManager,
-    pub multisig_outcome_receiver: UnboundedReceiver<MultisigOutcome>,
     pub outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
     pub tag_cache: TagCache,
 }
 
 pub fn new_node(account_id: AccountId) -> Node {
     let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
-    let (multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let ceremony_manager = CeremonyManager::new(
-        account_id,
-        multisig_outcome_sender,
-        outgoing_p2p_message_sender,
-        &logger,
-    );
+    let ceremony_manager = CeremonyManager::new(account_id, outgoing_p2p_message_sender, &logger);
 
     Node {
         ceremony_manager,
-        multisig_outcome_receiver,
         outgoing_p2p_message_receiver,
         tag_cache,
     }
@@ -125,39 +114,35 @@ pub struct KeygenCeremonyDetails {
 }
 
 impl Node {
-    pub async fn try_recv_outcome<Output: std::fmt::Debug>(
+    pub fn request_signing(
         &mut self,
-    ) -> Option<CeremonyOutcome<CeremonyId, Output>>
-    where
-        CeremonyOutcome<CeremonyId, Output>: TryFrom<MultisigOutcome, Error = MultisigOutcome>,
-    {
-        Some(
-            CeremonyOutcome::<CeremonyId, Output>::try_from(
-                recv_with_timeout(&mut self.multisig_outcome_receiver).await?,
-            )
-            .unwrap(),
-        )
-    }
-
-    pub fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails) {
+        signing_ceremony_details: SigningCeremonyDetails,
+    ) -> CeremonyResultReceiver<SchnorrSignature> {
+        let (result_sender, result_receiver) = oneshot::channel();
         self.ceremony_manager.on_request_to_sign(
-            signing_ceremony_details.rng,
+            signing_ceremony_details.ceremony_id,
+            signing_ceremony_details.signers,
             signing_ceremony_details.message_hash,
             signing_ceremony_details.keygen_result_info,
-            signing_ceremony_details.signers,
-            signing_ceremony_details.ceremony_id,
+            signing_ceremony_details.rng,
+            result_sender,
         );
+        result_receiver
     }
 
-    pub fn request_keygen(&mut self, keygen_ceremony_details: KeygenCeremonyDetails) {
+    pub fn request_keygen(
+        &mut self,
+        keygen_ceremony_details: KeygenCeremonyDetails,
+    ) -> CeremonyResultReceiver<KeygenResultInfo> {
+        let (result_sender, result_receiver) = oneshot::channel();
         self.ceremony_manager.on_keygen_request(
-            keygen_ceremony_details.rng,
-            KeygenRequest {
-                ceremony_id: keygen_ceremony_details.ceremony_id,
-                signers: keygen_ceremony_details.signers,
-            },
+            keygen_ceremony_details.ceremony_id,
+            keygen_ceremony_details.signers,
             keygen_ceremony_details.keygen_options,
+            keygen_ceremony_details.rng,
+            result_sender,
         );
+        result_receiver
     }
 }
 
@@ -188,7 +173,10 @@ pub trait CeremonyRunnerStrategy {
         outputs: HashMap<AccountId, Self::Output>,
     ) -> Self::CheckedOutput;
 
-    fn request_ceremony(&mut self, node_id: &AccountId);
+    fn request_ceremony(
+        &mut self,
+        node_id: &AccountId,
+    ) -> CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>;
 
     fn inner_distribute_message(
         &mut self,
@@ -208,8 +196,6 @@ pub struct CeremonyRunner<CeremonyRunnerData> {
 impl<CeremonyRunnerData> CeremonyRunner<CeremonyRunnerData>
 where
     Self: CeremonyRunnerStrategy,
-    CeremonyOutcome<CeremonyId, <Self as CeremonyRunnerStrategy>::Output>:
-        TryFrom<MultisigOutcome, Error = MultisigOutcome>,
 {
     pub fn inner_new(
         nodes: HashMap<AccountId, Node>,
@@ -367,89 +353,141 @@ where
 
     pub async fn try_gather_outcomes(
         &mut self,
-    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, CeremonyError>> {
-        let outcomes = stream::iter(self.nodes.iter_mut())
-            .then(|(account_id, node)| async move {
-                let outcome = node.try_recv_outcome().await?;
+        result_receivers: &mut HashMap<
+            AccountId,
+            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+        >,
+    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, Vec<AccountId>>> {
+        let results = self
+            .nodes
+            .iter_mut()
+            .map(|(account_id, node)| {
+                let result = result_receivers
+                    .get_mut(account_id)
+                    .unwrap()
+                    .try_recv()
+                    .ok()?;
 
-                if outcome.result.is_err() {
+                if result.is_err() {
                     assert!(node
                         .tag_cache
                         .contains_tag(<Self as CeremonyRunnerStrategy>::CEREMONY_FAILED_TAG));
                 }
 
-                Some((account_id.clone(), outcome))
+                Some((account_id.clone(), result))
             })
             .collect::<Vec<
                 Option<(
                     AccountId,
-                    CeremonyOutcome<CeremonyId, <Self as CeremonyRunnerStrategy>::Output>,
+                    Result<
+                        <Self as CeremonyRunnerStrategy>::Output,
+                        (Vec<AccountId>, anyhow::Error),
+                    >,
                 )>,
             >>()
-            .await
             .into_iter()
             .collect::<Option<
                 HashMap<
                     AccountId,
-                    CeremonyOutcome<CeremonyId, <Self as CeremonyRunnerStrategy>::Output>,
+                    Result<
+                        <Self as CeremonyRunnerStrategy>::Output,
+                        (Vec<AccountId>, anyhow::Error),
+                    >,
                 >,
             >>()?;
 
-        let _ceremony_id = all_same(outcomes.iter().map(|(_account_id, outcome)| outcome.id))
-            .expect("Inconsistent ceremony ids in the ceremony outcomes");
-
-        let (ok_outcomes, error_outcomes): (HashMap<_, _>, Vec<_>) = outcomes
+        let (ok_results, error_results): (HashMap<_, _>, Vec<_>) = results
             .into_iter()
-            .partition_map(|(account_id, outcome)| match outcome.result {
+            .partition_map(|(account_id, result)| match result {
                 Ok(output) => Either::Left((account_id, output)),
                 Err(error) => Either::Right(error),
             });
 
-        if !ok_outcomes.is_empty() && error_outcomes.is_empty() {
-            Some(Ok(self.post_successful_complete_check(ok_outcomes)))
-        } else if ok_outcomes.is_empty() && !error_outcomes.is_empty() {
-            Some(Err(all_same(error_outcomes.into_iter().map(
-                |(reason, reported)| (reason, reported.into_iter().sorted().collect::<Vec<_>>()),
+        if !ok_results.is_empty() && error_results.is_empty() {
+            Some(Ok(self.post_successful_complete_check(ok_results)))
+        } else if ok_results.is_empty() && !error_results.is_empty() {
+            Some(Err(all_same(error_results.into_iter().map(
+                |(reported, _error)| (reported.into_iter().sorted().collect::<Vec<_>>()),
             ))
-            .expect("Ceremony Errors weren't consistent for all nodes")))
+            .expect("Reported parties weren't the same for all nodes")))
         } else {
             panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
         }
     }
 
-    pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
-        assert_ok!(self.try_gather_outcomes().await.unwrap())
+    pub async fn complete(
+        &mut self,
+        mut result_receivers: HashMap<
+            AccountId,
+            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+        >,
+    ) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
+        assert_ok!(self
+            .try_gather_outcomes(&mut result_receivers)
+            .await
+            .unwrap())
     }
 
-    pub async fn try_complete_with_error(&mut self, bad_account_ids: &[AccountId]) -> Option<()> {
-        let (reason, reported) = self.try_gather_outcomes().await?.unwrap_err();
-        assert_eq!(CeremonyAbortReason::Invalid, reason);
+    pub async fn try_complete_with_error(
+        &mut self,
+        bad_account_ids: &[AccountId],
+        result_receivers: &mut HashMap<
+            AccountId,
+            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+        >,
+    ) -> Option<()> {
+        let reported = self
+            .try_gather_outcomes(result_receivers)
+            .await?
+            .unwrap_err();
         assert_eq!(bad_account_ids, &reported[..]);
         Some(())
     }
 
-    pub async fn complete_with_error(&mut self, bad_account_ids: &[AccountId]) {
-        self.try_complete_with_error(bad_account_ids).await.unwrap();
+    pub async fn complete_with_error(
+        &mut self,
+        bad_account_ids: &[AccountId],
+        mut result_receivers: HashMap<
+            AccountId,
+            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+        >,
+    ) {
+        self.try_complete_with_error(bad_account_ids, &mut result_receivers)
+            .await
+            .unwrap();
     }
 
-    pub fn request_without_gather(&mut self) {
-        for id in self.nodes.keys().sorted().cloned().collect::<Vec<_>>() {
-            self.request_ceremony(&id);
-        }
+    pub fn request_without_gather(
+        &mut self,
+    ) -> HashMap<AccountId, CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>> {
+        self.nodes
+            .keys()
+            .sorted()
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|id| {
+                let result_receiver = self.request_ceremony(&id);
+                (id, result_receiver)
+            })
+            .collect()
     }
 
     pub async fn request(
         &mut self,
-    ) -> HashMap<
-        AccountId,
+    ) -> (
         HashMap<
             AccountId,
-            <CeremonyRunner<CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
+            HashMap<
+                AccountId,
+                <CeremonyRunner<CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
+            >,
         >,
-    > {
-        self.request_without_gather();
+        HashMap<AccountId, CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>>,
+    ) {
+        let result_receivers = self.request_without_gather();
 
-        self.gather_outgoing_messages().await
+        (self.gather_outgoing_messages().await, result_receivers)
     }
 }
 
@@ -494,13 +532,16 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
         (KeyId(public_key.serialize().into()), outputs)
     }
 
-    fn request_ceremony(&mut self, node_id: &AccountId) {
+    fn request_ceremony(
+        &mut self,
+        node_id: &AccountId,
+    ) -> CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output> {
         let keygen_ceremony_details = self.keygen_ceremony_details();
 
         self.nodes
             .get_mut(node_id)
             .unwrap()
-            .request_keygen(keygen_ceremony_details);
+            .request_keygen(keygen_ceremony_details)
     }
 
     fn inner_distribute_message(
@@ -569,13 +610,16 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
         signature
     }
 
-    fn request_ceremony(&mut self, node_id: &AccountId) {
+    fn request_ceremony(
+        &mut self,
+        node_id: &AccountId,
+    ) -> CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output> {
         let signing_ceremony_details = self.signing_ceremony_details(node_id);
 
         self.nodes
             .get_mut(node_id)
             .unwrap()
-            .request_signing(signing_ceremony_details);
+            .request_signing(signing_ceremony_details)
     }
 
     fn inner_distribute_message(
@@ -784,7 +828,7 @@ pub fn standard_signing_coroutine<'a>(
     )>,
 > {
     Box::pin(async move {
-        let stage_1_messages = ceremony.request().await;
+        let (stage_1_messages, result_receivers) = ceremony.request().await;
         visitor.yield_ceremony(&stage_1_messages)?;
         let stage_2_messages = ceremony.run_stage(stage_1_messages.clone()).await;
         visitor.yield_ceremony(&stage_2_messages)?;
@@ -795,7 +839,7 @@ pub fn standard_signing_coroutine<'a>(
         ceremony.distribute_messages(stage_4_messages.clone());
 
         Some((
-            ceremony.complete().await,
+            ceremony.complete(result_receivers).await,
             vec![
                 into_generic_stage_data(stage_1_messages.clone()),
                 into_generic_stage_data(stage_2_messages.clone()),
@@ -838,13 +882,13 @@ pub async fn standard_keygen(
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
-    let stage_1_messages = keygen_ceremony.request().await;
+    let (stage_1_messages, result_receivers) = keygen_ceremony.request().await;
     let stage_2_messages = keygen_ceremony.run_stage(stage_1_messages.clone()).await;
     let stage_3_messages = keygen_ceremony.run_stage(stage_2_messages.clone()).await;
     let stage_4_messages = keygen_ceremony.run_stage(stage_3_messages.clone()).await;
     let stage_5_messages = keygen_ceremony.run_stage(stage_4_messages.clone()).await;
     keygen_ceremony.distribute_messages(stage_5_messages.clone());
-    let (key_id, key_data) = keygen_ceremony.complete().await;
+    let (key_id, key_data) = keygen_ceremony.complete(result_receivers).await;
 
     (
         key_id,
@@ -891,12 +935,15 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         KeygenOptions::default(),
         Rng::from_entropy(),
     );
-    let stage_1_messages = keygen_ceremony.request().await;
+    let (stage_1_messages, mut result_receivers) = keygen_ceremony.request().await;
     let stage_2_messages = keygen_ceremony
         .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
         .await;
     keygen_ceremony.distribute_messages(stage_2_messages);
-    match keygen_ceremony.try_complete_with_error(&[]).await {
+    match keygen_ceremony
+        .try_complete_with_error(&[], &mut result_receivers)
+        .await
+    {
         Some(_) => {
             for node in keygen_ceremony.nodes.values() {
                 assert!(node.tag_cache.contains_tag(KEYGEN_REJECTED_INCOMPATIBLE));
@@ -915,7 +962,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
             );
             keygen_ceremony.distribute_messages(stage_5_messages);
 
-            let (key_id, key_data) = keygen_ceremony.complete().await;
+            let (key_id, key_data) = keygen_ceremony.complete(result_receivers).await;
 
             Ok((key_id, key_data, keygen_ceremony.nodes))
         }
@@ -946,7 +993,7 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
     )>,
 > {
     Box::pin(async move {
-        let stage_1_messages = ceremony.request().await;
+        let (stage_1_messages, result_receivers) = ceremony.request().await;
         visitor.yield_ceremony(&stage_1_messages)?;
         let stage_2_messages = ceremony.run_stage(stage_1_messages.clone()).await;
         visitor.yield_ceremony(&stage_2_messages)?;
@@ -968,7 +1015,7 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
         let stage_7_messages = ceremony.run_stage(stage_6_messages.clone()).await;
         visitor.yield_ceremony(&stage_7_messages)?;
         ceremony.distribute_messages(stage_7_messages.clone());
-        let (_key_id, key_data) = ceremony.complete().await;
+        let (_key_id, key_data) = ceremony.complete(result_receivers).await;
 
         Some((
             key_data,
@@ -1099,4 +1146,14 @@ pub fn verify_sig_with_aggkey(sig: &SchnorrSignature, key_id: &KeyId) -> Result<
         .map_err(|e| anyhow::Error::msg(format!("Failed to verify signature: {:?}", e)))?;
 
     Ok(())
+}
+
+pub fn modify_participants(participants: &mut Vec<AccountId>, keep: AccountId, add: AccountId) {
+    participants.retain(|account_id| keep != *account_id);
+    let account_id = participants
+        .iter_mut()
+        .find(|account_id| **account_id != add)
+        .unwrap();
+    *account_id = add;
+    participants.push(keep);
 }

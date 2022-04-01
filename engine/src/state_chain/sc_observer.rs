@@ -7,109 +7,26 @@ use slog::o;
 use sp_core::H256;
 use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     eth::{EthBroadcaster, EthRpcApi},
-    logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
-    multisig::{
-        KeyId, KeygenOutcome, KeygenRequest, MessageHash, MultisigOutcome, MultisigRequest,
-        SigningOutcome, SigningRequest,
-    },
+    logging::{COMPONENT_KEY, LOG_ACCOUNT_STATE},
+    multisig::{client::MultisigClientApi, KeyId, MessageHash},
     multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-async fn process_multisig_outcome<RpcClient>(
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    multisig_outcome: MultisigOutcome,
-    logger: &slog::Logger,
-) where
-    RpcClient: StateChainRpcApi,
-{
-    match multisig_outcome {
-        MultisigOutcome::Signing(SigningOutcome { id, result }) => match result {
-            Ok(sig) => {
-                let _result = state_chain_client
-                    .submit_unsigned_extrinsic(
-                        pallet_cf_threshold_signature::Call::signature_success(id, sig.into()),
-                        logger,
-                    )
-                    .await;
-            }
-            Err((err, bad_account_ids)) => {
-                slog::error!(
-                    logger,
-                    "Signing ceremony failed with error: {:?}",
-                    err;
-                    CEREMONY_ID_KEY => id,
-                );
-
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
-                            id,
-                            bad_account_ids.into_iter().collect(),
-                        ),
-                        logger,
-                    )
-                    .await;
-            }
-        },
-        MultisigOutcome::Keygen(KeygenOutcome { id, result }) => match result {
-            Ok(keygen_result_info) => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_vaults::Call::report_keygen_outcome(
-                            id,
-                            pallet_cf_vaults::KeygenOutcome::Success(
-                                cf_chains::eth::AggKey::from_pubkey_compressed(
-                                    keygen_result_info
-                                        .key
-                                        .get_public_key()
-                                        .get_element()
-                                        .serialize(),
-                                ),
-                            ),
-                        ),
-                        logger,
-                    )
-                    .await;
-            }
-            Err((err, bad_account_ids)) => {
-                slog::error!(
-                    logger,
-                    "Keygen ceremony failed with error: {:?}",
-                    err;
-                    CEREMONY_ID_KEY => id,
-                );
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_vaults::Call::report_keygen_outcome(
-                            id,
-                            pallet_cf_vaults::KeygenOutcome::Failure(BTreeSet::from_iter(
-                                bad_account_ids,
-                            )),
-                        ),
-                        logger,
-                    )
-                    .await;
-            }
-        },
-    };
-}
-
-pub async fn start<BlockStream, RpcClient, EthRpc>(
+pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster<EthRpc>,
-    multisig_request_sender: UnboundedSender<MultisigRequest>,
+    multisig_client: Arc<MultisigClient>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
         sp_core::ed25519::Public,
         AccountPeerMappingChange,
     )>,
-    mut multisig_outcome_receiver: UnboundedReceiver<MultisigOutcome>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
     sm_window_sender: UnboundedSender<BlockHeightWindow>,
@@ -118,8 +35,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
-    RpcClient: StateChainRpcApi,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
     EthRpc: EthRpcApi,
+    MultisigClient: MultisigClientApi + Send + Sync + 'static,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
@@ -271,14 +189,41 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         validator_candidates,
                                                     ),
                                                 ) => {
-                                                    let gen_new_key_event = MultisigRequest::Keygen(
-                                                        KeygenRequest::new(ceremony_id, validator_candidates),
-                                                    );
-
-                                                    multisig_request_sender
-                                                        .send(gen_new_key_event)
-                                                        .map_err(|_| "Receiver should exist")
-                                                        .unwrap();
+                                                    let multisig_client = multisig_client.clone();
+                                                    let state_chain_client = state_chain_client.clone();
+                                                    let logger = logger.clone();
+                                                    tokio::spawn(async move {
+                                                        match multisig_client.keygen(ceremony_id, validator_candidates).await {
+                                                            Ok(public_key) => {
+                                                                let _result = state_chain_client
+                                                                    .submit_signed_extrinsic(
+                                                                        pallet_cf_vaults::Call::report_keygen_outcome(
+                                                                            ceremony_id,
+                                                                            pallet_cf_vaults::KeygenOutcome::Success(
+                                                                                cf_chains::eth::AggKey::from_pubkey_compressed(
+                                                                                    public_key.serialize(),
+                                                                                ),
+                                                                            ),
+                                                                        ),
+                                                                        &logger,
+                                                                    )
+                                                                    .await;
+                                                            }
+                                                            Err((bad_account_ids, _error)) => {
+                                                                let _result = state_chain_client
+                                                                    .submit_signed_extrinsic(
+                                                                        pallet_cf_vaults::Call::report_keygen_outcome(
+                                                                            ceremony_id,
+                                                                            pallet_cf_vaults::KeygenOutcome::Failure(BTreeSet::from_iter(
+                                                                                bad_account_ids,
+                                                                            )),
+                                                                        ),
+                                                                        &logger,
+                                                                    )
+                                                                    .await;
+                                                            }
+                                                        }
+                                                    });
                                                 }
                                                 state_chain_runtime::Event::EthereumThresholdSigner(
                                                     pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
@@ -288,18 +233,32 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         payload,
                                                     ),
                                                 ) if validators.contains(&state_chain_client.our_account_id) => {
-                                                    let sign_tx = MultisigRequest::Sign(SigningRequest::new(
-                                                        ceremony_id,
-                                                        KeyId(key_id),
-                                                        MessageHash(payload.to_fixed_bytes()),
-                                                        validators,
-                                                    ));
-
-                                                    // The below will be replaced with one shot channels
-                                                    multisig_request_sender
-                                                        .send(sign_tx)
-                                                        .map_err(|_| "Receiver should exist")
-                                                        .unwrap();
+                                                    let multisig_client = multisig_client.clone();
+                                                    let state_chain_client = state_chain_client.clone();
+                                                    let logger = logger.clone();
+                                                    tokio::spawn(async move {
+                                                        match multisig_client.sign(ceremony_id, KeyId(key_id), validators, MessageHash(payload.to_fixed_bytes())).await {
+                                                            Ok(signature) => {
+                                                                let _result = state_chain_client
+                                                                    .submit_unsigned_extrinsic(
+                                                                        pallet_cf_threshold_signature::Call::signature_success(ceremony_id, signature.into()),
+                                                                        &logger,
+                                                                    )
+                                                                    .await;
+                                                            }
+                                                            Err((bad_account_ids, _error)) => {
+                                                                let _result = state_chain_client
+                                                                    .submit_signed_extrinsic(
+                                                                        pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
+                                                                            ceremony_id,
+                                                                            bad_account_ids.into_iter().collect(), // TODO NOW Questionable
+                                                                        ),
+                                                                        &logger,
+                                                                    )
+                                                                    .await;
+                                                            }
+                                                        }
+                                                    });
                                                 }
                                                 state_chain_runtime::Event::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Event::TransactionSigningRequest(
@@ -462,17 +421,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                     }
                 }
             },
-            option_multisig_outcome = multisig_outcome_receiver.recv() => {
-                match option_multisig_outcome {
-                    Some(multisig_outcome) => {
-                        process_multisig_outcome(state_chain_client.clone(), multisig_outcome, &logger).await;
-                    },
-                    None => {
-                        slog::error!(logger, "Exiting as multisig_outcome channel ended");
-                        break
-                    }
-                }
-            }
         }
     }
 }
