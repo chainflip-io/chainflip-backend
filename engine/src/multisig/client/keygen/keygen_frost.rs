@@ -253,9 +253,10 @@ pub fn validate_commitments(
                 .get(idx)
                 .expect("message must be present due to ceremony runner invariants");
 
-            if !is_valid_zkp(challenge, &c.zkp, &c.commitments)
-                || !is_valid_hash_commitment(c, &hash_commitment.0)
-            {
+            let invalid_zkp = !is_valid_zkp(challenge, &c.zkp, &c.commitments);
+            let invalid_hash_commitment = !is_valid_hash_commitment(c, &hash_commitment.0);
+
+            if invalid_zkp || invalid_hash_commitment {
                 Some(*idx)
             } else {
                 None
@@ -326,6 +327,19 @@ pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitmen
     }
 
     H256::from(hasher.finalize().as_ref())
+}
+
+#[cfg(test)]
+impl DKGUnverifiedCommitment {
+    /// Change the lowest degree coefficient so that it fails ZKP check
+    pub fn corrupt_primary_coefficient(&mut self, mut rng: &mut Rng) {
+        self.commitments.0[0] = Point::from_scalar(&Scalar::random(&mut rng));
+    }
+
+    /// Change a higher degree coefficient, so that it fails hash commitment check
+    pub fn corrupt_secondary_coefficient(&mut self, mut rng: &mut Rng) {
+        self.commitments.0[1] = Point::from_scalar(&Scalar::random(&mut rng));
+    }
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
 use futures::{stream, Future, StreamExt};
 use itertools::Itertools;
 
-use rand_legacy::{FromEntropy, SeedableRng};
+use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -869,10 +869,20 @@ pub fn gen_invalid_local_sig(mut rng: &mut Rng) -> LocalSig3 {
     }
 }
 
+pub fn get_invalid_hash_comm(rng: &mut Rng) -> HashComm1 {
+    use sp_core::H256;
+
+    let mut buffer: [u8; 32] = [0; 32];
+    rng.fill_bytes(&mut buffer);
+
+    HashComm1(H256::from(buffer))
+}
+
 // Make these member functions of the CeremonyRunner
 pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
         &mut rng,
+        // The commitment is only invalid because of the invalid context
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
