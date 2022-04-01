@@ -1,9 +1,13 @@
 use rand_legacy::{FromEntropy, SeedableRng};
+use std::{collections::BTreeSet, iter::FromIterator};
 use tokio::sync::oneshot;
 
 use crate::multisig::{
     client::{
-        keygen::{self, Comm1, Complaints4, SecretShare3, VerifyComm2, VerifyHashComm2},
+        keygen::{
+            self, BlameResponse6, Comm1, Complaints4, SecretShare3, VerifyComm2, VerifyComplaints5,
+            VerifyHashComm2,
+        },
         tests::helpers::{
             all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
             gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
@@ -563,6 +567,88 @@ async fn should_report_on_invalid_hash_commitment() {
     // TODO: ensure that we fail due to "invalid hash commitment"
     ceremony
         .complete_with_error(&[bad_account_id], result_receivers)
+        .await;
+}
+
+#[tokio::test]
+async fn should_handle_inconsistent_broadcast_complaints4() {
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+    let messages = ceremony.request().await;
+
+    let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+
+    let [bad_account_id] = &ceremony.select_account_ids();
+
+    // Make one of the nodes send different complaints to most of the others
+    // Note: the bad node must send different complaints to more than 1/3 of the participants
+    for (counter, message) in messages
+        .get_mut(bad_account_id)
+        .unwrap()
+        .values_mut()
+        .enumerate()
+    {
+        *message = Complaints4(BTreeSet::from_iter(counter..counter + ACCOUNT_IDS.len()));
+    }
+
+    let messages = ceremony
+        .run_stage::<keygen::VerifyComplaints5, _, _>(messages)
+        .await;
+    ceremony.distribute_messages(messages);
+    ceremony
+        .complete_with_error(&[bad_account_id.clone()])
+        .await;
+}
+
+#[tokio::test]
+async fn should_handle_inconsistent_broadcast_complaints6() {
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+    let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
+        &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
+    );
+
+    let messages = ceremony.request().await;
+
+    let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+
+    let [bad_node_id, blamed_node_id] = &ceremony.select_account_ids();
+
+    // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
+    *messages
+        .get_mut(&ACCOUNT_IDS[0])
+        .unwrap()
+        .get_mut(&ACCOUNT_IDS[1])
+        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+
+    let mut messages = run_stages!(
+        ceremony,
+        messages,
+        Complaints4,
+        VerifyComplaints5,
+        BlameResponse6
+    );
+
+    let [bad_account_id] = &ceremony.select_account_ids();
+
+    // Make one of the nodes send different blame response to most of the others
+    // Note: the bad node must send different blame response to more than 1/3 of the participants
+    for message in messages.get_mut(bad_node_id).unwrap().values_mut() {
+        *message = BlameResponse6(
+            std::iter::once((
+                party_idx_mapping.get_idx(blamed_node_id).unwrap(),
+                SecretShare3::create_random(&mut ceremony.rng),
+            ))
+            .collect(),
+        )
+    }
+
+    let messages = ceremony
+        .run_stage::<keygen::VerifyBlameResponses7, _, _>(messages)
+        .await;
+    ceremony.distribute_messages(messages);
+    ceremony
+        .complete_with_error(&[bad_account_id.clone()])
         .await;
 }
 
