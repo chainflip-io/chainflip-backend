@@ -57,17 +57,18 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 		let mut num_read_writes = 0;
 		signing_attempts_iter.drain().into_iter().for_each(|(_, old_signing_attempt)| {
+			let broadcast_attempt_id = BroadcastAttemptId {
+				broadcast_id: old_signing_attempt.broadcast_id,
+				attempt_count: old_signing_attempt.attempt_count,
+			};
 			let tx_attempt = TransactionSigningAttempt::<T, I> {
 				broadcast_attempt: BroadcastAttempt {
-					broadcast_attempt_id: BroadcastAttemptId {
-						broadcast_id: old_signing_attempt.broadcast_id,
-						attempt_count: old_signing_attempt.attempt_count,
-					},
+					broadcast_attempt_id,
 					unsigned_tx: old_signing_attempt.unsigned_tx,
 				},
 				nominee: old_signing_attempt.nominee,
 			};
-			AwaitingTransactionSignature::insert(old_signing_attempt.broadcast_id, tx_attempt);
+			AwaitingTransactionSignature::insert(broadcast_attempt_id, tx_attempt);
 			num_read_writes += 1;
 		});
 
@@ -78,19 +79,20 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			.drain()
 			.into_iter()
 			.for_each(|(_, old_transmission_attempt)| {
+				let broadcast_attempt_id = BroadcastAttemptId {
+					broadcast_id: old_transmission_attempt.broadcast_id,
+					attempt_count: old_transmission_attempt.attempt_count,
+				};
 				let trans_attempt = TransmissionAttempt::<T, I> {
 					broadcast_attempt: BroadcastAttempt {
-						broadcast_attempt_id: BroadcastAttemptId {
-							broadcast_id: old_transmission_attempt.broadcast_id,
-							attempt_count: old_transmission_attempt.attempt_count,
-						},
+						broadcast_attempt_id,
 						unsigned_tx: old_transmission_attempt.unsigned_tx,
 					},
 					signer: old_transmission_attempt.signer,
 					signed_tx: old_transmission_attempt.signed_tx,
 				};
 				num_read_writes += 1;
-				AwaitingTransmission::insert(old_transmission_attempt.broadcast_id, trans_attempt);
+				AwaitingTransmission::insert(broadcast_attempt_id, trans_attempt);
 			});
 
 		// remove storage prefix

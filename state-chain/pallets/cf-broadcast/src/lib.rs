@@ -50,6 +50,13 @@ pub struct BroadcastAttemptId {
 	pub attempt_count: AttemptCount,
 }
 
+impl BroadcastAttemptId {
+	/// Increment the attempt count for a particular BroadcastAttemptId
+	pub fn next_attempt(&self) -> Self {
+		Self { attempt_count: self.attempt_count + 1, ..*self }
+	}
+}
+
 impl sp_std::fmt::Display for BroadcastAttemptId {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(
@@ -173,10 +180,20 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
 
+	/// Maps a BroadcastId to the latest AttemptCount number for this broadcast
+	#[pallet::storage]
+	pub type BroadcastIdToAttemptNumbers<T, I = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, Vec<AttemptCount>, OptionQuery>;
+
 	/// Live transaction signing requests.
 	#[pallet::storage]
-	pub type AwaitingTransactionSignature<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, TransactionSigningAttempt<T, I>, OptionQuery>;
+	pub type AwaitingTransactionSignature<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BroadcastAttemptId,
+		TransactionSigningAttempt<T, I>,
+		OptionQuery,
+	>;
 
 	/// Lookup table between Signature -> Broadcast
 	#[pallet::storage]
@@ -186,7 +203,7 @@ pub mod pallet {
 	/// Live transaction transmission requests.
 	#[pallet::storage]
 	pub type AwaitingTransmission<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, TransmissionAttempt<T, I>, OptionQuery>;
+		StorageMap<_, Twox64Concat, BroadcastAttemptId, TransmissionAttempt<T, I>, OptionQuery>;
 
 	/// The list of failed broadcasts pending retry.
 	#[pallet::storage]
@@ -213,8 +230,8 @@ pub mod pallet {
 		/// A request to transmit a signed transaction to the target chain. \[broadcast_attempt_id,
 		/// signed_tx\]
 		TransmissionRequest(BroadcastAttemptId, SignedTransactionFor<T, I>),
-		/// A broadcast has successfully been completed. \[broadcast_id\]
-		BroadcastComplete(BroadcastId),
+		/// A broadcast has successfully been completed. \[broadcast_attempt_id\]
+		BroadcastComplete(BroadcastAttemptId),
 		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_attempt_id\]
 		BroadcastRetryScheduled(BroadcastAttemptId),
 		/// A broadcast has failed irrecoverably. \[broadcast_attempt_id, failed_transaction\]
@@ -260,14 +277,14 @@ pub mod pallet {
 				match stage {
 					BroadcastStage::TransactionSigning => {
 						if let Some(signing_attempt) =
-							AwaitingTransactionSignature::<T, I>::take(attempt_id.broadcast_id)
+							AwaitingTransactionSignature::<T, I>::take(attempt_id)
 						{
 							notify_and_retry(signing_attempt.broadcast_attempt);
 						}
 					},
 					BroadcastStage::Transmission => {
 						if let Some(transmission_attempt) =
-							AwaitingTransmission::<T, I>::take(attempt_id.broadcast_id)
+							Self::take_transmission_attempt(attempt_id)
 						{
 							notify_and_retry(transmission_attempt.broadcast_attempt);
 						}
@@ -322,13 +339,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			let signing_attempt =
-				AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id.broadcast_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			ensure!(signing_attempt.nominee == signer.into(), Error::<T, I>::InvalidSigner);
 
-			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id.broadcast_id);
+			// it's no longer being signed, it's being broadcast
+			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
 
 			if T::TargetChain::verify_signed_transaction(
 				&signing_attempt.broadcast_attempt.unsigned_tx,
@@ -338,7 +355,7 @@ pub mod pallet {
 			.is_ok()
 			{
 				AwaitingTransmission::<T, I>::insert(
-					broadcast_attempt_id.broadcast_id,
+					broadcast_attempt_id,
 					TransmissionAttempt {
 						broadcast_attempt: signing_attempt.broadcast_attempt,
 						signer: signing_attempt.nominee,
@@ -383,23 +400,36 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transmission_success())]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
-			broadcast_id: BroadcastId,
+			broadcast_attempt_id: BroadcastAttemptId,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// == Clean up storage items ==
-			AwaitingTransmission::<T, I>::take(broadcast_id)
+			let attempt_numbers =
+				BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_attempt_id.broadcast_id)
+					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			for attempt_count in attempt_numbers {
+				AwaitingTransmission::<T, I>::take(BroadcastAttemptId {
+					broadcast_id: broadcast_attempt_id.broadcast_id,
+					attempt_count,
+				})
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			}
 
-			if let Some(payload) = SignatureToBroadcastIdLookup::<T, I>::iter()
-				.find_map(|(payload, id)| if id == broadcast_id { Some(payload) } else { None })
-			{
+			if let Some(payload) =
+				SignatureToBroadcastIdLookup::<T, I>::iter().find_map(|(payload, id)| {
+					if id == broadcast_attempt_id.broadcast_id {
+						Some(payload)
+					} else {
+						None
+					}
+				}) {
 				SignatureToBroadcastIdLookup::<T, I>::remove(payload);
 			}
 			// ====
 
-			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
+			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_attempt_id));
 
 			Ok(().into())
 		}
@@ -418,14 +448,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transmission_failure())]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,
-			broadcast_id: BroadcastId,
+			broadcast_attempt_id: BroadcastAttemptId,
 			failure: TransmissionFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let TransmissionAttempt { broadcast_attempt, signer, .. } =
-				AwaitingTransmission::<T, I>::take(broadcast_id)
+				Self::take_transmission_attempt(&broadcast_attempt_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			match failure {
@@ -498,8 +528,22 @@ pub mod pallet {
 
 			// Here we need to be able to get the accurate broadcast id from the payload
 			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
-				if AwaitingTransmission::<T, I>::take(broadcast_id).is_some() {
-					Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_id));
+				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
+					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+
+				for attempt_count in &attempt_numbers {
+					AwaitingTransmission::<T, I>::take(BroadcastAttemptId {
+						broadcast_id,
+						attempt_count: *attempt_count,
+					})
+					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+				}
+				if let Some(attempt_count) = attempt_numbers.last() {
+					let last_broadcast_attempt_id =
+						BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
+					Self::deposit_event(Event::<T, I>::BroadcastComplete(
+						last_broadcast_attempt_id,
+					));
 				}
 			}
 
@@ -509,6 +553,27 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	// helper function to remove the associated broadcastidtoattempt_count mapping
+	pub fn take_transmission_attempt(
+		broadcast_attempt_id: &BroadcastAttemptId,
+	) -> Option<TransmissionAttempt<T, I>> {
+		let transmission_attempt = AwaitingTransmission::<T, I>::take(broadcast_attempt_id)?;
+		BroadcastIdToAttemptNumbers::<T, I>::mutate(
+			transmission_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			|attempt_numbers| {
+				if let Some(attempt_numbers) = attempt_numbers {
+					if let Some(index) = attempt_numbers
+						.iter()
+						.position(|x| *x == broadcast_attempt_id.attempt_count)
+					{
+						attempt_numbers.remove(index);
+					}
+				}
+			},
+		);
+		Some(transmission_attempt)
+	}
+
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(
@@ -532,6 +597,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
+		BroadcastIdToAttemptNumbers::<T, I>::insert(broadcast_id, vec![0]);
 
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 			broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
@@ -540,11 +606,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-			broadcast_attempt_id: BroadcastAttemptId {
-				attempt_count: broadcast_attempt.broadcast_attempt_id.attempt_count + 1,
-				broadcast_id: broadcast_attempt.broadcast_attempt_id.broadcast_id,
+		let next_broadcast_attempt_id = broadcast_attempt.broadcast_attempt_id.next_attempt();
+		BroadcastIdToAttemptNumbers::<T, I>::mutate(
+			broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			|attempts| {
+				if let Some(attempts) = attempts {
+					attempts.push(next_broadcast_attempt_id.attempt_count)
+				}
 			},
+		);
+
+		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+			broadcast_attempt_id: next_broadcast_attempt_id,
 			..broadcast_attempt
 		})
 	}
@@ -558,7 +631,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionSignature::<T, I>::insert(
-				broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				broadcast_attempt.broadcast_attempt_id,
 				TransactionSigningAttempt {
 					broadcast_attempt: BroadcastAttempt::<T, I> {
 						unsigned_tx: broadcast_attempt.unsigned_tx.clone(),
@@ -606,7 +679,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count < T::MaximumAttempts::get() {
 			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
 			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
-				failed_broadcast_attempt.broadcast_attempt_id,
+				// TODO: Double check this
+				failed_broadcast_attempt.broadcast_attempt_id.next_attempt(),
 			));
 		} else {
 			Self::deposit_event(Event::<T, I>::BroadcastAborted(
