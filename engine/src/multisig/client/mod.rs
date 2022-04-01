@@ -228,7 +228,7 @@ where
         // cleanup stale signing_info in pending_requests_to_sign
         let logger = &self.logger;
 
-        let mut expired_requests_to_sign_ids = vec![];
+        let mut expired_ceremony_ids = vec![];
 
         self.pending_requests_to_sign
             .retain(|key_id, pending_signing_infos| {
@@ -244,7 +244,7 @@ where
                             CEREMONY_ID_KEY => ceremony_id,
                         );
 
-                        expired_requests_to_sign_ids.push(ceremony_id);
+                        expired_ceremony_ids.push(ceremony_id);
                         return false;
                     }
                     true
@@ -252,13 +252,14 @@ where
                 !pending_signing_infos.is_empty()
             });
 
-        for id in expired_requests_to_sign_ids {
-            if let Err(err) = self.multisig_outcome_sender.send(MultisigOutcome::Signing(
-                SigningOutcome::timeout(id, vec![]),
-            )) {
+        for id in expired_ceremony_ids {
+            if let Err(err) = self
+                .multisig_outcome_sender
+                .send(MultisigOutcome::Keygen(KeygenOutcome::timeout(id, vec![])))
+            {
                 slog::error!(
                     self.logger,
-                    "Could not send SigningOutcome::timeout: {}",
+                    "Could not send KeygenOutcome::timeout: {}",
                     err
                 );
             }
@@ -538,21 +539,12 @@ where
     pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
 
-        for reqs in self.pending_requests_to_sign.values_mut() {
-            for req in reqs.iter_mut() {
-                req.set_expiry_time(std::time::Instant::now());
+        self.pending_requests_to_sign.retain(|_, pending_infos| {
+            for pending in pending_infos {
+                pending.set_expiry_time(std::time::Instant::now());
             }
-        }
-
-        self.check_timeout();
-    }
-
-    pub fn force_pending_rts_timeout(&mut self) {
-        for reqs in self.pending_requests_to_sign.values_mut() {
-            for req in reqs.iter_mut() {
-                req.set_expiry_time(std::time::Instant::now());
-            }
-        }
+            true
+        });
 
         self.check_timeout();
     }
