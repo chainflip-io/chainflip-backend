@@ -328,7 +328,7 @@ fn test_invalid_id_is_noop() {
 		assert_noop!(
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(0).into(),
-				BroadcastAttemptId { broadcast_id: 0, attempt_count: 0 },
+				BroadcastAttemptId::default(),
 				<<MockEthereum as ChainAbi>::UnsignedTransaction>::default()
 					.signed(Validity::Valid),
 				Validity::Valid
@@ -338,7 +338,7 @@ fn test_invalid_id_is_noop() {
 		assert_noop!(
 			MockBroadcast::transmission_success(
 				Origin::root(),
-				BroadcastAttemptId { broadcast_id: 0, attempt_count: 0 },
+				BroadcastAttemptId::default(),
 				[0u8; 4]
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
@@ -346,7 +346,7 @@ fn test_invalid_id_is_noop() {
 		assert_noop!(
 			MockBroadcast::transmission_failure(
 				Origin::root(),
-				BroadcastAttemptId { broadcast_id: 0, attempt_count: 0 },
+				BroadcastAttemptId::default(),
 				TransmissionFailure::TransactionFailed,
 				[0u8; 4]
 			),
