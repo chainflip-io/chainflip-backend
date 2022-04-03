@@ -319,9 +319,6 @@ pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitmen
 
     let mut hasher = Sha256::new();
 
-    // NOTE: it should be sufficient to use ceremony_id as context as
-    // we never reuse the same id for different ceremonies, but lets
-    // put the signers in to make the context hard to predict as well
     for comm in &coefficient_commitments.commitments.0 {
         hasher.update(bincode::serialize(&comm).expect("serialiation can't fail"));
     }

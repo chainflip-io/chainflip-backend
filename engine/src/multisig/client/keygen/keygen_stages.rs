@@ -118,9 +118,9 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyHashCommitm
     type Message = VerifyHashComm2;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
-        let data = self.hash_commitments.clone();
-
-        DataToSend::Broadcast(VerifyHashComm2 { data })
+        DataToSend::Broadcast(VerifyHashComm2 {
+            data: self.hash_commitments.clone(),
+        })
     }
 
     fn should_delay(&self, m: &KeygenData) -> bool {
