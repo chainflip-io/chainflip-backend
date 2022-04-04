@@ -552,8 +552,7 @@ jobs:
         description: Name of the cluster to authenticate to
         type: string
         default: cluster-staging
-    docker:
-      - image: "cimg/node:17.8.0"
+    executor: chainflip-master
     steps:
       - checkout
       - attach_workspace:
