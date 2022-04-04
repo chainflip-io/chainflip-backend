@@ -884,17 +884,48 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
 mod timeout {
 
-    // TODO: add timeout tests for hash commitment stages
-
     use super::*;
 
     use crate::multisig::client::{keygen::*, tests::helpers::KeygenCeremonyRunner};
 
-    // TODO: more test cases
-
     mod during_regular_stage {
 
         use super::*;
+
+        #[tokio::test]
+        async fn recover_if_party_appears_offline_to_minority_stage1a() {
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+            let mut messages = ceremony.request().await;
+
+            let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
+
+            messages
+                .get_mut(&non_sending_party_id)
+                .unwrap()
+                .remove(&timed_out_party_id);
+
+            // This node doesn't receive non_sending_party's message, so must timeout
+            ceremony
+                .nodes
+                .get_mut(&timed_out_party_id)
+                .unwrap()
+                .client
+                .force_stage_timeout();
+
+            let messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyHashComm2,
+                Comm1,
+                VerifyComm2,
+                SecretShare3,
+                Complaints4,
+                VerifyComplaints5
+            );
+            ceremony.distribute_messages(messages);
+            ceremony.complete().await;
+        }
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage1() {
@@ -1020,6 +1051,31 @@ mod timeout {
         use super::*;
 
         #[tokio::test]
+        async fn recover_if_agree_on_values_stage2a() {
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+            let messages = ceremony.request().await;
+
+            let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
+
+            let messages = ceremony
+                .run_stage_with_non_sender::<Comm1, _, _>(messages, &ACCOUNT_IDS[0].clone())
+                .await;
+
+            let messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyComm2,
+                SecretShare3,
+                Complaints4,
+                VerifyComplaints5
+            );
+
+            ceremony.distribute_messages(messages);
+            ceremony.complete().await;
+        }
+
+        #[tokio::test]
         async fn recover_if_agree_on_values_stage2() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
@@ -1095,6 +1151,30 @@ mod timeout {
             ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
 
             ceremony.complete(result_receivers).await;
+        }
+
+        #[tokio::test]
+        async fn report_if_insufficient_messages_stage_2a() {
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+            let messages = ceremony.request().await;
+
+            let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
+
+            // bad party 1 times out during a broadcast stage. It should be reported
+            let messages = ceremony
+                .run_stage_with_non_sender::<VerifyHashComm2, _, _>(
+                    messages,
+                    &non_sending_party_id_1,
+                )
+                .await;
+
+            // bad party 2 times out during a broadcast verification stage. It won't get reported.
+            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+
+            ceremony
+                .complete_with_error(&[non_sending_party_id_1])
+                .await
         }
 
         #[tokio::test]
