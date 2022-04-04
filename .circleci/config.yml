@@ -594,7 +594,7 @@ jobs:
           command: |
             export WS_ENDPOINT="ws://localhost:9944"
             export TYPES_FILE="./state-chain/types.json"
-            cd ~/chainflip-docgen/
+            cd ./chainflip-docgen/
             npm run generate
       - store_artifacts:
           path: target/release
