@@ -377,18 +377,11 @@ async fn should_abort_on_blames_at_invalid_indexes() {
 async fn should_panic_keygen_request_if_not_participating() {
     let mut node = new_node(AccountId::new([0; 32]));
 
-    // Get an id that is not `c0`s id
-    let unknown_id = AccountId::new([0; 32]);
-    assert!(!ACCOUNT_IDS.contains(&unknown_id));
-    let mut keygen_ids = ACCOUNT_IDS.clone();
-    keygen_ids[0] = unknown_id;
-
-    // Send the keygen request
-    let ceremony_id = 1;
+    // Send a keygen request where participants doesn't include our account id
     let (result_sender, _result_receiver) = oneshot::channel();
     node.ceremony_manager.on_keygen_request(
-        ceremony_id,
-        keygen_ids,
+        1,
+        ACCOUNT_IDS.clone(),
         KeygenOptions::allowing_high_pubkey(),
         Rng::from_seed([8; 32]),
         result_sender,
