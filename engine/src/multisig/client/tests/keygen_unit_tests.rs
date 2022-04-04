@@ -2,7 +2,7 @@ use rand_legacy::{FromEntropy, SeedableRng};
 
 use crate::multisig::{
     client::{
-        keygen::{self, SecretShare3},
+        keygen::{self, Comm1, SecretShare3, VerifyHashComm2},
         tests::helpers::{
             gen_invalid_keygen_comm1, new_node, new_nodes, recv_with_timeout, run_keygen,
             split_messages_for, STAGE_FINISHED_OR_NOT_STARTED,
@@ -15,8 +15,8 @@ use crate::multisig::{
 };
 
 use super::helpers::{
-    self, all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage, standard_keygen,
-    KeygenCeremonyRunner,
+    self, all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
+    get_invalid_hash_comm, standard_keygen, KeygenCeremonyRunner,
 };
 
 use crate::testing::assert_ok;
@@ -29,11 +29,9 @@ use crate::logging::KEYGEN_REQUEST_IGNORED;
 /// generate a key without entering a blaming stage
 #[tokio::test]
 async fn happy_path_results_in_valid_key() {
-    let (_, _, _) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
-    )
-    .await;
+    let nodes = new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey());
+
+    let (_, _, _) = run_keygen(nodes, 1).await;
 }
 
 /// If keygen state expires before a formal request to keygen
@@ -97,7 +95,7 @@ async fn should_delay_comm1_before_keygen_request() {
     let [test_id, late_id] = ceremony.select_account_ids();
 
     let (late_msg, early_msgs) =
-        split_messages_for(messages.stage_1_messages.clone(), &test_id, &late_id);
+        split_messages_for(messages.stage_1a_messages.clone(), &test_id, &late_id);
 
     ceremony.distribute_messages(early_msgs);
 
@@ -198,6 +196,8 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     let mut messages = helpers::run_stages!(
         ceremony,
         messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
         keygen::VerifyComm2,
         keygen::SecretShare3
     );
@@ -245,6 +245,8 @@ async fn should_report_on_invalid_blame_response() {
     let mut messages = helpers::run_stages!(
         ceremony,
         messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
         keygen::VerifyComm2,
         keygen::SecretShare3
     );
@@ -312,6 +314,8 @@ async fn should_report_on_incomplete_blame_response() {
     let mut messages = helpers::run_stages!(
         ceremony,
         messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
         keygen::VerifyComm2,
         keygen::SecretShare3
     );
@@ -353,11 +357,13 @@ async fn should_abort_on_blames_at_invalid_indexes() {
         1,
         Rng::from_seed([8; 32]),
     );
-    let messages = keygen_ceremony.request().await;
+    let stage_1a_messages = keygen_ceremony.request().await;
 
     let mut stage_4_messages = helpers::run_stages!(
         keygen_ceremony,
-        messages,
+        stage_1a_messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
         keygen::VerifyComm2,
         keygen::SecretShare3,
         keygen::Complaints4
@@ -415,7 +421,7 @@ async fn should_ignore_duplicate_keygen_request() {
 
     let messages = ceremony.request().await;
     let _messages = ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(messages)
+        .run_stage::<keygen::VerifyHashComm2, _, _>(messages)
         .await;
 
     let [node_id] = ceremony.select_account_ids();
@@ -546,27 +552,113 @@ async fn should_ignore_unexpected_message_for_stage() {
 async fn should_handle_inconsistent_broadcast_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new(
         new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1,
+        1, /* ceremony id */
         Rng::from_seed([8; 32]),
     );
 
-    let mut messages = ceremony.request().await;
+    let stage_1a_messages = ceremony.request().await;
+    let mut stage_1_messages =
+        helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2, Comm1);
 
     let bad_account_id = &ACCOUNT_IDS[1];
 
     // Make one of the nodes send different comm1 to most of the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
-    for message in messages.get_mut(bad_account_id).unwrap().values_mut() {
+    for message in stage_1_messages
+        .get_mut(bad_account_id)
+        .unwrap()
+        .values_mut()
+        // we only need to corrupt >1/3 of the messages
+        .step_by(2)
+    {
         *message = gen_invalid_keygen_comm1(&mut ceremony.rng);
     }
 
-    let messages = ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(messages)
+    let stage_2_messages = ceremony
+        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(stage_2_messages);
     ceremony
         .complete_with_error(&[bad_account_id.clone()])
         .await;
+}
+
+#[tokio::test]
+async fn should_handle_inconsistent_broadcast_hash_comm() {
+    let mut ceremony = KeygenCeremonyRunner::new(
+        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
+        1, /* ceremony id */
+        Rng::from_seed([8; 32]),
+    );
+
+    let mut stage_1a_messages = ceremony.request().await;
+
+    let bad_account_id = &ACCOUNT_IDS[1];
+
+    // `bad_account_id` send different hash commitments to different nodes
+    // Note: the bad node must send different values to more than 1/3 of the participants
+    for message in stage_1a_messages
+        .get_mut(bad_account_id)
+        .unwrap()
+        .values_mut()
+    {
+        *message = get_invalid_hash_comm(&mut ceremony.rng);
+    }
+
+    let stage_2a_messages = helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2,);
+
+    ceremony.distribute_messages(stage_2a_messages);
+    ceremony
+        .complete_with_error(&[bad_account_id.clone()])
+        .await;
+}
+
+// If one or more parties reveal invalid coefficients that don't correspond
+// to the hash commitments sent earlier, the ceremony should be aborted with
+// those parties reported.
+#[tokio::test]
+async fn should_report_on_invalid_hash_commitment() {
+    let mut ceremony = KeygenCeremonyRunner::new(
+        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
+        1, /* ceremony id */
+        Rng::from_seed([8; 32]),
+    );
+
+    let stage_1a_messages = ceremony.request().await;
+    let mut stage_1_messages =
+        helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2, Comm1);
+
+    let [bad_account_id] = ceremony.select_account_ids();
+
+    // Make a node send a bad commitment to the others
+    // Note: we must send the same bad commitment to all of the nodes,
+    // or we will fail on the `inconsistent` error instead of the validation error.
+    let corrupted_message = {
+        let mut original_message = stage_1_messages
+            .get(&bad_account_id)
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        original_message.corrupt_secondary_coefficient(&mut ceremony.rng);
+        original_message
+    };
+    for message in stage_1_messages
+        .get_mut(&bad_account_id)
+        .unwrap()
+        .values_mut()
+    {
+        *message = corrupted_message.clone();
+    }
+
+    let stage_2_messages = ceremony
+        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
+        .await;
+    ceremony.distribute_messages(stage_2_messages);
+
+    // TODO: ensure that we fail due to "invalid hash commitment"
+    ceremony.complete_with_error(&[bad_account_id]).await;
 }
 
 // If one or more parties send invalid commitments, the ceremony should be aborted.
@@ -579,22 +671,40 @@ async fn should_handle_invalid_commitments() {
         Rng::from_seed([8; 32]),
     );
 
-    let mut messages = ceremony.request().await;
+    let stage_1a_messages = ceremony.request().await;
+    let mut stage_1_messages =
+        helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2, Comm1);
 
     let [bad_account_id] = ceremony.select_account_ids();
 
     // Make a node send a bad commitment to the others
     // Note: we must send the same bad commitment to all of the nodes,
     // or we will fail on the `inconsistent` error instead of the validation error.
-    let invalid_comm1 = gen_invalid_keygen_comm1(&mut ceremony.rng);
-    for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-        *message = invalid_comm1.clone();
+    let corrupted_message = {
+        let mut original_message = stage_1_messages
+            .get(&bad_account_id)
+            .unwrap()
+            .values()
+            .next()
+            .unwrap()
+            .clone();
+        original_message.corrupt_primary_coefficient(&mut ceremony.rng);
+        original_message
+    };
+    for message in stage_1_messages
+        .get_mut(&bad_account_id)
+        .unwrap()
+        .values_mut()
+    {
+        *message = corrupted_message.clone();
     }
 
-    let messages = ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(messages)
+    let stage_2_messages = ceremony
+        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(stage_2_messages);
+
+    // TODO: ensure that we fail due to "invalid ZKP"
     ceremony.complete_with_error(&[bad_account_id]).await;
 }
 
@@ -752,6 +862,8 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
 mod timeout {
 
+    // TODO: add timeout tests for hash commitment stages
+
     use super::*;
 
     // What should be tested w.r.t timeouts:
@@ -781,7 +893,8 @@ mod timeout {
 
             let messages = ceremony.request().await;
 
-            let messages = helpers::run_stages!(ceremony, messages, VerifyComm2,);
+            let messages =
+                helpers::run_stages!(ceremony, messages, VerifyHashComm2, Comm1, VerifyComm2);
 
             let messages = ceremony
                 .run_stage_with_non_sender::<SecretShare3, _, _>(messages, &ACCOUNT_IDS[0].clone())
@@ -809,6 +922,8 @@ mod timeout {
             let messages = helpers::run_stages!(
                 ceremony,
                 messages,
+                VerifyHashComm2,
+                Comm1,
                 VerifyComm2,
                 SecretShare3,
                 Complaints4,
