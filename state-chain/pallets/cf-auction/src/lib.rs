@@ -359,28 +359,28 @@ impl<T: Config> Pallet<T> {
 		RemainingBidders::<T>::put(remaining_bids);
 	}
 
-	fn promote_or_demote(promote: bool, validator_id: &T::ValidatorId) {
-		T::ChainflipAccount::update_state(
-			&(validator_id.clone().into()),
-			if promote { ChainflipAccountState::Backup } else { ChainflipAccountState::Passive },
-		);
-	}
-
 	fn adjust_group(
 		validator_id: &T::ValidatorId,
-		promote: bool,
+		account_state: ChainflipAccountState,
 		remaining_bidders: &mut Vec<RemainingBid<T::ValidatorId, T::Amount>>,
 	) {
-		Self::promote_or_demote(promote, validator_id);
+		T::ChainflipAccount::update_state(&(validator_id.clone().into()), account_state);
 
-		let index_of_shifted = if !promote {
+		let index_of_shifted = if account_state == ChainflipAccountState::Passive {
 			BackupGroupSize::<T>::get().saturating_sub(One::one())
 		} else {
 			BackupGroupSize::<T>::get()
 		};
 
 		if let Some((adjusted_validator_id, _)) = remaining_bidders.get(index_of_shifted as usize) {
-			Self::promote_or_demote(!promote, adjusted_validator_id);
+			T::ChainflipAccount::update_state(
+				&(adjusted_validator_id.clone().into()),
+				if account_state == ChainflipAccountState::Backup {
+					ChainflipAccountState::Passive
+				} else {
+					ChainflipAccountState::Backup
+				},
+			);
 		}
 	}
 }
@@ -410,7 +410,11 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 					remaining_bidders,
 					(validator_id.clone(), amount),
 				);
-				Pallet::<T>::adjust_group(validator_id, true, remaining_bidders);
+				Pallet::<T>::adjust_group(
+					validator_id,
+					ChainflipAccountState::Backup,
+					remaining_bidders,
+				);
 			},
 			ChainflipAccountState::Passive if amount > HighestPassiveNodeBid::<T>::get() => {
 				let remaining_bidders = &mut RemainingBidders::<T>::get();
@@ -428,7 +432,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 				if amount < LowestBackupValidatorBid::<T>::get() {
 					Pallet::<T>::adjust_group(
 						validator_id,
-						false,
+						ChainflipAccountState::Passive,
 						&mut RemainingBidders::<T>::get(),
 					);
 				}
