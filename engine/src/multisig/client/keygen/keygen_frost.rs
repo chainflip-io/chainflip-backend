@@ -1,12 +1,15 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use zeroize::Zeroize;
 
 use crate::multisig::{
     client::ThresholdParameters,
     crypto::{Point, Rng, Scalar},
 };
+
+use super::keygen_data::HashComm1;
 
 /// Evaluate polynomial f(x) = c0 + c1 * x + c2 * x^2 + ... (expressed as
 /// an iterator over its coefficients [c0, c1, c2, ...]) at x = index
@@ -228,17 +231,32 @@ pub struct DKGCommitment {
     commitments: CoefficientCommitments,
 }
 
+fn is_valid_hash_commitment(
+    public_coefficients: &DKGUnverifiedCommitment,
+    hash_commitment: &H256,
+) -> bool {
+    hash_commitment == &generate_hash_commitment(public_coefficients)
+}
+
 // (Figure 1: Round 1, Step 5)
 pub fn validate_commitments(
-    commitments: HashMap<usize, DKGUnverifiedCommitment>,
+    public_coefficients: HashMap<usize, DKGUnverifiedCommitment>,
+    hash_commitments: HashMap<usize, HashComm1>,
     context: &HashContext,
 ) -> Result<HashMap<usize, DKGCommitment>, Vec<usize>> {
-    let invalid_idxs: Vec<_> = commitments
+    let invalid_idxs: Vec<_> = public_coefficients
         .iter()
         .filter_map(|(idx, c)| {
             let challenge = generate_dkg_challenge(*idx, context, c.commitments.0[0], c.zkp.r);
 
-            if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
+            let hash_commitment = hash_commitments
+                .get(idx)
+                .expect("message must be present due to ceremony runner invariants");
+
+            let invalid_zkp = !is_valid_zkp(challenge, &c.zkp, &c.commitments);
+            let invalid_hash_commitment = !is_valid_hash_commitment(c, &hash_commitment.0);
+
+            if invalid_zkp || invalid_hash_commitment {
                 Some(*idx)
             } else {
                 None
@@ -247,7 +265,7 @@ pub fn validate_commitments(
         .collect();
 
     if invalid_idxs.is_empty() {
-        Ok(commitments
+        Ok(public_coefficients
             .into_iter()
             .map(|(idx, c)| {
                 (
@@ -296,6 +314,31 @@ pub fn derive_local_pubkeys_for_parties(
         .collect()
 }
 
+pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitment) -> H256 {
+    use sha2::{Digest, Sha256};
+
+    let mut hasher = Sha256::new();
+
+    for comm in &coefficient_commitments.commitments.0 {
+        hasher.update(bincode::serialize(&comm).expect("serialiation can't fail"));
+    }
+
+    H256::from(hasher.finalize().as_ref())
+}
+
+#[cfg(test)]
+impl DKGUnverifiedCommitment {
+    /// Change the lowest degree coefficient so that it fails ZKP check
+    pub fn corrupt_primary_coefficient(&mut self, mut rng: &mut Rng) {
+        self.commitments.0[0] = Point::from_scalar(&Scalar::random(&mut rng));
+    }
+
+    /// Change a higher degree coefficient, so that it fails hash commitment check
+    pub fn corrupt_secondary_coefficient(&mut self, mut rng: &mut Rng) {
+        self.commitments.0[1] = Point::from_scalar(&Scalar::random(&mut rng));
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -326,23 +369,34 @@ mod tests {
         use rand_legacy::SeedableRng;
         let mut rng = Rng::from_seed([0; 32]);
 
-        let (commitments, outgoing_shares): (HashMap<_, _>, HashMap<_, _>) = (1..=n)
-            .map(|idx| {
-                let (secret, shares_commitments, shares) =
-                    generate_secret_and_shares(&mut rng, n, t);
-                // Zero-knowledge proof of `secret`
-                let zkp = generate_zkp_of_secret(&mut rng, secret, &context, idx);
+        let (commitments, hash_commitments, outgoing_shares): (
+            HashMap<_, _>,
+            HashMap<_, _>,
+            HashMap<_, _>,
+        ) = itertools::multiunzip((1..=n).map(|idx| {
+            let (secret, shares_commitments, shares) = generate_secret_and_shares(&mut rng, n, t);
+            // Zero-knowledge proof of `secret`
+            let zkp = generate_zkp_of_secret(&mut rng, secret, &context, idx);
 
-                let dkg_commitment = DKGUnverifiedCommitment {
-                    commitments: shares_commitments,
-                    zkp,
-                };
+            let dkg_commitment = DKGUnverifiedCommitment {
+                commitments: shares_commitments,
+                zkp,
+            };
 
-                ((idx, dkg_commitment), (idx, shares))
-            })
-            .unzip();
+            let hash_commitment = generate_hash_commitment(&dkg_commitment);
 
-        let coeff_commitments = assert_ok!(validate_commitments(commitments, &context));
+            (
+                (idx, dkg_commitment),
+                (idx, HashComm1(hash_commitment)),
+                (idx, shares),
+            )
+        }));
+
+        let coeff_commitments = assert_ok!(validate_commitments(
+            commitments,
+            hash_commitments,
+            &context
+        ));
 
         // Now it is okay to distribute the shares
 

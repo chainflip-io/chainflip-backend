@@ -24,7 +24,7 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
-use super::keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions};
+use super::keygen::{HashCommitments1, HashContext, KeygenData, KeygenOptions};
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
@@ -271,7 +271,7 @@ impl CeremonyManager {
                 rng,
             };
 
-            let processor = AwaitCommitments1::new(common.clone(), keygen_options, context);
+            let processor = HashCommitments1::new(common.clone(), keygen_options, context);
 
             Box::new(BroadcastStage::new(processor, common))
         };

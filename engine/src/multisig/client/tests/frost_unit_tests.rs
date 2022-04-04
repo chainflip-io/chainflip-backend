@@ -233,6 +233,8 @@ async fn should_delay_rts_until_key_is_ready() {
     let messages = run_stages!(
         keygen_ceremony,
         messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
         keygen::VerifyComm2,
         keygen::SecretShare3,
         keygen::Complaints4,
@@ -379,6 +381,8 @@ async fn pending_rts_should_expire() {
     run_stages!(
         keygen_ceremony,
         messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
         keygen::VerifyComm2,
         keygen::SecretShare3,
         keygen::Complaints4,

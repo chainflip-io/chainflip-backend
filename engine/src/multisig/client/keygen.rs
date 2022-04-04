@@ -9,13 +9,13 @@ use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
 pub use keygen_data::{
-    BlameResponse6, Comm1, Complaints4, KeygenData, SecretShare3, VerifyBlameResponses7,
-    VerifyComm2, VerifyComplaints5,
+    BlameResponse6, Comm1, Complaints4, HashComm1, KeygenData, SecretShare3, VerifyBlameResponses7,
+    VerifyComm2, VerifyComplaints5, VerifyHashComm2,
 };
 
 pub use keygen_frost::HashContext;
 
-pub use keygen_stages::{is_contract_compatible, AwaitCommitments1};
+pub use keygen_stages::{is_contract_compatible, HashCommitments1};
 
 use state_chain_runtime::AccountId;
 
