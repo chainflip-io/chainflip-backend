@@ -505,7 +505,7 @@ jobs:
   git-clone-docgen-repo:
     resource_class: small
     docker:
-      - image: "cimg/node:stable"
+      - image: "cimg/node:17.8.0"
     steps:
       - gh/setup
       - gh/clone:
