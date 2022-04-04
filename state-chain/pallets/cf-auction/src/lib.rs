@@ -339,24 +339,21 @@ impl<T: Config> Pallet<T> {
 	) {
 		if let Ok(index) = remaining_bidders.binary_search_by(|bid| new_bid.0.cmp(&bid.0)) {
 			remaining_bidders[index] = new_bid;
-			Pallet::<T>::sort_remaining_bidders(remaining_bidders);
+
+			// Sort and set state
+			remaining_bidders.sort_unstable_by_key(|k| k.1);
+			remaining_bidders.reverse();
+
+			let lowest_backup_validator_bid =
+				Self::lowest_bid(&Self::current_backup_validators(remaining_bidders));
+
+			let highest_passive_node_bid =
+				Self::highest_bid(&Self::current_passive_nodes(remaining_bidders));
+
+			LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
+			HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);
+			RemainingBidders::<T>::put(remaining_bidders);
 		}
-	}
-
-	fn sort_remaining_bidders(remaining_bids: &mut Vec<RemainingBid<T::ValidatorId, T::Amount>>) {
-		// Sort and set state
-		remaining_bids.sort_unstable_by_key(|k| k.1);
-		remaining_bids.reverse();
-
-		let lowest_backup_validator_bid =
-			Self::lowest_bid(&Self::current_backup_validators(remaining_bids));
-
-		let highest_passive_node_bid =
-			Self::highest_bid(&Self::current_passive_nodes(remaining_bids));
-
-		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
-		HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);
-		RemainingBidders::<T>::put(remaining_bids);
 	}
 
 	fn adjust_group(
