@@ -18,11 +18,8 @@ pub const KEYGEN_STAGES: usize = 9;
 pub const SIGNING_STAGES: usize = 4;
 pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 
-/// Seeds
-// Note: Keygen seeds may need to be updated if keygen changes the way it uses the rng.
-// A seed that will produce a contract compatible key
-pub const COMPATIBLE_KEYGEN_SEED: [u8; 32] = [8; 32];
-// Default seed used when signing
+/// Default seeds
+pub const DEFAULT_KEYGEN_SEED: [u8; 32] = [8; 32];
 pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
 
 /// Default ceremony ids

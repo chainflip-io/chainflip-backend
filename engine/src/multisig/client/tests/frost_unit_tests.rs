@@ -260,7 +260,7 @@ async fn should_delay_rts_until_key_is_ready() {
             .chain(non_signing_nodes)
             .collect(),
         DEFAULT_KEYGEN_CEREMONY_ID,
-        Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
+        Rng::from_seed(DEFAULT_KEYGEN_SEED),
     );
 
     // The request to sign should have been delayed, so the stage is unaffected

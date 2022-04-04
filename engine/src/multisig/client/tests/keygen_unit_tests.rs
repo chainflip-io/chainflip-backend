@@ -1,4 +1,4 @@
-use rand_legacy::{FromEntropy, SeedableRng};
+use rand_legacy::FromEntropy;
 
 use crate::multisig::{
     client::{
@@ -20,7 +20,7 @@ use crate::testing::assert_ok;
 
 use super::*;
 
-use crate::logging::{KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED};
+use crate::logging::KEYGEN_REQUEST_IGNORED;
 
 /// If all nodes are honest and behave as expected we should
 /// generate a key without entering a blaming stage
@@ -523,11 +523,7 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 
 #[tokio::test]
 async fn should_handle_inconsistent_broadcast_hash_comm() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1, /* ceremony id */
-        Rng::from_seed([8; 32]),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let mut stage_1a_messages = ceremony.request().await;
 
@@ -556,11 +552,7 @@ async fn should_handle_inconsistent_broadcast_hash_comm() {
 // those parties reported.
 #[tokio::test]
 async fn should_report_on_invalid_hash_commitment() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
-        1, /* ceremony id */
-        Rng::from_seed([8; 32]),
-    );
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let stage_1a_messages = ceremony.request().await;
     let mut stage_1_messages =

@@ -56,7 +56,7 @@ use state_chain_runtime::AccountId;
 pub type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{
-    ACCOUNT_IDS, COMPATIBLE_KEYGEN_SEED, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+    ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
     DEFAULT_SIGNING_SEED, STAGE_FINISHED_OR_NOT_STARTED,
 };
 
@@ -454,7 +454,7 @@ impl KeygenCeremonyRunner {
         KeygenCeremonyRunner::new(
             new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::allowing_high_pubkey()),
             DEFAULT_KEYGEN_CEREMONY_ID,
-            Rng::from_seed(COMPATIBLE_KEYGEN_SEED),
+            Rng::from_seed(DEFAULT_KEYGEN_SEED),
         )
     }
 }
@@ -755,7 +755,7 @@ pub async fn run_keygen(
     ceremony_id: CeremonyId,
 ) -> (KeyId, StandardKeygenMessages, HashMap<AccountId, Node>) {
     let keygen_ceremony =
-        KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(COMPATIBLE_KEYGEN_SEED));
+        KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
     standard_keygen(keygen_ceremony).await
 }
 
