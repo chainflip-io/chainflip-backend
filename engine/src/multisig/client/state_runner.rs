@@ -283,6 +283,10 @@ where
         self.inner.is_some()
     }
 
+    pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<CeremonyResult>> {
+        self.inner.map(|inner| inner.result_sender)
+    }
+
     #[cfg(test)]
     pub fn get_stage(&self) -> Option<String> {
         self.inner

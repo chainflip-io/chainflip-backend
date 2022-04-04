@@ -150,9 +150,8 @@ impl CeremonyManager {
             .signing_states
             .remove(&ceremony_id)
             .unwrap()
-            .inner
-            .unwrap()
-            .result_sender;
+            .try_into_result_sender()
+            .unwrap();
         self.ceremony_id_tracker.consume_signing_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
             slog::warn!(

@@ -67,7 +67,7 @@ where
     let (signing_request_sender, mut signing_request_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let client = Arc::new(MultisigClient::new(
+    let multisig_client = Arc::new(MultisigClient::new(
         my_account_id.clone(),
         db,
         keygen_request_sender,
@@ -76,11 +76,12 @@ where
         &logger,
     ));
 
-    (client.clone(), {
+    let multisig_client_backend_future = {
         use crate::multisig::client::ceremony_manager::CeremonyManager;
 
         let mut ceremony_manager =
             CeremonyManager::new(my_account_id, outgoing_p2p_message_sender, &logger);
+        let multisig_client = multisig_client.clone();
 
         async move {
             // Stream outputs () approximately every ten seconds
@@ -100,10 +101,12 @@ where
                     _ = check_timeouts_tick.tick() => {
                         slog::trace!(logger, "Checking for expired multisig states");
                         ceremony_manager.check_timeouts();
-                        client.check_timeouts().await;
+                        multisig_client.check_timeouts().await;
                     }
                 }
             }
         }
-    })
+    };
+
+    (multisig_client, multisig_client_backend_future)
 }
