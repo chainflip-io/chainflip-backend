@@ -51,12 +51,6 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 	});
 }
 
-pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
-	BIDDER_SET.with(|cell| {
-		*cell.borrow_mut() = bidders;
-	});
-}
-
 pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
 	let auction_result =
 		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");

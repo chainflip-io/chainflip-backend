@@ -322,7 +322,9 @@ fn should_adjust_groups_in_emergency() {
 		// and the remaining BVs or 100/3
 		assert_eq!(number_of_backup_validators, max_validators / 3);
 
-		set_bidders(bidders_in_emergency_network);
+		BIDDER_SET.with(|cell| {
+			*cell.borrow_mut() = bidders_in_emergency_network;
+		});
 
 		// Let's now run the emergency auction
 		// We have a set of 100 bidders, 50 validators, 33 backup validators and 17 passive
