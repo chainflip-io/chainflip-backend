@@ -22,8 +22,6 @@ pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 // Note: Keygen seeds may need to be updated if keygen changes the way it uses the rng.
 // A seed that will produce a contract compatible key
 pub const COMPATIBLE_KEYGEN_SEED: [u8; 32] = [8; 32];
-// A seed that will produce a contract non-compatible key
-pub const NON_COMPATIBLE_KEYGEN_SEED: [u8; 32] = [11; 32];
 // Default seed used when signing
 pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
 

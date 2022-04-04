@@ -677,25 +677,18 @@ async fn should_handle_invalid_complaints4() {
 // Keygen aborts if the key is not compatible with the contract at VerifyCommitmentsBroadcast2
 #[tokio::test]
 async fn should_handle_not_compatible_keygen() {
-    let mut ceremony = KeygenCeremonyRunner::new(
-        new_nodes(ACCOUNT_IDS.clone(), KeygenOptions::default()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        Rng::from_seed(NON_COMPATIBLE_KEYGEN_SEED),
-    );
-    let messages = ceremony.request().await;
-    let messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1, VerifyComm2);
-    ceremony.distribute_messages(messages);
-
-    match ceremony.try_complete_with_error(&[]).await {
-        Some(_) => {
-            for node in ceremony.nodes.values() {
-                assert!(node.tag_cache.contains_tag(KEYGEN_REJECTED_INCOMPATIBLE));
-            }
-        }
-        None => {
-            panic!(
-                "Keygen was supposed to fail with an incompatible key. Maybe try a different seed."
-            );
+    let mut counter = 0;
+    loop {
+        if let Err(()) = run_keygen_with_err_on_high_pubkey(ACCOUNT_IDS.clone()).await {
+            break;
+        } else {
+            // We have a 50/50 chance of failing each time, so we should have failed keygen within 40 tries
+            // But it has a 0.0000000001% chance of failing this test as a false positive.
+            counter += 1;
+            assert!(
+                counter < 40,
+                "Should have failed keygen with high pub key by now"
+            )
         }
     }
 }
