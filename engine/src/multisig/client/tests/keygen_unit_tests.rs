@@ -576,7 +576,15 @@ async fn should_handle_inconsistent_broadcast_complaints4() {
 
     let messages = ceremony.request().await;
 
-    let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+    let mut messages = run_stages!(
+        ceremony,
+        messages,
+        VerifyHashComm2,
+        Comm1,
+        VerifyComm2,
+        SecretShare3,
+        Complaints4
+    );
 
     let [bad_account_id] = &ceremony.select_account_ids();
 
@@ -610,7 +618,14 @@ async fn should_handle_inconsistent_broadcast_complaints6() {
 
     let messages = ceremony.request().await;
 
-    let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+    let mut messages = run_stages!(
+        ceremony,
+        messages,
+        VerifyHashComm2,
+        Comm1,
+        VerifyComm2,
+        SecretShare3
+    );
 
     let [bad_node_id, blamed_node_id] = &ceremony.select_account_ids();
 
@@ -1090,6 +1105,8 @@ mod timeout {
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
+            let messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
+
             // bad party 1 times out during a broadcast stage. It should be reported
             let messages = ceremony
                 .run_stage_with_non_sender::<VerifyComm2, _, _>(messages, &non_sending_party_id_1)
@@ -1109,7 +1126,15 @@ mod timeout {
 
             let messages = ceremony.request().await;
 
-            let messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+            let messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyHashComm2,
+                Comm1,
+                VerifyComm2,
+                SecretShare3,
+                Complaints4
+            );
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
@@ -1135,7 +1160,14 @@ mod timeout {
 
             let messages = ceremony.request().await;
 
-            let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+            let mut messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyHashComm2,
+                Comm1,
+                VerifyComm2,
+                SecretShare3
+            );
 
             // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
             *messages
