@@ -211,7 +211,7 @@ where
         }
     }
 
-    // This function is structued to simplify the writing of tests (i.e. should_delay_rts_until_key_is_ready).
+    // This function is structured to simplify the writing of tests (i.e. should_delay_rts_until_key_is_ready).
     // When the function is called it will send the request to the CeremonyManager/Backend immediately
     // The function returns a future that will complete only once the CeremonyManager has finished
     // the ceremony. This allows tests to split making the request and waiting for the result.
@@ -277,14 +277,12 @@ where
                                 CEREMONY_ID_KEY => pending_request.ceremony_id
                             );
                             if pending_request.signers.len() == 1 {
-                                pending_request
-                                    .result_sender
-                                    .send(Ok(self.single_party_signing(
+                                let _result = pending_request.result_sender.send(Ok(self
+                                    .single_party_signing(
                                         pending_request.data,
                                         keygen_result_info.clone(),
                                         pending_request.rng,
-                                    )))
-                                    .unwrap();
+                                    )));
                             } else {
                                 self.signing_request_sender
                                     .send((
@@ -303,14 +301,14 @@ where
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
                 Some(Err(error)) => Err(error),
-                None => Err((vec![], anyhow::Error::msg("Keygen ceremony ignored"))),
+                None => Err((vec![], anyhow::Error::msg("Keygen request ignored"))),
             }
         }
     }
 
-    // Similarly to initiate_keygen this function is structued to simplify the writing of tests (i.e. should_delay_rts_until_key_is_ready).
-    // Once the async function is complete it will that sent the request to the CeremonyManager/Backend
-    // The function returns a second future that will complete only once the CeremonyManager has finished
+    // Similarly to initiate_keygen this function is structured to simplify the writing of tests (i.e. should_delay_rts_until_key_is_ready).
+    // Once the async function returns it has sent the request to the CeremonyManager/Backend
+    // and outputs a second future that will complete only once the CeremonyManager has finished
     // the ceremony. This allows tests to split making the request and waiting for the result.
     pub async fn initiate_signing(
         &self,
@@ -389,7 +387,7 @@ where
                     if let Ok(result) = result_receiver.await {
                         result
                     } else {
-                        Err((vec![], anyhow::Error::msg("Keygen ceremony ignored")))
+                        Err((vec![], anyhow::Error::msg("Signing request ignored")))
                     }
                 }
             }
@@ -398,7 +396,7 @@ where
 
     /// Clean up expired states
     #[allow(clippy::unnecessary_filter_map)] // Clippy is wrong
-    pub async fn cleanup(&self) {
+    pub async fn check_timeouts(&self) {
         // cleanup stale signing_request in pending_requests_to_sign
         let logger = &self.logger;
 
@@ -418,7 +416,7 @@ where
                             CEREMONY_ID_KEY => pending_signing_request.ceremony_id,
                         );
 
-                        pending_signing_request.result_sender.send(Err((vec![], anyhow::Error::msg("Signing ceremony timed out before the associated key was generated.")))).unwrap();
+                        let _result = pending_signing_request.result_sender.send(Err((vec![], anyhow::Error::msg("Signing ceremony timed out before the associated key was generated."))));
 
                         None
                     } else {
@@ -496,6 +494,20 @@ where
         SchnorrSignature {
             s: *sigma.as_bytes(),
             r: r.get_element(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn expire_all(&self) {
+        for pending in self
+            .inner_state
+            .try_write()
+            .unwrap()
+            .pending_requests_to_sign
+            .values_mut()
+            .flatten()
+        {
+            pending.should_expire_at = std::time::Instant::now();
         }
     }
 }

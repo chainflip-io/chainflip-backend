@@ -84,7 +84,7 @@ where
 
         async move {
             // Stream outputs () approximately every ten seconds
-            let mut cleanup_tick = common::make_periodic_tick(Duration::from_secs(10));
+            let mut check_timeouts_tick = common::make_periodic_tick(Duration::from_secs(10));
 
             loop {
                 tokio::select! {
@@ -97,10 +97,10 @@ where
                     Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
                         ceremony_manager.process_p2p_message(sender_id, message);
                     }
-                    _ = cleanup_tick.tick() => {
+                    _ = check_timeouts_tick.tick() => {
                         slog::trace!(logger, "Checking for expired multisig states");
-                        ceremony_manager.cleanup();
-                        client.cleanup().await;
+                        ceremony_manager.check_timeouts();
+                        client.check_timeouts().await;
                     }
                 }
             }

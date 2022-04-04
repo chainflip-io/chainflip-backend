@@ -506,10 +506,7 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-pub struct KeygenCeremonyRunnerData {
-    keygen_options: KeygenOptions,
-}
-pub type KeygenCeremonyRunner = CeremonyRunner<KeygenCeremonyRunnerData>;
+pub type KeygenCeremonyRunner = CeremonyRunner<KeygenOptions>;
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     type CeremonyData = KeygenData;
     type Output = KeygenResultInfo;
@@ -564,12 +561,7 @@ impl KeygenCeremonyRunner {
         keygen_options: KeygenOptions,
         rng: Rng,
     ) -> Self {
-        Self::inner_new(
-            nodes,
-            ceremony_id,
-            KeygenCeremonyRunnerData { keygen_options },
-            rng,
-        )
+        Self::inner_new(nodes, ceremony_id, keygen_options, rng)
     }
 
     pub fn keygen_ceremony_details(&mut self) -> KeygenCeremonyDetails {
@@ -579,7 +571,7 @@ impl KeygenCeremonyRunner {
             ceremony_id: self.ceremony_id,
             rng: Rng::from_seed(self.rng.gen()),
             signers: self.nodes.keys().cloned().collect(),
-            keygen_options: self.ceremony_runner_data.keygen_options,
+            keygen_options: self.ceremony_runner_data,
         }
     }
 }
@@ -1075,7 +1067,7 @@ const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 impl Node {
     pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
-        self.ceremony_manager.cleanup();
+        self.ceremony_manager.check_timeouts();
     }
 
     pub fn ensure_ceremony_at_signing_stage(
@@ -1148,7 +1140,7 @@ pub fn verify_sig_with_aggkey(sig: &SchnorrSignature, key_id: &KeyId) -> Result<
     Ok(())
 }
 
-pub fn modify_participants(participants: &mut Vec<AccountId>, keep: AccountId, add: AccountId) {
+pub fn switch_out_participant(participants: &mut Vec<AccountId>, keep: AccountId, add: AccountId) {
     participants.retain(|account_id| keep != *account_id);
     let account_id = participants
         .iter_mut()

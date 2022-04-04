@@ -5,8 +5,8 @@ use crate::multisig::{
     client::{
         keygen::{self, SecretShare3},
         tests::helpers::{
-            gen_invalid_keygen_comm1, modify_participants, new_node, new_nodes, run_keygen,
-            split_messages_for, STAGE_FINISHED_OR_NOT_STARTED,
+            gen_invalid_keygen_comm1, new_node, new_nodes, run_keygen, split_messages_for,
+            switch_out_participant, STAGE_FINISHED_OR_NOT_STARTED,
         },
         utils::PartyIdxMapping,
     },
@@ -366,8 +366,8 @@ async fn should_abort_on_blames_at_invalid_indexes() {
 
 #[tokio::test]
 #[should_panic]
-async fn should_ignore_keygen_request_if_not_participating() {
-    let mut node = new_node(ACCOUNT_IDS[0].clone());
+async fn should_panic_keygen_request_if_not_participating() {
+    let mut node = new_node(AccountId::new([0; 32]));
 
     // Get an id that is not `c0`s id
     let unknown_id = AccountId::new([0; 32]);
@@ -407,7 +407,7 @@ async fn should_ignore_duplicate_keygen_request() {
     let mut keygen_ceremony_details = ceremony.keygen_ceremony_details();
     let unknown_id = AccountId::new([0; 32]);
     assert!(!ceremony.nodes.contains_key(&unknown_id));
-    modify_participants(
+    switch_out_participant(
         &mut keygen_ceremony_details.signers,
         node_id.clone(),
         unknown_id,

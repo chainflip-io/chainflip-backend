@@ -16,7 +16,7 @@ use crate::{
         tests::fixtures::MESSAGE_HASH,
         KeyDBMock, MessageHash,
     },
-    testing::{assert_future_can_complete, assert_future_cannot_complete, assert_ok},
+    testing::{assert_future_awaits, assert_future_can_complete, assert_ok},
 };
 use client::{MultisigClient, SchnorrSignature};
 use rand_legacy::SeedableRng;
@@ -257,7 +257,7 @@ async fn should_delay_rts_until_key_is_ready() {
         .await;
 
     // Check Sign Request Has been Delayed
-    assert_future_cannot_complete(&mut signing_request_fut);
+    assert_future_awaits(&mut signing_request_fut);
     assert_eq!(
         signing_request_receiver.try_recv().unwrap_err(),
         TryRecvError::Empty
@@ -267,14 +267,14 @@ async fn should_delay_rts_until_key_is_ready() {
     assert_ok!(keygen_request_fut.await);
 
     // Check Sign Request cannot return Until signature is provided
-    assert_future_cannot_complete(&mut signing_request_fut);
+    assert_future_awaits(&mut signing_request_fut);
 
     // Fake completion of requests keygen
     let fake_signature = SchnorrSignature {
         s: [0; 32],
         r: PublicKey::from(unsafe { secp256k1::ffi::PublicKey::new() }),
     };
-    let (_, _, _, _, _, result_sender) = signing_request_receiver.recv().await.unwrap();
+    let (.., result_sender) = signing_request_receiver.recv().await.unwrap();
     result_sender.send(Ok(fake_signature.clone())).unwrap();
 
     // Check sign request completes after signature is provided
@@ -295,7 +295,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     // Send the request to sign with a signer specified that is unknown
     let [test_node_id] = signing_ceremony.select_account_ids();
     let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(&test_node_id);
-    helpers::modify_participants(
+    helpers::switch_out_participant(
         &mut signing_ceremony_details.signers,
         test_node_id.clone(),
         unknown_signer_id,
@@ -314,7 +314,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 
 #[tokio::test]
 #[should_panic]
-async fn should_ignore_rts_if_not_participating() {
+async fn should_panic_rts_if_not_participating() {
     let (mut signing_ceremony, non_signing_nodes) = new_signing_ceremony_with_keygen().await;
 
     // Get a node that participated in generating this key, but one not selected for this signing
@@ -329,7 +329,7 @@ async fn should_ignore_rts_if_not_participating() {
 }
 
 #[tokio::test]
-async fn should_ignore_rts_with_incsufficient_number_of_signers() {
+async fn should_ignore_rts_with_insufficient_number_of_signers() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let [test_node_id] = signing_ceremony.select_account_ids();
@@ -355,6 +355,45 @@ async fn should_ignore_rts_with_incsufficient_number_of_signers() {
         signing_ceremony.ceremony_id
     ));
     assert!(node_0.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+}
+
+#[tokio::test]
+async fn pending_rts_should_expire() {
+    let logger = logging::test_utils::new_test_logger();
+
+    let (key_id, ..) = run_keygen(
+        new_nodes(ACCOUNT_IDS.clone()),
+        1,
+        KeygenOptions::allowing_high_pubkey(),
+    )
+    .await;
+
+    let account_id = &ACCOUNT_IDS[0];
+    let (keygen_request_sender, mut _keygen_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (signing_request_sender, mut _signing_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let client = MultisigClient::new(
+        account_id.clone(),
+        KeyDBMock::default(),
+        keygen_request_sender,
+        signing_request_sender,
+        KeygenOptions::default(),
+        &logger,
+    );
+
+    let mut signing_request_fut = client
+        .initiate_signing(1, key_id, ACCOUNT_IDS.to_vec(), MessageHash([0; 32]))
+        .await;
+
+    assert_future_awaits(&mut signing_request_fut);
+
+    client.expire_all();
+
+    client.check_timeouts().await;
+
+    assert_future_can_complete(signing_request_fut).unwrap_err();
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -473,7 +512,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
         .find(|account_id| **account_id != node_0_id)
         .unwrap()
         .clone();
-    helpers::modify_participants(
+    helpers::switch_out_participant(
         &mut signing_ceremony_details.signers,
         node_0_id.clone(),
         dup_account_id,

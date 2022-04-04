@@ -188,41 +188,33 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         ceremony_id,
                                                         validator_candidates,
                                                     ),
-                                                ) => {
+                                                ) if validator_candidates.contains(&state_chain_client.our_account_id) => {
                                                     let multisig_client = multisig_client.clone();
                                                     let state_chain_client = state_chain_client.clone();
                                                     let logger = logger.clone();
                                                     tokio::spawn(async move {
-                                                        match multisig_client.keygen(ceremony_id, validator_candidates).await {
-                                                            Ok(public_key) => {
-                                                                let _result = state_chain_client
-                                                                    .submit_signed_extrinsic(
-                                                                        pallet_cf_vaults::Call::report_keygen_outcome(
-                                                                            ceremony_id,
+                                                        let _result = state_chain_client
+                                                            .submit_signed_extrinsic(
+                                                                pallet_cf_vaults::Call::report_keygen_outcome(
+                                                                    ceremony_id,
+                                                                    match multisig_client.keygen(ceremony_id, validator_candidates).await {
+                                                                        Ok(public_key) => {
                                                                             pallet_cf_vaults::KeygenOutcome::Success(
                                                                                 cf_chains::eth::AggKey::from_pubkey_compressed(
                                                                                     public_key.serialize(),
                                                                                 ),
-                                                                            ),
-                                                                        ),
-                                                                        &logger,
-                                                                    )
-                                                                    .await;
-                                                            }
-                                                            Err((bad_account_ids, _error)) => {
-                                                                let _result = state_chain_client
-                                                                    .submit_signed_extrinsic(
-                                                                        pallet_cf_vaults::Call::report_keygen_outcome(
-                                                                            ceremony_id,
+                                                                            )
+                                                                        }
+                                                                        Err((bad_account_ids, _error)) => {
                                                                             pallet_cf_vaults::KeygenOutcome::Failure(BTreeSet::from_iter(
                                                                                 bad_account_ids,
-                                                                            )),
-                                                                        ),
-                                                                        &logger,
-                                                                    )
-                                                                    .await;
-                                                            }
-                                                        }
+                                                                            ))
+                                                                        }
+                                                                    },
+                                                                ),
+                                                                &logger,
+                                                            )
+                                                            .await;
                                                     });
                                                 }
                                                 state_chain_runtime::Event::EthereumThresholdSigner(
@@ -251,7 +243,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                     .submit_signed_extrinsic(
                                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
                                                                             ceremony_id,
-                                                                            bad_account_ids.into_iter().collect(), // TODO NOW Questionable
+                                                                            bad_account_ids.into_iter().collect(),
                                                                         ),
                                                                         &logger,
                                                                     )
