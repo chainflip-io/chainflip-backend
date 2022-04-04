@@ -642,19 +642,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			use cf_traits::ChainflipAccountState;
-
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
 			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-
-			for validator_id in &genesis_validators {
-				T::ChainflipAccount::update_state(
-					&(validator_id.clone()),
-					ChainflipAccountState::Validator,
-				)
-			}
 
 			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
 		}
