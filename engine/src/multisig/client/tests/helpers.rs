@@ -456,7 +456,7 @@ where
     ) {
         self.try_complete_with_error(bad_account_ids, &mut result_receivers)
             .await
-            .unwrap();
+            .expect("Failed to get all ceremony outcomes");
     }
 
     pub fn request_without_gather(

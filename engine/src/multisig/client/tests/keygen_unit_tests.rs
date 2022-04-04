@@ -1081,5 +1081,93 @@ mod timeout {
 
             ceremony.complete(result_receivers).await;
         }
+
+        #[tokio::test]
+        async fn report_if_insufficient_messages_stage_2() {
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+            let messages = ceremony.request().await;
+
+            let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
+
+            // bad party 1 times out during a broadcast stage. It should be reported
+            let messages = ceremony
+                .run_stage_with_non_sender::<VerifyComm2, _, _>(messages, &non_sending_party_id_1)
+                .await;
+
+            // bad party 2 times out during a broadcast verification stage. It won't get reported.
+            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+
+            ceremony
+                .complete_with_error(&[non_sending_party_id_1])
+                .await
+        }
+
+        #[tokio::test]
+        async fn report_if_insufficient_messages_stage_5() {
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+            let messages = ceremony.request().await;
+
+            let messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+
+            let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
+
+            // bad party 1 times out during a broadcast stage. It should be reported
+            let messages = ceremony
+                .run_stage_with_non_sender::<VerifyComplaints5, _, _>(
+                    messages,
+                    &non_sending_party_id_1,
+                )
+                .await;
+
+            // bad party 2 times out during a broadcast verification stage. It won't get reported.
+            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+
+            ceremony
+                .complete_with_error(&[non_sending_party_id_1])
+                .await
+        }
+
+        #[tokio::test]
+        async fn report_if_insufficient_messages_stage_7() {
+            let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+            let messages = ceremony.request().await;
+
+            let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+
+            // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
+            *messages
+                .get_mut(&ACCOUNT_IDS[0])
+                .unwrap()
+                .get_mut(&ACCOUNT_IDS[1])
+                .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+
+            let messages = run_stages!(
+                ceremony,
+                messages,
+                Complaints4,
+                VerifyComplaints5,
+                BlameResponse6
+            );
+
+            let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
+
+            // bad party 1 times out during a broadcast stage. It should be reported
+            let messages = ceremony
+                .run_stage_with_non_sender::<VerifyBlameResponses7, _, _>(
+                    messages,
+                    &non_sending_party_id_1,
+                )
+                .await;
+
+            // bad party 2 times out during a broadcast verification stage. It won't get reported.
+            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+
+            ceremony
+                .complete_with_error(&[non_sending_party_id_1])
+                .await
+        }
     }
 }
