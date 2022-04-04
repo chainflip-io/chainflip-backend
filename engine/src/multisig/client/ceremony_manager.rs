@@ -25,7 +25,7 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 use crate::multisig::MessageHash;
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
-use super::keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions};
+use super::keygen::{HashCommitments1, HashContext, KeygenData, KeygenOptions};
 use super::{MultisigData, MultisigMessage};
 
 pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (Vec<AccountId>, anyhow::Error)>>;
@@ -243,7 +243,7 @@ impl CeremonyManager {
                 rng,
             };
 
-            let processor = AwaitCommitments1::new(common.clone(), keygen_options, context);
+            let processor = HashCommitments1::new(common.clone(), keygen_options, context);
 
             Box::new(BroadcastStage::new(processor, common))
         };

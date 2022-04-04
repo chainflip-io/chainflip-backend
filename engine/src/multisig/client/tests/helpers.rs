@@ -12,7 +12,7 @@ use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
 use futures::{stream, Future, StreamExt};
 use itertools::{Either, Itertools};
 
-use rand_legacy::{FromEntropy, SeedableRng};
+use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
@@ -24,7 +24,7 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
-            keygen::{HashContext, KeygenOptions, SecretShare3},
+            keygen::{HashComm1, HashContext, KeygenOptions, SecretShare3},
             signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
         crypto::Rng,
@@ -511,7 +511,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     type CeremonyData = KeygenData;
     type Output = KeygenResultInfo;
     type CheckedOutput = (KeyId, HashMap<AccountId, Self::Output>);
-    type InitialStageData = keygen::Comm1;
+    type InitialStageData = keygen::HashComm1;
     const CEREMONY_FAILED_TAG: &'static str = KEYGEN_CEREMONY_FAILED;
 
     fn post_successful_complete_check(
@@ -859,6 +859,8 @@ pub async fn standard_signing(
 }
 
 pub struct StandardKeygenMessages {
+    pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
+    pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
     pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1>>,
     pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2>>,
     pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3>>,
@@ -874,7 +876,9 @@ pub async fn standard_keygen(
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
-    let (stage_1_messages, result_receivers) = keygen_ceremony.request().await;
+    let (stage_1a_messages, result_receivers) = keygen_ceremony.request().await;
+    let stage_2a_messages = keygen_ceremony.run_stage(stage_1a_messages.clone()).await;
+    let stage_1_messages = keygen_ceremony.run_stage(stage_2a_messages.clone()).await;
     let stage_2_messages = keygen_ceremony.run_stage(stage_1_messages.clone()).await;
     let stage_3_messages = keygen_ceremony.run_stage(stage_2_messages.clone()).await;
     let stage_4_messages = keygen_ceremony.run_stage(stage_3_messages.clone()).await;
@@ -886,6 +890,8 @@ pub async fn standard_keygen(
         key_id,
         key_data,
         StandardKeygenMessages {
+            stage_1a_messages,
+            stage_2a_messages,
             stage_1_messages,
             stage_2_messages,
             stage_3_messages,
@@ -927,10 +933,14 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         KeygenOptions::default(),
         Rng::from_entropy(),
     );
-    let (stage_1_messages, mut result_receivers) = keygen_ceremony.request().await;
-    let stage_2_messages = keygen_ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
-        .await;
+    let (stage_1a_messages, mut result_receivers) = keygen_ceremony.request().await;
+    let stage_2_messages = run_stages!(
+        keygen_ceremony,
+        stage_1a_messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
+        keygen::VerifyComm2
+    );
     keygen_ceremony.distribute_messages(stage_2_messages);
     match keygen_ceremony
         .try_complete_with_error(&[], &mut result_receivers)
@@ -963,6 +973,8 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 
 #[derive(Clone)]
 pub struct AllKeygenMessages {
+    pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
+    pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
     pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1>>,
     pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2>>,
     pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3>>,
@@ -985,7 +997,11 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
     )>,
 > {
     Box::pin(async move {
-        let (stage_1_messages, result_receivers) = ceremony.request().await;
+        let (stage_1a_messages, result_receivers) = ceremony.request().await;
+        visitor.yield_ceremony(&stage_1a_messages)?;
+        let stage_2a_messages = ceremony.run_stage(stage_1a_messages.clone()).await;
+        visitor.yield_ceremony(&stage_2a_messages)?;
+        let stage_1_messages = ceremony.run_stage(stage_2a_messages.clone()).await;
         visitor.yield_ceremony(&stage_1_messages)?;
         let stage_2_messages = ceremony.run_stage(stage_1_messages.clone()).await;
         visitor.yield_ceremony(&stage_2_messages)?;
@@ -1012,6 +1028,8 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
         Some((
             key_data,
             vec![
+                into_generic_stage_data(stage_1a_messages.clone()),
+                into_generic_stage_data(stage_2a_messages.clone()),
                 into_generic_stage_data(stage_1_messages.clone()),
                 into_generic_stage_data(stage_2_messages.clone()),
                 into_generic_stage_data(stage_3_messages.clone()),
@@ -1021,6 +1039,8 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
                 into_generic_stage_data(stage_7_messages.clone()),
             ],
             AllKeygenMessages {
+                stage_1a_messages,
+                stage_2a_messages,
                 stage_1_messages,
                 stage_2_messages,
                 stage_3_messages,
@@ -1041,10 +1061,20 @@ pub fn gen_invalid_local_sig(mut rng: &mut Rng) -> LocalSig3 {
     }
 }
 
+pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
+    use sp_core::H256;
+
+    let mut buffer: [u8; 32] = [0; 32];
+    rng.fill_bytes(&mut buffer);
+
+    HashComm1(H256::from(buffer))
+}
+
 // Make these member functions of the CeremonyRunner
 pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
         &mut rng,
+        // The commitment is only invalid because of the invalid context
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
@@ -1103,13 +1133,15 @@ impl Node {
         let stage = self.ceremony_manager.get_keygen_stage_for(ceremony_id);
         let is_at_stage = match stage_number {
             STAGE_FINISHED_OR_NOT_STARTED => stage == None,
-            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
-            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
-            3 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
-            4 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage4>"),
-            5 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage5>"),
-            6 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage6>"),
-            7 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage7>"),
+            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
+            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage4>"),
+            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage5>"),
+            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage6>"),
+            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage7>"),
             _ => false,
         };
         if is_at_stage {

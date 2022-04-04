@@ -6,13 +6,13 @@ mod keygen_stages;
 pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 pub use keygen_data::{
-    BlameResponse6, Comm1, Complaints4, KeygenData, SecretShare3, VerifyBlameResponses7,
-    VerifyComm2, VerifyComplaints5,
+    BlameResponse6, Comm1, Complaints4, HashComm1, KeygenData, SecretShare3, VerifyBlameResponses7,
+    VerifyComm2, VerifyComplaints5, VerifyHashComm2,
 };
 
 pub use keygen_frost::HashContext;
 
-pub use keygen_stages::{is_contract_compatible, AwaitCommitments1};
+pub use keygen_stages::{is_contract_compatible, HashCommitments1};
 
 #[derive(Clone, Copy)] // TODO Doesn't need to derive Copy
 pub struct KeygenOptions {
