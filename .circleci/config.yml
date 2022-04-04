@@ -599,7 +599,7 @@ jobs:
       - store_artifacts:
           path: target/release
       - store_artifacts:
-          path: generated/
+          path: ./chainflip-docgen/generated/
 
   create-testnet:
     parameters:
