@@ -276,7 +276,11 @@ pub mod pallet {
 					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(_) => {
-					T::Auctioneer::update_backup_and_passive_states();
+					// TODO: Delete this and move it somewhere it makes sense
+					// (or remove it if promot_demote does it)
+					// Removing this leads to unauthorised witness in some integration tests
+					// e.g. decreasing_mab_scenario
+					// T::Auctioneer::update_backup_and_passive_states();
 					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -761,6 +765,7 @@ impl<T: Config> Pallet<T> {
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
 			// Update validator account state.
+			// Inline this????
 			ChainflipAccountStore::<T>::update_validator_account_data(validator, new_epoch);
 		}
 

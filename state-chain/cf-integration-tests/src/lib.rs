@@ -48,6 +48,7 @@ mod tests {
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+		// TODO: Can we use the actual events here?
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
 		pub enum ContractEvent {
@@ -192,6 +193,7 @@ mod tests {
 				if self.state() == ChainflipAccountState::Validator && self.active {
 					match event {
 						ContractEvent::Staked { node_id: validator_id, amount, .. } => {
+							println!("{} is witnessing stake for: {}", self.node_id, validator_id);
 							// Witness event -> send transaction to state chain
 							state_chain_runtime::WitnesserApi::witness_staked(
 								Origin::signed(self.node_id.clone()),
@@ -1513,18 +1515,26 @@ mod tests {
 					network::Cli::activate_account(node_4.clone());
 					network::Cli::activate_account(node_5.clone());
 
+					println!("Current active: {:?}", Validator::current_validators());
+
 					// Stake the first 3 nodes to be in the active set
 					testnet.stake_manager_contract.stake(node_1.clone(), 100);
 					testnet.stake_manager_contract.stake(node_2.clone(), 50);
 					testnet.stake_manager_contract.stake(node_3.clone(), 30);
+
+					println!("Stake the first 3 nodes");
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 					// Expect the MAB to be the genesis balance
 					assert_eq!(1, Validator::bond());
 
+					println!("Moved forward an epoch blocks");
+
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+
+					println!("Moved forward an epoch blocks again");
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
 					let current_validators = Validator::current_validators();
@@ -1542,10 +1552,14 @@ mod tests {
 					testnet.stake_manager_contract.stake(node_4.clone(), 5);
 					testnet.stake_manager_contract.stake(node_5.clone(), 5);
 
+					println!("Added staked events for the passive nodes");
+
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
 					// Bond has decreased from 31 to 6
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
+
+					println!("Moved forward epoch blocks a third time");
 
 					let current_validators = Validator::current_validators();
 					// Expect all nodes to be in the active set

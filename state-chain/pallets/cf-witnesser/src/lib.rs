@@ -29,7 +29,7 @@ use frame_support::{
 	Hashable,
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
-use sp_std::prelude::*;
+use sp_std::{if_std, prelude::*};
 use utilities::success_threshold_from_share_count;
 
 #[frame_support::pallet]
@@ -231,14 +231,26 @@ impl<T: Config> Pallet<T> {
 		// Ensure the epoch has not yet expired
 		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
-		// Look up the signer in the list of validators
-		let index = ValidatorIndex::<T>::get(&epoch_index, &who)
-			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
-
 		// The number of validators for the epoch
 		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
 		// validator count.
 		let num_validators = EpochValidatorCount::<T>::get(epoch_index).unwrap_or_default();
+
+		if_std! {
+			// This code is only being compiled and executed when the `std` feature is enabled.
+			println!("Num validators: {}", num_validators);
+			println!("Epoch index: {}", epoch_index);
+			println!("Who is doing witness: {}", who);
+		}
+
+		// Look up the signer in the list of validators
+		let index = ValidatorIndex::<T>::get(&epoch_index, &who)
+			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
+
+		if_std! {
+			// This code is only being compiled and executed when the `std` feature is enabled.
+			println!("Was a good witness")
+		}
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);
@@ -359,6 +371,9 @@ where
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
+	// By this point, current_validators() is already updated
+	// It seems weird that ValidatorIndex is not removed here
+	// also where the fuck are current validators set
 	fn on_new_epoch(
 		_previous_epoch_validators: &[Self::ValidatorId],
 		epoch_validators: &[Self::ValidatorId],
@@ -366,8 +381,22 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		// Update the list of validators in the witnesser.
 		let epoch = T::EpochInfo::epoch_index();
 
+		if_std! {
+			let current_validators = T::EpochInfo::current_validators();
+			println!(
+				"The current validators before inserting validator index: {:?}",
+				current_validators
+			);
+		}
+
+		// Why are we not inserting the old valiators here
 		let mut total = 0;
 		for (i, v) in epoch_validators.iter().enumerate() {
+			if_std! {
+				// This code is only being compiled and executed when the `std` feature is enabled.
+				println!("Inserting validator {:?} for epoch: {}", v, epoch);
+			}
+
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
 			total += 1;
 		}

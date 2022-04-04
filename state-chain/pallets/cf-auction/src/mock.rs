@@ -55,6 +55,7 @@ pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
 	let auction_result =
 		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
 
+	// TODO: This should not be in the Auctioneer pallet either
 	<AuctionPallet as Auctioneer>::update_backup_and_passive_states();
 
 	// TODO: Fix this hack

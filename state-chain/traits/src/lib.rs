@@ -380,6 +380,7 @@ pub trait ChainflipAccount {
 	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex);
 }
 
+// Remove in place of a proper validator enum
 /// An outgoing node
 pub trait IsOutgoing {
 	type AccountId;
