@@ -273,7 +273,7 @@ fn should_establish_a_highest_passive_node_bid() {
 }
 
 #[test]
-fn should_adjust_groups_in_emergency() {
+fn should_adjust_validator_at_boundary_in_emergency() {
 	new_test_ext().execute_with(|| {
 		let number_of_bidders = 150u32;
 		let max_validators = 100u32;

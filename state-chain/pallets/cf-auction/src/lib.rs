@@ -356,7 +356,9 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn adjust_group(
+	// There are only a certain number of backup validators allowed to be backup
+	// so when we update particular states, we must also adjust the one on the boundary
+	fn set_validator_state_and_adjust_at_boundary(
 		validator_id: &T::ValidatorId,
 		account_state: ChainflipAccountState,
 		remaining_bidders: &mut Vec<RemainingBid<T::ValidatorId, T::Amount>>,
@@ -407,7 +409,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 					remaining_bidders,
 					(validator_id.clone(), amount),
 				);
-				Pallet::<T>::adjust_group(
+				Pallet::<T>::set_validator_state_and_adjust_at_boundary(
 					validator_id,
 					ChainflipAccountState::Backup,
 					remaining_bidders,
@@ -427,7 +429,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 					(validator_id.clone(), amount),
 				);
 				if amount < LowestBackupValidatorBid::<T>::get() {
-					Pallet::<T>::adjust_group(
+					Pallet::<T>::set_validator_state_and_adjust_at_boundary(
 						validator_id,
 						ChainflipAccountState::Passive,
 						&mut RemainingBidders::<T>::get(),
