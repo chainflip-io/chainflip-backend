@@ -337,8 +337,6 @@ fn test_not_enough_signers_for_threshold() {
 		.with_request(b"OHAI")
 		.build()
 		.execute_with(|| {
-			let ceremony_id = current_ceremony_id();
-			let _ = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 		});
@@ -455,7 +453,7 @@ mod failure_reporting {
 		// reported.
 		assert_eq!(ctx.offenders(), vec![4, 5], "Context was {:?}.", ctx);
 
-		// // Fourth report, reporting threshold passed.
+		// Fourth report, reporting threshold passed.
 		report(&mut ctx, 4, vec![1]);
 
 		// Status: 4 responses in, votes: [1:3, 2:1]
