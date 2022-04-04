@@ -553,7 +553,7 @@ jobs:
         type: string
         default: cluster-staging
     docker:
-      - image: "cimg/node:stable"
+      - image: "cimg/node:17.8.0"
     steps:
       - checkout
       - attach_workspace:
