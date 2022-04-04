@@ -185,9 +185,14 @@ workflows:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
-      - test-single-node:
+      - git-clone-docgen-repo:
           requires:
             - cargo-build-and-test
+          context:
+            - github-credentials
+      - test-single-node:
+          requires:
+            - git-clone-docgen-repo
           context:
             - ghcr-credentials
             - do-credentials
@@ -497,6 +502,23 @@ jobs:
           paths:
             - cluster
 
+  git-clone-docgen-repo:
+    resource_class: small
+    docker:
+      - image: "cimg/node:stable"
+    steps:
+      - gh/setup
+      - gh/clone:
+          repo: https://github.com/chainflip-io/chainflip-docgen.git
+          dir: chainflip-docgen
+      - run: |
+          cd chainflip-docgen
+          npm install
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - chainflip-docgen/*
+
   run-integration-tests:
     resource_class: xlarge
     executor: rust-poetry
@@ -530,7 +552,8 @@ jobs:
         description: Name of the cluster to authenticate to
         type: string
         default: cluster-staging
-    executor: chainflip-master
+    docker:
+      - image: "cimg/node:stable"
     steps:
       - checkout
       - attach_workspace:
@@ -567,8 +590,17 @@ jobs:
             curl
             --url 'http://localhost:5555/health'
             -vv
+      - run:
+          name: Generate State Chain docs
+          command: |
+            export WS_ENDPOINT="ws://localhost:9944"
+            export TYPES_FILE="./state-chain/types.json"
+            cd ~/chainflip-docgen/
+            npm run generate
       - store_artifacts:
           path: target/release
+      - store_artifacts:
+          path: generated/
 
   create-testnet:
     parameters:
