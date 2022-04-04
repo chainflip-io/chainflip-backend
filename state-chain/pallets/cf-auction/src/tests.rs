@@ -22,8 +22,6 @@ fn should_provide_winning_set() {
 			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(expected_winning_set().0)),
 		);
 
-		<AuctionPallet as Auctioneer>::update_backup_and_passive_states();
-
 		generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
 		let AuctionResult { winners, minimum_active_bid, .. } = run_complete_auction();
 
