@@ -282,7 +282,6 @@ pub mod pallet {
 						// Initiate a new attempt.
 						Self::new_ceremony_attempt(request_id, payload, attempt.wrapping_add(1));
 
-						// Scedule a retry
 						Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
 					} else {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
@@ -485,6 +484,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Start a ceremony.
 		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
 
+		// Secedule an inital retry
+		Self::schedule_retry(ceremony_id, T::ThresholdFailureTimeout::get());
+
 		// Set retry timeout
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
 
@@ -528,8 +530,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				nominees,
 				payload,
 			));
-
-			Self::schedule_retry(ceremony_id, T::ThresholdFailureTimeout::get());
 		} else {
 			// Store the context, schedule a retry for the next block.
 			PendingCeremonies::<T, I>::insert(

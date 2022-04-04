@@ -235,7 +235,6 @@ fn fail_path_with_timeout() {
 			// Callback has *not* executed but is scheduled for a retry in 10 blocks' time.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 10;
 			assert!(!MockCallback::has_executed(request_id));
-			// We expect two retries. 1 inital + the one over reports from the CFE
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 
 			// The offender has not yet been reported.
@@ -246,8 +245,8 @@ fn fail_path_with_timeout() {
 				retry_block,
 			);
 
-			// Expect only the inial retry to be in the queue
-			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
+			// Expect the retry queue to be empty
+			assert!(MockEthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
 			assert_eq!(MockOffenceReporter::get_reported(), vec![1]);
