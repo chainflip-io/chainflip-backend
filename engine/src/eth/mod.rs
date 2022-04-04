@@ -1258,7 +1258,7 @@ mod merged_stream_tests {
     ) {
         assert!(!items.is_empty(), "should have at least one item");
 
-        const DELAY_DURATION_MILLIS: u64 = 10;
+        const DELAY_DURATION_MILLIS: u64 = 50;
 
         let mut protocol_last_returned = items.first().unwrap().1;
         let mut http_items = Vec::new();
