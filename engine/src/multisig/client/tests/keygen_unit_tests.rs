@@ -648,7 +648,15 @@ async fn should_handle_invalid_complaints4() {
 
     let messages = ceremony.request().await;
 
-    let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+    let mut messages = run_stages!(
+        ceremony,
+        messages,
+        VerifyHashComm2,
+        Comm1,
+        VerifyComm2,
+        SecretShare3,
+        Complaints4
+    );
 
     let [bad_account_id] = ceremony.select_account_ids();
 
@@ -675,9 +683,7 @@ async fn should_handle_not_compatible_keygen() {
         Rng::from_seed(NON_COMPATIBLE_KEYGEN_SEED),
     );
     let messages = ceremony.request().await;
-    let messages = ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(messages)
-        .await;
+    let messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1, VerifyComm2);
     ceremony.distribute_messages(messages);
 
     match ceremony.try_complete_with_error(&[]).await {
@@ -837,7 +843,9 @@ mod timeout {
         async fn recover_if_party_appears_offline_to_minority_stage1() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let mut messages = ceremony.request().await;
+            let messages = ceremony.request().await;
+
+            let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
@@ -872,8 +880,15 @@ mod timeout {
 
             let messages = ceremony.request().await;
 
-            let mut messages =
-                run_stages!(ceremony, messages, VerifyComm2, SecretShare3, Complaints4);
+            let mut messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyHashComm2,
+                Comm1,
+                VerifyComm2,
+                SecretShare3,
+                Complaints4
+            );
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
@@ -901,7 +916,14 @@ mod timeout {
 
             let messages = ceremony.request().await;
 
-            let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+            let mut messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyHashComm2,
+                Comm1,
+                VerifyComm2,
+                SecretShare3
+            );
 
             // Stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
             *messages
@@ -990,7 +1012,14 @@ mod timeout {
 
             let messages = ceremony.request().await;
 
-            let mut messages = run_stages!(ceremony, messages, VerifyComm2, SecretShare3);
+            let mut messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyHashComm2,
+                Comm1,
+                VerifyComm2,
+                SecretShare3
+            );
 
             // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
             *messages
