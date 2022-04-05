@@ -245,7 +245,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                     .submit_signed_extrinsic(
                                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
                                                                             ceremony_id,
-                                                                            bad_account_ids.into_iter().collect(),
+                                                                            BTreeSet::from_iter(bad_account_ids),
                                                                         ),
                                                                         &logger,
                                                                     )

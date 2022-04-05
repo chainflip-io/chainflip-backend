@@ -392,7 +392,7 @@ where
         })
     }
 
-    /// Clean up stale signing_request in pending_requests_to_sign
+    /// Clean up stale pending signing requests
     #[allow(clippy::unnecessary_filter_map)] // Clippy is wrong
     pub async fn check_timeouts(&self) {
         let logger = &self.logger;
