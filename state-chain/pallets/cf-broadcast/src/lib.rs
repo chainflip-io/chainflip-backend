@@ -472,10 +472,17 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			// TODO: Inline this, it'll likely be the only place it's used
 			let TransmissionAttempt { broadcast_attempt, signer, .. } =
-				Self::take_transmission_attempt(&broadcast_attempt_id)
+				AwaitingTransmission::<T, I>::take(broadcast_attempt_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			BroadcastIdToAttemptNumbers::<T, I>::mutate(
+				broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				|attempt_numbers| {
+					if let Some(attempt_numbers) = attempt_numbers {
+						attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
+					}
+				},
+			);
 
 			match failure {
 				TransmissionFailure::TransactionRejected => {
@@ -582,22 +589,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 			}
 		}
-	}
-
-	// helper function to remove the associated broadcastidtoattempt_count mapping
-	pub fn take_transmission_attempt(
-		broadcast_attempt_id: &BroadcastAttemptId,
-	) -> Option<TransmissionAttempt<T, I>> {
-		let transmission_attempt = AwaitingTransmission::<T, I>::take(broadcast_attempt_id)?;
-		BroadcastIdToAttemptNumbers::<T, I>::mutate(
-			transmission_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			|attempt_numbers| {
-				if let Some(attempt_numbers) = attempt_numbers {
-					attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
-				}
-			},
-		);
-		Some(transmission_attempt)
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
