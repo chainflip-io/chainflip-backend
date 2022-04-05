@@ -33,3 +33,6 @@ engine/tests/test_keystore/*
 
 # created by cargo-deny check --graph
 graph
+
+# created by running try-runtime (state-chain/TROUBLESHOOTING.md)
+.state-snapshot

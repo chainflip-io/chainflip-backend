@@ -41,7 +41,10 @@
     "to": "Option<u64>"
   },
   "BlockNumber": "u32",
-  "BroadcastAttemptId": "u64",
+  "BroadcastAttemptId": {
+    "broadcast_id": "BroadcastId",
+    "attempt_count": "AttemptCount"
+  },
   "BroadcastId": "u32",
   "BroadcastStage": {
     "_enum": [
@@ -73,9 +76,8 @@
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
-  "FailedBroadcastAttempt": {
-    "broadcast_id": "BroadcastId",
-    "attempt_count": "AttemptCount",
+  "BroadcastAttempt": {
+    "broadcast_attempt_id": "BroadcastAttemptId",
     "unsigned_tx": "UnsignedTransactionFor"
   },
   "FlipAccount": {
