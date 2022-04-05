@@ -167,10 +167,6 @@ fn test_broadcast_happy_path() {
 		);
 
 		// Check if the storage was cleaned up successfully
-		println!(
-			"Here's the broadcast attempt id: {:?}",
-			SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
-		);
 		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
 			MockThresholdSignature::default()
 		)
