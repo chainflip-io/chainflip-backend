@@ -469,7 +469,6 @@ fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attemp
 			vec![(BroadcastStage::Transmission, broadcast_attempt_id)]
 		);
 
-		println!("About to expire the transmission");
 		MockBroadcast::on_initialize(transmission_expiry_block);
 
 		// NB: Now, we have *started again*. We do not retry the tranmission alone, but ask to sign
@@ -488,15 +487,18 @@ fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attemp
 			1
 		);
 
-		// submit success for the non-incremented broadcast attempt id (that has expired)
-		assert_noop!(
-			MockBroadcast::transmission_success(
-				RawOrigin::Signed(tx_sig_request.nominee).into(),
-				broadcast_attempt_id,
-				Default::default(),
-			),
-			Error::<Test, Instance1>::InvalidBroadcastAttemptId
-		);
+		// submit success for a transaction that has expired, is success
+		// NB: At this point we do have BroadcastAttemptId (BAID) (1, 1) => the mapping
+		// BroadcastAttemptIdToAttemptNumbers mapping for key of 1, contains the
+		// AttemptCount of 1. However, this transmission_success is submitted with BAID(1, 0).
+		// Thus, when we attempt to clean up on success we will log that we have an invalid
+		// BAID, since we will be trying to ::take() a TransmissionAttempt of 1, when it
+		// does not exist yet.
+		assert_ok!(MockBroadcast::transmission_success(
+			RawOrigin::Signed(tx_sig_request.nominee).into(),
+			broadcast_attempt_id,
+			Default::default(),
+		));
 	});
 }
 

@@ -680,8 +680,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count < T::MaximumAttempts::get() {
 			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
 			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
-				// TODO: Double check this
-				failed_broadcast_attempt.broadcast_attempt_id.next_attempt(),
+				failed_broadcast_attempt.broadcast_attempt_id,
 			));
 		} else {
 			Self::deposit_event(Event::<T, I>::BroadcastAborted(
