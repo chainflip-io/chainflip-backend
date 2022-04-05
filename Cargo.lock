@@ -903,6 +903,7 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
