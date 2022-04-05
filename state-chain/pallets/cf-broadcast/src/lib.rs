@@ -410,16 +410,12 @@ pub mod pallet {
 			// == Clean up storage items ==
 
 			let attempt_numbers =
-				BroadcastIdToAttemptNumbers::<T, I>::get(broadcast_attempt_id.broadcast_id)
+				BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_attempt_id.broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			for attempt_count in attempt_numbers {
-				AwaitingTransmission::<T, I>::take(BroadcastAttemptId {
-					broadcast_id: broadcast_attempt_id.broadcast_id,
-					attempt_count,
-				})
-				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
-			}
-			BroadcastIdToAttemptNumbers::<T, I>::remove(broadcast_attempt_id.broadcast_id);
+			Self::clean_up_transmission_attempts_on_success(
+				broadcast_attempt_id.broadcast_id,
+				&attempt_numbers,
+			)?;
 
 			if let Some(payload) =
 				SignatureToBroadcastIdLookup::<T, I>::iter().find_map(|(payload, id)| {
@@ -535,14 +531,7 @@ pub mod pallet {
 			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
 				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-
-				for attempt_count in &attempt_numbers {
-					AwaitingTransmission::<T, I>::take(BroadcastAttemptId {
-						broadcast_id,
-						attempt_count: *attempt_count,
-					})
-					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
-				}
+				Self::clean_up_transmission_attempts_on_success(broadcast_id, &attempt_numbers);
 				if let Some(attempt_count) = attempt_numbers.last() {
 					let last_broadcast_attempt_id =
 						BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -558,6 +547,22 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	// Clean up attempts and attempt mapping on success
+	pub fn clean_up_transmission_attempts_on_success(
+		broadcast_id: BroadcastId,
+		attempt_numbers: &Vec<AttemptCount>,
+	) -> DispatchResultWithPostInfo {
+		for attempt_count in attempt_numbers {
+			AwaitingTransmission::<T, I>::take(BroadcastAttemptId {
+				broadcast_id,
+				attempt_count: *attempt_count,
+			})
+			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+		}
+
+		Ok(().into())
+	}
+
 	// helper function to remove the associated broadcastidtoattempt_count mapping
 	pub fn take_transmission_attempt(
 		broadcast_attempt_id: &BroadcastAttemptId,
