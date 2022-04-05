@@ -793,6 +793,8 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
+            signing_ceremony.distribute_messages(messages.clone());
+
             // this node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
                 .nodes
@@ -831,6 +833,8 @@ mod timeout {
                 .get_mut(&non_sending_party_id)
                 .unwrap()
                 .remove(&timed_out_party_id);
+
+            signing_ceremony.distribute_messages(messages.clone());
 
             // this node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
