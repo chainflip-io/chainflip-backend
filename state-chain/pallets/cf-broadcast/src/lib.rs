@@ -278,15 +278,32 @@ pub mod pallet {
 
 				match stage {
 					BroadcastStage::TransactionSigning => {
+						// We take here. We only allow a single transaction signature request
+						// to be valid at a time
 						if let Some(signing_attempt) =
 							AwaitingTransactionSignature::<T, I>::take(attempt_id)
 						{
+							// invalidate the old attempt count by removing it from the mapping
+							BroadcastIdToAttemptNumbers::<T, I>::mutate(
+								signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+								|attempt_numbers| {
+									if let Some(attempt_numbers) = attempt_numbers {
+										attempt_numbers.retain(|x| {
+											*x != signing_attempt
+												.broadcast_attempt
+												.broadcast_attempt_id
+												.attempt_count
+										});
+									}
+								},
+							);
 							notify_and_retry(signing_attempt.broadcast_attempt);
 						}
 					},
+					// when we retry we actually don't want to take the attempt or the count
 					BroadcastStage::Transmission => {
 						if let Some(transmission_attempt) =
-							Self::take_transmission_attempt(attempt_id)
+							AwaitingTransmission::<T, I>::get(attempt_id)
 						{
 							notify_and_retry(transmission_attempt.broadcast_attempt);
 						}
@@ -412,7 +429,7 @@ pub mod pallet {
 			let attempt_numbers =
 				BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_attempt_id.broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			Self::clean_up_transmission_attempts_on_success(
+			Self::clean_up_on_transmission_success(
 				broadcast_attempt_id.broadcast_id,
 				&attempt_numbers,
 			);
@@ -455,6 +472,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
+			// TODO: Inline this, it'll likely be the only place it's used
 			let TransmissionAttempt { broadcast_attempt, signer, .. } =
 				Self::take_transmission_attempt(&broadcast_attempt_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
@@ -531,7 +549,7 @@ pub mod pallet {
 			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
 				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-				Self::clean_up_transmission_attempts_on_success(broadcast_id, &attempt_numbers);
+				Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
 				if let Some(attempt_count) = attempt_numbers.last() {
 					let last_broadcast_attempt_id =
 						BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -548,19 +566,21 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Clean up attempts and attempt mapping on success
-	pub fn clean_up_transmission_attempts_on_success(
+	pub fn clean_up_on_transmission_success(
 		broadcast_id: BroadcastId,
 		attempt_numbers: &[AttemptCount],
 	) {
 		for attempt_count in attempt_numbers {
 			let broadcast_attempt_id =
 				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() {
-				log::warn!(
-					"Invalid BroadcastAttemptId {} cleaning up AwaitingTransmissions",
-					broadcast_attempt_id
-				);
-			};
+
+			// A particular attempt is either alive because at the signing stage
+			// OR it's at the transmission stage
+			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
+				AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
+			{
+				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
+			}
 		}
 	}
 
