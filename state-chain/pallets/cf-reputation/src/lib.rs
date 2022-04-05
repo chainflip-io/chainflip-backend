@@ -79,9 +79,6 @@ pub mod pallet {
 			BlockNumber = <Self as frame_system::Config>::BlockNumber,
 		>;
 
-		/// Penalise
-		type Penalty: OffencePenalty;
-
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
