@@ -18,33 +18,80 @@ pub use weights::WeightInfo;
 
 use frame_support::{
 	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, StorageVersion},
+	traits::{Get, OnRuntimeUpgrade, StorageVersion},
 };
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, Saturating, UniqueSaturatedInto, Zero};
-use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, ops::Neg, prelude::*};
+use sp_runtime::traits::{UniqueSaturatedInto, Zero};
+use sp_std::{
+	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
+	iter::{FromIterator, Iterator},
+	prelude::*,
+};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 
-/// The credits one earns being online, equivalent to a blocktime online
-pub type OnlineCreditsFor<T> = <T as frame_system::Config>::BlockNumber;
-/// Reputation of a validator
-#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct Reputation<OnlineCredits> {
-	online_credits: OnlineCredits,
-	pub reputation_points: ReputationPoints,
+mod reputation;
+mod suspensions;
+
+pub use reputation::*;
+pub use suspensions::*;
+
+type RuntimeSuspensionTracker<T> = SuspensionTracker<
+	<T as Chainflip>::ValidatorId,
+	<T as frame_system::Config>::BlockNumber,
+	<T as Config>::Offence,
+>;
+
+impl<T: Config> ReputationParameters for T {
+	type OnlineCredits = T::BlockNumber;
+
+	fn bounds() -> (ReputationPoints, ReputationPoints) {
+		T::ReputationPointFloorAndCeiling::get()
+	}
+
+	fn accrual_rate() -> (ReputationPoints, Self::OnlineCredits) {
+		AccrualRatio::<T>::get()
+	}
 }
+
+type RuntimeReputationTracker<T> = reputation::ReputationTracker<T>;
 
 /// A reputation penalty as a ratio of points penalised over number of blocks
-#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct ReputationPenalty<BlockNumber> {
+#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode)]
+pub struct ReputationPenaltyRate<BlockNumber> {
 	pub points: ReputationPoints,
-	pub blocks: BlockNumber,
+	pub per_blocks: BlockNumber,
 }
 
-type ReputationOf<T> = Reputation<<T as frame_system::Config>::BlockNumber>;
+/// A penalty comprises the reputation that will be deducted and the number of blocks suspension
+/// that are imposed.
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+pub struct Penalty<T: Config> {
+	reputation: ReputationPoints,
+	suspension: T::BlockNumber,
+}
+
+impl<T: Config> sp_std::fmt::Debug for Penalty<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		f.debug_struct("Penalty")
+			.field("reputation", &self.reputation)
+			.field("suspension", &self.suspension)
+			.finish()
+	}
+}
+
+impl<T: Config> Default for Penalty<T> {
+	fn default() -> Self {
+		Self { reputation: 15, suspension: T::HeartbeatBlockInterval::get() }
+	}
+}
+
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	MissedHeartbeat,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -61,17 +108,8 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The number of blocks for the time frame we would test liveliness within
-		#[pallet::constant]
-		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
-
-		/// The floor and ceiling values for a reputation score
-		#[pallet::constant]
-		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
-
-		/// The maximum number of reputation points that can be accrued
-		#[pallet::constant]
-		type MaximumReputationPointAccrued: Get<ReputationPoints>;
+		/// The runtime offence type must be compatible with this pallet's offence type.
+		type Offence: From<PalletOffence> + Member + Parameter + Copy;
 
 		/// When we have to, we slash
 		type Slasher: Slashing<
@@ -84,6 +122,18 @@ pub mod pallet {
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
+		/// The number of blocks for the time frame we would test liveliness within
+		#[pallet::constant]
+		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
+
+		/// The floor and ceiling values for a reputation score
+		#[pallet::constant]
+		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
+
+		/// The maximum number of reputation points that can be accrued
+		#[pallet::constant]
+		type MaximumReputationPointAccrued: Get<ReputationPoints>;
 	}
 
 	#[pallet::hooks]
@@ -108,25 +158,29 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn accrual_ratio)]
 	pub type AccrualRatio<T: Config> =
-		StorageValue<_, (ReputationPoints, OnlineCreditsFor<T>), ValueQuery>;
+		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
 
-	/// A map tracking our validators.  We record the number of reputation points that they may
-	/// have.
+	/// Reputation trackers for each validator.
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
 	pub type Reputations<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, ReputationOf<T>, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn reputation_point_penalty)]
-	/// The number of reputation points we lose for every x blocks offline
-	pub type ReputationPointPenalty<T: Config> =
-		StorageValue<_, ReputationPenalty<BlockNumberFor<T>>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, RuntimeReputationTracker<T>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn suspensions)]
-	/// If the validator is suspended, contains the block number at which they will be released.
-	pub type Suspensions<T: Config> = StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber>;
+	/// Suspension tracking storage for each offence.
+	pub type Suspensions<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::Offence,
+		VecDeque<(T::BlockNumber, T::ValidatorId)>,
+		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn penalties)]
+	/// The penalty to be applied for each offence.
+	pub type Penalties<T: Config> = StorageMap<_, Twox64Concat, T::Offence, Penalty<T>>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_exclusion_set)]
@@ -135,22 +189,22 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An offline condition has been met
-		OffencePenalty(T::ValidatorId, Offence, ReputationPoints),
-		/// The accrual rate for our reputation points has been updated \[points, online credits\]
-		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
-		/// The value for ReputationPointPenalty has been updated
-		ReputationPointPenaltyUpdated(ReputationPenalty<BlockNumberFor<T>>),
+		/// An offence has been penalised. \[offender, offence, penalty\]
+		OffencePenalty(T::ValidatorId, T::Offence, ReputationPoints),
+		/// The accrual rate for our reputation points has been updated \[points, online_credits\]
+		AccrualRateUpdated(ReputationPoints, T::BlockNumber),
+		/// The penalty for missing a heartbeat has been updated. \[points\]
+		MissedHeartbeatPenaltyUpdated(ReputationPoints),
+		/// The penalty for some offence has been updated \[offence, old_penalty, new_penalty\]
+		PenaltyUpdated(T::Offence, Penalty<T>, Penalty<T>),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// An invalid amount of reputation points set for the accrual ratio.
-		InvalidAccrualReputationPoints,
-		/// An invalid amount of online credits for the accrual ratio.
-		InvalidAccrualOnlineCredits,
+		/// Tried to set the accrual ration to something invalid.
+		InvalidAccrualRatio,
 		/// The block in a reputation point penalty must be non-zero.
-		InvalidReputationPenalty,
+		InvalidReputationPenaltyRate,
 	}
 
 	#[pallet::call]
@@ -170,102 +224,125 @@ pub mod pallet {
 		pub fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			points: ReputationPoints,
-			online_credits: OnlineCreditsFor<T>,
+			online_credits: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
+			let _success = T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				points <= T::MaximumReputationPointAccrued::get(),
-				Error::<T>::InvalidAccrualReputationPoints
+				points <= T::MaximumReputationPointAccrued::get() && online_credits > Zero::zero(),
+				Error::<T>::InvalidAccrualRatio
 			);
-			// If we have points to accrue then ensure that the online credits, which are equivalent
-			// to block time, are less than our heartbeat interval
-			if points > Zero::zero() {
-				ensure!(
-					online_credits > T::HeartbeatBlockInterval::get(),
-					Error::<T>::InvalidAccrualOnlineCredits
-				);
-			}
 
 			AccrualRatio::<T>::set((points, online_credits));
 			Self::deposit_event(Event::AccrualRateUpdated(points, online_credits));
 
 			Ok(().into())
 		}
-		/// Updates the value for the ReputationPointPenalty storage item
+
+		/// Updates the penalty for missing a heartbeat.
 		///
 		/// ## Events
 		///
-		/// - [ReputationPointPenaltyUpdated](Event::ReputationPointPenaltyUpdated)
+		/// - [MissedHeartbeatPenaltyUpdated](Event::MissedHeartbeatPenaltyUpdated)
 		#[pallet::weight(T::WeightInfo::update_reputation_point_penalty())]
-		pub fn update_reputation_point_penalty(
+		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
-			value: ReputationPenalty<BlockNumberFor<T>>,
+			value: ReputationPenaltyRate<BlockNumberFor<T>>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(value.blocks > Zero::zero(), Error::<T>::InvalidReputationPenalty);
-			ReputationPointPenalty::<T>::put(value.clone());
-			Self::deposit_event(Event::ReputationPointPenaltyUpdated(value));
+			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+
+			let ReputationPenaltyRate { points, per_blocks } = value;
+			let interval: u16 = T::HeartbeatBlockInterval::get().unique_saturated_into();
+			let per_blocks: u16 = per_blocks.unique_saturated_into();
+
+			let reputation =
+				(points.saturating_mul(interval as i32).checked_div(per_blocks as i32))
+					.ok_or(Error::<T>::InvalidReputationPenaltyRate)?;
+
+			Penalties::<T>::insert(
+				T::Offence::from(PalletOffence::MissedHeartbeat),
+				Penalty::<T> { reputation, suspension: Zero::zero() },
+			);
+
+			Self::deposit_event(Event::MissedHeartbeatPenaltyUpdated(reputation));
+			Ok(().into())
+		}
+
+		// #[pallet::weight(T::WeightInfo::set_penalty())]
+		#[pallet::weight(10_000_000)]
+		pub fn set_penalty(
+			origin: OriginFor<T>,
+			offence: T::Offence,
+			penalty: Penalty<T>,
+		) -> DispatchResultWithPostInfo {
+			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+
+			let old = Penalties::<T>::mutate(&offence, |maybe_penalty| {
+				let old = maybe_penalty.clone().unwrap_or_default();
+				*maybe_penalty = Some(penalty.clone());
+				old
+			});
+
+			Self::deposit_event(Event::<T>::PenaltyUpdated(offence, old, penalty));
+
 			Ok(().into())
 		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub accrual_ratio: (ReputationPoints, OnlineCreditsFor<T>),
+		pub accrual_ratio: (ReputationPoints, T::BlockNumber),
+		pub missed_heartbeat_penalty: (ReputationPoints, T::BlockNumber),
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { accrual_ratio: (Zero::zero(), Zero::zero()) }
+			Self {
+				accrual_ratio: (Zero::zero(), Zero::zero()),
+				missed_heartbeat_penalty: (15, Zero::zero()),
+			}
 		}
 	}
 
-	/// On genesis, we are initializing the accrual ratio confirming that it is greater than the
-	/// heartbeat interval.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			assert!(
-				self.accrual_ratio.1 > T::HeartbeatBlockInterval::get(),
-				"Heartbeat interval needs to be less than block duration reward"
-			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
-			ReputationPointPenalty::<T>::put(ReputationPenalty { points: 1, blocks: 10u32.into() });
+			Penalties::<T>::insert(
+				T::Offence::from(PalletOffence::MissedHeartbeat),
+				Penalty::<T> {
+					reputation: self.missed_heartbeat_penalty.0,
+					suspension: self.missed_heartbeat_penalty.1,
+				},
+			);
 		}
 	}
 }
 
-/// Implementation of `OffenceReporter` reporting on `Offence` with specified number
-/// of reputation points
 impl<T: Config> OffenceReporter for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	type Penalty = T::Penalty;
+	type Offence = T::Offence;
 
-	fn report(condition: Offence, validator_id: &Self::ValidatorId) {
-		// Confirm validator is present
-		if !Reputations::<T>::contains_key(validator_id) {
-			log::error!(
-				target: "cf-reputation",
-				"Cannot find Validator {:?} to report.",
-				validator_id
-			);
-			return
+	fn report_many<'a>(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
+		let offence = offence.into();
+		let penalty = Self::resolve_penalty_for(offence);
+
+		if penalty.reputation > 0 {
+			for validator_id in validators {
+				Reputations::<T>::mutate(&validator_id, |rep| {
+					rep.deduct_reputation(penalty.reputation);
+				});
+				Self::deposit_event(Event::OffencePenalty(
+					validator_id.clone(),
+					offence,
+					penalty.reputation,
+				));
+			}
 		}
 
-		let (penalty, should_suspend) = Self::Penalty::penalty(&condition);
-
-		if should_suspend {
-			Self::suspend(validator_id);
+		if penalty.suspension > Zero::zero() {
+			Self::suspend_all(validators, &offence, penalty.suspension);
 		}
-
-		if condition == Offence::ParticipateKeygenFailed {
-			KeygenExclusionSet::<T>::append(validator_id.clone());
-		}
-
-		Self::deposit_event(Event::OffencePenalty((*validator_id).clone(), condition, penalty));
-
-		Self::update_reputation(validator_id, penalty.neg());
 	}
 }
 
@@ -273,79 +350,24 @@ impl<T: Config> Heartbeat for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type BlockNumber = T::BlockNumber;
 
-	/// A heartbeat is submitted and in doing so the validator is credited the blocks for this
-	/// heartbeat interval.  These block credits are transformed to reputation points based on
-	/// the accrual ratio.
 	fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
-		// Check if this validator has reputation
-		if !Reputations::<T>::contains_key(&validator_id) {
-			// Credit this validator with the blocks for this interval and set 0 reputation
-			// points
-			Reputations::<T>::insert(
-				validator_id,
-				Reputation { online_credits: Self::online_credit_reward(), reputation_points: 0 },
-			);
-		} else {
-			// Update reputation points for this validator
-			Reputations::<T>::mutate(
-				validator_id,
-				|Reputation { online_credits, reputation_points }| {
-					*online_credits += Self::online_credit_reward();
-					let (rewarded_points, credits) = AccrualRatio::<T>::get();
-					// If we have hit a number of credits to earn reputation points
-					if *online_credits >= credits {
-						// Swap these credits for reputation
-						*online_credits -= credits;
-						// Update reputation
-						*reputation_points += rewarded_points;
-					}
-				},
-			);
-		}
+		Reputations::<T>::mutate(&validator_id, |rep| {
+			rep.boost_reputation(Self::online_credit_reward());
+		});
 	}
 
-	/// For those that we are still *awaiting* on will be penalised reputation points and any
-	/// online credits earned will be set to zero.  In other words we expect continued liveness
-	/// before we earn points.
-	/// Once the reputation points fall below zero slashing comes into play and is delegated to
-	/// the `Slashing` trait.
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
-		// Penalise those that are missing this heartbeat
+		<Self as OffenceReporter>::report_many(
+			PalletOffence::MissedHeartbeat,
+			network_state.offline.as_slice(),
+		);
 		for validator_id in network_state.offline {
-			let reputation_points = Reputations::<T>::mutate(
-				&validator_id,
-				|Reputation { online_credits, reputation_points }| {
-					if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
-						// Update reputation points
-						let ReputationPenalty { points, blocks } =
-							ReputationPointPenalty::<T>::get();
-						let interval: u32 =
-							T::HeartbeatBlockInterval::get().unique_saturated_into();
-						let blocks: u32 = blocks.unique_saturated_into();
+			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
+				rep.reset_online_credits();
+				rep.reputation_points
+			});
 
-						let penalty =
-							(points.saturating_mul(interval as i32).checked_div(blocks as i32))
-								.unwrap_or_else(|| {
-									log::error!(
-										"Unexpected penalty calculation error {:?}: {:?}.",
-										interval,
-										blocks
-									);
-									0
-								});
-
-						*reputation_points = Pallet::<T>::clamp_reputation_points(
-							(*reputation_points).saturating_sub(penalty),
-						);
-						// Reset the credits earned as being online consecutively
-						*online_credits = Zero::zero();
-					}
-
-					*reputation_points
-				},
-			);
-
-			if reputation_points < Zero::zero() {
+			if reputation_points < 0 {
 				// At this point we slash the validator by the amount of blocks offline
 				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
@@ -361,48 +383,61 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	}
 }
 
-pub struct KeygenExclusion<T>(PhantomData<T>);
+pub trait OffenceList<T: Config> {
+	const OFFENCES: &'static [T::Offence];
+}
 
-impl<T: Config> Get<BTreeSet<T::ValidatorId>> for KeygenExclusion<T> {
+pub struct GetValidatorsExcludedFor<T: Config, L: OffenceList<T>>(
+	sp_std::marker::PhantomData<(T, L)>,
+);
+
+impl<T: Config, L: OffenceList<T>> Get<BTreeSet<T::ValidatorId>>
+	for GetValidatorsExcludedFor<T, L>
+{
 	fn get() -> BTreeSet<T::ValidatorId> {
-		BTreeSet::<_>::from_iter(KeygenExclusionSet::<T>::get())
+		Pallet::<T>::validators_suspended_for(L::OFFENCES)
 	}
 }
 
 impl<T: Config> Pallet<T> {
 	/// Return number of online credits for reward
-	fn online_credit_reward() -> OnlineCreditsFor<T> {
+	fn online_credit_reward() -> T::BlockNumber {
 		// Equivalent to the number of blocks used for the heartbeat
 		T::HeartbeatBlockInterval::get()
 	}
 
-	/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
-	fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) {
-		Reputations::<T>::mutate(validator_id, |Reputation { reputation_points, .. }| {
-			*reputation_points = Pallet::<T>::clamp_reputation_points(*reputation_points + points);
-			T::DbWeight::get().reads_writes(1, 1)
-		});
+	pub fn suspend_all<'a>(
+		validators: impl IntoIterator<Item = &'a T::ValidatorId>,
+		offence: &T::Offence,
+		suspension: T::BlockNumber,
+	) {
+		// Scoped::<T, RuntimeSuspensionTracker<T>>::scoped(offence)
+		// 	.mutate(|tracker| tracker.suspend(validators.iter().cloned(), suspension));
+		let mut tracker = <SuspensionTracker<_, _, _> as StorageLoadable<T>>::load(offence);
+		tracker.suspend(validators.into_iter().cloned(), suspension);
+		StorageLoadable::<T>::commit(&mut tracker);
 	}
 
-	/// Clamp reputation points to bounds defined in the pallet
-	fn clamp_reputation_points(reputation_points: i32) -> i32 {
-		let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
-		reputation_points.clamp(floor, ceiling)
+	/// Gets a list of validators that are suspended for committing any of a list of offences.
+	pub fn validators_suspended_for<I>(offences: &[T::Offence]) -> I
+	where
+		I: FromIterator<T::ValidatorId>,
+	{
+		offences
+			.iter()
+			.flat_map(|offence| {
+				<RuntimeSuspensionTracker<T> as StorageLoadable<T>>::load(offence).get_suspended()
+			})
+			.collect::<I>()
 	}
 
-	fn suspend(validator_id: &T::ValidatorId) {
-		let current_block_number = frame_system::Pallet::<T>::current_block_number();
-		let released_at = current_block_number.saturating_add(T::HeartbeatBlockInterval::get());
-
-		Suspensions::<T>::insert(validator_id, released_at);
-	}
-
-	// TODO: factor this out into an interface is_suspended(validator) -> bool
-	pub fn is_suspended_at(block_number: T::BlockNumber, validator_id: &T::ValidatorId) -> bool {
-		if let Some(absolution_block) = Suspensions::<T>::get(validator_id) {
-			block_number <= absolution_block
-		} else {
-			false
-		}
+	/// Look up the penalty for the given offence. Uses the default value if no mapping is
+	/// available.
+	fn resolve_penalty_for<O: Into<T::Offence>>(offence: O) -> Penalty<T> {
+		let offence: T::Offence = offence.into();
+		Penalties::<T>::get(&offence).unwrap_or_else(|| {
+			log::warn!("No penalty defined for offence {:?}, using default.", offence);
+			Default::default()
+		})
 	}
 }

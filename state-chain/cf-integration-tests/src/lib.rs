@@ -595,6 +595,7 @@ mod tests {
 
 			pallet_cf_reputation::GenesisConfig::<Runtime> {
 				accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+				missed_heartbeat_penalty: (15, 0),
 			}
 			.assimilate_storage(storage)
 			.unwrap();
@@ -740,7 +741,7 @@ mod tests {
 				for account in accounts.iter() {
 					assert_eq!(
 						Reputation::reputation(account),
-						pallet_cf_reputation::Reputation::<BlockNumber>::default(),
+						pallet_cf_reputation::ReputationTracker::<Runtime>::default(),
 						"validator shouldn't have reputation points"
 					);
 				}

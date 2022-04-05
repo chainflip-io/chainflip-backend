@@ -1,7 +1,7 @@
 use crate::{
 	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, FailureVoters,
-	KeygenOutcome, KeygenResolutionPendingSince, PendingVaultRotation, SuccessVoters, Vault,
-	VaultRotationStatus, Vaults,
+	KeygenOutcome, KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation,
+	SuccessVoters, Vault, VaultRotationStatus, Vaults,
 };
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
@@ -97,7 +97,7 @@ fn keygen_failure() {
 		let ceremony_id = current_ceremony_id();
 
 		// The ceremony failed.
-		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES.to_vec());
+		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES);
 
 		// KeygenAborted event emitted.
 		assert_eq!(last_event(), PalletEvent::KeygenFailure(ceremony_id).into());
@@ -109,7 +109,10 @@ fn keygen_failure() {
 		);
 
 		// Bad validators have been reported.
-		assert_eq!(MockOffenceReporter::get_reported(), BAD_CANDIDATES);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::ParticipateKeygenFailed,
+			BAD_CANDIDATES.to_vec(),
+		);
 	});
 }
 
@@ -399,7 +402,7 @@ fn keygen_report_failure() {
 			AsyncResult::Ready(SuccessOrFailure::Failure)
 		);
 
-		assert_eq!(MockOffenceReporter::get_reported(), vec![CHARLIE]);
+		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![CHARLIE]);
 
 		assert_last_event!(crate::Event::KeygenFailure(..));
 
@@ -433,7 +436,10 @@ fn test_grace_period() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// All non-responding candidates should have been reported.
-		assert_eq!(MockOffenceReporter::get_reported(), vec![BOB, CHARLIE]);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::ParticipateKeygenFailed,
+			vec![BOB, CHARLIE],
+		);
 	});
 }
 

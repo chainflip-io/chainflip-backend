@@ -16,11 +16,10 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offence_reporting::{Offence, OffenceReporter},
-	AsyncResult, AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountData,
-	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyValidator, SuccessOrFailure,
-	VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
+	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyValidator, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -94,6 +93,12 @@ impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
 
 type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
 type VanityName = Vec<u8>;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	MissedAuthorshipSlot,
+}
+
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 pub type Percentage = u8;
@@ -118,6 +123,9 @@ pub mod pallet {
 	{
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The top-level offence type must support this pallet's offence type.
+		type Offence: From<PalletOffence>;
 
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId = ValidatorIdOf<Self>>;
@@ -145,7 +153,10 @@ pub mod pallet {
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
 
 		/// For reporting missed authorship slots.
-		type OffenceReporter: OffenceReporter<ValidatorId = ValidatorIdOf<Self>>;
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = ValidatorIdOf<Self>,
+			Offence = Self::Offence,
+		>;
 
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
@@ -215,7 +226,7 @@ pub mod pallet {
 				if let Some(id) =
 					<Self as EpochInfo>::current_validators().get(validator_index as usize)
 				{
-					T::OffenceReporter::report(Offence::MissedAuthorshipSlot, id);
+					T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 				} else {
 					log::error!(
 						"Invalid slot index {:?} when processing missed authorship slots.",

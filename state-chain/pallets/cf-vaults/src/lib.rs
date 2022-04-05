@@ -7,9 +7,9 @@
 use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::{Offence, OffenceReporter},
-	AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex,
-	EpochTransitionHandler, KeyProvider, NonceProvider, SuccessOrFailure, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
+	CurrentEpochIndex, EpochIndex, EpochTransitionHandler, KeyProvider, NonceProvider,
+	SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -281,6 +281,14 @@ pub mod releases {
 	pub const V1: StorageVersion = StorageVersion::new(1);
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	/// Failing a keygen ceremony carries its own consequences.
+	ParticipateKeygenFailed,
+	/// In addition, failing keygen is considered a regular signing offence.
+	SigningOffence,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -296,6 +304,9 @@ pub mod pallet {
 		/// The event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Offences supported in this runtime.
+		type Offence: From<PalletOffence>;
+
 		/// The chain that managed by this vault must implement the api types.
 		type Chain: ChainAbi;
 
@@ -306,7 +317,10 @@ pub mod pallet {
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
 		/// For reporting misbehaving validators.
-		type OffenceReporter: OffenceReporter<ValidatorId = Self::ValidatorId>;
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = Self::ValidatorId,
+			Offence = Self::Offence,
+		>;
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
@@ -358,7 +372,10 @@ pub mod pallet {
 						},
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-							Self::on_keygen_failure(keygen_ceremony_id, offenders);
+							Self::on_keygen_failure(
+								keygen_ceremony_id,
+								&offenders.into_iter().collect::<Vec<_>>(),
+							);
 						},
 					}
 					KeygenResolutionPendingSince::<T, I>::kill();
@@ -671,15 +688,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 	}
 
-	fn on_keygen_failure(
-		ceremony_id: CeremonyId,
-		offenders: impl IntoIterator<Item = T::ValidatorId>,
-	) {
+	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 
-		for offender in offenders {
-			T::OffenceReporter::report(Offence::ParticipateKeygenFailed, &offender);
-		}
+		T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
+		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
 	}

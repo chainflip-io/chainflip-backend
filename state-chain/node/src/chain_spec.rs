@@ -572,7 +572,10 @@ fn testnet_genesis(
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
-		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
+		reputation: ReputationConfig {
+			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+			missed_heartbeat_penalty: (15, 0),
+		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),

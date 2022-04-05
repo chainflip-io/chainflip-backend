@@ -8,12 +8,17 @@ use frame_system::RawOrigin;
 
 benchmarks! {
 	update_accrual_ratio {
-	} : _(RawOrigin::Root, 2, (151 as u32).into())
-	update_reputation_point_penalty {
-		 let reputation_points_penalty = ReputationPenalty { points: 1, blocks: (10 as u32).into() };
+	} : _(RawOrigin::Root, 2, 151u32.into())
+	set_penalty {
+	} : _(RawOrigin::Root, PalletOffence::MissedHeartbeat.into(), Default::default())
+	update_missed_heartbeat_penalty {
+		 let reputation_points_penalty = ReputationPenaltyRate { points: 1, per_blocks: (10 as u32).into() };
 	} : _(RawOrigin::Root, reputation_points_penalty)
 	verify {
-		assert_eq!(ReputationPointPenalty::<T>::get(), ReputationPenalty { points: 1, blocks: (10 as u32).into() });
+		assert_eq!(
+			Pallet::<T>::resolve_penalty_for(PalletOffence::MissedHeartbeat),
+			Penalty { reputation: 15, suspension: 0_u32.into() }
+		);
 	}
 	on_runtime_upgrade {
 	} : {
