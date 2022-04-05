@@ -646,12 +646,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			// Schedule expiry.
 			let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
-			Expiries::<T, I>::mutate(expiry_block, |entries| {
-				entries.push((
-					BroadcastStage::TransactionSigning,
-					broadcast_attempt.broadcast_attempt_id,
-				))
-			});
+			Expiries::<T, I>::append(
+				expiry_block,
+				(BroadcastStage::TransactionSigning, broadcast_attempt.broadcast_attempt_id),
+			);
 
 			// Emit the transaction signing request.
 			Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
