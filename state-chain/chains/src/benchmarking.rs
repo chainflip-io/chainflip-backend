@@ -1,4 +1,4 @@
-use crate::eth::{to_ethereum_address, SchnorrVerificationComponents};
+use crate::eth::{to_ethereum_address, SchnorrVerificationComponents, TransactionHash, H256};
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use libsecp256k1::{PublicKey, SecretKey};
 
@@ -13,5 +13,11 @@ impl BenchmarkDefault for SchnorrVerificationComponents {
 		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&k));
 
 		Self { s: SIG, k_times_g_addr }
+	}
+}
+
+impl BenchmarkDefault for TransactionHash {
+	fn benchmark_default() -> Self {
+		H256::from([0u8; 32])
 	}
 }

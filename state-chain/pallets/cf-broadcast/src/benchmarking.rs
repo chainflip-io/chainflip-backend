@@ -3,7 +3,13 @@
 
 use super::*;
 
+use cf_chains::eth::{TransactionHash, H256};
 use frame_benchmarking::benchmarks_instance_pallet;
+use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
+
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
+
+type TransactionHashFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
 
 benchmarks_instance_pallet! {
 	on_initialize {} : {}
@@ -21,8 +27,17 @@ benchmarks_instance_pallet! {
 	// 	let call = Call::<T, I>::start_broadcast(unsigned.into());
 	// 	let origin = T::EnsureWitnessed::successful_origin();
 	// } : { call.dispatch_bypass_filter(origin)? }
-	transaction_ready_for_transmission {} : {}
-	transmission_success {} : {}
+	transaction_ready_for_transmission {
+
+	} : {}
+	transmission_success {
+		let attempt_id = 1;
+		let tx_hash = TransactionHashFor::<T, I>::benchmark_default();
+		let call = Call::<T, I>::transmission_success(attempt_id, tx_hash.into());
+		let origin = T::EnsureThresholdSigned::successful_origin();
+	} : {
+		call.dispatch_bypass_filter(origin)?
+	}
 	transmission_failure {} : {}
 	on_signature_ready {} : {}
 	signature_accepted {} : {}
