@@ -35,7 +35,7 @@ use pallet_cf_vaults::CeremonyId;
 
 use key_store::KeyStore;
 
-use tokio::sync::{mpsc::UnboundedSender, RwLock};
+use tokio::sync::mpsc::UnboundedSender;
 use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
@@ -163,7 +163,7 @@ where
         Rng,
         CeremonyResultSender<SchnorrSignature>,
     )>,
-    inner_state: RwLock<InnerMultisigClientState<KeyDatabase>>,
+    inner_state: std::sync::Mutex<InnerMultisigClientState<KeyDatabase>>,
     keygen_options: KeygenOptions,
     logger: slog::Logger,
 }
@@ -200,7 +200,7 @@ where
     ) -> Self {
         MultisigClient {
             my_account_id,
-            inner_state: RwLock::new(InnerMultisigClientState {
+            inner_state: std::sync::Mutex::new(InnerMultisigClientState {
                 key_store: KeyStore::new(db),
                 pending_requests_to_sign: Default::default(),
             }),
@@ -260,7 +260,7 @@ where
                 Some(Ok(keygen_result_info)) => {
                     let key_id = KeyId(keygen_result_info.key.get_public_key_bytes());
 
-                    let mut inner_state = self.inner_state.write().await;
+                    let mut inner_state = self.inner_state.lock().unwrap();
 
                     inner_state
                         .key_store
@@ -327,12 +327,10 @@ where
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
 
-        let mut inner_state = self.inner_state.write().await;
+        let mut inner_state = self.inner_state.lock().unwrap();
 
         let request = match inner_state.key_store.get_key(&key_id).cloned() {
             Some(keygen_result_info) => {
-                drop(inner_state);
-
                 if signers.len() == 1 {
                     RequestStatus::Ready(self.single_party_signing(data, keygen_result_info, rng))
                 } else {
@@ -397,7 +395,7 @@ where
     pub async fn check_timeouts(&self) {
         let logger = &self.logger;
 
-        let mut inner_state = self.inner_state.write().await;
+        let mut inner_state = self.inner_state.lock().unwrap();
 
         inner_state.pending_requests_to_sign
             .retain(|key_id, pending_signing_requests| {
@@ -498,7 +496,7 @@ where
     pub fn expire_all(&self) {
         for pending in self
             .inner_state
-            .try_write()
+            .try_lock()
             .unwrap()
             .pending_requests_to_sign
             .values_mut()
