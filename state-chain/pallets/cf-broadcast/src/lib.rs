@@ -180,7 +180,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
 
-	/// Maps a BroadcastId to the latest AttemptCount number for this broadcast
+	/// Maps a BroadcastId to a list of unresolved broadcast attempt numbers.
 	#[pallet::storage]
 	pub type BroadcastIdToAttemptNumbers<T, I = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, Vec<AttemptCount>, OptionQuery>;
