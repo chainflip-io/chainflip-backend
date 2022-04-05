@@ -269,8 +269,6 @@ where
                     // Process requests to sign that required the key in `key_info`
                     if let Some(requests) = inner_state.pending_requests_to_sign.remove(&key_id) {
                         for pending_request in requests {
-                            // Factor out TODO NOW
-
                             slog::debug!(
                                 self.logger,
                                 "Processing a pending request to sign";
@@ -394,10 +392,9 @@ where
         })
     }
 
-    /// Clean up expired states
+    /// Clean up stale signing_request in pending_requests_to_sign
     #[allow(clippy::unnecessary_filter_map)] // Clippy is wrong
     pub async fn check_timeouts(&self) {
-        // cleanup stale signing_request in pending_requests_to_sign
         let logger = &self.logger;
 
         let mut inner_state = self.inner_state.write().await;
@@ -407,7 +404,7 @@ where
                 // TODO: Replace with drain_filter() once stablized
                 *pending_signing_requests = pending_signing_requests.drain(..).filter_map(|pending_signing_request| {
                     if pending_signing_request.should_expire_at < Instant::now() {
-                        // TODO: Remove this logging and replace anyhow::Error with enum the has a variant for this case
+                        // TODO: Remove this logging and add these details to the Result error (Possibly by using an error enum (instead of an anyhow::Error) that has a variant for each type of error.
                         slog::warn!(
                             logger,
                             #REQUEST_TO_SIGN_EXPIRED,

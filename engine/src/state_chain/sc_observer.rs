@@ -193,11 +193,13 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                     let state_chain_client = state_chain_client.clone();
                                                     let logger = logger.clone();
                                                     tokio::spawn(async move {
+                                                        let result_public_key = multisig_client.keygen(ceremony_id, validator_candidates).await;
+
                                                         let _result = state_chain_client
                                                             .submit_signed_extrinsic(
                                                                 pallet_cf_vaults::Call::report_keygen_outcome(
                                                                     ceremony_id,
-                                                                    match multisig_client.keygen(ceremony_id, validator_candidates).await {
+                                                                    match result_public_key {
                                                                         Ok(public_key) => {
                                                                             pallet_cf_vaults::KeygenOutcome::Success(
                                                                                 cf_chains::eth::AggKey::from_pubkey_compressed(
