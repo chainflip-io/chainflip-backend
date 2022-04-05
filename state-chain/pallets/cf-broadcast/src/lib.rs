@@ -415,7 +415,7 @@ pub mod pallet {
 			Self::clean_up_transmission_attempts_on_success(
 				broadcast_attempt_id.broadcast_id,
 				&attempt_numbers,
-			)?;
+			);
 
 			if let Some(payload) =
 				SignatureToBroadcastIdLookup::<T, I>::iter().find_map(|(payload, id)| {
@@ -551,16 +551,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_transmission_attempts_on_success(
 		broadcast_id: BroadcastId,
 		attempt_numbers: &Vec<AttemptCount>,
-	) -> DispatchResultWithPostInfo {
+	) {
 		for attempt_count in attempt_numbers {
-			AwaitingTransmission::<T, I>::take(BroadcastAttemptId {
-				broadcast_id,
-				attempt_count: *attempt_count,
-			})
-			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			let broadcast_attempt_id =
+				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
+			if let None = AwaitingTransmission::<T, I>::take(broadcast_attempt_id) {
+				log::warn!(
+					"Invalid BroadcastAttemptId {} cleaning up AwaitingTransmissions",
+					broadcast_attempt_id
+				);
+			};
 		}
-
-		Ok(().into())
 	}
 
 	// helper function to remove the associated broadcastidtoattempt_count mapping
