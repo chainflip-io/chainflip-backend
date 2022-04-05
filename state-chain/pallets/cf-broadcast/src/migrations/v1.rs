@@ -55,7 +55,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			b"AwaitingTransactionSignature",
 		);
 
-		let mut num_read_writes = 0;
+		let mut num_writes = 0;
+		let mut num_reads = 0;
 		signing_attempts_iter.drain().into_iter().for_each(|(_, old_signing_attempt)| {
 			let broadcast_attempt_id = BroadcastAttemptId {
 				broadcast_id: old_signing_attempt.broadcast_id,
@@ -68,8 +69,13 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				},
 				nominee: old_signing_attempt.nominee,
 			};
+			BroadcastIdToAttemptNumbers::<T, I>::append(
+				broadcast_attempt_id.broadcast_id,
+				broadcast_attempt_id.attempt_count,
+			);
 			AwaitingTransactionSignature::insert(broadcast_attempt_id, tx_attempt);
-			num_read_writes += 1;
+			num_reads += 1;
+			num_writes += 2;
 		});
 
 		let transmission_attempts_iter =
@@ -91,8 +97,13 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					signer: old_transmission_attempt.signer,
 					signed_tx: old_transmission_attempt.signed_tx,
 				};
-				num_read_writes += 1;
+				BroadcastIdToAttemptNumbers::<T, I>::append(
+					broadcast_attempt_id.broadcast_id,
+					broadcast_attempt_id.attempt_count,
+				);
 				AwaitingTransmission::insert(broadcast_attempt_id, trans_attempt);
+				num_reads += 1;
+				num_writes += 2;
 			});
 
 		// remove storage prefix
@@ -112,15 +123,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					unsigned_tx: failed.unsigned_tx,
 				})
 				.collect::<Vec<_>>();
-			num_read_writes += 1;
+			num_reads += 1;
+			num_writes += 1;
 			BroadcastRetryQueue::put(queue);
 		}
 
 		// No longer required, we can just use BroadcastId, or aggregate
 		// BroadcastAttemptId(BroadcastId, AttemptCount)
 		remove_storage_prefix(PALLET_NAME, BROADCAST_ATTEMPT_ID_COUNTER, b"");
-
-		T::DbWeight::get().reads_writes(num_read_writes, num_read_writes + 1)
+		num_writes += 1;
+		T::DbWeight::get().reads_writes(num_reads, num_writes)
 	}
 
 	#[cfg(feature = "try-runtime")]
