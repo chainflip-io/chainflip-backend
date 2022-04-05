@@ -398,7 +398,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [InvalidBroadcastAttmemptId](Error::InvalidBroadcastAttemptId)
+		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
 		#[pallet::weight(T::WeightInfo::transmission_success())]
 		pub fn transmission_success(
 			origin: OriginFor<T>,
