@@ -607,13 +607,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let next_broadcast_attempt_id = broadcast_attempt.broadcast_attempt_id.next_attempt();
-		BroadcastIdToAttemptNumbers::<T, I>::mutate(
+
+		BroadcastIdToAttemptNumbers::<T, I>::append(
 			broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			|attempts| {
-				if let Some(attempts) = attempts {
-					attempts.push(next_broadcast_attempt_id.attempt_count)
-				}
-			},
+			next_broadcast_attempt_id.attempt_count,
 		);
 
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
