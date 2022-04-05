@@ -550,12 +550,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Clean up attempts and attempt mapping on success
 	pub fn clean_up_transmission_attempts_on_success(
 		broadcast_id: BroadcastId,
-		attempt_numbers: &Vec<AttemptCount>,
+		attempt_numbers: &[AttemptCount],
 	) {
 		for attempt_count in attempt_numbers {
 			let broadcast_attempt_id =
 				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-			if let None = AwaitingTransmission::<T, I>::take(broadcast_attempt_id) {
+			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() {
 				log::warn!(
 					"Invalid BroadcastAttemptId {} cleaning up AwaitingTransmissions",
 					broadcast_attempt_id
