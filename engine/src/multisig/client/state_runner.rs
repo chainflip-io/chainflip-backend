@@ -11,16 +11,18 @@ use crate::{
 };
 use state_chain_runtime::AccountId;
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
+use super::{
+    ceremony_manager::CeremonyResultSender, common::CeremonyStage, utils::PartyIdxMapping,
+};
 
 pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: MultisigOutcomeSender,
+    pub result_sender: CeremonyResultSender<CeremonyResult>,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
 pub struct StateRunner<CeremonyData, CeremonyResult> {
-    inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
+    pub inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
     delayed_messages: BTreeMap<AccountId, CeremonyData>,
@@ -51,7 +53,7 @@ where
         &mut self,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: MultisigOutcomeSender,
+        result_sender: CeremonyResultSender<CeremonyResult>,
     ) -> Result<Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>>> {
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
@@ -279,6 +281,10 @@ where
     /// returns true if the ceremony is authorized (has received a ceremony request)
     pub fn is_authorized(&self) -> bool {
         self.inner.is_some()
+    }
+
+    pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<CeremonyResult>> {
+        self.inner.map(|inner| inner.result_sender)
     }
 
     #[cfg(test)]

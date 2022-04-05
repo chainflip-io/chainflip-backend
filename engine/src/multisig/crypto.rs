@@ -87,7 +87,7 @@ use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyShare {
     pub y: Point,
     pub x_i: Scalar,

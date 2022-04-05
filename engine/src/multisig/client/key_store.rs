@@ -24,8 +24,8 @@ where
     }
 
     #[cfg(test)]
-    pub fn get_db(&self) -> &S {
-        &self.db
+    pub fn extract_db(self) -> S {
+        self.db
     }
 
     pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo> {
