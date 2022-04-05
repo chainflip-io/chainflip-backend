@@ -439,13 +439,9 @@ mod failure_reporting {
 	fn basic_thresholds() {
 		let mut ctx = init_context([1, 2, 3, 4, 5]);
 
-		// First report, countdown threshold passed.
+		// Blame validators.
 		report(&mut ctx, 1, vec![2]);
-
-		// Second report, countdown threshold passed.
 		report(&mut ctx, 2, vec![1]);
-
-		// Third report, countdown threshold passed.
 		report(&mut ctx, 3, vec![1]);
 
 		// Status: 3 responses in, votes: [1:2, 2:1]

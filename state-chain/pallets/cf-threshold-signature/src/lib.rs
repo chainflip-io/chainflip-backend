@@ -484,10 +484,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Start a ceremony.
 		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
 
-		// Secedule an inital retry
+		// Schedule an initial retry.
 		Self::schedule_retry(ceremony_id, T::ThresholdFailureTimeout::get());
 
-		// Set retry timeout
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
 
 		(request_id, ceremony_id)
