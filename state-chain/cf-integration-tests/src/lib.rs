@@ -1386,14 +1386,16 @@ mod tests {
 		use pallet_cf_validator::EpochHistory;
 		use state_chain_runtime::Validator;
 
+		// TODO: Rename
 		// Helper function that checks the epochs of a validator against a list of expected
 		// epochs
 		fn ensure_epoch_activity(account: &AccountId, epochs: Vec<EpochIndex>) {
-			let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(account);
-			assert_eq!(epochs.len(), active_epochs.len(), "different list size!");
-			for epoch in epochs {
-				assert!(active_epochs.contains(&epoch), "missing epoch!");
-			}
+			assert_eq!(
+				EpochHistory::<Runtime>::active_epochs_for_validator(account),
+				epochs,
+				"The active epochs for the validator should be {:?}",
+				epochs
+			);
 		}
 
 		// This should be the normal scenario. We define a network with a smaller active set size
