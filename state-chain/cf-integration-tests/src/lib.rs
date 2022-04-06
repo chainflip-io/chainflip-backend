@@ -355,7 +355,7 @@ mod tests {
 
 				// Include any nodes already *created* to the test network
 				for node in existing_nodes {
-					network.add_node(node);
+					network.add_engine(node);
 					// Only need to setup peer mapping as the AccountInfo is already set up if they
 					// are genesis nodes
 					setup_peer_mapping(node, &node.clone().to_string());
@@ -400,21 +400,14 @@ mod tests {
 
 			pub fn create_node(&mut self) -> NodeId {
 				let node_id = self.next_node_id();
-				self.add_node(&node_id);
+				self.add_engine(&node_id);
 				node_id
 			}
 
-			// Adds a node which doesn't have its session keys set
-			pub fn add_node(&mut self, node_id: &NodeId) {
-				self.engines.insert(
-					node_id.clone(),
-					Engine {
-						node_id: node_id.clone(),
-						active: true,
-						signer: self.signer.clone(),
-						engine_state: EngineState::None,
-					},
-				);
+			// Adds an engine to the test network
+			pub fn add_engine(&mut self, node_id: &NodeId) {
+				self.engines
+					.insert(node_id.clone(), Engine::new(node_id.clone(), self.signer.clone()));
 			}
 
 			pub fn move_to_next_epoch(&mut self, epoch: u32) {
