@@ -29,7 +29,7 @@ use frame_support::{
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, if_std, prelude::*};
 
 use cf_traits::Bonding;
 
@@ -549,10 +549,22 @@ pub mod pallet {
 	#[pallet::getter(fn current_epoch)]
 	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
-	/// Active validator lookup
+	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
-	#[pallet::getter(fn validator_lookup)]
-	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, ()>;
+	#[pallet::getter(fn validator_index)]
+	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EpochIndex,
+		Blake2_128Concat,
+		<T as frame_system::Config>::AccountId,
+		u16,
+	>;
+
+	/// Track epochs and their associated validator count
+	#[pallet::storage]
+	#[pallet::getter(fn epoch_validator_count)]
+	pub type EpochValidatorCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
@@ -668,8 +680,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		Validators::<T>::get()
 	}
 
-	fn is_validator(account: &Self::ValidatorId) -> bool {
-		ValidatorLookup::<T>::contains_key(account)
+	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
+		ValidatorIndex::<T>::get(epoch_index, account)
 	}
 
 	fn bond() -> Self::Amount {
@@ -699,8 +711,13 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		last_block_for_claims <= current_block_number
 	}
 
+	// TODO: Why is this a thing? Shouldn't we just use the mapping?
 	fn active_validator_count() -> u32 {
 		Validators::<T>::decode_len().unwrap_or_default() as u32
+	}
+
+	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
+		EpochValidatorCount::<T>::get(epoch)
 	}
 }
 
@@ -720,23 +737,34 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	}
 }
 
+// At this point, have we set the new epoch number?
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
 	fn start_new_epoch(epoch_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
-		let old_validators = Validators::<T>::get();
-		// Update state of current validators
-		Validators::<T>::set(epoch_validators.to_vec());
-		ValidatorLookup::<T>::remove_all(None);
-		for validator in epoch_validators {
-			ValidatorLookup::<T>::insert(validator, ());
-		}
-
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
 			(*epoch - 1, *epoch)
 		});
+
+		let old_validators = Validators::<T>::get();
+		// Update state of current validators
+		Validators::<T>::set(epoch_validators.to_vec());
+
+		// Set up the validator indexes here
+		let mut total = 0;
+		for (index, account_id) in epoch_validators.iter().enumerate() {
+			if_std! {
+				// This code is only being compiled and executed when the `std` feature is enabled.
+				println!("Inserting validator {:?} for epoch: {} at index: {}", account_id, new_epoch, index);
+			}
+
+			ValidatorIndex::<T>::insert(&new_epoch, account_id, index as u16);
+			total += 1;
+		}
+
+		EpochValidatorCount::<T>::insert(new_epoch, total);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);

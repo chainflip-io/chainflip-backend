@@ -708,10 +708,11 @@ mod tests {
 					"epochs will not rotate automatically from genesis"
 				);
 
+				let current_epoch = Validator::current_epoch();
+
 				for account in accounts.iter() {
-					assert_eq!(
-						Validator::validator_lookup(account),
-						Some(()),
+					assert!(
+						Validator::validator_index(current_epoch, account).is_some(),
 						"validator is present in lookup"
 					);
 				}

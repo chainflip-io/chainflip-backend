@@ -17,7 +17,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use bitvec::prelude::*;
-use cf_traits::{EpochIndex, EpochInfo, EpochTransitionHandler};
+use cf_traits::{EpochIndex, EpochInfo};
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{
@@ -84,21 +84,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
-
-	/// Defines a unique index for each validator for every epoch.
-	#[pallet::storage]
-	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		EpochIndex,
-		Blake2_128Concat,
-		<T as frame_system::Config>::AccountId,
-		u16,
-	>;
-
-	/// Track epochs and their associated validator count
-	#[pallet::storage]
-	pub type EpochValidatorCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
 
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
@@ -234,7 +219,8 @@ impl<T: Config> Pallet<T> {
 		// The number of validators for the epoch
 		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
 		// validator count.
-		let num_validators = EpochValidatorCount::<T>::get(epoch_index).unwrap_or_default();
+		let num_validators =
+			T::EpochInfo::validator_count_at_epoch(epoch_index).expect("TODO: Handle this expect");
 
 		if_std! {
 			// This code is only being compiled and executed when the `std` feature is enabled.
@@ -243,8 +229,7 @@ impl<T: Config> Pallet<T> {
 			println!("Who is doing witness: {}", who);
 		}
 
-		// Look up the signer in the list of validators
-		let index = ValidatorIndex::<T>::get(&epoch_index, &who)
+		let index = T::EpochInfo::validator_index(epoch_index, &who.clone().into())
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		if_std! {
@@ -297,7 +282,7 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == success_threshold_from_share_count(num_validators) as usize {
+		if num_votes == success_threshold_from_share_count(num_validators.into()) as usize {
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
@@ -365,42 +350,5 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
 		RawOrigin::WitnessThreshold.into()
-	}
-}
-
-impl<T: Config> EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-
-	// By this point, current_validators() is already updated
-	// It seems weird that ValidatorIndex is not removed here
-	// also where the fuck are current validators set
-	fn on_new_epoch(
-		_previous_epoch_validators: &[Self::ValidatorId],
-		epoch_validators: &[Self::ValidatorId],
-	) {
-		// Update the list of validators in the witnesser.
-		let epoch = T::EpochInfo::epoch_index();
-
-		if_std! {
-			let current_validators = T::EpochInfo::current_validators();
-			println!(
-				"The current validators before inserting validator index: {:?}",
-				current_validators
-			);
-		}
-
-		// Why are we not inserting the old valiators here
-		let mut total = 0;
-		for (i, v) in epoch_validators.iter().enumerate() {
-			if_std! {
-				// This code is only being compiled and executed when the `std` feature is enabled.
-				println!("Inserting validator {:?} for epoch: {}", v, epoch);
-			}
-
-			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
-			total += 1;
-		}
-
-		EpochValidatorCount::<T>::insert(epoch, total);
 	}
 }

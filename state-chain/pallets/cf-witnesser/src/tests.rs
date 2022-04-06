@@ -2,7 +2,7 @@ use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	Error, VoteMask, Votes,
 };
-use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
+use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo};
 use frame_support::{assert_noop, assert_ok, Hashable};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
@@ -128,12 +128,6 @@ fn can_continue_to_witness_for_old_epochs() {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
 		// Run through a few epochs; 1, 2 and 3
 		MockEpochInfo::incr_epoch(); // 1 - Alice
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA]);
-		MockEpochInfo::incr_epoch(); // 2 - Alice
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA]);
-		MockEpochInfo::incr_epoch(); // 3 - Bob
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[BOBSON]);
-
 		let current_epoch = MockEpochInfo::epoch_index();
 
 		// The last expired epoch

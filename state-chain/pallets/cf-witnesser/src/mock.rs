@@ -1,8 +1,5 @@
 use crate::{self as pallet_cf_witness};
-use cf_traits::{
-	mocks::{self, epoch_info::MockEpochInfo},
-	EpochTransitionHandler,
-};
+use cf_traits::mocks::{self, epoch_info::MockEpochInfo};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -95,7 +92,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// This is required to log events.
 		System::set_block_number(1);
 		MockEpochInfo::incr_epoch();
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &VALIDATORS);
 	});
 
 	ext

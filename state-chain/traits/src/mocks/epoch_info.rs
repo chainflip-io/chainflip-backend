@@ -83,8 +83,15 @@ macro_rules! impl_mock_epoch_info {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
 			}
 
-			fn is_validator(account: &Self::ValidatorId) -> bool {
-				Self::current_validators().as_slice().contains(account)
+			fn validator_index(
+				_epoch_index: $epoch_index,
+				_account: &Self::ValidatorId,
+			) -> Option<u16> {
+				todo!("Do this when used");
+			}
+
+			fn validator_count_at_epoch(_epoch: $epoch_index) -> Option<u32> {
+				todo!("Do this when used");
 			}
 
 			fn bond() -> Self::Amount {

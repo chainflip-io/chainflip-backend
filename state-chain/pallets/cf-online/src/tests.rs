@@ -68,9 +68,16 @@ fn non_validators_should_not_appear_in_network_state() {
 		assert_ok!(OnlinePallet::heartbeat(Origin::signed(BOB)));
 		assert_ok!(OnlinePallet::heartbeat(Origin::signed(ALICE)));
 
-		assert!(!MockEpochInfo::is_validator(&BOB), "Bob should not be a validator");
+		let current_epoch = MockEpochInfo::epoch_index();
+		assert!(
+			!MockEpochInfo::validator_index(current_epoch, &BOB).is_some(),
+			"Bob should not be a validator"
+		);
 
-		assert!(MockEpochInfo::is_validator(&ALICE), "Alice should be a validator");
+		assert!(
+			MockEpochInfo::validator_index(current_epoch, &ALICE).is_some(),
+			"Alice should be a validator"
+		);
 
 		assert!(<OnlinePallet as IsOnline>::is_online(&BOB), "Bob should be online");
 

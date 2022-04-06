@@ -93,8 +93,11 @@ pub trait EpochInfo {
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
 
-	/// Checks if the account is currently a validator.
-	fn is_validator(account: &Self::ValidatorId) -> bool;
+	/// Gets validator index of a particular validator for a given epoch
+	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
+
+	/// Validator count at a particular epoch.
+	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
 	/// current candidate validator set
