@@ -93,22 +93,27 @@ mod tests {
 			}
 		}
 
-		pub struct Signer {
+		pub struct ThresholdSigner {
 			agg_secret_key: SecretKey,
 			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
 			key_seed: u64,
 			proposed_seed: Option<u64>,
 		}
 
-		impl Default for Signer {
+		impl Default for ThresholdSigner {
 			fn default() -> Self {
 				let key_seed = GENESIS_KEY;
 				let (agg_secret_key, _) = Self::generate_keypair(key_seed);
-				Signer { agg_secret_key, signatures: HashMap::new(), key_seed, proposed_seed: None }
+				ThresholdSigner {
+					agg_secret_key,
+					signatures: HashMap::new(),
+					key_seed,
+					proposed_seed: None,
+				}
 			}
 		}
 
-		impl Signer {
+		impl ThresholdSigner {
 			// Sign message with current key, caches signatures
 			pub fn sign(
 				&mut self,
@@ -175,13 +180,20 @@ mod tests {
 		pub struct Engine {
 			pub node_id: NodeId,
 			pub active: bool,
-			pub signer: Rc<RefCell<Signer>>,
+			// conveniently creates a threshold "signature" (not really)
+			// all engines have the same one, so they create the same sig
+			pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
 			pub engine_state: EngineState,
 		}
 
 		impl Engine {
-			fn new(node_id: NodeId, signer: Rc<RefCell<Signer>>) -> Self {
-				Engine { node_id, active: true, signer, engine_state: EngineState::None }
+			fn new(node_id: NodeId, signer: Rc<RefCell<ThresholdSigner>>) -> Self {
+				Engine {
+					node_id,
+					active: true,
+					threshold_signer: signer,
+					engine_state: EngineState::None,
+				}
 			}
 
 			fn state(&self) -> ChainflipAccountState {
@@ -220,7 +232,7 @@ mod tests {
 							Event::Validator(
 								// A new epoch
 								pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-									(&*self.signer).borrow_mut().rotate_keys();
+									(&*self.threshold_signer).borrow_mut().rotate_keys();
 							},
 							Event::EthereumThresholdSigner(
 								// A signature request
@@ -237,7 +249,7 @@ mod tests {
 										Origin::none(),
 										*ceremony_id,
 										// Sign with current key
-										(&*self.signer).borrow_mut().sign(payload),
+										(&*self.threshold_signer).borrow_mut().sign(payload),
 									).expect("should be able to submit threshold signature for Ethereum");
 								} };
 							},
@@ -248,7 +260,7 @@ mod tests {
 										// If we rotating let's witness the keys being rotated on the contract
 										state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
 											Origin::signed(self.node_id.clone()),
-											(&*self.signer).borrow_mut().proposed_public_key(),
+											(&*self.threshold_signer).borrow_mut().proposed_public_key(),
 											100,
 											[1u8; 32].into(),
 										).expect("should be able to vault key rotation for node");
@@ -274,7 +286,7 @@ mod tests {
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
 										// Propose a new key
-										KeygenOutcome::Success((&*self.signer).borrow_mut().propose_new_public_key()),
+										KeygenOutcome::Success((&*self.threshold_signer).borrow_mut().propose_new_public_key()),
 									).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 								}
 						},
@@ -336,7 +348,9 @@ mod tests {
 			pub stake_manager_contract: StakingContract,
 			last_event: usize,
 			node_counter: u32,
-			pub signer: Rc<RefCell<Signer>>,
+
+			// Used to initialised the threshold signers of the engines added
+			pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
 		}
 
 		impl Network {
@@ -370,7 +384,7 @@ mod tests {
 					setup_account_and_peer_mapping(&node_id, &seed);
 					network
 						.engines
-						.insert(node_id.clone(), Engine::new(node_id, network.signer.clone()));
+						Engine::new(node_id, network.threshold_signer.clone()),
 				}
 
 				nodes.append(&mut existing_nodes.to_vec());
@@ -406,8 +420,10 @@ mod tests {
 
 			// Adds an engine to the test network
 			pub fn add_engine(&mut self, node_id: &NodeId) {
-				self.engines
-					.insert(node_id.clone(), Engine::new(node_id.clone(), self.signer.clone()));
+				self.engines.insert(
+					node_id.clone(),
+					Engine::new(node_id.clone(), self.threshold_signer.clone()),
+				);
 			}
 
 			pub fn move_to_next_epoch(&mut self, epoch: u32) {
@@ -609,7 +625,7 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			let (_, public_key) = network::Signer::generate_keypair(GENESIS_KEY);
+			let (_, public_key) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 			GenesisBuild::<Runtime, _>::assimilate_storage(
