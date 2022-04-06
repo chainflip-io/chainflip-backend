@@ -116,6 +116,9 @@ pub mod pallet {
 
 		/// The epoch has expired
 		EpochExpired,
+
+		/// Invalid epoch
+		InvalidEpoch,
 	}
 
 	#[pallet::call]
@@ -220,7 +223,7 @@ impl<T: Config> Pallet<T> {
 		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
 		// validator count.
 		let num_validators =
-			T::EpochInfo::validator_count_at_epoch(epoch_index).expect("TODO: Handle this expect");
+			T::EpochInfo::validator_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
 
 		if_std! {
 			// This code is only being compiled and executed when the `std` feature is enabled.

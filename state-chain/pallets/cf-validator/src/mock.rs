@@ -132,7 +132,6 @@ impl Auctioneer for MockAuctioneer {
 
 	fn update_backup_and_passive_states() {
 		// no op
-		// KYLE: this used to set the AUCTION_WINNERS
 	}
 }
 
@@ -244,7 +243,6 @@ impl Bonding for MockBonder {
 	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
-// THIS IS WHERE THE MOCK AUCTIONEER IS SET
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;

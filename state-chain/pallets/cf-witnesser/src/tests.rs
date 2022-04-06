@@ -31,6 +31,8 @@ fn call_on_threshold() {
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
+		println!("Witnessed Alissa");
+
 		// Vote again, we should reach the threshold and dispatch the call.
 		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
 		let dispatch_result =
@@ -126,12 +128,23 @@ fn delegated_call_should_emit_but_not_return_error() {
 fn can_continue_to_witness_for_old_epochs() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
-		// Run through a few epochs; 1, 2 and 3
-		MockEpochInfo::incr_epoch(); // 1 - Alice
-		let current_epoch = MockEpochInfo::epoch_index();
 
-		// The last expired epoch
-		let expired_epoch = 1;
+		// These are ALISSA, BOBSON, CHARLEMAGNE
+		let mut current_validators = MockEpochInfo::current_validators();
+		// same validators for each epoch - we should change this though
+		MockEpochInfo::next_epoch(current_validators.clone());
+		MockEpochInfo::next_epoch(current_validators.clone());
+
+		// remove CHARLEMAGNE and add DEIRDRE
+		current_validators.pop();
+		current_validators.push(DEIRDRE);
+		assert_eq!(current_validators, vec![ALISSA, BOBSON, DEIRDRE]);
+		MockEpochInfo::next_epoch(current_validators.clone());
+
+		let current_epoch = MockEpochInfo::epoch_index();
+		assert_eq!(current_epoch, 4);
+
+		let expired_epoch = current_epoch - 3;
 		MockEpochInfo::set_last_expired_epoch(expired_epoch);
 
 		// Witness a call for one before the current epoch which has yet to expire
@@ -156,7 +169,7 @@ fn can_continue_to_witness_for_old_epochs() {
 		// Try to witness in a past epoch, which has yet to expire, and that we weren't a member
 		assert_noop!(
 			Witnesser::witness_at_epoch(
-				Origin::signed(BOBSON),
+				Origin::signed(DEIRDRE),
 				call.clone(),
 				current_epoch - 1,
 				Default::default()
@@ -166,13 +179,13 @@ fn can_continue_to_witness_for_old_epochs() {
 
 		// But can witness in an epoch we are in
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(BOBSON),
+			Origin::signed(DEIRDRE),
 			call.clone(),
 			current_epoch,
 			Default::default()
 		));
 
-		// And an epoch that doesn't yet exist
+		// And cannot witness in an epoch that doesn't yet exist
 		assert_noop!(
 			Witnesser::witness_at_epoch(
 				Origin::signed(ALISSA),
@@ -180,7 +193,7 @@ fn can_continue_to_witness_for_old_epochs() {
 				current_epoch + 1,
 				Default::default()
 			),
-			Error::<Test>::UnauthorisedWitness
+			Error::<Test>::InvalidEpoch
 		);
 	});
 }
