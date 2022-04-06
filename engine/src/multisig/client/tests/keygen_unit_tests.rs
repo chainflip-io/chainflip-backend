@@ -615,7 +615,7 @@ async fn should_handle_invalid_comm1() {
 async fn should_handle_invalid_complaints4() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let messages = ceremony.request().await;
+    let (messages, result_receivers) = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -640,7 +640,9 @@ async fn should_handle_invalid_complaints4() {
         .run_stage::<keygen::VerifyComplaints5, _, _>(messages)
         .await;
     ceremony.distribute_messages(messages);
-    ceremony.complete_with_error(&[bad_account_id]).await;
+    ceremony
+        .complete_with_error(&[bad_account_id], result_receivers)
+        .await;
 }
 
 // Keygen aborts if the key is not compatible with the contract at VerifyCommitmentsBroadcast2
@@ -797,7 +799,7 @@ mod timeout {
         async fn recover_if_party_appears_offline_to_minority_stage1() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
 
@@ -812,10 +814,7 @@ mod timeout {
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
-                .nodes
-                .get_mut(&timed_out_party_id)
-                .unwrap()
-                .client
+                .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
             let messages = run_stages!(
@@ -827,14 +826,14 @@ mod timeout {
                 VerifyComplaints5
             );
             ceremony.distribute_messages(messages);
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage4() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -857,22 +856,19 @@ mod timeout {
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
-                .nodes
-                .get_mut(&timed_out_party_id)
-                .unwrap()
-                .client
+                .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
             let messages = run_stages!(ceremony, messages, VerifyComplaints5,);
             ceremony.distribute_messages(messages);
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
 
         #[tokio::test]
         async fn recover_if_party_appears_offline_to_minority_stage6() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -909,15 +905,12 @@ mod timeout {
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
-                .nodes
-                .get_mut(&timed_out_party_id)
-                .unwrap()
-                .client
+                .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
             let messages = run_stages!(ceremony, messages, VerifyBlameResponses7,);
             ceremony.distribute_messages(messages);
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
     }
 
@@ -970,7 +963,7 @@ mod timeout {
         async fn recover_if_agree_on_values_stage7() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -1000,7 +993,7 @@ mod timeout {
             let [bad_node_id] = ceremony.select_account_ids();
             ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
 
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
     }
 }
