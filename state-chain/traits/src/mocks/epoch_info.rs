@@ -26,6 +26,7 @@ macro_rules! impl_mock_epoch_info {
 
 			/// Get the current number of validators.
 			pub fn set_validators(validators: Vec<$account_id>) {
+				println!("mock epoch info: set_validators: {:?}", validators);
 				CURRENT_VALIDATORS.with(|cell| {
 					*cell.borrow_mut() = validators;
 				})

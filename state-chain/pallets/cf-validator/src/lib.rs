@@ -742,6 +742,10 @@ impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
 	fn start_new_epoch(epoch_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
+		if_std! {
+			println!("STARTING NEW EPOCH");
+		}
+
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
