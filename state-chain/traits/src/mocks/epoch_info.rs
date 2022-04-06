@@ -11,7 +11,6 @@ macro_rules! impl_mock_epoch_info {
 
 		thread_local! {
 			pub static CURRENT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
-			pub static NEXT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
 			pub static BOND: RefCell<$balance> = RefCell::new(0);
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
 			pub static LAST_EXPIRED_EPOCH: RefCell<$epoch_index> = RefCell::new(Default::default());
@@ -19,10 +18,6 @@ macro_rules! impl_mock_epoch_info {
 		}
 
 		impl MockEpochInfo {
-			/// Get the current number of validators.
-			pub fn validator_count() -> usize {
-				CURRENT_VALIDATORS.with(|cell| cell.borrow().len())
-			}
 
 			/// Get the current number of validators.
 			pub fn set_validators(validators: Vec<$account_id>) {
@@ -35,17 +30,6 @@ macro_rules! impl_mock_epoch_info {
 			/// Add a validator to the current validators.
 			pub fn add_validator(account: $account_id) {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
-			}
-
-			/// Queue a validator. Adds the validator to the set of next validators.
-			pub fn queue_validator(account: $account_id) {
-				NEXT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
-			}
-
-			/// Clears the current and next validators.
-			pub fn clear_validators() {
-				CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
-				NEXT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
 			}
 
 			/// Set the bond amount.
