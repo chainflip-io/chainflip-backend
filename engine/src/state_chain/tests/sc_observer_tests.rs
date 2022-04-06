@@ -8,6 +8,7 @@ use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use codec::Encode;
 use frame_system::{AccountInfo, Phase};
 use mockall::predicate::{self, eq};
+use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_validator::CurrentEpoch;
 use pallet_cf_vaults::{BlockHeightWindow, Vault, Vaults};
 use sp_core::{
@@ -21,7 +22,7 @@ use web3::types::{Bytes, SignedTransaction};
 use crate::{
     eth::{EthBroadcaster, EthWsRpcClient, MockEthRpcApi},
     logging::{self, test_utils::new_test_logger},
-    multisig::{MultisigInstruction, MultisigOutcome},
+    multisig::client::MockMultisigClientApi,
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{
@@ -132,6 +133,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         mock_state_chain_rpc_client,
     ));
 
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
 
@@ -141,12 +144,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -156,9 +155,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -247,12 +245,10 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -263,9 +259,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -336,12 +331,10 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -352,9 +345,8 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -375,12 +367,10 @@ async fn backup_checks_account_data_every_block() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -440,9 +430,8 @@ async fn backup_checks_account_data_every_block() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -463,6 +452,8 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     // === FAKE BLOCKHEADERS ===
     // two empty blocks in the stream
     let empty_block_header = test_header(20);
@@ -474,12 +465,8 @@ async fn validator_to_validator_on_new_epoch_event() {
         Ok(new_epoch_block_header.clone()),
     ]);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -608,9 +595,8 @@ async fn validator_to_validator_on_new_epoch_event() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -650,6 +636,8 @@ async fn backup_to_validator_on_new_epoch() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     // === FAKE BLOCKHEADERS ===
     // two empty blocks in the stream
     let empty_block_header = test_header(20);
@@ -661,12 +649,8 @@ async fn backup_to_validator_on_new_epoch() {
         Ok(new_epoch_block_header.clone()),
     ]);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -781,9 +765,8 @@ async fn backup_to_validator_on_new_epoch() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -958,12 +941,10 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -974,9 +955,8 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -1104,7 +1084,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         Phase::ApplyExtrinsic(0),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                0,
+                                BroadcastAttemptId::default(),
                                 AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                                 UnsignedTransaction::default(),
                             ),
@@ -1116,7 +1096,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         Phase::ApplyExtrinsic(1),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                0,
+                                BroadcastAttemptId::default(),
                                 AccountId32::new([1; 32]),
                                 UnsignedTransaction::default(),
                             ),
@@ -1136,12 +1116,10 @@ async fn only_encodes_and_signs_when_active_and_specified() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -1152,9 +1130,8 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -1187,16 +1164,14 @@ async fn run_the_sc_observer() {
             .await
             .unwrap();
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
     let eth_broadcaster =
         EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
+
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
 
     let (sm_window_sender, _sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -1207,9 +1182,8 @@ async fn run_the_sc_observer() {
         state_chain_client,
         block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,

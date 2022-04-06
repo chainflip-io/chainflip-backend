@@ -77,7 +77,6 @@ benchmarks_instance_pallet! {
 			.collect();
 
 		let completed_response_context = CeremonyContext::<T, I> {
-			retry_scheduled:true,
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,

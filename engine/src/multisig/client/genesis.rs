@@ -85,13 +85,13 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
 
         let account_ids = ensure_unsorted(node_name_to_id_map.values().cloned().collect(), 0);
 
-        let (key_id, nodes) = {
+        let (key_id, key_data, _) = {
             let mut count = 0;
             loop {
                 if count >= 20 {
                     panic!("20 runs and no key generated. There's a 0.5^20 chance of this happening. Well done.");
                 } else {
-                    if let Ok((key_id, nodes)) =
+                    if let Ok((key_id, key_data, nodes)) =
                         run_keygen_with_err_on_high_pubkey(account_ids.clone()).await
                     {
                         // Check Key Works
@@ -101,6 +101,7 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
                                 nodes,
                                 1,
                                 key_id.clone(),
+                                key_data.clone(),
                                 MESSAGE_HASH.clone(),
                                 Rng::from_entropy(),
                             );
@@ -108,6 +109,7 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
 
                         break (
                             key_id,
+                            key_data,
                             signing_ceremony
                                 .nodes
                                 .into_iter()
@@ -127,13 +129,8 @@ DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
             .iter()
             .map(|(node_name, account_id)| {
                 let secret = hex::encode(
-                    bincode::serialize(
-                        &nodes[account_id]
-                            .client
-                            .get_key(&key_id)
-                            .expect("key must be present"),
-                    )
-                    .unwrap_or_else(|_| panic!("Could not serialize secret for {}", node_name)),
+                    bincode::serialize(&key_data[account_id])
+                        .unwrap_or_else(|_| panic!("Could not serialize secret for {}", node_name)),
                 );
                 println!("{}'s secret: {:?}", &node_name, &secret);
                 (node_name.to_string(), secret)

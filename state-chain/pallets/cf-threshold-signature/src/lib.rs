@@ -68,8 +68,6 @@ pub mod pallet {
 	/// Metadata for a pending threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
-		/// Whether or not this request has been scheduled to be retried.
-		pub retry_scheduled: bool,
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each validator has received.
@@ -81,18 +79,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> CeremonyContext<T, I> {
-		/// Based on the current state of the ceremony, defines whether we have reached a point
-		/// where enough respondents have reported a failure of the ceremony such that we can
-		/// schedule a retry.
-		pub fn countdown_initiation_threshold_reached(&self) -> bool {
-			// The number of responses at which we start a timeout to allow other participants to
-			// respond.
-			let response_threshold = self.participant_count / 10 + 1;
-
-			self.remaining_respondents.len() <=
-				(self.participant_count - response_threshold) as usize
-		}
-
 		/// Based on the reported blame_counts, decide which nodes should be reported for failure.
 		///
 		/// We assume that at least 2/3 of participants need to blame a node for it to be reliable.
@@ -444,12 +430,6 @@ pub mod pallet {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
-						if !context.retry_scheduled &&
-							context.countdown_initiation_threshold_reached()
-						{
-							context.retry_scheduled = true;
-							Self::schedule_retry(id, T::ThresholdFailureTimeout::get());
-						}
 						if context.remaining_respondents.is_empty() {
 							// No more respondents waiting: we can retry on the next block.
 							Self::schedule_retry(id, 1u32.into());
@@ -500,8 +480,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		});
+
 		// Start a ceremony.
 		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
+
+		// Schedule an initial retry.
+		Self::schedule_retry(ceremony_id, T::ThresholdFailureTimeout::get());
 
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
 
@@ -531,7 +515,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					retry_scheduled: false,
 					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
 					blame_counts: Default::default(),
 					participant_count: nominees.len() as u32,
@@ -551,7 +534,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					retry_scheduled: true,
 					remaining_respondents: Default::default(),
 					blame_counts: Default::default(),
 					participant_count: 0,

@@ -185,9 +185,14 @@ workflows:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
-      - test-single-node:
+      - git-clone-docgen-repo:
           requires:
             - cargo-build-and-test
+          context:
+            - github-credentials
+      - test-single-node:
+          requires:
+            - git-clone-docgen-repo
           context:
             - ghcr-credentials
             - do-credentials
@@ -429,7 +434,7 @@ jobs:
       - run: sccache --show-stats
       # TODO: remove the global ignores (#1254)
       - run: |
-          cargo clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
+          sh clippy.sh
           sccache --show-stats
 
   cargo-doc:
@@ -496,6 +501,23 @@ jobs:
           root: ./
           paths:
             - cluster
+
+  git-clone-docgen-repo:
+    resource_class: small
+    docker:
+      - image: "cimg/node:17.8.0"
+    steps:
+      - gh/setup
+      - gh/clone:
+          repo: https://github.com/chainflip-io/chainflip-docgen.git
+          dir: chainflip-docgen
+      - run: |
+          cd chainflip-docgen
+          npm install
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - chainflip-docgen/*
 
   run-integration-tests:
     resource_class: xlarge
@@ -567,8 +589,17 @@ jobs:
             curl
             --url 'http://localhost:5555/health'
             -vv
+      - run:
+          name: Generate State Chain docs
+          command: |
+            export WS_ENDPOINT="ws://localhost:9944"
+            export TYPES_FILE="../state-chain/types.json"
+            cd ./chainflip-docgen/
+            npm run generate
       - store_artifacts:
           path: target/release
+      - store_artifacts:
+          path: ./chainflip-docgen/generated/
 
   create-testnet:
     parameters:

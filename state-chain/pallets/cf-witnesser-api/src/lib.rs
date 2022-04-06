@@ -72,16 +72,17 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*id, *tx_hash)
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*broadcast_attempt_id, *tx_hash)
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_transmission_success(
 			origin: OriginFor<T>,
-			id: pallet_cf_broadcast::BroadcastAttemptId,
+			broadcast_attempt_id: pallet_cf_broadcast::BroadcastAttemptId,
 			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance1>::transmission_success(id, tx_hash);
+			let call =
+				BroadcastCall::<T, Instance1>::transmission_success(broadcast_attempt_id, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -97,17 +98,21 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_failure(*id, failure.clone(), *tx_hash)
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_failure(*broadcast_attempt_id, failure.clone(), *tx_hash)
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_eth_transmission_failure(
 			origin: OriginFor<T>,
-			id: pallet_cf_broadcast::BroadcastAttemptId,
+			broadcast_attempt_id: pallet_cf_broadcast::BroadcastAttemptId,
 			failure: pallet_cf_broadcast::TransmissionFailure,
 			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = BroadcastCall::<T, Instance1>::transmission_failure(id, failure, tx_hash);
+			let call = BroadcastCall::<T, Instance1>::transmission_failure(
+				broadcast_attempt_id,
+				failure,
+				tx_hash,
+			);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}

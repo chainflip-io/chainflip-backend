@@ -1,7 +1,7 @@
 //! Multisig signing and keygen
 
 /// Multisig client
-mod client;
+pub mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 /// Storage for the keys
@@ -14,23 +14,18 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
 use slog::o;
 use state_chain_runtime::AccountId;
 
-pub use client::{
-    KeygenOptions, KeygenOutcome, MultisigClient, MultisigMessage, MultisigOutcome,
-    SchnorrSignature, SigningOutcome,
-};
+pub use client::{KeygenOptions, MultisigClient, MultisigMessage, SchnorrSignature};
 
 pub use db::{KeyDB, PersistentKeyDB};
 
 #[cfg(test)]
 pub use db::KeyDBMock;
-
-pub use self::client::{keygen::KeygenInfo, signing::SigningInfo};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
@@ -51,24 +46,15 @@ impl std::fmt::Display for KeyId {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum MultisigInstruction {
-    Keygen(KeygenInfo),
-    Sign(SigningInfo),
-}
-
-/// Start the multisig client, which listens for p2p messages and instructions from the SC
+/// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<S>(
     my_account_id: AccountId,
     db: S,
-    mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
-    multisig_outcome_sender: UnboundedSender<MultisigOutcome>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     keygen_options: KeygenOptions,
     logger: &slog::Logger,
-) -> impl futures::Future
+) -> (Arc<MultisigClient<S>>, impl futures::Future)
 where
     S: KeyDB,
 {
@@ -76,38 +62,51 @@ where
 
     slog::info!(logger, "Starting");
 
-    let mut client = MultisigClient::new(
-        my_account_id,
+    let (keygen_request_sender, mut keygen_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (signing_request_sender, mut signing_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let multisig_client = Arc::new(MultisigClient::new(
+        my_account_id.clone(),
         db,
-        multisig_outcome_sender,
-        outgoing_p2p_message_sender,
+        keygen_request_sender,
+        signing_request_sender,
         keygen_options,
         &logger,
-    );
+    ));
 
-    async move {
-        // Stream outputs () approximately every ten seconds
-        let mut check_timeout_tick = common::make_periodic_tick(Duration::from_secs(10));
+    let multisig_client_backend_future = {
+        use crate::multisig::client::ceremony_manager::CeremonyManager;
 
-        use rand_legacy::FromEntropy;
-        let mut rng = crypto::Rng::from_entropy();
+        let mut ceremony_manager =
+            CeremonyManager::new(my_account_id, outgoing_p2p_message_sender, &logger);
+        let multisig_client = multisig_client.clone();
 
-        loop {
-            tokio::select! {
-                Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
-                    client.process_p2p_message(sender_id, message);
-                }
-                Some(msg) = multisig_instruction_receiver.recv() => {
-                    client.process_multisig_instruction(msg, &mut rng);
-                }
-                _ = check_timeout_tick.tick() => {
-                    client.check_timeout();
-                }
-                Ok(()) = &mut shutdown_rx => {
-                    slog::info!(logger, "MultisigClient stopped due to shutdown request!");
-                    break;
+        async move {
+            // Stream outputs () approximately every ten seconds
+            let mut check_timeouts_tick = common::make_periodic_tick(Duration::from_secs(10));
+
+            loop {
+                tokio::select! {
+                    Some((ceremony_id, participants, keygen_options, rng, result_sender)) = keygen_request_receiver.recv() => {
+                        ceremony_manager.on_keygen_request(ceremony_id, participants, keygen_options, rng, result_sender);
+                    }
+                    Some((ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender)) = signing_request_receiver.recv() => {
+                        ceremony_manager.on_request_to_sign(ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender);
+                    }
+                    Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
+                        ceremony_manager.process_p2p_message(sender_id, message);
+                    }
+                    _ = check_timeouts_tick.tick() => {
+                        slog::trace!(logger, "Checking for expired multisig states");
+                        ceremony_manager.check_timeouts();
+                        multisig_client.check_timeouts().await;
+                    }
                 }
             }
         }
-    }
+    };
+
+    (multisig_client, multisig_client_backend_future)
 }
