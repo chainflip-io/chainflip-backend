@@ -280,7 +280,7 @@ pub mod pallet {
 					// (or remove it if promot_demote does it)
 					// Removing this leads to unauthorised witness in some integration tests
 					// e.g. decreasing_mab_scenario
-					// T::Auctioneer::update_backup_and_passive_states();
+					T::Auctioneer::update_backup_and_passive_states();
 					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
