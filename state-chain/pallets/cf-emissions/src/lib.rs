@@ -386,7 +386,10 @@ impl<T: Config> EmissionsTrigger for Pallet<T> {
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = <T as frame_system::Config>::AccountId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], _new_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(
+		_previous_epoch_validators: &[Self::ValidatorId],
+		_epoch_validators: &[Self::ValidatorId],
+	) {
 		// Calculate block emissions on every epoch
 		Self::calculate_block_emissions();
 		// Process any outstanding emissions.

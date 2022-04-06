@@ -719,12 +719,12 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(new_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
+	fn start_new_epoch(epoch_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
 		let old_validators = Validators::<T>::get();
 		// Update state of current validators
-		Validators::<T>::set(new_validators.to_vec());
+		Validators::<T>::set(epoch_validators.to_vec());
 		ValidatorLookup::<T>::remove_all(None);
-		for validator in new_validators {
+		for validator in epoch_validators {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
 
@@ -749,12 +749,12 @@ impl<T: Config> Pallet<T> {
 		Self::emergency_rotation_completed();
 
 		// Save the epoch -> validators map
-		HistoricalValidators::<T>::insert(new_epoch, new_validators);
+		HistoricalValidators::<T>::insert(new_epoch, epoch_validators);
 
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		for validator in new_validators.iter() {
+		for validator in epoch_validators.iter() {
 			// Remember in which epoch an validator was active
 			EpochHistory::<T>::activate_epoch(validator, new_epoch);
 			// Bond the validators
@@ -765,7 +765,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators);
+		T::EpochTransitionHandler::on_new_epoch(&old_validators, epoch_validators);
 
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));

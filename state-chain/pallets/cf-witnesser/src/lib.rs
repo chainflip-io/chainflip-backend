@@ -359,12 +359,15 @@ where
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(
+		_previous_epoch_validators: &[Self::ValidatorId],
+		epoch_validators: &[Self::ValidatorId],
+	) {
 		// Update the list of validators in the witnesser.
 		let epoch = T::EpochInfo::epoch_index();
 
 		let mut total = 0;
-		for (i, v) in new_validators.iter().enumerate() {
+		for (i, v) in epoch_validators.iter().enumerate() {
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
 			total += 1;
 		}

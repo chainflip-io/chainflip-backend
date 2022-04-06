@@ -215,9 +215,12 @@ pub trait EpochTransitionHandler {
 	type ValidatorId;
 	/// A new epoch has started
 	///
-	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
-	/// a `new_bond`
-	fn on_new_epoch(old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]);
+	/// The `previous_epoch_validators` now let `epoch_validators` take control
+	/// There can be an overlap between these two sets of validators
+	fn on_new_epoch(
+		previous_epoch_validators: &[Self::ValidatorId],
+		epoch_validators: &[Self::ValidatorId],
+	);
 }
 
 /// Providing bidders for an auction
