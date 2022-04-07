@@ -574,7 +574,7 @@ async fn should_report_on_invalid_hash_commitment() {
 async fn should_handle_inconsistent_broadcast_complaints4() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let messages = ceremony.request().await;
+    let (messages, result_receivers) = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -604,7 +604,7 @@ async fn should_handle_inconsistent_broadcast_complaints4() {
         .await;
     ceremony.distribute_messages(messages);
     ceremony
-        .complete_with_error(&[bad_account_id.clone()])
+        .complete_with_error(&[bad_account_id.clone()], result_receivers)
         .await;
 }
 
@@ -616,7 +616,7 @@ async fn should_handle_inconsistent_broadcast_complaints6() {
         &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
     );
 
-    let messages = ceremony.request().await;
+    let (messages, result_receivers) = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -663,7 +663,7 @@ async fn should_handle_inconsistent_broadcast_complaints6() {
         .await;
     ceremony.distribute_messages(messages);
     ceremony
-        .complete_with_error(&[bad_account_id.clone()])
+        .complete_with_error(&[bad_account_id.clone()], result_receivers)
         .await;
 }
 
@@ -896,7 +896,7 @@ mod timeout {
         async fn recover_if_party_appears_offline_to_minority_stage1a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let mut messages = ceremony.request().await;
+            let (mut messages, result_receivers) = ceremony.request().await;
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
@@ -905,12 +905,11 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
+            ceremony.distribute_messages(messages.clone());
+
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
-                .nodes
-                .get_mut(&timed_out_party_id)
-                .unwrap()
-                .client
+                .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
             let messages = run_stages!(
@@ -924,7 +923,7 @@ mod timeout {
                 VerifyComplaints5
             );
             ceremony.distribute_messages(messages);
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
 
         #[tokio::test]
@@ -1054,7 +1053,7 @@ mod timeout {
         async fn recover_if_agree_on_values_stage2a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
 
@@ -1072,7 +1071,7 @@ mod timeout {
             );
 
             ceremony.distribute_messages(messages);
-            ceremony.complete().await;
+            ceremony.complete(result_receivers).await;
         }
 
         #[tokio::test]
@@ -1157,7 +1156,7 @@ mod timeout {
         async fn report_if_insufficient_messages_stage_2a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
@@ -1173,7 +1172,7 @@ mod timeout {
             ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             ceremony
-                .complete_with_error(&[non_sending_party_id_1])
+                .complete_with_error(&[non_sending_party_id_1], result_receivers)
                 .await
         }
 
@@ -1181,7 +1180,7 @@ mod timeout {
         async fn report_if_insufficient_messages_stage_2() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
@@ -1196,7 +1195,7 @@ mod timeout {
             ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             ceremony
-                .complete_with_error(&[non_sending_party_id_1])
+                .complete_with_error(&[non_sending_party_id_1], result_receivers)
                 .await
         }
 
@@ -1204,7 +1203,7 @@ mod timeout {
         async fn report_if_insufficient_messages_stage_5() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let messages = run_stages!(
                 ceremony,
@@ -1230,7 +1229,7 @@ mod timeout {
             ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             ceremony
-                .complete_with_error(&[non_sending_party_id_1])
+                .complete_with_error(&[non_sending_party_id_1], result_receivers)
                 .await
         }
 
@@ -1238,7 +1237,7 @@ mod timeout {
         async fn report_if_insufficient_messages_stage_7() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let messages = ceremony.request().await;
+            let (messages, result_receivers) = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -1278,7 +1277,7 @@ mod timeout {
             ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             ceremony
-                .complete_with_error(&[non_sending_party_id_1])
+                .complete_with_error(&[non_sending_party_id_1], result_receivers)
                 .await
         }
     }
