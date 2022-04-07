@@ -109,15 +109,14 @@ pub trait EpochInfo {
 	/// Are we in the auction phase of the epoch?
 	fn is_auction_phase() -> bool;
 
-	/// The number of validators in the current active set.
-	fn active_validator_count() -> u32;
-
 	/// The consensus threshold for the current epoch.
 	///
 	/// This is the number of parties required to conduct a *successful* threshold
 	/// signature ceremony based on the number of active validators.
 	fn consensus_threshold() -> u32 {
-		cf_utilities::success_threshold_from_share_count(Self::active_validator_count())
+		cf_utilities::success_threshold_from_share_count(
+			Self::validator_count_at_epoch(Self::epoch_index()).unwrap_or_default(),
+		)
 	}
 }
 

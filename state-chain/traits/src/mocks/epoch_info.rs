@@ -120,10 +120,6 @@ macro_rules! impl_mock_epoch_info {
 			fn is_auction_phase() -> bool {
 				AUCTION_PHASE.with(|cell| *cell.borrow())
 			}
-
-			fn active_validator_count() -> u32 {
-				Self::current_validators().len() as u32
-			}
 		}
 	};
 }
