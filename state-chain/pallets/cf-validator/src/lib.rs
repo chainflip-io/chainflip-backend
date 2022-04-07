@@ -279,10 +279,11 @@ pub mod pallet {
 					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(_) => {
-					// TODO: Delete this and move it somewhere it makes sense
-					// (or remove it if promot_demote does it)
-					// Removing this leads to unauthorised witness in some integration tests
-					// e.g. decreasing_mab_scenario
+					// TODO: Remove update_backup_and_passive_states and move it somewhere it makes
+					// sense Just removing it means that on a rotation, the nodes that were
+					// validators do not get moved to backup state. This then impacts some
+					// integration tests which check the state in order to determine if a node
+					// should submit a witness or not
 					T::Auctioneer::update_backup_and_passive_states();
 					Self::set_rotation_status(RotationStatus::Idle);
 				},
