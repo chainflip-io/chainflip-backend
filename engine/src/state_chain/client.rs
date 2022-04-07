@@ -4,6 +4,7 @@ use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
+use frame_support::storage::types::QueryKindTrait;
 use frame_support::unsigned::TransactionValidityError;
 use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
@@ -353,66 +354,67 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 }
 
-// A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
-pub trait StorageMapAssociatedTypes {
-    type Key;
-    type Value: codec::FullCodec;
-    type QueryKind: frame_support::storage::types::QueryKindTrait<Self::Value, Self::OnEmpty>;
-    type OnEmpty;
+mod storage_traits {
+    use codec::FullCodec;
+    use frame_support::{
+        storage::types::{QueryKindTrait, StorageMap, StorageValue},
+        traits::{Get, StorageInstance},
+        StorageHasher,
+    };
+    use sp_core::storage::StorageKey;
 
-    fn _hashed_key_for(key: &Self::Key) -> StorageKey;
-}
-impl<
-        Prefix: frame_support::traits::StorageInstance,
-        Hasher: frame_support::StorageHasher,
-        Key: codec::FullCodec,
-        Value: codec::FullCodec,
-        QueryKind: frame_support::storage::types::QueryKindTrait<Value, OnEmpty>,
-        OnEmpty: frame_support::traits::Get<QueryKind::Query> + 'static,
-        MaxValues: frame_support::traits::Get<Option<u32>>,
-    > StorageMapAssociatedTypes
-    for frame_support::storage::types::StorageMap<
-        Prefix,
-        Hasher,
-        Key,
-        Value,
-        QueryKind,
-        OnEmpty,
-        MaxValues,
-    >
-{
-    type Key = Key;
-    type Value = Value;
-    type QueryKind = QueryKind;
-    type OnEmpty = OnEmpty;
+    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
+    pub trait StorageMapAssociatedTypes {
+        type Key;
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
 
-    fn _hashed_key_for(key: &Self::Key) -> StorageKey {
-        StorageKey(Self::hashed_key_for(key))
+        fn _hashed_key_for(key: &Self::Key) -> StorageKey;
     }
-}
+    impl<
+            Prefix: StorageInstance,
+            Hasher: StorageHasher,
+            Key: FullCodec,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+            MaxValues: Get<Option<u32>>,
+        > StorageMapAssociatedTypes
+        for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+    {
+        type Key = Key;
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
 
-// A method to safely extract type information about Substrate storage values (As the Key and Value types are not available)
-pub trait StorageValueAssociatedTypes {
-    type Value: codec::FullCodec;
-    type QueryKind: frame_support::storage::types::QueryKindTrait<Self::Value, Self::OnEmpty>;
-    type OnEmpty;
+        fn _hashed_key_for(key: &Self::Key) -> StorageKey {
+            StorageKey(Self::hashed_key_for(key))
+        }
+    }
 
-    fn _hashed_key() -> StorageKey;
-}
-impl<
-        Prefix: frame_support::traits::StorageInstance,
-        Value: codec::FullCodec,
-        QueryKind: frame_support::storage::types::QueryKindTrait<Value, OnEmpty>,
-        OnEmpty: frame_support::traits::Get<QueryKind::Query> + 'static,
-    > StorageValueAssociatedTypes
-    for frame_support::storage::types::StorageValue<Prefix, Value, QueryKind, OnEmpty>
-{
-    type Value = Value;
-    type QueryKind = QueryKind;
-    type OnEmpty = OnEmpty;
+    // A method to safely extract type information about Substrate storage values (As the Key and Value types are not available)
+    pub trait StorageValueAssociatedTypes {
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
 
-    fn _hashed_key() -> StorageKey {
-        StorageKey(Self::hashed_key().into())
+        fn _hashed_key() -> StorageKey;
+    }
+    impl<
+            Prefix: StorageInstance,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+        > StorageValueAssociatedTypes for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+    {
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
+
+        fn _hashed_key() -> StorageKey {
+            StorageKey(Self::hashed_key().into())
+        }
     }
 }
 
@@ -630,13 +632,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
-    pub async fn get_storage_value<StorageValue: StorageValueAssociatedTypes>(
+    pub async fn get_storage_value<StorageValue: storage_traits::StorageValueAssociatedTypes>(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<<<StorageValue as StorageValueAssociatedTypes>::QueryKind as frame_support::storage::types::QueryKindTrait<
-        <StorageValue as StorageValueAssociatedTypes>::Value,
-        <StorageValue as StorageValueAssociatedTypes>::OnEmpty
-    >>::Query>{
+    ) -> Result<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
         let storage_key = StorageValue::_hashed_key();
         self.state_chain_rpc_client
             .storage(block_hash, storage_key.clone())
@@ -645,22 +644,18 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 "Failed to get storage value with key: {:?} at block hash {:#x}",
                 storage_key, block_hash
             ))?
-            .map(|data| <StorageValue as StorageValueAssociatedTypes>::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
+            .map(|data| StorageValue::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
             .map_or(Ok(None), |v| v.map(Some))
-            .map(<<StorageValue as StorageValueAssociatedTypes>::QueryKind as frame_support::storage::types::QueryKindTrait<
-                <StorageValue as StorageValueAssociatedTypes>::Value,
-                <StorageValue as StorageValueAssociatedTypes>::OnEmpty
-            >>::from_optional_value_to_query)
+            .map(StorageValue::QueryKind::from_optional_value_to_query)
     }
 
-    pub async fn get_storage_map<StorageMap: StorageMapAssociatedTypes>(
+    pub async fn get_storage_map<StorageMap: storage_traits::StorageMapAssociatedTypes>(
         &self,
         block_hash: state_chain_runtime::Hash,
-        key: &<StorageMap as StorageMapAssociatedTypes>::Key,
-    ) -> Result<<<StorageMap as StorageMapAssociatedTypes>::QueryKind as frame_support::storage::types::QueryKindTrait<
-        <StorageMap as StorageMapAssociatedTypes>::Value,
-        <StorageMap as StorageMapAssociatedTypes>::OnEmpty
-    >>::Query>{
+        key: &StorageMap::Key,
+    ) -> Result<
+        <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+    > {
         let storage_key = StorageMap::_hashed_key_for(key);
         self.state_chain_rpc_client
             .storage(block_hash, storage_key.clone())
@@ -669,12 +664,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 "Failed to get storage map entry with key: {:?} at block hash {:#x}",
                 storage_key, block_hash
             ))?
-            .map(|data| <StorageMap as StorageMapAssociatedTypes>::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
+            .map(|data| StorageMap::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
             .map_or(Ok(None), |v| v.map(Some))
-            .map(<<StorageMap as StorageMapAssociatedTypes>::QueryKind as frame_support::storage::types::QueryKindTrait<
-                <StorageMap as StorageMapAssociatedTypes>::Value,
-                <StorageMap as StorageMapAssociatedTypes>::OnEmpty
-            >>::from_optional_value_to_query)
+            .map(StorageMap::QueryKind::from_optional_value_to_query)
     }
 
     async fn get_from_storage_with_key<StorageType: Decode + Debug>(
