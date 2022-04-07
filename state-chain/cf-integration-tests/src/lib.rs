@@ -390,23 +390,6 @@ mod tests {
 				(network, passive_nodes)
 			}
 
-			// TODO: Rename
-			pub fn filter_nodes(&self, state: ChainflipAccountState) -> Vec<NodeId> {
-				self.engines
-					.iter()
-					.filter_map(
-						|(node_id, engine)| {
-							if engine.state() == state {
-								Some(node_id)
-							} else {
-								None
-							}
-						},
-					)
-					.cloned()
-					.collect()
-			}
-
 			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
 				self.engines.get_mut(node_id).expect("valid node_id").active = active;
 			}
@@ -1168,12 +1151,9 @@ mod tests {
 					// validators The result will be our newly created nodes will be validators and
 					// the genesis validators will become backup validators
 					let mut genesis_validators = Validator::current_validators();
-					let (mut testnet, _) =
+					let (mut testnet, mut init_passive_nodes) =
 						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
 
-					let mut init_passive_nodes =
-						testnet.filter_nodes(ChainflipAccountState::Passive);
-					let active_nodes = testnet.filter_nodes(ChainflipAccountState::Validator);
 					// An initial stake which is superior to the genesis stakes
 					// The current validators would have been rewarded on us leaving the current
 					// epoch so let's up the stakes for the passive nodes.
@@ -1193,7 +1173,7 @@ mod tests {
 					);
 
 					// Activate the accounts
-					for node in [active_nodes, init_passive_nodes.clone()].concat() {
+					for node in [genesis_validators.clone(), init_passive_nodes.clone()].concat() {
 						network::Cli::activate_account(node);
 					}
 
