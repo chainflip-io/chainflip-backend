@@ -17,6 +17,10 @@ pub trait MeaningOfLiveApi {
 	/// }'
 	#[rpc(name = "ask")]
 	fn ask(&self) -> Result<u32, jsonrpc_core::Error>;
+
+	/// Returns the same value you've passed into the rpc
+	#[rpc(name = "return_same_value")]
+	fn return_same_value(&self, x: u32) -> Result<u32, jsonrpc_core::Error>;
 }
 
 pub struct MeaningOfLiveRpc<C, B> {
@@ -37,6 +41,14 @@ where
 		self.client
 			.runtime_api()
 			.ask(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+
+	fn return_same_value(&self, x: u32) -> Result<u32, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.return_same_value(&at, x)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 }

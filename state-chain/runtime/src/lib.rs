@@ -573,6 +573,9 @@ impl_runtime_apis! {
 		fn ask() -> u32 {
 			42
 		}
+		fn return_same_value(x: u32) -> u32 {
+			x
+		}
 	}
 
 	// END CUSTOM RUNTIME APIS
