@@ -31,8 +31,6 @@ fn call_on_threshold() {
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
-		println!("Witnessed Alissa");
-
 		// Vote again, we should reach the threshold and dispatch the call.
 		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
 		let dispatch_result =

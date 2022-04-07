@@ -27,7 +27,6 @@ macro_rules! impl_mock_epoch_info {
 
 			/// Get the current number of validators.
 			pub fn set_validators(validators: Vec<$account_id>) {
-				println!("mock epoch info: set_validators: {:?}", validators);
 				CURRENT_VALIDATORS.with(|cell| {
 					*cell.borrow_mut() = validators;
 				})
@@ -67,7 +66,6 @@ macro_rules! impl_mock_epoch_info {
 					let mut map = cell.borrow_mut();
 					let validator_index = map.entry(epoch_index).or_insert(HashMap::new());
 					for (i, account_id) in account_ids.iter().enumerate() {
-						println!("Setting Epoch: {} Validator: {}, i: {}", epoch_index, account_id, i);
 						validator_index.insert(account_id.clone(), i as u16);
 					}
 				})

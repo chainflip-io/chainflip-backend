@@ -52,7 +52,6 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 }
 
 pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
-	println!("Run complete auction");
 	let auction_result =
 		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
 

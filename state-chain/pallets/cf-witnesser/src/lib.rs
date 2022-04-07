@@ -29,7 +29,7 @@ use frame_support::{
 	Hashable,
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
-use sp_std::{if_std, prelude::*};
+use sp_std::prelude::*;
 use utilities::success_threshold_from_share_count;
 
 #[frame_support::pallet]
@@ -225,20 +225,8 @@ impl<T: Config> Pallet<T> {
 		let num_validators =
 			T::EpochInfo::validator_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
 
-		if_std! {
-			// This code is only being compiled and executed when the `std` feature is enabled.
-			println!("Num validators: {}", num_validators);
-			println!("Epoch index: {}", epoch_index);
-			println!("Who is doing witness: {}", who);
-		}
-
 		let index = T::EpochInfo::validator_index(epoch_index, &who.clone().into())
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
-
-		if_std! {
-			// This code is only being compiled and executed when the `std` feature is enabled.
-			println!("Was a good witness")
-		}
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);

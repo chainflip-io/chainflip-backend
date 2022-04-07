@@ -29,7 +29,7 @@ use frame_support::{
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
-use sp_std::{collections::btree_map::BTreeMap, if_std, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use cf_traits::Bonding;
 
@@ -737,15 +737,10 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	}
 }
 
-// At this point, have we set the new epoch number?
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
 	fn start_new_epoch(epoch_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
-		if_std! {
-			println!("STARTING NEW EPOCH");
-		}
-
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
@@ -759,11 +754,6 @@ impl<T: Config> Pallet<T> {
 		// Set up the validator indexes here
 		let mut total = 0;
 		for (index, account_id) in epoch_validators.iter().enumerate() {
-			if_std! {
-				// This code is only being compiled and executed when the `std` feature is enabled.
-				println!("Inserting validator {:?} for epoch: {} at index: {}", account_id, new_epoch, index);
-			}
-
 			ValidatorIndex::<T>::insert(&new_epoch, account_id, index as u16);
 			total += 1;
 		}
