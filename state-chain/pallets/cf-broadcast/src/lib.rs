@@ -478,19 +478,19 @@ pub mod pallet {
 
 			// remove this broadcast attempt from the list of attempts for this broadcast
 			// and return the latest attempt number
-			let last_attempt_number = BroadcastIdToAttemptNumbers::<T, I>::mutate(
+			let last_attempt_number = BroadcastIdToAttemptNumbers::<T, I>::try_mutate(
 				broadcast_attempt.broadcast_attempt_id.broadcast_id,
 				|attempt_numbers| {
-					if let Some(attempt_numbers) = attempt_numbers {
-						let last_attempt_number =
-							attempt_numbers.last().cloned().unwrap_or_default();
-						attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
-						last_attempt_number
-					} else {
-						Default::default()
-					}
+					attempt_numbers
+						.as_mut()
+						.and_then(|attempt_numbers| {
+							let last_attempt = attempt_numbers.last().copied();
+							attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
+							last_attempt
+						})
+						.ok_or(Error::<T, I>::InvalidBroadcastId)
 				},
-			);
+			)?;
 
 			// if not the latest attempt id, then we should ignore it, because we've
 			// already scheduled a retry for it.
