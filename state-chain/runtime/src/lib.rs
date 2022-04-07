@@ -172,7 +172,9 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 parameter_types! {
-	pub const KeygenResponseGracePeriod: BlockNumber = constants::common::KEYGEN_RESPONSE_GRACE_PERIOD_BLOCKS;
+	pub const KeygenResponseGracePeriod: BlockNumber =
+		constants::common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS +
+		constants::common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -445,7 +447,7 @@ use frame_support::instances::Instance1;
 use pallet_cf_validator::PercentageRange;
 
 parameter_types! {
-	pub const ThresholdFailureTimeout: BlockNumber = 15;
+	pub const ThresholdFailureTimeout: BlockNumber = constants::common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
 	pub const CeremonyRetryDelay: BlockNumber = 1;
 }
 
