@@ -394,7 +394,7 @@ mod tests {
 				self.engines.get_mut(node_id).expect("valid node_id").active = active;
 			}
 
-			pub fn create_node(&mut self) -> NodeId {
+			pub fn create_engine(&mut self) -> NodeId {
 				let node_id = self.next_node_id();
 				self.add_engine(&node_id);
 				node_id
@@ -880,7 +880,7 @@ mod tests {
 					}
 
 					// Add two nodes which don't have session keys
-					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
+					let keyless_nodes = vec![testnet.create_engine(), testnet.create_engine()];
 					// Our keyless nodes also stake
 					for keyless_node in &keyless_nodes {
 						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
@@ -888,7 +888,7 @@ mod tests {
 
 					// A late staker which we will use after the auction.  They are yet to stake
 					// and will do after the auction with the intention of being a backup validator
-					let late_staker = testnet.create_node();
+					let late_staker = testnet.create_engine();
 					testnet.set_active(&late_staker, true);
 					let seed = late_staker.to_string();
 					setup_account_and_peer_mapping(&late_staker, &seed);
