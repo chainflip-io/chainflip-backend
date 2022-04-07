@@ -4,6 +4,7 @@
 mod chainflip;
 pub mod constants;
 mod migrations;
+pub mod runtime_apis;
 #[cfg(test)]
 mod tests;
 use cf_chains::{eth, Ethereum};
@@ -558,6 +559,15 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
+	// START CUSTOM RUNTIME APIS
+
+	impl runtime_apis::MeaningOfLiveRuntimeApi<Block> for Runtime {
+		fn ask() -> u32 {
+			42
+		}
+	}
+
+	// END CUSTOM RUNTIME APIS
 
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
