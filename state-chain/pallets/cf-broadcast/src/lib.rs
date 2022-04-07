@@ -475,31 +475,47 @@ pub mod pallet {
 			let TransmissionAttempt { broadcast_attempt, signer, .. } =
 				AwaitingTransmission::<T, I>::take(broadcast_attempt_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
-			BroadcastIdToAttemptNumbers::<T, I>::mutate(
+
+			// remove this broadcast attempt from the list of attempts for this broadcast
+			// and return the latest attempt number
+			let last_attempt_number = BroadcastIdToAttemptNumbers::<T, I>::mutate(
 				broadcast_attempt.broadcast_attempt_id.broadcast_id,
 				|attempt_numbers| {
 					if let Some(attempt_numbers) = attempt_numbers {
+						let last_attempt_number =
+							attempt_numbers.last().cloned().unwrap_or_default();
 						attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
+						last_attempt_number
+					} else {
+						Default::default()
 					}
 				},
 			);
 
-			match failure {
-				TransmissionFailure::TransactionRejected => {
-					Self::report_and_schedule_retry(
-						&signer,
-						broadcast_attempt,
-						Offence::TransactionFailedOnTransmission,
-					);
-				},
-				TransmissionFailure::TransactionFailed => {
-					Self::deposit_event(Event::<T, I>::BroadcastFailed(
-						broadcast_attempt.broadcast_attempt_id,
-						broadcast_attempt.unsigned_tx,
-					));
-				},
-			};
-
+			// if not the latest attempt id, then we should ignore it, because we've
+			// already scheduled a retry for it.
+			if broadcast_attempt_id.attempt_count != last_attempt_number {
+				log::debug!(
+					"Ignoring failure for broadcast attempt id {} because it is not the latest attempt",
+					broadcast_attempt_id
+				);
+			} else {
+				match failure {
+					TransmissionFailure::TransactionRejected => {
+						Self::report_and_schedule_retry(
+							&signer,
+							broadcast_attempt,
+							Offence::TransactionFailedOnTransmission,
+						);
+					},
+					TransmissionFailure::TransactionFailed => {
+						Self::deposit_event(Event::<T, I>::BroadcastFailed(
+							broadcast_attempt.broadcast_attempt_id,
+							broadcast_attempt.unsigned_tx,
+						));
+					},
+				};
+			}
 			Ok(().into())
 		}
 
