@@ -137,7 +137,7 @@ fn can_continue_to_witness_for_old_epochs() {
 		current_validators.pop();
 		current_validators.push(DEIRDRE);
 		assert_eq!(current_validators, vec![ALISSA, BOBSON, DEIRDRE]);
-		MockEpochInfo::next_epoch(current_validators.clone());
+		MockEpochInfo::next_epoch(current_validators);
 
 		let current_epoch = MockEpochInfo::epoch_index();
 		assert_eq!(current_epoch, 4);

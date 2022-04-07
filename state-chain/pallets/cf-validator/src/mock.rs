@@ -121,11 +121,11 @@ impl Auctioneer for MockAuctioneer {
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error> {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| {
 			let run_behaviour = (*cell.borrow()).clone();
-			run_behaviour.and_then(|result| {
+			run_behaviour.map(|result| {
 				AUCTION_WINNERS.with(|cell| {
 					*cell.borrow_mut() = Some(result.winners.to_vec());
 				});
-				Ok(result)
+				result
 			})
 		})
 	}

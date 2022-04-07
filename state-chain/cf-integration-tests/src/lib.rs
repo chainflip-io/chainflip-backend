@@ -921,9 +921,11 @@ mod tests {
 					);
 
 					let mut winners = Validator::validators();
+					winners.sort();
+					nodes.sort();
 					assert_eq!(
-						winners.sort(),
-						nodes.sort(),
+						winners,
+						nodes,
 						"the new winners should be those genesis validators and the passive nodes that have keys"
 					);
 
