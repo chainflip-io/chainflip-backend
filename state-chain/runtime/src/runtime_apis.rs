@@ -4,4 +4,7 @@ decl_runtime_apis!(
 	pub trait MeaningOfLiveRuntimeApi {
 		fn ask() -> u32;
 	}
+	pub trait ValidatorRuntimeApi {
+		fn is_auction_phase() -> bool;
+	}
 );

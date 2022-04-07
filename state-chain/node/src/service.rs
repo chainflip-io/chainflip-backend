@@ -1,6 +1,9 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use custom_rpcs::{MeaningOfLiveApi, MeaningOfLiveRpc};
+use custom_rpcs::{
+	meaning_of_live_rpc::{MeaningOfLiveApi, MeaningOfLiveRpc},
+	validator_rpc::{ValidatorApi, ValidatorRpc},
+};
 use jsonrpc_core::MetaIoHandler;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
@@ -241,6 +244,12 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 			// Meaning of live custom rpc
 			io.extend_with(MeaningOfLiveApi::to_delegate(MeaningOfLiveRpc {
+				client: client.clone(),
+				_phantom: PhantomData::default(),
+			}));
+
+			// Validator custom rpc
+			io.extend_with(ValidatorApi::to_delegate(ValidatorRpc {
 				client: client.clone(),
 				_phantom: PhantomData::default(),
 			}));

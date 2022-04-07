@@ -31,6 +31,8 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 
+use cf_traits::EpochInfo;
+
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -560,6 +562,12 @@ pub type Executive = frame_executive::Executive<
 
 impl_runtime_apis! {
 	// START CUSTOM RUNTIME APIS
+
+	impl runtime_apis::ValidatorRuntimeApi<Block> for Runtime {
+		fn is_auction_phase() -> bool {
+			Validator::is_auction_phase()
+		}
+	}
 
 	impl runtime_apis::MeaningOfLiveRuntimeApi<Block> for Runtime {
 		fn ask() -> u32 {
