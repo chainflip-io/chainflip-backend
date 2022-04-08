@@ -111,18 +111,18 @@ async fn main() {
         if chain_id_from_sc != chain_id_from_eth_ws {
             slog::error!(
                 &root_logger,
-                "The WS (ChainId: {}) ETH node is pointing to the wrong chain id (HTTP node is correct (ChainId: {}).",
+                "The WS ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
                 chain_id_from_eth_ws,
-                chain_id_from_eth_http,
+                chain_id_from_sc,
             );
             has_wrong_chain_id = true;
         }
         if chain_id_from_sc != chain_id_from_eth_http {
             slog::error!(
                 &root_logger,
-                "The HTTP (ChainId: {}) ETH node is pointing to the wrong chain id (WS node is correct (ChainId: {}).",
+                "The HTTP ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
                 chain_id_from_eth_http,
-                chain_id_from_eth_ws,
+                chain_id_from_sc,
             );
             has_wrong_chain_id = true;
         }
