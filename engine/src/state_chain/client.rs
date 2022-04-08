@@ -765,17 +765,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         state_chain_runtime::Runtime:
             pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
     {
-        let vaults = self
-            .get_from_storage_with_key::<Vault<C>>(
-                block_hash,
-                StorageKey(pallet_cf_vaults::Vaults::<
-                    state_chain_runtime::Runtime,
-                    <C as PalletInstanceAlias>::Instance,
-                >::hashed_key_for(&epoch_index)),
-            )
-            .await?;
-
-        Ok(vaults.last().expect("should have a vault").to_owned())
+        Ok(self
+            .get_storage_map::<pallet_cf_vaults::Vaults<
+                state_chain_runtime::Runtime,
+                <C as PalletInstanceAlias>::Instance,
+            >>(block_hash, &epoch_index)
+            .await?
+            .expect("should have a vault"))
     }
 
     /// Get all the events from a particular block
