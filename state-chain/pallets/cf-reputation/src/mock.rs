@@ -1,6 +1,7 @@
 use super::*;
 use crate as pallet_cf_reputation;
 use frame_support::{construct_runtime, parameter_types};
+use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -110,6 +111,7 @@ impl Chainflip for Test {
 	type EpochInfo = MockEpochInfo;
 }
 
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum AllOffences {
 	MissedHeartbeat,
@@ -141,7 +143,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		reputation_pallet: ReputationPalletConfig {
 			accrual_ratio: ACCRUAL_RATE,
-			missed_heartbeat_penalty: (MISSED_HEARTBEAT_PENALTY_POINTS, 0),
+			penalties: vec![(AllOffences::MissedHeartbeat, (MISSED_HEARTBEAT_PENALTY_POINTS, 0))],
 		},
 	};
 

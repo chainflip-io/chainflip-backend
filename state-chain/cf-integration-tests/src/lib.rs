@@ -10,9 +10,9 @@ mod tests {
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
 	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
-		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, EthereumVault,
-		Flip, Governance, Online, Origin, Reputation, Runtime, Session, Staking, System, Timestamp,
-		Validator,
+		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
+		Emissions, EthereumVault, Flip, Governance, Online, Origin, Reputation, Runtime, Session,
+		Staking, System, Timestamp, Validator,
 	};
 
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
@@ -595,7 +595,7 @@ mod tests {
 
 			pallet_cf_reputation::GenesisConfig::<Runtime> {
 				accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
-				missed_heartbeat_penalty: (15, 0),
+				penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
 			}
 			.assimilate_storage(storage)
 			.unwrap();

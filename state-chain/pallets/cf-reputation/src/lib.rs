@@ -109,7 +109,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The runtime offence type must be compatible with this pallet's offence type.
-		type Offence: From<PalletOffence> + Member + Parameter + Copy;
+		type Offence: From<PalletOffence> + Member + Parameter + Copy + MaybeSerializeDeserialize;
 
 		/// When we have to, we slash
 		type Slasher: Slashing<
@@ -291,16 +291,14 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub accrual_ratio: (ReputationPoints, T::BlockNumber),
-		pub missed_heartbeat_penalty: (ReputationPoints, T::BlockNumber),
+		#[allow(clippy::type_complexity)]
+		pub penalties: Vec<(T::Offence, (ReputationPoints, T::BlockNumber))>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				accrual_ratio: (Zero::zero(), Zero::zero()),
-				missed_heartbeat_penalty: (15, Zero::zero()),
-			}
+			Self { accrual_ratio: (Zero::zero(), Zero::zero()), penalties: Default::default() }
 		}
 	}
 
@@ -308,13 +306,12 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			AccrualRatio::<T>::set(self.accrual_ratio);
-			Penalties::<T>::insert(
-				T::Offence::from(PalletOffence::MissedHeartbeat),
-				Penalty::<T> {
-					reputation: self.missed_heartbeat_penalty.0,
-					suspension: self.missed_heartbeat_penalty.1,
-				},
-			);
+			for (offence, (reputation, suspension)) in self.penalties.iter() {
+				Penalties::<T>::insert(
+					offence,
+					Penalty::<T> { reputation: *reputation, suspension: *suspension },
+				);
+			}
 		}
 	}
 }

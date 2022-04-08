@@ -5,6 +5,7 @@ use pallet_cf_reputation::{GetValidatorsExcludedFor, OffenceList};
 use crate::Runtime;
 
 /// Offences that can be reported in this runtime.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode)]
 pub enum Offence {
 	/// There was a failure in participation during a signing
