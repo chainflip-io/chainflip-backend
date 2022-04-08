@@ -13,6 +13,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend/pallets/'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+hex = { version = "0.4", default-features = false }
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
 pallet-cf-validator = { path = '../cf-validator', default-features = false }

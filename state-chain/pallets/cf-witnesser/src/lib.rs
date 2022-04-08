@@ -69,7 +69,13 @@ pub mod pallet {
 	}
 
 	/// A hash to index the call by.
-	pub(super) type CallHash = [u8; 32];
+	#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+	pub struct CallHash(pub [u8; 32]);
+	impl sp_std::fmt::Debug for CallHash {
+		fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+			write!(f, "{}", hex::encode(self.0))
+		}
+	}
 
 	/// Convenience alias for a collection of bits representing the votes of each validator.
 	pub(super) type VoteMask = BitSlice<Msb0, u8>;
@@ -241,7 +247,7 @@ impl<T: Config> Pallet<T> {
 		let num_validators = EpochValidatorCount::<T>::get(epoch_index).unwrap_or_default();
 
 		// Register the vote
-		let call_hash = Hashable::blake2_256(&call);
+		let call_hash = CallHash(Hashable::blake2_256(&call));
 		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
 			&epoch_index,
 			&call_hash,
