@@ -71,6 +71,14 @@ pub mod pallet {
 	/// A hash to index the call by.
 	pub(super) type CallHash = [u8; 32];
 
+	#[derive(Clone, Copy, PartialEq, Hash, Eq, Encode, Decode)]
+	pub struct CallHashPrintable(pub [u8; 32]);
+	impl sp_std::fmt::Debug for CallHashPrintable {
+		fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+			write!(f, "{}", hex::encode(self.0))
+		}
+	}
+
 	/// Convenience alias for a collection of bits representing the votes of each validator.
 	pub(super) type VoteMask = BitSlice<Msb0, u8>;
 
@@ -109,13 +117,13 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some external event has been witnessed [call_sig, who, num_votes]
-		WitnessReceived(CallHash, T::ValidatorId, VoteCount),
+		WitnessReceived(CallHashPrintable, T::ValidatorId, VoteCount),
 
 		/// The witness threshold has been reached [call_sig, num_votes]
-		ThresholdReached(CallHash, VoteCount),
+		ThresholdReached(CallHashPrintable, VoteCount),
 
 		/// A witness call has been executed [call_sig, result].
-		WitnessExecuted(CallHash, DispatchResult),
+		WitnessExecuted(CallHashPrintable, DispatchResult),
 	}
 
 	#[pallet::error]
@@ -278,18 +286,22 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
+		let call_hash_printable = CallHashPrintable(call_hash);
 		Self::deposit_event(Event::<T>::WitnessReceived(
-			call_hash,
+			call_hash_printable,
 			who.into(),
 			num_votes as VoteCount,
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		if num_votes == success_threshold_from_share_count(num_validators) as usize {
-			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
+			Self::deposit_event(Event::<T>::ThresholdReached(
+				call_hash_printable,
+				num_votes as VoteCount,
+			));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
-				call_hash,
+				call_hash_printable,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
 		}
