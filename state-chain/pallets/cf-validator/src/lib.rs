@@ -719,6 +719,16 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
 		EpochValidatorCount::<T>::get(epoch)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16) {
+		ValidatorIndex::<T>::insert(epoch_index, account, index);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_count_for_epoch(epoch_index: EpochIndex, count: u32) {
+		EpochValidatorCount::<T>::insert(epoch_index, count);
+	}
 }
 
 /// Indicates to the session module if the session should be rotated.

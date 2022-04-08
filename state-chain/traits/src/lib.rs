@@ -119,6 +119,12 @@ pub trait EpochInfo {
 	fn consensus_threshold() -> u32 {
 		cf_utilities::success_threshold_from_share_count(Self::current_validator_count() as u32)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_count_for_epoch(epoch: EpochIndex, count: u32);
 }
 
 pub struct CurrentThreshold<T>(PhantomData<T>);
