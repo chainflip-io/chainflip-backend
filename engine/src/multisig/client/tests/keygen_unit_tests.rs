@@ -310,11 +310,11 @@ async fn should_report_on_incomplete_blame_response() {
 #[tokio::test]
 async fn should_abort_on_blames_at_invalid_indexes() {
     let mut keygen_ceremony = KeygenCeremonyRunner::new_with_default();
-    let (stage_1a_messages, result_receivers) = keygen_ceremony.request().await;
+    let (messages, result_receivers) = keygen_ceremony.request().await;
 
-    let mut stage_4_messages = run_stages!(
+    let mut messages = run_stages!(
         keygen_ceremony,
-        stage_1a_messages,
+        messages,
         keygen::VerifyHashComm2,
         keygen::Comm1,
         keygen::VerifyComm2,
@@ -323,14 +323,14 @@ async fn should_abort_on_blames_at_invalid_indexes() {
     );
 
     let bad_node_id = &ACCOUNT_IDS[1];
-    for message in stage_4_messages.get_mut(bad_node_id).unwrap().values_mut() {
+    for message in messages.get_mut(bad_node_id).unwrap().values_mut() {
         *message = keygen::Complaints4(std::array::IntoIter::new([1, usize::MAX]).collect());
     }
 
-    let stage_5_messages = keygen_ceremony
-        .run_stage::<keygen::VerifyComplaints5, _, _>(stage_4_messages)
+    let messages = keygen_ceremony
+        .run_stage::<keygen::VerifyComplaints5, _, _>(messages)
         .await;
-    keygen_ceremony.distribute_messages(stage_5_messages);
+    keygen_ceremony.distribute_messages(messages);
     keygen_ceremony
         .complete_with_error(&[bad_node_id.clone()], result_receivers)
         .await;
@@ -539,9 +539,8 @@ async fn should_handle_inconsistent_broadcast_hash_comm() {
 async fn should_report_on_invalid_hash_commitment() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (stage_1a_messages, result_receivers) = ceremony.request().await;
-    let mut stage_1_messages =
-        helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2, Comm1);
+    let (messages, result_receivers) = ceremony.request().await;
+    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
 
     let [bad_account_id] = ceremony.select_account_ids();
 
@@ -549,7 +548,7 @@ async fn should_report_on_invalid_hash_commitment() {
     // Note: we must send the same bad commitment to all of the nodes,
     // or we will fail on the `inconsistent` error instead of the validation error.
     let corrupted_message = {
-        let mut original_message = stage_1_messages
+        let mut original_message = messages
             .get(&bad_account_id)
             .unwrap()
             .values()
@@ -559,18 +558,14 @@ async fn should_report_on_invalid_hash_commitment() {
         original_message.corrupt_secondary_coefficient(&mut ceremony.rng);
         original_message
     };
-    for message in stage_1_messages
-        .get_mut(&bad_account_id)
-        .unwrap()
-        .values_mut()
-    {
+    for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
         *message = corrupted_message.clone();
     }
 
-    let stage_2_messages = ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
+    let messages = ceremony
+        .run_stage::<keygen::VerifyComm2, _, _>(messages)
         .await;
-    ceremony.distribute_messages(stage_2_messages);
+    ceremony.distribute_messages(messages);
 
     // TODO: ensure that we fail due to "invalid hash commitment"
     ceremony
@@ -693,9 +688,8 @@ async fn should_handle_inconsistent_broadcast_blame_responses6() {
 async fn should_handle_invalid_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (stage_1a_messages, result_receivers) = ceremony.request().await;
-    let mut stage_1_messages =
-        helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2, Comm1);
+    let (messages, result_receivers) = ceremony.request().await;
+    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
 
     let [bad_account_id] = ceremony.select_account_ids();
 
@@ -703,7 +697,7 @@ async fn should_handle_invalid_comm1() {
     // Note: we must send the same bad commitment to all of the nodes,
     // or we will fail on the `inconsistent` error instead of the validation error.
     let corrupted_message = {
-        let mut original_message = stage_1_messages
+        let mut original_message = messages
             .get(&bad_account_id)
             .unwrap()
             .values()
@@ -713,18 +707,14 @@ async fn should_handle_invalid_comm1() {
         original_message.corrupt_primary_coefficient(&mut ceremony.rng);
         original_message
     };
-    for message in stage_1_messages
-        .get_mut(&bad_account_id)
-        .unwrap()
-        .values_mut()
-    {
+    for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
         *message = corrupted_message.clone();
     }
 
-    let stage_2_messages = ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
+    let messages = ceremony
+        .run_stage::<keygen::VerifyComm2, _, _>(messages)
         .await;
-    ceremony.distribute_messages(stage_2_messages);
+    ceremony.distribute_messages(messages);
 
     // TODO: ensure that we fail due to "invalid ZKP"
     ceremony
