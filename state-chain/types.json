@@ -246,7 +246,7 @@
       "AwaitingKeygen": "AwaitingKeygen",
       "AwaitingRotation": "AwaitingRotation",
       "Complete": "Complete",
-      "Failed: "()"
+      "Failed": "()"
     }
   },
   "Version": "SemVer",
