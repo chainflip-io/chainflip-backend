@@ -107,7 +107,7 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 				assert_eq!(reputation_points(id), points - penalty.reputation,);
 			}
 			assert_eq!(
-				ReputationPallet::validators_suspended_for::<BTreeSet<_>>(&[offence]),
+				ReputationPallet::validators_suspended_for(&[offence]),
 				if !penalty.suspension.is_zero() {
 					who.iter().cloned().collect::<BTreeSet<_>>()
 				} else {
@@ -120,7 +120,7 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 		offline_test(AllOffences::NotLockingYourComputer, &[BOB]);
 
 		assert_eq!(
-			ReputationPallet::validators_suspended_for::<BTreeSet<_>>(&[
+			ReputationPallet::validators_suspended_for(&[
 				AllOffences::MissedHeartbeat,
 				AllOffences::ForgettingYourYubiKey,
 				AllOffences::NotLockingYourComputer
@@ -135,9 +135,7 @@ fn suspensions() {
 	new_test_ext().execute_with(|| {
 		ReputationPallet::suspend_all(&[1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
 		assert_eq!(
-			ReputationPallet::validators_suspended_for::<BTreeSet<_>>(&[
-				AllOffences::ForgettingYourYubiKey,
-			]),
+			ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,]),
 			[1, 2, 3].iter().cloned().collect(),
 		);
 	});

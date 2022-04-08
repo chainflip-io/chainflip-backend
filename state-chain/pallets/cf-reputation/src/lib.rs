@@ -24,7 +24,7 @@ pub use pallet::*;
 use sp_runtime::traits::{UniqueSaturatedInto, Zero};
 use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
-	iter::{FromIterator, Iterator},
+	iter::Iterator,
 	prelude::*,
 };
 
@@ -419,16 +419,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Gets a list of validators that are suspended for committing any of a list of offences.
-	pub fn validators_suspended_for<I>(offences: &[T::Offence]) -> I
-	where
-		I: FromIterator<T::ValidatorId>,
-	{
+	pub fn validators_suspended_for(offences: &[T::Offence]) -> BTreeSet<T::ValidatorId> {
 		offences
 			.iter()
 			.flat_map(|offence| {
 				<RuntimeSuspensionTracker<T> as StorageLoadable<T>>::load(offence).get_suspended()
 			})
-			.collect::<I>()
+			.collect()
 	}
 
 	/// Look up the penalty for the given offence. Uses the default value if no mapping is
