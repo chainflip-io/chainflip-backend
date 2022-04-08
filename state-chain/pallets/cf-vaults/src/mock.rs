@@ -14,7 +14,10 @@ use crate as pallet_cf_vaults;
 
 use super::*;
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
-use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, Chainflip};
+use cf_traits::{
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo},
+	Chainflip,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -74,7 +77,7 @@ impl Chainflip for MockRuntime {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type EpochInfo = MockEpochInfo;
 }
 
 pub struct MockCallback;
@@ -175,6 +178,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 			deployment_block: 0,
 		},
 	};
+
+	MockEpochInfo::set_validators(vec![ALICE, BOB, CHARLIE]);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

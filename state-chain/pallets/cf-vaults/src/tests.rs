@@ -108,11 +108,9 @@ fn keygen_failure() {
 			AsyncResult::Ready(SuccessOrFailure::Failure)
 		);
 
-		// Bad validators have been reported.
-		MockOffenceReporter::assert_reported(
-			PalletOffence::ParticipateKeygenFailed,
-			BAD_CANDIDATES.to_vec(),
-		);
+		// Too many bad validators, they have not been reported.
+		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![]);
+		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![]);
 	});
 }
 
@@ -403,6 +401,7 @@ fn keygen_report_failure() {
 		);
 
 		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![CHARLIE]);
+		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![CHARLIE]);
 
 		assert_last_event!(crate::Event::KeygenFailure(..));
 
@@ -435,11 +434,9 @@ fn test_grace_period() {
 		VaultsPallet::on_initialize(26);
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
-		// All non-responding candidates should have been reported.
-		MockOffenceReporter::assert_reported(
-			PalletOffence::ParticipateKeygenFailed,
-			vec![BOB, CHARLIE],
-		);
+		// Too many candidates failed to report, so we report nobody.
+		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![]);
+		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![]);
 	});
 }
 

@@ -8,7 +8,7 @@ use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochIndex, EpochTransitionHandler, KeyProvider, NonceProvider,
+	CurrentEpochIndex, EpochIndex, EpochInfo, EpochTransitionHandler, KeyProvider, NonceProvider,
 	SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
@@ -691,8 +691,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 
-		T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
-		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
+		if offenders.len() < T::EpochInfo::consensus_threshold() as usize {
+			T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
+			T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
+		}
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
 	}
