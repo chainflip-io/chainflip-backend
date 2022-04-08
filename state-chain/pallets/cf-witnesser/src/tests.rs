@@ -1,6 +1,6 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
-	CallHashPrintable, Error, VoteMask, Votes,
+	CallHash, Error, VoteMask, Votes,
 };
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
 use frame_support::{assert_noop, assert_ok, Hashable};
@@ -50,19 +50,19 @@ fn call_on_threshold() {
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
 
 		// Check the deposited event to get the vote count.
-		let call_hash = frame_support::Hashable::blake2_256(&*call);
+		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
 		let stored_vec =
 			Votes::<Test>::get(MockEpochInfo::epoch_index(), call_hash).unwrap_or_default();
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
 		assert_eq!(votes.count_ones(), 3);
 
 		assert_event_sequence::<Test>(vec![
-			crate::Event::WitnessReceived(CallHashPrintable(call_hash), ALISSA, 1).into(),
-			crate::Event::WitnessReceived(CallHashPrintable(call_hash), BOBSON, 2).into(),
-			crate::Event::ThresholdReached(CallHashPrintable(call_hash), 2).into(),
+			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
+			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
+			crate::Event::ThresholdReached(call_hash, 2).into(),
 			dummy::Event::<Test>::ValueIncremented(answer).into(),
-			crate::Event::WitnessExecuted(CallHashPrintable(call_hash), dispatch_result).into(),
-			crate::Event::WitnessReceived(CallHashPrintable(call_hash), CHARLEMAGNE, 3).into(),
+			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
+			crate::Event::WitnessReceived(call_hash, CHARLEMAGNE, 3).into(),
 		]);
 	});
 }
@@ -115,7 +115,7 @@ fn delegated_call_should_emit_but_not_return_error() {
 
 		// The second witness should have triggered the failing call.
 		assert_event_sequence::<Test>(vec![crate::Event::<Test>::WitnessExecuted(
-			CallHashPrintable(Hashable::blake2_256(&call)),
+			CallHash(Hashable::blake2_256(&call)),
 			Err(pallet_dummy::Error::<Test>::NoneValue.into()),
 		)
 		.into()]);

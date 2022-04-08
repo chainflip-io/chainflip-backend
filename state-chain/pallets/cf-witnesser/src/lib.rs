@@ -68,12 +68,9 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	/// A hash to index the call by.
-	pub(super) type CallHash = [u8; 32];
-
-	#[derive(Clone, Copy, PartialEq, Hash, Eq, Encode, Decode)]
-	pub struct CallHashPrintable(pub [u8; 32]);
-	impl sp_std::fmt::Debug for CallHashPrintable {
+	#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+	pub struct CallHash(pub [u8; 32]);
+	impl sp_std::fmt::Debug for CallHash {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 			write!(f, "{}", hex::encode(self.0))
 		}
@@ -117,13 +114,13 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some external event has been witnessed [call_sig, who, num_votes]
-		WitnessReceived(CallHashPrintable, T::ValidatorId, VoteCount),
+		WitnessReceived(CallHash, T::ValidatorId, VoteCount),
 
 		/// The witness threshold has been reached [call_sig, num_votes]
-		ThresholdReached(CallHashPrintable, VoteCount),
+		ThresholdReached(CallHash, VoteCount),
 
 		/// A witness call has been executed [call_sig, result].
-		WitnessExecuted(CallHashPrintable, DispatchResult),
+		WitnessExecuted(CallHash, DispatchResult),
 	}
 
 	#[pallet::error]
@@ -249,7 +246,7 @@ impl<T: Config> Pallet<T> {
 		let num_validators = EpochValidatorCount::<T>::get(epoch_index).unwrap_or_default();
 
 		// Register the vote
-		let call_hash = Hashable::blake2_256(&call);
+		let call_hash = CallHash(Hashable::blake2_256(&call));
 		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
 			&epoch_index,
 			&call_hash,
@@ -286,22 +283,18 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		let call_hash_printable = CallHashPrintable(call_hash);
 		Self::deposit_event(Event::<T>::WitnessReceived(
-			call_hash_printable,
+			call_hash,
 			who.into(),
 			num_votes as VoteCount,
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		if num_votes == success_threshold_from_share_count(num_validators) as usize {
-			Self::deposit_event(Event::<T>::ThresholdReached(
-				call_hash_printable,
-				num_votes as VoteCount,
-			));
+			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
-				call_hash_printable,
+				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
 		}
