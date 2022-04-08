@@ -33,7 +33,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use cf_traits::Bonding;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
