@@ -171,11 +171,12 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         keygen::SecretShare3
     );
 
-    // stage 3 - with account 0 sending account 1 a bad secret share
+    // One party sends another a bad secret share to cause entering the blaming stage
+    let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
     *messages
-        .get_mut(&ACCOUNT_IDS[0])
+        .get_mut(bad_share_sender_id)
         .unwrap()
-        .get_mut(&ACCOUNT_IDS[1])
+        .get_mut(bad_chare_receiver_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
     let messages = run_stages!(
@@ -596,7 +597,7 @@ async fn should_handle_inconsistent_broadcast_complaints4() {
         .values_mut()
         .enumerate()
     {
-        *message = Complaints4(BTreeSet::from_iter(counter..counter + ACCOUNT_IDS.len()));
+        *message = Complaints4(BTreeSet::from_iter(counter..(counter + ACCOUNT_IDS.len())));
     }
 
     let messages = ceremony
@@ -609,7 +610,7 @@ async fn should_handle_inconsistent_broadcast_complaints4() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_complaints6() {
+async fn should_handle_inconsistent_broadcast_blame_responses6() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
@@ -629,11 +630,12 @@ async fn should_handle_inconsistent_broadcast_complaints6() {
 
     let [bad_node_id, blamed_node_id] = &ceremony.select_account_ids();
 
-    // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
+    // One party sends another a bad secret share to cause entering the blaming stage
+    let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
     *messages
-        .get_mut(&ACCOUNT_IDS[0])
+        .get_mut(bad_share_sender_id)
         .unwrap()
-        .get_mut(&ACCOUNT_IDS[1])
+        .get_mut(bad_chare_receiver_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
     let mut messages = run_stages!(
@@ -1010,11 +1012,12 @@ mod timeout {
                 SecretShare3
             );
 
-            // Stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
+            // One party sends another a bad secret share to cause entering the blaming stage
+            let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
             *messages
-                .get_mut(&ACCOUNT_IDS[0])
+                .get_mut(bad_share_sender_id)
                 .unwrap()
-                .get_mut(&ACCOUNT_IDS[1])
+                .get_mut(bad_chare_receiver_id)
                 .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
@@ -1057,8 +1060,9 @@ mod timeout {
 
             let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
 
+            let [non_sender_id] = &ceremony.select_account_ids();
             let messages = ceremony
-                .run_stage_with_non_sender::<Comm1, _, _>(messages, &ACCOUNT_IDS[0].clone())
+                .run_stage_with_non_sender::<Comm1, _, _>(messages, non_sender_id)
                 .await;
 
             let messages = run_stages!(
@@ -1082,8 +1086,9 @@ mod timeout {
 
             let messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1, VerifyComm2);
 
+            let [non_sender_id] = &ceremony.select_account_ids();
             let messages = ceremony
-                .run_stage_with_non_sender::<SecretShare3, _, _>(messages, &ACCOUNT_IDS[0].clone())
+                .run_stage_with_non_sender::<SecretShare3, _, _>(messages, non_sender_id)
                 .await;
 
             let messages = run_stages!(ceremony, messages, Complaints4, VerifyComplaints5);
@@ -1109,8 +1114,8 @@ mod timeout {
                 VerifyComplaints5
             );
 
-            let [bad_node_id] = ceremony.select_account_ids();
-            ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
+            let [non_sender_id] = ceremony.select_account_ids();
+            ceremony.distribute_messages_with_non_sender(messages, &non_sender_id);
 
             ceremony.complete(result_receivers).await;
         }
@@ -1130,11 +1135,12 @@ mod timeout {
                 SecretShare3
             );
 
-            // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
+            // One party sends another a bad secret share to cause entering the blaming stage
+            let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
             *messages
-                .get_mut(&ACCOUNT_IDS[0])
+                .get_mut(bad_share_sender_id)
                 .unwrap()
-                .get_mut(&ACCOUNT_IDS[1])
+                .get_mut(bad_chare_receiver_id)
                 .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
             let messages = run_stages!(
@@ -1146,8 +1152,8 @@ mod timeout {
                 VerifyBlameResponses7
             );
 
-            let [bad_node_id] = ceremony.select_account_ids();
-            ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
+            let [non_sender_id] = ceremony.select_account_ids();
+            ceremony.distribute_messages_with_non_sender(messages, &non_sender_id);
 
             ceremony.complete(result_receivers).await;
         }
@@ -1248,11 +1254,12 @@ mod timeout {
                 SecretShare3
             );
 
-            // stage 3 - with account 0 sending account 1 a bad secret share so we will go into blaming stage
+            // One party sends another a bad secret share to cause entering the blaming stage
+            let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
             *messages
-                .get_mut(&ACCOUNT_IDS[0])
+                .get_mut(bad_share_sender_id)
                 .unwrap()
-                .get_mut(&ACCOUNT_IDS[1])
+                .get_mut(bad_chare_receiver_id)
                 .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
             let messages = run_stages!(
