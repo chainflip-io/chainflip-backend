@@ -50,6 +50,10 @@ where
 	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
 		Self::mock_report_many(offence.into(), validators);
 	}
+
+	fn forgive_all(offence: impl Into<Self::Offence>) {
+		Self::set_reported_for(offence.into(), []);
+	}
 }
 
 #[cfg(test)]

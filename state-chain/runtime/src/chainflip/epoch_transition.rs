@@ -1,6 +1,6 @@
 use cf_traits::EpochTransitionHandler;
 
-use crate::{AccountId, Emissions, EthereumVault, Reputation};
+use crate::{AccountId, Emissions, EthereumVault};
 
 pub struct ChainflipEpochTransitions;
 
@@ -9,7 +9,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 
 	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]) {
 		<Emissions as EpochTransitionHandler>::on_new_epoch(epoch_validators);
-		<Reputation as EpochTransitionHandler>::on_new_epoch(epoch_validators);
 		<EthereumVault as EpochTransitionHandler>::on_new_epoch(epoch_validators);
 	}
 }

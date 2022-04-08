@@ -769,6 +769,7 @@ impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 
 	fn on_new_epoch(_epoch_validators: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
+		T::OffenceReporter::forgive_all(PalletOffence::ParticipateKeygenFailed);
 	}
 }
 

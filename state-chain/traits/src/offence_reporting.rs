@@ -10,4 +10,7 @@ pub trait OffenceReporter {
 
 	/// Report multiple validators.
 	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]);
+
+	/// Forgive all validators for an offence.
+	fn forgive_all(offence: impl Into<Self::Offence>);
 }

@@ -9,9 +9,7 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
-use cf_traits::{
-	offence_reporting::*, Chainflip, EpochTransitionHandler, Heartbeat, NetworkState, Slashing,
-};
+use cf_traits::{offence_reporting::*, Chainflip, Heartbeat, NetworkState, Slashing};
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -182,10 +180,6 @@ pub mod pallet {
 	/// The penalty to be applied for each offence.
 	pub type Penalties<T: Config> = StorageMap<_, Twox64Concat, T::Offence, Penalty<T>>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn keygen_exclusion_set)]
-	pub type KeygenExclusionSet<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -341,6 +335,10 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 			Self::suspend_all(validators, &offence, penalty.suspension);
 		}
 	}
+
+	fn forgive_all(offence: impl Into<Self::Offence>) {
+		Suspensions::<T>::remove(&offence.into());
+	}
 }
 
 impl<T: Config> Heartbeat for Pallet<T> {
@@ -369,14 +367,6 @@ impl<T: Config> Heartbeat for Pallet<T> {
 				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
 		}
-	}
-}
-
-impl<T: Config> EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-
-	fn on_new_epoch(_epoch_validators: &[Self::ValidatorId]) {
-		KeygenExclusionSet::<T>::kill();
 	}
 }
 
