@@ -214,7 +214,8 @@ pub mod pallet {
 				let validator_index = slot % <Self as EpochInfo>::validator_count_at_epoch(
 					<Self as EpochInfo>::epoch_index(),
 				)
-				.unwrap_or_default() as u64;
+				.expect("The validator count for the current epoch always exists")
+					as u64;
 				if let Some(id) =
 					<Self as EpochInfo>::current_validators().get(validator_index as usize)
 				{
