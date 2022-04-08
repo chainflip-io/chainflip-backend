@@ -90,6 +90,10 @@ macro_rules! impl_mock_epoch_info {
 				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
 			}
 
+			fn current_validator_count() -> u32 {
+				CURRENT_VALIDATORS.with(|cell| cell.borrow().len() as u32)
+			}
+
 			fn validator_index(
 				epoch_index: $epoch_index,
 				account: &Self::ValidatorId,

@@ -93,6 +93,9 @@ pub trait EpochInfo {
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
 
+	/// Get the current number of validators
+	fn current_validator_count() -> u32;
+
 	/// Gets validator index of a particular validator for a given epoch
 	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
 
@@ -114,9 +117,7 @@ pub trait EpochInfo {
 	/// This is the number of parties required to conduct a *successful* threshold
 	/// signature ceremony based on the number of active validators.
 	fn consensus_threshold() -> u32 {
-		cf_utilities::success_threshold_from_share_count(
-			Self::validator_count_at_epoch(Self::epoch_index()).unwrap_or_default(),
-		)
+		cf_utilities::success_threshold_from_share_count(Self::current_validator_count() as u32)
 	}
 }
 

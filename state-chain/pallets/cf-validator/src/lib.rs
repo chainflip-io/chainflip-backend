@@ -211,11 +211,7 @@ pub mod pallet {
 
 			// Punish any validators that missed their authorship slot.
 			for slot in T::MissedAuthorshipSlots::missed_slots() {
-				let validator_index = slot % <Self as EpochInfo>::validator_count_at_epoch(
-					<Self as EpochInfo>::epoch_index(),
-				)
-				.expect("The validator count for the current epoch always exists")
-					as u64;
+				let validator_index = slot % <Self as EpochInfo>::current_validator_count() as u64;
 				if let Some(id) =
 					<Self as EpochInfo>::current_validators().get(validator_index as usize)
 				{
@@ -683,6 +679,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		Validators::<T>::get()
+	}
+
+	fn current_validator_count() -> u32 {
+		Self::current_validators().len() as u32
 	}
 
 	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
