@@ -750,14 +750,11 @@ impl<T: Config> Pallet<T> {
 		// Update state of current validators
 		Validators::<T>::set(epoch_validators.to_vec());
 
-		// Set up the validator indexes here
-		let mut total = 0;
-		for (index, account_id) in epoch_validators.iter().enumerate() {
+		epoch_validators.iter().enumerate().for_each(|(index, account_id)| {
 			ValidatorIndex::<T>::insert(&new_epoch, account_id, index as u16);
-			total += 1;
-		}
+		});
 
-		EpochValidatorCount::<T>::insert(new_epoch, total);
+		EpochValidatorCount::<T>::insert(new_epoch, epoch_validators.len() as u32);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);
