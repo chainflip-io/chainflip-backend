@@ -21,7 +21,7 @@ benchmarks! {
 		// a witness call here - for now.
 	} : _(RawOrigin::Signed(caller.clone()), Box::new(call.clone()))
 	verify {
-		let call_hash = Hashable::blake2_256(&call);
+		let call_hash = CallHash(Hashable::blake2_256(&call));
 		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
 	}
 }

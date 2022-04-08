@@ -68,6 +68,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// A hash to index the call by.
 	#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 	pub struct CallHash(pub [u8; 32]);
 	impl sp_std::fmt::Debug for CallHash {
