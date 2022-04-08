@@ -497,7 +497,7 @@ async fn validator_to_validator_on_new_epoch_event() {
     mock_state_chain_rpc_client
         .expect_storage()
         .with(
-            eq(new_epoch_block_header.hash()),
+            eq(new_epoch_block_header_hash),
             eq(mock_account_storage_key()),
         )
         .times(1)
@@ -518,7 +518,7 @@ async fn validator_to_validator_on_new_epoch_event() {
     // the second time we get the current epoch is on a new epoch event
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(eq(new_epoch_block_header.hash()), eq(epoch_key))
+        .with(eq(new_epoch_block_header_hash), eq(epoch_key))
         .times(1)
         .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
 
@@ -546,7 +546,7 @@ async fn validator_to_validator_on_new_epoch_event() {
     mock_state_chain_rpc_client
         .expect_storage_events_at()
         .with(
-            eq(Some(new_epoch_block_header.hash())),
+            eq(Some(new_epoch_block_header_hash)),
             eq(vault_key_after_new_epoch),
         )
         .times(1)
@@ -571,10 +571,7 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(new_epoch_block_header.clone().hash())),
-            eq(mock_events_key()),
-        )
+        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -583,7 +580,7 @@ async fn validator_to_validator_on_new_epoch_event() {
                     state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
                     vec![H256::default()],
                 )],
-                new_epoch_block_header.hash(),
+                new_epoch_block_header_hash,
             )])
         });
 
@@ -741,10 +738,7 @@ async fn backup_to_validator_on_new_epoch() {
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(new_epoch_block_header.clone().hash())),
-            eq(mock_events_key()),
-        )
+        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -907,10 +901,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(new_epoch_block_header.clone().hash())),
-            eq(mock_events_key()),
-        )
+        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -1072,9 +1063,10 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         });
 
     // get the events for the new block - will contain 2 events, one for us to sign and one for us not to sign
+    let block_header_hash = block_header.hash();
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(block_header.clone().hash())), eq(mock_events_key()))
+        .with(eq(Some(block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -1104,7 +1096,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         vec![H256::default()],
                     ),
                 ],
-                block_header.hash(),
+                block_header_hash,
             )])
         });
 
