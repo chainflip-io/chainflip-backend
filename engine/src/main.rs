@@ -111,7 +111,7 @@ async fn main() {
         if chain_id_from_sc != chain_id_from_eth_ws {
             slog::error!(
                 &root_logger,
-                "Error: The WS ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
+                "The WS ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
                 chain_id_from_eth_ws,
                 chain_id_from_sc,
             );
@@ -120,7 +120,7 @@ async fn main() {
         if chain_id_from_sc != chain_id_from_eth_http {
             slog::error!(
                 &root_logger,
-                "Error: The HTTP ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
+                "The HTTP ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
                 chain_id_from_eth_http,
                 chain_id_from_sc,
             );
