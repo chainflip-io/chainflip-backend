@@ -140,25 +140,3 @@ fn suspensions() {
 		);
 	});
 }
-
-// #[test]
-// fn reporting_participate_in_signing_offence_should_also_ban_validator() {
-// 	new_test_ext().execute_with(|| {
-// 		// Confirm a ban is called for this validator for this condition
-// 		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
-// 		ReputationPallet::report(Offence::ParticipateSigningFailed, &ALICE);
-
-// 		assert!(ReputationPallet::is_suspended_at(System::current_block_number(), &ALICE));
-// 	});
-// }
-
-// #[test]
-// fn reporting_invalid_transaction_authored_offence_should_not_ban_validator() {
-// 	new_test_ext().execute_with(|| {
-// 		// We do not ban validators for authoring an invalid transaction
-// 		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, 1);
-// 		ReputationPallet::report(Offence::InvalidTransactionAuthored, &ALICE);
-
-// 		assert!(!ReputationPallet::is_suspended_at(System::current_block_number(), &ALICE));
-// 	});
-// }
