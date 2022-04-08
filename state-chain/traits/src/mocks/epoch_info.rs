@@ -12,9 +12,6 @@ macro_rules! impl_mock_epoch_info {
 
 		thread_local! {
 			pub static CURRENT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
-			// TODO YOU WERE HERE KYLE
-			// Need to implement the setting of this, and then
-			// need to use it in the initialisation of the test environment
 			pub static VALIDATOR_INDEX: RefCell<HashMap<$epoch_index, HashMap<$account_id, u16>>> = RefCell::new(HashMap::new());
 			pub static BOND: RefCell<$balance> = RefCell::new(0);
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
