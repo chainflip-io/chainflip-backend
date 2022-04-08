@@ -378,7 +378,7 @@ pub trait ChainflipAccount {
 	type AccountId;
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
+	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState);
 	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex);
 }
 
@@ -403,7 +403,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::get(account_id)
 	}
 
-	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
+	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = state;
 		})

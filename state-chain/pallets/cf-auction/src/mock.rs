@@ -64,7 +64,7 @@ pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
 	// for validators, their state is not set in update for backup and passive now
 	// so we have to
 	for potential_validator in auction_result.winners.clone() {
-		<MockChainflipAccount as ChainflipAccount>::update_state(
+		<MockChainflipAccount as ChainflipAccount>::set_state(
 			&potential_validator,
 			ChainflipAccountState::Validator,
 		);

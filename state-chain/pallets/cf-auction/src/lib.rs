@@ -287,11 +287,11 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
 
 		for (validator_id, _amount) in backup_validators {
-			T::ChainflipAccount::update_state(&validator_id.into(), ChainflipAccountState::Backup);
+			T::ChainflipAccount::set_state(&validator_id.into(), ChainflipAccountState::Backup);
 		}
 
 		for (validator_id, _amount) in passive_nodes {
-			T::ChainflipAccount::update_state(&validator_id.into(), ChainflipAccountState::Passive);
+			T::ChainflipAccount::set_state(&validator_id.into(), ChainflipAccountState::Passive);
 		}
 	}
 }
@@ -355,7 +355,7 @@ impl<T: Config> Pallet<T> {
 		account_state: ChainflipAccountState,
 		remaining_bidders: &mut Vec<RemainingBid<T::ValidatorId, T::Amount>>,
 	) {
-		T::ChainflipAccount::update_state(&(validator_id.clone().into()), account_state);
+		T::ChainflipAccount::set_state(&(validator_id.clone().into()), account_state);
 
 		let index_of_shifted = if account_state == ChainflipAccountState::Passive {
 			BackupGroupSize::<T>::get().saturating_sub(One::one())
@@ -364,7 +364,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		if let Some((adjusted_validator_id, _)) = remaining_bidders.get(index_of_shifted as usize) {
-			T::ChainflipAccount::update_state(
+			T::ChainflipAccount::set_state(
 				&(adjusted_validator_id.clone().into()),
 				if account_state == ChainflipAccountState::Backup {
 					ChainflipAccountState::Passive
