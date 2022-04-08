@@ -277,12 +277,6 @@ impl<T: Config> Auctioneer for Pallet<T> {
 
 	// Update the state for backup and passive, as this can change every block
 	fn update_backup_and_passive_states() {
-		let update_status = |account_ids: Vec<T::ValidatorId>, state| {
-			for account_id in account_ids {
-				T::ChainflipAccount::update_state(&account_id.into(), state);
-			}
-		};
-
 		let remaining_bidders = RemainingBidders::<T>::get();
 		let backup_validators = Self::current_backup_validators(&remaining_bidders);
 		let passive_nodes = Self::current_passive_nodes(&remaining_bidders);
@@ -292,15 +286,13 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 		HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
 
-		update_status(
-			backup_validators.iter().map(|(account_id, _)| account_id.clone()).collect(),
-			ChainflipAccountState::Backup,
-		);
+		for (validator_id, _amount) in backup_validators {
+			T::ChainflipAccount::update_state(&validator_id.into(), ChainflipAccountState::Backup);
+		}
 
-		update_status(
-			passive_nodes.iter().map(|(account_id, _)| account_id.clone()).collect(),
-			ChainflipAccountState::Passive,
-		);
+		for (validator_id, _amount) in passive_nodes {
+			T::ChainflipAccount::update_state(&validator_id.into(), ChainflipAccountState::Passive);
+		}
 	}
 }
 
