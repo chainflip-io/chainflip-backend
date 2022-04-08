@@ -18,6 +18,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		let number_of_current_validators = Validators::<T>::get().len() as u32;
 		EpochValidatorCount::<T>::insert(T::EpochInfo::epoch_index(), number_of_current_validators);
+		#[allow(clippy::unnecessary_cast)]
 		T::DbWeight::get().reads_writes(2 as Weight, 3 as Weight)
 	}
 
