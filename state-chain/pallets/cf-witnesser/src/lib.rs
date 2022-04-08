@@ -73,7 +73,7 @@ pub mod pallet {
 	pub struct CallHash(pub [u8; 32]);
 	impl sp_std::fmt::Debug for CallHash {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-			write!(f, "{}", hex::encode(self.0))
+			write!(f, "0x{}", hex::encode(self.0))
 		}
 	}
 
