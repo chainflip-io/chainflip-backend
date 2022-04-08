@@ -472,28 +472,30 @@ async fn should_ignore_unexpected_message_for_stage() {
 async fn should_handle_inconsistent_broadcast_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (stage_1a_messages, result_receivers) = ceremony.request().await;
-    let mut stage_1_messages =
-        helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2, Comm1);
+    let (messages, result_receivers) = ceremony.request().await;
+    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
 
     let [bad_account_id] = &ceremony.select_account_ids();
 
-    // Make one of the nodes send different comm1 to most of the others
+    // Make one of the nodes send 2 different commitments evenly to the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
-    for message in stage_1_messages
+    let commitments = [
+        gen_invalid_keygen_comm1(&mut ceremony.rng),
+        gen_invalid_keygen_comm1(&mut ceremony.rng),
+    ];
+    for (counter, message) in messages
         .get_mut(bad_account_id)
         .unwrap()
         .values_mut()
-        // we only need to corrupt >1/3 of the messages
-        .step_by(2)
+        .enumerate()
     {
-        *message = gen_invalid_keygen_comm1(&mut ceremony.rng);
+        *message = commitments[counter % 2].clone();
     }
 
-    let stage_2_messages = ceremony
-        .run_stage::<keygen::VerifyComm2, _, _>(stage_1_messages)
+    let messages = ceremony
+        .run_stage::<keygen::VerifyComm2, _, _>(messages)
         .await;
-    ceremony.distribute_messages(stage_2_messages);
+    ceremony.distribute_messages(messages);
     ceremony
         .complete_with_error(&[bad_account_id.clone()], result_receivers)
         .await;
@@ -503,23 +505,28 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 async fn should_handle_inconsistent_broadcast_hash_comm() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (mut stage_1a_messages, result_receivers) = ceremony.request().await;
+    let (mut messages, result_receivers) = ceremony.request().await;
 
     let bad_account_id = &ACCOUNT_IDS[1];
 
-    // `bad_account_id` send different hash commitments to different nodes
+    // Make one of the nodes send 2 different hash commitments evenly to the others
     // Note: the bad node must send different values to more than 1/3 of the participants
-    for message in stage_1a_messages
+    let hash_comms = [
+        get_invalid_hash_comm(&mut ceremony.rng),
+        get_invalid_hash_comm(&mut ceremony.rng),
+    ];
+    for (counter, message) in messages
         .get_mut(bad_account_id)
         .unwrap()
         .values_mut()
+        .enumerate()
     {
-        *message = get_invalid_hash_comm(&mut ceremony.rng);
+        *message = hash_comms[counter % 2].clone();
     }
 
-    let stage_2a_messages = helpers::run_stages!(ceremony, stage_1a_messages, VerifyHashComm2,);
+    let messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2,);
 
-    ceremony.distribute_messages(stage_2a_messages);
+    ceremony.distribute_messages(messages);
     ceremony
         .complete_with_error(&[bad_account_id.clone()], result_receivers)
         .await;
@@ -589,7 +596,7 @@ async fn should_handle_inconsistent_broadcast_complaints4() {
 
     let [bad_account_id] = &ceremony.select_account_ids();
 
-    // Make one of the nodes send different complaints to most of the others
+    // Make one of the nodes send 2 different complaints evenly to the others
     // Note: the bad node must send different complaints to more than 1/3 of the participants
     for (counter, message) in messages
         .get_mut(bad_account_id)
@@ -597,7 +604,9 @@ async fn should_handle_inconsistent_broadcast_complaints4() {
         .values_mut()
         .enumerate()
     {
-        *message = Complaints4(BTreeSet::from_iter(counter..(counter + ACCOUNT_IDS.len())));
+        *message = Complaints4(BTreeSet::from_iter(
+            counter % 2..((counter % 2) + ACCOUNT_IDS.len()),
+        ));
     }
 
     let messages = ceremony
@@ -648,13 +657,22 @@ async fn should_handle_inconsistent_broadcast_blame_responses6() {
 
     let [bad_account_id] = &ceremony.select_account_ids();
 
-    // Make one of the nodes send different blame response to most of the others
+    // Make one of the nodes send 2 different blame responses evenly to the others
     // Note: the bad node must send different blame response to more than 1/3 of the participants
-    for message in messages.get_mut(bad_node_id).unwrap().values_mut() {
+    let secret_shares = [
+        SecretShare3::create_random(&mut ceremony.rng),
+        SecretShare3::create_random(&mut ceremony.rng),
+    ];
+    for (counter, message) in messages
+        .get_mut(bad_node_id)
+        .unwrap()
+        .values_mut()
+        .enumerate()
+    {
         *message = BlameResponse6(
             std::iter::once((
                 party_idx_mapping.get_idx(blamed_node_id).unwrap(),
-                SecretShare3::create_random(&mut ceremony.rng),
+                secret_shares[counter % 2].clone(),
             ))
             .collect(),
         )
