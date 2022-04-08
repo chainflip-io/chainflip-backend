@@ -32,13 +32,14 @@ use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
-use substrate_subxt::UncheckedExtrinsic;
 use substrate_subxt::{
+    balances::Balances,
     extrinsic::{
-        CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
+        ChargeTransactionPayment, CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion,
+        CheckTxVersion, CheckWeight,
     },
     system::System,
-    Runtime, SignedExtension, SignedExtra,
+    Runtime, SignedExtension, SignedExtra, UncheckedExtrinsic,
 };
 use tokio::sync::RwLock;
 
@@ -68,6 +69,9 @@ impl System for RuntimeImplForSigningExtrinsics {
     type Extrinsic = state_chain_runtime::UncheckedExtrinsic;
     type AccountData = <state_chain_runtime::Runtime as frame_system::Config>::AccountData;
 }
+impl Balances for RuntimeImplForSigningExtrinsics {
+    type Balance = <state_chain_runtime::Runtime as pallet_cf_flip::Config>::Balance;
+}
 // Substrate_subxt's Runtime trait allows us to use it's extrinsic signing code
 impl Runtime for RuntimeImplForSigningExtrinsics {
     type Signature = state_chain_runtime::Signature;
@@ -86,9 +90,10 @@ pub struct SCDefaultExtra<T: System> {
     nonce: T::Index,
     genesis_hash: T::Hash,
 }
+
 impl<T> SignedExtra<T> for SCDefaultExtra<T>
 where
-    T: System + Clone + Debug + Eq + Send + Sync,
+    T: System + Balances + Clone + Debug + Eq + Send + Sync,
 {
     #[allow(clippy::type_complexity)]
     type Extra = (
@@ -98,7 +103,9 @@ where
         CheckEra<T>,
         CheckNonce<T>,
         CheckWeight<T>,
+        ChargeTransactionPayment<T>,
     );
+
     fn new(spec_version: u32, tx_version: u32, nonce: T::Index, genesis_hash: T::Hash) -> Self {
         SCDefaultExtra {
             spec_version,
@@ -107,6 +114,7 @@ where
             genesis_hash,
         }
     }
+
     fn extra(&self) -> Self::Extra {
         (
             CheckSpecVersion(PhantomData, self.spec_version),
@@ -115,12 +123,16 @@ where
             CheckEra((Era::Immortal, PhantomData), self.genesis_hash),
             CheckNonce(self.nonce),
             CheckWeight(PhantomData),
+            // Note: The tip is ignored in our runtime, but we need to provide one in order to
+            // use substrate's transaction fee logic.
+            ChargeTransactionPayment(Default::default()),
         )
     }
 }
+
 impl<T> SignedExtension for SCDefaultExtra<T>
 where
-    T: System + Clone + Debug + Eq + Send + Sync,
+    T: System + Balances + Clone + Debug + Eq + Send + Sync,
 {
     const IDENTIFIER: &'static str = "SCDefaultExtra";
     type AccountId = T::AccountId;
