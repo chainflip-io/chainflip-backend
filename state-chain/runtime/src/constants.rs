@@ -56,4 +56,8 @@ pub mod common {
 
 	/// Percent of the epoch we are allowed to claim
 	pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
+
+	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
+	/// equivalent to 15 minutes.
+	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
 }

@@ -130,9 +130,9 @@ pub fn get_environment() -> StateChainEnvironment {
 /// The reputation penalty and suspension duration for each offence.
 const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::ParticipateKeygenFailed, (15, u32::MAX)),
-	(Offence::ParticipateSigningFailed, (15, 150)),
-	(Offence::MissedAuthorshipSlot, (15, 150)),
-	(Offence::MissedHeartbeat, (15, 150)),
+	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::InvalidTransactionAuthored, (15, 0)),
 	(Offence::TransactionFailedOnTransmission, (15, 0)),
 ];
