@@ -226,10 +226,7 @@ pub trait EpochTransitionHandler {
 	///
 	/// The `previous_epoch_validators` now let `epoch_validators` take control
 	/// There can be an overlap between these two sets of validators
-	fn on_new_epoch(
-		previous_epoch_validators: &[Self::ValidatorId],
-		epoch_validators: &[Self::ValidatorId],
-	);
+	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]);
 }
 
 /// Providing bidders for an auction

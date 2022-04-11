@@ -757,7 +757,6 @@ impl<T: Config> Pallet<T> {
 			(*epoch - 1, *epoch)
 		});
 
-		let old_validators = Validators::<T>::get();
 		// Update state of current validators
 		Validators::<T>::set(epoch_validators.to_vec());
 
@@ -799,7 +798,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(&old_validators, epoch_validators);
+		T::EpochTransitionHandler::on_new_epoch(epoch_validators);
 
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
