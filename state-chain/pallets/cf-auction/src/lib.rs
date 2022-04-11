@@ -359,7 +359,7 @@ impl<T: Config> Pallet<T> {
 	// so when we update particular states, we must also adjust the one on the boundary
 	fn set_validator_state_and_adjust_at_boundary(
 		validator_id: &T::ValidatorId,
-		account_state: ChainflipAccountState,
+		account_state: BackupOrPassive,
 		remaining_bidders: &mut Vec<RemainingBid<T::ValidatorId, T::Amount>>,
 	) {
 		T::ChainflipAccount::set_state(&(validator_id.clone().into()), account_state);
@@ -414,7 +414,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 				);
 				Pallet::<T>::set_validator_state_and_adjust_at_boundary(
 					validator_id,
-					ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
+					BackupOrPassive::Backup,
 					remaining_bidders,
 				);
 			}
@@ -438,7 +438,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 				if amount < LowestBackupValidatorBid::<T>::get() {
 					Pallet::<T>::set_validator_state_and_adjust_at_boundary(
 						validator_id,
-						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+						BackupOrPassive::Backup,
 						&mut RemainingBidders::<T>::get(),
 					);
 				}
