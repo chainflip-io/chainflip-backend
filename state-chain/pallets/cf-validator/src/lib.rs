@@ -805,7 +805,6 @@ impl<T: Config> Pallet<T> {
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
 			// Update validator account state.
-			// Inline this????
 			ChainflipAccountStore::<T>::update_validator_account_data(validator, new_epoch);
 		}
 
