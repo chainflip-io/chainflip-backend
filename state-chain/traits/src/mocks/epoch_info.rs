@@ -7,8 +7,6 @@ macro_rules! impl_mock_epoch_info {
 		use std::cell::RefCell;
 		use $crate::EpochInfo;
 
-		use $crate::EpochIndex;
-
 		pub struct MockEpochInfo;
 		use std::collections::HashMap;
 
@@ -125,7 +123,7 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16) {
+			fn set_validator_index(epoch_index: $epoch_index, account: &Self::ValidatorId, index: u16) {
 				VALIDATOR_INDEX.with(|cell| {
 					let mut map = cell.borrow_mut();
 					let validator_index = map.entry(epoch_index).or_insert(HashMap::new());
@@ -134,7 +132,7 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn set_validator_count_for_epoch(epoch: EpochIndex, count: u32) {
+			fn set_validator_count_for_epoch(epoch: $epoch_index, count: u32) {
 				EPOCH_VALIDATOR_COUNT.with(|cell| {
 					cell.borrow_mut().insert(epoch, count);
 				})
