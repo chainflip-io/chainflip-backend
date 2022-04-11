@@ -172,11 +172,11 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     );
 
     // One party sends another a bad secret share to cause entering the blaming stage
-    let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
+    let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
     *messages
         .get_mut(bad_share_sender_id)
         .unwrap()
-        .get_mut(bad_chare_receiver_id)
+        .get_mut(bad_share_receiver_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
     let messages = run_stages!(
@@ -635,11 +635,11 @@ async fn should_handle_inconsistent_broadcast_blame_responses6() {
     let [bad_node_id, blamed_node_id] = &ceremony.select_account_ids();
 
     // One party sends another a bad secret share to cause entering the blaming stage
-    let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
+    let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
     *messages
         .get_mut(bad_share_sender_id)
         .unwrap()
-        .get_mut(bad_chare_receiver_id)
+        .get_mut(bad_share_receiver_id)
         .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
     let mut messages = run_stages!(
@@ -1021,11 +1021,11 @@ mod timeout {
             );
 
             // One party sends another a bad secret share to cause entering the blaming stage
-            let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
+            let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
             *messages
                 .get_mut(bad_share_sender_id)
                 .unwrap()
-                .get_mut(bad_chare_receiver_id)
+                .get_mut(bad_share_receiver_id)
                 .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
@@ -1144,11 +1144,11 @@ mod timeout {
             );
 
             // One party sends another a bad secret share to cause entering the blaming stage
-            let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
+            let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
             *messages
                 .get_mut(bad_share_sender_id)
                 .unwrap()
-                .get_mut(bad_chare_receiver_id)
+                .get_mut(bad_share_receiver_id)
                 .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
             let messages = run_stages!(
@@ -1263,11 +1263,11 @@ mod timeout {
             );
 
             // One party sends another a bad secret share to cause entering the blaming stage
-            let [bad_share_sender_id, bad_chare_receiver_id] = &ceremony.select_account_ids();
+            let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
             *messages
                 .get_mut(bad_share_sender_id)
                 .unwrap()
-                .get_mut(bad_chare_receiver_id)
+                .get_mut(bad_share_receiver_id)
                 .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
 
             let messages = run_stages!(
