@@ -922,10 +922,13 @@ mod timeout {
                 .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
+            let messages = ceremony
+                .gather_outgoing_messages::<VerifyHashComm2, KeygenData>()
+                .await;
+
             let messages = run_stages!(
                 ceremony,
                 messages,
-                VerifyHashComm2,
                 Comm1,
                 VerifyComm2,
                 SecretShare3,
@@ -958,10 +961,13 @@ mod timeout {
                 .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
+            let messages = ceremony
+                .gather_outgoing_messages::<VerifyComm2, KeygenData>()
+                .await;
+
             let messages = run_stages!(
                 ceremony,
                 messages,
-                VerifyComm2,
                 SecretShare3,
                 Complaints4,
                 VerifyComplaints5
@@ -1000,7 +1006,10 @@ mod timeout {
                 .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
-            let messages = run_stages!(ceremony, messages, VerifyComplaints5,);
+            let messages = ceremony
+                .gather_outgoing_messages::<VerifyComplaints5, KeygenData>()
+                .await;
+
             ceremony.distribute_messages(messages);
             ceremony.complete(result_receivers).await;
         }
@@ -1050,7 +1059,10 @@ mod timeout {
                 .get_mut_node(&timed_out_party_id)
                 .force_stage_timeout();
 
-            let messages = run_stages!(ceremony, messages, VerifyBlameResponses7,);
+            let messages = ceremony
+                .gather_outgoing_messages::<VerifyBlameResponses7, KeygenData>()
+                .await;
+
             ceremony.distribute_messages(messages);
             ceremony.complete(result_receivers).await;
         }

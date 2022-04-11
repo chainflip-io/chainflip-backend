@@ -267,7 +267,7 @@ where
         }
     }
 
-    async fn gather_outgoing_messages<
+    pub async fn gather_outgoing_messages<
         NextStageData: TryFrom<<Self as CeremonyRunnerStrategy>::CeremonyData, Error = Error> + Clone,
         Error: Display,
     >(
