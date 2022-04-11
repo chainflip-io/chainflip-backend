@@ -22,7 +22,7 @@ pub struct StateAuthorised<CeremonyData, CeremonyResult> {
 }
 
 pub struct StateRunner<CeremonyData, CeremonyResult> {
-    pub inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
+    inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
     delayed_messages: BTreeMap<AccountId, CeremonyData>,
