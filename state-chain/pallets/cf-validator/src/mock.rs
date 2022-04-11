@@ -119,13 +119,19 @@ impl Auctioneer for MockAuctioneer {
 	type Error = &'static str;
 
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error> {
-		AUCTION_RUN_BEHAVIOUR.with(|cell| (*cell.borrow()).clone())
+		AUCTION_RUN_BEHAVIOUR.with(|cell| {
+			let run_behaviour = (*cell.borrow()).clone();
+			run_behaviour.map(|result| {
+				AUCTION_WINNERS.with(|cell| {
+					*cell.borrow_mut() = Some(result.winners.to_vec());
+				});
+				result
+			})
+		})
 	}
 
-	fn update_validator_status(winners: &[Self::ValidatorId]) {
-		AUCTION_WINNERS.with(|cell| {
-			*cell.borrow_mut() = Some(winners.to_vec());
-		});
+	fn update_backup_and_passive_states() {
+		// no op
 	}
 }
 
@@ -162,9 +168,12 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
-		for validator in new_validators {
-			MockChainflipAccount::update_last_active_epoch(
+	fn on_new_epoch(
+		_previous_epoch_validators: &[Self::ValidatorId],
+		epoch_validators: &[Self::ValidatorId],
+	) {
+		for validator in epoch_validators {
+			MockChainflipAccount::update_validator_account_data(
 				validator,
 				ValidatorPallet::epoch_index(),
 			);

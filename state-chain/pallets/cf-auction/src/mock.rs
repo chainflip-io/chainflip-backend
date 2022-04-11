@@ -6,7 +6,7 @@ use cf_traits::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
 	},
-	Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
+	Bid, Chainflip, ChainflipAccount, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
@@ -51,17 +51,24 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 	});
 }
 
-pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
-	BIDDER_SET.with(|cell| {
-		*cell.borrow_mut() = bidders;
-	});
-}
-
 pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
 	let auction_result =
 		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
 
-	<AuctionPallet as Auctioneer>::update_validator_status(&auction_result.winners);
+	// TODO: This should not be in the Auctioneer pallet either
+	<AuctionPallet as Auctioneer>::update_backup_and_passive_states();
+
+	// TODO: Fix this hack
+	// This is necessary because, in the mocks, update state sets the
+	// nodes (see MockChainflipAccount)
+	// for validators, their state is not set in update for backup and passive now
+	// so we have to
+	for potential_validator in auction_result.winners.clone() {
+		<MockChainflipAccount as ChainflipAccount>::set_state(
+			&potential_validator,
+			ChainflipAccountState::Validator,
+		);
+	}
 
 	MockEpochInfo::set_bond(auction_result.minimum_active_bid);
 	MockEpochInfo::set_validators(auction_result.winners.clone());

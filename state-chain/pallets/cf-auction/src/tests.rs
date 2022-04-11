@@ -22,8 +22,6 @@ fn should_provide_winning_set() {
 			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(expected_winning_set().0)),
 		);
 
-		<AuctionPallet as Auctioneer>::update_validator_status(&auction_result.winners);
-
 		generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
 		let AuctionResult { winners, minimum_active_bid, .. } = run_complete_auction();
 
@@ -273,7 +271,7 @@ fn should_establish_a_highest_passive_node_bid() {
 }
 
 #[test]
-fn should_adjust_groups_in_emergency() {
+fn should_adjust_validator_at_boundary_in_emergency() {
 	new_test_ext().execute_with(|| {
 		let number_of_bidders = 150u32;
 		let max_validators = 100u32;
@@ -322,7 +320,9 @@ fn should_adjust_groups_in_emergency() {
 		// and the remaining BVs or 100/3
 		assert_eq!(number_of_backup_validators, max_validators / 3);
 
-		set_bidders(bidders_in_emergency_network);
+		BIDDER_SET.with(|cell| {
+			*cell.borrow_mut() = bidders_in_emergency_network;
+		});
 
 		// Let's now run the emergency auction
 		// We have a set of 100 bidders, 50 validators, 33 backup validators and 17 passive

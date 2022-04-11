@@ -17,7 +17,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use bitvec::prelude::*;
-use cf_traits::{EpochIndex, EpochInfo, EpochTransitionHandler};
+use cf_traits::{EpochIndex, EpochInfo};
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{
@@ -91,21 +91,6 @@ pub mod pallet {
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
 
-	/// Defines a unique index for each validator for every epoch.
-	#[pallet::storage]
-	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		EpochIndex,
-		Blake2_128Concat,
-		<T as frame_system::Config>::AccountId,
-		u16,
-	>;
-
-	/// Track epochs and their associated validator count
-	#[pallet::storage]
-	pub type EpochValidatorCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
-
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
@@ -137,6 +122,9 @@ pub mod pallet {
 
 		/// The epoch has expired
 		EpochExpired,
+
+		/// Invalid epoch
+		InvalidEpoch,
 	}
 
 	#[pallet::call]
@@ -237,14 +225,14 @@ impl<T: Config> Pallet<T> {
 		// Ensure the epoch has not yet expired
 		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
-		// Look up the signer in the list of validators
-		let index = ValidatorIndex::<T>::get(&epoch_index, &who)
-			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
-
 		// The number of validators for the epoch
 		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
 		// validator count.
-		let num_validators = EpochValidatorCount::<T>::get(epoch_index).unwrap_or_default();
+		let num_validators =
+			T::EpochInfo::validator_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
+
+		let index = T::EpochInfo::validator_index(epoch_index, &who.clone().into())
+			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
 		let call_hash = CallHash(Hashable::blake2_256(&call));
@@ -359,22 +347,5 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
 		RawOrigin::WitnessThreshold.into()
-	}
-}
-
-impl<T: Config> EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
-		// Update the list of validators in the witnesser.
-		let epoch = T::EpochInfo::epoch_index();
-
-		let mut total = 0;
-		for (i, v) in new_validators.iter().enumerate() {
-			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
-			total += 1;
-		}
-
-		EpochValidatorCount::<T>::insert(epoch, total);
 	}
 }

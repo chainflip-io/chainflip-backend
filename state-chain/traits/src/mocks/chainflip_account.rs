@@ -13,7 +13,7 @@ impl ChainflipAccount for MockChainflipAccount {
 		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
 	}
 
-	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
+	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
 			let mut map = cell.borrow_mut();
 			match map.get_mut(account_id) {
@@ -28,7 +28,7 @@ impl ChainflipAccount for MockChainflipAccount {
 		});
 	}
 
-	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
+	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
 			let mut map = cell.borrow_mut();
 			match map.get_mut(account_id) {
@@ -36,12 +36,15 @@ impl ChainflipAccount for MockChainflipAccount {
 					map.insert(
 						*account_id,
 						ChainflipAccountData {
-							state: ChainflipAccountState::Passive,
+							state: ChainflipAccountState::Validator,
 							last_active_epoch: Some(index),
 						},
 					);
 				},
-				Some(item) => (*item).last_active_epoch = Some(index),
+				Some(item) => {
+					(*item).last_active_epoch = Some(index);
+					(*item).state = ChainflipAccountState::Validator;
+				},
 			}
 		});
 	}
