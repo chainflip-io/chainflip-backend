@@ -237,7 +237,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [MissedHeartbeatPenaltyUpdated](Event::MissedHeartbeatPenaltyUpdated)
-		#[pallet::weight(T::WeightInfo::update_reputation_point_penalty())]
+		#[pallet::weight(T::WeightInfo::update_missed_heartbeat_penalty())]
 		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
 			value: ReputationPenaltyRate<BlockNumberFor<T>>,
@@ -261,8 +261,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// #[pallet::weight(T::WeightInfo::set_penalty())]
-		#[pallet::weight(10_000_000)]
+		/// Set the [Penalty] for an [Offence].
+		#[pallet::weight(T::WeightInfo::set_penalty())]
 		pub fn set_penalty(
 			origin: OriginFor<T>,
 			offence: T::Offence,

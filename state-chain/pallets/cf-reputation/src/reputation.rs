@@ -53,6 +53,7 @@ impl<P: ReputationParameters> ReputationTracker<P> {
 		self.clamp(P::bounds());
 	}
 
+	/// Clamp the reputation points to the given bounds.
 	fn clamp(&mut self, (floor, ceiling): (ReputationPoints, ReputationPoints)) {
 		self.reputation_points = self.reputation_points.clamp(floor, ceiling);
 	}
