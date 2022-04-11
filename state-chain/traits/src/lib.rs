@@ -360,10 +360,16 @@ pub trait EmergencyRotation {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
-pub enum ChainflipAccountState {
-	Passive,
+pub enum BackupOrPassive {
 	Backup,
-	Validator,
+	Passive,
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+pub enum ChainflipAccountState {
+	CurrentAuthority,
+	HistoricAuthority(BackupOrPassive),
+	BackupOrPassive(BackupOrPassive),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -374,7 +380,10 @@ pub struct ChainflipAccountData {
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Passive, last_active_epoch: None }
+		ChainflipAccountData {
+			state: ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+			last_active_epoch: None,
+		}
 	}
 }
 
@@ -418,7 +427,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).last_active_epoch = Some(index);
-			(*account_data).state = ChainflipAccountState::Validator;
+			(*account_data).state = ChainflipAccountState::CurrentAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}

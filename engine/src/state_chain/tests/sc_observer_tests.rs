@@ -4,7 +4,7 @@ use cf_chains::{
     eth::{AggKey, UnsignedTransaction},
     Ethereum,
 };
-use cf_traits::{ChainflipAccountData, ChainflipAccountState};
+use cf_traits::{BackupOrPassive, ChainflipAccountData, ChainflipAccountState};
 use codec::Encode;
 use frame_system::{AccountInfo, Phase};
 use mockall::predicate::{self, eq};
@@ -94,7 +94,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+                account_info_from_data(ChainflipAccountState::CurrentAuthority, Some(3)).encode(),
             )))
         });
 
@@ -198,7 +198,11 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Passive, Some(2)).encode(),
+                account_info_from_data(
+                    ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+                    Some(2),
+                )
+                .encode(),
             )))
         });
 
@@ -304,7 +308,11 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Backup, Some(1)).encode(),
+                account_info_from_data(
+                    ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
+                    Some(1),
+                )
+                .encode(),
             )))
         });
 
@@ -395,7 +403,11 @@ async fn backup_checks_account_data_every_block() {
         .times(3)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Backup, Some(1)).encode(),
+                account_info_from_data(
+                    ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
+                    Some(1),
+                )
+                .encode(),
             )))
         });
 
@@ -488,7 +500,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+                account_info_from_data(ChainflipAccountState::CurrentAuthority, Some(3)).encode(),
             )))
         });
 
@@ -503,7 +515,7 @@ async fn validator_to_validator_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Validator, Some(4)).encode(),
+                account_info_from_data(ChainflipAccountState::CurrentAuthority, Some(4)).encode(),
             )))
         });
 
@@ -672,7 +684,11 @@ async fn backup_to_validator_on_new_epoch() {
         .times(2)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Backup, None).encode(),
+                account_info_from_data(
+                    ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
+                    None,
+                )
+                .encode(),
             )))
         });
 
@@ -687,7 +703,7 @@ async fn backup_to_validator_on_new_epoch() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Validator, Some(4)).encode(),
+                account_info_from_data(ChainflipAccountState::CurrentAuthority, Some(4)).encode(),
             )))
         });
 
@@ -813,7 +829,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+                account_info_from_data(ChainflipAccountState::CurrentAuthority, Some(3)).encode(),
             )))
         });
 
@@ -828,7 +844,11 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Passive, Some(3)).encode(),
+                account_info_from_data(
+                    ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+                    Some(3),
+                )
+                .encode(),
             )))
         });
 
@@ -839,7 +859,11 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(2)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Passive, Some(3)).encode(),
+                account_info_from_data(
+                    ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+                    Some(3),
+                )
+                .encode(),
             )))
         });
 
@@ -1027,7 +1051,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+                account_info_from_data(ChainflipAccountState::CurrentAuthority, Some(3)).encode(),
             )))
         });
 

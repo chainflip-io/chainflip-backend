@@ -76,7 +76,7 @@ fn should_create_correct_size_of_groups() {
 				"expected passive node size is not expected"
 			);
 
-			validate_states(result.winners, ChainflipAccountState::Validator);
+			validate_states(result.winners, ChainflipAccountState::CurrentAuthority);
 
 			let backup_validators = AuctionPallet::remaining_bidders()
 				.iter()
@@ -84,7 +84,10 @@ fn should_create_correct_size_of_groups() {
 				.map(|(validator_id, _)| *validator_id)
 				.collect();
 
-			validate_states(backup_validators, ChainflipAccountState::Backup);
+			validate_states(
+				backup_validators,
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
+			);
 
 			let passive_nodes = AuctionPallet::remaining_bidders()
 				.iter()
@@ -93,7 +96,10 @@ fn should_create_correct_size_of_groups() {
 				.map(|(validator_id, _)| *validator_id)
 				.collect();
 
-			validate_states(passive_nodes, ChainflipAccountState::Passive);
+			validate_states(
+				passive_nodes,
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+			);
 		};
 
 		// Validate groups at genesis
@@ -153,13 +159,13 @@ fn should_promote_passive_node_if_stake_qualifies_for_backup() {
 
 		assert_eq!(
 			MockChainflipAccount::get(top_passive_node).state,
-			ChainflipAccountState::Backup,
+			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 			"top passive node is now a backup validator"
 		);
 
 		assert_eq!(
 			MockChainflipAccount::get(bottom_backup_validator).state,
-			ChainflipAccountState::Passive,
+			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
 			"bottom backup validator is now passive node"
 		);
 
@@ -198,7 +204,7 @@ fn should_demote_backup_validator_on_poor_stake() {
 
 		assert_eq!(
 			MockChainflipAccount::get(top_backup_validator_id).state,
-			ChainflipAccountState::Passive,
+			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
 			"backup validator should be demoted to passive node"
 		);
 
@@ -229,7 +235,7 @@ fn should_establish_a_new_lowest_backup_validator_bid() {
 
 		assert_eq!(
 			MockChainflipAccount::get(top_backup_validator_id).state,
-			ChainflipAccountState::Backup,
+			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 			"bid changed and state remains as backup validator"
 		);
 
@@ -258,7 +264,7 @@ fn should_establish_a_highest_passive_node_bid() {
 
 		assert_eq!(
 			MockChainflipAccount::get(bottom_passive_node).state,
-			ChainflipAccountState::Passive,
+			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
 			"should remain as passive node"
 		);
 
@@ -303,14 +309,16 @@ fn should_adjust_validator_at_boundary_in_emergency() {
 		let number_of_backup_validators = bidders_in_emergency_network
 			.iter()
 			.filter(|(validator_id, _)| {
-				MockChainflipAccount::get(validator_id).state == ChainflipAccountState::Backup
+				MockChainflipAccount::get(validator_id).state ==
+					ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
 			})
 			.count() as u32;
 
 		let number_of_validators = bidders_in_emergency_network
 			.iter()
 			.filter(|(validator_id, _)| {
-				MockChainflipAccount::get(validator_id).state == ChainflipAccountState::Validator
+				MockChainflipAccount::get(validator_id).state ==
+					ChainflipAccountState::CurrentAuthority
 			})
 			.count() as u32;
 

@@ -36,14 +36,14 @@ impl ChainflipAccount for MockChainflipAccount {
 					map.insert(
 						*account_id,
 						ChainflipAccountData {
-							state: ChainflipAccountState::Validator,
+							state: ChainflipAccountState::CurrentAuthority,
 							last_active_epoch: Some(index),
 						},
 					);
 				},
 				Some(item) => {
 					(*item).last_active_epoch = Some(index);
-					(*item).state = ChainflipAccountState::Validator;
+					(*item).state = ChainflipAccountState::CurrentAuthority;
 				},
 			}
 		});

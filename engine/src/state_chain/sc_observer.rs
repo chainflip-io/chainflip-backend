@@ -1,5 +1,5 @@
 use cf_chains::Ethereum;
-use cf_traits::{ChainflipAccountData, ChainflipAccountState};
+use cf_traits::{BackupOrPassive, ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_validator::CeremonyId;
@@ -115,31 +115,19 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    async fn get_current_account_state<RpcClient: StateChainRpcApi>(
+    async fn get_current_account_data<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
         logger: &slog::Logger,
-    ) -> (ChainflipAccountData, bool) {
+    ) -> ChainflipAccountData {
         let new_account_data = state_chain_client
             .get_account_data(block_hash)
             .await
             .expect("Could not get account data");
 
-        let current_epoch = state_chain_client
-            .epoch_at_block(block_hash)
-            .await
-            .expect("Could not get current epoch");
+        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state; "last_active_epoch" => new_account_data.last_active_epoch);
 
-        let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
-            last_active_epoch + 1 == current_epoch
-        } else {
-            false
-        };
-
-        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state;
-        "is_outgoing" => is_outgoing, "last_active_epoch" => new_account_data.last_active_epoch);
-
-        (new_account_data, is_outgoing)
+        new_account_data
     }
 
     async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
@@ -165,10 +153,15 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     }
 
     // Initialise the account state
-    let (mut account_data, mut is_outgoing) =
-        get_current_account_state(state_chain_client.clone(), initial_block_hash, &logger).await;
+    let mut account_data =
+        get_current_account_data(state_chain_client.clone(), initial_block_hash, &logger).await;
 
-    if account_data.state == ChainflipAccountState::Validator || is_outgoing {
+    if account_data.state == ChainflipAccountState::CurrentAuthority
+        || matches!(
+            account_data.state,
+            ChainflipAccountState::HistoricAuthority(_)
+        )
+    {
         send_windows_to_witness_processes(
             state_chain_client.clone(),
             initial_block_hash,
@@ -389,24 +382,20 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                     }
                                 }
 
-                                // Backup and passive nodes need to update their state on every block (since it's possible to move
+                                // Backup and passive nodes (only, not historical) need to update their state on every block (since it's possible to move
                                 // between Backup and Passive on every block), while Active nodes only need to update every new epoch.
                                 if received_new_epoch || matches!(
                                     account_data.state,
-                                    ChainflipAccountState::Backup | ChainflipAccountState::Passive
+                                    ChainflipAccountState::BackupOrPassive(_)
                                 ) {
-                                    let (new_account_data, new_is_outgoing) =
-                                        get_current_account_state(state_chain_client.clone(), current_block_hash, &logger).await;
-                                    account_data = new_account_data;
-                                    is_outgoing = new_is_outgoing;
-
+                                    account_data = get_current_account_data(state_chain_client.clone(), current_block_hash, &logger).await;
                                 }
 
                                 // New windows should be sent to outgoing validators (so they know when to finish) or to
                                 // new/existing validators (so they know when to start)
                                 // Note: nodes that were outgoing in the last epoch (active 2 epochs ago) have already
                                 // received their end window, so we don't need to send anything to them
-                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::Validator) || is_outgoing) {
+                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::CurrentAuthority) || matches!(account_data.state, ChainflipAccountState::HistoricAuthority(_))) {
                                     send_windows_to_witness_processes(
                                         state_chain_client.clone(),
                                         current_block_hash,

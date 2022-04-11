@@ -1092,7 +1092,7 @@ pub mod test_utils {
             providers: 2,
             sufficients: 0,
             data: ChainflipAccountData {
-                state: ChainflipAccountState::Validator,
+                state: ChainflipAccountState::CurrentAuthority,
                 last_active_epoch: Some(1),
             },
         };

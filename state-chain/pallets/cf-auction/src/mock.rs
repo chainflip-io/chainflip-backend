@@ -66,7 +66,7 @@ pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
 	for potential_validator in auction_result.winners.clone() {
 		<MockChainflipAccount as ChainflipAccount>::set_state(
 			&potential_validator,
-			ChainflipAccountState::Validator,
+			ChainflipAccountState::CurrentAuthority,
 		);
 	}
 
