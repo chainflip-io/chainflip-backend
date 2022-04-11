@@ -83,7 +83,12 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         if *peer_id_from_cfe_config == peer_id_from_node {
             let (port, ip_address, source) = if let Some((port, ip_address)) = listening_addresses
                 .iter()
-                .find(|(_, _, ip_address)| ip_address.is_global())
+                .find(|(_, _, ipv6_address)|
+                    // Ipv6Addr::is_global doesn't handle Ipv4 mapped addresses
+                    match ipv6_address.to_ipv4_mapped() {
+                        Some(ipv4_address) => ipv4_address.is_global(),
+                        None => ipv6_address.is_global(),
+                    })
                 .map(|(_, port, ip_address)| (*port, *ip_address))
             {
                 (
