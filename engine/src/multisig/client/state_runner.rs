@@ -215,7 +215,7 @@ where
             None => {
                 slog::debug!(
                     self.logger,
-                    "Delaying message {} from party [{}] (pre signing request)",
+                    "Delaying message {} from party [{}] for unauthorised ceremony",
                     m,
                     id
                 )
