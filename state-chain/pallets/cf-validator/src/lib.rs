@@ -682,7 +682,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn current_validator_count() -> u32 {
-		Self::current_validators().len() as u32
+		Validators::<T>::decode_len().unwrap_or_default() as u32
 	}
 
 	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
