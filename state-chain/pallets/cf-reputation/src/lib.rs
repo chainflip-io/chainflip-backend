@@ -82,7 +82,7 @@ impl<T: Config> sp_std::fmt::Debug for Penalty<T> {
 
 impl<T: Config> Default for Penalty<T> {
 	fn default() -> Self {
-		Self { reputation: 15, suspension: T::HeartbeatBlockInterval::get() }
+		Self { reputation: Default::default(), suspension: Default::default() }
 	}
 }
 
