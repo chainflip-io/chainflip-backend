@@ -748,11 +748,7 @@ mod tests {
 
 				for account in accounts.iter() {
 					let account_data = ChainflipAccountStore::<Runtime>::get(account);
-					assert_eq!(
-						Some(1),
-						account_data.last_active_epoch,
-						"validator should be active in the genesis epoch(1)"
-					);
+					// TODO: Check historical epochs
 					assert_eq!(ChainflipAccountState::CurrentAuthority, account_data.state);
 				}
 			});
@@ -946,11 +942,7 @@ mod tests {
 					);
 
 					for account in keyless_nodes.iter() {
-						assert_eq!(
-							None,
-							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
-							"this node should have never been active"
-						);
+						// TODO: Check historical epochs
 						assert_eq!(
 							ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
 							ChainflipAccountStore::<Runtime>::get(account).state,
@@ -958,13 +950,8 @@ mod tests {
 						);
 					}
 
-					let current_epoch = Validator::epoch_index();
 					for account in new_validators.iter() {
-						assert_eq!(
-							Some(current_epoch),
-							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
-							"validator should have been active in current epoch"
-						);
+						// TODO: Check historical epochs
 						assert_eq!(
 							ChainflipAccountState::CurrentAuthority,
 							ChainflipAccountStore::<Runtime>::get(account).state,
@@ -1208,7 +1195,8 @@ mod tests {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						assert_eq!(account_data.state, ChainflipAccountState::CurrentAuthority);
 						// we were active in teh first epoch
-						assert_eq!(account_data.last_active_epoch, Some(2));
+
+						// TODO: Check historical epochs
 					});
 
 					// assert list of backup validators as being the genesis validators
@@ -1233,7 +1221,7 @@ mod tests {
 							ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
 						);
 						// we were active in teh first epoch
-						assert_eq!(account_data.last_active_epoch, Some(1));
+						// TODO: Check historical epochs
 					});
 
 					let backup_validator_balances: HashMap<NodeId, FlipBalance> =

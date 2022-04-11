@@ -372,17 +372,16 @@ pub enum ChainflipAccountState {
 	BackupOrPassive(BackupOrPassive),
 }
 
+// TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
-	pub last_active_epoch: Option<EpochIndex>,
 }
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
 		ChainflipAccountData {
 			state: ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
-			last_active_epoch: None,
 		}
 	}
 }
@@ -391,8 +390,8 @@ pub trait ChainflipAccount {
 	type AccountId;
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState);
-	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex);
+	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
+	fn update_validator_account_data(account_id: &Self::AccountId);
 }
 
 // Remove in place of a proper validator enum
@@ -416,17 +415,24 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::get(account_id)
 	}
 
-	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
+	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state = state;
+			match account_data.state {
+				ChainflipAccountState::CurrentAuthority => {
+					// TODO: Handle this case
+				},
+				ChainflipAccountState::HistoricAuthority(_) |
+				ChainflipAccountState::BackupOrPassive(_) => {
+					(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
+				},
+			}
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	/// Set the last epoch number and set the account state to Validator
-	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex) {
+	fn update_validator_account_data(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).last_active_epoch = Some(index);
 			(*account_data).state = ChainflipAccountState::CurrentAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));

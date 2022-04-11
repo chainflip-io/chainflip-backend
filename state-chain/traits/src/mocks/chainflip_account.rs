@@ -1,4 +1,4 @@
-use crate::{ChainflipAccount, ChainflipAccountData, ChainflipAccountState, EpochIndex};
+use crate::{BackupOrPassive, ChainflipAccount, ChainflipAccountData, ChainflipAccountState};
 use std::{cell::RefCell, collections::HashMap};
 thread_local! {
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
@@ -13,22 +13,8 @@ impl ChainflipAccount for MockChainflipAccount {
 		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
 	}
 
-	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
-		CHAINFLIP_ACCOUNTS.with(|cell| {
-			let mut map = cell.borrow_mut();
-			match map.get_mut(account_id) {
-				None => {
-					map.insert(
-						*account_id,
-						ChainflipAccountData { state, last_active_epoch: None },
-					);
-				},
-				Some(item) => (*item).state = state,
-			}
-		});
-	}
-
-	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex) {
+	// Only sets as BackupOrPassive, not Historic
+	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
 			let mut map = cell.borrow_mut();
 			match map.get_mut(account_id) {
@@ -36,13 +22,36 @@ impl ChainflipAccount for MockChainflipAccount {
 					map.insert(
 						*account_id,
 						ChainflipAccountData {
-							state: ChainflipAccountState::CurrentAuthority,
-							last_active_epoch: Some(index),
+							state: ChainflipAccountState::BackupOrPassive(backup_or_passive),
 						},
 					);
 				},
 				Some(item) => {
-					(*item).last_active_epoch = Some(index);
+					(*item).state = match item.state {
+						ChainflipAccountState::CurrentAuthority => {
+							todo!("Handle this case")
+						},
+						ChainflipAccountState::HistoricAuthority(_) =>
+							ChainflipAccountState::HistoricAuthority(backup_or_passive),
+						ChainflipAccountState::BackupOrPassive(_) =>
+							ChainflipAccountState::BackupOrPassive(backup_or_passive),
+					};
+				},
+			}
+		});
+	}
+
+	fn update_validator_account_data(account_id: &Self::AccountId) {
+		CHAINFLIP_ACCOUNTS.with(|cell| {
+			let mut map = cell.borrow_mut();
+			match map.get_mut(account_id) {
+				None => {
+					map.insert(
+						*account_id,
+						ChainflipAccountData { state: ChainflipAccountState::CurrentAuthority },
+					);
+				},
+				Some(item) => {
 					(*item).state = ChainflipAccountState::CurrentAuthority;
 				},
 			}

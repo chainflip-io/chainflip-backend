@@ -1,5 +1,5 @@
 use cf_chains::Ethereum;
-use cf_traits::{BackupOrPassive, ChainflipAccountData, ChainflipAccountState};
+use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_validator::CeremonyId;
@@ -125,7 +125,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
             .await
             .expect("Could not get account data");
 
-        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state; "last_active_epoch" => new_account_data.last_active_epoch);
+        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state);
 
         new_account_data
     }
@@ -133,18 +133,21 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
-        account_data: ChainflipAccountData,
         sm_window_sender: &UnboundedSender<BlockHeightWindow>,
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
+        // TODO: Use all the historical epochs: https://github.com/chainflip-io/chainflip-backend/issues/1218
+        let last_active_epoch = state_chain_client
+            .get_historical_active_epochs(block_hash)
+            .await?
+            .last()
+            .expect("Must exist if we're sending windows to witness processes")
+            .clone();
+
         let eth_vault = state_chain_client
-            .get_vault::<Ethereum>(
-                block_hash,
-                account_data
-                    .last_active_epoch
-                    .expect("we are active or outgoing"),
-            )
+            .get_vault::<Ethereum>(block_hash, last_active_epoch)
             .await?;
+
         sm_window_sender
             .send(eth_vault.active_window.clone())
             .unwrap();
@@ -165,7 +168,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         send_windows_to_witness_processes(
             state_chain_client.clone(),
             initial_block_hash,
-            account_data,
             &sm_window_sender,
             &km_window_sender,
         )
@@ -399,7 +401,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                     send_windows_to_witness_processes(
                                         state_chain_client.clone(),
                                         current_block_hash,
-                                        account_data,
                                         &sm_window_sender,
                                         &km_window_sender,
                                     )

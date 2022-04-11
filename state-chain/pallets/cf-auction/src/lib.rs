@@ -288,16 +288,16 @@ impl<T: Config> Auctioneer for Pallet<T> {
 
 		// TODO: Ensure we handle the case where we have Historical validators
 		for (validator_id, _amount) in backup_validators {
-			T::ChainflipAccount::set_state(
+			T::ChainflipAccount::set_backup_or_passive(
 				&validator_id.into(),
-				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
+				BackupOrPassive::Backup,
 			);
 		}
 
 		for (validator_id, _amount) in passive_nodes {
-			T::ChainflipAccount::set_state(
+			T::ChainflipAccount::set_backup_or_passive(
 				&validator_id.into(),
-				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+				BackupOrPassive::Passive,
 			);
 		}
 	}
@@ -359,26 +359,28 @@ impl<T: Config> Pallet<T> {
 	// so when we update particular states, we must also adjust the one on the boundary
 	fn set_validator_state_and_adjust_at_boundary(
 		validator_id: &T::ValidatorId,
-		account_state: BackupOrPassive,
+		backup_or_passive: BackupOrPassive,
 		remaining_bidders: &mut Vec<RemainingBid<T::ValidatorId, T::Amount>>,
 	) {
-		T::ChainflipAccount::set_state(&(validator_id.clone().into()), account_state);
+		T::ChainflipAccount::set_backup_or_passive(
+			&(validator_id.clone().into()),
+			backup_or_passive,
+		);
 
-		let index_of_shifted =
-			if account_state == ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive) {
-				BackupGroupSize::<T>::get().saturating_sub(One::one())
-			} else {
-				BackupGroupSize::<T>::get()
-			};
+		let index_of_shifted = if backup_or_passive == BackupOrPassive::Passive {
+			BackupGroupSize::<T>::get().saturating_sub(One::one())
+		} else {
+			BackupGroupSize::<T>::get()
+		};
 
 		if let Some((adjusted_validator_id, _)) = remaining_bidders.get(index_of_shifted as usize) {
-			T::ChainflipAccount::set_state(
+			// TODO: find all the places set_state is used
+			T::ChainflipAccount::set_backup_or_passive(
 				&(adjusted_validator_id.clone().into()),
-				if account_state == ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
-				{
-					ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
+				if backup_or_passive == BackupOrPassive::Backup {
+					BackupOrPassive::Passive
 				} else {
-					ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
+					BackupOrPassive::Backup
 				},
 			);
 		}

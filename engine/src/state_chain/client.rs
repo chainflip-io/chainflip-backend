@@ -13,6 +13,7 @@ use jsonrpc_core_client::{RpcChannel, RpcError};
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use multisig_p2p_transport::PeerId;
+use pallet_cf_validator::HistoricalActiveEpochs;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
@@ -822,6 +823,18 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .data)
     }
 
+    /// Get the historical active epochs of this validator at a particular block
+    pub async fn get_historical_active_epochs(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<Vec<EpochIndex>> {
+        self.get_storage_map::<HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            block_hash,
+            &self.our_account_id,
+        )
+        .await
+    }
+
     /// Get the latest epoch number at the provided block hash
     pub async fn epoch_at_block(
         &self,
@@ -1093,7 +1106,6 @@ pub mod test_utils {
             sufficients: 0,
             data: ChainflipAccountData {
                 state: ChainflipAccountState::CurrentAuthority,
-                last_active_epoch: Some(1),
             },
         };
 

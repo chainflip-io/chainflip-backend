@@ -10,8 +10,7 @@ use cf_traits::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing,
-	QualifyValidator,
+	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -135,19 +134,6 @@ impl Auctioneer for MockAuctioneer {
 	}
 }
 
-pub struct MockIsOutgoing;
-impl IsOutgoing for MockIsOutgoing {
-	type AccountId = u64;
-
-	fn is_outgoing(account_id: &Self::AccountId) -> bool {
-		if let Some(last_active_epoch) = MockChainflipAccount::get(account_id).last_active_epoch {
-			let current_epoch_index = ValidatorPallet::epoch_index();
-			return last_active_epoch.saturating_add(1) == current_epoch_index
-		}
-		false
-	}
-}
-
 pub struct MockOnline;
 impl IsOnline for MockOnline {
 	type ValidatorId = ValidatorId;
@@ -170,10 +156,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]) {
 		for validator in epoch_validators {
-			MockChainflipAccount::update_validator_account_data(
-				validator,
-				ValidatorPallet::epoch_index(),
-			);
+			MockChainflipAccount::update_validator_account_data(validator);
 		}
 	}
 }

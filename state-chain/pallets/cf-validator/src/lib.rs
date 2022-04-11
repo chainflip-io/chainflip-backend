@@ -804,9 +804,11 @@ impl<T: Config> Pallet<T> {
 			// Bond the validators
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
-			// Update validator account state.
-			ChainflipAccountStore::<T>::update_validator_account_data(validator, new_epoch);
+
+			ChainflipAccountStore::<T>::update_validator_account_data(validator);
 		}
+
+		// TODO: Update the state of the old validators here, to downgrade them
 
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(epoch_validators);
