@@ -388,8 +388,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                 // between Backup and Passive on every block), while Active nodes only need to update every new epoch.
                                 if received_new_epoch || matches!(
                                     account_data.state,
-                                    ChainflipAccountState::BackupOrPassive(_)
-                                ) {
+                                    ChainflipAccountState::BackupOrPassive(_)) || matches!(account_data.state, ChainflipAccountState::HistoricAuthority(_))
+                                 {
                                     account_data = get_current_account_data(state_chain_client.clone(), current_block_hash, &logger).await;
                                 }
 

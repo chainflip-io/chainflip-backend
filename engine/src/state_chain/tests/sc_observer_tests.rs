@@ -9,7 +9,7 @@ use codec::Encode;
 use frame_system::{AccountInfo, Phase};
 use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
-use pallet_cf_validator::CurrentEpoch;
+use pallet_cf_validator::HistoricalActiveEpochs;
 use pallet_cf_vaults::{BlockHeightWindow, Vault, Vaults};
 use sp_core::{
     storage::{StorageData, StorageKey},
@@ -53,6 +53,12 @@ fn account_info_from_data(state: ChainflipAccountState) -> AccountInfo<u32, Chai
     }
 }
 
+fn mock_historical_epochs_key() -> StorageKey {
+    StorageKey(HistoricalActiveEpochs::<Runtime>::hashed_key_for(
+        AccountId32::new(OUR_ACCOUNT_ID_BYTES),
+    ))
+}
+
 /// ETH Window for epoch three after epoch starts, so we know the end
 const WINDOW_EPOCH_TWO_END: BlockHeightWindow = BlockHeightWindow {
     from: 20,
@@ -72,7 +78,7 @@ const WINDOW_EPOCH_THREE_END: BlockHeightWindow = BlockHeightWindow {
 const WINDOW_EPOCH_FOUR_INITIAL: BlockHeightWindow = BlockHeightWindow { from: 40, to: None };
 
 #[tokio::test]
-async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup() {
+async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_on_startup() {
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     mock_state_chain_rpc_client
@@ -92,18 +98,14 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
             )))
         });
 
-    // get the epoch
+    // mock the call to historical_active_epochs
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(
-            eq(initial_block_hash),
-            eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
-        )
+        .with(eq(initial_block_hash), eq(mock_historical_epochs_key()))
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(vec![3].encode()))));
 
     // get the current vault
-
     mock_state_chain_rpc_client
         .expect_storage()
         .with(
@@ -170,8 +172,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
 }
 
 #[tokio::test]
-async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup() {
-    // Current epoch is set to 3. Our last_active_epoch is set to 2.
+async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup() {
+    // Current epoch is set to 3. Our last_active_epoch is set toƒ} 2.
     // So we should be deemed outgoing, and submit the block height windows as expected to the nodes
     // even though we are passive
 
@@ -185,29 +187,26 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     let initial_block_hash = H256::default();
 
     // get account info
-
     mock_state_chain_rpc_client
         .expect_storage()
         .with(eq(initial_block_hash), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::BackupOrPassive(
+                account_info_from_data(ChainflipAccountState::HistoricAuthority(
                     BackupOrPassive::Passive,
                 ))
                 .encode(),
             )))
         });
 
-    // get the current epoch, which is 3
+    // mock the call to historical_active_epochs
+    let historical_epoch = 2;
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(
-            eq(initial_block_hash),
-            eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
-        )
+        .with(eq(initial_block_hash), eq(mock_historical_epochs_key()))
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(vec![historical_epoch].encode()))));
 
     // get the current vault
     mock_state_chain_rpc_client
@@ -215,7 +214,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         .with(
             eq(initial_block_hash),
             eq(StorageKey(
-                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&2),
+                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&historical_epoch),
             )),
         )
         .times(1)
@@ -280,7 +279,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
 }
 
 #[tokio::test]
-async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
+async fn sends_initial_extrinsics_when_backup_but_not_historic_on_startup() {
     // Current epoch is set to 3. Our last_active_epoch is set to 1.
     // So we should be backup, but not outgoing. Hence, we should not send any messages
     // down the witness channels
@@ -307,16 +306,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
                 .encode(),
             )))
         });
-
-    // get the current epoch, which is 3
-    mock_state_chain_rpc_client
-        .expect_storage()
-        .with(
-            eq(initial_block_hash),
-            eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
-        )
-        .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
@@ -387,7 +376,6 @@ async fn backup_checks_account_data_every_block() {
     let initial_block_hash = H256::default();
 
     // get account info
-
     mock_state_chain_rpc_client
         .expect_storage()
         .with(predicate::always(), eq(mock_account_storage_key()))
@@ -401,16 +389,6 @@ async fn backup_checks_account_data_every_block() {
                 .encode(),
             )))
         });
-
-    // get the current epoch, which is 3
-    mock_state_chain_rpc_client
-        .expect_storage()
-        .with(
-            predicate::always(),
-            eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
-        )
-        .times(3)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // Get events from the block
     // We will match on every block hash, but only the events key, as we want to return no events
@@ -448,7 +426,7 @@ async fn backup_checks_account_data_every_block() {
 }
 
 #[tokio::test]
-async fn validator_to_validator_on_new_epoch_event() {
+async fn current_authority_to_current_authority_on_new_epoch_event() {
     let logger = new_test_logger();
 
     let eth_rpc_mock = MockEthRpcApi::new();
@@ -510,20 +488,23 @@ async fn validator_to_validator_on_new_epoch_event() {
             )))
         });
 
-    // get the current epoch, which is 3
-    let epoch_key = StorageKey(CurrentEpoch::<Runtime>::hashed_key().into());
+    // mock the call to historical_active_epochs
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(eq(initial_block_hash), eq(epoch_key.clone()))
+        .with(eq(initial_block_hash), eq(mock_historical_epochs_key()))
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(vec![3].encode()))));
 
     // the second time we get the current epoch is on a new epoch event
+    // we now have 2 epochs in the history, we only get the last one
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(eq(new_epoch_block_header_hash), eq(epoch_key))
+        .with(
+            eq(new_epoch_block_header_hash),
+            eq(mock_historical_epochs_key()),
+        )
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(vec![3, 4].encode()))));
 
     // get the current vault
     let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3));
@@ -629,7 +610,7 @@ async fn validator_to_validator_on_new_epoch_event() {
 }
 
 #[tokio::test]
-async fn backup_to_validator_on_new_epoch() {
+async fn backup_not_historic_to_authority_on_new_epoch() {
     let logger = new_test_logger();
 
     let eth_rpc_mock = MockEthRpcApi::new();
@@ -697,29 +678,24 @@ async fn backup_to_validator_on_new_epoch() {
             )))
         });
 
-    // get the current epoch, which is 3
-    let epoch_key = StorageKey(CurrentEpoch::<Runtime>::hashed_key().into());
-    // we get the epoch when we start up, and on the first block that we receive, since we start as backup
+    // mock the call to historical_active_epochs after we rotate into the new epoch
+    let new_epoch = 4;
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(predicate::always(), eq(epoch_key.clone()))
-        .times(2)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
-
-    // the third time we get the current epoch is on a new epoch event, the epoch number is 4
-    mock_state_chain_rpc_client
-        .expect_storage()
-        .with(eq(new_epoch_block_header_hash), eq(epoch_key))
+        .with(
+            eq(new_epoch_block_header_hash),
+            eq(mock_historical_epochs_key()),
+        )
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(vec![new_epoch].encode()))));
 
-    // We'll get the vault from the new epoch 4 when we become active
+    // We'll get the vault from the new epoch `new_epoch` when we become active
     mock_state_chain_rpc_client
         .expect_storage()
         .with(
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
-                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&4),
+                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&new_epoch),
             )),
         )
         .times(1)
@@ -789,7 +765,7 @@ async fn backup_to_validator_on_new_epoch() {
 }
 
 #[tokio::test]
-async fn validator_to_outgoing_passive_on_new_epoch_event() {
+async fn current_authority_to_historic_passive_on_new_epoch_event() {
     // === FAKE BLOCKHEADERS ===
     let empty_block_header = test_header(20);
     let new_epoch_block_header = test_header(21);
@@ -834,7 +810,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::BackupOrPassive(
+                account_info_from_data(ChainflipAccountState::HistoricAuthority(
                     BackupOrPassive::Passive,
                 ))
                 .encode(),
@@ -848,36 +824,35 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         .times(2)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::BackupOrPassive(
+                account_info_from_data(ChainflipAccountState::HistoricAuthority(
                     BackupOrPassive::Passive,
                 ))
                 .encode(),
             )))
         });
 
-    // get the current epoch, which is 3
-    let epoch_key = StorageKey(CurrentEpoch::<Runtime>::hashed_key().into());
+    // we get the historical_active_epochs on startup because we're a current authority
+    // we get the only epoch we've been in, 3
+    let first_epoch = 3;
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(eq(initial_block_hash), eq(epoch_key.clone()))
+        .with(eq(initial_block_hash), eq(mock_historical_epochs_key()))
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
-
-    // the second time we get the current epoch is on a new epoch event
-    mock_state_chain_rpc_client
-        .expect_storage()
-        .with(eq(new_epoch_block_header_hash), eq(epoch_key.clone()))
-        .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(vec![first_epoch].encode()))));
 
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(predicate::always(), eq(epoch_key))
-        .times(2)
-        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
+        .with(
+            eq(new_epoch_block_header_hash),
+            eq(mock_historical_epochs_key()),
+        )
+        .times(1)
+        .returning(move |_, _| Ok(Some(StorageData(vec![first_epoch].encode()))));
 
     // get the current vault
-    let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3));
+    let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(
+        &first_epoch,
+    ));
 
     // get the vault on start up because we're active
     mock_state_chain_rpc_client
@@ -991,8 +966,10 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
     assert!(sm_window_receiver.recv().await.is_none());
 }
 
+// TODO: We should test that this works for historical epochs too. We should be able to sign for historical epochs we
+// were a part of
 #[tokio::test]
-async fn only_encodes_and_signs_when_active_and_specified() {
+async fn only_encodes_and_signs_when_current_authority_and_specified() {
     // === FAKE BLOCKHEADERS ===
 
     let block_header = test_header(21);
@@ -1043,15 +1020,12 @@ async fn only_encodes_and_signs_when_active_and_specified() {
             )))
         });
 
-    // get the epoch
+    // get the historical epochs
     mock_state_chain_rpc_client
         .expect_storage()
-        .with(
-            eq(initial_block_hash),
-            eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
-        )
+        .with(eq(initial_block_hash), eq(mock_historical_epochs_key()))
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(vec![3].encode()))));
 
     // get the current vault
 

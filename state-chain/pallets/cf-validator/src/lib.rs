@@ -769,6 +769,7 @@ impl<T: Config> Pallet<T> {
 			(*epoch - 1, *epoch)
 		});
 
+		let mut old_validators = Validators::<T>::get();
 		// Update state of current validators
 		Validators::<T>::set(epoch_validators.to_vec());
 
@@ -808,7 +809,12 @@ impl<T: Config> Pallet<T> {
 			ChainflipAccountStore::<T>::update_validator_account_data(validator);
 		}
 
-		// TODO: Update the state of the old validators here, to downgrade them
+		// find all the valitators moving out of the epoch
+		old_validators.retain(|validator| !epoch_validators.contains(validator));
+
+		for validator in old_validators.iter() {
+			ChainflipAccountStore::<T>::set_historic_validator(validator);
+		}
 
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(epoch_validators);

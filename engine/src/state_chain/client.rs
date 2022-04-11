@@ -1097,6 +1097,7 @@ pub mod test_utils {
         StorageChangeSet { block, changes }
     }
 
+    // TODO: Get some chain data for this test
     #[test]
     fn storage_change_set_encoding_works() {
         let account_info = AccountInfo {
@@ -1115,9 +1116,8 @@ pub mod test_utils {
         let storage_data = changes.1.unwrap().0;
 
         // this was retrieved from the chain itself
-        let storage_data_expected: Vec<u8> = vec![
-            12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 0, 0, 0,
-        ];
+        let storage_data_expected: Vec<u8> =
+            vec![12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0];
 
         assert_eq!(storage_data, storage_data_expected);
     }

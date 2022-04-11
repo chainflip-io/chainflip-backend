@@ -57,4 +57,8 @@ impl ChainflipAccount for MockChainflipAccount {
 			}
 		});
 	}
+
+	fn set_historic_validator(_account_id: &Self::AccountId) {
+		todo!()
+	}
 }
