@@ -48,7 +48,8 @@ where
 	/// Suspend a validator for a number of blocks.
 	pub fn suspend(&mut self, ids: impl IntoIterator<Item = Id>, duration: Block) {
 		let current_block = self.current_block;
-		self.all.extend(iter::repeat_with(move || current_block + duration).zip(ids));
+		self.all
+			.extend(iter::repeat_with(move || current_block.saturating_add(duration)).zip(ids));
 		self.all.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
 	}
 

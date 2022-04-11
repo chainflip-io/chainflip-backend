@@ -143,7 +143,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		reputation_pallet: ReputationPalletConfig {
 			accrual_ratio: ACCRUAL_RATE,
-			penalties: vec![(AllOffences::MissedHeartbeat, (MISSED_HEARTBEAT_PENALTY_POINTS, 0))],
+			penalties: vec![
+				(AllOffences::MissedHeartbeat, (MISSED_HEARTBEAT_PENALTY_POINTS, 0)),
+				(AllOffences::ForgettingYourYubiKey, (15, HEARTBEAT_BLOCK_INTERVAL)),
+				(AllOffences::NotLockingYourComputer, (15, HEARTBEAT_BLOCK_INTERVAL)),
+			],
 		},
 	};
 

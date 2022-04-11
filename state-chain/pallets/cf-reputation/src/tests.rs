@@ -119,6 +119,11 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 		offline_test(AllOffences::ForgettingYourYubiKey, &[ALICE, BOB]);
 		offline_test(AllOffences::NotLockingYourComputer, &[BOB]);
 
+		// Heartbeats have no explicit suspension.
+		assert_eq!(
+			ReputationPallet::validators_suspended_for(&[AllOffences::MissedHeartbeat,]),
+			[].iter().cloned().collect(),
+		);
 		assert_eq!(
 			ReputationPallet::validators_suspended_for(&[
 				AllOffences::MissedHeartbeat,
@@ -137,6 +142,42 @@ fn suspensions() {
 		assert_eq!(
 			ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,]),
 			[1, 2, 3].iter().cloned().collect(),
+		);
+	});
+}
+
+#[test]
+fn forgiveness() {
+	impl OffenceList<Test> for AllOffences {
+		const OFFENCES: &'static [Self] = &[
+			AllOffences::ForgettingYourYubiKey,
+			AllOffences::NotLockingYourComputer,
+			AllOffences::MissedHeartbeat,
+		];
+	}
+
+	new_test_ext().execute_with(|| {
+		ReputationPallet::suspend_all(&[1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
+		ReputationPallet::suspend_all(&[1, 2], &AllOffences::NotLockingYourComputer, u64::MAX);
+		ReputationPallet::suspend_all(&[1], &AllOffences::MissedHeartbeat, 15);
+		assert_eq!(
+			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
+			[1, 2, 3].iter().cloned().collect(),
+		);
+		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::ForgettingYourYubiKey);
+		assert_eq!(
+			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
+			[1, 2].iter().cloned().collect(),
+		);
+		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::NotLockingYourComputer);
+		assert_eq!(
+			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
+			[1].iter().cloned().collect(),
+		);
+		<ReputationPallet as OffenceReporter>::forgive_all(PalletOffence::MissedHeartbeat);
+		assert_eq!(
+			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
+			[].iter().cloned().collect(),
 		);
 	});
 }
