@@ -314,7 +314,7 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Offence = T::Offence;
 
-	fn report_many<'a>(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
+	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
 		let offence = offence.into();
 		let penalty = Self::resolve_penalty_for(offence);
 
