@@ -162,7 +162,7 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(new_validators: &[Self::ValidatorId]) {
 		for validator in new_validators {
 			MockChainflipAccount::update_last_active_epoch(
 				validator,

@@ -365,7 +365,7 @@ where
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(new_validators: &[Self::ValidatorId]) {
 		// Update the list of validators in the witnesser.
 		let epoch = T::EpochInfo::epoch_index();
 

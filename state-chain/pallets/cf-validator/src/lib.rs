@@ -729,7 +729,6 @@ impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
 	fn start_new_epoch(new_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
-		let old_validators = Validators::<T>::get();
 		// Update state of current validators
 		Validators::<T>::set(new_validators.to_vec());
 		ValidatorLookup::<T>::remove_all(None);
@@ -777,7 +776,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators);
+		T::EpochTransitionHandler::on_new_epoch(new_validators);
 	}
 
 	fn expire_epoch(epoch: EpochIndex) {

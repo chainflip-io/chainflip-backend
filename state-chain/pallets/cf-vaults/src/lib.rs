@@ -752,7 +752,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 	type ValidatorId = <T as Chainflip>::ValidatorId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], _new_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(_new_validators: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
 	}
 }
