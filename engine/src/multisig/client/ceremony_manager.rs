@@ -222,11 +222,10 @@ impl CeremonyManager {
             return;
         }
 
-        let logger = &self.logger;
-        let state = self
-            .keygen_states
-            .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
+        let logger_no_ceremony_id = &self.logger;
+        let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
+            KeygenStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+        });
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, participants);
@@ -302,12 +301,11 @@ impl CeremonyManager {
         }
 
         // We have the key and have received a request to sign
-        let logger = &self.logger;
+        let logger_no_ceremony_id = &self.logger;
 
-        let state = self
-            .signing_states
-            .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
+        let state = self.signing_states.entry(ceremony_id).or_insert_with(|| {
+            SigningStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+        });
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -318,7 +316,7 @@ impl CeremonyManager {
                 validator_mapping: key_info.validator_map.clone(),
                 own_idx,
                 all_idxs: signer_idxs,
-                logger: self.logger.clone(),
+                logger: logger.clone(),
                 rng,
             };
 
