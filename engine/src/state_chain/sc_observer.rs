@@ -162,7 +162,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     if account_data.state == ChainflipAccountState::CurrentAuthority
         || matches!(
             account_data.state,
-            ChainflipAccountState::HistoricAuthority(_)
+            ChainflipAccountState::HistoricalAuthority(_)
         )
     {
         send_windows_to_witness_processes(
@@ -388,16 +388,16 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                 // between Backup and Passive on every block), while CurrentAuthority nodes only need to update every new epoch.
                                 if received_new_epoch || matches!(
                                     account_data.state,
-                                    ChainflipAccountState::BackupOrPassive(_)) || matches!(account_data.state, ChainflipAccountState::HistoricAuthority(_))
+                                    ChainflipAccountState::BackupOrPassive(_)) || matches!(account_data.state, ChainflipAccountState::HistoricalAuthority(_))
                                  {
                                     account_data = get_current_account_data(state_chain_client.clone(), current_block_hash, &logger).await;
                                 }
 
-                                // New windows should be sent to HistoricAuthority validators (so they know when to finish) or to
+                                // New windows should be sent to HistoricalAuthority validators (so they know when to finish) or to
                                 // new/existing CurrentAuthoritys (so they know when to start)
                                 // Note: nodes that were outgoing in the last epoch (active 2 epochs ago) have already
                                 // received their end window, so we don't need to send anything to them
-                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::CurrentAuthority) || matches!(account_data.state, ChainflipAccountState::HistoricAuthority(_))) {
+                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::CurrentAuthority) || matches!(account_data.state, ChainflipAccountState::HistoricalAuthority(_))) {
                                     send_windows_to_witness_processes(
                                         state_chain_client.clone(),
                                         current_block_hash,

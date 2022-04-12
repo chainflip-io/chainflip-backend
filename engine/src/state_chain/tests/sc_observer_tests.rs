@@ -193,7 +193,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::HistoricAuthority(
+                account_info_from_data(ChainflipAccountState::HistoricalAuthority(
                     BackupOrPassive::Passive,
                 ))
                 .encode(),
@@ -810,7 +810,7 @@ async fn current_authority_to_historic_passive_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::HistoricAuthority(
+                account_info_from_data(ChainflipAccountState::HistoricalAuthority(
                     BackupOrPassive::Passive,
                 ))
                 .encode(),
@@ -824,7 +824,7 @@ async fn current_authority_to_historic_passive_on_new_epoch_event() {
         .times(2)
         .returning(move |_, _| {
             Ok(Some(StorageData(
-                account_info_from_data(ChainflipAccountState::HistoricAuthority(
+                account_info_from_data(ChainflipAccountState::HistoricalAuthority(
                     BackupOrPassive::Passive,
                 ))
                 .encode(),

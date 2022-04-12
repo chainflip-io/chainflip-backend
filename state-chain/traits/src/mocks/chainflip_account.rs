@@ -30,8 +30,8 @@ impl ChainflipAccount for MockChainflipAccount {
 						ChainflipAccountState::CurrentAuthority => {
 							panic!("Cannot set backup_or_passive on current_authority");
 						},
-						ChainflipAccountState::HistoricAuthority(_) =>
-							ChainflipAccountState::HistoricAuthority(backup_or_passive),
+						ChainflipAccountState::HistoricalAuthority(_) =>
+							ChainflipAccountState::HistoricalAuthority(backup_or_passive),
 						ChainflipAccountState::BackupOrPassive(_) =>
 							ChainflipAccountState::BackupOrPassive(backup_or_passive),
 					};

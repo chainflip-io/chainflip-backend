@@ -368,7 +368,7 @@ pub enum BackupOrPassive {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
-	HistoricAuthority(BackupOrPassive),
+	HistoricalAuthority(BackupOrPassive),
 	BackupOrPassive(BackupOrPassive),
 }
 
@@ -421,8 +421,8 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 			ChainflipAccountState::CurrentAuthority => {
 				log::warn!("Attempted to set backup or passive on a current authority account");
 			},
-			ChainflipAccountState::HistoricAuthority(_) => {
-				(*account_data).state = ChainflipAccountState::HistoricAuthority(state);
+			ChainflipAccountState::HistoricalAuthority(_) => {
+				(*account_data).state = ChainflipAccountState::HistoricalAuthority(state);
 			},
 			ChainflipAccountState::BackupOrPassive(_) => {
 				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
@@ -444,7 +444,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn set_historic_validator(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state =
-				ChainflipAccountState::HistoricAuthority(BackupOrPassive::Passive);
+				ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive);
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}

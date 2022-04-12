@@ -1215,7 +1215,7 @@ mod tests {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						assert_eq!(
 							account_data.state,
-							ChainflipAccountState::HistoricAuthority(BackupOrPassive::Backup)
+							ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup)
 						);
 						// we were active in teh first epoch
 						// TODO: Check historical epochs
