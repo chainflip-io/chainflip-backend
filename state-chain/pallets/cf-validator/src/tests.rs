@@ -92,10 +92,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		MockAuctioneer::set_run_behaviour(Ok(Default::default()));
 
 		move_forward_blocks(1);
-		assert!(matches!(
-			RotationPhase::<Test>::get(),
-			RotationStatusOf::<Test>::AwaitingVaults(..)
-		))
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::AwaitingVaults(..)))
 	});
 }
 
@@ -103,7 +100,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 	new_test_ext().execute_with(|| {
 		MockVaultRotator::set_error_on_start(true);
-		RotationPhase::<Test>::set(RotationStatusOf::<Test>::RunAuction);
+		RotationPhase::<Test>::set(RotationStatus::<Test>::RunAuction);
 		// Move forward a few blocks, vault rotations fail because the vault rotator can't start.
 		// We keep trying to resolve the auction.
 		move_forward_blocks(10);
@@ -167,7 +164,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 fn should_rotate_when_forced() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-		assert!(matches!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction));
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction));
 	});
 }
 
@@ -194,12 +191,9 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 			DUMMY_GENESIS_VALIDATORS,
 			"we should still be validating with the genesis validators"
 		);
-		assert!(matches!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction));
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction));
 		move_forward_blocks(1);
-		assert!(matches!(
-			RotationPhase::<Test>::get(),
-			RotationStatusOf::<Test>::AwaitingVaults(..)
-		));
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::AwaitingVaults(..)));
 		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
 		assert_next_epoch();
 		assert_eq!(
@@ -516,7 +510,7 @@ fn test_setting_vanity_names_() {
 #[test]
 fn test_missing_author_punishment() {
 	new_test_ext().execute_with(|| {
-		RotationPhase::<Test>::set(RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
+		RotationPhase::<Test>::set(RotationStatus::<Test>::VaultsRotated(AuctionOutcome {
 			winners: vec![1, 2, 3, 4],
 			..Default::default()
 		}));

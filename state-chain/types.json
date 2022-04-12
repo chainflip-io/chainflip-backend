@@ -182,7 +182,6 @@
       "SessionRotating": "(AuctionResult)"
     }
   },
-  "RotationStatusOf": "RotationStatus",
   "RuntimeReputationTracker": "ReputationTracker",
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",

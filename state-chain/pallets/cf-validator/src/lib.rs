@@ -56,20 +56,28 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
-pub type RotationStatusOf<T> = RotationStatus<
-	AuctionResult<<T as frame_system::Config>::AccountId, <T as cf_traits::Chainflip>::Amount>,
->;
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum RotationStatus<T> {
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+pub enum RotationStatus<T: Config> {
 	Idle,
 	RunAuction,
-	AwaitingVaults(T),
-	VaultsRotated(T),
-	SessionRotating(T),
+	AwaitingVaults(AuctionOutcome<T>),
+	VaultsRotated(AuctionOutcome<T>),
+	SessionRotating(AuctionOutcome<T>),
 }
 
-impl<T> Default for RotationStatus<T> {
+impl<T: Config> sp_std::fmt::Debug for RotationStatus<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		match self {
+			RotationStatus::Idle => write!(f, "Idle"),
+			RotationStatus::RunAuction => write!(f, "RunAuction"),
+			RotationStatus::AwaitingVaults(outcome) => write!(f, "AwaitingVaults(..)"),
+			RotationStatus::VaultsRotated(outcome) => write!(f, "VaultsRotated(..)"),
+			RotationStatus::SessionRotating(outcome) => write!(f, "SessionRotating(..)"),
+		}
+	}
+}
+
+impl<T: Config> Default for RotationStatus<T> {
 	fn default() -> Self {
 		RotationStatus::Idle
 	}
@@ -176,7 +184,7 @@ pub mod pallet {
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// Rotation status updated \[rotation_status\]
-		RotationStatusUpdated(RotationStatusOf<T>),
+		RotationStatusUpdated(RotationStatus<T>),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
@@ -569,7 +577,7 @@ pub mod pallet {
 	/// The rotation phase we are currently at
 	#[pallet::storage]
 	#[pallet::getter(fn rotation_phase)]
-	pub type RotationPhase<T: Config> = StorageValue<_, RotationStatusOf<T>, ValueQuery>;
+	pub type RotationPhase<T: Config> = StorageValue<_, RotationStatus<T>, ValueQuery>;
 
 	/// A list of the current validators
 	#[pallet::storage]
@@ -824,7 +832,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn set_rotation_status(new_status: RotationStatusOf<T>) {
+	fn set_rotation_status(new_status: RotationStatus<T>) {
 		RotationPhase::<T>::put(new_status.clone());
 		Self::deposit_event(Event::RotationStatusUpdated(new_status));
 	}
