@@ -126,23 +126,6 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-/// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
-/// finally it is completed
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum AuctionPhase<ValidatorId, Amount> {
-	/// Waiting for bids
-	WaitingForBids,
-	/// We have ran the auction and have a set of validators with minimum active bid awaiting
-	/// confirmation
-	ValidatorsSelected(Vec<ValidatorId>, Amount),
-}
-
-impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
-	fn default() -> Self {
-		AuctionPhase::WaitingForBids
-	}
-}
-
 /// A bid represented by a validator and the amount they wish to bid
 pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
 /// A bid that has been classified as out of the validating set
