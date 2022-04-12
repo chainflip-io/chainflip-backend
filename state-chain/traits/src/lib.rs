@@ -12,7 +12,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
 	Hashable, Parameter,
 };
 use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, RuntimeDebug};
@@ -41,8 +41,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Parameter
 		+ Ord
 		+ core::fmt::Debug
-		+ From<<Self as frame_system::Config>::AccountId>
-		+ Into<<Self as frame_system::Config>::AccountId>
+		+ IsType<<Self as frame_system::Config>::AccountId>
 		+ MaybeSerializeDeserialize;
 
 	/// An id type for keys used in threshold signature ceremonies.

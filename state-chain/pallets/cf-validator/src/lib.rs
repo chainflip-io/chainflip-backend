@@ -16,9 +16,9 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
-	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, Chainflip,
+	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
 	QualifyValidator, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
@@ -91,7 +91,7 @@ impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
 	}
 }
 
-type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
+type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 type VanityName = Vec<u8>;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -118,7 +118,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config:
 		frame_system::Config<AccountData = ChainflipAccountData>
-		+ cf_traits::Chainflip
+		+ Chainflip
 		+ pallet_session::Config<ValidatorId = ValidatorIdOf<Self>>
 	{
 		/// The overarching event type.
@@ -141,7 +141,7 @@ pub mod pallet {
 		type Auctioneer: Auctioneer<ValidatorId = ValidatorIdOf<Self>, Amount = Self::Amount>;
 
 		/// The lifecycle of a vault rotation
-		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
+		type VaultRotator: VaultRotator<ValidatorId = <Self as Chainflip>::ValidatorId>;
 
 		/// For looking up Chainflip Account data.
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
@@ -163,7 +163,7 @@ pub mod pallet {
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 
 		/// Updates the bond of a validator
-		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
+		type Bonder: Bonding<ValidatorId = ValidatorIdOf<Self>, Amount = Self::Amount>;
 	}
 
 	#[pallet::event]
@@ -188,8 +188,8 @@ pub mod pallet {
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 		/// Ratio of claim period updated \[percentage\]
 		ClaimPeriodUpdated(Percentage),
-		/// Vanity Name for a validator has been set \[validator_id, vanity_name\]
-		VanityNameSet(ValidatorIdOf<T>, VanityName),
+		/// Vanity Name for an account has been set \[account_id, vanity_name\]
+		VanityNameSet(T::AccountId, VanityName),
 	}
 
 	#[pallet::error]
@@ -503,7 +503,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			let validator_id: ValidatorIdOf<T> = account_id;
+			let validator_id: ValidatorIdOf<T> = account_id.into();
 			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version != version {
 					Self::deposit_event(Event::CFEVersionUpdated(
@@ -522,9 +522,9 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
 			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-			let mut validators: BTreeMap<ValidatorIdOf<T>, VanityName> = VanityNames::<T>::get();
-			validators.insert(account_id.clone(), name.clone());
-			VanityNames::<T>::put(validators);
+			let mut vanity_names = VanityNames::<T>::get();
+			vanity_names.insert(account_id.clone(), name.clone());
+			VanityNames::<T>::put(vanity_names);
 			Self::deposit_event(Event::VanityNameSet(account_id, name));
 			Ok(().into())
 		}
@@ -558,14 +558,8 @@ pub mod pallet {
 	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn validator_index)]
-	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		EpochIndex,
-		Blake2_128Concat,
-		<T as frame_system::Config>::AccountId,
-		u16,
-	>;
+	pub(super) type ValidatorIndex<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, EpochIndex, Blake2_128Concat, ValidatorIdOf<T>, u16>;
 
 	/// Track epochs and their associated validator count
 	#[pallet::storage]
@@ -586,7 +580,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn vanity_names)]
 	pub type VanityNames<T: Config> =
-		StorageValue<_, BTreeMap<ValidatorIdOf<T>, VanityName>, ValueQuery>;
+		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
 	/// The current bond
 	#[pallet::storage]
@@ -806,14 +800,14 @@ impl<T: Config> Pallet<T> {
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
 
-			ChainflipAccountStore::<T>::set_current_authority(validator);
+			ChainflipAccountStore::<T>::set_current_authority(validator.into_ref());
 		}
 
 		// find all the valitators moving out of the epoch
 		old_validators.retain(|validator| !epoch_validators.contains(validator));
 
 		old_validators.iter().for_each(|validator| {
-			ChainflipAccountStore::<T>::set_historical_validator(validator);
+			ChainflipAccountStore::<T>::set_historical_validator(validator.into_ref());
 		});
 
 		// We've got new validators, which means the backups and passives may have changed
@@ -992,7 +986,7 @@ impl<T: Config> QualifyValidator for PeerMapping<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-		AccountPeerMapping::<T>::contains_key(validator_id)
+		AccountPeerMapping::<T>::contains_key(validator_id.into_ref())
 	}
 }
 
