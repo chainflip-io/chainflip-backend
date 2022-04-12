@@ -174,9 +174,8 @@ impl CeremonyManager {
             .keygen_states
             .remove(&ceremony_id)
             .unwrap()
-            .inner
-            .unwrap()
-            .result_sender;
+            .try_into_result_sender()
+            .unwrap();
         self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
             slog::warn!(
@@ -223,10 +222,11 @@ impl CeremonyManager {
             return;
         }
 
+        let logger = &self.logger;
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, &logger));
+            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, participants);

@@ -278,15 +278,32 @@ pub mod pallet {
 
 				match stage {
 					BroadcastStage::TransactionSigning => {
+						// We take here. We only allow a single transaction signature request
+						// to be valid at a time
 						if let Some(signing_attempt) =
 							AwaitingTransactionSignature::<T, I>::take(attempt_id)
 						{
+							// invalidate the old attempt count by removing it from the mapping
+							BroadcastIdToAttemptNumbers::<T, I>::mutate(
+								signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+								|attempt_numbers| {
+									if let Some(attempt_numbers) = attempt_numbers {
+										attempt_numbers.retain(|x| {
+											*x != signing_attempt
+												.broadcast_attempt
+												.broadcast_attempt_id
+												.attempt_count
+										});
+									}
+								},
+							);
 							notify_and_retry(signing_attempt.broadcast_attempt);
 						}
 					},
+					// when we retry we actually don't want to take the attempt or the count
 					BroadcastStage::Transmission => {
 						if let Some(transmission_attempt) =
-							Self::take_transmission_attempt(attempt_id)
+							AwaitingTransmission::<T, I>::get(attempt_id)
 						{
 							notify_and_retry(transmission_attempt.broadcast_attempt);
 						}
@@ -412,7 +429,7 @@ pub mod pallet {
 			let attempt_numbers =
 				BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_attempt_id.broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			Self::clean_up_transmission_attempts_on_success(
+			Self::clean_up_on_transmission_success(
 				broadcast_attempt_id.broadcast_id,
 				&attempt_numbers,
 			);
@@ -446,6 +463,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
+		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
 		#[pallet::weight(T::WeightInfo::transmission_failure())]
 		pub fn transmission_failure(
 			origin: OriginFor<T>,
@@ -456,25 +474,49 @@ pub mod pallet {
 			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let TransmissionAttempt { broadcast_attempt, signer, .. } =
-				Self::take_transmission_attempt(&broadcast_attempt_id)
+				AwaitingTransmission::<T, I>::take(broadcast_attempt_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
-			match failure {
-				TransmissionFailure::TransactionRejected => {
-					Self::report_and_schedule_retry(
-						&signer,
-						broadcast_attempt,
-						Offence::TransactionFailedOnTransmission,
-					);
+			// remove this broadcast attempt from the list of attempts for this broadcast
+			// and return the latest attempt number
+			let last_attempt_number = BroadcastIdToAttemptNumbers::<T, I>::try_mutate(
+				broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				|attempt_numbers| {
+					attempt_numbers
+						.as_mut()
+						.and_then(|attempt_numbers| {
+							let last_attempt = attempt_numbers.last().copied();
+							attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
+							last_attempt
+						})
+						.ok_or(Error::<T, I>::InvalidBroadcastId)
 				},
-				TransmissionFailure::TransactionFailed => {
-					Self::deposit_event(Event::<T, I>::BroadcastFailed(
-						broadcast_attempt.broadcast_attempt_id,
-						broadcast_attempt.unsigned_tx,
-					));
-				},
-			};
+			)?;
 
+			// if not the latest attempt id, then we should ignore it, because we've
+			// already scheduled a retry for it.
+			if broadcast_attempt_id.attempt_count != last_attempt_number {
+				log::debug!(
+					"Ignoring failure for broadcast attempt id {} because it is not the latest attempt",
+					broadcast_attempt_id
+				);
+			} else {
+				match failure {
+					TransmissionFailure::TransactionRejected => {
+						Self::report_and_schedule_retry(
+							&signer,
+							broadcast_attempt,
+							Offence::TransactionFailedOnTransmission,
+						);
+					},
+					TransmissionFailure::TransactionFailed => {
+						Self::deposit_event(Event::<T, I>::BroadcastFailed(
+							broadcast_attempt.broadcast_attempt_id,
+							broadcast_attempt.unsigned_tx,
+						));
+					},
+				};
+			}
 			Ok(().into())
 		}
 
@@ -531,7 +573,7 @@ pub mod pallet {
 			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
 				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-				Self::clean_up_transmission_attempts_on_success(broadcast_id, &attempt_numbers);
+				Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
 				if let Some(attempt_count) = attempt_numbers.last() {
 					let last_broadcast_attempt_id =
 						BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -548,36 +590,22 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Clean up attempts and attempt mapping on success
-	pub fn clean_up_transmission_attempts_on_success(
+	pub fn clean_up_on_transmission_success(
 		broadcast_id: BroadcastId,
 		attempt_numbers: &[AttemptCount],
 	) {
 		for attempt_count in attempt_numbers {
 			let broadcast_attempt_id =
 				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() {
-				log::warn!(
-					"Invalid BroadcastAttemptId {} cleaning up AwaitingTransmissions",
-					broadcast_attempt_id
-				);
-			};
-		}
-	}
 
-	// helper function to remove the associated broadcastidtoattempt_count mapping
-	pub fn take_transmission_attempt(
-		broadcast_attempt_id: &BroadcastAttemptId,
-	) -> Option<TransmissionAttempt<T, I>> {
-		let transmission_attempt = AwaitingTransmission::<T, I>::take(broadcast_attempt_id)?;
-		BroadcastIdToAttemptNumbers::<T, I>::mutate(
-			transmission_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			|attempt_numbers| {
-				if let Some(attempt_numbers) = attempt_numbers {
-					attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
-				}
-			},
-		);
-		Some(transmission_attempt)
+			// A particular attempt is either alive because at the signing stage
+			// OR it's at the transmission stage
+			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
+				AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
+			{
+				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
+			}
+		}
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.

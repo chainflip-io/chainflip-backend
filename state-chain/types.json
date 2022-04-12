@@ -245,7 +245,8 @@
     "_enum": {
       "AwaitingKeygen": "AwaitingKeygen",
       "AwaitingRotation": "AwaitingRotation",
-      "Complete": "Complete"
+      "Complete": "Complete",
+      "Failed": "()"
     }
   },
   "Version": "SemVer",

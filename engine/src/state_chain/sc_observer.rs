@@ -2,9 +2,11 @@ use cf_chains::Ethereum;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
+use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
+use sp_runtime::AccountId32;
 use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
@@ -16,6 +18,65 @@ use crate::{
     multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
+
+async fn handle_keygen_request<MultisigClient, RpcClient>(
+    multisig_client: Arc<MultisigClient>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    ceremony_id: CeremonyId,
+    validator_candidates: Vec<AccountId32>,
+    logger: slog::Logger,
+) where
+    MultisigClient: MultisigClientApi + Send + Sync + 'static,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+{
+    use pallet_cf_vaults::KeygenOutcome;
+
+    tokio::spawn(async move {
+        let keygen_outcome = multisig_client
+            .keygen(ceremony_id, validator_candidates.clone())
+            .await;
+
+        let keygen_outcome = match keygen_outcome {
+            Ok(public_key) => {
+                // Keygen verification: before the new key is returned to the SC,
+                // we first ensure that all parties can use it for signing
+
+                let public_key_bytes = public_key.serialize();
+
+                // We arbitrarily choose the data to sign over to be the hash of the generated pubkey
+                let data_to_sign = sp_core::hashing::blake2_256(&public_key_bytes);
+                match multisig_client
+                    .sign(
+                        ceremony_id,
+                        KeyId(public_key_bytes.to_vec()),
+                        validator_candidates,
+                        MessageHash(data_to_sign),
+                    )
+                    .await
+                {
+                    // Report keygen success if we are able to sign
+                    Ok(_signature) => KeygenOutcome::Success(
+                        cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
+                    ),
+                    // Report keygen failure if we failed to sign
+                    Err((bad_account_ids, _error)) => {
+                        KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                    }
+                }
+            }
+            Err((bad_account_ids, _error)) => {
+                KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+            }
+        };
+
+        let _result = state_chain_client
+            .submit_signed_extrinsic(
+                pallet_cf_vaults::Call::report_keygen_outcome(ceremony_id, keygen_outcome),
+                &logger,
+            )
+            .await;
+    });
+}
 
 pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
@@ -189,35 +250,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         validator_candidates,
                                                     ),
                                                 ) if validator_candidates.contains(&state_chain_client.our_account_id) => {
-                                                    let multisig_client = multisig_client.clone();
-                                                    let state_chain_client = state_chain_client.clone();
-                                                    let logger = logger.clone();
-                                                    tokio::spawn(async move {
-                                                        let result_public_key = multisig_client.keygen(ceremony_id, validator_candidates).await;
-
-                                                        let _result = state_chain_client
-                                                            .submit_signed_extrinsic(
-                                                                pallet_cf_vaults::Call::report_keygen_outcome(
-                                                                    ceremony_id,
-                                                                    match result_public_key {
-                                                                        Ok(public_key) => {
-                                                                            pallet_cf_vaults::KeygenOutcome::Success(
-                                                                                cf_chains::eth::AggKey::from_pubkey_compressed(
-                                                                                    public_key.serialize(),
-                                                                                ),
-                                                                            )
-                                                                        }
-                                                                        Err((bad_account_ids, _error)) => {
-                                                                            pallet_cf_vaults::KeygenOutcome::Failure(BTreeSet::from_iter(
-                                                                                bad_account_ids,
-                                                                            ))
-                                                                        }
-                                                                    },
-                                                                ),
-                                                                &logger,
-                                                            )
-                                                            .await;
-                                                    });
+                                                    handle_keygen_request(multisig_client.clone(), state_chain_client.clone(), ceremony_id, validator_candidates, logger.clone()).await;
                                                 }
                                                 state_chain_runtime::Event::EthereumThresholdSigner(
                                                     pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(

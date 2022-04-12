@@ -6,11 +6,11 @@ use chainflip_engine::{
     },
 };
 use futures::StreamExt;
-use pallet_cf_validator::{Percentage, RotationStatus, RotationStatusOf};
+use pallet_cf_validator::RotationStatus;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_core::ed25519::Public as EdPublic;
 use sp_core::sr25519::Public as SrPublic;
-use sp_core::{ed25519::Public as EdPublic, storage::StorageKey};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use std::convert::TryInto;
@@ -112,36 +112,27 @@ async fn request_claim(
 
         let block_hash = block.hash();
         let current_block_number = block.number;
-        let current_epoch_started_at: state_chain_runtime::BlockNumber = state_chain_client
-            .get_storage_value(block_hash, StorageKey(pallet_cf_validator::CurrentEpochStartedAt::<
+        let current_epoch_started_at = state_chain_client
+            .get_storage_value::<pallet_cf_validator::CurrentEpochStartedAt::<
                 state_chain_runtime::Runtime,
-            >::hashed_key().into()))
+            >>(block_hash)
             .await?;
 
-        let claim_period_as_percentage: Percentage = state_chain_client
-            .get_storage_value(block_hash, StorageKey(pallet_cf_validator::ClaimPeriodAsPercentage::<
+        let claim_period_as_percentage = state_chain_client
+            .get_storage_value::<pallet_cf_validator::ClaimPeriodAsPercentage::<
                 state_chain_runtime::Runtime,
-            >::hashed_key().into()))
+            >>(block_hash)
             .await?;
 
-        let blocks_per_epoch: state_chain_runtime::BlockNumber = state_chain_client
-            .get_storage_value(
+        let blocks_per_epoch = state_chain_client
+            .get_storage_value::<pallet_cf_validator::BlocksPerEpoch<state_chain_runtime::Runtime>>(
                 block_hash,
-                StorageKey(
-                    pallet_cf_validator::BlocksPerEpoch::<state_chain_runtime::Runtime>::hashed_key()
-                        .into(),
-                ),
             )
             .await?;
 
-        let rotation_phase: RotationStatusOf<state_chain_runtime::Runtime> = state_chain_client
-            .get_storage_value(
+        let rotation_phase = state_chain_client
+            .get_storage_value::<pallet_cf_validator::RotationPhase<state_chain_runtime::Runtime>>(
                 block_hash,
-                StorageKey(
-                    pallet_cf_validator::RotationPhase::<state_chain_runtime::Runtime>::hashed_key(
-                    )
-                    .into(),
-                ),
             )
             .await?;
 
@@ -239,35 +230,21 @@ async fn request_claim(
                                     hex::encode(claim_cert.clone())
                                 );
                                 let chain_id = state_chain_client
-                                    .get_storage_value::<u64>(
-                                        block_hash,
-                                        StorageKey(
-                                            pallet_cf_environment::EthereumChainId::<
-                                                state_chain_runtime::Runtime,
-                                            >::hashed_key(
-                                            )
-                                            .into(),
-                                        ),
-                                    )
+                                    .get_storage_value::<pallet_cf_environment::EthereumChainId<
+                                        state_chain_runtime::Runtime,
+                                    >>(block_hash)
                                     .await
                                     .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
-                                    .get_storage_value(
-                                        block_hash,
-                                        StorageKey(
-                                            pallet_cf_environment::StakeManagerAddress::<
-                                                state_chain_runtime::Runtime,
-                                            >::hashed_key(
-                                            )
-                                            .into(),
-                                        ),
-                                    )
+                                    .get_storage_value::<pallet_cf_environment::StakeManagerAddress<
+                                        state_chain_runtime::Runtime,
+                                    >>(block_hash)
                                     .await
                                     .expect("Failed to fetch StakeManagerAddress from State Chain");
                                 let tx_hash = register_claim(
                                     settings,
                                     chain_id,
-                                    stake_manager_address,
+                                    stake_manager_address.into(),
                                     claim_cert,
                                     logger,
                                 )
