@@ -148,32 +148,21 @@ pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
 /// A bid that has been classified as out of the validating set
 pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
 
-/// A successful auction result
+/// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct AuctionResult<ValidatorId, Amount> {
-	pub winners: Vec<ValidatorId>,
-	pub minimum_active_bid: Amount,
+pub struct AuctionOutcome<T: Chainflip> {
+	/// The auction winners.
+	pub winners: Vec<T::ValidatorId>,
+	/// The auction losers and their bids.
+	pub losers: Vec<(T::ValidatorId, T::Amount)>,
+	/// The resulting bond for the next epoch.
+	pub bond: T::Amount,
 }
 
-/// A range of min, max for active validator set
-pub type ActiveValidatorRange = (u32, u32);
-
-/// Auctioneer
-///
-/// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
-/// returned as an `AuctionResult` calling `run_auction()`.
-pub trait Auctioneer {
-	type ValidatorId;
-	type Amount;
+pub trait Auctioneer<T: Chainflip> {
 	type Error: Into<DispatchError>;
 
-	/// Run an auction by qualifying a validator
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error>;
-
-	// TODO: there's probably a better place to put this (both in terms of being in this trait)
-	// and where it's called
-	/// Update the states of backup and passive nodes
-	fn update_backup_and_passive_states();
+	fn resolve_auction() -> Result<AuctionOutcome<T>, Self::Error>;
 }
 
 pub trait BackupValidators {
