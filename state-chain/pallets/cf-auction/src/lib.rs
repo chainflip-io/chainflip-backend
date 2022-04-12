@@ -91,7 +91,8 @@ pub mod pallet {
 	pub(super) type ActiveValidatorSizeRange<T: Config> =
 		StorageValue<_, ActiveValidatorRange, ValueQuery>;
 
-	/// The remaining set of bidders after an auction
+	/// List of bidders that were not winners of the last auction, sorted from
+	/// highest to lowest bid.
 	#[pallet::storage]
 	#[pallet::getter(fn remaining_bidders)]
 	pub(super) type RemainingBidders<T: Config> =
@@ -283,10 +284,10 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		let lowest_backup_validator_bid = Self::lowest_bid(&backup_validators);
 		let highest_passive_node_bid = Self::highest_bid(&passive_nodes);
 
+		// TODO: Look into removing these, we should only need to set this in one place
 		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 		HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
 
-		// TODO: Ensure we handle the case where we have Historical validators
 		for (validator_id, _amount) in backup_validators {
 			T::ChainflipAccount::set_backup_or_passive(
 				&validator_id.into(),
@@ -339,7 +340,7 @@ impl<T: Config> Pallet<T> {
 		if let Ok(index) = remaining_bidders.binary_search_by(|bid| new_bid.0.cmp(&bid.0)) {
 			remaining_bidders[index] = new_bid;
 
-			// Sort and set state
+			// reverse sort by amount (highest first)
 			remaining_bidders.sort_unstable_by_key(|k| k.1);
 			remaining_bidders.reverse();
 
@@ -374,7 +375,6 @@ impl<T: Config> Pallet<T> {
 		};
 
 		if let Some((adjusted_validator_id, _)) = remaining_bidders.get(index_of_shifted as usize) {
-			// TODO: find all the places set_state is used
 			T::ChainflipAccount::set_backup_or_passive(
 				&(adjusted_validator_id.clone().into()),
 				if backup_or_passive == BackupOrPassive::Backup {
