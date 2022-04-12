@@ -950,7 +950,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages.clone());
+            ceremony.distribute_messages(messages);
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
@@ -989,7 +989,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages.clone());
+            ceremony.distribute_messages(messages);
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
@@ -1034,7 +1034,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages.clone());
+            ceremony.distribute_messages(messages);
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
@@ -1087,7 +1087,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages.clone());
+            ceremony.distribute_messages(messages);
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
