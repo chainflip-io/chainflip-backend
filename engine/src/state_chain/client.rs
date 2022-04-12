@@ -44,7 +44,7 @@ use substrate_subxt::{
 use tokio::sync::RwLock;
 
 use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
-use crate::constants::MAX_RETRY_ATTEMPTS;
+use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -431,7 +431,7 @@ mod storage_traits {
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
+    /// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
         &self,
         extrinsic: Extrinsic,
@@ -442,7 +442,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     {
         let extrinsic = state_chain_runtime::Call::from(extrinsic);
         let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
-        for _ in 0..MAX_RETRY_ATTEMPTS {
+        for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             let runtime_version = { self.runtime_version.read().await.clone() };
@@ -1203,7 +1203,7 @@ mod tests {
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
-            .times(MAX_RETRY_ATTEMPTS)
+            .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(RpcError::JsonRpcError(Error {
                     code: ErrorCode::ServerError(1014),
@@ -1237,7 +1237,7 @@ mod tests {
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
-            .times(MAX_RETRY_ATTEMPTS)
+            .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(RpcError::JsonRpcError(Error {
                     code: ErrorCode::ServerError(1010),
