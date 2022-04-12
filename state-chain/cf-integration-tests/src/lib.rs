@@ -1128,10 +1128,8 @@ mod tests {
 		use std::collections::HashMap;
 
 		#[test]
-		// We have a set of backup validators who receive rewards
-		// A network is created where we have a validating set with a set of backup validators
-		// The backup validators would receive emissions on each heartbeat
-		fn backup_rewards() {
+
+		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// We want to have at least one heartbeat within our reduced epoch
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
@@ -1149,9 +1147,8 @@ mod tests {
 					let (mut testnet, mut init_passive_nodes) =
 						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
 
-					// An initial stake which is superior to the genesis stakes
-					// The current validators would have been rewarded on us leaving the current
-					// epoch so let's up the stakes for the passive nodes.
+					// An initial stake which is greater than the genesis stakes
+					// We intend for these initially passive nodes to win the auction
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &init_passive_nodes {
@@ -1162,7 +1159,7 @@ mod tests {
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 
 					assert_eq!(
-						1,
+						GENESIS_EPOCH,
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
@@ -1218,7 +1215,7 @@ mod tests {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						assert_eq!(
 							account_data.state,
-							ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
+							ChainflipAccountState::HistoricAuthority(BackupOrPassive::Backup)
 						);
 						// we were active in teh first epoch
 						// TODO: Check historical epochs

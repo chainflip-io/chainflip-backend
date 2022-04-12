@@ -287,12 +287,6 @@ pub mod pallet {
 					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(_) => {
-					// TODO: Remove update_backup_and_passive_states and move it somewhere it makes
-					// sense Just removing it means that on a rotation, the nodes that were
-					// validators do not get moved to backup state. This then impacts some
-					// integration tests which check the state in order to determine if a node
-					// should submit a witness or not
-					T::Auctioneer::update_backup_and_passive_states();
 					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -812,9 +806,12 @@ impl<T: Config> Pallet<T> {
 		// find all the valitators moving out of the epoch
 		old_validators.retain(|validator| !epoch_validators.contains(validator));
 
-		for validator in old_validators.iter() {
+		old_validators.iter().for_each(|validator| {
 			ChainflipAccountStore::<T>::set_historic_validator(validator);
-		}
+		});
+
+		// We've got new validators, which means the backups and passives may have changed
+		T::Auctioneer::update_backup_and_passive_states();
 
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(epoch_validators);

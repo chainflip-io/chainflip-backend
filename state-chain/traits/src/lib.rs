@@ -417,16 +417,16 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	}
 
 	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			match account_data.state {
-				ChainflipAccountState::CurrentAuthority => {
-					// TODO: Handle this case
-				},
-				ChainflipAccountState::HistoricAuthority(_) |
-				ChainflipAccountState::BackupOrPassive(_) => {
-					(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
-				},
-			}
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
+			ChainflipAccountState::CurrentAuthority => {
+				todo!("Handle this case");
+			},
+			ChainflipAccountState::HistoricAuthority(_) => {
+				(*account_data).state = ChainflipAccountState::HistoricAuthority(state);
+			},
+			ChainflipAccountState::BackupOrPassive(_) => {
+				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
+			},
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
@@ -440,6 +440,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	}
 
 	// TODO: How to check if we set to backup or passive
+	// we might want to combine this with an update_backup_or_passive
 	fn set_historic_validator(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state =
