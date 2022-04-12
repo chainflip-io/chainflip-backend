@@ -384,8 +384,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                     }
                                 }
 
-                                // Backup and passive nodes (only, not historical) need to update their state on every block (since it's possible to move
-                                // between Backup and Passive on every block), while Active nodes only need to update every new epoch.
+                                // Backup and passive nodes (could be historical backup or passive) need to update their state on every block (since it's possible to move
+                                // between Backup and Passive on every block), while CurrentAuthority nodes only need to update every new epoch.
                                 if received_new_epoch || matches!(
                                     account_data.state,
                                     ChainflipAccountState::BackupOrPassive(_)) || matches!(account_data.state, ChainflipAccountState::HistoricAuthority(_))
@@ -393,8 +393,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                     account_data = get_current_account_data(state_chain_client.clone(), current_block_hash, &logger).await;
                                 }
 
-                                // New windows should be sent to outgoing validators (so they know when to finish) or to
-                                // new/existing validators (so they know when to start)
+                                // New windows should be sent to HistoricAuthority validators (so they know when to finish) or to
+                                // new/existing CurrentAuthoritys (so they know when to start)
                                 // Note: nodes that were outgoing in the last epoch (active 2 epochs ago) have already
                                 // received their end window, so we don't need to send anything to them
                                 if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::CurrentAuthority) || matches!(account_data.state, ChainflipAccountState::HistoricAuthority(_))) {
