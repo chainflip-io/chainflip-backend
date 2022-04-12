@@ -172,7 +172,7 @@ fn should_rotate_when_forced() {
 }
 
 #[test]
-fn should_rotate_at_epoch() {
+fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 	new_test_ext().execute_with(|| {
 		let new_bond = 10;
 		let new_validators = vec![1, 2];

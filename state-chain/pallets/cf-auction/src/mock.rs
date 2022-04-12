@@ -51,23 +51,6 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 	});
 }
 
-pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
-	let auction_result =
-		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
-
-	// TODO: This should not be in the Auctioneer pallet either
-	<AuctionPallet as Auctioneer>::update_backup_and_passive_states();
-
-	auction_result.winners.iter().for_each(|winner| {
-		<MockChainflipAccount as ChainflipAccount>::update_validator_account_data(winner);
-	});
-
-	MockEpochInfo::set_bond(auction_result.minimum_active_bid);
-	MockEpochInfo::set_validators(auction_result.winners.clone());
-
-	auction_result
-}
-
 pub fn last_event() -> mock::Event {
 	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }

@@ -13,7 +13,6 @@ impl ChainflipAccount for MockChainflipAccount {
 		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
 	}
 
-	// Only sets as BackupOrPassive, not Historic
 	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
 			let mut map = cell.borrow_mut();
