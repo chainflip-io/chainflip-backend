@@ -22,6 +22,7 @@ getrandom = { version = "0.2", features = ["js"], default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 nanorand = { version = '0.6', default-features = false, features = ['wyrand']}
+serde = { version = "1.0.126", optional = true, features = ['derive'] }
 
 # Chainflip local dependencies
 cf-traits = { path = "../traits", default-features = false }
@@ -234,6 +235,7 @@ std = [
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment/std',
+  'serde',
   'sp-api/std',
   'sp-block-builder/std',
   'sp-consensus-aura/std',

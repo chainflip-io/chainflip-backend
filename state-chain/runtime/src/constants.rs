@@ -42,8 +42,11 @@ pub mod common {
 	pub const VALIDATOR_EMISSION_INFLATION_BPS: u32 = 1000;
 	pub const BACKUP_VALIDATOR_EMISSION_INFLATION_BPS: u32 = 100;
 
+	/// The number of blocks to wait for a threshold signature ceremony to complete.
+	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 = 15;
+
 	/// The maximum number of blocks to wait for a keygen to complete.
-	pub const KEYGEN_RESPONSE_GRACE_PERIOD_BLOCKS: u32 = 150; // 150 * 6 == 900 seconds(15 minutes)
+	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = 150; // 150 * 6 == 900 seconds(15 minutes)
 
 	/// The maximum number of broadcast attempts
 	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
@@ -53,4 +56,8 @@ pub mod common {
 
 	/// Percent of the epoch we are allowed to claim
 	pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
+
+	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
+	/// equivalent to 15 minutes.
+	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
 }

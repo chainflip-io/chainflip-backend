@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, AttemptCount, Instance1, SignerNomination};
+use crate::{
+	self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence, SignerNomination,
+};
 use cf_chains::mocks::{MockApiCall, MockEthereum, MockTransactionBuilder};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, threshold_signer::MockThresholdSigner},
@@ -63,8 +65,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_offence_reporting!(u64);
-
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
@@ -99,9 +99,13 @@ parameter_types! {
 	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
+	type Offence = PalletOffence;
 	type TargetChain = MockEthereum;
 	type ApiCall = MockApiCall<MockEthereum>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;

@@ -16,11 +16,10 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offence_reporting::{Offence, OffenceReporter},
-	AsyncResult, AuctionResult, Auctioneer, ChainflipAccount, ChainflipAccountData,
-	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyValidator, SuccessOrFailure,
-	VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
+	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyValidator, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -33,7 +32,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use cf_traits::Bonding;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -94,6 +93,12 @@ impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
 
 type ValidatorIdOf<T> = <T as frame_system::Config>::AccountId;
 type VanityName = Vec<u8>;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	MissedAuthorshipSlot,
+}
+
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 pub type Percentage = u8;
@@ -118,6 +123,9 @@ pub mod pallet {
 	{
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The top-level offence type must support this pallet's offence type.
+		type Offence: From<PalletOffence>;
 
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId = ValidatorIdOf<Self>>;
@@ -145,7 +153,10 @@ pub mod pallet {
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
 
 		/// For reporting missed authorship slots.
-		type OffenceReporter: OffenceReporter<ValidatorId = ValidatorIdOf<Self>>;
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = ValidatorIdOf<Self>,
+			Offence = Self::Offence,
+		>;
 
 		/// The range of online validators we would trigger an emergency rotation
 		#[pallet::constant]
@@ -211,11 +222,11 @@ pub mod pallet {
 
 			// Punish any validators that missed their authorship slot.
 			for slot in T::MissedAuthorshipSlots::missed_slots() {
-				let validator_index = slot % <Self as EpochInfo>::active_validator_count() as u64;
+				let validator_index = slot % <Self as EpochInfo>::current_validator_count() as u64;
 				if let Some(id) =
 					<Self as EpochInfo>::current_validators().get(validator_index as usize)
 				{
-					T::OffenceReporter::report(Offence::MissedAuthorshipSlot, id);
+					T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 				} else {
 					log::error!(
 						"Invalid slot index {:?} when processing missed authorship slots.",
@@ -275,8 +286,13 @@ pub mod pallet {
 				RotationStatus::VaultsRotated(auction_result) => {
 					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
-				RotationStatus::SessionRotating(auction_result) => {
-					T::Auctioneer::update_validator_status(&auction_result.winners);
+				RotationStatus::SessionRotating(_) => {
+					// TODO: Remove update_backup_and_passive_states and move it somewhere it makes
+					// sense Just removing it means that on a rotation, the nodes that were
+					// validators do not get moved to backup state. This then impacts some
+					// integration tests which check the state in order to determine if a node
+					// should submit a witness or not
+					T::Auctioneer::update_backup_and_passive_states();
 					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -545,10 +561,22 @@ pub mod pallet {
 	#[pallet::getter(fn current_epoch)]
 	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
-	/// Active validator lookup
+	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
-	#[pallet::getter(fn validator_lookup)]
-	pub type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, ()>;
+	#[pallet::getter(fn validator_index)]
+	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EpochIndex,
+		Blake2_128Concat,
+		<T as frame_system::Config>::AccountId,
+		u16,
+	>;
+
+	/// Track epochs and their associated validator count
+	#[pallet::storage]
+	#[pallet::getter(fn epoch_validator_count)]
+	pub type EpochValidatorCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
@@ -642,19 +670,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			use cf_traits::ChainflipAccountState;
-
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
 			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-
-			for validator_id in &genesis_validators {
-				T::ChainflipAccount::update_state(
-					&(validator_id.clone()),
-					ChainflipAccountState::Validator,
-				)
-			}
 
 			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
 		}
@@ -673,8 +692,12 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		Validators::<T>::get()
 	}
 
-	fn is_validator(account: &Self::ValidatorId) -> bool {
-		ValidatorLookup::<T>::contains_key(account)
+	fn current_validator_count() -> u32 {
+		Validators::<T>::decode_len().unwrap_or_default() as u32
+	}
+
+	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
+		ValidatorIndex::<T>::get(epoch_index, account)
 	}
 
 	fn bond() -> Self::Amount {
@@ -704,8 +727,18 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		last_block_for_claims <= current_block_number
 	}
 
-	fn active_validator_count() -> u32 {
-		Validators::<T>::decode_len().unwrap_or_default() as u32
+	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
+		EpochValidatorCount::<T>::get(epoch)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16) {
+		ValidatorIndex::<T>::insert(epoch_index, account, index);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_count_for_epoch(epoch_index: EpochIndex, count: u32) {
+		EpochValidatorCount::<T>::insert(epoch_index, count);
 	}
 }
 
@@ -728,20 +761,21 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(new_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
-		let old_validators = Validators::<T>::get();
-		// Update state of current validators
-		Validators::<T>::set(new_validators.to_vec());
-		ValidatorLookup::<T>::remove_all(None);
-		for validator in new_validators {
-			ValidatorLookup::<T>::insert(validator, ());
-		}
-
+	fn start_new_epoch(epoch_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
 			(*epoch - 1, *epoch)
 		});
+
+		// Update state of current validators
+		Validators::<T>::set(epoch_validators.to_vec());
+
+		epoch_validators.iter().enumerate().for_each(|(index, account_id)| {
+			ValidatorIndex::<T>::insert(&new_epoch, account_id, index as u16);
+		});
+
+		EpochValidatorCount::<T>::insert(new_epoch, epoch_validators.len() as u32);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);
@@ -757,27 +791,28 @@ impl<T: Config> Pallet<T> {
 		// If we were in an emergency, mark as completed
 		Self::emergency_rotation_completed();
 
-		// Emit that a new epoch will be starting
-		Self::deposit_event(Event::NewEpoch(new_epoch));
-
 		// Save the epoch -> validators map
-		HistoricalValidators::<T>::insert(new_epoch, new_validators);
+		HistoricalValidators::<T>::insert(new_epoch, epoch_validators);
 
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		for validator in new_validators.iter() {
+		for validator in epoch_validators.iter() {
 			// Remember in which epoch an validator was active
 			EpochHistory::<T>::activate_epoch(validator, new_epoch);
 			// Bond the validators
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
 			// Update validator account state.
-			ChainflipAccountStore::<T>::update_last_active_epoch(validator, new_epoch);
+			// Inline this????
+			ChainflipAccountStore::<T>::update_validator_account_data(validator, new_epoch);
 		}
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(&old_validators, new_validators);
+		T::EpochTransitionHandler::on_new_epoch(epoch_validators);
+
+		// Emit that a new epoch will be starting
+		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
 
 	fn expire_epoch(epoch: EpochIndex) {

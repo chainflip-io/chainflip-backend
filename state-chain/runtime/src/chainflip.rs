@@ -2,6 +2,8 @@
 pub mod chain_instances;
 pub mod epoch_transition;
 mod missed_authorship_slots;
+mod offences;
+pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
 use pallet_cf_flip::Surplus;
@@ -16,7 +18,6 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	offence_reporting::{Offence, ReputationPoints},
 	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	RewardsDistribution, StakeHandler, StakeTransfer,
 };
@@ -175,20 +176,6 @@ impl cf_traits::WaivedFees for WaivedFees {
 			return super::Governance::members().contains(caller)
 		}
 		false
-	}
-}
-
-pub struct OffencePenalty;
-
-impl cf_traits::offence_reporting::OffencePenalty for OffencePenalty {
-	fn penalty(condition: &Offence) -> (ReputationPoints, bool) {
-		match condition {
-			Offence::ParticipateSigningFailed => (15, true),
-			Offence::ParticipateKeygenFailed => (15, true),
-			Offence::InvalidTransactionAuthored => (15, false),
-			Offence::TransactionFailedOnTransmission => (15, false),
-			Offence::MissedAuthorshipSlot => (15, true),
-		}
 	}
 }
 

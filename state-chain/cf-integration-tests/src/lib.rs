@@ -10,9 +10,9 @@ mod tests {
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
 	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
-		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, EthereumVault,
-		Flip, Governance, Online, Origin, Reputation, Runtime, Session, Staking, System, Timestamp,
-		Validator,
+		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
+		Emissions, EthereumVault, Flip, Governance, Online, Origin, Reputation, Runtime, Session,
+		Staking, System, Timestamp, Validator,
 	};
 
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
@@ -48,6 +48,7 @@ mod tests {
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+		// TODO: Can we use the actual events here?
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
 		pub enum ContractEvent {
@@ -92,22 +93,27 @@ mod tests {
 			}
 		}
 
-		pub struct Signer {
+		pub struct ThresholdSigner {
 			agg_secret_key: SecretKey,
 			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
 			key_seed: u64,
 			proposed_seed: Option<u64>,
 		}
 
-		impl Default for Signer {
+		impl Default for ThresholdSigner {
 			fn default() -> Self {
 				let key_seed = GENESIS_KEY;
 				let (agg_secret_key, _) = Self::generate_keypair(key_seed);
-				Signer { agg_secret_key, signatures: HashMap::new(), key_seed, proposed_seed: None }
+				ThresholdSigner {
+					agg_secret_key,
+					signatures: HashMap::new(),
+					key_seed,
+					proposed_seed: None,
+				}
 			}
 		}
 
-		impl Signer {
+		impl ThresholdSigner {
 			// Sign message with current key, caches signatures
 			pub fn sign(
 				&mut self,
@@ -174,13 +180,20 @@ mod tests {
 		pub struct Engine {
 			pub node_id: NodeId,
 			pub active: bool,
-			pub signer: Rc<RefCell<Signer>>,
+			// conveniently creates a threshold "signature" (not really)
+			// all engines have the same one, so they create the same sig
+			pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
 			pub engine_state: EngineState,
 		}
 
 		impl Engine {
-			fn new(node_id: NodeId, signer: Rc<RefCell<Signer>>) -> Self {
-				Engine { node_id, active: true, signer, engine_state: EngineState::None }
+			fn new(node_id: NodeId, signer: Rc<RefCell<ThresholdSigner>>) -> Self {
+				Engine {
+					node_id,
+					active: true,
+					threshold_signer: signer,
+					engine_state: EngineState::None,
+				}
 			}
 
 			fn state(&self) -> ChainflipAccountState {
@@ -218,7 +231,7 @@ mod tests {
 							Event::Validator(
 								// A new epoch
 								pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-									(&*self.signer).borrow_mut().rotate_keys();
+									(&*self.threshold_signer).borrow_mut().rotate_keys();
 							},
 							Event::EthereumThresholdSigner(
 								// A signature request
@@ -231,12 +244,11 @@ mod tests {
 								// Participate in signing ceremony if requested.
 								// We only need one node to submit the unsigned transaction.
 								if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
-									// Sign with current key
-									let verification_components = (&*self.signer).borrow_mut().sign(payload);
 									state_chain_runtime::EthereumThresholdSigner::signature_success(
 										Origin::none(),
 										*ceremony_id,
-										verification_components,
+										// Sign with current key
+										(&*self.threshold_signer).borrow_mut().sign(payload),
 									).expect("should be able to submit threshold signature for Ethereum");
 								} };
 							},
@@ -245,16 +257,11 @@ mod tests {
 								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 									if let EngineState::Rotation = self.engine_state {
 										// If we rotating let's witness the keys being rotated on the contract
-										let ethereum_block_number: u64 = 100;
-										let tx_hash = [1u8; 32];
-
-										let public_key = (&*self.signer).borrow_mut().proposed_public_key();
-
 										state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
 											Origin::signed(self.node_id.clone()),
-											public_key,
-											ethereum_block_number,
-											tx_hash.into(),
+											(&*self.threshold_signer).borrow_mut().proposed_public_key(),
+											100,
+											[1u8; 32].into(),
 										).expect("should be able to vault key rotation for node");
 									}
 							},
@@ -274,13 +281,11 @@ mod tests {
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, validators)) => {
 								if validators.contains(&self.node_id) {
-									// Propose a new key
-									let public_key = (&*self.signer).borrow_mut().propose_new_public_key();
-
 									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
-										KeygenOutcome::Success(public_key),
+										// Propose a new key
+										KeygenOutcome::Success((&*self.threshold_signer).borrow_mut().propose_new_public_key()),
 									).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 								}
 						},
@@ -300,6 +305,11 @@ mod tests {
 					}
 				}
 			}
+		}
+
+		pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId, seed: &str) {
+			setup_account(node_id, seed);
+			setup_peer_mapping(node_id, seed);
 		}
 
 		// Create an account, generate and register the session keys
@@ -337,82 +347,65 @@ mod tests {
 			pub stake_manager_contract: StakingContract,
 			last_event: usize,
 			node_counter: u32,
-			pub signer: Rc<RefCell<Signer>>,
+
+			// Used to initialised the threshold signers of the engines added
+			pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
 		}
 
 		impl Network {
 			pub fn next_node_id(&mut self) -> NodeId {
 				self.node_counter += 1;
-				// TODO improve this to not overflow
 				[self.node_counter as u8; 32].into()
 			}
 
 			// Create a network which includes the validators in genesis of number of nodes
 			// and return a network and sorted list of nodes within
-			pub fn create(number_of_nodes: u8, nodes_to_include: &[NodeId]) -> (Self, Vec<NodeId>) {
+			pub fn create(
+				number_of_passive_nodes: u8,
+				existing_nodes: &[NodeId],
+			) -> (Self, Vec<NodeId>) {
 				let mut network: Network = Default::default();
 
 				// Include any nodes already *created* to the test network
-				for node in nodes_to_include {
-					network.add_node(node);
+				for node in existing_nodes {
+					network.add_engine(node);
+					// Only need to setup peer mapping as the AccountInfo is already set up if they
+					// are genesis nodes
 					setup_peer_mapping(node, &node.clone().to_string());
 				}
 
-				let remaining_nodes = number_of_nodes.saturating_sub(nodes_to_include.len() as u8);
-
-				let mut nodes = Vec::new();
-				for _ in 0..remaining_nodes {
+				// Create the passive nodes
+				let mut passive_nodes = Vec::new();
+				for _ in 0..number_of_passive_nodes {
 					let node_id = network.next_node_id();
-					nodes.push(node_id.clone());
+					passive_nodes.push(node_id.clone());
 					let seed = node_id.clone().to_string();
-					setup_account(&node_id, &seed);
-					setup_peer_mapping(&node_id, &seed);
-					network
-						.engines
-						.insert(node_id.clone(), Engine::new(node_id, network.signer.clone()));
+					setup_account_and_peer_mapping(&node_id, &seed);
+					network.engines.insert(
+						node_id.clone(),
+						Engine::new(node_id, network.threshold_signer.clone()),
+					);
 				}
 
-				nodes.append(&mut nodes_to_include.to_vec());
-				nodes.sort();
-				(network, nodes)
-			}
-
-			pub fn filter_nodes(&self, state: ChainflipAccountState) -> Vec<NodeId> {
-				self.engines
-					.iter()
-					.filter_map(
-						|(node_id, engine)| {
-							if engine.state() == state {
-								Some(node_id)
-							} else {
-								None
-							}
-						},
-					)
-					.cloned()
-					.collect()
+				(network, passive_nodes)
 			}
 
 			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
 				self.engines.get_mut(node_id).expect("valid node_id").active = active;
 			}
 
-			pub fn create_node(&mut self) -> NodeId {
+			pub fn create_engine(&mut self) -> NodeId {
 				let node_id = self.next_node_id();
-				self.add_node(&node_id);
+				self.add_engine(&node_id);
 				node_id
 			}
 
-			// Adds a node which doesn't have its session keys set
-			pub fn add_node(&mut self, node_id: &NodeId) {
+			// TODO: This seems like a pointless abstraction
+			// Adds an engine to the test network
+			pub fn add_engine(&mut self, node_id: &NodeId) {
 				self.engines.insert(
 					node_id.clone(),
-					Engine {
-						node_id: node_id.clone(),
-						active: true,
-						signer: self.signer.clone(),
-						engine_state: EngineState::None,
-					},
+					Engine::new(node_id.clone(), self.threshold_signer.clone()),
 				);
 			}
 
@@ -602,6 +595,7 @@ mod tests {
 
 			pallet_cf_reputation::GenesisConfig::<Runtime> {
 				accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+				penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
 			}
 			.assimilate_storage(storage)
 			.unwrap();
@@ -615,7 +609,7 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			let (_, public_key) = network::Signer::generate_keypair(GENESIS_KEY);
+			let (_, public_key) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 			GenesisBuild::<Runtime, _>::assimilate_storage(
@@ -648,7 +642,6 @@ mod tests {
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
-		pub const NUMBER_OF_VALIDATORS: u32 = 3;
 
 		pub fn default() -> ExtBuilder {
 			ExtBuilder::default()
@@ -708,10 +701,11 @@ mod tests {
 					"epochs will not rotate automatically from genesis"
 				);
 
+				let current_epoch = Validator::current_epoch();
+
 				for account in accounts.iter() {
-					assert_eq!(
-						Validator::validator_lookup(account),
-						Some(()),
+					assert!(
+						Validator::validator_index(current_epoch, account).is_some(),
 						"validator is present in lookup"
 					);
 				}
@@ -747,7 +741,7 @@ mod tests {
 				for account in accounts.iter() {
 					assert_eq!(
 						Reputation::reputation(account),
-						pallet_cf_reputation::Reputation::<BlockNumber>::default(),
+						pallet_cf_reputation::ReputationTracker::<Runtime>::default(),
 						"validator shouldn't have reputation points"
 					);
 				}
@@ -770,7 +764,7 @@ mod tests {
 
 	mod epoch {
 		use super::{genesis::GENESIS_BALANCE, *};
-		use crate::tests::network::{setup_account, setup_peer_mapping};
+		use crate::tests::network::setup_account_and_peer_mapping;
 		use cf_traits::{
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
 		};
@@ -800,9 +794,10 @@ mod tests {
 				.min_validators(5)
 				.build()
 				.execute_with(|| {
-					// A network with a set of passive nodes
-					let (mut testnet, nodes) =
-						network::Network::create(8, &Validator::current_validators());
+					let mut nodes = Validator::current_validators();
+					let (mut testnet, mut passive_nodes) = network::Network::create(3, &nodes);
+
+					nodes.append(&mut passive_nodes);
 
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
@@ -846,11 +841,15 @@ mod tests {
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
-					assert_eq!(2, Validator::epoch_index());
+					// The rotation can now continue to the next phase.
+					assert!(matches!(
+						Validator::rotation_phase(),
+						RotationStatus::AwaitingVaults(..)
+					));
 				});
 		}
 
-		#[allow(dead_code)]
+		#[test]
 		// An epoch has completed.  We have a genesis where the blocks per epoch are
 		// set to 100
 		// - When the epoch is reached an auction is started and completed
@@ -860,25 +859,33 @@ mod tests {
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
-			const ACTIVE_SET_SIZE: u32 = 5;
+			const MAX_SET_SIZE: u32 = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(ACTIVE_SET_SIZE)
+				.max_validators(MAX_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					// A network with a set of passive nodes
-					let (mut testnet, nodes) = network::Network::create(
-						ACTIVE_SET_SIZE as u8,
-						&Validator::current_validators(),
-					);
-					// Add two nodes which don't have session keys
-					let keyless_nodes = vec![testnet.create_node(), testnet.create_node()];
+					// Genesis nodes
+					let mut nodes = Validator::current_validators();
+
+					let number_of_passive_nodes = MAX_SET_SIZE
+						.checked_sub(nodes.len() as u32)
+						.expect("Max set size must be at least the number of genesis validators");
+
+					let (mut testnet, mut passive_nodes) =
+						network::Network::create(number_of_passive_nodes as u8, &nodes);
+
+					nodes.append(&mut passive_nodes);
+					assert_eq!(nodes.len() as u32, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
 						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
 					}
+
+					// Add two nodes which don't have session keys
+					let keyless_nodes = vec![testnet.create_engine(), testnet.create_engine()];
 					// Our keyless nodes also stake
 					for keyless_node in &keyless_nodes {
 						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
@@ -886,11 +893,10 @@ mod tests {
 
 					// A late staker which we will use after the auction.  They are yet to stake
 					// and will do after the auction with the intention of being a backup validator
-					let late_staker = testnet.create_node();
+					let late_staker = testnet.create_engine();
 					testnet.set_active(&late_staker, true);
 					let seed = late_staker.to_string();
-					setup_account(&late_staker, &seed);
-					setup_peer_mapping(&late_staker, &seed);
+					setup_account_and_peer_mapping(&late_staker, &seed);
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
@@ -921,10 +927,11 @@ mod tests {
 
 					let mut winners = Validator::validators();
 					winners.sort();
+					nodes.sort();
 					assert_eq!(
 						winners,
 						nodes,
-						"the new winners should be those genesis validators and the new nodes created in test"
+						"the new winners should be those genesis validators and the passive nodes that have keys"
 					);
 
 					let mut new_validators = Validator::current_validators();
@@ -1002,11 +1009,12 @@ mod tests {
 				.max_validators(MAX_VALIDATORS)
 				.build()
 				.execute_with(|| {
+					let mut nodes = Validator::current_validators();
 					// Create the test network with some fresh nodes and the genesis validators
-					let (mut testnet, nodes) = network::Network::create(
-						MAX_VALIDATORS as u8,
-						&Validator::current_validators(),
-					);
+					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
+
+					nodes.append(&mut passive_nodes);
+
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
@@ -1120,11 +1128,14 @@ mod tests {
 
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
-		use cf_traits::{ChainflipAccountState, EpochInfo, FlipBalance, IsOnline, StakeTransfer};
+		use cf_traits::{
+			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, FlipBalance,
+			IsOnline, StakeTransfer,
+		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
-			Validator,
+			Runtime, Validator,
 		};
 		use std::collections::HashMap;
 
@@ -1138,29 +1149,24 @@ mod tests {
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_VALIDATORS: u32 = 10;
-			const BACKUP_VALDATORS: u32 = genesis::NUMBER_OF_VALIDATORS;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_validators(MAX_VALIDATORS)
 				.build()
 				.execute_with(|| {
-					// Create MAX_VALIDATORS nodes and stake them above our genesis validators
-					// The result will be our newly created nodes will be validators and the
-					// genesis validators will become backup validators
+					// Create MAX_VALIDATORS passive nodes and stake them above our genesis
+					// validators The result will be our newly created nodes will be validators and
+					// the genesis validators will become backup validators
 					let mut genesis_validators = Validator::current_validators();
-					let (mut testnet, _) = network::Network::create(
-						(MAX_VALIDATORS + BACKUP_VALDATORS) as u8,
-						&genesis_validators,
-					);
+					let (mut testnet, mut init_passive_nodes) =
+						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
 
-					let mut passive_nodes = testnet.filter_nodes(ChainflipAccountState::Passive);
-					let active_nodes = testnet.filter_nodes(ChainflipAccountState::Validator);
 					// An initial stake which is superior to the genesis stakes
 					// The current validators would have been rewarded on us leaving the current
 					// epoch so let's up the stakes for the passive nodes.
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
-					for node in &passive_nodes {
+					for node in &init_passive_nodes {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
 					}
 
@@ -1174,7 +1180,7 @@ mod tests {
 					);
 
 					// Activate the accounts
-					for node in [active_nodes, passive_nodes.clone()].concat() {
+					for node in [genesis_validators.clone(), init_passive_nodes.clone()].concat() {
 						network::Cli::activate_account(node);
 					}
 
@@ -1190,12 +1196,19 @@ mod tests {
 					let mut current_validators: Vec<NodeId> = Validator::current_validators();
 
 					current_validators.sort();
-					passive_nodes.sort();
+					init_passive_nodes.sort();
 
 					assert_eq!(
-						passive_nodes, current_validators,
-						"our new testnet nodes should be the new validators"
+						init_passive_nodes, current_validators,
+						"our new initial passive nodes should be the new validators"
 					);
+
+					current_validators.iter().for_each(|account_id| {
+						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
+						assert_eq!(account_data.state, ChainflipAccountState::Validator);
+						// we were active in teh first epoch
+						assert_eq!(account_data.last_active_epoch, Some(2));
+					});
 
 					// assert list of backup validators as being the genesis validators
 					let mut current_backup_validators: Vec<NodeId> = Auction::remaining_bidders()
@@ -1211,6 +1224,13 @@ mod tests {
 						genesis_validators, current_backup_validators,
 						"we should have new backup validators"
 					);
+
+					current_backup_validators.iter().for_each(|account_id| {
+						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
+						assert_eq!(account_data.state, ChainflipAccountState::Backup);
+						// we were active in teh first epoch
+						assert_eq!(account_data.last_active_epoch, Some(1));
+					});
 
 					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
 						current_backup_validators
@@ -1233,7 +1253,7 @@ mod tests {
 				});
 		}
 
-		#[allow(dead_code)]
+		#[test]
 		// A network is created with a set of validators and backup validators.
 		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
 		// with 20% going offline and forcing an emergency rotation in which a new set of validators
@@ -1252,10 +1272,11 @@ mod tests {
 				.max_validators(MAX_VALIDATORS)
 				.build()
 				.execute_with(|| {
-					let (mut testnet, nodes) = network::Network::create(
-						MAX_VALIDATORS as u8,
-						&Validator::current_validators(),
-					);
+					let mut nodes = Validator::current_validators();
+					let (mut testnet, mut passive_nodes) =
+						network::Network::create(MAX_VALIDATORS as u8, &nodes);
+
+					nodes.append(&mut passive_nodes);
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
@@ -1361,14 +1382,16 @@ mod tests {
 		use pallet_cf_validator::EpochHistory;
 		use state_chain_runtime::Validator;
 
+		// TODO: Rename
 		// Helper function that checks the epochs of a validator against a list of expected
 		// epochs
 		fn ensure_epoch_activity(account: &AccountId, epochs: Vec<EpochIndex>) {
-			let active_epochs = EpochHistory::<Runtime>::active_epochs_for_validator(account);
-			assert_eq!(epochs.len(), active_epochs.len(), "different list size!");
-			for epoch in epochs {
-				assert!(active_epochs.contains(&epoch), "missing epoch!");
-			}
+			assert_eq!(
+				EpochHistory::<Runtime>::active_epochs_for_validator(account),
+				epochs,
+				"The active epochs for the validator should be {:?}",
+				epochs
+			);
 		}
 
 		// This should be the normal scenario. We define a network with a smaller active set size
@@ -1391,30 +1414,33 @@ mod tests {
 				.max_validators(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					let (mut testnet, nodes) =
-						network::Network::create(5_u8, &Validator::current_validators());
+					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
+					let current_validators = Validator::current_validators();
+					let (mut testnet, passive_nodes) =
+						network::Network::create(2, &current_validators);
 					// Define 5 nodes
-					let node_1 = nodes.get(0).unwrap();
-					let node_2 = nodes.get(1).unwrap();
-					let node_3 = nodes.get(2).unwrap();
-					let node_4 = nodes.get(3).unwrap();
-					let node_5 = nodes.get(4).unwrap();
+					let genesis_node_1 = current_validators.get(0).unwrap();
+					let genesis_node_2 = current_validators.get(1).unwrap();
+					let genesis_node_3 = current_validators.get(2).unwrap();
+					let init_passive_node_1 = passive_nodes.get(0).unwrap();
+					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
 					// Activate accounts
-					network::Cli::activate_account(node_1.clone());
-					network::Cli::activate_account(node_2.clone());
-					network::Cli::activate_account(node_3.clone());
-					network::Cli::activate_account(node_4.clone());
-					network::Cli::activate_account(node_5.clone());
+					network::Cli::activate_account(genesis_node_1.clone());
+					network::Cli::activate_account(genesis_node_2.clone());
+					network::Cli::activate_account(genesis_node_3.clone());
+					network::Cli::activate_account(init_passive_node_1.clone());
+					network::Cli::activate_account(init_passive_node_2.clone());
 
 					// Stake the nodes
-					testnet.stake_manager_contract.stake(node_1.clone(), 100);
-					testnet.stake_manager_contract.stake(node_2.clone(), 50);
-					testnet.stake_manager_contract.stake(node_3.clone(), 30);
-					testnet.stake_manager_contract.stake(node_4.clone(), 20);
-					testnet.stake_manager_contract.stake(node_5.clone(), 10);
+					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 99);
+					testnet.stake_manager_contract.stake(genesis_node_2.clone(), 50);
+					testnet.stake_manager_contract.stake(genesis_node_3.clone(), 30);
+					testnet.stake_manager_contract.stake(init_passive_node_1.clone(), 20);
+					testnet.stake_manager_contract.stake(init_passive_node_2.clone(), 10);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					// TODO: Should we? we don't seem to be given we start in epoch 1
 					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
 					// Expect the MAB to be the genesis balance
 					assert_eq!(1, Validator::bond());
@@ -1425,40 +1451,42 @@ mod tests {
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
 
 					let current_validators = Validator::current_validators();
-					// Expect 3, 2 and 1 in the active set
-					assert!(current_validators.contains(node_1));
-					assert!(current_validators.contains(node_2));
-					assert!(current_validators.contains(node_3));
+					// Expect the genesis nodes in the active set, and only them
+					assert!(current_validators.contains(genesis_node_1));
+					assert!(current_validators.contains(genesis_node_2));
+					assert!(current_validators.contains(genesis_node_3));
+					assert_eq!(current_validators.len(), 3);
 
-					// Stake nodes 4/5 and bid out 2/3
-					testnet.stake_manager_contract.stake(node_4.clone(), 100);
-					testnet.stake_manager_contract.stake(node_5.clone(), 100);
+					// Stake the passive nodes
+					testnet.stake_manager_contract.stake(init_passive_node_1.clone(), 100);
+					testnet.stake_manager_contract.stake(init_passive_node_2.clone(), 100);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
 
-					// Bond has increased to 100
+					// Bond has increased to 100 after the passive nodes now have stakes of 120, and
+					// 110 the 3rd highest genesis node has a stake of 100 (99 + 1)
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
 
 					let current_validators = Validator::current_validators();
 					// Expect 1, 4 and 5 in the active set
-					assert!(current_validators.contains(node_1));
-					assert!(current_validators.contains(node_4));
-					assert!(current_validators.contains(node_5));
+					assert!(current_validators.contains(genesis_node_1));
+					assert!(current_validators.contains(init_passive_node_1));
+					assert!(current_validators.contains(init_passive_node_2));
 
 					// Check activity in epochs
-					ensure_epoch_activity(node_1, vec![2, 3]);
-					ensure_epoch_activity(node_2, vec![2]);
-					ensure_epoch_activity(node_3, vec![2]);
-					ensure_epoch_activity(node_4, vec![3]);
-					ensure_epoch_activity(node_5, vec![3]);
+					ensure_epoch_activity(genesis_node_1, vec![2, 3]);
+					ensure_epoch_activity(genesis_node_2, vec![2]);
+					ensure_epoch_activity(genesis_node_3, vec![2]);
+					ensure_epoch_activity(init_passive_node_1, vec![3]);
+					ensure_epoch_activity(init_passive_node_2, vec![3]);
 
-					// We expect node_1 to be bonded for the epoch with the higher bond
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_1));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_2));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_3));
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_4));
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_5));
+					// We expect genesis_node_1 to be bonded for the epoch with the higher bond
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_1));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(genesis_node_2));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(genesis_node_3));
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(init_passive_node_1));
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(init_passive_node_2));
 				});
 		}
 
@@ -1483,51 +1511,63 @@ mod tests {
 				.max_validators(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					let (mut testnet, nodes) =
-						network::Network::create(5_u8, &Validator::current_validators());
+					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
+					let current_validators = &Validator::current_validators();
+					let (mut testnet, passive_nodes) =
+						network::Network::create(2, current_validators);
 
 					// Define 5 nodes
-					let node_1 = nodes.get(0).unwrap();
-					let node_2 = nodes.get(1).unwrap();
-					let node_3 = nodes.get(2).unwrap();
-					let node_4 = nodes.get(3).unwrap();
-					let node_5 = nodes.get(4).unwrap();
+					let genesis_node_1 = current_validators.get(0).unwrap();
+					let genesis_node_2 = current_validators.get(1).unwrap();
+					let genesis_node_3 = current_validators.get(2).unwrap();
+					let init_passive_node_1 = passive_nodes.get(0).unwrap();
+					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
 					// Activate accounts
-					network::Cli::activate_account(node_1.clone());
-					network::Cli::activate_account(node_2.clone());
-					network::Cli::activate_account(node_3.clone());
-					network::Cli::activate_account(node_4.clone());
-					network::Cli::activate_account(node_5.clone());
+					network::Cli::activate_account(genesis_node_1.clone());
+					network::Cli::activate_account(genesis_node_2.clone());
+					network::Cli::activate_account(genesis_node_3.clone());
+					network::Cli::activate_account(init_passive_node_1.clone());
+					network::Cli::activate_account(init_passive_node_2.clone());
 
-					// Stake the first 3 nodes to be in the active set
-					testnet.stake_manager_contract.stake(node_1.clone(), 100);
-					testnet.stake_manager_contract.stake(node_2.clone(), 50);
-					testnet.stake_manager_contract.stake(node_3.clone(), 30);
+					// Stake a genesis node, and the passive nodes.
+					// They should have the highest stake now
+					// they are just sorted nodes from the network output function
+					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 30);
+					testnet.stake_manager_contract.stake(init_passive_node_1.clone(), 50);
+					testnet.stake_manager_contract.stake(init_passive_node_2.clone(), 100);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
+
+					// Is this true? - Why can we move forward, epoch blocks and not have increased
+					// an epoch number
+					assert_eq!(
+						1,
+						Validator::epoch_index(),
+						"We should still be in the first epoch"
+					);
 					// Expect the MAB to be the genesis balance
 					assert_eq!(1, Validator::bond());
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
 					let current_validators = Validator::current_validators();
 					// Expect the staked nodes to be in the active set
-					assert!(current_validators.contains(node_1));
-					assert!(current_validators.contains(node_2));
-					assert!(current_validators.contains(node_3));
+					assert!(current_validators.contains(genesis_node_1));
+					assert!(current_validators.contains(init_passive_node_1));
+					assert!(current_validators.contains(init_passive_node_2));
 
 					// Increase the active set size to simulate an decrease of the MAB
 					assert_ok!(
 						Auction::set_active_validator_range(RawOrigin::Root.into(), (4, 5),)
 					);
 
-					// Stake nodes 4 and 5 with a lower amount then the current MAB
-					testnet.stake_manager_contract.stake(node_4.clone(), 5);
-					testnet.stake_manager_contract.stake(node_5.clone(), 5);
+					// give the genesis nodes some extra stake (bringing their stake to 6
+					testnet.stake_manager_contract.stake(genesis_node_2.clone(), 5);
+					testnet.stake_manager_contract.stake(genesis_node_3.clone(), 5);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
@@ -1536,29 +1576,29 @@ mod tests {
 
 					let current_validators = Validator::current_validators();
 					// Expect all nodes to be in the active set
-					assert!(current_validators.contains(node_1));
-					assert!(current_validators.contains(node_2));
-					assert!(current_validators.contains(node_3));
-					assert!(current_validators.contains(node_4));
-					assert!(current_validators.contains(node_5));
+					assert!(current_validators.contains(genesis_node_1));
+					assert!(current_validators.contains(genesis_node_2));
+					assert!(current_validators.contains(genesis_node_3));
+					assert!(current_validators.contains(init_passive_node_1));
+					assert!(current_validators.contains(init_passive_node_2));
 
 					// Expect Node 1, 2 and 3 to be active in 2 epochs
-					ensure_epoch_activity(node_1, vec![2, 3]);
-					ensure_epoch_activity(node_2, vec![2, 3]);
-					ensure_epoch_activity(node_3, vec![2, 3]);
+					ensure_epoch_activity(genesis_node_1, vec![2, 3]);
+					ensure_epoch_activity(init_passive_node_1, vec![2, 3]);
+					ensure_epoch_activity(init_passive_node_2, vec![2, 3]);
 
 					// Expect node 3 and 4 to be active in 1 epoch
-					ensure_epoch_activity(node_4, vec![3]);
-					ensure_epoch_activity(node_5, vec![3]);
+					ensure_epoch_activity(genesis_node_2, vec![3]);
+					ensure_epoch_activity(genesis_node_3, vec![3]);
 
 					// Expect node 1, 2 and 3 to be be bonded for epoch 2
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_1));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_2));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(node_3));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(genesis_node_1));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(init_passive_node_1));
+					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(init_passive_node_2));
 
 					// Expect node 1 and 2 to bonded for epoch 3
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_4));
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(node_5));
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_2));
+					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_3));
 				});
 		}
 	}

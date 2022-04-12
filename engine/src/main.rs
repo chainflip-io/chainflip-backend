@@ -12,7 +12,7 @@ use chainflip_engine::{
 };
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
-use sp_core::{storage::StorageKey, U256};
+use sp_core::U256;
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -91,16 +91,11 @@ async fn main() {
     {
         // ensure configured eth node is pointing to the correct chain id
         let chain_id_from_sc = U256::from(state_chain_client
-        .get_storage_value::<u64>(
-            latest_block_hash,
-            StorageKey(
-                pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
-                )
-                .into(),
-            ),
-        )
-        .await
-        .expect("Should get EthereumChainId from SC"));
+            .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
+                latest_block_hash,
+            )
+            .await
+            .expect("Should get EthereumChainId from SC"));
 
         let chain_id_from_eth_ws = eth_ws_rpc_client
             .chain_id()
@@ -116,18 +111,18 @@ async fn main() {
         if chain_id_from_sc != chain_id_from_eth_ws {
             slog::error!(
                 &root_logger,
-                "The WS (ChainId: {}) ETH node is pointing to the wrong chain id (HTTP node is correct (ChainId: {}).",
+                "The WS ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
                 chain_id_from_eth_ws,
-                chain_id_from_eth_http,
+                chain_id_from_sc,
             );
             has_wrong_chain_id = true;
         }
         if chain_id_from_sc != chain_id_from_eth_http {
             slog::error!(
                 &root_logger,
-                "The HTTP (ChainId: {}) ETH node is pointing to the wrong chain id (WS node is correct (ChainId: {}).",
+                "The HTTP ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
                 chain_id_from_eth_http,
-                chain_id_from_eth_ws,
+                chain_id_from_sc,
             );
             has_wrong_chain_id = true;
         }
@@ -137,26 +132,23 @@ async fn main() {
     }
 
     let stake_manager_address = state_chain_client
-        .get_storage_value(
-            latest_block_hash,
-            StorageKey(pallet_cf_environment::StakeManagerAddress::<
-                state_chain_runtime::Runtime,
-            >::hashed_key().into()),
-        )
+        .get_storage_value::<pallet_cf_environment::StakeManagerAddress::<
+            state_chain_runtime::Runtime,
+        >>(latest_block_hash)
         .await
         .expect("Should get StakeManager address from SC");
-    let stake_manager_contract =
-        StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
+    let stake_manager_contract = StakeManager::new(stake_manager_address.into())
+        .expect("Should create StakeManager contract");
 
     let key_manager_address = state_chain_client
-        .get_storage_value(latest_block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
+        .get_storage_value::<pallet_cf_environment::KeyManagerAddress::<
             state_chain_runtime::Runtime,
-        >::hashed_key().into()))
+        >>(latest_block_hash)
         .await
         .expect("Should get KeyManager address from SC");
 
     let key_manager_contract =
-        KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
+        KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
 
     let (multisig_client, multisig_client_backend_future) = multisig::start_client(
         state_chain_client.our_account_id.clone(),

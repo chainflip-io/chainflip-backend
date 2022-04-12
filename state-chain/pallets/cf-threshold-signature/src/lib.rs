@@ -17,8 +17,8 @@ use codec::{Decode, Encode};
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
-	offence_reporting::{Offence, OffenceReporter},
-	AsyncResult, CeremonyIdProvider, Chainflip, KeyProvider, SignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, KeyProvider,
+	SignerNomination,
 };
 use frame_support::{
 	ensure,
@@ -51,6 +51,11 @@ type AttemptCount = u32;
 
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	ParticipateSigningFailed,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -132,6 +137,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// The top-level offence type must support this pallet's offence type.
+		type Offence: From<PalletOffence>;
+
 		/// The top-level origin type of the runtime.
 		type RuntimeOrigin: From<Origin<Self, I>>
 			+ IsType<<Self as frame_system::Config>::Origin>
@@ -152,7 +160,10 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 
 		/// For reporting bad actors.
-		type OffenceReporter: OffenceReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = <Self as Chainflip>::ValidatorId,
+			Offence = Self::Offence,
+		>;
 
 		/// CeremonyId source.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
@@ -271,9 +282,10 @@ pub mod pallet {
 				{
 					num_retries += 1;
 					// Report the offenders.
-					for offender in failed_ceremony_context.offenders() {
-						T::OffenceReporter::report(Offence::ParticipateSigningFailed, &offender);
-					}
+					T::OffenceReporter::report_many(
+						PalletOffence::ParticipateSigningFailed,
+						failed_ceremony_context.offenders().as_slice(),
+					);
 
 					// Clean up old ceremony and start a new one.
 					if let Some((request_id, attempt, payload)) =

@@ -1,8 +1,5 @@
 use crate::{self as pallet_cf_witness};
-use cf_traits::{
-	mocks::{self, epoch_info::MockEpochInfo},
-	EpochTransitionHandler,
-};
+use cf_traits::mocks::{self, epoch_info::MockEpochInfo};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -78,24 +75,22 @@ impl dummy::Config for Test {
 	type Witnesser = pallet_cf_witness::Pallet<Test>;
 }
 
-pub const ALISSA: <Test as frame_system::Config>::AccountId = 123u64;
-pub const BOBSON: <Test as frame_system::Config>::AccountId = 456u64;
-pub const CHARLEMAGNE: <Test as frame_system::Config>::AccountId = 789u64;
-pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 987u64;
+pub const ALISSA: <Test as frame_system::Config>::AccountId = 1u64;
+pub const BOBSON: <Test as frame_system::Config>::AccountId = 2u64;
+pub const CHARLEMAGNE: <Test as frame_system::Config>::AccountId = 3u64;
+pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 4u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
 		system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
-	const VALIDATORS: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
-	MockEpochInfo::set_validators(VALIDATORS.to_vec());
+	const GENESIS_VALIDATORS: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
 
 	ext.execute_with(|| {
 		// This is required to log events.
 		System::set_block_number(1);
-		MockEpochInfo::incr_epoch();
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &VALIDATORS);
+		MockEpochInfo::next_epoch(GENESIS_VALIDATORS.to_vec());
 	});
 
 	ext

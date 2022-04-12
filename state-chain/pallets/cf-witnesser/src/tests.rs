@@ -1,8 +1,8 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
-	Error, VoteMask, Votes,
+	CallHash, Error, VoteMask, Votes,
 };
-use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
+use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo};
 use frame_support::{assert_noop, assert_ok, Hashable};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
@@ -50,7 +50,7 @@ fn call_on_threshold() {
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
 
 		// Check the deposited event to get the vote count.
-		let call_hash = frame_support::Hashable::blake2_256(&*call);
+		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
 		let stored_vec =
 			Votes::<Test>::get(MockEpochInfo::epoch_index(), call_hash).unwrap_or_default();
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
@@ -115,7 +115,7 @@ fn delegated_call_should_emit_but_not_return_error() {
 
 		// The second witness should have triggered the failing call.
 		assert_event_sequence::<Test>(vec![crate::Event::<Test>::WitnessExecuted(
-			Hashable::blake2_256(&call),
+			CallHash(Hashable::blake2_256(&call)),
 			Err(pallet_dummy::Error::<Test>::NoneValue.into()),
 		)
 		.into()]);
@@ -126,18 +126,23 @@ fn delegated_call_should_emit_but_not_return_error() {
 fn can_continue_to_witness_for_old_epochs() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
-		// Run through a few epochs; 1, 2 and 3
-		MockEpochInfo::incr_epoch(); // 1 - Alice
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA]);
-		MockEpochInfo::incr_epoch(); // 2 - Alice
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[ALISSA]);
-		MockEpochInfo::incr_epoch(); // 3 - Bob
-		<Witnesser as EpochTransitionHandler>::on_new_epoch(&[], &[BOBSON]);
+
+		// These are ALISSA, BOBSON, CHARLEMAGNE
+		let mut current_validators = MockEpochInfo::current_validators();
+		// same validators for each epoch - we should change this though
+		MockEpochInfo::next_epoch(current_validators.clone());
+		MockEpochInfo::next_epoch(current_validators.clone());
+
+		// remove CHARLEMAGNE and add DEIRDRE
+		current_validators.pop();
+		current_validators.push(DEIRDRE);
+		assert_eq!(current_validators, vec![ALISSA, BOBSON, DEIRDRE]);
+		MockEpochInfo::next_epoch(current_validators);
 
 		let current_epoch = MockEpochInfo::epoch_index();
+		assert_eq!(current_epoch, 4);
 
-		// The last expired epoch
-		let expired_epoch = 1;
+		let expired_epoch = current_epoch - 3;
 		MockEpochInfo::set_last_expired_epoch(expired_epoch);
 
 		// Witness a call for one before the current epoch which has yet to expire
@@ -162,7 +167,7 @@ fn can_continue_to_witness_for_old_epochs() {
 		// Try to witness in a past epoch, which has yet to expire, and that we weren't a member
 		assert_noop!(
 			Witnesser::witness_at_epoch(
-				Origin::signed(BOBSON),
+				Origin::signed(DEIRDRE),
 				call.clone(),
 				current_epoch - 1,
 				Default::default()
@@ -172,13 +177,13 @@ fn can_continue_to_witness_for_old_epochs() {
 
 		// But can witness in an epoch we are in
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(BOBSON),
+			Origin::signed(DEIRDRE),
 			call.clone(),
 			current_epoch,
 			Default::default()
 		));
 
-		// And an epoch that doesn't yet exist
+		// And cannot witness in an epoch that doesn't yet exist
 		assert_noop!(
 			Witnesser::witness_at_epoch(
 				Origin::signed(ALISSA),
@@ -186,7 +191,7 @@ fn can_continue_to_witness_for_old_epochs() {
 				current_epoch + 1,
 				Default::default()
 			),
-			Error::<Test>::UnauthorisedWitness
+			Error::<Test>::InvalidEpoch
 		);
 	});
 }

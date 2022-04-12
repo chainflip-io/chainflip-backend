@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, RequestId,
+	Error, PalletOffence, RequestId,
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{AsyncResult, Chainflip};
@@ -238,7 +238,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 
 			// The offender has not yet been reported.
-			assert!(MockOffenceReporter::get_reported().is_empty());
+			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![]);
 
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
@@ -249,7 +249,7 @@ fn fail_path_with_timeout() {
 			assert!(MockEthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
-			assert_eq!(MockOffenceReporter::get_reported(), vec![1]);
+			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
 			let context = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);
@@ -300,7 +300,7 @@ fn fail_path_no_timeout() {
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
 
 			// The offender has not yet been reported.
-			assert!(MockOffenceReporter::get_reported().is_empty());
+			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![]);
 
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
@@ -311,7 +311,7 @@ fn fail_path_no_timeout() {
 			assert!(MockEthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// We did reach the reporting threshold, participant 1 was reported.
-			assert_eq!(MockOffenceReporter::get_reported(), vec![1]);
+			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
 			let pending = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);

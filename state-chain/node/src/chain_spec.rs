@@ -4,10 +4,10 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, CfeSettings,
-	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
-	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
+	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumVaultConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
@@ -126,6 +126,16 @@ pub fn get_environment() -> StateChainEnvironment {
 		max_extrinsic_retry_attempts,
 	}
 }
+
+/// The reputation penalty and suspension duration for each offence.
+const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
+	(Offence::ParticipateKeygenFailed, (15, u32::MAX)),
+	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::InvalidTransactionAuthored, (15, 0)),
+	(Offence::TransactionFailedOnTransmission, (15, 0)),
+];
 
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
@@ -572,7 +582,10 @@ fn testnet_genesis(
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
-		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
+		reputation: ReputationConfig {
+			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+			penalties: PENALTIES.to_vec(),
+		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),

@@ -14,12 +14,15 @@ use crate as pallet_cf_vaults;
 
 use super::*;
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
-use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, Chainflip};
+use cf_traits::{
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo},
+	Chainflip,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
-type ValidatorId = u64;
+pub type ValidatorId = u64;
 
 thread_local! {
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
@@ -68,15 +71,13 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-cf_traits::impl_mock_offence_reporting!(u64);
-
 impl Chainflip for MockRuntime {
 	type KeyId = Vec<u8>;
 	type ValidatorId = ValidatorId;
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type EpochInfo = MockEpochInfo;
 }
 
 pub struct MockCallback;
@@ -148,8 +149,12 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25;
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
+
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
+	type Offence = PalletOffence;
 	type Chain = MockEthereum;
 	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
@@ -173,6 +178,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 			deployment_block: 0,
 		},
 	};
+
+	MockEpochInfo::set_validators(vec![ALICE, BOB, CHARLIE]);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
