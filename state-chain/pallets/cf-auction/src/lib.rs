@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+mod auction_resolver;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
@@ -14,10 +15,11 @@ pub mod weights;
 
 pub use weights::WeightInfo;
 
+pub use auction_resolver::*;
 use cf_traits::{
-	ActiveValidatorRange, AuctionResult, Auctioneer, BackupOrPassive, BackupValidators,
-	BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	EpochInfo, QualifyValidator, RemainingBid, StakeHandler,
+	AuctionOutcome, Auctioneer, BackupOrPassive, BackupValidators, BidderProvider, Chainflip,
+	ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo, QualifyValidator,
+	RemainingBid, StakeHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -29,6 +31,8 @@ use sp_runtime::traits::One;
 use sp_std::{cmp::min, collections::btree_set::BTreeSet, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
+type ActiveValidatorRange = (u32, u32);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -113,6 +117,12 @@ pub mod pallet {
 	#[pallet::getter(fn highest_passive_node_bid)]
 	pub(super) type HighestPassiveNodeBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
+	/// Auction parameters.
+	#[pallet::storage]
+	#[pallet::getter(fn auction_parameters)]
+	pub(super) type AuctionParameters<T: Config> =
+		StorageValue<_, <ResolverV1<T> as AuctionResolver<T>>::AuctionParameters, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -179,91 +189,30 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Auctioneer for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
+impl<T: Config> Auctioneer<T> for Pallet<T> {
 	type Error = Error<T>;
 
-	// Resolve an auction.  Bids are taken and are qualified. In doing so a `AuctionResult` is
-	// returned with the winners of the auction and the MAB.  Unsuccessful bids are grouped for
-	// potential backup validator candidates.  If we are in an emergency rotation then the strategy
-	// of grouping is modified to avoid a superminority of low collateralised nodes.
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Error<T>> {
+	fn resolve_auction() -> Result<AuctionOutcome<T>, Error<T>> {
 		let mut bids = T::BidderProvider::get_bidders();
 		// Determine if this validator is qualified for bidding
 		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
 		let excluded = T::KeygenExclusionSet::get();
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
-		let number_of_bidders = bids.len() as u32;
-		let (min_number_of_validators, max_number_of_validators) =
-			ActiveValidatorSizeRange::<T>::get();
-		// Final rule - Confirm we have our set size
-		ensure!(number_of_bidders >= min_number_of_validators, {
-			log::error!(
-				"[cf-auction] insufficient bidders to proceed. {} < {}",
-				number_of_bidders,
-				min_number_of_validators
-			);
-			Error::<T>::NotEnoughBidders
-		});
 
-		bids.sort_unstable_by_key(|k| k.1);
-		bids.reverse();
+		let outcome = ResolverV1::resolve_auction(&ActiveValidatorSizeRange::<T>::get(), bids)?;
 
-		let mut target_validator_group_size =
-			min(max_number_of_validators, number_of_bidders) as usize;
-		let mut next_validator_group: Vec<_> =
-			bids.iter().take(target_validator_group_size as usize).collect();
+		// TODO Move this to validator pallet.
+		BackupGroupSize::<T>::put(outcome.losers.len() as u32);
+		RemainingBidders::<T>::put(&outcome.losers);
 
-		if T::EmergencyRotation::emergency_rotation_in_progress() {
-			// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
-			// of existing BVs in the validating set.  We ensure this by using the last
-			// MAB to understand who were BVs and ensure we only maintain the required
-			// amount under this level to avoid a superminority of low collateralised
-			// nodes.
-			if let Some(new_target_validator_group_size) = next_validator_group
-				.iter()
-				.position(|(_, amount)| amount < &T::EpochInfo::bond())
-			{
-				let number_of_existing_backup_validators = (target_validator_group_size -
-					new_target_validator_group_size) as u32 *
-					(T::ActiveToBackupValidatorRatio::get() - 1) /
-					T::ActiveToBackupValidatorRatio::get();
+		Self::deposit_event(Event::AuctionCompleted(outcome.winners.clone()));
 
-				let number_of_backup_validators_to_be_included =
-					(number_of_existing_backup_validators as u32)
-						.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get()) /
-						100;
-
-				target_validator_group_size = new_target_validator_group_size +
-					number_of_backup_validators_to_be_included as usize;
-
-				next_validator_group.truncate(target_validator_group_size);
-			}
-		}
-
-		let winners: Vec<_> = next_validator_group
-			.iter()
-			.map(|(validator_id, _)| (*validator_id).clone())
-			.collect();
-
-		let backup_group_size =
-			target_validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
-
-		let remaining_bidders: Vec<_> =
-			bids.iter().skip(target_validator_group_size as usize).collect();
-
-		RemainingBidders::<T>::put(remaining_bidders);
-		BackupGroupSize::<T>::put(backup_group_size);
-
-		Self::deposit_event(Event::AuctionCompleted(winners.clone()));
-
-		let minimum_active_bid =
-			next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
-
-		Ok(AuctionResult { winners, minimum_active_bid })
+		Ok(outcome)
 	}
+}
 
+// TODO Move this & associated storage to validator pallet.
+impl<T: Config> Pallet<T> {
 	// Update the state for backup and passive, as this can change every block
 	fn update_backup_and_passive_states() {
 		let remaining_bidders = RemainingBidders::<T>::get();

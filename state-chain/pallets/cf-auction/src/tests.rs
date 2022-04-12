@@ -7,13 +7,10 @@ fn should_provide_winning_set() {
 	new_test_ext().execute_with(|| {
 		generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 
-		let auction_result =
-			<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
+		let auction_outcome =
+			<AuctionPallet as Auctioneer<Test>>::resolve_auction().expect("the auction should run");
 
-		assert_eq!(
-			(auction_result.winners.clone(), auction_result.minimum_active_bid),
-			expected_winning_set()
-		);
+		assert_eq!((auction_outcome.winners.clone(), auction_outcome.bond), expected_winning_set());
 
 		assert_eq!(
 			last_event(),
@@ -21,11 +18,11 @@ fn should_provide_winning_set() {
 		);
 
 		generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
-		let AuctionResult { winners, minimum_active_bid, .. } =
+		let AuctionOutcome { winners, bond, .. } =
 			AuctionPallet::resolve_auction().expect("the auction should run");
 
 		assert_eq!(
-			(winners, minimum_active_bid),
+			(winners, bond),
 			expected_winning_set(),
 			"running subsequent auction with new bidders should new winners"
 		);
@@ -54,12 +51,12 @@ fn should_create_correct_size_of_groups() {
 		generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 		let auction_result = AuctionPallet::resolve_auction().expect("the auction should run");
 
-		let validate_bidder_groups = |result: AuctionResult<ValidatorId, Amount>| {
+		let validate_bidder_groups = |outcome: AuctionOutcome<Test>| {
 			let number_of_bidders = MockBidderProvider::get_bidders().len() as u32;
 			let (validators_size, backup_validators_size, passive_nodes_size) =
 				expected_group_sizes(number_of_bidders);
 
-			assert_eq!(validators_size, result.winners.len() as u32);
+			assert_eq!(validators_size, outcome.winners.len() as u32);
 
 			assert_eq!(backup_validators_size, AuctionPallet::backup_group_size());
 
@@ -275,7 +272,7 @@ fn should_exclude_bad_validators_in_next_auction() {
 
 		// Confirm we just have the good bidders in our new auction result
 		assert_eq!(
-			<AuctionPallet as Auctioneer>::resolve_auction()
+			<AuctionPallet as Auctioneer<Test>>::resolve_auction()
 				.expect("we should have an auction")
 				.winners,
 			good_bidders
@@ -305,7 +302,7 @@ fn should_exclude_excluded_from_keygen_set() {
 
 		// Confirm we just have the good bidders in our new auction result
 		assert_eq!(
-			<AuctionPallet as Auctioneer>::resolve_auction()
+			<AuctionPallet as Auctioneer<Test>>::resolve_auction()
 				.expect("we should have an auction")
 				.winners,
 			good_bidders
