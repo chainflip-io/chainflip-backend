@@ -841,7 +841,11 @@ mod tests {
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
-					assert_eq!(2, Validator::epoch_index());
+					// The rotation can now continue to the next phase.
+					assert!(matches!(
+						Validator::rotation_phase(),
+						RotationStatus::AwaitingVaults(..)
+					));
 				});
 		}
 
