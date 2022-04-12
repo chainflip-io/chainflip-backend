@@ -58,17 +58,9 @@ pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
 	// TODO: This should not be in the Auctioneer pallet either
 	<AuctionPallet as Auctioneer>::update_backup_and_passive_states();
 
-	// TODO: Fix this hack
-	// This is necessary because, in the mocks, update state sets the
-	// nodes (see MockChainflipAccount)
-	// for validators, their state is not set in update for backup and passive now
-	// so we have to
-	for potential_validator in auction_result.winners.clone() {
-		<MockChainflipAccount as ChainflipAccount>::set_state(
-			&potential_validator,
-			ChainflipAccountState::CurrentAuthority,
-		);
-	}
+	auction_result.winners.iter().for_each(|winner| {
+		<MockChainflipAccount as ChainflipAccount>::update_validator_account_data(winner);
+	});
 
 	MockEpochInfo::set_bond(auction_result.minimum_active_bid);
 	MockEpochInfo::set_validators(auction_result.winners.clone());
