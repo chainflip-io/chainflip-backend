@@ -131,7 +131,7 @@ pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
 pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
 
 /// The outcome of a successful auction.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct AuctionOutcome<T: Chainflip> {
 	/// The auction winners.
 	pub winners: Vec<T::ValidatorId>,
@@ -139,6 +139,16 @@ pub struct AuctionOutcome<T: Chainflip> {
 	pub losers: Vec<(T::ValidatorId, T::Amount)>,
 	/// The resulting bond for the next epoch.
 	pub bond: T::Amount,
+}
+
+impl<T: Chainflip> Default for AuctionOutcome<T> {
+	fn default() -> Self {
+		AuctionOutcome {
+			winners: Default::default(),
+			losers: Default::default(),
+			bond: Default::default(),
+		}
+	}
 }
 
 pub trait Auctioneer<T: Chainflip> {
