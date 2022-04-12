@@ -28,7 +28,7 @@ impl ChainflipAccount for MockChainflipAccount {
 				Some(item) => {
 					(*item).state = match item.state {
 						ChainflipAccountState::CurrentAuthority => {
-							todo!("Handle this case")
+							panic!("Cannot set backup_or_passive on current_authority");
 						},
 						ChainflipAccountState::HistoricAuthority(_) =>
 							ChainflipAccountState::HistoricAuthority(backup_or_passive),
@@ -58,6 +58,6 @@ impl ChainflipAccount for MockChainflipAccount {
 	}
 
 	fn set_historic_validator(_account_id: &Self::AccountId) {
-		todo!()
+		todo!("Implement when required");
 	}
 }

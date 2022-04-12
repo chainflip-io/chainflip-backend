@@ -419,7 +419,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
 			ChainflipAccountState::CurrentAuthority => {
-				todo!("Handle this case");
+				log::warn!("Attempted to set backup or passive on a current authority account");
 			},
 			ChainflipAccountState::HistoricAuthority(_) => {
 				(*account_data).state = ChainflipAccountState::HistoricAuthority(state);
