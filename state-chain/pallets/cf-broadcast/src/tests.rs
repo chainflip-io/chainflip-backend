@@ -1,7 +1,7 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Expiries, Instance1, SignatureToBroadcastIdLookup,
+	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
 	TransmissionFailure,
 };
 use cf_chains::{
@@ -218,8 +218,11 @@ fn test_broadcast_rejected() {
 			.attempt_count == 1
 		);
 
-		// The nominee was not reported.
-		assert_eq!(MockOffenceReporter::get_reported(), vec![RANDOM_NOMINEE]);
+		// The nominee was reported.
+		MockOffenceReporter::assert_reported(
+			PalletOffence::TransactionFailedOnTransmission,
+			vec![RANDOM_NOMINEE],
+		);
 	})
 }
 
@@ -314,7 +317,10 @@ fn test_bad_signature() {
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// The nominee was reported.
-		assert_eq!(MockOffenceReporter::get_reported(), vec![RANDOM_NOMINEE]);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::InvalidTransactionAuthored,
+			vec![RANDOM_NOMINEE],
+		);
 	})
 }
 

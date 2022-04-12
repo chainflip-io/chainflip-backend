@@ -526,9 +526,9 @@ fn test_missing_author_punishment() {
 		let offset = 4 * 123456;
 		MockMissedAuthorshipSlots::set(vec![1 + offset, 2 + offset]);
 		move_forward_blocks(1);
-		assert_eq!(
-			MockOffenceReporter::get_reported(),
-			ValidatorPallet::validators().get(1..=2).unwrap().to_vec()
+		MockOffenceReporter::assert_reported(
+			PalletOffence::MissedAuthorshipSlot,
+			ValidatorPallet::validators().get(1..=2).unwrap().to_vec(),
 		)
 	})
 }

@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-mod chainflip;
+pub mod chainflip;
 pub mod constants;
 mod migrations;
 #[cfg(test)]
@@ -43,12 +43,12 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::{offence_reporting::ReputationPoints, ChainflipAccountData};
+use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	OffencePenalty,
+	KeygenOffences,
 };
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
@@ -139,7 +139,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-	type KeygenExclusionSet = pallet_cf_reputation::KeygenExclusion<Self>;
+	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
 }
 
 // FIXME: These would be changed
@@ -153,6 +153,7 @@ parameter_types! {
 
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
+	type Offence = chainflip::Offence;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
@@ -179,6 +180,7 @@ parameter_types! {
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
@@ -421,17 +423,17 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 }
 
 parameter_types! {
-	pub const HeartbeatBlockInterval: BlockNumber = 150;
+	pub const HeartbeatBlockInterval: BlockNumber = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
-	pub const MaximumReputationPointAccrued: ReputationPoints = 15;
+	pub const MaximumReputationPointAccrued: pallet_cf_reputation::ReputationPoints = 15;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
+	type Offence = chainflip::Offence;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
-	type Penalty = OffencePenalty;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
@@ -453,6 +455,7 @@ parameter_types! {
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type Offence = chainflip::Offence;
 	type RuntimeOrigin = Origin;
 	type ThresholdCallable = Call;
 	type SignerNomination = chainflip::RandomSignerNomination;
@@ -474,6 +477,7 @@ parameter_types! {
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type Offence = chainflip::Offence;
 	type TargetChain = cf_chains::Ethereum;
 	type ApiCall = eth::api::EthereumApi;
 	type ThresholdSigner = EthereumThresholdSigner;

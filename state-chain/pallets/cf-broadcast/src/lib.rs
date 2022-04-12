@@ -15,7 +15,9 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
-use cf_traits::{offence_reporting::*, Broadcaster, Chainflip, SignerNomination, ThresholdSigner};
+use cf_traits::{
+	offence_reporting::OffenceReporter, Broadcaster, Chainflip, SignerNomination, ThresholdSigner,
+};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -65,6 +67,12 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 			self.broadcast_id, self.attempt_count
 		)
 	}
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	InvalidTransactionAuthored,
+	TransactionFailedOnTransmission,
 }
 
 #[frame_support::pallet]
@@ -130,6 +138,9 @@ pub mod pallet {
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
 
+		/// Offences that can be reported in this runtime.
+		type Offence: From<PalletOffence>;
+
 		/// A marker trait identifying the chain that we are broadcasting to.
 		type TargetChain: ChainAbi;
 
@@ -150,7 +161,10 @@ pub mod pallet {
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 
 		/// For reporting bad actors.
-		type OffenceReporter: OffenceReporter<ValidatorId = Self::ValidatorId>;
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = Self::ValidatorId,
+			Offence = Self::Offence,
+		>;
 
 		/// Ensure that only threshold signature consensus can trigger a broadcast.
 		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
@@ -400,7 +414,7 @@ pub mod pallet {
 				Self::report_and_schedule_retry(
 					&signing_attempt.nominee.clone(),
 					signing_attempt.broadcast_attempt,
-					Offence::InvalidTransactionAuthored,
+					PalletOffence::InvalidTransactionAuthored,
 				)
 			}
 
@@ -506,7 +520,7 @@ pub mod pallet {
 						Self::report_and_schedule_retry(
 							&signer,
 							broadcast_attempt,
-							Offence::TransactionFailedOnTransmission,
+							PalletOffence::TransactionFailedOnTransmission,
 						);
 					},
 					TransmissionFailure::TransactionFailed => {
@@ -696,9 +710,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn report_and_schedule_retry(
 		signer: &T::ValidatorId,
 		failed_broadcast_attempt: BroadcastAttempt<T, I>,
-		offence: Offence,
+		offence: PalletOffence,
 	) {
-		T::OffenceReporter::report(offence, signer);
+		T::OffenceReporter::report(offence, signer.clone());
 		Self::schedule_retry(failed_broadcast_attempt);
 	}
 

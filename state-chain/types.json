@@ -129,7 +129,9 @@
       "ParticipateSigningFailed",
       "ParticipateKeygenFailed",
       "InvalidTransactionAuthored",
-      "TransactionFailedOnTransmission"
+      "TransactionFailedOnTransmission",
+      "MissedAuthorshipSlot",
+      "MissedHeartbeat"
     ]
   },
   "OnlineCredits": "BlockNumber",
@@ -141,6 +143,10 @@
     ]
   },
   "PayloadFor": "[u8; 32]",
+  "Penalty": {
+    "reputation": "ReputationPoints",
+    "suspension": "BlockNumber"
+  },
   "Percentage": "u8",
   "PercentageRange": {
     "top": "u8",
@@ -155,7 +161,7 @@
     "expiry": "Uint"
   },
   "RemainingBid": "(ValidatorId, Amount)",
-  "Reputation": {
+  "ReputationTracker": {
     "online_credits": "OnlineCredits",
     "reputation_points": "ReputationPoints"
   },
@@ -177,6 +183,7 @@
     }
   },
   "RotationStatusOf": "RotationStatus",
+  "RuntimeReputationTracker": "ReputationTracker",
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
     "k_times_g_addr": "[u8; 20]"

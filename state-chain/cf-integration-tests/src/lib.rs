@@ -10,9 +10,9 @@ mod tests {
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
 	use sp_runtime::{traits::Zero, Storage};
 	use state_chain_runtime::{
-		constants::common::*, opaque::SessionKeys, AccountId, Auction, Emissions, EthereumVault,
-		Flip, Governance, Online, Origin, Reputation, Runtime, Session, Staking, System, Timestamp,
-		Validator,
+		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
+		Emissions, EthereumVault, Flip, Governance, Online, Origin, Reputation, Runtime, Session,
+		Staking, System, Timestamp, Validator,
 	};
 
 	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
@@ -595,6 +595,7 @@ mod tests {
 
 			pallet_cf_reputation::GenesisConfig::<Runtime> {
 				accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+				penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
 			}
 			.assimilate_storage(storage)
 			.unwrap();
@@ -740,7 +741,7 @@ mod tests {
 				for account in accounts.iter() {
 					assert_eq!(
 						Reputation::reputation(account),
-						pallet_cf_reputation::Reputation::<BlockNumber>::default(),
+						pallet_cf_reputation::ReputationTracker::<Runtime>::default(),
 						"validator shouldn't have reputation points"
 					);
 				}
@@ -840,7 +841,11 @@ mod tests {
 					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
-					assert_eq!(2, Validator::epoch_index());
+					// The rotation can now continue to the next phase.
+					assert!(matches!(
+						Validator::rotation_phase(),
+						RotationStatus::AwaitingVaults(..)
+					));
 				});
 		}
 

@@ -209,8 +209,6 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
-cf_traits::impl_mock_offence_reporting!(ValidatorId);
-
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u32 = 2;
@@ -240,8 +238,12 @@ impl Bonding for MockBonder {
 	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
+
 impl Config for Test {
 	type Event = Event;
+	type Offence = PalletOffence;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
