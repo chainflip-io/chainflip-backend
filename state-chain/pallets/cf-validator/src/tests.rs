@@ -174,9 +174,10 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 		let new_bond = 10;
 		let new_validators = vec![1, 2];
 
-		MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
+		MockAuctioneer::set_run_behaviour(Ok(AuctionOutcome {
 			winners: new_validators.clone(),
-			minimum_active_bid: new_bond,
+			losers: vec![],
+			bond: new_bond,
 		}));
 
 		assert_eq!(

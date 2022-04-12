@@ -16,7 +16,7 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, Chainflip,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Auctioneer, Chainflip,
 	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
 	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
 	QualifyValidator, SuccessOrFailure, VaultRotator,
@@ -70,9 +70,9 @@ impl<T: Config> sp_std::fmt::Debug for RotationStatus<T> {
 		match self {
 			RotationStatus::Idle => write!(f, "Idle"),
 			RotationStatus::RunAuction => write!(f, "RunAuction"),
-			RotationStatus::AwaitingVaults(outcome) => write!(f, "AwaitingVaults(..)"),
-			RotationStatus::VaultsRotated(outcome) => write!(f, "VaultsRotated(..)"),
-			RotationStatus::SessionRotating(outcome) => write!(f, "SessionRotating(..)"),
+			RotationStatus::AwaitingVaults(..) => write!(f, "AwaitingVaults(..)"),
+			RotationStatus::VaultsRotated(..) => write!(f, "VaultsRotated(..)"),
+			RotationStatus::SessionRotating(..) => write!(f, "SessionRotating(..)"),
 		}
 	}
 }
@@ -145,8 +145,8 @@ pub mod pallet {
 		/// Benchmark stuff
 		type ValidatorWeightInfo: WeightInfo;
 
-		/// An auction type
-		type Auctioneer: Auctioneer<ValidatorId = ValidatorIdOf<Self>, Amount = Self::Amount>;
+		/// Resolves auctions.
+		type Auctioneer: Auctioneer<Self>;
 
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = <Self as Chainflip>::ValidatorId>;
@@ -255,11 +255,11 @@ pub mod pallet {
 					}
 				},
 				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction() {
-					Ok(auction_result) => {
-						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
+					Ok(auction_outcome) => {
+						match T::VaultRotator::start_vault_rotation(auction_outcome.winners.clone())
 						{
 							Ok(_) => Self::set_rotation_status(RotationStatus::AwaitingVaults(
-								auction_result,
+								auction_outcome,
 							)),
 							// We are assuming here that this is unlikely as the only reason it
 							// would fail is if we have no validators, which is already checked by
@@ -813,7 +813,8 @@ impl<T: Config> Pallet<T> {
 		});
 
 		// We've got new validators, which means the backups and passives may have changed
-		T::Auctioneer::update_backup_and_passive_states();
+		// TODO DAN: replace this
+		// T::Auctioneer::update_backup_and_passive_states();
 
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(epoch_validators);
@@ -890,7 +891,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	/// activates the queued validators.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match RotationPhase::<T>::get() {
-			RotationStatus::VaultsRotated(auction_result) => Some(auction_result.winners),
+			RotationStatus::VaultsRotated(auction_outcome) => Some(auction_outcome.winners),
 			_ => None,
 		}
 	}
@@ -906,11 +907,10 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
-		if let RotationStatus::SessionRotating(AuctionResult {
-			winners, minimum_active_bid, ..
-		}) = RotationPhase::<T>::get()
+		if let RotationStatus::SessionRotating(AuctionOutcome { winners, bond, .. }) =
+			RotationPhase::<T>::get()
 		{
-			Pallet::<T>::start_new_epoch(&winners, minimum_active_bid)
+			Pallet::<T>::start_new_epoch(&winners, bond)
 		}
 	}
 }
