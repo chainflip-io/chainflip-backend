@@ -191,6 +191,50 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     ceremony.complete(result_receivers).await;
 }
 
+#[tokio::test]
+async fn should_enter_blaming_stage_on_timeout_secret_shares() {
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+    let (messages, result_receivers) = ceremony.request().await;
+
+    let mut messages = run_stages!(
+        ceremony,
+        messages,
+        keygen::VerifyHashComm2,
+        keygen::Comm1,
+        keygen::VerifyComm2,
+        keygen::SecretShare3
+    );
+
+    // One party fails to send a secret share to another causing everyone to later enter the blaming stage
+    let [non_sending_party_id, timed_out_party_id] = &ceremony.select_account_ids();
+    messages
+        .get_mut(non_sending_party_id)
+        .unwrap()
+        .remove(timed_out_party_id);
+
+    ceremony.distribute_messages(messages);
+
+    // This node doesn't receive non_sending_party_id's message, so must timeout
+    ceremony
+        .get_mut_node(timed_out_party_id)
+        .force_stage_timeout();
+
+    let messages = ceremony
+        .gather_outgoing_messages::<Complaints4, keygen::KeygenData>()
+        .await;
+
+    let messages = run_stages!(
+        ceremony,
+        messages,
+        keygen::VerifyComplaints5,
+        keygen::BlameResponse6,
+        keygen::VerifyBlameResponses7
+    );
+    ceremony.distribute_messages(messages);
+    ceremony.complete(result_receivers).await;
+}
+
 /// If one or more parties send an invalid secret share both the first
 /// time and during the blaming stage, the ceremony is aborted with these
 /// parties reported
