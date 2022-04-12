@@ -137,15 +137,15 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
         // TODO: Use all the historical epochs: https://github.com/chainflip-io/chainflip-backend/issues/1218
-        let last_active_epoch = state_chain_client
+        let last_active_epochs = state_chain_client
             .get_historical_active_epochs(block_hash)
-            .await?
+            .await?;
+        let last_active_epoch = last_active_epochs
             .last()
-            .expect("Must exist if we're sending windows to witness processes")
-            .clone();
+            .expect("Must exist if we're sending windows to witness processes");
 
         let eth_vault = state_chain_client
-            .get_vault::<Ethereum>(block_hash, last_active_epoch)
+            .get_vault::<Ethereum>(block_hash, *last_active_epoch)
             .await?;
 
         sm_window_sender
