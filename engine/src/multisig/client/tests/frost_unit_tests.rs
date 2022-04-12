@@ -737,6 +737,8 @@ mod timeout {
 
     mod during_regular_stage {
 
+        use crate::multisig::client::signing::frost::SigningData;
+
         use super::*;
 
         // ======================
@@ -761,17 +763,20 @@ mod timeout {
 
             signing_ceremony.distribute_messages(messages.clone());
 
-            // this node doesn't receive non_sending_party's message, so must timeout
+            // This node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
                 .nodes
                 .get_mut(&timed_out_party_id)
                 .unwrap()
                 .force_stage_timeout();
 
+            let messages = signing_ceremony
+                .gather_outgoing_messages::<frost::VerifyComm2, SigningData>()
+                .await;
+
             let messages = run_stages!(
                 signing_ceremony,
                 messages,
-                frost::VerifyComm2,
                 frost::LocalSig3,
                 frost::VerifyLocalSig4
             );
@@ -801,14 +806,16 @@ mod timeout {
 
             signing_ceremony.distribute_messages(messages.clone());
 
-            // this node doesn't receive non_sending_party's message, so must timeout
+            // This node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
                 .nodes
                 .get_mut(&timed_out_party_id)
                 .unwrap()
                 .force_stage_timeout();
 
-            let messages = run_stages!(signing_ceremony, messages, frost::VerifyLocalSig4,);
+            let messages = signing_ceremony
+                .gather_outgoing_messages::<frost::VerifyLocalSig4, SigningData>()
+                .await;
 
             signing_ceremony.distribute_messages(messages);
             signing_ceremony.complete(result_receivers).await;
