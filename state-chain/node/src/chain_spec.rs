@@ -59,7 +59,6 @@ pub struct StateChainEnvironment {
 	eth_block_safety_margin: u32,
 	pending_sign_duration: u32,
 	max_ceremony_stage_duration: u32,
-	max_extrinsic_retry_attempts: u32,
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
@@ -98,11 +97,6 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<u32>()
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
-	let max_extrinsic_retry_attempts = env::var("MAX_EXTRINSIC_RETRY_ATTEMPTS")
-		.unwrap_or(format!("{}", CfeSettings::default().max_extrinsic_retry_attempts))
-		.parse::<u32>()
-		.expect("MAX_EXTRINSIC_RETRY_ATTEMPTS env var could not be parsed to u32");
-
 	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
 		.unwrap_or(format!("{}", CfeSettings::default().max_ceremony_stage_duration))
 		.parse::<u32>()
@@ -123,7 +117,6 @@ pub fn get_environment() -> StateChainEnvironment {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	}
 }
 
@@ -160,7 +153,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -189,7 +181,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -229,7 +220,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -264,7 +254,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -330,7 +319,6 @@ fn chainflip_three_node_testnet_config_from_env(
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = environment;
 	Ok(ChainSpec::from_genesis(
 		name,
@@ -389,7 +377,6 @@ fn chainflip_three_node_testnet_config_from_env(
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -436,7 +423,6 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -517,7 +503,6 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,

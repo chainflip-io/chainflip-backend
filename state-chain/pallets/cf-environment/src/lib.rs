@@ -19,8 +19,6 @@ pub mod cfe {
 		pub pending_sign_duration: u32,
 		/// Maximum duration a ceremony stage can last
 		pub max_ceremony_stage_duration: u32,
-		/// Number of times to retry after incrementing the nonce on a nonce error
-		pub max_extrinsic_retry_attempts: u32,
 	}
 
 	/// Sensible default values for the CFE setting.
@@ -30,7 +28,6 @@ pub mod cfe {
 				eth_block_safety_margin: 6,
 				pending_sign_duration: 500,
 				max_ceremony_stage_duration: 300,
-				max_extrinsic_retry_attempts: 10,
 			}
 		}
 	}
