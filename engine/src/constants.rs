@@ -15,7 +15,7 @@ pub const MAX_STAGE_DURATION: Duration = Duration::from_secs(300); // TODO Look 
 // ======= State chain client =======
 
 /// Number of times to retry after incrementing the nonce on a nonce error
-pub const MAX_RETRY_ATTEMPTS: usize = 10;
+pub const MAX_EXTRINSIC_RETRY_ATTEMPTS: usize = 10;
 
 // ======= Eth Rpc Client =======
 /// Duration before the attempt to connect to the ethereum node times out
