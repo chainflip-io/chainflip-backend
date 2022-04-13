@@ -392,8 +392,8 @@ pub trait ChainflipAccount {
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
 	fn update_validator_account_data(account_id: &Self::AccountId);
-	fn set_historic_validator(account_id: &Self::AccountId);
-	fn from_historic_to_backup_or_passive(account_id: &Self::AccountId);
+	fn set_historical_validator(account_id: &Self::AccountId);
+	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
 }
 
 // Remove in place of a proper validator enum
@@ -442,7 +442,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 
 	// TODO: How to check if we set to backup or passive
 	// we might want to combine this with an update_backup_or_passive
-	fn set_historic_validator(account_id: &Self::AccountId) {
+	fn set_historical_validator(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state =
 				ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive);
@@ -450,7 +450,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
-	fn from_historic_to_backup_or_passive(account_id: &Self::AccountId) {
+	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
 			ChainflipAccountState::HistoricalAuthority(state) => {
 				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);

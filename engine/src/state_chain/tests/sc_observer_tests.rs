@@ -610,7 +610,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 }
 
 #[tokio::test]
-async fn backup_not_historic_to_authority_on_new_epoch() {
+async fn backup_not_historical_to_authority_on_new_epoch() {
     let logger = new_test_logger();
 
     let eth_rpc_mock = MockEthRpcApi::new();
@@ -765,7 +765,7 @@ async fn backup_not_historic_to_authority_on_new_epoch() {
 }
 
 #[tokio::test]
-async fn current_authority_to_historic_passive_on_new_epoch_event() {
+async fn current_authority_to_historical_passive_on_new_epoch_event() {
     // === FAKE BLOCKHEADERS ===
     let empty_block_header = test_header(20);
     let new_epoch_block_header = test_header(21);

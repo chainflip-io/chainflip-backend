@@ -807,7 +807,7 @@ impl<T: Config> Pallet<T> {
 		old_validators.retain(|validator| !epoch_validators.contains(validator));
 
 		old_validators.iter().for_each(|validator| {
-			ChainflipAccountStore::<T>::set_historic_validator(validator);
+			ChainflipAccountStore::<T>::set_historical_validator(validator);
 		});
 
 		// We've got new validators, which means the backups and passives may have changed
@@ -824,7 +824,7 @@ impl<T: Config> Pallet<T> {
 		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_validator(validator) == 0 {
-				ChainflipAccountStore::<T>::from_historic_to_backup_or_passive(validator);
+				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(validator);
 			}
 			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}
