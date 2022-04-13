@@ -30,8 +30,6 @@ use sp_std::{cmp::min, collections::btree_set::BTreeSet, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-type ActiveValidatorRange = (u32, u32);
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -61,12 +59,6 @@ pub mod pallet {
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
-		/// Ratio of backup validators
-		#[pallet::constant]
-		type ActiveToBackupValidatorRatio: Get<u32>;
-		/// Percentage of backup validators in validating set in a emergency rotation
-		#[pallet::constant]
-		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
 	}
 
 	/// Pallet implements \[Hooks\] trait
@@ -87,12 +79,6 @@ pub mod pallet {
 		}
 	}
 
-	/// Size range for number of validators we want in our validating set
-	#[pallet::storage]
-	#[pallet::getter(fn active_validator_size_range)]
-	pub(super) type ActiveValidatorSizeRange<T: Config> =
-		StorageValue<_, ActiveValidatorRange, ValueQuery>;
-
 	/// Auction parameters.
 	#[pallet::storage]
 	#[pallet::getter(fn auction_parameters)]
@@ -105,53 +91,62 @@ pub mod pallet {
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<T::ValidatorId>, T::Amount),
 		/// The active validator range upper limit has changed \[before, after\]
-		ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange),
+		AuctionParametersChanged(
+			<ResolverV1<T> as AuctionResolver<T>>::AuctionParameters,
+			<ResolverV1<T> as AuctionResolver<T>>::AuctionParameters,
+		),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Invalid range used for the active validator range.
-		InvalidRange,
+		/// Auction parameters are invalid.
+		InvalidAuctionParameters,
 		/// Not enough bidders were available to resolve the auction.
 		NotEnoughBidders,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Sets the size of our auction range
+		/// Sets the auction parameters.
 		///
 		/// The dispatch origin of this function must be root.
 		///
 		/// ## Events
 		///
-		/// - [ActiveValidatorRangeChanged](Event::ActiveValidatorRangeChanged)
+		/// - [AuctionParametersChanged](Event::AuctionParametersChanged)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidRange](Error::InvalidRange)
+		/// - [InvalidAuctionParameters](Error::InvalidAuctionParameters)
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
 		pub fn set_active_validator_range(
 			origin: OriginFor<T>,
-			range: ActiveValidatorRange,
+			auction_parameters: <ResolverV1<T> as AuctionResolver<T>>::AuctionParameters,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let old = Self::set_active_range(range)?;
-			Self::deposit_event(Event::ActiveValidatorRangeChanged(old, range));
+			let old = Self::set_auction_parameters(auction_parameters)?;
+			Self::deposit_event(Event::AuctionParametersChanged(old, auction_parameters));
 			Ok(().into())
 		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub validator_size_range: ActiveValidatorRange,
+		min_size: u32,
+		max_size: u32,
+		active_to_backup_validator_ratio: u32,
+		percentage_of_backup_validators_in_emergency: u32,
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			use sp_runtime::traits::Zero;
-
-			Self { validator_size_range: (Zero::zero(), Zero::zero()) }
+			Self {
+				min_size: 3,
+				max_size: 15,
+				active_to_backup_validator_ratio: 3,
+				percentage_of_backup_validators_in_emergency: 30,
+			}
 		}
 	}
 
@@ -159,8 +154,14 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			Pallet::<T>::set_active_range(self.validator_size_range)
-				.expect("we should be able to set the range of the active set");
+			Pallet::<T>::set_auction_parameters(AuctionParametersV1 {
+				min_size: self.min_size,
+				max_size: self.max_size,
+				active_to_backup_validator_ratio: self.active_to_backup_validator_ratio,
+				percentage_of_backup_validators_in_emergency: self
+					.percentage_of_backup_validators_in_emergency,
+			})
+			.expect("we should provide valid auction parameters at genesis");
 		}
 	}
 }
@@ -175,7 +176,13 @@ impl<T: Config> Auctioneer<T> for Pallet<T> {
 		let excluded = T::KeygenExclusionSet::get();
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 
-		let outcome = ResolverV1::resolve_auction(&ActiveValidatorSizeRange::<T>::get(), bids)?;
+		let outcome = ResolverV1::resolve_auction(
+			AuctionParameters::<T>::get(),
+			AuctionContextV1 {
+				is_emergency: T::EmergencyRotation::emergency_rotation_in_progress(),
+			},
+			bids,
+		)?;
 
 		Self::deposit_event(Event::AuctionCompleted(outcome.winners.clone(), outcome.bond));
 
@@ -184,12 +191,18 @@ impl<T: Config> Auctioneer<T> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, Error<T>> {
-		let (low, high) = range;
-		ensure!(high >= low && low >= T::MinValidators::get(), Error::<T>::InvalidRange);
-		let old = ActiveValidatorSizeRange::<T>::get();
-		if old != range {
-			ActiveValidatorSizeRange::<T>::put(range);
+	fn set_auction_parameters(
+		auction_parameters: AuctionParametersV1,
+	) -> Result<AuctionParametersV1, Error<T>> {
+		let (low, high) = (auction_parameters.min_size, auction_parameters.max_size);
+		ensure!(low <= high, Error::<T>::InvalidAuctionParameters);
+		ensure!(
+			high >= low && low >= T::MinValidators::get(),
+			Error::<T>::InvalidAuctionParameters
+		);
+		let old = AuctionParameters::<T>::get();
+		if old != auction_parameters {
+			AuctionParameters::<T>::put(auction_parameters);
 		}
 		Ok(old)
 	}
