@@ -100,7 +100,7 @@ pub trait EpochInfo {
 	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
 
 	/// Validator count at a particular epoch.
-	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
+	fn validator_count_at_epoch(epoch_index: EpochIndex) -> Option<u32>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
 	/// current candidate validator set
@@ -124,7 +124,7 @@ pub trait EpochInfo {
 	fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_validator_count_for_epoch(epoch: EpochIndex, count: u32);
+	fn set_validator_count_for_epoch(epoch_index: EpochIndex, count: u32);
 }
 
 pub struct CurrentThreshold<T>(PhantomData<T>);
