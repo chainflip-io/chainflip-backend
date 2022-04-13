@@ -32,7 +32,6 @@ use sp_runtime::{
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	convert::TryInto,
 	iter::FromIterator,
 	marker::PhantomData,
 	prelude::*,
@@ -264,8 +263,6 @@ pub mod pallet {
 		/// The reporting party is not one of the signatories for this ceremony, or has already
 		/// responded.
 		InvalidRespondent,
-		/// Too many parties were reported as having failed in the threshold ceremony.
-		ExcessOffenders,
 		/// The request Id is stale or not yet valid.
 		InvalidRequestId,
 	}
@@ -470,11 +467,7 @@ pub mod pallet {
 			id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			Call::<T, I>::report_signature_failed(
-				id,
-				offenders.try_into().map_err(|_| Error::<T, I>::ExcessOffenders)?,
-			)
-			.dispatch_bypass_filter(origin)
+			Call::<T, I>::report_signature_failed(id, offenders).dispatch_bypass_filter(origin)
 		}
 	}
 }
