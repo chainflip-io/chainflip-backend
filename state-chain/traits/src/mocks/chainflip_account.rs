@@ -40,7 +40,7 @@ impl ChainflipAccount for MockChainflipAccount {
 		});
 	}
 
-	fn update_validator_account_data(account_id: &Self::AccountId) {
+	fn set_current_authority(account_id: &Self::AccountId) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
 			let mut map = cell.borrow_mut();
 			match map.get_mut(account_id) {

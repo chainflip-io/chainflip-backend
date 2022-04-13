@@ -800,7 +800,7 @@ impl<T: Config> Pallet<T> {
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
 
-			ChainflipAccountStore::<T>::update_validator_account_data(validator);
+			ChainflipAccountStore::<T>::set_current_authority(validator);
 		}
 
 		// find all the valitators moving out of the epoch

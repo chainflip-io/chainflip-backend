@@ -391,7 +391,8 @@ pub trait ChainflipAccount {
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
-	fn update_validator_account_data(account_id: &Self::AccountId);
+	/// Set the validator to be the current authority
+	fn set_current_authority(account_id: &Self::AccountId);
 	fn set_historical_validator(account_id: &Self::AccountId);
 	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
 }
@@ -433,7 +434,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	}
 
 	/// Set the last epoch number and set the account state to Validator
-	fn update_validator_account_data(account_id: &Self::AccountId) {
+	fn set_current_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = ChainflipAccountState::CurrentAuthority;
 		})
