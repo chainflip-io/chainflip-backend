@@ -239,7 +239,7 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 /// time and during the blaming stage, the ceremony is aborted with these
 /// parties reported
 #[tokio::test]
-async fn should_handle_invalid_blame_response6() {
+async fn should_report_on_invalid_blame_response6() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
     let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
         &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
@@ -513,7 +513,7 @@ async fn should_ignore_unexpected_message_for_stage() {
 // the ceremony should be aborted and all faulty parties should be reported.
 // Fail on `verify_broadcasts` during `VerifyCommitmentsBroadcast2`
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_comm1() {
+async fn should_report_on_inconsistent_broadcast_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
@@ -543,7 +543,7 @@ async fn should_handle_inconsistent_broadcast_comm1() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_hash_comm() {
+async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (mut messages, result_receivers) = ceremony.request().await;
@@ -574,7 +574,7 @@ async fn should_handle_inconsistent_broadcast_hash_comm() {
 // to the hash commitments sent earlier, the ceremony should be aborted with
 // those parties reported.
 #[tokio::test]
-async fn should_report_on_invalid_hash_commitment() {
+async fn should_report_on_invalid_hash_comm1a() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
@@ -612,7 +612,7 @@ async fn should_report_on_invalid_hash_commitment() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_complaints4() {
+async fn should_report_on_inconsistent_broadcast_complaints4() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
@@ -652,7 +652,7 @@ async fn should_handle_inconsistent_broadcast_complaints4() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_blame_responses6() {
+async fn should_report_on_inconsistent_broadcast_blame_responses6() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
@@ -720,7 +720,7 @@ async fn should_handle_inconsistent_broadcast_blame_responses6() {
 // If one or more parties send invalid commitments, the ceremony should be aborted.
 // Fail on `validate_commitments` during `VerifyCommitmentsBroadcast2`.
 #[tokio::test]
-async fn should_handle_invalid_comm1() {
+async fn should_report_on_invalid_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
@@ -758,7 +758,7 @@ async fn should_handle_invalid_comm1() {
 }
 
 #[tokio::test]
-async fn should_handle_invalid_complaints4() {
+async fn should_report_on_invalid_complaints4() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
@@ -938,7 +938,7 @@ mod timeout {
         use super::*;
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage1a() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage1a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (mut messages, result_receivers) = ceremony.request().await;
@@ -975,7 +975,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage1() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage1() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1012,7 +1012,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage4() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage4() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1050,7 +1050,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage6() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage6() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1108,7 +1108,7 @@ mod timeout {
         use super::*;
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage2a() {
+        async fn should_recover_if_agree_on_values_stage2a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1134,7 +1134,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage2() {
+        async fn should_recover_if_agree_on_values_stage2() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1153,7 +1153,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage5() {
+        async fn should_recover_if_agree_on_values_stage5() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1176,7 +1176,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage7() {
+        async fn should_recover_if_agree_on_values_stage7() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1214,7 +1214,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_2a() {
+        async fn should_report_if_insufficient_messages_stage2a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1238,7 +1238,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_2() {
+        async fn should_report_if_insufficient_messages_stage2() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1261,7 +1261,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_5() {
+        async fn should_report_if_insufficient_messages_stage5() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;
@@ -1295,7 +1295,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_7() {
+        async fn should_report_if_insufficient_messages_stage7() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
             let (messages, result_receivers) = ceremony.request().await;

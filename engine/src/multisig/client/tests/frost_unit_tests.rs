@@ -105,7 +105,7 @@ async fn should_delay_comm1_before_rts() {
 }
 
 #[tokio::test]
-async fn should_handle_invalid_local_sig() {
+async fn should_report_on_invalid_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
@@ -137,7 +137,7 @@ async fn should_handle_invalid_local_sig() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_com1() {
+async fn should_report_on_inconsistent_broadcast_comm1() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (mut messages, result_receivers) = signing_ceremony.request().await;
@@ -162,7 +162,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_sig3() {
+async fn should_report_on_inconsistent_broadcast_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
@@ -749,7 +749,7 @@ mod timeout {
         // agree on a party timing out in the following broadcast verification stage, the party gets reported
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage1() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let (mut messages, result_receivers) = signing_ceremony.request().await;
@@ -785,7 +785,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage3() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage3() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let (messages, result_receivers) = signing_ceremony.request().await;
@@ -834,7 +834,7 @@ mod timeout {
         // If timeout during a broadcast verification stage, and we have enough data, we can recover
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage2() {
+        async fn should_recover_if_agree_on_values_stage2() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let [bad_node_id] = &ceremony.select_account_ids();
@@ -856,7 +856,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage4() {
+        async fn should_recover_if_agree_on_values_stage4() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let [bad_node_id] = &ceremony.select_account_ids();
@@ -887,7 +887,7 @@ mod timeout {
         // because that would need another round of "voting" which can also timeout.
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_2() {
+        async fn should_report_if_insufficient_messages_stage2() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             // bad party 1 will timeout during a broadcast stage. It should be reported
@@ -914,7 +914,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_4() {
+        async fn should_report_if_insufficient_messages_stage4() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             // bad party 1 will timeout during a broadcast stage. It should be reported
