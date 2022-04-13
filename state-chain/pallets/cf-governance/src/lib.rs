@@ -91,7 +91,7 @@ pub mod pallet {
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
-	/// Count how many proposals have ever been submitted
+	/// Number of proposals that have been submitted
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_id_counter)]
 	pub(super) type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
@@ -102,7 +102,7 @@ pub mod pallet {
 	pub(super) type ExecutionPipeline<T> =
 		StorageValue<_, Vec<(OpaqueCall, ProposalId)>, ValueQuery>;
 
-	/// Time in seconds after a proposal expires
+	/// Time in seconds until a proposal expires
 	#[pallet::storage]
 	#[pallet::getter(fn expiry_span)]
 	pub(super) type ExpiryTime<T> = StorageValue<_, Timestamp, ValueQuery>;

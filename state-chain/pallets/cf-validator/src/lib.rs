@@ -670,11 +670,12 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
-			let genesis_validators = <pallet_session::Pallet<T>>::validators();
+			CurrentEpochStartedAt::<T>::set(Default::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-
+			let genesis_validators = pallet_session::Pallet::<T>::validators();
 			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
 		}
 	}
