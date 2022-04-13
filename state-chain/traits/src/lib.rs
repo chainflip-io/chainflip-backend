@@ -389,11 +389,16 @@ impl Default for ChainflipAccountData {
 pub trait ChainflipAccount {
 	type AccountId;
 
+	/// Get the account data for the given account id.
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
+	/// Updates the state of a
 	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
 	/// Set the validator to be the current authority
 	fn set_current_authority(account_id: &Self::AccountId);
+	/// Sets the validator state to historical
 	fn set_historical_validator(account_id: &Self::AccountId);
+	/// Sets the current validator to the historical validator, should be called
+	/// once the validator has no more active epochs
 	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
 }
 
