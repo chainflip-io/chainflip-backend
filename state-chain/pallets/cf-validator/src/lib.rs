@@ -823,8 +823,10 @@ impl<T: Config> Pallet<T> {
 	fn expire_epoch(epoch: EpochIndex) {
 		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
-			let bond = EpochHistory::<T>::active_bond(validator);
-			T::Bonder::update_validator_bond(validator, bond);
+			if EpochHistory::<T>::number_of_active_epochs_for_validator(validator) == 0 {
+				ChainflipAccountStore::<T>::from_historic_to_backup_or_passive(validator);
+			}
+			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}
 	}
 
@@ -850,6 +852,10 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 
 	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
 		HistoricalActiveEpochs::<T>::get(id)
+	}
+
+	fn number_of_active_epochs_for_validator(id: &Self::ValidatorId) -> u32 {
+		HistoricalActiveEpochs::<T>::decode_len(id).unwrap_or_default() as u32
 	}
 
 	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {

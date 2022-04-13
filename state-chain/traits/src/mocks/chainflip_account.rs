@@ -60,4 +60,8 @@ impl ChainflipAccount for MockChainflipAccount {
 	fn set_historic_validator(_account_id: &Self::AccountId) {
 		todo!("Implement when required");
 	}
+
+	fn from_historic_to_backup_or_passive(_account_id: &Self::AccountId) {
+		todo!("Implement when required");
+	}
 }
