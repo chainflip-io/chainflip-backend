@@ -88,7 +88,7 @@ fn should_create_correct_size_of_groups() {
 	});
 }
 
-fn current_backup_validators() -> Vec<RemainingBid<ValidatorId, Amount>> {
+fn current_backup_validators() -> Vec<(ValidatorId, Amount)> {
 	AuctionPallet::remaining_bidders()
 		.iter()
 		.take(AuctionPallet::backup_group_size() as usize)
@@ -96,7 +96,7 @@ fn current_backup_validators() -> Vec<RemainingBid<ValidatorId, Amount>> {
 		.collect()
 }
 
-fn current_passive_nodes() -> Vec<RemainingBid<ValidatorId, Amount>> {
+fn current_passive_nodes() -> Vec<(ValidatorId, Amount)> {
 	AuctionPallet::remaining_bidders()
 		.iter()
 		.skip(AuctionPallet::backup_group_size() as usize)

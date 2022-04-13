@@ -35,7 +35,6 @@
   },
   "BasisPoints": "u32",
   "Balance": "FlipBalance",
-  "Bid": "(ValidatorId, Amount)",
   "BlockHeightWindow": {
     "from": "u64",
     "to": "Option<u64>"
@@ -160,7 +159,6 @@
     "address": "EthereumAddress",
     "expiry": "Uint"
   },
-  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationTracker": {
     "online_credits": "OnlineCredits",
     "reputation_points": "ReputationPoints"

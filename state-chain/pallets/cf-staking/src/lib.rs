@@ -16,7 +16,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{ApiCall, RegisterClaim};
-use cf_traits::{Bid, BidderProvider, EpochInfo, NonceProvider, StakeTransfer, ThresholdSigner};
+use cf_traits::{BidderProvider, EpochInfo, NonceProvider, StakeTransfer, ThresholdSigner};
 use core::time::Duration;
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -748,7 +748,7 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = <T as frame_system::Config>::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
 				if retired {

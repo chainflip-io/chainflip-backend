@@ -6,7 +6,7 @@ use cf_traits::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
 	},
-	Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
+	Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
@@ -168,7 +168,7 @@ impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }

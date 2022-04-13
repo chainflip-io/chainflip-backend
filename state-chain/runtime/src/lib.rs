@@ -46,10 +46,7 @@ use sp_version::RuntimeVersion;
 use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
-use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	KeygenOffences,
-};
+use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::{Bonder, FlipSlasher};
@@ -349,7 +346,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = ChainflipStakeHandler;
+	type StakeHandler = pallet_cf_validator::UpdateBackupAndPassiveAccounts<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 }
