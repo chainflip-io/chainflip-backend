@@ -1,11 +1,9 @@
 use sp_api::decl_runtime_apis;
 
 decl_runtime_apis!(
-	pub trait MeaningOfLiveRuntimeApi {
-		fn ask() -> u32;
-		fn return_same_value(x: u32) -> u32;
-	}
-	pub trait ValidatorRuntimeApi {
+	/// Definition for all runtime API interfaces.
+	pub trait CustomRuntimeApi {
+		/// Returns true if the current phase is the auction phase.
 		fn is_auction_phase() -> bool;
 	}
 );

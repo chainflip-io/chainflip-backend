@@ -568,24 +568,13 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
-	// START CUSTOM RUNTIME APIS
-
-	impl runtime_apis::ValidatorRuntimeApi<Block> for Runtime {
+	// START custom runtime APIs
+	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
 		fn is_auction_phase() -> bool {
 			Validator::is_auction_phase()
 		}
 	}
-
-	impl runtime_apis::MeaningOfLiveRuntimeApi<Block> for Runtime {
-		fn ask() -> u32 {
-			42
-		}
-		fn return_same_value(x: u32) -> u32 {
-			x
-		}
-	}
-
-	// END CUSTOM RUNTIME APIS
+	// END custom runtime APIs
 
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {

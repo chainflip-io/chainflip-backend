@@ -1068,7 +1068,7 @@ name = "chainflip-node"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "custom-rpcs",
+ "custom-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-try-runtime",
@@ -1588,7 +1588,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "custom-rpcs"
+name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
  "jsonrpc-core",
