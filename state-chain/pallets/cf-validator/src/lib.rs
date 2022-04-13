@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(bindings_after_at)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -11,15 +12,17 @@ pub mod weights;
 
 pub use weights::WeightInfo;
 
+mod backup_triage;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 
+pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Auctioneer, Chainflip,
-	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
-	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyValidator, SuccessOrFailure, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Auctioneer, BackupOrPassive,
+	Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation,
+	EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch,
+	MissedAuthorshipSlots, QualifyValidator, StakeHandler, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -645,6 +648,11 @@ pub mod pallet {
 	#[pallet::getter(fn ceremony_id_counter)]
 	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
+	/// Backup validator triage state.
+	#[pallet::storage]
+	#[pallet::getter(fn backup_validator_triage)]
+	pub type BackupValidatorTriage<T> = StorageValue<_, BackupTriageResult<T>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
@@ -675,7 +683,11 @@ pub mod pallet {
 			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 			EpochValidatorCount::<T>::insert(GENESIS_EPOCH, genesis_validators.len() as u32);
 			CurrentEpochStartedAt::<T>::set(Default::default());
-			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
+			Pallet::<T>::start_new_epoch(AuctionOutcome {
+				winners: genesis_validators,
+				bond: self.bond,
+				..Default::default()
+			});
 		}
 	}
 }
@@ -764,7 +776,11 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(epoch_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
+	fn start_new_epoch(auction_outcome: AuctionOutcome<T>) {
+		let epoch_validators = auction_outcome.winners;
+		let new_bond = auction_outcome.bond;
+		let backup_candidates = auction_outcome.losers;
+
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
@@ -773,7 +789,7 @@ impl<T: Config> Pallet<T> {
 
 		let mut old_validators = Validators::<T>::get();
 		// Update state of current validators
-		Validators::<T>::set(epoch_validators.to_vec());
+		Validators::<T>::put(&epoch_validators);
 
 		epoch_validators.iter().enumerate().for_each(|(index, account_id)| {
 			ValidatorIndex::<T>::insert(&new_epoch, account_id, index as u16);
@@ -796,7 +812,7 @@ impl<T: Config> Pallet<T> {
 		Self::emergency_rotation_completed();
 
 		// Save the epoch -> validators map
-		HistoricalValidators::<T>::insert(new_epoch, epoch_validators);
+		HistoricalValidators::<T>::insert(new_epoch, &epoch_validators);
 
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
@@ -819,11 +835,11 @@ impl<T: Config> Pallet<T> {
 		});
 
 		// We've got new validators, which means the backups and passives may have changed
-		// TODO DAN: replace this
-		// T::Auctioneer::update_backup_and_passive_states();
+		// TODO configurable parameter to replace '3'.
+		Self::update_backup_and_passive_states(backup_candidates, epoch_validators.len() / 3);
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(epoch_validators);
+		T::EpochTransitionHandler::on_new_epoch(&epoch_validators);
 
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
@@ -833,7 +849,9 @@ impl<T: Config> Pallet<T> {
 		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_validator(validator) == 0 {
-				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(validator);
+				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(
+					validator.into_ref(),
+				);
 			}
 			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}
@@ -842,6 +860,33 @@ impl<T: Config> Pallet<T> {
 	fn set_rotation_status(new_status: RotationStatus<T>) {
 		RotationPhase::<T>::put(new_status.clone());
 		Self::deposit_event(Event::RotationStatusUpdated(new_status));
+	}
+
+	fn update_backup_and_passive_states(
+		backup_candidates: Vec<(ValidatorIdOf<T>, T::Amount)>,
+		backup_group_size_target: usize,
+	) {
+		let triage_result =
+			BackupTriageResult::<T>::new(backup_candidates, backup_group_size_target);
+
+		// TODO:
+		// It's not this simple. For example, there might be old backup validators who are no longer
+		// in either of these sets because they were banned from the auction.
+		for (validator_id, _amount) in triage_result.backup.iter() {
+			T::ChainflipAccount::set_backup_or_passive(
+				validator_id.into_ref(),
+				BackupOrPassive::Backup,
+			);
+		}
+
+		for (validator_id, _amount) in triage_result.passive.iter() {
+			T::ChainflipAccount::set_backup_or_passive(
+				validator_id.into_ref(),
+				BackupOrPassive::Passive,
+			);
+		}
+
+		BackupValidatorTriage::<T>::put(triage_result);
 	}
 }
 
@@ -913,10 +958,8 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
-		if let RotationStatus::SessionRotating(AuctionOutcome { winners, bond, .. }) =
-			RotationPhase::<T>::get()
-		{
-			Pallet::<T>::start_new_epoch(&winners, bond)
+		if let RotationStatus::SessionRotating(auction_outcome) = RotationPhase::<T>::get() {
+			Pallet::<T>::start_new_epoch(auction_outcome)
 		}
 	}
 }
@@ -1003,5 +1046,22 @@ pub struct NotDuringRotation<T: Config>(PhantomData<T>);
 impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	fn is_satisfied() -> bool {
 		RotationPhase::<T>::get() == RotationStatus::Idle
+	}
+}
+
+pub struct UpdateBackupAndPassiveAccounts<T>(PhantomData<T>);
+
+impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
+	type ValidatorId = ValidatorIdOf<T>;
+	type Amount = T::Amount;
+
+	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
+		if <Pallet<T> as EpochInfo>::current_validators().contains(validator_id) {
+			return
+		}
+
+		BackupValidatorTriage::<T>::mutate(|backup_triage| {
+			backup_triage.adjust_validator::<T::ChainflipAccount>(validator_id.clone(), amount);
+		});
 	}
 }

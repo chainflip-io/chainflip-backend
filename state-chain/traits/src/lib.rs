@@ -125,11 +125,6 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-/// A bid represented by a validator and the amount they wish to bid
-pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
-/// A bid that has been classified as out of the validating set
-pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
-
 /// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct AuctionOutcome<T: Chainflip> {
@@ -199,7 +194,7 @@ pub trait BidderProvider {
 	type Amount;
 	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
 	/// greater than zero
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
 /// Provide feedback on staking
