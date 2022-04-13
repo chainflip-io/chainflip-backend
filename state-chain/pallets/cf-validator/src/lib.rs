@@ -850,28 +850,28 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 		HistoricalBonds::<T>::get(epoch)
 	}
 
-	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
-		HistoricalActiveEpochs::<T>::get(id)
+	fn active_epochs_for_validator(validator_id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
+		HistoricalActiveEpochs::<T>::get(validator_id)
 	}
 
-	fn number_of_active_epochs_for_validator(id: &Self::ValidatorId) -> u32 {
-		HistoricalActiveEpochs::<T>::decode_len(id).unwrap_or_default() as u32
+	fn number_of_active_epochs_for_validator(validator_id: &Self::ValidatorId) -> u32 {
+		HistoricalActiveEpochs::<T>::decode_len(validator_id).unwrap_or_default() as u32
 	}
 
-	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
+	fn deactivate_epoch(validator_id: &Self::ValidatorId, epoch: EpochIndex) {
+		HistoricalActiveEpochs::<T>::mutate(validator_id, |active_epochs| {
 			active_epochs.retain(|&x| x != epoch);
 		});
 	}
 
-	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
+	fn activate_epoch(validator_id: &Self::ValidatorId, epoch: EpochIndex) {
+		HistoricalActiveEpochs::<T>::mutate(validator_id, |epochs| {
 			epochs.push(epoch);
 		});
 	}
 
-	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount {
-		Self::active_epochs_for_validator(validator)
+	fn active_bond(validator_id: &Self::ValidatorId) -> Self::Amount {
+		Self::active_epochs_for_validator(validator_id)
 			.iter()
 			.map(|epoch| Self::epoch_bond(*epoch))
 			.max()
