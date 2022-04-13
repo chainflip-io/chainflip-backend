@@ -817,11 +817,6 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 
-					// Activate the accounts
-					for node in &nodes {
-						network::Cli::activate_account(node.clone());
-					}
-
 					// Move to start of auction
 					testnet.move_forward_blocks(1);
 
@@ -875,6 +870,11 @@ mod tests {
 					let (mut testnet, mut passive_nodes) =
 						network::Network::create(number_of_passive_nodes as u8, &nodes);
 
+					// Activate the passiv nodes
+					for node in &passive_nodes {
+						network::Cli::activate_account(node.clone());
+					}
+
 					nodes.append(&mut passive_nodes);
 					assert_eq!(nodes.len() as u32, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
@@ -900,11 +900,6 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-
-					// Activate the accounts
-					for node in &nodes {
-						network::Cli::activate_account(node.clone());
-					}
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
@@ -1013,13 +1008,17 @@ mod tests {
 					// Create the test network with some fresh nodes and the genesis validators
 					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
 
+					// Activate passive nodes
+					for passive_node in passive_nodes.clone() {
+						network::Cli::activate_account(passive_node);
+					}
+
 					nodes.append(&mut passive_nodes);
 
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
 						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
-						network::Cli::activate_account(node.clone());
 					}
 
 					// Move forward one block to process events
@@ -1168,6 +1167,7 @@ mod tests {
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &init_passive_nodes {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
+						network::Cli::activate_account(node.clone());
 					}
 
 					// Start an auction
@@ -1178,11 +1178,6 @@ mod tests {
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
-
-					// Activate the accounts
-					for node in [genesis_validators.clone(), init_passive_nodes.clone()].concat() {
-						network::Cli::activate_account(node);
-					}
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
@@ -1276,6 +1271,10 @@ mod tests {
 					let (mut testnet, mut passive_nodes) =
 						network::Network::create(MAX_VALIDATORS as u8, &nodes);
 
+					for passive_node in passive_nodes.clone() {
+						network::Cli::activate_account(passive_node);
+					}
+
 					nodes.append(&mut passive_nodes);
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
@@ -1292,11 +1291,6 @@ mod tests {
 
 					// Start an auction and wait for rotation
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-
-					// Activate the accounts
-					for node in &nodes {
-						network::Cli::activate_account(node.clone());
-					}
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -1426,9 +1420,6 @@ mod tests {
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
 					// Activate accounts
-					network::Cli::activate_account(genesis_node_1.clone());
-					network::Cli::activate_account(genesis_node_2.clone());
-					network::Cli::activate_account(genesis_node_3.clone());
 					network::Cli::activate_account(init_passive_node_1.clone());
 					network::Cli::activate_account(init_passive_node_2.clone());
 
@@ -1524,9 +1515,6 @@ mod tests {
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
 					// Activate accounts
-					network::Cli::activate_account(genesis_node_1.clone());
-					network::Cli::activate_account(genesis_node_2.clone());
-					network::Cli::activate_account(genesis_node_3.clone());
 					network::Cli::activate_account(init_passive_node_1.clone());
 					network::Cli::activate_account(init_passive_node_2.clone());
 
