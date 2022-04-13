@@ -179,10 +179,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 			epoch_index: EpochIndex,
-			block_number: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::do_witness_at_epoch(who, *call, epoch_index, block_number)
+			Self::do_witness_at_epoch(who, *call, epoch_index)
 		}
 	}
 
@@ -220,7 +219,6 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 		epoch_index: EpochIndex,
-		_block_number: T::BlockNumber,
 	) -> DispatchResultWithPostInfo {
 		// Ensure the epoch has not yet expired
 		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
@@ -295,7 +293,7 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index(), Default::default())
+		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index())
 	}
 }
 
@@ -312,9 +310,8 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 		who: Self::AccountId,
 		call: Self::Call,
 		epoch: EpochIndex,
-		block_number: Self::BlockNumber,
 	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who.into(), call, epoch, block_number)
+		Self::do_witness_at_epoch(who.into(), call, epoch)
 	}
 }
 
