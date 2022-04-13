@@ -17,8 +17,8 @@ use codec::{Decode, Encode};
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, KeyProvider,
-	SignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
+	KeyProvider, SignerNomination,
 };
 use frame_support::{
 	ensure,
@@ -64,7 +64,6 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 		pallet_prelude::*,
-		storage::bounded_btree_set::BoundedBTreeSet,
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
 	};
@@ -407,8 +406,7 @@ pub mod pallet {
 		/// Report that a threshold signature ceremony has failed and incriminate the guilty
 		/// participants.
 		///
-		/// The `offenders` argument takes a [BoundedBTreeSet] where the set size is limited
-		/// to the current size of the threshold group.
+		/// The `offenders` argument takes a [BTreeSet]
 		///
 		/// ## Events
 		///
@@ -422,10 +420,7 @@ pub mod pallet {
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
 			id: CeremonyId,
-			offenders: BoundedBTreeSet<
-				<T as Chainflip>::ValidatorId,
-				cf_traits::CurrentThreshold<T>,
-			>,
+			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let reporter_id = ensure_signed(origin)?.into();
 
@@ -520,9 +515,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let key_id = T::KeyProvider::current_key_id();
 
 		// Select nominees for threshold signature.
-		if let Some(nominees) =
-			T::SignerNomination::threshold_nomination_with_seed((ceremony_id, attempt))
-		{
+		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed(
+			(ceremony_id, attempt),
+			T::EpochInfo::epoch_index(),
+		) {
 			// Store the context.
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,

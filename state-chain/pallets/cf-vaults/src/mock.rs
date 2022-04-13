@@ -179,8 +179,9 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		},
 	};
 
-	MockEpochInfo::set_validators(vec![ALICE, BOB, CHARLIE]);
-
+	let validators = vec![ALICE, BOB, CHARLIE];
+	MockEpochInfo::set_epoch_validator_count(0, validators.len() as u32);
+	MockEpochInfo::set_validators(validators);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {

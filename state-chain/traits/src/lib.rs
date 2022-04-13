@@ -116,8 +116,10 @@ pub trait EpochInfo {
 	///
 	/// This is the number of parties required to conduct a *successful* threshold
 	/// signature ceremony based on the number of active validators.
-	fn consensus_threshold() -> u32 {
-		cf_utilities::success_threshold_from_share_count(Self::current_validator_count() as u32)
+	fn consensus_threshold(epoch_index: EpochIndex) -> u32 {
+		cf_utilities::success_threshold_from_share_count(
+			Self::validator_count_at_epoch(epoch_index).unwrap_or_default(),
+		)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -125,14 +127,6 @@ pub trait EpochInfo {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_validator_count_for_epoch(epoch_index: EpochIndex, count: u32);
-}
-
-pub struct CurrentThreshold<T>(PhantomData<T>);
-
-impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
-	fn get() -> u32 {
-		T::EpochInfo::consensus_threshold()
-	}
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
@@ -492,7 +486,10 @@ pub trait SignerNomination {
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
-	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>>;
+	fn threshold_nomination_with_seed<H: Hashable>(
+		seed: H,
+		epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.

@@ -691,7 +691,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 
-		if offenders.len() < T::EpochInfo::consensus_threshold() as usize {
+		if offenders.len() < T::EpochInfo::consensus_threshold(T::EpochInfo::epoch_index()) as usize
+		{
 			T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
 			T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 		}
