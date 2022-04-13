@@ -674,9 +674,8 @@ pub mod pallet {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
 			CurrentEpochStartedAt::<T>::set(Default::default());
-			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-
+			let genesis_validators = pallet_session::Pallet::<T>::validators();
 			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
 		}
 	}
