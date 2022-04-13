@@ -461,7 +461,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 			ChainflipAccountState::HistoricalAuthority(state) => {
 				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
 			},
-			ChainflipAccountState::CurrentAuthority | ChainflipAccountState::BackupOrPassive(_) => {
+			_ => {
 				log::error!(
 					"Attempted to set backup or passive on a CurrentAuthority or BackupOrPassive"
 				);
