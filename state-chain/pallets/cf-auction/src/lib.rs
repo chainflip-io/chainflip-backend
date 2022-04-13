@@ -102,8 +102,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An auction has a set of winners \[auction_index, winners\]
-		AuctionCompleted(Vec<T::ValidatorId>),
+		/// An auction has a set of winners \[winners, bond\]
+		AuctionCompleted(Vec<T::ValidatorId>, T::Amount),
 		/// The active validator range upper limit has changed \[before, after\]
 		ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange),
 	}
@@ -177,7 +177,7 @@ impl<T: Config> Auctioneer<T> for Pallet<T> {
 
 		let outcome = ResolverV1::resolve_auction(&ActiveValidatorSizeRange::<T>::get(), bids)?;
 
-		Self::deposit_event(Event::AuctionCompleted(outcome.winners.clone()));
+		Self::deposit_event(Event::AuctionCompleted(outcome.winners.clone(), outcome.bond));
 
 		Ok(outcome)
 	}
