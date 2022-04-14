@@ -29,8 +29,12 @@ pub async fn test_all_stake_manager_events() {
     let settings =
         Settings::from_default_file("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
-    let eth_ws_rpc_client =
-        EthWsRpcClient::new(&settings.eth, &root_logger).expect("Couldn't create EthRpcClient");
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
+        .await
+        .expect("Couldn't create EthWsRpcClient");
+
+    let eth_http_rpc_client = EthHttpRpcClient::new(&settings.eth, &root_logger)
+        .expect("Couldn't create EthHttpRpcClient");
 
     let stake_manager =
         StakeManager::new(integration_test_settings.eth.stake_manager_address).unwrap();
@@ -178,7 +182,7 @@ pub async fn test_all_stake_manager_events() {
                     new_supply,
                     U256::from_dec_str("100000000000000000000000000").unwrap()
                 );
-                assert!(block_number > &U256::from_str("0").unwrap());
+                assert!(block_number > U256::from_str("0").unwrap());
                 true
             }
             _ => false,

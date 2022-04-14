@@ -1207,8 +1207,7 @@ mod merged_stream_tests {
             tx_hash: Default::default(),
             log_index: U256::from(log_index),
             block_number,
-            event_parameters: KeyManagerEvent::KeyChange {
-                signed: true,
+            event_parameters: KeyManagerEvent::AggKeySetByAggKey {
                 old_key: ChainflipKey::default(),
                 new_key: ChainflipKey::default(),
             },

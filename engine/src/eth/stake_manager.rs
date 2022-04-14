@@ -283,7 +283,7 @@ mod tests {
             RawLog {
                 topics : vec![
                     staked_event_signature,
-                    NODE_ID.clone(),
+                    *NODE_ID,
                     H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 ],
                 data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap()
@@ -321,7 +321,7 @@ mod tests {
             RawLog {
                 topics : vec![
                     claimed_register_event_signature,
-                    NODE_ID.clone(),
+                    *NODE_ID,
                     H256::from_str("0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap()
                 ],
                 data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a3986000000000000000000000000000000000000000000000000000000000000061a6fd4e0000000000000000000000000000000000000000000000000000000061a9a04b").unwrap()
