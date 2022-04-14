@@ -15,16 +15,17 @@ const SEED: u32 = 0;
 
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 
-fn add_online_validators<T, I>(accounts: I)
+fn add_online_validators<T, I>(validators: I)
 where
 	T: frame_system::Config + pallet_cf_validator::Config + pallet_cf_online::Config,
-	I: Clone + Iterator<Item = <T as frame_system::Config>::AccountId>,
+	I: Clone + Iterator<Item = <T as Chainflip>::ValidatorId>,
 {
-	Validators::<T>::put(accounts.clone().collect::<Vec<_>>());
-	for account in accounts {
-		whitelist_account!(account);
+	Validators::<T>::put(validators.clone().collect::<Vec<_>>());
+	for validator_id in validators {
+		let account_id = validator_id.into_ref();
+		whitelist_account!(account_id);
 		OnlineCall::<T>::heartbeat()
-			.dispatch_bypass_filter(RawOrigin::Signed(account).into())
+			.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into())
 			.unwrap();
 	}
 }
@@ -38,7 +39,7 @@ benchmarks_instance_pallet! {
 	}
 
 	signature_success {
-		let all_accounts = (0..150).map(|i| account::<T::AccountId>("signers", i, SEED));
+		let all_accounts = (0..150).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED));
 
 		add_online_validators::<T, _>(all_accounts);
 
@@ -52,7 +53,7 @@ benchmarks_instance_pallet! {
 	}
 	report_signature_failed {
 		let a in 1 .. 100;
-		let all_accounts = (0..150).map(|i| account::<T::AccountId>("signers", i, SEED));
+		let all_accounts = (0..150).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED));
 
 		add_online_validators::<T, _>(all_accounts);
 
