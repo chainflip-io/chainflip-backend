@@ -1122,8 +1122,8 @@ mod tests {
 		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
-			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
-			Runtime, Validator,
+			EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online, Runtime,
+			Validator,
 		};
 		use std::collections::HashMap;
 
