@@ -59,6 +59,12 @@ pub mod pallet {
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
+		/// Ratio of backup validators
+		#[pallet::constant]
+		type ActiveToBackupValidatorRatio: Get<u32>;
+		/// Percentage of backup validators in validating set in a emergency rotation
+		#[pallet::constant]
+		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
 	}
 
 	/// Pallet implements \[Hooks\] trait
@@ -121,32 +127,32 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
 		pub fn set_active_validator_range(
 			origin: OriginFor<T>,
-			auction_parameters: <ResolverV1<T> as AuctionResolver<T>>::AuctionParameters,
+			active_validator_range: (u32, u32),
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			let old = Self::set_auction_parameters(auction_parameters)?;
-			Self::deposit_event(Event::AuctionParametersChanged(old, auction_parameters));
+			let new = AuctionParametersV1 {
+				min_size: active_validator_range.0,
+				max_size: active_validator_range.1,
+				active_to_backup_validator_ratio: T::ActiveToBackupValidatorRatio::get(),
+				percentage_of_backup_validators_in_emergency:
+					T::PercentageOfBackupValidatorsInEmergency::get(),
+			};
+			let old = Self::set_auction_parameters(new)?;
+			Self::deposit_event(Event::AuctionParametersChanged(old, new));
 			Ok(().into())
 		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		min_size: u32,
-		max_size: u32,
-		active_to_backup_validator_ratio: u32,
-		percentage_of_backup_validators_in_emergency: u32,
+		pub min_size: u32,
+		pub max_size: u32,
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				min_size: 3,
-				max_size: 15,
-				active_to_backup_validator_ratio: 3,
-				percentage_of_backup_validators_in_emergency: 30,
-			}
+			Self { min_size: 3, max_size: 15 }
 		}
 	}
 
@@ -157,9 +163,9 @@ pub mod pallet {
 			Pallet::<T>::set_auction_parameters(AuctionParametersV1 {
 				min_size: self.min_size,
 				max_size: self.max_size,
-				active_to_backup_validator_ratio: self.active_to_backup_validator_ratio,
-				percentage_of_backup_validators_in_emergency: self
-					.percentage_of_backup_validators_in_emergency,
+				active_to_backup_validator_ratio: T::ActiveToBackupValidatorRatio::get(),
+				percentage_of_backup_validators_in_emergency:
+					T::PercentageOfBackupValidatorsInEmergency::get(),
 			})
 			.expect("we should provide valid auction parameters at genesis");
 		}
