@@ -185,7 +185,8 @@ where
 		}
 
 		// Promote any passives that fit in the backup target size.
-		while self.backup.len() < self.backup_group_size_target as usize && self.passive.len() > 0 {
+		while self.backup.len() < self.backup_group_size_target as usize && !self.passive.is_empty()
+		{
 			let promoted = self.passive.pop().expect("passive set is not empty");
 			AccountState::set_backup_or_passive(
 				promoted.validator_id.into_ref(),
