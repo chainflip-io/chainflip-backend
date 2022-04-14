@@ -571,7 +571,8 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_auction::GenesisConfig {
-					validator_size_range: (self.min_validators, self.max_validators),
+					min_size: self.min_validators,
+					max_size: self.max_validators,
 				},
 				storage,
 			)
@@ -1116,8 +1117,8 @@ mod tests {
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{
-			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
-			EpochInfo, FlipBalance, IsOnline, StakeTransfer,
+			BackupOrPassive, BackupValidators, ChainflipAccount, ChainflipAccountState,
+			ChainflipAccountStore, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
@@ -1192,11 +1193,8 @@ mod tests {
 					});
 
 					// assert list of backup validators as being the genesis validators
-					let mut current_backup_validators: Vec<NodeId> = Auction::remaining_bidders()
-						.iter()
-						.take(Auction::backup_group_size() as usize)
-						.map(|(validator_id, _)| validator_id.clone())
-						.collect();
+					let mut current_backup_validators: Vec<NodeId> =
+						<Validator as BackupValidators>::backup_validators();
 
 					current_backup_validators.sort();
 					genesis_validators.sort();
