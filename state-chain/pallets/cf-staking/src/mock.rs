@@ -170,6 +170,9 @@ impl pallet_cf_staking::Config for Test {
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
 pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
+// Used as genesis node for testing.
+pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
+
 pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -177,7 +180,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
 		staking: StakingConfig {
-			genesis_stakers: vec![],
+			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
 			minimum_stake: MIN_STAKE,
 			claim_ttl: Duration::from_secs(10),
 		},
