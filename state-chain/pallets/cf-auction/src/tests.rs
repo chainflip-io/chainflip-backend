@@ -14,7 +14,10 @@ fn should_provide_winning_set() {
 
 		assert_eq!(
 			last_event(),
-			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(expected_winning_set().0)),
+			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(
+				expected_winning_set().0,
+				expected_winning_set().1
+			)),
 		);
 
 		generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_B);
@@ -37,22 +40,19 @@ fn changing_range() {
 		// Check we are throwing up an error when we send anything less than the minimum of 1
 		assert_noop!(
 			AuctionPallet::set_active_validator_range(Origin::root(), (0, 0)),
-			Error::<Test>::InvalidRange
+			Error::<Test>::InvalidAuctionParameters
 		);
 		assert_noop!(
 			AuctionPallet::set_active_validator_range(Origin::root(), (0, 1)),
-			Error::<Test>::InvalidRange
+			Error::<Test>::InvalidAuctionParameters
 		);
 		// This should now work
 		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
 		// Confirm we have an event
-		assert_eq!(
+		assert!(matches!(
 			last_event(),
-			mock::Event::AuctionPallet(crate::Event::ActiveValidatorRangeChanged(
-				(MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
-				(2, 100)
-			)),
-		);
+			mock::Event::AuctionPallet(crate::Event::AuctionParametersChanged(..)),
+		));
 		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
 		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (3, 3)));
 	});

@@ -11,7 +11,10 @@ benchmarks! {
 		let range = (2, 100);
 	}: _(RawOrigin::Root, range.into())
 	verify {
-		assert_eq!(Pallet::<T>::active_validator_size_range(), range.into())
+		assert!(matches!(
+			Pallet::<T>::auction_parameters(),
+			AuctionParametersV1 { min_size, max_size, .. } if (min_size, max_size) == range
+		));
 	}
 }
 
