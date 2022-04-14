@@ -1,10 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
+mod max_value;
 pub mod mocks;
 pub mod offence_reporting;
 
 pub use async_result::AsyncResult;
+pub use max_value::*;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
@@ -33,7 +35,8 @@ pub trait Chainflip: frame_system::Config {
 		+ Ord
 		+ Copy
 		+ AtLeast32BitUnsigned
-		+ MaybeSerializeDeserialize;
+		+ MaybeSerializeDeserialize
+		+ MaxValue;
 
 	/// An identity for a validator
 	type ValidatorId: Member

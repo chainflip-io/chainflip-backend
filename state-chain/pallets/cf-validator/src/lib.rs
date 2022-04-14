@@ -19,10 +19,10 @@ mod migrations;
 
 pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Auctioneer, BackupOrPassive,
-	Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation,
-	EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch,
-	MissedAuthorshipSlots, QualifyValidator, StakeHandler, SuccessOrFailure, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Auctioneer, Chainflip,
+	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyValidator, StakeHandler, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -651,7 +651,7 @@ pub mod pallet {
 	/// Backup validator triage state.
 	#[pallet::storage]
 	#[pallet::getter(fn backup_validator_triage)]
-	pub type BackupValidatorTriage<T> = StorageValue<_, BackupTriageResult<T>, ValueQuery>;
+	pub type BackupValidatorTriage<T> = StorageValue<_, RuntimeBackupTriage<T>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -860,27 +860,9 @@ impl<T: Config> Pallet<T> {
 		backup_candidates: Vec<(ValidatorIdOf<T>, T::Amount)>,
 		backup_group_size_target: usize,
 	) {
-		let triage_result =
-			BackupTriageResult::<T>::new(backup_candidates, backup_group_size_target);
-
-		// TODO:
-		// It's not this simple. For example, there might be old backup validators who are no longer
-		// in either of these sets because they were banned from the auction.
-		for (validator_id, _amount) in triage_result.backup.iter() {
-			T::ChainflipAccount::set_backup_or_passive(
-				validator_id.into_ref(),
-				BackupOrPassive::Backup,
-			);
-		}
-
-		for (validator_id, _amount) in triage_result.passive.iter() {
-			T::ChainflipAccount::set_backup_or_passive(
-				validator_id.into_ref(),
-				BackupOrPassive::Passive,
-			);
-		}
-
-		BackupValidatorTriage::<T>::put(triage_result);
+		let triage = RuntimeBackupTriage::<T>::new(backup_candidates, backup_group_size_target);
+		triage.update_account_statuses::<T::ChainflipAccount>();
+		BackupValidatorTriage::<T>::put(triage);
 	}
 }
 
