@@ -287,12 +287,6 @@ pub mod pallet {
 					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
 				},
 				RotationStatus::SessionRotating(_) => {
-					// TODO: Remove update_backup_and_passive_states and move it somewhere it makes
-					// sense Just removing it means that on a rotation, the nodes that were
-					// validators do not get moved to backup state. This then impacts some
-					// integration tests which check the state in order to determine if a node
-					// should submit a witness or not
-					T::Auctioneer::update_backup_and_passive_states();
 					Self::set_rotation_status(RotationStatus::Idle);
 				},
 			}
@@ -769,6 +763,7 @@ impl<T: Config> Pallet<T> {
 			(*epoch - 1, *epoch)
 		});
 
+		let mut old_validators = Validators::<T>::get();
 		// Update state of current validators
 		Validators::<T>::set(epoch_validators.to_vec());
 
@@ -804,10 +799,19 @@ impl<T: Config> Pallet<T> {
 			// Bond the validators
 			let bond = EpochHistory::<T>::active_bond(validator);
 			T::Bonder::update_validator_bond(validator, bond);
-			// Update validator account state.
-			// Inline this????
-			ChainflipAccountStore::<T>::update_validator_account_data(validator, new_epoch);
+
+			ChainflipAccountStore::<T>::set_current_authority(validator);
 		}
+
+		// find all the valitators moving out of the epoch
+		old_validators.retain(|validator| !epoch_validators.contains(validator));
+
+		old_validators.iter().for_each(|validator| {
+			ChainflipAccountStore::<T>::set_historical_validator(validator);
+		});
+
+		// We've got new validators, which means the backups and passives may have changed
+		T::Auctioneer::update_backup_and_passive_states();
 
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(epoch_validators);
@@ -819,8 +823,10 @@ impl<T: Config> Pallet<T> {
 	fn expire_epoch(epoch: EpochIndex) {
 		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
-			let bond = EpochHistory::<T>::active_bond(validator);
-			T::Bonder::update_validator_bond(validator, bond);
+			if EpochHistory::<T>::number_of_active_epochs_for_validator(validator) == 0 {
+				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(validator);
+			}
+			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}
 	}
 
@@ -844,24 +850,28 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 		HistoricalBonds::<T>::get(epoch)
 	}
 
-	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
-		HistoricalActiveEpochs::<T>::get(id)
+	fn active_epochs_for_validator(validator_id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
+		HistoricalActiveEpochs::<T>::get(validator_id)
 	}
 
-	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::mutate(validator, |active_epochs| {
+	fn number_of_active_epochs_for_validator(validator_id: &Self::ValidatorId) -> u32 {
+		HistoricalActiveEpochs::<T>::decode_len(validator_id).unwrap_or_default() as u32
+	}
+
+	fn deactivate_epoch(validator_id: &Self::ValidatorId, epoch: EpochIndex) {
+		HistoricalActiveEpochs::<T>::mutate(validator_id, |active_epochs| {
 			active_epochs.retain(|&x| x != epoch);
 		});
 	}
 
-	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::mutate(validator, |epochs| {
+	fn activate_epoch(validator_id: &Self::ValidatorId, epoch: EpochIndex) {
+		HistoricalActiveEpochs::<T>::mutate(validator_id, |epochs| {
 			epochs.push(epoch);
 		});
 	}
 
-	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount {
-		Self::active_epochs_for_validator(validator)
+	fn active_bond(validator_id: &Self::ValidatorId) -> Self::Amount {
+		Self::active_epochs_for_validator(validator_id)
 			.iter()
 			.map(|epoch| Self::epoch_bond(*epoch))
 			.max()

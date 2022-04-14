@@ -202,7 +202,7 @@ mod tests {
 
 			// Handle events from contract
 			fn on_contract_event(&self, event: &ContractEvent) {
-				if self.state() == ChainflipAccountState::Validator && self.active {
+				if self.state() == ChainflipAccountState::CurrentAuthority && self.active {
 					match event {
 						ContractEvent::Staked { node_id: validator_id, amount, .. } => {
 							// Witness event -> send transaction to state chain
@@ -225,7 +225,7 @@ mod tests {
 				// If active handle events
 				if self.active {
 					// Being a validator we would respond to certain events
-					if self.state() == ChainflipAccountState::Validator {
+					if self.state() == ChainflipAccountState::CurrentAuthority {
 						on_events!(
 							events,
 							Event::Validator(
@@ -748,12 +748,8 @@ mod tests {
 
 				for account in accounts.iter() {
 					let account_data = ChainflipAccountStore::<Runtime>::get(account);
-					assert_eq!(
-						Some(1),
-						account_data.last_active_epoch,
-						"validator should be active in the genesis epoch(1)"
-					);
-					assert_eq!(ChainflipAccountState::Validator, account_data.state);
+					// TODO: Check historical epochs
+					assert_eq!(ChainflipAccountState::CurrentAuthority, account_data.state);
 				}
 			});
 		}
@@ -766,7 +762,8 @@ mod tests {
 		use super::{genesis::GENESIS_BALANCE, *};
 		use crate::tests::network::setup_account_and_peer_mapping;
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
+			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+			EpochInfo,
 		};
 		use pallet_cf_validator::RotationStatus;
 		use state_chain_runtime::{HeartbeatBlockInterval, Validator};
@@ -940,27 +937,18 @@ mod tests {
 					);
 
 					for account in keyless_nodes.iter() {
+						// TODO: Check historical epochs
 						assert_eq!(
-							None,
-							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
-							"this node should have never been active"
-						);
-						assert_eq!(
-							ChainflipAccountState::Passive,
+							ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
 							ChainflipAccountStore::<Runtime>::get(account).state,
 							"should be a passive node"
 						);
 					}
 
-					let current_epoch = Validator::epoch_index();
 					for account in new_validators.iter() {
+						// TODO: Check historical epochs
 						assert_eq!(
-							Some(current_epoch),
-							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
-							"validator should have been active in current epoch"
-						);
-						assert_eq!(
-							ChainflipAccountState::Validator,
+							ChainflipAccountState::CurrentAuthority,
 							ChainflipAccountStore::<Runtime>::get(account).state,
 							"should be validator"
 						);
@@ -971,7 +959,7 @@ mod tests {
 					testnet.stake_manager_contract.stake(late_staker.clone(), stake_amount);
 					testnet.move_forward_blocks(1);
 					assert_eq!(
-						ChainflipAccountState::Backup,
+						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
 						"late staker should be a backup validator"
 					);
@@ -1128,8 +1116,8 @@ mod tests {
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, FlipBalance,
-			IsOnline, StakeTransfer,
+			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+			EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
@@ -1139,10 +1127,8 @@ mod tests {
 		use std::collections::HashMap;
 
 		#[test]
-		// We have a set of backup validators who receive rewards
-		// A network is created where we have a validating set with a set of backup validators
-		// The backup validators would receive emissions on each heartbeat
-		fn backup_rewards() {
+
+		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// We want to have at least one heartbeat within our reduced epoch
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
@@ -1160,9 +1146,8 @@ mod tests {
 					let (mut testnet, mut init_passive_nodes) =
 						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
 
-					// An initial stake which is superior to the genesis stakes
-					// The current validators would have been rewarded on us leaving the current
-					// epoch so let's up the stakes for the passive nodes.
+					// An initial stake which is greater than the genesis stakes
+					// We intend for these initially passive nodes to win the auction
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &init_passive_nodes {
@@ -1174,7 +1159,7 @@ mod tests {
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 
 					assert_eq!(
-						1,
+						GENESIS_EPOCH,
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
@@ -1200,9 +1185,10 @@ mod tests {
 
 					current_validators.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-						assert_eq!(account_data.state, ChainflipAccountState::Validator);
+						assert_eq!(account_data.state, ChainflipAccountState::CurrentAuthority);
 						// we were active in teh first epoch
-						assert_eq!(account_data.last_active_epoch, Some(2));
+
+						// TODO: Check historical epochs
 					});
 
 					// assert list of backup validators as being the genesis validators
@@ -1222,9 +1208,12 @@ mod tests {
 
 					current_backup_validators.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-						assert_eq!(account_data.state, ChainflipAccountState::Backup);
+						assert_eq!(
+							account_data.state,
+							ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup)
+						);
 						// we were active in teh first epoch
-						assert_eq!(account_data.last_active_epoch, Some(1));
+						// TODO: Check historical epochs
 					});
 
 					let backup_validator_balances: HashMap<NodeId, FlipBalance> =

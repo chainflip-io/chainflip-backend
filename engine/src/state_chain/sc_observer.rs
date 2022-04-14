@@ -115,48 +115,38 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    async fn get_current_account_state<RpcClient: StateChainRpcApi>(
+    async fn get_current_account_data<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
         logger: &slog::Logger,
-    ) -> (ChainflipAccountData, bool) {
+    ) -> ChainflipAccountData {
         let new_account_data = state_chain_client
             .get_account_data(block_hash)
             .await
             .expect("Could not get account data");
 
-        let current_epoch = state_chain_client
-            .epoch_at_block(block_hash)
-            .await
-            .expect("Could not get current epoch");
+        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state);
 
-        let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
-            last_active_epoch + 1 == current_epoch
-        } else {
-            false
-        };
-
-        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state;
-        "is_outgoing" => is_outgoing, "last_active_epoch" => new_account_data.last_active_epoch);
-
-        (new_account_data, is_outgoing)
+        new_account_data
     }
 
     async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
-        account_data: ChainflipAccountData,
         sm_window_sender: &UnboundedSender<BlockHeightWindow>,
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
+        // TODO: Use all the historical epochs: https://github.com/chainflip-io/chainflip-backend/issues/1218
+        let last_active_epoch = *state_chain_client
+            .get_historical_active_epochs(block_hash)
+            .await?
+            .last()
+            .expect("Must exist if we're sending windows to witness processes");
+
         let eth_vault = state_chain_client
-            .get_vault::<Ethereum>(
-                block_hash,
-                account_data
-                    .last_active_epoch
-                    .expect("we are active or outgoing"),
-            )
+            .get_vault::<Ethereum>(block_hash, last_active_epoch)
             .await?;
+
         sm_window_sender
             .send(eth_vault.active_window.clone())
             .unwrap();
@@ -165,14 +155,16 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     }
 
     // Initialise the account state
-    let (mut account_data, mut is_outgoing) =
-        get_current_account_state(state_chain_client.clone(), initial_block_hash, &logger).await;
+    let mut account_data =
+        get_current_account_data(state_chain_client.clone(), initial_block_hash, &logger).await;
 
-    if account_data.state == ChainflipAccountState::Validator || is_outgoing {
+    if matches!(
+        account_data.state,
+        ChainflipAccountState::HistoricalAuthority(_) | ChainflipAccountState::CurrentAuthority
+    ) {
         send_windows_to_witness_processes(
             state_chain_client.clone(),
             initial_block_hash,
-            account_data,
             &sm_window_sender,
             &km_window_sender,
         )
@@ -389,28 +381,23 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                     }
                                 }
 
-                                // Backup and passive nodes need to update their state on every block (since it's possible to move
-                                // between Backup and Passive on every block), while Active nodes only need to update every new epoch.
+                                // Backup and passive nodes (could be historical backup or passive) need to update their state on every block (since it's possible to move
+                                // between Backup and Passive on every block), while CurrentAuthority nodes only need to update every new epoch.
                                 if received_new_epoch || matches!(
                                     account_data.state,
-                                    ChainflipAccountState::Backup | ChainflipAccountState::Passive
-                                ) {
-                                    let (new_account_data, new_is_outgoing) =
-                                        get_current_account_state(state_chain_client.clone(), current_block_hash, &logger).await;
-                                    account_data = new_account_data;
-                                    is_outgoing = new_is_outgoing;
-
+                                    ChainflipAccountState::BackupOrPassive(_) | ChainflipAccountState::HistoricalAuthority(_))
+                                 {
+                                    account_data = get_current_account_data(state_chain_client.clone(), current_block_hash, &logger).await;
                                 }
 
-                                // New windows should be sent to outgoing validators (so they know when to finish) or to
-                                // new/existing validators (so they know when to start)
+                                // New windows should be sent to HistoricalAuthority validators (so they know when to finish) or to
+                                // new/existing CurrentAuthoritys (so they know when to start)
                                 // Note: nodes that were outgoing in the last epoch (active 2 epochs ago) have already
                                 // received their end window, so we don't need to send anything to them
-                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::Validator) || is_outgoing) {
+                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::CurrentAuthority | ChainflipAccountState::HistoricalAuthority(_))) {
                                     send_windows_to_witness_processes(
                                         state_chain_client.clone(),
                                         current_block_hash,
-                                        account_data,
                                         &sm_window_sender,
                                         &km_window_sender,
                                     )
