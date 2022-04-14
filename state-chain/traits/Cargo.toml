@@ -6,6 +6,8 @@ authors = ['Chainflip <https://chainflip.io>']
 description = "Common traits used in the Chainflip runtime"
 
 [dependencies]
+log = { version = '0.4.14', default-features = false }
+
 # Internal
 cf-chains = { path ='../chains', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
@@ -48,10 +50,19 @@ git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'merge-config-option'
 optional = true
 
+[dev-dependencies.sp-core]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
+[dev-dependencies.sp-io]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
 [features]
 default = ['std']
 std = [
     'cf-chains/std',
+    'cf-utilities/std',
     'codec/std',
     'scale-info/std',
     'sp-std/std',
@@ -60,7 +71,7 @@ std = [
     'sp-runtime/std',
 ]
 runtime-benchmarks = [
-    'frame-benchmarking',
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
+    'cf-chains/runtime-benchmarks',
 ]

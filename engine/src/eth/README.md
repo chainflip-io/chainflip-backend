@@ -10,7 +10,7 @@ This component witnesses the events that occur on the StakeManager contract and 
 
 ## Key Manager Witness
 
-TODO: This needs filling in once the contract audit fixes are in, the the KeyManager is updated to register the 4 events that will be emitted.
+TODO: This needs filling in once the contract audit fixes are in, the KeyManager is updated to register the 4 events that will be emitted.
 
 ## ETH Broadcaster
 

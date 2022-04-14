@@ -1,9 +1,12 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable};
+use crate::{
+	eth::{SchnorrVerificationComponents, SigData, Tokenizable},
+	ChainCrypto, Ethereum,
+};
 
 use codec::{Decode, Encode};
-use ethabi::{ethereum_types::H256, Address, Param, ParamType, StateMutability, Token, Uint};
+use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
@@ -21,22 +24,6 @@ pub struct RegisterClaim {
 	pub address: Address,
 	/// The expiry duration in seconds.
 	pub expiry: Uint,
-}
-
-impl ChainflipContractCall for RegisterClaim {
-	fn has_signature(&self) -> bool {
-		!self.sig_data.sig.is_zero()
-	}
-
-	fn signing_payload(&self) -> H256 {
-		self.sig_data.msg_hash
-	}
-
-	fn abi_encode_with_signature(&self, signature: &SchnorrVerificationComponents) -> Vec<u8> {
-		let mut call = self.clone();
-		call.sig_data.insert_signature(signature);
-		call.abi_encoded()
-	}
 }
 
 impl RegisterClaim {
@@ -59,7 +46,16 @@ impl RegisterClaim {
 		calldata
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
+	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
+		self.sig_data.insert_signature(signature);
+		self
+	}
+
+	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		self.sig_data.msg_hash
+	}
+
+	pub fn abi_encoded(&self) -> Vec<u8> {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
@@ -118,7 +114,7 @@ mod test_register_claim {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
 		));
 	}
 
@@ -135,7 +131,7 @@ mod test_register_claim {
 		const TEST_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 
 		let stake_manager = ethabi::Contract::load(
-			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
 		)
 		.unwrap();
 
@@ -147,11 +143,13 @@ mod test_register_claim {
 		let expected_msg_hash = register_claim_runtime.sig_data.msg_hash;
 
 		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
-		let runtime_payload =
-			register_claim_runtime.abi_encode_with_signature(&SchnorrVerificationComponents {
+		let runtime_payload = register_claim_runtime
+			.clone()
+			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-			}); // Ensure signing payload isn't modified by signature.
+			})
+			.abi_encoded(); // Ensure signing payload isn't modified by signature.
 
 		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
 

@@ -1,11 +1,13 @@
 use std::cell::RefCell;
 
 use crate::{
-	self as pallet_cf_broadcast, AttemptCount, BroadcastConfig, Instance1, SignerNomination,
+	self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence, SignerNomination,
 };
-use cf_chains::Ethereum;
-use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Chainflip};
-use codec::{Decode, Encode};
+use cf_chains::mocks::{MockApiCall, MockEthereum, MockTransactionBuilder};
+use cf_traits::{
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, threshold_signer::MockThresholdSigner},
+	Chainflip,
+};
 use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::{
@@ -63,8 +65,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_offline_conditions!(u64);
-
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
@@ -89,37 +89,6 @@ impl SignerNomination for MockNominator {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct MockBroadcastConfig;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct MockUnsignedTx;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum MockSignedTx {
-	Valid,
-	Invalid,
-}
-
-impl BroadcastConfig for MockBroadcastConfig {
-	type Chain = Ethereum;
-	type UnsignedTransaction = MockUnsignedTx;
-	type SignedTransaction = MockSignedTx;
-	type TransactionHash = [u8; 4];
-	type SignerId = ();
-
-	fn verify_transaction(
-		_unsigned_tx: &Self::UnsignedTransaction,
-		signed_tx: &Self::SignedTransaction,
-		_signer_id: &Self::SignerId,
-	) -> Option<()> {
-		match signed_tx {
-			MockSignedTx::Valid => Some(()),
-			MockSignedTx::Invalid => None,
-		}
-	}
-}
-
 pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;
 pub const TRANSMISSION_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
 pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 3;
@@ -130,12 +99,19 @@ parameter_types! {
 	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
-	type TargetChain = Ethereum;
-	type BroadcastConfig = MockBroadcastConfig;
+	type Call = Call;
+	type Offence = PalletOffence;
+	type TargetChain = MockEthereum;
+	type ApiCall = MockApiCall<MockEthereum>;
+	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
+	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
 	type SignerNomination = MockNominator;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;

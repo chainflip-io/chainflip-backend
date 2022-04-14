@@ -11,10 +11,17 @@ pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 
+// ==== Logging Eth Observer constants ====
+pub const ETH_HTTP_STREAM_YIELDED: &str = "eth-observer-http-yielded";
+pub const ETH_WS_STREAM_YIELDED: &str = "eth-observer-ws-yielded";
+pub const ETH_STREAM_BEHIND: &str = "eth-stream-behind";
+
 // ==== Logging Trace/Debug Tag constants ====
 pub const LOG_ACCOUNT_STATE: &str = "T1";
 
 pub mod utils {
+    /// Async slog channel size
+    const ASYNC_SLOG_CHANNEL_SIZE: usize = 1024;
 
     use super::COMPONENT_KEY;
     const KV_LIST_INDENT: &str = "    \x1b[0;34m|\x1b[0m";
@@ -38,12 +45,16 @@ pub mod utils {
 
         // Print the readable log
         println!(
-            "\x1b{}[{}]\x1b[0m {} {} - {}",
+            "\x1b{}[{}]\x1b[0m {} {}",
             level_color,
             record.level(),
-            record.tag(),
-            record.module(),
-            record.msg()
+            record.msg(),
+            // Only show the tag if its not empty
+            if !record.tag().is_empty() {
+                format!("([{}], {})", record.tag(), record.module())
+            } else {
+                format!("({})", record.module())
+            }
         );
 
         // Print the location of the log call if its a Warning or above
@@ -74,6 +85,7 @@ pub mod utils {
             Ok(())
         }
     }
+
     pub struct PrintlnDrainVerbose;
 
     impl Drain for PrintlnDrainVerbose {
@@ -122,11 +134,14 @@ pub mod utils {
 
     /// Creates an async json logger with the 'tag' added as a key (not a key by default)
     /// ```sh
-    /// {"msg":"...","level":"TRCE","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
+    /// {"msg":"...","level":"trace","ts":"2021-10-21T12:49:22.492673400+11:00","tag":"...", "my_key":"my value"}
     /// ```
     pub fn new_json_logger() -> slog::Logger {
         slog::Logger::root(
-            slog_async::Async::new(new_json_drain()).build().fuse(),
+            slog_async::Async::new(new_json_drain())
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
             o!(),
         )
     }
@@ -143,7 +158,13 @@ pub mod utils {
             blacklist: Arc::new(tag_blacklist.into_iter().collect::<HashSet<_>>()),
         }
         .fuse();
-        slog::Logger::root(slog_async::Async::new(drain).build().fuse(), o!())
+        slog::Logger::root(
+            slog_async::Async::new(drain)
+                .chan_size(ASYNC_SLOG_CHANNEL_SIZE)
+                .build()
+                .fuse(),
+            o!(),
+        )
     }
 
     /// Creates a custom json drain that includes the tag as a key
@@ -240,6 +261,11 @@ pub mod test_utils {
                 .iter()
                 .filter(|log_tag| *log_tag == tag)
                 .count()
+        }
+
+        /// Just start again
+        pub fn clear(&mut self) {
+            *self.log.lock().unwrap() = Vec::new();
         }
     }
 

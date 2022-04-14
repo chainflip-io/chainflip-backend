@@ -4,19 +4,28 @@
 use super::*;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
 benchmarks! {
 	set_blocks_for_epoch {
 		let b = 2_u32;
-	}: _(RawOrigin::Root, b.into())
+		let call = Call::<T>::set_blocks_for_epoch(b.into());
+		let o = T::EnsureGovernance::successful_origin();
+	}: {
+		call.dispatch_bypass_filter(o)?
+	}
 	verify {
 		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
 	}
 	force_rotation {
-	}: _(RawOrigin::Root)
+		let call = Call::<T>::force_rotation();
+		let o = T::EnsureGovernance::successful_origin();
+	}: {
+		call.dispatch_bypass_filter(o)?
+	}
 	verify {
-		assert_eq!(Pallet::<T>::force(), true)
+		assert_eq!(Pallet::<T>::rotation_phase(), RotationStatus::RunAuction)
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
@@ -27,7 +36,7 @@ benchmarks! {
 		};
 	}: _(RawOrigin::Signed(caller.clone()), version.clone())
 	verify {
-		let validator_id: T::ValidatorId = caller.into();
+		let validator_id: ValidatorIdOf<T> = caller.into();
 		assert_eq!(Pallet::<T>::validator_cfe_version(validator_id), version)
 	}
 	// TODO: this benchmark is failing in in an test environment.
@@ -58,6 +67,14 @@ benchmarks! {
 	verify {
 		assert!(MappedPeers::<T>::contains_key(&public));
 		assert!(AccountPeerMapping::<T>::contains_key(&caller));
+	}
+
+	set_vanity_name {
+		let caller: T::AccountId = whitelisted_caller();
+		let name = str::repeat("x", 64).as_bytes().to_vec();
+	}: _(RawOrigin::Signed(caller.clone()), name.clone())
+	verify {
+		assert_eq!(VanityNames::<T>::get().get(&caller), Some(&name));
 	}
 }
 

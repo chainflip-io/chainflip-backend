@@ -1,18 +1,18 @@
 use chainflip_engine::{
     eth::{
-        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster, EthRpcApi,
-        EthRpcClient,
+        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster,
+        EthHttpRpcClient, EthRpcApi, EthWsRpcClient,
     },
     health::HealthMonitor,
     logging,
-    multisig::{self, MultisigInstruction, MultisigOutcome, PersistentKeyDB},
+    multisig::{self, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
 use pallet_cf_validator::SemVer;
 use pallet_cf_vaults::BlockHeightWindow;
-use sp_core::{storage::StorageKey, U256};
+use sp_core::U256;
 use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
@@ -41,12 +41,16 @@ async fn main() {
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &root_logger)
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
-        .expect("Should create EthRpcClient");
+        .expect("Should create EthWsRpcClient");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &root_logger)
-        .expect("Failed to create ETH broadcaster");
+    let eth_http_rpc_client =
+        EthHttpRpcClient::new(&settings.eth, &root_logger).expect("Should create EthHttpRpcClient");
+
+    let eth_broadcaster =
+        EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &root_logger)
+            .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
         state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
@@ -69,15 +73,9 @@ async fn main() {
     let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger)
         .expect("Failed to open database");
 
-    let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
-    let (multisig_instruction_sender, multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    // TODO: Merge this into the MultisigInstruction channel
+    // TODO: Merge this into the MultisigClientApi
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-
-    let (multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -93,68 +91,76 @@ async fn main() {
     {
         // ensure configured eth node is pointing to the correct chain id
         let chain_id_from_sc = U256::from(state_chain_client
-        .get_environment_value::<u64>(
-            latest_block_hash,
-            StorageKey(
-                pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>::hashed_key(
-                )
-                .into(),
-            ),
-        )
-        .await
-        .expect("Should get EthereumChainId from SC"));
+            .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
+                latest_block_hash,
+            )
+            .await
+            .expect("Should get EthereumChainId from SC"));
 
-        let chain_id_from_eth = eth_rpc_client
+        let chain_id_from_eth_ws = eth_ws_rpc_client
             .chain_id()
             .await
             .expect("Should fetch chain id");
 
-        if chain_id_from_sc != chain_id_from_eth {
+        let chain_id_from_eth_http = eth_http_rpc_client
+            .chain_id()
+            .await
+            .expect("Should fetch chain id");
+
+        let mut has_wrong_chain_id = false;
+        if chain_id_from_sc != chain_id_from_eth_ws {
             slog::error!(
-            &root_logger,
-            "Ethereum node pointing to ChainId {}, which is incorrect. Please ensure your Ethereum node is pointing to the network with ChainId: {}",
-            chain_id_from_eth,
-            chain_id_from_sc
-        );
+                &root_logger,
+                "The WS ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
+                chain_id_from_eth_ws,
+                chain_id_from_sc,
+            );
+            has_wrong_chain_id = true;
+        }
+        if chain_id_from_sc != chain_id_from_eth_http {
+            slog::error!(
+                &root_logger,
+                "The HTTP ETH node is pointing to ETH network with ChainId: {}. Please ensure it's pointing to network with ChainId {}",
+                chain_id_from_eth_http,
+                chain_id_from_sc,
+            );
+            has_wrong_chain_id = true;
+        }
+        if has_wrong_chain_id {
             return;
         }
     }
 
     let stake_manager_address = state_chain_client
-        .get_environment_value(
-            latest_block_hash,
-            StorageKey(pallet_cf_environment::StakeManagerAddress::<
-                state_chain_runtime::Runtime,
-            >::hashed_key().into()),
-        )
+        .get_storage_value::<pallet_cf_environment::StakeManagerAddress::<
+            state_chain_runtime::Runtime,
+        >>(latest_block_hash)
         .await
         .expect("Should get StakeManager address from SC");
-    let stake_manager_contract =
-        StakeManager::new(stake_manager_address).expect("Should create StakeManager contract");
+    let stake_manager_contract = StakeManager::new(stake_manager_address.into())
+        .expect("Should create StakeManager contract");
 
     let key_manager_address = state_chain_client
-        .get_environment_value(latest_block_hash, StorageKey(pallet_cf_environment::KeyManagerAddress::<
+        .get_storage_value::<pallet_cf_environment::KeyManagerAddress::<
             state_chain_runtime::Runtime,
-        >::hashed_key().into()))
+        >>(latest_block_hash)
         .await
         .expect("Should get KeyManager address from SC");
 
     let key_manager_contract =
-        KeyManager::new(key_manager_address).expect("Should create KeyManager contract");
+        KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
+
+    let (multisig_client, multisig_client_backend_future) = multisig::start_client(
+        state_chain_client.our_account_id.clone(),
+        db,
+        incoming_p2p_message_receiver,
+        outgoing_p2p_message_sender,
+        multisig::KeygenOptions::default(),
+        &root_logger,
+    );
 
     tokio::join!(
-        // Start signing components
-        multisig::start_client(
-            state_chain_client.our_account_id.clone(),
-            db,
-            multisig_instruction_receiver,
-            multisig_outcome_sender,
-            incoming_p2p_message_receiver,
-            outgoing_p2p_message_sender,
-            shutdown_client_rx,
-            multisig::KeygenOptions::default(),
-            &root_logger,
-        ),
+        multisig_client_backend_future,
         async {
             multisig_p2p::start(
                 &settings,
@@ -173,9 +179,8 @@ async fn main() {
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
-            multisig_instruction_sender,
+            multisig_client,
             account_peer_mapping_change_sender,
-            multisig_outcome_receiver,
             // send messages to these channels to start witnessing
             sm_window_sender,
             km_window_sender,
@@ -185,14 +190,16 @@ async fn main() {
         // Start eth observors
         eth::start_contract_observer(
             stake_manager_contract,
-            &eth_rpc_client,
+            &eth_ws_rpc_client,
+            &eth_http_rpc_client,
             sm_window_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
         eth::start_contract_observer(
             key_manager_contract,
-            &eth_rpc_client,
+            &eth_ws_rpc_client,
+            &eth_http_rpc_client,
             km_window_receiver,
             state_chain_client.clone(),
             &root_logger,

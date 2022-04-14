@@ -8,15 +8,19 @@ description = "Shared Chain-specific functionality for use in the substrate runt
 [dependencies]
 # Cryptography
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
+secp256k1 = {optional = true, version = "0.20"}
 
 # Ethereum
 ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '87ea2a3'}
 ethereum = {default-features = false, version = "0.10"}
-hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
+
+# Other
+hex = {default-features = false, version = "0.4"}
+hex-literal = {optional = true, version = '0.3'}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
-secp256k1 = {optional = true, version = "0.20"}
 log = { version = '0.4.14', default-features = false }
+cf-runtime-benchmark-utilities = { path = '../runtime-benchmark-utilities', default-features = false }
 
 # Substrate packages
 [dependencies.codec]
@@ -54,6 +58,7 @@ rand = {version='0.8.4'}
 [features]
 default = ['std']
 std = [
+    'cf-runtime-benchmark-utilities/std',
     'codec/std',
     'ethabi/std',
     'ethereum/std',
@@ -68,4 +73,9 @@ std = [
     'sp-std/std',
     'secp256k1'
 ]
-mocks = []
+runtime-benchmarks = [
+    'cf-runtime-benchmark-utilities/runtime-benchmarks',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+    'hex-literal',
+]

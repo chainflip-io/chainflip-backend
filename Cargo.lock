@@ -782,6 +782,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-benchmark-utilities",
  "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=87ea2a3)",
  "ethereum",
  "frame-support",
@@ -854,6 +855,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-runtime-benchmark-utilities"
+version = "0.1.0"
+dependencies = [
+ "sp-std",
+]
+
+[[package]]
+name = "cf-runtime-macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "cf-runtime-upgrade-utilities"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "log 0.4.14",
+ "sp-io",
+ "sp-std",
+]
+
+[[package]]
+name = "cf-runtime-utilities"
+version = "0.1.0"
+dependencies = [
+ "cf-runtime-macros",
+ "frame-support",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
@@ -861,8 +900,11 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log 0.4.14",
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
+ "sp-io",
  "sp-runtime",
  "sp-std",
  "utilities",
@@ -927,14 +969,14 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "structopt",
- "tokio 1.13.0",
+ "tokio",
  "utilities",
  "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3.git?rev=a425fa7)",
 ]
 
 [[package]]
 name = "chainflip-engine"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -951,9 +993,9 @@ dependencies = [
  "dyn-clone",
  "env_logger 0.9.0",
  "ethbloom",
- "failure",
  "frame-support",
  "frame-system",
+ "fs_extra",
  "futures 0.3.17",
  "futures-core",
  "futures-util",
@@ -971,7 +1013,7 @@ dependencies = [
  "lazy_static",
  "libp2p",
  "log 0.4.14",
- "mockall",
+ "mockall 0.11.0",
  "multisig-p2p-transport",
  "num",
  "pallet-cf-auction",
@@ -1012,8 +1054,7 @@ dependencies = [
  "substrate-subxt",
  "tempdir",
  "thiserror",
- "tokio 1.13.0",
- "tokio-compat-02",
+ "tokio",
  "tokio-stream",
  "url 1.7.2",
  "utilities",
@@ -1660,6 +1701,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 
 [[package]]
+name = "difflib"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
+
+[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1745,6 +1792,12 @@ name = "downcast"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
+
+[[package]]
+name = "downcast"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "downcast-rs"
@@ -2034,28 +2087,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "failure"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
-dependencies = [
- "backtrace",
- "failure_derive",
-]
-
-[[package]]
-name = "failure_derive"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
-
-[[package]]
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2183,6 +2214,15 @@ name = "float-cmp"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
+dependencies = [
+ "num-traits 0.2.14",
+]
+
+[[package]]
+name = "float-cmp"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 dependencies = [
  "num-traits 0.2.14",
 ]
@@ -2447,6 +2487,12 @@ dependencies = [
  "libc",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "fs_extra"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
 name = "fuchsia-cprng"
@@ -2745,7 +2791,7 @@ dependencies = [
  "http",
  "indexmap",
  "slab",
- "tokio 1.13.0",
+ "tokio",
  "tokio-util",
  "tracing",
 ]
@@ -2980,7 +3026,7 @@ dependencies = [
  "itoa",
  "pin-project-lite 0.2.7",
  "socket2 0.4.2",
- "tokio 1.13.0",
+ "tokio",
  "tower-service",
  "tracing",
  "want",
@@ -2998,7 +3044,7 @@ dependencies = [
  "log 0.4.14",
  "rustls",
  "rustls-native-certs",
- "tokio 1.13.0",
+ "tokio",
  "tokio-rustls",
  "webpki",
 ]
@@ -3012,7 +3058,7 @@ dependencies = [
  "derive_builder",
  "dns-lookup",
  "hyper 0.14.14",
- "tokio 1.13.0",
+ "tokio",
  "tower-service",
  "tracing",
 ]
@@ -3026,7 +3072,7 @@ dependencies = [
  "bytes 1.1.0",
  "hyper 0.14.14",
  "native-tls",
- "tokio 1.13.0",
+ "tokio",
  "tokio-native-tls",
 ]
 
@@ -3217,9 +3263,9 @@ checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
 
 [[package]]
 name = "itertools"
-version = "0.10.1"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
 dependencies = [
  "either",
 ]
@@ -3262,7 +3308,7 @@ dependencies = [
  "log 0.4.14",
  "serde 1.0.130",
  "serde_json",
- "tokio 1.13.0",
+ "tokio",
  "url 1.7.2",
  "websocket",
 ]
@@ -3362,7 +3408,7 @@ dependencies = [
  "jsonrpc-core",
  "lazy_static",
  "log 0.4.14",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
  "tokio-util",
  "unicase 2.6.0",
@@ -3400,7 +3446,7 @@ dependencies = [
  "serde 1.0.130",
  "serde_json",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "url 2.2.2",
 ]
 
@@ -3465,7 +3511,7 @@ dependencies = [
  "serde_json",
  "soketto 0.6.0",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "tokio-rustls",
  "tokio-util",
  "url 2.2.2",
@@ -4504,11 +4550,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ab571328afa78ae322493cacca3efac6a0f2e0a67305b4df31fd439ef129ac0"
 dependencies = [
  "cfg-if 1.0.0",
- "downcast",
+ "downcast 0.10.0",
  "fragile",
  "lazy_static",
- "mockall_derive",
- "predicates",
+ "mockall_derive 0.10.2",
+ "predicates 1.0.8",
+ "predicates-tree",
+]
+
+[[package]]
+name = "mockall"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d4d70639a72f972725db16350db56da68266ca368b2a1fe26724a903ad3d6b8"
+dependencies = [
+ "cfg-if 1.0.0",
+ "downcast 0.11.0",
+ "fragile",
+ "lazy_static",
+ "mockall_derive 0.11.0",
+ "predicates 2.1.1",
  "predicates-tree",
 ]
 
@@ -4517,6 +4578,18 @@ name = "mockall_derive"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7e25b214433f669161f414959594216d8e6ba83b6679d3db96899c0b4639033"
+dependencies = [
+ "cfg-if 1.0.0",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "mockall_derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79ef208208a0dea3f72221e26e904cdc6db2e481d9ade89081ddd494f1dbaa6b"
 dependencies = [
  "cfg-if 1.0.0",
  "proc-macro2",
@@ -4614,6 +4687,7 @@ name = "multisig-p2p-transport"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bincode",
  "bs58",
  "futures 0.3.17",
@@ -4622,14 +4696,16 @@ dependencies = [
  "jsonrpc-derive",
  "jsonrpc-pubsub",
  "log 0.4.14",
- "mockall",
+ "mockall 0.10.2",
+ "predicates 2.1.1",
  "sc-network",
  "sc-rpc",
+ "sc-service",
  "serde 1.0.130",
  "serde_json",
  "sp-core",
  "sp-runtime",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
 ]
 
@@ -5046,6 +5122,7 @@ name = "pallet-cf-auction"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5064,6 +5141,7 @@ name = "pallet-cf-broadcast"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5083,6 +5161,7 @@ name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5106,6 +5185,7 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
+ "serde 1.0.130",
  "sp-std",
 ]
 
@@ -5146,6 +5226,7 @@ dependencies = [
 name = "pallet-cf-online"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5163,15 +5244,15 @@ dependencies = [
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log 0.4.14",
- "pallet-cf-online",
- "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
+ "serde 1.0.130",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5189,7 +5270,6 @@ dependencies = [
  "frame-system",
  "log 0.4.14",
  "pallet-cf-flip",
- "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
@@ -5204,12 +5284,15 @@ name = "pallet-cf-threshold-signature"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
  "log 0.4.14",
+ "pallet-cf-online",
+ "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5223,6 +5306,7 @@ name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5242,6 +5326,7 @@ name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5266,6 +5351,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex",
  "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
@@ -5483,7 +5569,7 @@ dependencies = [
  "libc",
  "log 0.4.14",
  "rand 0.7.3",
- "tokio 1.13.0",
+ "tokio",
  "winapi 0.3.9",
 ]
 
@@ -5852,7 +5938,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f49cfaf7fdaa3bfacc6fa3e7054e65148878354a5cfddcf661df4c851f8021df"
 dependencies = [
  "difference",
- "float-cmp",
+ "float-cmp 0.8.0",
+ "normalize-line-endings",
+ "predicates-core",
+ "regex",
+]
+
+[[package]]
+name = "predicates"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5aab5be6e4732b473071984b3164dbbfb7a3674d30ea5ff44410b6bcd960c3c"
+dependencies = [
+ "difflib",
+ "float-cmp 0.9.0",
+ "itertools",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -6066,7 +6166,7 @@ dependencies = [
  "hyper-system-resolver",
  "pin-project-lite 0.2.7",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "tracing",
  "tracing-futures",
  "trust-dns-client",
@@ -6565,7 +6665,7 @@ dependencies = [
  "serde 1.0.130",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.13.0",
+ "tokio",
  "tokio-native-tls",
  "url 2.2.2",
  "wasm-bindgen",
@@ -6896,7 +6996,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "tiny-bip39",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -8717,6 +8817,7 @@ name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
@@ -8752,6 +8853,7 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "scale-info",
+ "serde 1.0.130",
  "sp-api",
  "sp-block-builder",
  "sp-consensus-aura",
@@ -8896,7 +8998,7 @@ dependencies = [
  "hyper 0.14.14",
  "log 0.4.14",
  "prometheus",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9172,18 +9274,6 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "0.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6703a273949a90131b290be1fe7b039d0fc884aa1935860dfcbe056f28cd8092"
-dependencies = [
- "bytes 0.5.6",
- "num_cpus",
- "pin-project-lite 0.1.12",
- "slab",
-]
-
-[[package]]
-name = "tokio"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "588b2d10a336da58d877567cd8fb8a14b463e2104910f8132cd054b4b96e29ee"
@@ -9211,20 +9301,6 @@ dependencies = [
  "bytes 0.4.12",
  "futures 0.1.31",
  "tokio-io",
-]
-
-[[package]]
-name = "tokio-compat-02"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7d4237822b7be8fff0a7a27927462fad435dcb6650f95cea9e946bf6bdc7e07"
-dependencies = [
- "bytes 0.5.6",
- "once_cell",
- "pin-project-lite 0.2.7",
- "tokio 0.2.25",
- "tokio 1.13.0",
- "tokio-stream",
 ]
 
 [[package]]
@@ -9266,7 +9342,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9295,7 +9371,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls",
- "tokio 1.13.0",
+ "tokio",
  "webpki",
 ]
 
@@ -9307,7 +9383,7 @@ checksum = "50145484efff8818b5ccd256697f36863f587da82cf8b409c53adf1e840798e3"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.7",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9357,7 +9433,7 @@ dependencies = [
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite 0.2.7",
- "tokio 1.13.0",
+ "tokio",
 ]
 
 [[package]]
@@ -9516,7 +9592,7 @@ dependencies = [
  "rand 0.8.4",
  "thiserror",
  "time 0.3.7",
- "tokio 1.13.0",
+ "tokio",
  "trust-dns-proto",
 ]
 
@@ -9541,7 +9617,7 @@ dependencies = [
  "smallvec 1.7.0",
  "thiserror",
  "tinyvec",
- "tokio 1.13.0",
+ "tokio",
  "url 2.2.2",
 ]
 
@@ -10185,7 +10261,7 @@ dependencies = [
  "serde_json",
  "soketto 0.7.0",
  "tiny-keccak",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
  "tokio-util",
  "url 2.2.2",
@@ -10219,7 +10295,7 @@ dependencies = [
  "serde_json",
  "soketto 0.7.0",
  "tiny-keccak",
- "tokio 1.13.0",
+ "tokio",
  "tokio-stream",
  "tokio-util",
  "url 2.2.2",
@@ -10234,7 +10310,7 @@ checksum = "1f6d8d1636b2627fe63518d5a9b38a569405d9c9bc665c43c9c341de57227ebb"
 dependencies = [
  "native-tls",
  "thiserror",
- "tokio 1.13.0",
+ "tokio",
  "url 2.2.2",
 ]
 

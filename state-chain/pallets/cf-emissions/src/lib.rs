@@ -2,8 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::eth::update_flip_supply::UpdateFlipSupply;
-use cf_traits::{NonceProvider, SigningContext, ThresholdSigner};
+use cf_chains::UpdateFlipSupply;
+use cf_traits::{Broadcaster, NonceProvider};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -18,20 +18,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - adds MintInterval storage items
-	pub const V1: StorageVersion = StorageVersion::new(1);
-}
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-use cf_traits::{BlockEmissions, EmissionsTrigger, Issuance, RewardsDistribution};
+use cf_traits::{
+	BlockEmissions, EmissionsTrigger, EpochTransitionHandler, Issuance, RewardsDistribution,
+};
 use codec::FullCodec;
-use frame_support::traits::{Get, Imbalance};
+use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, UniqueSaturatedInto, Zero},
 	SaturatedConversion,
 };
 
@@ -44,7 +40,7 @@ type BasisPoints = u32;
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::Ethereum;
+	use cf_chains::ChainAbi;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
@@ -55,6 +51,12 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// The host chain to which we broadcast supply updates.
+		///
+		/// In practice this is always [Ethereum] but making this configurable simplifies
+		/// testing.
+		type HostChain: ChainAbi;
+
 		/// The Flip token denomination.
 		type FlipBalance: Member
 			+ FullCodec
@@ -62,8 +64,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ AtLeast32BitUnsigned
-			+ UniqueSaturatedFrom<Self::BlockNumber>
-			+ Into<cf_chains::eth::Uint>;
+			+ UniqueSaturatedFrom<Self::BlockNumber>;
 
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
@@ -81,18 +82,18 @@ pub mod pallet {
 			Surplus = Self::Surplus,
 		>;
 
+		/// An outgoing api call that supports UpdateFlipSupply.
+		type ApiCall: UpdateFlipSupply<Self::HostChain>;
+
+		/// Transaction broadcaster for the host chain.
+		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
+
 		/// Blocks per day.
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider<cf_chains::Ethereum>;
-
-		/// Top-level Ethereum signing context needs to support `UpdateFlipSupply`.
-		type SigningContext: From<UpdateFlipSupply> + SigningContext<Self, Chain = Ethereum>;
-
-		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type NonceProvider: NonceProvider<Self::HostChain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -100,7 +101,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
@@ -164,29 +165,18 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				releases::V1.put::<Pallet<T>>();
-				migrations::v1::migrate::<T>();
-				return T::WeightInfo::on_runtime_upgrade_v1()
-			}
+			migrations::PalletMigration::<T>::on_runtime_upgrade();
 			T::WeightInfo::on_runtime_upgrade()
 		}
+
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			if releases::V0 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::pre_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			if releases::V1 == <Pallet<T> as GetStorageVersion>::on_chain_storage_version() {
-				migrations::v1::post_migrate::<T, Self>()
-			} else {
-				Ok(())
-			}
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
@@ -287,6 +277,7 @@ pub mod pallet {
 			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
 			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
 			MintInterval::<T>::put(T::BlockNumber::from(100_u32));
+			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
 	}
 }
@@ -309,15 +300,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Updates the total supply on the ETH blockchain
 	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
-		// TODO: extend the BlockNumber type in a nice to avoid this parse here
-		let block_as_u32: u32 = block_number.saturated_into();
-		let transaction = UpdateFlipSupply::new_unsigned(
-			T::NonceProvider::next_nonce(),
-			total_supply,
-			block_as_u32,
-		);
 		// Emit a threshold signature request.
-		T::ThresholdSigner::request_transaction_signature(transaction);
+		// TODO: See if we can replace an old request if there is one.
+		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
+			T::NonceProvider::next_nonce(),
+			total_supply.unique_saturated_into(),
+			block_number.saturated_into(),
+		));
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to
@@ -333,13 +322,10 @@ impl<T: Config> Pallet<T> {
 
 		let reward_amount = ValidatorEmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed);
 
-		// Check if an overflow occurred during the multiplication
-		if reward_amount.is_none() {
+		let reward_amount = reward_amount.unwrap_or_else(|| {
 			log::error!("Overflow while trying to mint rewards at block {:?}.", block_number);
-			return
-		}
-
-		let reward_amount = reward_amount.expect("Checked for overflow already.");
+			Zero::zero()
+		});
 
 		if !reward_amount.is_zero() {
 			// Mint the rewards
@@ -374,7 +360,10 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 			((T::Issuance::total_issuance() * inflation.into()) /
 				10_000u32.into() / DAYS_IN_YEAR.into())
 			.checked_div(&T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()))
-			.expect("blocks per day should be greater than zero")
+			.unwrap_or_else(|| {
+				log::error!("blocks per day should be greater than zero");
+				Zero::zero()
+			})
 		}
 
 		Self::update_validator_block_emission(inflation_to_block_reward::<T>(
@@ -391,5 +380,16 @@ impl<T: Config> EmissionsTrigger for Pallet<T> {
 	fn trigger_emissions() {
 		let current_block_number = frame_system::Pallet::<T>::block_number();
 		Self::mint_rewards_for_block(current_block_number);
+	}
+}
+
+impl<T: Config> EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = <T as frame_system::Config>::AccountId;
+
+	fn on_new_epoch(_epoch_validators: &[Self::ValidatorId]) {
+		// Calculate block emissions on every epoch
+		Self::calculate_block_emissions();
+		// Process any outstanding emissions.
+		Self::trigger_emissions();
 	}
 }

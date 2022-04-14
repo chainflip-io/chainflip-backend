@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +15,8 @@ macro_rules! derive_impls_for_keygen_data {
 /// Data sent between parties over p2p for a keygen ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum KeygenData {
+    HashComm1(HashComm1),
+    VerifyHashComm2(VerifyHashComm2),
     Comm1(Comm1),
     Verify2(VerifyComm2),
     SecretShares3(SecretShare3),
@@ -27,6 +29,8 @@ pub enum KeygenData {
 impl std::fmt::Display for KeygenData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner = match self {
+            KeygenData::HashComm1(hash_comm1) => hash_comm1.to_string(),
+            KeygenData::VerifyHashComm2(verify2) => verify2.to_string(),
             KeygenData::Comm1(comm1) => comm1.to_string(),
             KeygenData::Verify2(verify2) => verify2.to_string(),
             KeygenData::SecretShares3(share3) => share3.to_string(),
@@ -39,6 +43,11 @@ impl std::fmt::Display for KeygenData {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HashComm1(pub sp_core::H256);
+
+pub type VerifyHashComm2 = BroadcastVerificationMessage<HashComm1>;
+
 pub type Comm1 = super::keygen_frost::DKGUnverifiedCommitment;
 
 pub type VerifyComm2 = BroadcastVerificationMessage<Comm1>;
@@ -50,7 +59,7 @@ pub type SecretShare3 = ShamirShare;
 
 /// List of parties blamed for sending invalid secret shares
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Complaints4(pub Vec<usize>);
+pub struct Complaints4(pub BTreeSet<usize>);
 
 pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
 
@@ -62,10 +71,12 @@ pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
 /// only be recovered by collecting shares from all (N-1) nodes, which would
 /// require collusion of N-1 nodes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlameResponse6(pub HashMap<usize, ShamirShare>);
+pub struct BlameResponse6(pub BTreeMap<usize, ShamirShare>);
 
 pub type VerifyBlameResponses7 = BroadcastVerificationMessage<BlameResponse6>;
 
+derive_impls_for_keygen_data!(HashComm1, KeygenData::HashComm1);
+derive_impls_for_keygen_data!(VerifyHashComm2, KeygenData::VerifyHashComm2);
 derive_impls_for_keygen_data!(Comm1, KeygenData::Comm1);
 derive_impls_for_keygen_data!(VerifyComm2, KeygenData::Verify2);
 derive_impls_for_keygen_data!(ShamirShare, KeygenData::SecretShares3);

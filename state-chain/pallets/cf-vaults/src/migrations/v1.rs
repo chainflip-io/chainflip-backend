@@ -1,16 +1,20 @@
 use crate::migrations::v1::v0_types::{VaultRotationStatusV0, VaultV0};
 
 use super::*;
-use cf_chains::ChainId;
+use frame_support::{storage::migration::*, StorageHasher};
 #[cfg(feature = "try-runtime")]
-use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-use frame_support::{storage::migration::*, Hashable};
+use frame_support::{traits::OnRuntimeUpgradeHelpersExt, Hashable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::convert::{TryFrom, TryInto};
 
 const PALLET_NAME_V0: &[u8; 6] = b"Vaults";
 
 const PALLET_NAME_V1: &[u8; 13] = b"EthereumVault";
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+enum ChainId {
+	Ethereum,
+}
 
 /// V1 Storage migration.
 ///
@@ -25,30 +29,39 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 	// accessors.
 	// If the conversion between old and new fails (it shouldn't!), we print an error and
 	// continue.
-	for (epoch, old_vault) in
-		storage_key_iter_with_suffix::<EpochIndex, VaultV0<T, I>, Blake2_128Concat>(
-			PALLET_NAME_V1,
-			b"Vaults",
-			ChainId::Ethereum.blake2_128_concat().as_slice(),
-		)
-		.drain()
-	{
-		old_vault
-			.try_into()
-			.map(|new_vault: Vault<T::Chain>| Vaults::<T, I>::insert(epoch, new_vault))
-			.unwrap_or_else(|e| {
-				log::error!("Unable to convert Vault from V0 to V1: {:?}", e);
-			});
+	for epoch in 0..=CurrentEpochIndex::<T>::get() {
+		let hash = [
+			epoch.using_encoded(<Blake2_128Concat as StorageHasher>::hash),
+			ChainId::Ethereum.using_encoded(<Blake2_128Concat as StorageHasher>::hash),
+		]
+		.concat();
+
+		if let Some(old_vault) =
+			take_storage_value::<VaultV0<T, I>>(PALLET_NAME_V1, b"Vaults", &hash[..])
+		{
+			old_vault
+				.try_into()
+				.map(|new_vault: Vault<T::Chain>| {
+					Vaults::<T, I>::insert(epoch, new_vault);
+				})
+				.unwrap_or_else(|e| {
+					log::error!("Unable to convert Vault from V0 to V1: {:?}", e);
+				});
+		} else {
+			log::info!("No vault for epoch {:?}, skipping storage migration.", epoch);
+		}
 	}
 
 	// The Nonce value needs to be moved from a double map to simple map.
-	take_storage_item::<_, _, Blake2_128Concat>(PALLET_NAME_V1, b"ChainNonces", ChainId::Ethereum)
-		.map(|nonce: Nonce| {
-			ChainNonce::<T, I>::put(nonce);
-		})
-		.unwrap_or_else(|| {
-			log::info!("🏯 No nonce value to migrate.");
-		});
+	take_storage_item::<_, <T::Chain as ChainAbi>::Nonce, Blake2_128Concat>(
+		PALLET_NAME_V1,
+		b"ChainNonces",
+		ChainId::Ethereum,
+	)
+	.map(ChainNonce::<T, I>::put)
+	.unwrap_or_else(|| {
+		log::info!("🏯 No nonce value to migrate.");
+	});
 
 	// If possible we should avoid upgrading during a rotation, but just in case...
 	if let Some(status_v0) = take_storage_item::<_, VaultRotationStatusV0<T, I>, Blake2_128Concat>(
@@ -70,7 +83,7 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 		Identity,
 	>(PALLET_NAME_V1, b"KeygenResolutionPending", ())
 	{
-		if let Some((Ethereum::CHAIN_ID, block_number)) = resolution_pending.first() {
+		if let Some((ChainId::Ethereum, block_number)) = resolution_pending.first() {
 			KeygenResolutionPendingSince::<T, I>::put(block_number);
 		}
 	} else {
@@ -85,6 +98,24 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static str> {
 	ensure!(StorageVersion::get::<Pallet<T, I>>() == releases::V0, "Expected storage version V0.");
 
+	ensure!(
+		have_storage_value(
+			PALLET_NAME_V0,
+			b"Vaults",
+			[100u32.blake2_128_concat(), ChainId::Ethereum.blake2_128_concat()]
+				.concat()
+				.as_slice()
+		),
+		"🏯 Can't find Ethereum vault at hash {:?}."
+	);
+	ensure!(
+		have_storage_value(
+			PALLET_NAME_V0,
+			b"ChainNonces",
+			ChainId::Ethereum.blake2_128_concat().as_slice()
+		),
+		"🏯 Can't find Ethereum nonce."
+	);
 	let pre_migration_id_counter: u64 =
 		get_storage_value(b"Vaults", b"KeygenCeremonyIdCounter", b"").unwrap_or_else(|| {
 			log::warn!("🏯 Couldn't extract old id counter, assuming default");
@@ -99,20 +130,27 @@ pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static s
 #[cfg(feature = "try-runtime")]
 pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static str> {
 	ensure!(StorageVersion::get::<Pallet<T, I>>() == releases::V1, "Expected storage version V1.");
+	ensure!(
+		Vaults::<T, I>::contains_key(CurrentEpochIndex::<T>::get()),
+		"💥 No vault for current epoch!"
+	);
 
 	let pre_migration_id_counter: u64 = Pallet::<T, I>::get_temp_storage("id_counter")
 		.ok_or("No id_counter written during the pre-migration checks")?;
 
-	let post_migration_id_counter = KeygenCeremonyIdCounter::<T, I>::get();
+	let next = T::CeremonyIdProvider::next_ceremony_id();
+	ensure!(pre_migration_id_counter + 1 <= next, {
+		log::error!(
+			"KeygenCeremonyIdCounter pre-migration: {:?} / next: {:?}.",
+			pre_migration_id_counter,
+			next
+		);
+		"🏯 KeygenCeremonyIdCounter pre/post migration inconsistency."
+	});
 
 	log::info!(
-		"🏯 KeygenCeremonyIdCounter checked; Pre-migration: {}, Post-migration: {}",
+		"🏯 KeygenCeremonyIdCounter checked; Pre-migration ceremony Id: {}",
 		pre_migration_id_counter,
-		post_migration_id_counter
-	);
-	ensure!(
-		pre_migration_id_counter == post_migration_id_counter,
-		"CeremonyId counter has changed!"
 	);
 	Ok(())
 }
@@ -134,7 +172,13 @@ mod v0_types {
 		type Error = &'static str;
 
 		fn try_from(old: VaultV0<T, I>) -> Result<Self, Self::Error> {
-			Ok(Self { public_key: old.public_key.try_into()?, active_window: old.active_window })
+			Ok(Self {
+				public_key: old
+					.public_key
+					.try_into()
+					.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")?,
+				active_window: old.active_window,
+			})
 		}
 	}
 
@@ -166,7 +210,11 @@ mod v0_types {
 				success_votes: old
 					.success_votes
 					.into_iter()
-					.map(|(key, votes)| key.try_into().map(|key| (key, votes)))
+					.map(|(key, votes)| {
+						key.try_into()
+							.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")
+							.map(|key| (key, votes))
+					})
 					.collect::<Result<_, _>>()?,
 				blame_votes: old.blame_votes,
 			})
@@ -204,7 +252,11 @@ mod v0_types {
 					response_status: response_status.try_into()?,
 				},
 				VaultRotationStatusV0::AwaitingRotation { new_public_key, _phantom } =>
-					Self::AwaitingRotation { new_public_key: new_public_key.try_into()? },
+					Self::AwaitingRotation {
+						new_public_key: new_public_key.try_into().map_err(|_| {
+							"Unable to convert Vec<u8> public key to AggKey format."
+						})?,
+					},
 				VaultRotationStatusV0::Complete { tx_hash, _phantom } =>
 					Self::Complete { tx_hash: vec_to_hash::<T::Chain>(tx_hash)? },
 			})
@@ -230,6 +282,8 @@ mod v0_types {
 
 	#[cfg(test)]
 	mod test_super {
+		use cf_chains::Ethereum;
+
 		use super::*;
 
 		#[test]

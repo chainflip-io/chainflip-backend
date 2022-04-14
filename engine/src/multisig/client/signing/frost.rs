@@ -54,7 +54,6 @@ impl SecretNoncePair {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 
 pub struct SigningCommitment {
-    pub index: usize,
     pub d: Point,
     pub e: Point,
 }
@@ -183,12 +182,9 @@ fn generate_bindings(
     commitments: &HashMap<usize, SigningCommitment>,
     all_idxs: &BTreeSet<usize>,
 ) -> HashMap<usize, Scalar> {
-    commitments
+    all_idxs
         .iter()
-        .map(|(idx, c)| {
-            assert_eq!(c.index, *idx);
-            (*idx, gen_rho_i(*idx, msg, commitments, all_idxs))
-        })
+        .map(|idx| (*idx, gen_rho_i(*idx, msg, commitments, all_idxs)))
         .collect()
 }
 

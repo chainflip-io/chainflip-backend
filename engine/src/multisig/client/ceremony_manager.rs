@@ -2,17 +2,18 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use crate::common::format_iterator;
-use crate::multisig::client::{self, MultisigOutcome};
+use crate::multisig::client;
 use crate::multisig::crypto::Rng;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use state_chain_runtime::AccountId;
 
 use client::{
     signing::frost::SigningData, state_runner::StateRunner, utils::PartyIdxMapping,
-    CeremonyAbortReason, MultisigOutcomeSender, SchnorrSignature,
+    SchnorrSignature,
 };
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
 
 use crate::logging::{
     CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED,
@@ -21,10 +22,14 @@ use crate::logging::{
 
 use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
 
-use crate::multisig::{KeygenInfo, KeygenOutcome, MessageHash, SigningOutcome};
+use crate::multisig::MessageHash;
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
-use super::keygen::{AwaitCommitments1, HashContext, KeygenData, KeygenOptions};
+use super::keygen::{HashCommitments1, HashContext, KeygenData, KeygenOptions};
+use super::{MultisigData, MultisigMessage};
+
+pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (Vec<AccountId>, anyhow::Error)>>;
+pub type CeremonyResultReceiver<T> = oneshot::Receiver<Result<T, (Vec<AccountId>, anyhow::Error)>>;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
@@ -33,7 +38,6 @@ type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
 /// generating signer indexes based on the list of parties
 pub struct CeremonyManager {
     my_account_id: AccountId,
-    outcome_sender: MultisigOutcomeSender,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
@@ -44,13 +48,11 @@ pub struct CeremonyManager {
 impl CeremonyManager {
     pub fn new(
         my_account_id: AccountId,
-        outcome_sender: MultisigOutcomeSender,
         outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
         logger: &slog::Logger,
     ) -> Self {
         CeremonyManager {
             my_account_id,
-            outcome_sender,
             outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
@@ -62,7 +64,7 @@ impl CeremonyManager {
     // This function is called periodically to check if any
     // ceremony should be aborted, reporting responsible parties
     // and cleaning up any relevant data
-    pub fn cleanup(&mut self) {
+    pub fn check_timeouts(&mut self) {
         // Copy the keys so we can iterate over them while at the same time
         // removing the elements as we go
         let signing_ids: Vec<_> = self.signing_states.keys().copied().collect();
@@ -75,14 +77,13 @@ impl CeremonyManager {
             if let Some(result) = state.try_expiring() {
                 // NOTE: we only respond (and consume the ceremony id)
                 //  if we have received a ceremony request from
-                // SC (i.e. the ceremony is "authorised")
-                // TODO: report nodes via a different extrinsic instead
+                // SC (i.e. the ceremony is "authorized")
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized() {
                     self.process_signing_ceremony_outcome(*ceremony_id, result);
                 } else {
+                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
-
                     self.signing_states.remove(ceremony_id);
                 }
             }
@@ -99,10 +100,10 @@ impl CeremonyManager {
                 // NOTE: we only respond (and consume the ceremony id)
                 // if we have received a ceremony request from
                 // SC (i.e. the ceremony is "authorised")
-                // TODO: report nodes via a different extrinsic instead
                 if state.is_authorized() {
                     self.process_keygen_ceremony_outcome(*ceremony_id, result);
                 } else {
+                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.keygen_states.remove(ceremony_id);
                 }
@@ -115,9 +116,10 @@ impl CeremonyManager {
         participants: &[AccountId],
         validator_map: &PartyIdxMapping,
     ) -> Result<(usize, BTreeSet<usize>), &'static str> {
-        if !participants.contains(&self.my_account_id) {
-            return Err("we are not among participants");
-        }
+        assert!(
+            participants.contains(&self.my_account_id),
+            "we are not among participants"
+        );
 
         // It should be impossible to fail here because of the check above,
         // but I don't like unwrapping (would be better if we
@@ -143,101 +145,71 @@ impl CeremonyManager {
         ceremony_id: CeremonyId,
         result: Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>,
     ) {
-        self.signing_states.remove(&ceremony_id);
+        let result_sender = self
+            .signing_states
+            .remove(&ceremony_id)
+            .unwrap()
+            .try_into_result_sender()
+            .unwrap();
         self.ceremony_id_tracker.consume_signing_id(&ceremony_id);
-        slog::debug!(
-            self.logger, "Removed a finished signing ceremony";
-            CEREMONY_ID_KEY => ceremony_id
-        );
-
-        match result {
-            Ok(schnorr_sig) => {
-                self.outcome_sender
-                    .send(MultisigOutcome::Signing(SigningOutcome {
-                        id: ceremony_id,
-                        result: Ok(schnorr_sig),
-                    }))
-                    .unwrap();
-            }
-            Err((blamed_parties, reason)) => {
-                slog::warn!(
-                    self.logger,
-                    #SIGNING_CEREMONY_FAILED,
-                    "Signing ceremony failed: {}",
-                    reason; "reported parties" =>
-                    format_iterator(&blamed_parties).to_string(),
-                    CEREMONY_ID_KEY => ceremony_id,
-                );
-
-                self.outcome_sender
-                    .send(MultisigOutcome::Signing(SigningOutcome {
-                        id: ceremony_id,
-                        result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
-                    }))
-                    .unwrap();
-            }
+        if let Err((blamed_parties, reason)) = &result {
+            slog::warn!(
+                self.logger,
+                #SIGNING_CEREMONY_FAILED,
+                "Signing ceremony failed: {}",
+                reason; "reported parties" =>
+                format_iterator(blamed_parties).to_string(),
+                CEREMONY_ID_KEY => ceremony_id,
+            );
         }
+        let _result = result_sender.send(result);
     }
 
     fn process_keygen_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
         result: Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>,
-    ) -> Option<KeygenResultInfo> {
-        self.keygen_states.remove(&ceremony_id);
+    ) {
+        let result_sender = self
+            .keygen_states
+            .remove(&ceremony_id)
+            .unwrap()
+            .try_into_result_sender()
+            .unwrap();
         self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
-        slog::debug!(
-            self.logger, "Removed a finished keygen ceremony";
-            CEREMONY_ID_KEY => ceremony_id
-        );
-
-        match result {
-            Ok(keygen_result_info) => Some(keygen_result_info),
-            Err((blamed_parties, reason)) => {
-                slog::warn!(
-                    self.logger,
-                    #KEYGEN_CEREMONY_FAILED,
-                    "Keygen ceremony failed: {}",
-                    reason; "reported parties" =>
-                    format_iterator(&blamed_parties).to_string(),
-                    CEREMONY_ID_KEY => ceremony_id,
-                );
-
-                self.outcome_sender
-                    .send(MultisigOutcome::Keygen(KeygenOutcome {
-                        id: ceremony_id,
-                        result: Err((CeremonyAbortReason::Invalid, blamed_parties)),
-                    }))
-                    .unwrap();
-                None
-            }
+        if let Err((blamed_parties, reason)) = &result {
+            slog::warn!(
+                self.logger,
+                #KEYGEN_CEREMONY_FAILED,
+                "Keygen ceremony failed: {}",
+                reason; "reported parties" =>
+                format_iterator(blamed_parties).to_string(),
+                CEREMONY_ID_KEY => ceremony_id,
+            );
         }
+        let _result = result_sender.send(result);
     }
 
     /// Process a keygen request
     pub fn on_keygen_request(
         &mut self,
-        rng: Rng,
-        keygen_info: KeygenInfo,
+        ceremony_id: CeremonyId,
+        participants: Vec<AccountId>,
         keygen_options: KeygenOptions,
+        rng: Rng,
+        result_sender: CeremonyResultSender<KeygenResultInfo>,
     ) {
         // TODO: Consider similarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
 
-        let KeygenInfo {
-            ceremony_id,
-            signers,
-        } = keygen_info;
-
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
-        let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&signers));
+        let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
-        let (our_idx, signer_idxs) = match self.map_ceremony_parties(&signers, &validator_map) {
+        let (our_idx, signer_idxs) = match self.map_ceremony_parties(&participants, &validator_map)
+        {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
-                // TODO: Look at better way of releasing the lock on the sc_observer
-                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
@@ -247,17 +219,16 @@ impl CeremonyManager {
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
-            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
-        let state = self
-            .keygen_states
-            .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, &logger));
+        let logger_no_ceremony_id = &self.logger;
+        let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
+            KeygenStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+        });
 
         let initial_stage = {
-            let context = generate_keygen_context(ceremony_id, signers);
+            let context = generate_keygen_context(ceremony_id, participants);
 
             let common = CeremonyCommon {
                 ceremony_id,
@@ -269,17 +240,12 @@ impl CeremonyManager {
                 rng,
             };
 
-            let processor = AwaitCommitments1::new(common.clone(), keygen_options, context);
+            let processor = HashCommitments1::new(common.clone(), keygen_options, context);
 
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(
-            ceremony_id,
-            initial_stage,
-            validator_map,
-            self.outcome_sender.clone(),
-        ) {
+        match state.on_ceremony_request(initial_stage, validator_map, result_sender) {
             Ok(Some(result)) => {
                 self.process_keygen_ceremony_outcome(ceremony_id, result);
             }
@@ -293,11 +259,12 @@ impl CeremonyManager {
     /// Process a request to sign
     pub fn on_request_to_sign(
         &mut self,
-        rng: Rng,
+        ceremony_id: CeremonyId,
+        signers: Vec<AccountId>,
         data: MessageHash,
         key_info: KeygenResultInfo,
-        signers: Vec<AccountId>,
-        ceremony_id: CeremonyId,
+        rng: Rng,
+        result_sender: CeremonyResultSender<SchnorrSignature>,
     ) {
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
@@ -312,8 +279,6 @@ impl CeremonyManager {
                 "Request to sign ignored: not enough signers {}/{}",
                 signers.len(), minimum_signers_needed
             );
-            // TODO: Look at better way of releasing the lock on the sc_observer
-            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
@@ -323,8 +288,6 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-                // TODO: Look at better way of releasing the lock on the sc_observer
-                self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
                 return;
             }
         };
@@ -334,17 +297,15 @@ impl CeremonyManager {
             .is_signing_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
-            self.outcome_sender.send(MultisigOutcome::Ignore).unwrap();
             return;
         }
 
         // We have the key and have received a request to sign
-        let logger = &self.logger;
+        let logger_no_ceremony_id = &self.logger;
 
-        let state = self
-            .signing_states
-            .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
+        let state = self.signing_states.entry(ceremony_id).or_insert_with(|| {
+            SigningStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+        });
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -355,7 +316,7 @@ impl CeremonyManager {
                 validator_mapping: key_info.validator_map.clone(),
                 own_idx,
                 all_idxs: signer_idxs,
-                logger: self.logger.clone(),
+                logger: logger.clone(),
                 rng,
             };
 
@@ -370,12 +331,7 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(
-            ceremony_id,
-            initial_stage,
-            key_info.validator_map,
-            self.outcome_sender.clone(),
-        ) {
+        match state.on_ceremony_request(initial_stage, key_info.validator_map, result_sender) {
             Ok(Some(result)) => {
                 self.process_signing_ceremony_outcome(ceremony_id, result);
             }
@@ -384,6 +340,31 @@ impl CeremonyManager {
             }
             _ => { /* nothing to do */ }
         };
+    }
+
+    /// Process message from another validator
+    pub fn process_p2p_message(&mut self, sender_id: AccountId, message: MultisigMessage) {
+        match message {
+            MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Keygen(data),
+            } => {
+                // NOTE: we should be able to process Keygen messages
+                // even when we are "signing"... (for example, if we want to
+                // generate a new key)
+                self.process_keygen_data(sender_id, ceremony_id, data);
+            }
+            MultisigMessage {
+                ceremony_id,
+                data: MultisigData::Signing(data),
+            } => {
+                // NOTE: we should be able to process Signing messages
+                // even when we are generating a new key (for example,
+                // we should be able to receive phase1 messages before we've
+                // finalized the signing key locally)
+                self.process_signing_data(sender_id, ceremony_id, data);
+            }
+        }
     }
 
     /// Process data for a signing ceremony arriving from a peer
@@ -396,8 +377,6 @@ impl CeremonyManager {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
 
-        slog::trace!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
-
         if self
             .ceremony_id_tracker
             .is_signing_ceremony_id_used(&ceremony_id)
@@ -409,6 +388,8 @@ impl CeremonyManager {
             );
             return;
         }
+
+        slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = &self.logger;
         let state = self
@@ -427,7 +408,7 @@ impl CeremonyManager {
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: KeygenData,
-    ) -> Option<KeygenResultInfo> {
+    ) {
         if self
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
@@ -437,7 +418,7 @@ impl CeremonyManager {
                 "Ignoring keygen data from old ceremony id {}",
                 ceremony_id
             );
-            return None;
+            return;
         }
 
         let logger = &self.logger;
@@ -446,9 +427,9 @@ impl CeremonyManager {
             .entry(ceremony_id)
             .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
 
-        state
-            .process_message(sender_id, data)
-            .and_then(|res| self.process_keygen_ceremony_outcome(ceremony_id, res))
+        if let Some(result) = state.process_message(sender_id, data) {
+            self.process_keygen_ceremony_outcome(ceremony_id, result);
+        }
     }
 }
 

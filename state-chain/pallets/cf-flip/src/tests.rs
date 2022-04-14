@@ -3,7 +3,7 @@ use std::mem;
 use crate::{
 	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
 };
-use cf_traits::{BondRotation, Issuance, StakeTransfer};
+use cf_traits::{Issuance, StakeTransfer};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
@@ -197,21 +197,6 @@ fn stake_transfers() {
 		assert_eq!(<Flip as StakeTransfer>::claimable_balance(&ALICE), 100);
 		assert_ok!(<Flip as StakeTransfer>::try_claim(&ALICE, 1));
 		assert!(MockStakeHandler::has_stake_updated(&ALICE));
-
-		check_balance_integrity();
-	});
-}
-
-#[test]
-fn update_bonds() {
-	new_test_ext().execute_with(|| {
-		<Flip as BondRotation>::update_validator_bonds(&[ALICE, BOB], 20);
-		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 20);
-		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
-
-		<Flip as BondRotation>::update_validator_bonds(&[BOB], 10);
-		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 0);
-		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 10);
 
 		check_balance_integrity();
 	});
@@ -517,6 +502,42 @@ mod test_slashing {
 			// Check if the diff between the balances is the expected slash
 			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);
 			check_balance_integrity();
+			assert_eq!(
+				System::events()
+					.into_iter()
+					.filter_map(|r| {
+						if let Event::Flip(inner) = r.event {
+							Some(inner)
+						} else {
+							None
+						}
+					})
+					.last()
+					.unwrap(),
+				crate::Event::<Test>::SlashingPerformed(ALICE, EXPECTED_SLASH),
+			);
+			// Test case where the slashing rate is set to 0. SlashingPerformed event should still
+			// be emitted.
+			SlashingRate::<Test>::set(0);
+			let initial_balance: u128 = Flip::total_balance_of(&ALICE);
+			FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE);
+			let balance_after = Flip::total_balance_of(&ALICE);
+			assert_eq!(initial_balance - balance_after, 0);
+			check_balance_integrity();
+			assert_eq!(
+				System::events()
+					.into_iter()
+					.filter_map(|r| {
+						if let Event::Flip(inner) = r.event {
+							Some(inner)
+						} else {
+							None
+						}
+					})
+					.last()
+					.unwrap(),
+				crate::Event::<Test>::SlashingPerformed(ALICE, 0),
+			);
 		});
 	}
 }

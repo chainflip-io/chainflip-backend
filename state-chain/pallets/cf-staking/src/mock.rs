@@ -1,10 +1,7 @@
 use crate as pallet_cf_staking;
-use cf_chains::{
-	eth, eth::register_claim::RegisterClaim, AlwaysVerifiesCoin, ChainCrypto, Ethereum,
-};
-use cf_traits::{impl_mock_waived_fees, WaivedFees};
-use codec::{Decode, Encode};
-use frame_support::{instances::Instance1, parameter_types};
+use cf_chains::{eth, ChainAbi, ChainCrypto, Ethereum};
+use cf_traits::{impl_mock_waived_fees, AsyncResult, ThresholdSigner, WaivedFees};
+use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -19,7 +16,7 @@ type AccountId = AccountId32;
 
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
-	Chainflip, NonceProvider, SigningContext,
+	Chainflip, NonceProvider,
 };
 
 // Configure a mock runtime to test the pallet.
@@ -31,7 +28,6 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Signer: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		Staking: pallet_cf_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
@@ -39,7 +35,6 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const ClaimTTL: Duration = Duration::from_secs(10);
 }
 
 impl frame_system::Config for Test {
@@ -77,37 +72,9 @@ impl Chainflip for Test {
 	type EpochInfo = MockEpochInfo;
 }
 
-cf_traits::impl_mock_signer_nomination!(AccountId);
-cf_traits::impl_mock_offline_conditions!(AccountId);
-
-pub struct MockKeyProvider;
-
-impl cf_traits::KeyProvider<AlwaysVerifiesCoin> for MockKeyProvider {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id() -> Self::KeyId {
-		Default::default()
-	}
-
-	fn current_key() -> <AlwaysVerifiesCoin as ChainCrypto>::AggKey {
-		vec![]
-	}
-}
-
 parameter_types! {
 	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
-}
-
-impl pallet_cf_threshold_signature::Config<Instance1> for Test {
-	type Event = Event;
-	type TargetChain = AlwaysVerifiesCoin;
-	type SigningContext = ClaimSigningContext;
-	type SignerNomination = MockSignerNomination;
-	type KeyProvider = MockKeyProvider;
-	type OfflineReporter = MockOfflineReporter;
-	type ThresholdFailureTimeout = ThresholdFailureTimeout;
-	type CeremonyRetryDelay = CeremonyRetryDelay;
 }
 
 parameter_types! {
@@ -140,55 +107,65 @@ cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 pub const NONCE: u64 = 42;
 
 impl NonceProvider<Ethereum> for Test {
-	fn next_nonce() -> cf_traits::Nonce {
+	fn next_nonce() -> <Ethereum as ChainAbi>::Nonce {
 		NONCE
 	}
 }
 
-// Mock SigningContext
+pub struct MockThresholdSigner;
 
+thread_local! {
+	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+}
+
+impl MockThresholdSigner {
+	pub fn received_requests() -> Vec<<Ethereum as ChainCrypto>::Payload> {
+		SIGNATURE_REQUESTS.with(|cell| cell.borrow().clone())
+	}
+
+	pub fn on_signature_ready(account_id: &AccountId) -> DispatchResultWithPostInfo {
+		Staking::post_claim_signature(Origin::root(), account_id.clone(), 0)
+	}
+}
+
+impl ThresholdSigner<Ethereum> for MockThresholdSigner {
+	type RequestId = u32;
+	type Error = &'static str;
+	type Callback = Call;
+
+	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
+		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
+		0
+	}
+
+	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
+		Ok(())
+	}
+
+	fn signature_result(
+		_: Self::RequestId,
+	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
+		AsyncResult::Ready(ETH_DUMMY_SIG)
+	}
+}
+
+// The dummy signature can't be Default - this would be interpreted as no signature.
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
 	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_addr: [0xcf; 20] };
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct ClaimSigningContext(RegisterClaim);
-
-impl From<RegisterClaim> for ClaimSigningContext {
-	fn from(r: RegisterClaim) -> Self {
-		ClaimSigningContext(r)
-	}
-}
-
-impl SigningContext<Test> for ClaimSigningContext {
-	type Chain = AlwaysVerifiesCoin;
-	type Callback = pallet_cf_staking::Call<Test>;
-	type ThresholdSignatureOrigin = pallet_cf_threshold_signature::Origin<Test, Instance1>;
-
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
-		Default::default()
-	}
-
-	fn resolve_callback(
-		&self,
-		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		pallet_cf_staking::Call::<Test>::post_claim_signature(self.0.node_id.into(), ETH_DUMMY_SIG)
-	}
-}
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
-	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
 	type NonceProvider = Self;
-	type SigningContext = ClaimSigningContext;
-	type ThresholdSigner = Signer;
+	type ThresholdSigner = MockThresholdSigner;
+	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type RegisterClaim = eth::api::EthereumApi;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
@@ -199,9 +176,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
-		staking: StakingConfig { genesis_stakers: vec![], minimum_stake: MIN_STAKE },
+		staking: StakingConfig {
+			genesis_stakers: vec![],
+			minimum_stake: MIN_STAKE,
+			claim_ttl: Duration::from_secs(10),
+		},
 	};
-	MockSignerNomination::set_candidates(vec![ALICE]);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

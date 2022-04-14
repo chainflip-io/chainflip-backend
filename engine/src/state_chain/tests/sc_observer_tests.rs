@@ -5,19 +5,24 @@ use cf_chains::{
     Ethereum,
 };
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
+use codec::Encode;
 use frame_system::{AccountInfo, Phase};
 use mockall::predicate::{self, eq};
+use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_validator::CurrentEpoch;
 use pallet_cf_vaults::{BlockHeightWindow, Vault, Vaults};
-use sp_core::{storage::StorageKey, H256, U256};
+use sp_core::{
+    storage::{StorageData, StorageKey},
+    H256, U256,
+};
 use sp_runtime::{AccountId32, Digest};
 use state_chain_runtime::{EthereumInstance, Header, Runtime};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
-    eth::{EthBroadcaster, EthRpcClient, MockEthRpcApi},
+    eth::{EthBroadcaster, EthWsRpcClient, MockEthRpcApi},
     logging::{self, test_utils::new_test_logger},
-    multisig::{MultisigInstruction, MultisigOutcome},
+    multisig::client::MockMultisigClientApi,
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{
@@ -84,50 +89,51 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
     let initial_block_hash = H256::default();
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+            )))
         });
 
     // get the epoch
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(initial_block_hash)),
+            eq(initial_block_hash),
             eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
         )
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // get the current vault
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(initial_block_hash)),
+            eq(initial_block_hash),
             eq(StorageKey(
                 Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3),
             )),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
-                },
-                initial_block_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
+
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
 
     // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
@@ -138,12 +144,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -153,9 +155,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_active_on_startup()
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -192,44 +193,43 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
     // get account info
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Passive, Some(2)),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Passive, Some(2)).encode(),
+            )))
         });
 
     // get the current epoch, which is 3
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(initial_block_hash)),
+            eq(initial_block_hash),
             eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
         )
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // get the current vault
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(initial_block_hash)),
+            eq(initial_block_hash),
             eq(StorageKey(
                 Vaults::<Runtime, EthereumInstance>::hashed_key_for(&2),
             )),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_TWO_END,
-                },
-                initial_block_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
@@ -245,12 +245,10 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -261,9 +259,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_outgoing_on_startup
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -302,25 +299,24 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
 
     // get account info
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Backup, Some(1)),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Backup, Some(1)).encode(),
+            )))
         });
 
     // get the current epoch, which is 3
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(initial_block_hash)),
+            eq(initial_block_hash),
             eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
         )
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
@@ -335,12 +331,10 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -351,9 +345,8 @@ async fn sends_initial_extrinsics_when_backup_but_not_outgoing_on_startup() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -374,12 +367,10 @@ async fn backup_checks_account_data_every_block() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -398,26 +389,25 @@ async fn backup_checks_account_data_every_block() {
     // get account info
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(predicate::always(), eq(mock_account_storage_key()))
         // NB: This is called three times. Once at the start, and then once for every block (x2 in this test)
         .times(3)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Backup, Some(1)),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Backup, Some(1)).encode(),
+            )))
         });
 
     // get the current epoch, which is 3
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
             predicate::always(),
             eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
         )
         .times(3)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, H256::default())]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // Get events from the block
     // We will match on every block hash, but only the events key, as we want to return no events
@@ -440,9 +430,8 @@ async fn backup_checks_account_data_every_block() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -463,6 +452,8 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     // === FAKE BLOCKHEADERS ===
     // two empty blocks in the stream
     let empty_block_header = test_header(20);
@@ -474,12 +465,8 @@ async fn validator_to_validator_on_new_epoch_event() {
         Ok(new_epoch_block_header.clone()),
     ]);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -496,83 +483,81 @@ async fn validator_to_validator_on_new_epoch_event() {
     let initial_block_hash = H256::default();
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+            )))
         });
 
     // The second time we query for our account data is when we've received a new epoch event
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(new_epoch_block_header.hash())),
+            eq(new_epoch_block_header_hash),
             eq(mock_account_storage_key()),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Validator, Some(4)),
-                new_epoch_block_header_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Validator, Some(4)).encode(),
+            )))
         });
 
     // get the current epoch, which is 3
     let epoch_key = StorageKey(CurrentEpoch::<Runtime>::hashed_key().into());
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(epoch_key.clone()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(epoch_key.clone()))
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, H256::default())]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // the second time we get the current epoch is on a new epoch event
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(new_epoch_block_header.hash())), eq(epoch_key))
+        .expect_storage()
+        .with(eq(new_epoch_block_header_hash), eq(epoch_key))
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(4, H256::default())]));
+        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
 
     // get the current vault
     let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3));
 
     // get the vault on start up because we're active
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(vault_key.clone()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(vault_key.clone()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
-                },
-                initial_block_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     let vault_key_after_new_epoch =
         StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&4));
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(new_epoch_block_header.hash())),
+            eq(new_epoch_block_header_hash),
             eq(vault_key_after_new_epoch),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_FOUR_INITIAL,
-                },
-                new_epoch_block_header_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     // Get events from the block
@@ -586,10 +571,7 @@ async fn validator_to_validator_on_new_epoch_event() {
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(new_epoch_block_header.clone().hash())),
-            eq(mock_events_key()),
-        )
+        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -598,7 +580,7 @@ async fn validator_to_validator_on_new_epoch_event() {
                     state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
                     vec![H256::default()],
                 )],
-                new_epoch_block_header.hash(),
+                new_epoch_block_header_hash,
             )])
         });
 
@@ -610,9 +592,8 @@ async fn validator_to_validator_on_new_epoch_event() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -652,6 +633,8 @@ async fn backup_to_validator_on_new_epoch() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     // === FAKE BLOCKHEADERS ===
     // two empty blocks in the stream
     let empty_block_header = test_header(20);
@@ -663,12 +646,8 @@ async fn backup_to_validator_on_new_epoch() {
         Ok(new_epoch_block_header.clone()),
     ]);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -688,72 +667,64 @@ async fn backup_to_validator_on_new_epoch() {
 
     // We start as a backup node and fetch on start up, and then the empty block
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(predicate::always(), eq(mock_account_storage_key()))
         .times(2)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Backup, None),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Backup, None).encode(),
+            )))
         });
 
     // The second time we query for our account data is when we've received a new epoch event
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(new_epoch_block_header.hash())),
+            eq(new_epoch_block_header_hash),
             eq(mock_account_storage_key()),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Validator, Some(4)),
-                new_epoch_block_header_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Validator, Some(4)).encode(),
+            )))
         });
 
     // get the current epoch, which is 3
     let epoch_key = StorageKey(CurrentEpoch::<Runtime>::hashed_key().into());
     // we get the epoch when we start up, and on the first block that we receive, since we start as backup
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(predicate::always(), eq(epoch_key.clone()))
         .times(2)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // the third time we get the current epoch is on a new epoch event, the epoch number is 4
-    let new_epoch_block_header_hash = new_epoch_block_header.hash();
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(new_epoch_block_header.hash())), eq(epoch_key))
+        .expect_storage()
+        .with(eq(new_epoch_block_header_hash), eq(epoch_key))
         .times(1)
-        .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                4,
-                new_epoch_block_header_hash,
-            )])
-        });
+        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
 
     // We'll get the vault from the new epoch 4 when we become active
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(new_epoch_block_header.hash())),
+            eq(new_epoch_block_header_hash),
             eq(StorageKey(
                 Vaults::<Runtime, EthereumInstance>::hashed_key_for(&4),
             )),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_FOUR_INITIAL,
-                },
-                new_epoch_block_header_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     // Get events from the block
@@ -767,10 +738,7 @@ async fn backup_to_validator_on_new_epoch() {
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(new_epoch_block_header.clone().hash())),
-            eq(mock_events_key()),
-        )
+        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -779,7 +747,7 @@ async fn backup_to_validator_on_new_epoch() {
                     state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
                     vec![H256::default()],
                 )],
-                new_epoch_block_header.hash(),
+                new_epoch_block_header_hash,
             )])
         });
 
@@ -791,9 +759,8 @@ async fn backup_to_validator_on_new_epoch() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -841,109 +808,100 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     // get account info
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+            )))
         });
 
     // The second time we query for our account data is when we've received a new epoch event
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(new_epoch_block_header.hash())),
+            eq(new_epoch_block_header_hash),
             eq(mock_account_storage_key()),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Passive, Some(3)),
-                new_epoch_block_header_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Passive, Some(3)).encode(),
+            )))
         });
 
     // after we become passive, we have two blocks of checking our status
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(predicate::always(), eq(mock_account_storage_key()))
         .times(2)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Passive, Some(3)),
-                H256::default(),
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Passive, Some(3)).encode(),
+            )))
         });
 
     // get the current epoch, which is 3
     let epoch_key = StorageKey(CurrentEpoch::<Runtime>::hashed_key().into());
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(epoch_key.clone()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(epoch_key.clone()))
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, H256::default())]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // the second time we get the current epoch is on a new epoch event
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(
-            eq(Some(new_epoch_block_header.hash())),
-            eq(epoch_key.clone()),
-        )
+        .expect_storage()
+        .with(eq(new_epoch_block_header_hash), eq(epoch_key.clone()))
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(4, H256::default())]));
+        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(predicate::always(), eq(epoch_key))
         .times(2)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(4, H256::default())]));
+        .returning(move |_, _| Ok(Some(StorageData(4.encode()))));
 
     // get the current vault
     let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3));
 
     // get the vault on start up because we're active
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(vault_key.clone()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(vault_key.clone()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
-                },
-                initial_block_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     // NB: Because we're outgoing, we use the same vault key, now we have a close to the window
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(new_epoch_block_header.hash())), eq(vault_key))
+        .expect_storage()
+        .with(eq(new_epoch_block_header_hash), eq(vault_key))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_END,
-                },
-                new_epoch_block_header_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     // Get events from the block
 
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(
-            eq(Some(new_epoch_block_header.clone().hash())),
-            eq(mock_events_key()),
-        )
+        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -952,7 +910,7 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
                     state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
                     vec![H256::default()],
                 )],
-                new_epoch_block_header.hash(),
+                new_epoch_block_header_hash,
             )])
         });
 
@@ -974,12 +932,10 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -990,9 +946,8 @@ async fn validator_to_outgoing_passive_on_new_epoch_event() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -1067,51 +1022,51 @@ async fn only_encodes_and_signs_when_active_and_specified() {
 
     // get account info
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(initial_block_hash)), eq(mock_account_storage_key()))
+        .expect_storage()
+        .with(eq(initial_block_hash), eq(mock_account_storage_key()))
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                account_info_from_data(ChainflipAccountState::Validator, Some(3)),
-                initial_block_hash,
-            )])
+            Ok(Some(StorageData(
+                account_info_from_data(ChainflipAccountState::Validator, Some(3)).encode(),
+            )))
         });
 
     // get the epoch
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(initial_block_hash)),
+            eq(initial_block_hash),
             eq(StorageKey(CurrentEpoch::<Runtime>::hashed_key().into())),
         )
         .times(1)
-        .returning(move |_, _| Ok(vec![storage_change_set_from(3, initial_block_hash)]));
+        .returning(move |_, _| Ok(Some(StorageData(3.encode()))));
 
     // get the current vault
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
+        .expect_storage()
         .with(
-            eq(Some(initial_block_hash)),
+            eq(initial_block_hash),
             eq(StorageKey(
                 Vaults::<Runtime, EthereumInstance>::hashed_key_for(&3),
             )),
         )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 Vault::<Ethereum> {
                     public_key: AggKey::from_pubkey_compressed([0; 33]),
                     active_window: WINDOW_EPOCH_THREE_INITIAL,
-                },
-                initial_block_hash,
-            )])
+                }
+                .encode(),
+            )))
         });
 
     // get the events for the new block - will contain 2 events, one for us to sign and one for us not to sign
+    let block_header_hash = block_header.hash();
     mock_state_chain_rpc_client
         .expect_storage_events_at()
-        .with(eq(Some(block_header.clone().hash())), eq(mock_events_key()))
+        .with(eq(Some(block_header_hash)), eq(mock_events_key()))
         .times(1)
         .returning(move |_, _| {
             Ok(vec![storage_change_set_from(
@@ -1121,7 +1076,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         Phase::ApplyExtrinsic(0),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                0,
+                                BroadcastAttemptId::default(),
                                 AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                                 UnsignedTransaction::default(),
                             ),
@@ -1133,7 +1088,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         Phase::ApplyExtrinsic(1),
                         state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                0,
+                                BroadcastAttemptId::default(),
                                 AccountId32::new([1; 32]),
                                 UnsignedTransaction::default(),
                             ),
@@ -1141,7 +1096,7 @@ async fn only_encodes_and_signs_when_active_and_specified() {
                         vec![H256::default()],
                     ),
                 ],
-                block_header.hash(),
+                block_header_hash,
             )])
         });
 
@@ -1153,12 +1108,10 @@ async fn only_encodes_and_signs_when_active_and_specified() {
 
     let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
     let (sm_window_sender, mut sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -1169,9 +1122,8 @@ async fn only_encodes_and_signs_when_active_and_specified() {
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,
@@ -1204,16 +1156,14 @@ async fn run_the_sc_observer() {
             .await
             .unwrap();
 
-    let (multisig_instruction_sender, _multisig_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let (_multisig_outcome_sender, multisig_outcome_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<MultisigOutcome>();
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, &logger).await.unwrap();
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
     let eth_broadcaster =
-        EthBroadcaster::new(&settings.eth, eth_rpc_client.clone(), &logger).unwrap();
+        EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
+
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
 
     let (sm_window_sender, _sm_window_receiver) =
         tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
@@ -1224,9 +1174,8 @@ async fn run_the_sc_observer() {
         state_chain_client,
         block_stream,
         eth_broadcaster,
-        multisig_instruction_sender,
+        multisig_client,
         account_peer_mapping_change_sender,
-        multisig_outcome_receiver,
         sm_window_sender,
         km_window_sender,
         initial_block_hash,

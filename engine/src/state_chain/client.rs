@@ -4,8 +4,9 @@ use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
+use frame_support::storage::types::QueryKindTrait;
 use frame_support::unsigned::TransactionValidityError;
-use frame_system::{AccountInfo, Phase};
+use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode, Value};
 use jsonrpc_core_client::{RpcChannel, RpcError};
@@ -24,25 +25,26 @@ use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{AccountId, Index, PalletInstanceAlias, SignedBlock};
+use state_chain_runtime::{AccountId, PalletInstanceAlias, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
-use substrate_subxt::UncheckedExtrinsic;
 use substrate_subxt::{
+    balances::Balances,
     extrinsic::{
-        CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
+        ChargeTransactionPayment, CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion,
+        CheckTxVersion, CheckWeight,
     },
     system::System,
-    Runtime, SignedExtension, SignedExtra,
+    Runtime, SignedExtension, SignedExtra, UncheckedExtrinsic,
 };
 use tokio::sync::RwLock;
 
 use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
-use crate::constants::MAX_RETRY_ATTEMPTS;
+use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -67,6 +69,9 @@ impl System for RuntimeImplForSigningExtrinsics {
     type Extrinsic = state_chain_runtime::UncheckedExtrinsic;
     type AccountData = <state_chain_runtime::Runtime as frame_system::Config>::AccountData;
 }
+impl Balances for RuntimeImplForSigningExtrinsics {
+    type Balance = <state_chain_runtime::Runtime as pallet_cf_flip::Config>::Balance;
+}
 // Substrate_subxt's Runtime trait allows us to use it's extrinsic signing code
 impl Runtime for RuntimeImplForSigningExtrinsics {
     type Signature = state_chain_runtime::Signature;
@@ -85,9 +90,10 @@ pub struct SCDefaultExtra<T: System> {
     nonce: T::Index,
     genesis_hash: T::Hash,
 }
+
 impl<T> SignedExtra<T> for SCDefaultExtra<T>
 where
-    T: System + Clone + Debug + Eq + Send + Sync,
+    T: System + Balances + Clone + Debug + Eq + Send + Sync,
 {
     #[allow(clippy::type_complexity)]
     type Extra = (
@@ -97,7 +103,9 @@ where
         CheckEra<T>,
         CheckNonce<T>,
         CheckWeight<T>,
+        ChargeTransactionPayment<T>,
     );
+
     fn new(spec_version: u32, tx_version: u32, nonce: T::Index, genesis_hash: T::Hash) -> Self {
         SCDefaultExtra {
             spec_version,
@@ -106,6 +114,7 @@ where
             genesis_hash,
         }
     }
+
     fn extra(&self) -> Self::Extra {
         (
             CheckSpecVersion(PhantomData, self.spec_version),
@@ -114,12 +123,16 @@ where
             CheckEra((Era::Immortal, PhantomData), self.genesis_hash),
             CheckNonce(self.nonce),
             CheckWeight(PhantomData),
+            // Note: The tip is ignored in our runtime, but we need to provide one in order to
+            // use substrate's transaction fee logic.
+            ChargeTransactionPayment(Default::default()),
         )
     }
 }
+
 impl<T> SignedExtension for SCDefaultExtra<T>
 where
-    T: System + Clone + Debug + Eq + Send + Sync,
+    T: System + Balances + Clone + Debug + Eq + Send + Sync,
 {
     const IDENTIFIER: &'static str = "SCDefaultExtra";
     type AccountId = T::AccountId;
@@ -171,6 +184,12 @@ pub trait StateChainRpcApi {
         &self,
         extrinsic: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>,
     ) -> Result<sp_core::H256, RpcError>;
+
+    async fn storage(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Option<StorageData>>;
 
     async fn storage_events_at(
         &self,
@@ -230,6 +249,18 @@ impl StateChainRpcApi for StateChainRpcClient {
             .context("latest_block_hash RPC API failed")?
             .ok_or_else(|| anyhow::Error::msg("Latest block hash could not be fetched"))?
             .hash())
+    }
+
+    async fn storage(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        storage_key: StorageKey,
+    ) -> Result<Option<StorageData>> {
+        self.state_rpc_client
+            .storage(storage_key, Some(block_hash))
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .context("storage RPC API failed")
     }
 
     async fn storage_events_at(
@@ -335,8 +366,72 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 }
 
+mod storage_traits {
+    use codec::FullCodec;
+    use frame_support::{
+        storage::types::{QueryKindTrait, StorageMap, StorageValue},
+        traits::{Get, StorageInstance},
+        StorageHasher,
+    };
+    use sp_core::storage::StorageKey;
+
+    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
+    pub trait StorageMapAssociatedTypes {
+        type Key;
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
+
+        fn _hashed_key_for(key: &Self::Key) -> StorageKey;
+    }
+    impl<
+            Prefix: StorageInstance,
+            Hasher: StorageHasher,
+            Key: FullCodec,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+            MaxValues: Get<Option<u32>>,
+        > StorageMapAssociatedTypes
+        for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+    {
+        type Key = Key;
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
+
+        fn _hashed_key_for(key: &Self::Key) -> StorageKey {
+            StorageKey(Self::hashed_key_for(key))
+        }
+    }
+
+    // A method to safely extract type information about Substrate storage values (As the Key and Value types are not available)
+    pub trait StorageValueAssociatedTypes {
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
+
+        fn _hashed_key() -> StorageKey;
+    }
+    impl<
+            Prefix: StorageInstance,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+        > StorageValueAssociatedTypes for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+    {
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
+
+        fn _hashed_key() -> StorageKey {
+            StorageKey(Self::hashed_key().into())
+        }
+    }
+}
+
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
+    /// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
         &self,
         extrinsic: Extrinsic,
@@ -347,7 +442,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     {
         let extrinsic = state_chain_runtime::Call::from(extrinsic);
         let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
-        for _ in 0..MAX_RETRY_ATTEMPTS {
+        for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             let runtime_version = { self.runtime_version.read().await.clone() };
@@ -367,7 +462,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 .await
             {
                 Ok(tx_hash) => {
-                    slog::trace!(
+                    slog::info!(
                         logger,
                         "{:?} submitted successfully with tx_hash: {:#x}",
                         extrinsic,
@@ -490,7 +585,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .map_err(rpc_error_into_anyhow_error)
         {
             Ok(tx_hash) => {
-                slog::trace!(
+                slog::info!(
                     logger,
                     "Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
                     extrinsic,
@@ -549,12 +644,49 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
+    pub async fn get_storage_value<StorageValue: storage_traits::StorageValueAssociatedTypes>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
+        let storage_key = StorageValue::_hashed_key();
+        self.state_chain_rpc_client
+            .storage(block_hash, storage_key.clone())
+            .await
+            .context(format!(
+                "Failed to get storage value with key: {:?} at block hash {:#x}",
+                storage_key, block_hash
+            ))?
+            .map(|data| StorageValue::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
+            .map_or(Ok(None), |v| v.map(Some))
+            .map(StorageValue::QueryKind::from_optional_value_to_query)
+    }
+
+    pub async fn get_storage_map<StorageMap: storage_traits::StorageMapAssociatedTypes>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        key: &StorageMap::Key,
+    ) -> Result<
+        <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+    > {
+        let storage_key = StorageMap::_hashed_key_for(key);
+        self.state_chain_rpc_client
+            .storage(block_hash, storage_key.clone())
+            .await
+            .context(format!(
+                "Failed to get storage map entry with key: {:?} at block hash {:#x}",
+                storage_key, block_hash
+            ))?
+            .map(|data| StorageMap::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
+            .map_or(Ok(None), |v| v.map(Some))
+            .map(StorageMap::QueryKind::from_optional_value_to_query)
+    }
+
     async fn get_from_storage_with_key<StorageType: Decode + Debug>(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<Vec<StorageType>> {
-        let storage_updates: Vec<_> = self
+        Ok(self
             .state_chain_rpc_client
             .storage_events_at(Some(block_hash), storage_key)
             .await?
@@ -570,9 +702,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     })
             })
             .flatten()
-            .collect::<Result<_>>()?;
-
-        Ok(storage_updates)
+            .collect::<Result<_>>()?)
     }
 
     pub async fn get_storage_pairs<StorageType: Decode + Debug>(
@@ -647,32 +777,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         state_chain_runtime::Runtime:
             pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
     {
-        let vaults = self
-            .get_from_storage_with_key::<Vault<C>>(
-                block_hash,
-                StorageKey(pallet_cf_vaults::Vaults::<
-                    state_chain_runtime::Runtime,
-                    <C as PalletInstanceAlias>::Instance,
-                >::hashed_key_for(&epoch_index)),
-            )
-            .await?;
-
-        Ok(vaults.last().expect("should have a vault").to_owned())
-    }
-
-    pub async fn get_environment_value<ValueType: Debug + Decode + Clone>(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<ValueType> {
-        let value_changes = self
-            .get_from_storage_with_key::<ValueType>(block_hash, storage_key)
-            .await?;
-
-        Ok(value_changes
-            .last()
-            .expect("Failed to find value in environment storage")
-            .to_owned())
+        Ok(self
+            .get_storage_map::<pallet_cf_vaults::Vaults<
+                state_chain_runtime::Runtime,
+                <C as PalletInstanceAlias>::Instance,
+            >>(block_hash, &epoch_index)
+            .await?
+            .expect("should have a vault"))
     }
 
     /// Get all the events from a particular block
@@ -685,7 +796,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 block_hash,
                 self.events_storage_key.clone(),
             )
-            .await?;
+            .await
+            .context(format!(
+                "Failed to get events for block hash {:#x}",
+                block_hash
+            ))?;
         if let Some(events) = events.last() {
             Ok(events.to_owned())
         } else {
@@ -698,40 +813,24 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
-        let account_info = self
-            .get_from_storage_with_key::<AccountInfo<Index, ChainflipAccountData>>(
+        Ok(self
+            .get_storage_map::<frame_system::Account<state_chain_runtime::Runtime>>(
                 block_hash,
-                StorageKey(
-                    frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
-                        &self.our_account_id,
-                    ),
-                ),
+                &self.our_account_id,
             )
-            .await?;
-
-        Ok(account_info
-            .last()
-            .expect("should have account data")
-            .to_owned()
+            .await?
             .data)
     }
 
-    /// Get the epoch number of the latest block
+    /// Get the latest epoch number at the provided block hash
     pub async fn epoch_at_block(
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
-        let epoch = self
-            .get_from_storage_with_key::<EpochIndex>(
-                block_hash,
-                StorageKey(
-                    pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
-                        .into(),
-                ),
-            )
-            .await?;
-
-        Ok(epoch.last().expect("should have epoch").to_owned())
+        self.get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
+            block_hash,
+        )
+        .await
     }
 
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
@@ -779,19 +878,11 @@ pub async fn connect_to_state_chain(
         frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
     );
 
-    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
-        state_chain_settings.ws_endpoint.as_str(),
-    )?)
-    .await
-    .map_err(rpc_error_into_anyhow_error)
-    .context("Failed to establish rpc connection to substrate node")?;
+    let state_chain_rpc_client =
+        connect_to_state_chain_without_signer(state_chain_settings).await?;
 
-    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
-    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
-    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
-
-    let mut block_header_stream = chain_rpc_client
+    let mut block_header_stream = state_chain_rpc_client
+        .chain_rpc_client
         .subscribe_finalized_heads()
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
@@ -808,11 +899,12 @@ pub async fn connect_to_state_chain(
 
         // often this call returns a more accurate hash than the stream returns
         // so we check and compare this to what the end of the stream is
-        let finalised_head_hash = chain_rpc_client
+        let finalised_head_hash = state_chain_rpc_client
+            .chain_rpc_client
             .finalized_head()
             .await
             .map_err(rpc_error_into_anyhow_error)?;
-        let finalised_head_number = chain_rpc_client
+        let finalised_head_number = state_chain_rpc_client.chain_rpc_client
             .header(Some(finalised_head_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?
@@ -855,7 +947,7 @@ pub async fn connect_to_state_chain(
         }
 
         let account_nonce = match get_account_nonce(
-            &state_rpc_client,
+            &state_chain_rpc_client.state_rpc_client,
             &account_storage_key,
             latest_block_hash,
         )
@@ -866,7 +958,7 @@ pub async fn connect_to_state_chain(
                 if wait_for_staking {
                     loop {
                         if let Some(nonce) = get_account_nonce(
-                            &state_rpc_client,
+                            &state_chain_rpc_client.state_rpc_client,
                             &account_storage_key,
                             latest_block_hash,
                         )
@@ -904,20 +996,14 @@ pub async fn connect_to_state_chain(
     );
 
     let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
-        &mut &state_rpc_client
+        &mut &state_chain_rpc_client
+            .state_rpc_client
             .metadata(Some(latest_block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?[..],
     )?)?;
 
     let system_pallet_metadata = metadata.module("System")?;
-
-    let state_chain_rpc_client = StateChainRpcClient {
-        system_rpc_client,
-        author_rpc_client,
-        state_rpc_client,
-        chain_rpc_client,
-    };
 
     Ok((
         latest_block_hash,
@@ -955,9 +1041,34 @@ pub async fn connect_to_state_chain(
     ))
 }
 
+#[allow(clippy::eval_order_dependence)]
+pub async fn connect_to_state_chain_without_signer(
+    state_chain_settings: &settings::StateChain,
+) -> Result<StateChainRpcClient> {
+    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
+        state_chain_settings.ws_endpoint.as_str(),
+    )?)
+    .await
+    .map_err(rpc_error_into_anyhow_error)
+    .context("Failed to establish rpc connection to substrate node")?;
+
+    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
+    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
+    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
+    let system_rpc_client: SystemRpcClient = rpc_client.into();
+
+    Ok(StateChainRpcClient {
+        system_rpc_client,
+        author_rpc_client,
+        state_rpc_client,
+        chain_rpc_client,
+    })
+}
+
 #[cfg(test)]
 pub mod test_utils {
     use cf_traits::ChainflipAccountState;
+    use frame_system::AccountInfo;
 
     use super::*;
 
@@ -1092,7 +1203,7 @@ mod tests {
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
-            .times(MAX_RETRY_ATTEMPTS)
+            .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(RpcError::JsonRpcError(Error {
                     code: ErrorCode::ServerError(1014),
@@ -1126,7 +1237,7 @@ mod tests {
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
-            .times(MAX_RETRY_ATTEMPTS)
+            .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(RpcError::JsonRpcError(Error {
                     code: ErrorCode::ServerError(1010),

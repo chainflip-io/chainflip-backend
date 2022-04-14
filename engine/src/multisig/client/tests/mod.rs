@@ -10,12 +10,19 @@ pub use helpers::{
 
 use lazy_static::lazy_static;
 
-use crate::multisig::KeygenInfo;
-
 use state_chain_runtime::AccountId;
 
-pub const KEYGEN_STAGES: usize = 7;
+pub const KEYGEN_STAGES: usize = 9;
 pub const SIGNING_STAGES: usize = 4;
+pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
+
+/// Default seeds
+pub const DEFAULT_KEYGEN_SEED: [u8; 32] = [8; 32];
+pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
+
+/// Default ceremony ids
+pub const DEFAULT_KEYGEN_CEREMONY_ID: u64 = 1;
+pub const DEFAULT_SIGNING_CEREMONY_ID: u64 = 2;
 
 lazy_static! {
     static ref ACCOUNT_IDS: Vec<AccountId> = [1, 2, 3, 4]

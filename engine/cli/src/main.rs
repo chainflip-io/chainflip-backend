@@ -1,13 +1,16 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
-    eth::{EthBroadcaster, EthRpcClient},
-    state_chain::client::connect_to_state_chain,
+    eth::{EthBroadcaster, EthWsRpcClient},
+    state_chain::client::{
+        connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
+    },
 };
 use futures::StreamExt;
+use pallet_cf_validator::RotationStatus;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_core::ed25519::Public as EdPublic;
 use sp_core::sr25519::Public as SrPublic;
-use sp_core::{ed25519::Public as EdPublic, storage::StorageKey};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use std::convert::TryInto;
@@ -19,6 +22,8 @@ use anyhow::Result;
 use utilities::clean_eth_address;
 
 mod settings;
+
+static STATE_CHAIN_CONNECT_ERROR: &str = "Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.";
 
 #[tokio::main]
 async fn main() {
@@ -33,7 +38,7 @@ async fn main() {
 
 async fn run_cli() -> Result<()> {
     let command_line_opts = CLICommandLineOptions::from_args();
-    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|_| anyhow::Error::msg("Please ensure your config file path is configured correctly. Or set all required command line arguments."))?;
+    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow::Error::msg(format!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err)))?;
 
     let logger = chainflip_engine::logging::utils::new_discard_logger();
 
@@ -51,8 +56,7 @@ async fn run_cli() -> Result<()> {
         } => {
             request_claim(
                 amount,
-                clean_eth_address(&eth_address)
-                    .map_err(|_| anyhow::Error::msg("You supplied an invalid ETH address"))?,
+                &eth_address,
                 &cli_settings,
                 should_register_claim,
                 &logger,
@@ -61,20 +65,115 @@ async fn run_cli() -> Result<()> {
         }
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
         Retire {} => retire_account(&cli_settings, &logger).await,
+        Activate {} => activate_account(&cli_settings, &logger).await,
+        Query { block_hash } => request_block(block_hash, &cli_settings).await,
     }
+}
+
+async fn request_block(
+    block_hash: state_chain_runtime::Hash,
+    settings: &CLISettings,
+) -> Result<()> {
+    println!(
+        "Querying the state chain for the block with hash {:x?}.",
+        block_hash
+    );
+
+    let state_chain_rpc_client =
+        connect_to_state_chain_without_signer(&settings.state_chain).await?;
+
+    match state_chain_rpc_client.get_block(block_hash).await? {
+        Some(block) => {
+            println!("{:#?}", block);
+        }
+        None => println!("Could not find block with block hash {:x?}", block_hash),
+    }
+    Ok(())
 }
 
 async fn request_claim(
     amount: f64,
-    eth_address: [u8; 20],
+    eth_address: &str,
     settings: &CLISettings,
     should_register_claim: bool,
     logger: &slog::Logger,
 ) -> Result<()> {
+    let (_, mut block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+
+    // Are we in a valid Auction phase
+    // TODO: Deduplicate this logic (and getting) by using an RPC directly to the is_auction_phase call in the validator pallet
+    // https://github.com/chainflip-io/chainflip-backend/issues/1462
+    {
+        // Check that we actually can claim atm.
+        let block = block_stream
+            .next()
+            .await
+            .unwrap_or_else(|| Err(anyhow::Error::msg("Unable to pull item from block stream")))?;
+
+        let block_hash = block.hash();
+        let current_block_number = block.number;
+        let current_epoch_started_at = state_chain_client
+            .get_storage_value::<pallet_cf_validator::CurrentEpochStartedAt::<
+                state_chain_runtime::Runtime,
+            >>(block_hash)
+            .await?;
+
+        let claim_period_as_percentage = state_chain_client
+            .get_storage_value::<pallet_cf_validator::ClaimPeriodAsPercentage::<
+                state_chain_runtime::Runtime,
+            >>(block_hash)
+            .await?;
+
+        let blocks_per_epoch = state_chain_client
+            .get_storage_value::<pallet_cf_validator::BlocksPerEpoch<state_chain_runtime::Runtime>>(
+                block_hash,
+            )
+            .await?;
+
+        let rotation_phase = state_chain_client
+            .get_storage_value::<pallet_cf_validator::RotationPhase<state_chain_runtime::Runtime>>(
+                block_hash,
+            )
+            .await?;
+
+        let is_auction_phase = {
+            if rotation_phase != RotationStatus::Idle {
+                true
+            } else {
+                // start + ((epoch_duration * percentage) / 100)
+                let last_block_for_claims = current_epoch_started_at.saturating_add(
+                    blocks_per_epoch
+                        .saturating_mul(claim_period_as_percentage.into())
+                        .checked_div(100u32)
+                        .unwrap_or_default(),
+                );
+
+                last_block_for_claims <= current_block_number
+            }
+        };
+
+        if is_auction_phase {
+            let next_auction_target = current_epoch_started_at + blocks_per_epoch;
+            return Err(anyhow::Error::msg(format!("You cannot claim during an auction. After the next auction, you can claim. The next auction is targetted to resolve at block number {}.", next_auction_target)));
+        }
+    }
+
+    // Sanitise data
+
+    let eth_address = clean_eth_address(eth_address)
+        .map_err(|error| anyhow::Error::msg(format!("You supplied an invalid ETH address: {}", error)))
+        .and_then(|eth_address|
+            if eth_address == [0; 20] {
+                Err(anyhow::Error::msg("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
+            } else {
+                Ok(eth_address)
+            }
+        )?;
+
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(
-        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`. You will send two transactions, a redeem and claim.",
+        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`. This will send two transactions, required to initiate the claim, a redeem and claim.",
         amount,
         atomic_amount,
         hex::encode(eth_address)
@@ -84,15 +183,18 @@ async fn request_claim(
         return Ok(());
     }
 
-    let (_, block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (_, block_stream, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger)
+            .await
+            .map_err(|_| anyhow::Error::msg(STATE_CHAIN_CONNECT_ERROR))?;
+    // Do the claim
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
             pallet_cf_staking::Call::claim(atomic_amount, eth_address),
             logger,
         )
-        .await
-        .expect("Failed to submit claim extrinsic");
+        .await?;
 
     println!(
         "Your claim has transaction hash: `{:#x}`. Waiting for your request to be confirmed...",
@@ -104,8 +206,7 @@ async fn request_claim(
 
     let events = state_chain_client
         .watch_submitted_extrinsic(tx_hash, block_stream)
-        .await
-        .expect("Failed to watch extrinsic");
+        .await?;
 
     for event in events {
         if let state_chain_runtime::Event::EthereumThresholdSigner(
@@ -116,12 +217,7 @@ async fn request_claim(
             'outer: while let Some(result_header) = block_stream.next().await {
                 let header = result_header.expect("Failed to get a valid block header");
                 let block_hash = header.hash();
-                let events = state_chain_client
-                    .get_events(block_hash)
-                    .await
-                    .unwrap_or_else(|e| {
-                        panic!("Failed to fetch events for block: {}, {}", header.number, e)
-                    });
+                let events = state_chain_client.get_events(block_hash).await?;
                 for (_phase, event, _) in events {
                     if let state_chain_runtime::Event::Staking(
                         pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
@@ -134,35 +230,21 @@ async fn request_claim(
                                     hex::encode(claim_cert.clone())
                                 );
                                 let chain_id = state_chain_client
-                                    .get_environment_value::<u64>(
-                                        block_hash,
-                                        StorageKey(
-                                            pallet_cf_environment::EthereumChainId::<
-                                                state_chain_runtime::Runtime,
-                                            >::hashed_key(
-                                            )
-                                            .into(),
-                                        ),
-                                    )
+                                    .get_storage_value::<pallet_cf_environment::EthereumChainId<
+                                        state_chain_runtime::Runtime,
+                                    >>(block_hash)
                                     .await
                                     .expect("Failed to fetch EthereumChainId from the State Chain");
                                 let stake_manager_address = state_chain_client
-                                    .get_environment_value(
-                                        block_hash,
-                                        StorageKey(
-                                            pallet_cf_environment::StakeManagerAddress::<
-                                                state_chain_runtime::Runtime,
-                                            >::hashed_key(
-                                            )
-                                            .into(),
-                                        ),
-                                    )
+                                    .get_storage_value::<pallet_cf_environment::StakeManagerAddress<
+                                        state_chain_runtime::Runtime,
+                                    >>(block_hash)
                                     .await
                                     .expect("Failed to fetch StakeManagerAddress from State Chain");
                                 let tx_hash = register_claim(
                                     settings,
                                     chain_id,
-                                    stake_manager_address,
+                                    stake_manager_address.into(),
                                     claim_cert,
                                     logger,
                                 )
@@ -199,11 +281,11 @@ async fn register_claim(
         stake_manager_address
     );
 
-    let eth_rpc_client = EthRpcClient::new(&settings.eth, logger)
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, logger)
         .await
         .expect("Unable to create EthRpcClient");
 
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_rpc_client, logger)?;
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_ws_rpc_client, logger)?;
 
     eth_broadcaster
         .send(
@@ -221,7 +303,9 @@ async fn register_claim(
 }
 
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger)
+        .await
+        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, STATE_CHAIN_CONNECT_ERROR)))?;
     let seed = state_chain_client
         .rotate_session_keys()
         .await
@@ -248,12 +332,26 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
 }
 
 async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|e| anyhow::Error::msg(format!("{:?} Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.", e)))?;
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger)
+        .await
+        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, STATE_CHAIN_CONNECT_ERROR)))?;
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(pallet_cf_staking::Call::retire_account(), logger)
         .await
         .expect("Could not retire account");
     println!("Account retired at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
+    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger)
+        .await
+        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, STATE_CHAIN_CONNECT_ERROR)))?;
+    let tx_hash = state_chain_client
+        .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account(), logger)
+        .await
+        .expect("Could not activate account");
+    println!("Account activated at tx {:#x}.", tx_hash);
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, iter::FromIterator, path::Path};
+use std::{collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path};
 
 use super::KeyDB;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
@@ -16,6 +16,9 @@ use anyhow::{Context, Result};
 /// written on any changes to the persistent application data format
 pub const DB_SCHEMA_VERSION: u32 = 1;
 
+/// The default schema version used if a database exists but no schema version is found
+const DEFAULT_DB_SCHEMA_VERSION: u32 = 0;
+
 /// Key used to store the `DB_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
 
@@ -32,6 +35,9 @@ pub const METADATA_COLUMN: &str = "metadata";
 const DEFAULT_COLUMN_NAME: &str = "default";
 // KVDB_rocksdb (legacy) naming for the data column. Used for migration
 const LEGACY_DATA_COLUMN_NAME: &str = "col0";
+
+/// Name of the directory that the backups will go into (only created before migrations)
+const BACKUPS_DIRECTORY: &str = "backups";
 
 /// Database for keys and persistent metadata
 pub struct PersistentKeyDB {
@@ -65,7 +71,13 @@ impl PersistentKeyDB {
         if path.exists() {
             // Add the column families found in the existing db, they might be needed for migration.
             DB::list_cf(&Options::default(), path)
-                .expect("Should get list of column families")
+                .map_err(anyhow::Error::msg)
+                .with_context(|| {
+                    format!(
+                        "Failed to read column families from existing database {}",
+                        path.display()
+                    )
+                })?
                 .into_iter()
                 .for_each(|cf_name| {
                     // Filter out the `default` column because we don't use it
@@ -103,8 +115,8 @@ impl PersistentKeyDB {
                 .context(format!("Failed to open database at: {}", path.display()))?;
 
         // Preform migrations and write the schema version
-        migrate_db_to_latest(&mut db, &logger)
-                    .unwrap_or_else(|_| panic!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", path.display()));
+        migrate_db_to_latest(&mut db, &logger, path)
+                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", path.display()))?;
 
         // Import the keys from the kvdb migration
         let mut p_kdb = PersistentKeyDB { db, logger };
@@ -150,13 +162,13 @@ impl KeyDB for PersistentKeyDB {
 
                 // deserialize the `KeygenResultInfo`
                 match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
-                    Ok(keygen_info) => {
-                        slog::info!(
+                    Ok(keygen_result_info) => {
+                        slog::debug!(
                             self.logger,
                             "Loaded key_info (key_id: {}) from database",
                             key_id
                         );
-                        Some((key_id, keygen_info))
+                        Some((key_id, keygen_result_info))
                     }
                     Err(err) => {
                         slog::error!(
@@ -171,6 +183,66 @@ impl KeyDB for PersistentKeyDB {
             })
             .collect()
     }
+}
+
+// Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
+fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Error> {
+    // Build the name for the new backup using the schema version and a timestamp
+    let backup_dir_name = format!(
+        "backup_v{}_{}_{}",
+        schema_version,
+        chrono::Utc::now().to_rfc3339(),
+        &path
+            .file_name()
+            .expect("Should have file name")
+            .to_os_string()
+            .into_string()
+            .expect("Should get string from filename"),
+    );
+
+    create_backup_with_directory_name(path, backup_dir_name)
+}
+
+fn create_backup_with_directory_name(
+    path: &Path,
+    backup_dir_name: String,
+) -> Result<String, anyhow::Error> {
+    // Create the BACKUPS_DIRECTORY if it doesn't exist
+    let backups_path = path.parent().expect("Should have parent");
+    let backups_path = backups_path.join(BACKUPS_DIRECTORY);
+    if !backups_path.exists() {
+        fs::create_dir_all(&backups_path)
+            .map_err(anyhow::Error::msg)
+            .with_context(|| {
+                format!(
+                    "Failed to create backup directory {}",
+                    &backups_path
+                        .to_str()
+                        .expect("Should get backup path as str")
+                )
+            })?;
+    }
+
+    // This db backup folder should not exist yet
+    let backup_dir_path = backups_path.join(backup_dir_name);
+    if backup_dir_path.exists() {
+        return Err(anyhow::Error::msg(format!(
+            "Backup directory already exists {}",
+            backup_dir_path.display()
+        )));
+    }
+
+    // Copy the files
+    let mut copy_options = fs_extra::dir::CopyOptions::new();
+    copy_options.copy_inside = true;
+    fs_extra::dir::copy(path, &backup_dir_path, &copy_options)
+        .map_err(anyhow::Error::msg)
+        .context("Failed to copy db files for backup")?;
+
+    Ok(backup_dir_path
+        .into_os_string()
+        .into_string()
+        .expect("Should get backup path as string"))
 }
 
 fn get_metadata_column_handle(db: &DB) -> &ColumnFamily {
@@ -212,15 +284,20 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> u32 {
         None => {
             slog::warn!(
                 logger,
-                "Did not find db_schema_version in existing database. Assuming db_schema_version of 0"
+                "Did not find schema version in database. Assuming schema version of {}",
+                DEFAULT_DB_SCHEMA_VERSION
             );
-            0
+            DEFAULT_DB_SCHEMA_VERSION
         }
     }
 }
 
 /// Migrates the db forward one version migration at a time to the latest `DB_SCHEMA_VERSION`
-fn migrate_db_to_latest(db: &mut DB, logger: &slog::Logger) -> Result<(), anyhow::Error> {
+fn migrate_db_to_latest(
+    db: &mut DB,
+    logger: &slog::Logger,
+    path: &Path,
+) -> Result<(), anyhow::Error> {
     let db_schema_version = read_schema_version(db, logger);
 
     if db_schema_version > DB_SCHEMA_VERSION {
@@ -237,6 +314,15 @@ fn migrate_db_to_latest(db: &mut DB, logger: &slog::Logger) -> Result<(), anyhow
             "Database is migrating from version {} to {}",
             db_schema_version,
             DB_SCHEMA_VERSION
+        );
+
+        // Backup the database before migrating it
+        slog::info!(
+            logger,
+            "Database backup created at {}",
+            create_backup(path, db_schema_version)
+                .map_err(anyhow::Error::msg)
+                .context("Failed to create database backup before migration")?
         );
     }
 
@@ -289,31 +375,25 @@ fn load_keys_using_kvdb(
         .map_err(|e| anyhow::Error::msg(format!("could not open kvdb database: {}", e)))?;
 
     // Load the keys from column 0 (aka "col0")
-    Ok(db
-        .iter(0)
-        .filter_map(|(key_id, key_info)| {
+    db.iter(0)
+        .map(|(key_id, key_info)| {
             let key_id: KeyId = KeyId(key_id.into());
             match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
-                Ok(keygen_info) => {
-                    slog::info!(
+                Ok(keygen_result_info) => {
+                    slog::debug!(
                         logger,
                         "Loaded key_info (key_id: {}) from kvdb database",
                         key_id
                     );
-                    Some((key_id, keygen_info))
+                    Ok((key_id, keygen_result_info))
                 }
-                Err(err) => {
-                    slog::error!(
-                        logger,
-                        "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
-                        key_id,
-                        err
-                    );
-                    None
-                }
+                Err(err) => Err(anyhow::Error::msg(format!(
+                    "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
+                    key_id, err,
+                ))),
             }
         })
-        .collect())
+        .collect()
 }
 
 #[cfg(test)]
@@ -324,6 +404,8 @@ mod tests {
     use crate::{
         logging::test_utils::new_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
     };
+
+    use tempdir::TempDir;
 
     const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
@@ -342,6 +424,12 @@ mod tests {
         .expect("Should write DB_SCHEMA_VERSION");
     }
 
+    // Creates a TempDir unique directory that will be deleted when dropped
+    fn get_temp_db_path() -> std::path::PathBuf {
+        let temp_dir = TempDir::new("unit_test").unwrap();
+        temp_dir.path().to_owned().join("db")
+    }
+
     // Just a random key
     const TEST_KEY: [u8; 33] = [
         3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132, 93,
@@ -354,27 +442,23 @@ mod tests {
     #[test]
     fn can_create_new_database() {
         let logger = new_test_logger();
-        let db_path = Path::new("db_new");
+        let db_path = get_temp_db_path();
 
         {
-            assert_ok!(PersistentKeyDB::new(db_path, &logger));
+            assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
             assert!(db_path.exists());
         }
-
-        // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
     }
 
     #[test]
-    fn new_db_creates_new_db_with_latest_version_when_db_does_not_exist() {
-        let db_path = Path::new("db3");
+    fn new_db_is_created_with_latest_schema_version() {
         let logger = new_test_logger();
+        let db_path = get_temp_db_path();
 
         // Create a fresh db. This will also write the schema version
-        let _ = std::fs::remove_dir_all(db_path);
         assert!(!db_path.exists());
         {
-            assert_ok!(PersistentKeyDB::new(db_path, &logger));
+            assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
         }
 
         assert!(db_path.exists());
@@ -393,29 +477,21 @@ mod tests {
                 .expect("Version should be a u32");
             assert_eq!(u32::from_be_bytes(db_schema_version), DB_SCHEMA_VERSION);
         }
-
-        // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
     }
 
     #[test]
     fn new_db_returns_db_when_db_data_version_is_latest() {
-        let db_path = Path::new("db4");
-        let _ = std::fs::remove_dir_all(db_path);
+        let db_path = get_temp_db_path();
 
         {
-            open_db_and_write_version_data(db_path, DB_SCHEMA_VERSION);
-            assert_ok!(PersistentKeyDB::new(db_path, &new_test_logger()));
+            open_db_and_write_version_data(db_path.as_path(), DB_SCHEMA_VERSION);
+            assert_ok!(PersistentKeyDB::new(db_path.as_path(), &new_test_logger()));
         }
-
-        // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
     }
 
     #[test]
-    fn can_migrate_0_to_1() {
-        let db_path = Path::new("migrate_0_1");
-        let _ = std::fs::remove_dir_all(db_path);
+    fn can_migrate_to_latests() {
+        let db_path = get_temp_db_path();
 
         let bashful_secret = KEYGEN_RESULT_INFO_HEX.to_string();
         let bashful_secret_bin = hex::decode(bashful_secret).unwrap();
@@ -430,24 +506,22 @@ mod tests {
         // No metadata column, the keygen data column is named 'col0' and has no prefix.
         // The compression used by kvdb is different from rust_rocksdb, so we must use kvdb here.
         {
-            let db = kvdb_rocksdb::Database::open(
-                &kvdb_rocksdb::DatabaseConfig::default(),
-                db_path.to_str().expect("Invalid path"),
-            )
-            .unwrap();
+            let db =
+                kvdb_rocksdb::Database::open(&kvdb_rocksdb::DatabaseConfig::default(), &db_path)
+                    .unwrap();
 
             let mut tx = db.transaction();
-            tx.put_vec(0, &key_id.0, bashful_secret_bin);
+            tx.put_vec(DEFAULT_DB_SCHEMA_VERSION, &key_id.0, bashful_secret_bin);
             db.write(tx).unwrap();
         }
 
         // Load the old db and see if the keygen data is migrated and schema version is updated
         {
-            let p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             assert_eq!(key.params.threshold, 1);
-            assert_eq!(read_schema_version(&p_db.db, &logger), 1);
+            assert_eq!(read_schema_version(&p_db.db, &logger), DB_SCHEMA_VERSION);
         }
 
         // Check that the old column family was deleted
@@ -458,28 +532,21 @@ mod tests {
                 .iter()
                 .any(|s| s == &LEGACY_DATA_COLUMN_NAME.to_string()));
         }
-
-        // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
     }
 
     #[test]
     fn should_not_migrate_backwards() {
-        let db_path = Path::new("db5");
-        let _ = std::fs::remove_dir_all(db_path);
+        let db_path = get_temp_db_path();
 
         // Create a db with schema version + 1
-        open_db_and_write_version_data(db_path, DB_SCHEMA_VERSION + 1);
+        open_db_and_write_version_data(db_path.as_path(), DB_SCHEMA_VERSION + 1);
 
         // Open the db and make sure the `migrate_db_to_latest` errors
         {
-            let mut db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
+            let mut db = DB::open_cf(&Options::default(), &db_path.as_path(), COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest(&mut db, &new_test_logger()).is_err());
+            assert!(migrate_db_to_latest(&mut db, &new_test_logger(), db_path.as_path()).is_err());
         }
-
-        // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
     }
 
     #[test]
@@ -494,10 +561,10 @@ mod tests {
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
-        let db_path = Path::new("db1");
-        let _ = std::fs::remove_dir_all(db_path);
+        let db_path = get_temp_db_path();
+
         {
-            let p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
             let db = p_db.db;
 
             let key = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
@@ -507,23 +574,21 @@ mod tests {
         }
 
         {
-            let p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             assert_eq!(key.params.threshold, 1);
         }
-        // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
     }
 
     #[test]
     fn can_update_key() {
         let logger = new_test_logger();
+        let db_path = get_temp_db_path();
         let key_id = KeyId(vec![0; 33]);
-        let db_path = Path::new("db2");
-        let _ = std::fs::remove_dir_all(db_path);
+
         {
-            let mut p_db = PersistentKeyDB::new(db_path, &logger).unwrap();
+            let mut p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
 
             let keys_before = p_db.load_keys();
             // there should be no key [0; 33] yet
@@ -538,7 +603,147 @@ mod tests {
             let keys_before = p_db.load_keys();
             assert!(keys_before.get(&key_id).is_some());
         }
-        // clean up
-        std::fs::remove_dir_all(db_path).unwrap();
+    }
+
+    #[test]
+    fn backup_is_created_when_migrating() {
+        let logger = new_test_logger();
+
+        // Fresh folder
+        let temp_dir = TempDir::new("backup_is_created_when_migrating").unwrap();
+        let path = temp_dir.path();
+
+        assert!(
+            path.read_dir().unwrap().next().is_none(),
+            "Folder should be empty"
+        );
+
+        let db_path = path.join("my_db");
+
+        // Create a db that has no schema version, so it will use DEFAULT_DB_SCHEMA_VERSION
+        {
+            let mut opts = Options::default();
+            opts.create_missing_column_families(true);
+            opts.create_if_missing(true);
+            let _db = DB::open_cf(&opts, &db_path, COLUMN_FAMILIES).expect("Should open db file");
+        }
+
+        // Load the db and trigger the migration and therefore the backup
+        {
+            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
+            assert_eq!(read_schema_version(&p_db.db, &logger), DB_SCHEMA_VERSION);
+        }
+
+        // Try and open the backup to make sure it still works
+        {
+            // Find the backup db
+            let backups_path = path.join(BACKUPS_DIRECTORY);
+            let backups: Vec<std::path::PathBuf> = fs::read_dir(&backups_path)
+                .unwrap()
+                .filter_map(|entry| {
+                    let entry = entry.expect("File should exist");
+                    let file_path = entry.path();
+                    if file_path.is_dir() && file_path != db_path {
+                        Some(file_path)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            assert!(
+                backups.len() == 1,
+                "Incorrect number of backups found in {}",
+                BACKUPS_DIRECTORY
+            );
+
+            // Open the backup and make sure the schema version is the same as the pre-migration
+            let backup_db = DB::open_cf(
+                &Options::default(),
+                &backups.first().unwrap(),
+                COLUMN_FAMILIES,
+            )
+            .expect("Should open db backup");
+            assert_eq!(
+                read_schema_version(&backup_db, &logger),
+                DEFAULT_DB_SCHEMA_VERSION
+            );
+        }
+    }
+
+    #[test]
+    fn backup_should_fail_if_already_exists() {
+        let logger = new_test_logger();
+        let db_path = get_temp_db_path();
+
+        // Create a normal db
+        assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
+
+        // Backup up the db to a specified directory.
+        // We cannot use the normal backup directory because it has a timestamp in it.
+        let backup_dir_name = "test".to_string();
+        assert_ok!(create_backup_with_directory_name(
+            db_path.as_path(),
+            backup_dir_name.clone()
+        ));
+
+        // Try and back it up again to the same directory and it should fail
+        assert!(create_backup_with_directory_name(db_path.as_path(), backup_dir_name).is_err());
+    }
+
+    #[test]
+    fn backup_should_fail_if_cant_copy_files() {
+        let logger = new_test_logger();
+        let temp_dir = TempDir::new("backup_should_fail_if_cant_copy_files").unwrap();
+        let parent_path = temp_dir.path();
+        let db_path = parent_path.join("db");
+
+        // Create a normal db
+        assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
+
+        // Change the backups folder to readonly
+        let backups_path = parent_path.join(BACKUPS_DIRECTORY);
+        assert!(backups_path.exists());
+        let mut permissions = backups_path.metadata().unwrap().permissions();
+        permissions.set_readonly(true);
+        assert_ok!(fs::set_permissions(&backups_path, permissions));
+        assert!(
+            backups_path.metadata().unwrap().permissions().readonly(),
+            "Readonly permissions were not set"
+        );
+
+        // Try and backup the db, it should fail with permissions denied due to readonly
+        assert!(create_backup(db_path.as_path(), DB_SCHEMA_VERSION).is_err());
+    }
+
+    #[test]
+    fn should_error_if_kvdb_fails_to_load_key() {
+        let logger = new_test_logger();
+        let db_path = get_temp_db_path();
+
+        // Create a db that is schema version 0 using kvdb.
+        {
+            let db =
+                kvdb_rocksdb::Database::open(&kvdb_rocksdb::DatabaseConfig::default(), &db_path)
+                    .unwrap();
+
+            let mut tx = db.transaction();
+
+            // Put in some junk data instead of proper KeygenResultInfo so that it will fail to load this key
+            tx.put_vec(0, &KeyId(TEST_KEY.into()).0, vec![1, 2, 3, 4]);
+            db.write(tx).unwrap();
+        }
+
+        // Load the bad db and make sure it errors
+        {
+            assert!(PersistentKeyDB::new(db_path.as_path(), &logger).is_err());
+        }
+
+        // Confirm that the db was not migrated, by checking that the metadata column doesn't exist.
+        {
+            assert!(!DB::list_cf(&Options::default(), db_path.as_path())
+                .expect("Should get column families")
+                .contains(&METADATA_COLUMN.to_string()))
+        }
     }
 }

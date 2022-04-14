@@ -87,7 +87,7 @@ use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyShare {
     pub y: Point,
     pub x_i: Scalar,
@@ -139,7 +139,7 @@ impl Scalar {
     }
 
     pub fn from_usize(a: usize) -> Self {
-        Scalar(ECScalar::from_bigint(&BigInt::from(a as u32)))
+        Scalar(ECScalar::from_bigint(&BigInt::from(a as u64)))
     }
 
     pub fn from_bytes(x: &[u8; 32]) -> Self {

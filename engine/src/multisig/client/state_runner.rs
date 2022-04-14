@@ -11,16 +11,17 @@ use crate::{
 };
 use state_chain_runtime::AccountId;
 
-use super::{common::CeremonyStage, utils::PartyIdxMapping, MultisigOutcomeSender};
+use super::{
+    ceremony_manager::CeremonyResultSender, common::CeremonyStage, utils::PartyIdxMapping,
+};
 
 pub struct StateAuthorised<CeremonyData, CeremonyResult> {
     pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: MultisigOutcomeSender,
+    pub result_sender: CeremonyResultSender<CeremonyResult>,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
 pub struct StateRunner<CeremonyData, CeremonyResult> {
-    ceremony_id: CeremonyId,
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
@@ -40,7 +41,6 @@ where
     pub fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
         StateRunner {
             inner: None,
-            ceremony_id,
             delayed_messages: Default::default(),
             should_expire_at: Instant::now() + MAX_STAGE_DURATION,
             logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
@@ -51,16 +51,10 @@ where
     /// the state machine to make progress
     pub fn on_ceremony_request(
         &mut self,
-        ceremony_id: CeremonyId,
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: MultisigOutcomeSender,
+        result_sender: CeremonyResultSender<CeremonyResult>,
     ) -> Result<Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>>> {
-        assert_eq!(
-            self.ceremony_id, ceremony_id,
-            "ceremony id set previously is incorrect"
-        );
-
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
         }
@@ -221,7 +215,7 @@ where
             None => {
                 slog::debug!(
                     self.logger,
-                    "Delaying message {} from party [{}] (pre signing request)",
+                    "Delaying message {} from party [{}] for unauthorised ceremony",
                     m,
                     id
                 )
@@ -287,6 +281,10 @@ where
     /// returns true if the ceremony is authorized (has received a ceremony request)
     pub fn is_authorized(&self) -> bool {
         self.inner.is_some()
+    }
+
+    pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<CeremonyResult>> {
+        self.inner.map(|inner| inner.result_sender)
     }
 
     #[cfg(test)]

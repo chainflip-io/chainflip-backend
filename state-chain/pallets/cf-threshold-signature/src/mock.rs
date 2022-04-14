@@ -1,8 +1,16 @@
-use std::{collections::BTreeSet, iter::FromIterator};
+use std::{collections::BTreeSet, iter::FromIterator, marker::PhantomData};
 
-use crate::{self as pallet_cf_threshold_signature, EnsureThresholdSigned};
-use cf_chains::{eth, ChainCrypto};
-use cf_traits::{Chainflip, SigningContext};
+use crate::{
+	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,
+	OpenRequests, PalletOffence, RequestId,
+};
+use cf_chains::{
+	mocks::{MockEthereum, MockThresholdSignature},
+	ChainCrypto,
+};
+use cf_traits::{
+	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, ThresholdSigner,
+};
 use codec::{Decode, Encode};
 use frame_support::{
 	instances::Instance1,
@@ -27,7 +35,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		DogeThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Origin<T>, Call, Storage, Event<T>, ValidateUnsigned},
+		MockEthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Origin<T>, Call, Storage, Event<T>, ValidateUnsigned},
 	}
 );
 
@@ -106,26 +114,31 @@ impl cf_traits::SignerNomination for MockNominator {
 // Mock Callback
 
 thread_local! {
-	pub static CALL_DISPATCHED: std::cell::RefCell<bool> = Default::default();
+	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 }
 
-pub struct MockCallback<C: ChainCrypto>(pub String, pub C::ThresholdSignature);
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 
-impl MockCallback<Doge> {
-	pub fn call() {
-		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = true);
+impl MockCallback<MockEthereum> {
+	pub fn new(id: RequestId) -> Self {
+		Self(id, Default::default())
 	}
 
-	pub fn has_executed() -> bool {
-		CALL_DISPATCHED.with(|cell| *cell.borrow())
+	pub fn call(self) {
+		assert!(matches!(
+			<MockEthereumThresholdSigner as ThresholdSigner<_>>::signature_result(self.0),
+			AsyncResult::Ready(..)
+		));
+		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(self.0));
 	}
 
-	pub fn reset() {
-		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = false);
+	pub fn has_executed(id: RequestId) -> bool {
+		CALL_DISPATCHED.with(|cell| *cell.borrow()) == Some(id)
 	}
 }
 
-impl UnfilteredDispatchable for MockCallback<Doge> {
+impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 	type Origin = Origin;
 
 	fn dispatch_bypass_filter(
@@ -133,103 +146,65 @@ impl UnfilteredDispatchable for MockCallback<Doge> {
 		origin: Self::Origin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		EnsureThresholdSigned::<Test, Instance1>::ensure_origin(origin)?;
-		Self::call();
+		self.call();
 		Ok(().into())
 	}
 }
 
 // Mock KeyProvider
-pub const MOCK_KEY_ID: &[u8] = b"d06e";
+pub const MOCK_KEY_ID: &[u8] = b"K-ID";
+pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
 
 pub struct MockKeyProvider;
 
-impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
+impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	type KeyId = Vec<u8>;
 
 	fn current_key_id() -> Self::KeyId {
 		MOCK_KEY_ID.to_vec()
 	}
 
-	fn current_key() -> <Doge as ChainCrypto>::AggKey {
-		eth::AggKey::from_pubkey_compressed(hex_literal::hex!(
-			"0331b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae"
-		))
+	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
+		MOCK_AGG_KEY
 	}
 }
 
-// Mock OfflineReporter
-cf_traits::impl_mock_offline_conditions!(u64);
-
-// Mock SigningContext
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct Doge;
-impl cf_chains::Chain for Doge {
-	const CHAIN_ID: cf_chains::ChainId = cf_chains::ChainId::Ethereum;
+pub fn sign(
+	payload: <MockEthereum as ChainCrypto>::Payload,
+) -> MockThresholdSignature<
+	<MockEthereum as ChainCrypto>::AggKey,
+	<MockEthereum as ChainCrypto>::Payload,
+> {
+	MockThresholdSignature::<_, _> { signing_key: MOCK_AGG_KEY, signed_payload: payload }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum DogeSig {
-	Valid,
-	Invalid,
-}
-
-impl ChainCrypto for Doge {
-	type AggKey = eth::AggKey;
-	type Payload = String;
-	type ThresholdSignature = DogeSig;
-	type TransactionHash = Vec<u8>;
-
-	fn verify_threshold_signature(
-		_agg_key: &Self::AggKey,
-		_payload: &Self::Payload,
-		signature: &Self::ThresholdSignature,
-	) -> bool {
-		*signature == DogeSig::Valid
-	}
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct DogeThresholdSignerContext {
-	pub message: String,
-}
-
-pub const VALID_SIGNATURE: DogeSig = DogeSig::Valid;
-pub const INVALID_SIGNATURE: DogeSig = DogeSig::Invalid;
-
-impl SigningContext<Test> for DogeThresholdSignerContext {
-	type Chain = Doge;
-	type Callback = MockCallback<Doge>;
-	type ThresholdSignatureOrigin = crate::Origin<Test, Instance1>;
-
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
-		self.message.clone()
-	}
-
-	fn resolve_callback(
-		&self,
-		signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		MockCallback(self.message.clone(), signature)
-	}
-}
+pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
+	MockThresholdSignature::<_, _> { signing_key: *b"BAD!", signed_payload: *b"BAD!" };
 
 parameter_types! {
 	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
-	type TargetChain = Doge;
-	type SigningContext = DogeThresholdSignerContext;
+	type Offence = PalletOffence;
+	type RuntimeOrigin = Origin;
+	type ThresholdCallable = MockCallback<MockEthereum>;
+	type TargetChain = MockEthereum;
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
-	type OfflineReporter = MockOfflineReporter;
+	type OffenceReporter = MockOffenceReporter;
+	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type Weights = ();
 }
 
+#[derive(Default)]
 pub struct ExtBuilder {
 	ext: sp_io::TestExternalities,
 }
@@ -256,24 +231,95 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn with_pending_request(mut self, message: &'static str) -> Self {
+	pub fn with_request(mut self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let request_id = DogeThresholdSigner::request_signature(DogeThresholdSignerContext {
-				message: message.to_string(),
-			});
-			let pending = DogeThresholdSigner::pending_request(request_id).unwrap();
-			assert_eq!(pending.attempt, 0);
+			let request_id =
+				<MockEthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
+			let (ceremony_id, attempt) =
+				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
+			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			assert_eq!(
+				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().2,
+				*message
+			);
+			assert_eq!(attempt, 0);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
+			assert!(matches!(
+				MockEthereumThresholdSigner::signatures(request_id),
+				AsyncResult::Pending
+			));
 		});
 		self
 	}
 
-	pub fn build(self) -> sp_io::TestExternalities {
-		self.ext
+	pub fn with_request_and_callback(
+		mut self,
+		message: &<MockEthereum as ChainCrypto>::Payload,
+		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereum>,
+	) -> Self {
+		self.ext.execute_with(|| {
+			// Initiate request
+			let request_id = MockEthereumThresholdSigner::request_signature_with_callback(
+				*message,
+				callback_gen,
+			);
+			let (ceremony_id, attempt) =
+				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
+			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			assert_eq!(
+				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().2,
+				*message
+			);
+			assert_eq!(attempt, 0);
+			assert_eq!(
+				pending.remaining_respondents,
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
+			);
+			assert!(matches!(
+				MockEthereumThresholdSigner::signatures(request_id),
+				AsyncResult::Pending
+			));
+			assert!(MockEthereumThresholdSigner::request_callback(request_id).is_some());
+		});
+		self
+	}
+
+	pub fn build(self) -> TestExternalitiesWithCheck {
+		TestExternalitiesWithCheck { ext: self.ext }
+	}
+}
+
+/// Wraps the TestExternalities so that we can run consistency checks before and after each test.
+pub struct TestExternalitiesWithCheck {
+	ext: sp_io::TestExternalities,
+}
+
+impl TestExternalitiesWithCheck {
+	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
+		self.ext.execute_with(|| {
+			Self::do_consistency_check();
+			let r = f();
+			Self::do_consistency_check();
+			r
+		})
+	}
+
+	/// Checks conditions that should always hold.
+	pub fn do_consistency_check() {
+		OpenRequests::<Test, _>::iter().for_each(|(ceremony_id, (request_id, attempt, _))| {
+			assert_eq!(LiveCeremonies::<Test, _>::get(request_id).unwrap(), (ceremony_id, attempt));
+		});
+		LiveCeremonies::<Test, _>::iter().for_each(|(ceremony_id, (request_id, attempt))| {
+			assert!(matches!(
+				OpenRequests::<Test, _>::get(request_id),
+				Some((ceremony_id_read, attempt_read, _))
+					if (ceremony_id_read, attempt_read) == (ceremony_id, attempt),
+			));
+		});
 	}
 }
 

@@ -2,7 +2,7 @@
 
 ## `MultisigClient`
 
-Receives `MultisigInstruction` and `P2PMessage` via channels.
+Receives `MultisigRequest` and `P2PMessage` via channels.
 Takes the `InnerEvent`s from its children and outputs a `P2PMessageCommand` or a `MultisigEvent` via channels.
 Triggers cleanup every 10sec.
 
@@ -40,7 +40,7 @@ Contains the `CeremonyStage`, in the case if signing it is a `BroadcastStage`.
 
 ```mermaid
 flowchart LR
-    process_multisig_instruction -- MultisigInstruction::Sign --> on_request_to_sign
+    process_multisig_request -- MultisigRequest::Sign --> on_request_to_sign
     process_p2p_message -- MultisigMessage::SigningMessage --> process_signing_data
     subgraph signing_states: HashMap<CeremonyId, SigningState>
         subgraph "AuthorisedSigningState (SigningState)"
@@ -73,7 +73,7 @@ flowchart LR
 
 ```mermaid
 graph TD;
-Idle -- MultisigInstruction::Sign --> AwaitCommitments1
+Idle -- MultisigRequest::Sign --> AwaitCommitments1
 AwaitCommitments1 ==> VerifyCommitmentsBroadcast2
 VerifyCommitmentsBroadcast2 ==> LocalSigStage3
 LocalSigStage3 ==> VerifyLocalSigsBroadcastStage4

@@ -13,5 +13,4 @@ pub const SOUNDCHECK: StateChainEnvironment = StateChainEnvironment {
 	eth_block_safety_margin: 4,
 	pending_sign_duration: 500,
 	max_ceremony_stage_duration: 300,
-	max_extrinsic_retry_attempts: 10,
 };

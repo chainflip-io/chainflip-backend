@@ -3,8 +3,8 @@
 
 use super::*;
 
-use cf_chains::eth::AggKey;
 use cf_traits::EpochInfo;
+use codec::{Decode, Encode};
 use frame_benchmarking::{
 	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
 };
@@ -20,11 +20,11 @@ const TX_HASH: [u8; 32] = [0xab; 32];
 
 /// Generate a validator set
 fn generate_validator_set<T: Config<I>, I: 'static>(
-	amount: u32,
+	set_size: u32,
 	caller: T::ValidatorId,
 ) -> BTreeSet<T::ValidatorId> {
 	let mut validator_set: BTreeSet<T::ValidatorId> = BTreeSet::new();
-	for i in 0..amount {
+	for i in 0..set_size {
 		let validator_id = account("doogle", i, 0);
 		validator_set.insert(validator_id);
 	}
@@ -32,50 +32,68 @@ fn generate_validator_set<T: Config<I>, I: 'static>(
 	validator_set
 }
 
+fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
+	let encoded = key.encode();
+	AggKeyFor::<T, I>::decode(&mut &encoded[..]).unwrap()
+}
+
 benchmarks_instance_pallet! {
 	on_initialize_failure {
-		let b in 101 .. 150;
+		let b in 1 .. 100;
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
 		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(150, caller.clone().into());
 		let blamed: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(b, caller.clone().into());
-		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
+		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates.clone());
 
-		for i in 0..b {
-			let validator_id = account("doogle", i, 0);
+		for validator_id in candidates {
 			let _result = keygen_response_status.add_failure_vote(&validator_id, blamed.clone());
 		}
 
 		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
+			VaultRotationStatus::<T, I>::AwaitingKeygen {
+				keygen_ceremony_id: CEREMONY_ID,
+				response_status: keygen_response_status
+			},
 		);
 	} : {
 		Pallet::<T, I>::on_initialize(5u32.into());
 	}
 	verify {
-		assert!(!PendingVaultRotation::<T, I>::exists());
+		assert_eq!(
+			<Pallet::<T, I> as VaultRotator>::get_vault_rotation_outcome(),
+			AsyncResult::Ready(SuccessOrFailure::Failure)
+		);
 	}
 	on_initialize_success {
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
 		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(150, caller.clone().into());
-		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
+		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates.clone());
 
-		for i in 0..120 {
-			let validator_id = account("doogle", i, 0);
-			let _result = keygen_response_status.add_success_vote(&validator_id, AggKey::from_pubkey_compressed(NEW_PUBLIC_KEY));
+		for validator_id in candidates {
+			let _result = keygen_response_status.add_success_vote(
+				&validator_id,
+				aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..])
+			);
 		}
 
 		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {  keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
+			VaultRotationStatus::<T, I>::AwaitingKeygen {
+				keygen_ceremony_id: CEREMONY_ID,
+				response_status: keygen_response_status
+			},
 		);
 	} : {
 		Pallet::<T, I>::on_initialize(5u32.into());
 	}
 	verify {
-		assert!(PendingVaultRotation::<T, I>::exists());
+		assert_eq!(
+			PendingVaultRotation::<T, I>::decode_variant(),
+			Some(VaultRotationStatusVariant::AwaitingRotation),
+		);
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
@@ -83,9 +101,12 @@ benchmarks_instance_pallet! {
 		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
 
 		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen { keygen_ceremony_id: CEREMONY_ID, response_status: keygen_response_status},
+			VaultRotationStatus::<T, I>::AwaitingKeygen {
+				keygen_ceremony_id: CEREMONY_ID,
+				response_status: keygen_response_status
+			},
 		);
-		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(AggKey::from_pubkey_compressed([0xbb; 33]));
+		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&[0xbb; 33][..]));
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
 	verify {
 		let rotation = PendingVaultRotation::<T, I>::get().unwrap();
@@ -97,11 +118,14 @@ benchmarks_instance_pallet! {
 	}
 	vault_key_rotated {
 		let caller: T::AccountId = whitelisted_caller();
-		let new_public_key = AggKey::from_pubkey_compressed([0xbb; 33]);
+		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
-		let call = Call::<T, I>::vault_key_rotated(new_public_key, 5u64, Decode::decode(&mut &TX_HASH[..]).unwrap());
+		let call = Call::<T, I>::vault_key_rotated(
+			new_public_key, 5u64,
+			Decode::decode(&mut &TX_HASH[..]).unwrap()
+		);
 		let origin = T::EnsureWitnessed::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {

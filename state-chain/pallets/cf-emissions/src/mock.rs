@@ -1,8 +1,10 @@
 use crate as pallet_cf_emissions;
-use cf_chains::{eth, ChainCrypto, Ethereum};
+use cf_chains::{mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, UpdateFlipSupply};
+use codec::{Decode, Encode};
 use frame_support::{
-	parameter_types,
+	parameter_types, storage,
 	traits::{Imbalance, UnfilteredDispatchable},
+	StorageHasher, Twox64Concat,
 };
 use frame_system as system;
 use sp_core::H256;
@@ -12,7 +14,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::WaivedFees;
+use cf_traits::{Broadcaster, WaivedFees};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -20,7 +22,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
-	Chainflip, NonceProvider, RewardsDistribution, SigningContext, ThresholdSigner,
+	Chainflip, NonceProvider, RewardsDistribution,
 };
 
 pub type AccountId = u64;
@@ -71,8 +73,6 @@ impl system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_offline_conditions!(u64);
-
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
@@ -92,41 +92,6 @@ impl UnfilteredDispatchable for MockCallback {
 		_origin: Self::Origin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
-	}
-}
-
-pub struct MockEthSigningContext;
-
-impl From<eth::update_flip_supply::UpdateFlipSupply> for MockEthSigningContext {
-	fn from(_: eth::update_flip_supply::UpdateFlipSupply) -> Self {
-		MockEthSigningContext
-	}
-}
-
-impl SigningContext<Test> for MockEthSigningContext {
-	type Chain = Ethereum;
-	type Callback = MockCallback;
-	type ThresholdSignatureOrigin = Origin;
-
-	fn get_payload(&self) -> <Self::Chain as ChainCrypto>::Payload {
-		Default::default()
-	}
-
-	fn resolve_callback(
-		&self,
-		_signature: <Self::Chain as ChainCrypto>::ThresholdSignature,
-	) -> Self::Callback {
-		MockCallback
-	}
-}
-
-pub struct MockThresholdSigner;
-
-impl ThresholdSigner<Test> for MockThresholdSigner {
-	type Context = MockEthSigningContext;
-
-	fn request_signature(_context: Self::Context) -> u64 {
-		0
 	}
 }
 
@@ -152,10 +117,10 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-pub const NONCE: u64 = 42;
+pub const NONCE: u32 = 42;
 
-impl NonceProvider<Ethereum> for Test {
-	fn next_nonce() -> cf_traits::Nonce {
+impl NonceProvider<MockEthereum> for Test {
+	fn next_nonce() -> <MockEthereum as ChainAbi>::Nonce {
 		NONCE
 	}
 }
@@ -181,16 +146,72 @@ impl RewardsDistribution for MockRewardsDistribution {
 	}
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockUpdateFlipSupply {
+	pub nonce: <MockEthereum as ChainAbi>::Nonce,
+	pub new_total_supply: u128,
+	pub block_number: u64,
+}
+
+impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
+	fn new_unsigned(
+		nonce: <MockEthereum as ChainAbi>::Nonce,
+		new_total_supply: u128,
+		block_number: u64,
+	) -> Self {
+		Self { nonce, new_total_supply, block_number }
+	}
+}
+
+impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
+	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+		[0xcf; 4]
+	}
+
+	fn signed(
+		self,
+		_threshold_signature: &<MockEthereum as ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		unimplemented!()
+	}
+
+	fn encoded(&self) -> Vec<u8> {
+		unimplemented!()
+	}
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockBroadcast;
+
+impl MockBroadcast {
+	pub fn call(outgoing: MockUpdateFlipSupply) {
+		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing)
+	}
+
+	pub fn get_called() -> Option<MockUpdateFlipSupply> {
+		storage::hashed::get(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast")
+	}
+}
+
+impl Broadcaster<MockEthereum> for MockBroadcast {
+	type ApiCall = MockUpdateFlipSupply;
+
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+		Self::call(api_call)
+	}
+}
+
 impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
+	type HostChain = MockEthereum;
 	type FlipBalance = u128;
+	type ApiCall = MockUpdateFlipSupply;
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = Self;
-	type SigningContext = MockEthSigningContext;
-	type ThresholdSigner = MockThresholdSigner;
+	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 }
 

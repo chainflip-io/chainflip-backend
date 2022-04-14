@@ -2,7 +2,7 @@
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = "2018"
 name = "chainflip-engine"
-version = "0.1.0"
+version = "0.3.0"
 
 [package.metadata.deb]
 depends = "$auto"
@@ -23,7 +23,7 @@ bincode = "1.3.3"
 bs58 = "0.4"
 config = "0.11.0"
 crossbeam-channel = "0.5.1"
-failure = "0.1.8"
+fs_extra = "1.2.0"
 futures = "0.3.14"
 futures-core = "0.3.14"
 futures-util = "0.3.14"
@@ -59,7 +59,6 @@ slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
 thiserror = "1.0.26"
 tokio = {version = "1.5.0", features = ["full"]}
-tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
@@ -145,7 +144,7 @@ version = "0.9"
 env_logger = "0.9.0"
 jsonrpc-pubsub = "18.0.0"
 log = "0.4.14"
-mockall = "0.10.2"
+mockall = "0.11.0"
 # only used for tests - because they are easy calls to make - no real side effects
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"

@@ -52,7 +52,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
-            index: self.common.own_idx,
             d: self.nonces.d_pub,
             e: self.nonces.e_pub,
         })
@@ -105,13 +104,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 
     /// Verify that all values have been broadcast correctly during stage 1
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
-        let verified_commitments = match verify_broadcasts(messages) {
+        let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(blamed_parties) => {
-                return StageResult::Error(
-                    blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of initial commitments"),
-                );
+            Err(abort_reason) => {
+                return abort_reason.into_stage_result_error("initial commitments");
             }
         };
 
@@ -151,8 +147,6 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
     fn init(&mut self) -> DataToSend<Self::Message> {
-        slog::trace!(self.common.logger, "Generating local signature response");
-
         let data = DataToSend::Broadcast(frost::generate_local_sig(
             &self.signing_common.data.0,
             &self.signing_common.key.key_share,
@@ -219,13 +213,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     /// Verify that signature shares have been broadcast correctly, and if so,
     /// combine them into the (final) aggregate signature
     fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> SigningStageResult {
-        let local_sigs = match verify_broadcasts(messages) {
+        let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
-            Err(blamed_parties) => {
-                return StageResult::Error(
-                    blamed_parties,
-                    anyhow::Error::msg("Inconsistent broadcast of local signatures"),
-                );
+            Err(abort_reason) => {
+                return abort_reason.into_stage_result_error("local signatures");
             }
         };
 

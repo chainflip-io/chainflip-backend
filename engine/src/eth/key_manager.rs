@@ -20,9 +20,9 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::decode_shared_event_closure;
 use super::event_common::EventWithCommon;
 use super::EthObserver;
+use super::{decode_shared_event_closure, DecodeLogClosure};
 
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
@@ -30,7 +30,7 @@ pub struct KeyManager {
     pub contract: ethabi::Contract,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct ChainflipKey {
     pub_key_x: ethabi::Uint,
     pub_key_y_parity: ethabi::Uint,
@@ -145,7 +145,7 @@ impl Tokenizable for SigData {
 }
 
 /// Represents the events that are expected from the KeyManager contract.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum KeyManagerEvent {
     /// `AggKeySetByAggKey(Key oldKey, Key newKey)`
     AggKeySetByAggKey {
@@ -187,6 +187,10 @@ pub enum KeyManagerEvent {
 impl EthObserver for KeyManager {
     type EventParameters = KeyManagerEvent;
 
+    fn contract_name(&self) -> &'static str {
+        "KeyManager"
+    }
+
     async fn handle_event<RpcClient>(
         &self,
         event: EventWithCommon<Self::EventParameters>,
@@ -216,9 +220,7 @@ impl EthObserver for KeyManager {
         }
     }
 
-    fn decode_log_closure(
-        &self,
-    ) -> Result<Box<dyn Fn(H256, ethabi::RawLog) -> Result<Self::EventParameters> + Send>> {
+    fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
         let ak_set_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
         let ak_set_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
         let gk_set_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
@@ -259,7 +261,7 @@ impl EthObserver for KeyManager {
         ))
     }
 
-    fn get_deployed_address(&self) -> H160 {
+    fn get_contract_address(&self) -> H160 {
         self.deployed_address
     }
 }
@@ -461,35 +463,6 @@ mod tests {
             }
             _ => panic!("Expected KeyManager::Refunded, got a different variant"),
         }
-    }
-
-    #[tokio::test]
-    async fn common_event_info_decoded_correctly() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
-
-        let transaction_hash =
-            H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
-                .unwrap();
-
-        let event = EventWithCommon::decode(
-            &key_manager.decode_log_closure().unwrap(),
-             web3::types::Log {
-                address: H160::zero(),
-                topics: vec![H256::from_str("0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521")
-                .unwrap()],
-                data: web3::types::Bytes(hex::decode("31b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()),
-                block_hash: None,
-                block_number: Some(web3::types::U64::zero()),
-                transaction_hash: Some(transaction_hash),
-                transaction_index: None,
-                log_index: None,
-                transaction_log_index: None,
-                log_type: None,
-                removed: None,
-            }
-        ).unwrap();
-
-        assert_eq!(event.tx_hash, transaction_hash);
     }
 
     #[test]
