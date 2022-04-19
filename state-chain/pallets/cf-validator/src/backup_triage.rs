@@ -36,7 +36,13 @@ where
 	Id: Ord,
 	Amount: Ord + Copy + Default + Zero + MaxValue,
 {
-	pub fn new(mut backup_candidates: Vec<(Id, Amount)>, backup_group_size_target: usize) -> Self {
+	pub fn new<AccountState: ChainflipAccount>(
+		mut backup_candidates: Vec<(Id, Amount)>,
+		backup_group_size_target: usize,
+	) -> Self
+	where
+		Id: IsType<AccountState::AccountId>,
+	{
 		let mut triage_result = if backup_group_size_target > backup_candidates.len() {
 			Self {
 				backup: backup_candidates.into_iter().map(Into::into).collect(),
@@ -55,22 +61,15 @@ where
 		};
 
 		triage_result.sort_all();
-		triage_result
-	}
 
-	pub fn update_account_statuses<AccountState: ChainflipAccount>(&self)
-	where
-		Id: IsType<AccountState::AccountId>,
-	{
-		// TODO:
-		// It's not this simple. For example, there might be old backup validators who are no longer
-		// in either of these sets because they were banned from the auction.
-		for validator_id in self.backup_validators() {
+		for validator_id in triage_result.backup_validators() {
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Backup);
 		}
-		for validator_id in self.passive_validators() {
+		for validator_id in triage_result.passive_validators() {
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Passive);
 		}
+
+		triage_result
 	}
 
 	pub fn backup_validators(&self) -> impl Iterator<Item = &Id> {
@@ -290,33 +289,28 @@ mod test_backup_triage {
 	fn test_new() {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3), (4, 4), (2, 2)];
 
-		let triage = TestBackupTriage::new(CANDIDATES.to_vec(), 3);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 3);
 
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 2, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new(CANDIDATES.to_vec(), 5);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 5);
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new(CANDIDATES.to_vec(), 10);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 10);
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new(CANDIDATES.to_vec(), 0);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 0);
 		assert_eq!(triage.lowest_backup_bid(), u32::MAX, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 5, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new(CANDIDATES.to_vec(), 1);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 1);
 		assert_eq!(triage.lowest_backup_bid(), 5, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 4, "{:?}", triage);
 		check_invariants!(triage);
@@ -327,8 +321,8 @@ mod test_backup_triage {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3), (4, 4), (2, 2)];
 		const TEST_SIZE: usize = 3;
 
-		let mut triage = TestBackupTriage::new(CANDIDATES.to_vec(), TEST_SIZE);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let mut triage =
+			TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), TEST_SIZE);
 
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 2, "{:?}", triage);
@@ -363,8 +357,8 @@ mod test_backup_triage {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3)];
 		const TEST_SIZE: usize = 3;
 
-		let mut triage = TestBackupTriage::new(CANDIDATES.to_vec(), TEST_SIZE);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let mut triage =
+			TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), TEST_SIZE);
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
@@ -387,8 +381,8 @@ mod test_backup_triage {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3)];
 		const TEST_SIZE: usize = 3;
 
-		let mut triage = TestBackupTriage::new(CANDIDATES.to_vec(), TEST_SIZE);
-		triage.update_account_statuses::<MockChainflipAccount>();
+		let mut triage =
+			TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), TEST_SIZE);
 		// Initial: [5, 3, 1] / []
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
