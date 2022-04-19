@@ -1,6 +1,9 @@
 #![cfg(test)]
 
+use std::{io::Write, path::Path};
+
 use futures::{Future, FutureExt};
+use tempfile;
 
 /// Simply unwraps the value. Advantage of this is to make it clear in tests
 /// what we are testing
@@ -19,6 +22,12 @@ pub fn assert_future_awaits(f: impl Future) {
 /// Checks if a given future either is ready, or will become ready on the next poll/without yielding
 pub fn assert_future_can_complete<I>(f: impl Future<Output = I>) -> I {
     assert_ok!(f.now_or_never())
+}
+
+pub fn with_file<C: FnOnce(&Path)>(text: &[u8], closure: C) {
+    let mut tempfile = tempfile::NamedTempFile::new().unwrap();
+    tempfile.write_all(text).unwrap();
+    closure(tempfile.path());
 }
 
 mod tests {

@@ -28,8 +28,8 @@ async fn check_signing_db() {
 
     let logger = logging::test_utils::new_test_logger();
 
-    use tempdir::TempDir;
-    let db_dir = TempDir::new("db_tests").unwrap();
+    use tempfile::TempDir;
+    let db_dir = TempDir::new().unwrap();
     let db_file = db_dir.path().join("db_file");
     let db = PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database");
 

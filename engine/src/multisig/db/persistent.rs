@@ -405,7 +405,7 @@ mod tests {
         logging::test_utils::new_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
     };
 
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
@@ -426,7 +426,7 @@ mod tests {
 
     // Creates a TempDir unique directory that will be deleted when dropped
     fn get_temp_db_path() -> std::path::PathBuf {
-        let temp_dir = TempDir::new("unit_test").unwrap();
+        let temp_dir = TempDir::new().unwrap();
         temp_dir.path().to_owned().join("db")
     }
 
@@ -610,7 +610,7 @@ mod tests {
         let logger = new_test_logger();
 
         // Fresh folder
-        let temp_dir = TempDir::new("backup_is_created_when_migrating").unwrap();
+        let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path();
 
         assert!(
@@ -694,7 +694,7 @@ mod tests {
     #[test]
     fn backup_should_fail_if_cant_copy_files() {
         let logger = new_test_logger();
-        let temp_dir = TempDir::new("backup_should_fail_if_cant_copy_files").unwrap();
+        let temp_dir = TempDir::new().unwrap();
         let parent_path = temp_dir.path();
         let db_path = parent_path.join("db");
 
