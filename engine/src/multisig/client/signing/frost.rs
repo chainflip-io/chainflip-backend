@@ -257,7 +257,7 @@ pub fn aggregate_signature(
     pubkeys: &BTreeMap<usize, Point>,
     commitments: &BTreeMap<usize, SigningCommitment>,
     responses: &BTreeMap<usize, SigningResponse>,
-) -> Result<SchnorrSignature, Vec<usize>> {
+) -> Result<SchnorrSignature, BTreeSet<usize>> {
     let bindings = generate_bindings(msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -268,7 +268,7 @@ pub fn aggregate_signature(
         msg,
     );
 
-    let mut invalid_idxs = vec![];
+    let mut invalid_idxs = BTreeSet::new();
 
     for signer_idx in signer_idxs {
         let rho_i = &bindings[signer_idx];
@@ -288,7 +288,7 @@ pub fn aggregate_signature(
             &challenge,
             &response.response,
         ) {
-            invalid_idxs.push(*signer_idx);
+            invalid_idxs.insert(*signer_idx);
         }
     }
 

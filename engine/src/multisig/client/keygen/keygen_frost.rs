@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, convert::TryInto};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::TryInto,
+};
 
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -62,7 +65,6 @@ impl ShamirShare {
 #[cfg(test)]
 fn reconstruct_secret(shares: &BTreeMap<usize, ShamirShare>) -> Scalar {
     use crate::multisig::client::signing::frost;
-    use std::collections::BTreeSet;
 
     let all_idxs: BTreeSet<usize> = shares.keys().into_iter().cloned().collect();
 
@@ -243,8 +245,8 @@ pub fn validate_commitments(
     public_coefficients: BTreeMap<usize, DKGUnverifiedCommitment>,
     hash_commitments: BTreeMap<usize, HashComm1>,
     context: &HashContext,
-) -> Result<BTreeMap<usize, DKGCommitment>, Vec<usize>> {
-    let invalid_idxs: Vec<_> = public_coefficients
+) -> Result<BTreeMap<usize, DKGCommitment>, BTreeSet<usize>> {
+    let invalid_idxs: BTreeSet<_> = public_coefficients
         .iter()
         .filter_map(|(idx, c)| {
             let challenge = generate_dkg_challenge(*idx, context, c.commitments.0[0], c.zkp.r);

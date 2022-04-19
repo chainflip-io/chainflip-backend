@@ -297,7 +297,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
             // so we abort with an empty list of responsible nodes
             // to let the State Chain restart the ceremony
             StageResult::Error(
-                vec![],
+                BTreeSet::new(),
                 anyhow::Error::msg("The key is not contract compatible"),
             )
         }
@@ -459,7 +459,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
 
         // Some complaints have been issued, entering the blaming stage
 
-        let idxs_to_report: Vec<_> = verified_complaints
+        let idxs_to_report: BTreeSet<_> = verified_complaints
             .iter()
             .filter_map(|(idx_from, Complaints4(blamed_idxs))| {
                 let has_invalid_idxs = !blamed_idxs.iter().all(|idx_blamed| {
@@ -647,8 +647,8 @@ impl VerifyBlameResponsesBroadcastStage7 {
     fn check_blame_responses(
         &self,
         blame_responses: BTreeMap<usize, BlameResponse6>,
-    ) -> Result<BTreeMap<usize, ShamirShare>, Vec<usize>> {
-        let (shares_for_us, bad_parties): (Vec<_>, Vec<_>) = blame_responses
+    ) -> Result<BTreeMap<usize, ShamirShare>, BTreeSet<usize>> {
+        let (shares_for_us, bad_parties): (Vec<_>, BTreeSet<_>) = blame_responses
             .iter()
             .map(|(sender_idx, response)| {
                 if !is_blame_response_complete(*sender_idx, response, &self.complaints) {

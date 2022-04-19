@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, fmt::Display, sync::Arc, time::Instant};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+    sync::Arc,
+    time::Instant,
+};
 
 use anyhow::Result;
 use pallet_cf_vaults::CeremonyId;
@@ -54,7 +59,7 @@ where
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: CeremonyResultSender<CeremonyResult>,
-    ) -> Result<Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>>> {
+    ) -> Result<Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>>> {
         if self.inner.is_some() {
             return Err(anyhow::Error::msg("Duplicate ceremony_id"));
         }
@@ -78,7 +83,7 @@ where
 
     fn finalize_current_stage(
         &mut self,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -129,7 +134,7 @@ where
         &mut self,
         sender_id: AccountId,
         data: CeremonyData,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
         slog::trace!(
             self.logger,
             "Received message {} from party [{}] ",
@@ -177,7 +182,7 @@ where
     /// Process previously delayed messages (which arrived one stage too early)
     pub fn process_delayed(
         &mut self,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
         let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
@@ -235,16 +240,16 @@ where
     /// protocol rules for the stage
     pub fn try_expiring(
         &mut self,
-    ) -> Option<Result<CeremonyResult, (Vec<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {
                 None => {
                     // Report the parties that tried to initiate the ceremony.
-                    let reported_ids: Vec<_> = self
+                    let reported_ids: BTreeSet<_> = self
                         .delayed_messages
                         .iter()
                         .map(|(id, _)| id.clone())
-                        .collect::<Vec<_>>();
+                        .collect();
 
                     slog::warn!(
                         self.logger,

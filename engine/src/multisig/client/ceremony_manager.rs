@@ -28,8 +28,9 @@ use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashCommitments1, HashContext, KeygenData, KeygenOptions};
 use super::{MultisigData, MultisigMessage};
 
-pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (Vec<AccountId>, anyhow::Error)>>;
-pub type CeremonyResultReceiver<T> = oneshot::Receiver<Result<T, (Vec<AccountId>, anyhow::Error)>>;
+pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
+pub type CeremonyResultReceiver<T> =
+    oneshot::Receiver<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
@@ -143,7 +144,7 @@ impl CeremonyManager {
     fn process_signing_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>,
+        result: Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>,
     ) {
         let result_sender = self
             .signing_states
@@ -168,7 +169,7 @@ impl CeremonyManager {
     fn process_keygen_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>,
+        result: Result<KeygenResultInfo, (BTreeSet<AccountId>, anyhow::Error)>,
     ) {
         let result_sender = self
             .keygen_states

@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     convert::{TryFrom, TryInto},
     fmt::Display,
 };
@@ -216,12 +216,12 @@ where
         self.processor.process(messages)
     }
 
-    fn awaited_parties(&self) -> Vec<usize> {
-        let mut awaited = vec![];
+    fn awaited_parties(&self) -> BTreeSet<usize> {
+        let mut awaited = BTreeSet::new();
 
         for idx in &self.common.all_idxs {
             if !self.messages.contains_key(idx) {
-                awaited.push(*idx);
+                awaited.insert(*idx);
             }
         }
 
