@@ -1,6 +1,9 @@
 #![cfg(test)]
 
-use std::{io::Write, path::Path};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use futures::{Future, FutureExt};
 use tempfile;
@@ -28,6 +31,15 @@ pub fn with_file<C: FnOnce(&Path)>(text: &[u8], closure: C) {
     let mut tempfile = tempfile::NamedTempFile::new().unwrap();
     tempfile.write_all(text).unwrap();
     closure(tempfile.path());
+}
+
+pub fn with_file_path<C: FnOnce(&Path, PathBuf)>(closure: C) {
+    let tempdir = tempfile::TempDir::new().unwrap();
+    closure(tempdir.path(), {
+        let tempfile = tempdir.path().to_owned().join("file");
+        assert!(!tempfile.exists());
+        tempfile
+    });
 }
 
 mod tests {
