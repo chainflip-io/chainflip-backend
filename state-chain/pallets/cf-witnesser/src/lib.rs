@@ -91,6 +91,10 @@ pub mod pallet {
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
 
+	/// A flag indicating that the CallHash has been executed.
+	#[pallet::storage]
+	pub type CallHashExecuted<T: Config> = StorageMap<_, Identity, CallHash, bool>;
+
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
@@ -279,13 +283,16 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == success_threshold_from_share_count(num_validators) as usize {
+		if num_votes == success_threshold_from_share_count(num_validators) as usize &&
+			CallHashExecuted::<T>::get(&call_hash).is_none()
+		{
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
+			CallHashExecuted::<T>::insert(&call_hash, true);
 		}
 
 		Ok(().into())
