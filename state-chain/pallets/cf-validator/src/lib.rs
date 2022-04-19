@@ -830,7 +830,10 @@ impl<T: Config> Pallet<T> {
 
 		// We've got new validators, which means the backups and passives may have changed
 		// TODO configurable parameter to replace '3'.
-		Self::update_backup_and_passive_states(backup_candidates, epoch_validators.len() / 3);
+		BackupValidatorTriage::<T>::put(RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
+			backup_candidates,
+			epoch_validators.len() / 3,
+		));
 
 		// Handler for a new epoch
 		T::EpochTransitionHandler::on_new_epoch(&epoch_validators);
@@ -854,15 +857,6 @@ impl<T: Config> Pallet<T> {
 	fn set_rotation_status(new_status: RotationStatus<T>) {
 		RotationPhase::<T>::put(new_status.clone());
 		Self::deposit_event(Event::RotationStatusUpdated(new_status));
-	}
-
-	fn update_backup_and_passive_states(
-		backup_candidates: Vec<(ValidatorIdOf<T>, T::Amount)>,
-		backup_group_size_target: usize,
-	) {
-		let triage = RuntimeBackupTriage::<T>::new(backup_candidates, backup_group_size_target);
-		triage.update_account_statuses::<T::ChainflipAccount>();
-		BackupValidatorTriage::<T>::put(triage);
 	}
 }
 
