@@ -52,7 +52,7 @@ impl<T: Config> AuctionResolver<T> for ResolverV1<T> {
 			Error::<T>::NotEnoughBidders
 		});
 
-		auction_candidates.sort_unstable_by_key(|k| Reverse(k.1));
+		auction_candidates.sort_unstable_by_key(|&(_, amount)| Reverse(amount));
 
 		let mut target_validator_group_size =
 			min(max_number_of_validators, number_of_bidders) as usize;
