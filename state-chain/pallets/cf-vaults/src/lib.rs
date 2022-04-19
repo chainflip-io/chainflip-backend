@@ -134,19 +134,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
-	/// Returns `Some(key)` *iff any* key has at least `self.success_threshold()` number of votes,
-	/// otherwise returns `None`.
-	fn success_consensus(&self) -> Option<AggKeyFor<T, I>> {
-		for key in SuccessVoters::<T, I>::iter_keys() {
-			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
-				self.success_threshold() as usize
-			{
-				return Some(key)
-			}
-		}
-		None
-	}
-
 	/// Returns `Some(blamed_nodes)` *iff* at least `self.success_threshold()` number of nodes voted
 	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
 	/// votes.
@@ -230,11 +217,14 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			return None
 		}
 
-		self.success_consensus()
-			// If it's a success, return success.
-			.map(KeygenOutcome::Success)
-			// Otherwise check if we have consensus on failure.
-			.or_else(|| self.failure_consensus().map(KeygenOutcome::Failure))
+		for key in SuccessVoters::<T, I>::iter_keys() {
+			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
+				self.success_threshold() as usize
+			{
+				return Some(KeygenOutcome::Success(key))
+			}
+		}
+		self.failure_consensus().map(KeygenOutcome::Failure)
 	}
 }
 
