@@ -134,35 +134,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
-	/// Returns `Some(blamed_nodes)` *iff* at least `self.success_threshold()` number of nodes voted
-	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
-	/// votes.
-	///
-	/// If less than `self.success_threshold()` voted for failure, returns `None`.
-	fn failure_consensus(&self) -> Option<BTreeSet<T::ValidatorId>> {
-		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
-			self.success_threshold() as usize
-		{
-			return None
-		}
-
-		Some(
-			self.blame_votes
-				.iter()
-				.filter_map(
-					|(id, vote_count)| {
-						if *vote_count >= self.blame_threshold() {
-							Some(id)
-						} else {
-							None
-						}
-					},
-				)
-				.cloned()
-				.collect(),
-		)
-	}
-
 	/// Resolves the keygen outcome as follows:
 	///
 	/// If and only if *all* candidates agree on the same key, return Success.
@@ -212,6 +183,13 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	/// Determines the keygen outcome based on threshold consensus.
+	/// Returns `Some(key)` *iff any* key has at least `self.success_threshold()` number of
+	/// votes.
+	/// Returns `Some(blamed_nodes)` *iff* at least `self.success_threshold()` number of nodes voted
+	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
+	/// votes.
+	///
+	/// If less than `self.success_threshold()` voted for failure or success returns `None`.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
 		if self.response_count() < self.success_threshold() {
 			return None
@@ -224,7 +202,28 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				return Some(KeygenOutcome::Success(key))
 			}
 		}
-		self.failure_consensus().map(KeygenOutcome::Failure)
+
+		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
+			self.success_threshold() as usize
+		{
+			return None
+		}
+
+		Some(KeygenOutcome::Failure(
+			self.blame_votes
+				.iter()
+				.filter_map(
+					|(id, vote_count)| {
+						if *vote_count >= self.blame_threshold() {
+							Some(id)
+						} else {
+							None
+						}
+					},
+				)
+				.cloned()
+				.collect(),
+		))
 	}
 }
 
