@@ -60,7 +60,7 @@ where
 			}
 		};
 
-		triage_result.sort_all();
+		triage_result.sort_backups_and_passives_by_validator_id();
 
 		for validator_id in triage_result.backup_validators() {
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Backup);
@@ -195,7 +195,7 @@ where
 		}
 
 		// Restore the original sort order.
-		self.sort_all();
+		self.sort_backups_and_passives_by_validator_id();
 	}
 
 	fn kill(&mut self, validator_id: Id) {
@@ -214,8 +214,7 @@ where
 			});
 	}
 
-	/// Sort backups and passives by validator id such that it can be binary-searched.
-	fn sort_all(&mut self) {
+	fn sort_backups_and_passives_by_validator_id(&mut self) {
 		self.backup
 			.sort_unstable_by(|left, right| left.validator_id.cmp(&right.validator_id));
 		self.passive
