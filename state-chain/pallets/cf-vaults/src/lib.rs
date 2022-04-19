@@ -183,13 +183,14 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	/// Determines the keygen outcome based on threshold consensus.
-	/// Returns `Some(key)` *iff any* key has at least `self.success_threshold()` number of
+	/// - If less than `self.success_threshold()` voted for failure or success returns `None`.
+	/// - Returns `Some(KeygenOutcomeSuccess(key))` *iff any* key has at least
+	///   `self.success_threshold()` number of
 	/// votes.
-	/// Returns `Some(blamed_nodes)` *iff* at least `self.success_threshold()` number of nodes voted
+	/// - Returns `Some(KeygenOutcomeFailur(blamed_nodes))` *iff* at least
+	///   `self.success_threshold()` number of nodes voted
 	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
 	/// votes.
-	///
-	/// If less than `self.success_threshold()` voted for failure or success returns `None`.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
 		if self.response_count() < self.success_threshold() {
 			return None
@@ -682,6 +683,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if offenders.len() < T::EpochInfo::consensus_threshold(T::EpochInfo::epoch_index()) as usize
 		{
+			// TODO: We should combine this reporting to include both, so we only send a single:
+			// partipate keygen failure report, and the report handles both cases.
 			T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
 			T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 		}
