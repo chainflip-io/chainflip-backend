@@ -233,7 +233,7 @@ where
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
 
-        let request = if participants.len() == 1 {
+        let request_status = if participants.len() == 1 {
             RequestStatus::Ready(self.single_party_keygen(rng))
         } else {
             let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
@@ -251,7 +251,7 @@ where
         };
 
         async move {
-            let result = match request {
+            let result = match request_status {
                 RequestStatus::Ready(keygen_result_info) => Some(Ok(keygen_result_info)),
                 RequestStatus::WaitForOneshot(result_receiver) => result_receiver.await.ok(),
             };
@@ -268,31 +268,27 @@ where
 
                     // Process requests to sign that required the key in `key_info`
                     if let Some(requests) = inner_state.pending_requests_to_sign.remove(&key_id) {
+                        assert!(
+                            keygen_result_info.params.share_count > 1,
+                            "single party keys can't have pending signing requests"
+                        );
+
                         for pending_request in requests {
                             slog::debug!(
                                 self.logger,
                                 "Processing a pending request to sign";
                                 CEREMONY_ID_KEY => pending_request.ceremony_id
                             );
-                            if pending_request.signers.len() == 1 {
-                                let _result = pending_request.result_sender.send(Ok(self
-                                    .single_party_signing(
-                                        pending_request.data,
-                                        keygen_result_info.clone(),
-                                        pending_request.rng,
-                                    )));
-                            } else {
-                                self.signing_request_sender
-                                    .send((
-                                        pending_request.ceremony_id,
-                                        pending_request.signers,
-                                        pending_request.data,
-                                        keygen_result_info.clone(),
-                                        pending_request.rng,
-                                        pending_request.result_sender,
-                                    ))
-                                    .unwrap();
-                            }
+                            self.signing_request_sender
+                                .send((
+                                    pending_request.ceremony_id,
+                                    pending_request.signers,
+                                    pending_request.data,
+                                    keygen_result_info.clone(),
+                                    pending_request.rng,
+                                    pending_request.result_sender,
+                                ))
+                                .unwrap();
                         }
                     }
 
