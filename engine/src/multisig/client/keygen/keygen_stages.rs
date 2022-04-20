@@ -512,7 +512,7 @@ mod detail {
     ) -> StageResult<KeygenData, KeygenResultInfo> {
         // Sanity check (failing this should not be possible due to the
         // hash commitment stage at the beginning of the ceremony)
-        if check_high_degree_commitments(&commitments) {
+        if check_high_degree_commitments(commitments) {
             return StageResult::Error(
                 vec![],
                 anyhow::Error::msg("High degree coefficient is zero"),
