@@ -62,6 +62,10 @@ where
 
 		triage_result.sort_backups_and_passives_by_validator_id();
 
+		// TODO:
+		// It's not this simple. For example, there might be old backup validators who are no longer
+		// in either of these sets because they were banned from the auction.
+
 		for validator_id in triage_result.backup_validators() {
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Backup);
 		}
