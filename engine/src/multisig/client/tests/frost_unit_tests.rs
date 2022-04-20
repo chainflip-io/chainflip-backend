@@ -13,19 +13,17 @@ use crate::{
         },
         crypto::Rng,
         tests::fixtures::MESSAGE_HASH,
-        KeyDBMock, MessageHash,
+        KeyDBMock, KeyId, MessageHash,
     },
-    testing::{assert_future_awaits, assert_future_can_complete, assert_ok},
+    testing::{assert_err, assert_future_can_complete, assert_ok},
 };
 
 use super::*;
 
-use client::{MultisigClient, SchnorrSignature};
+use client::MultisigClient;
 use rand_legacy::SeedableRng;
 
 use itertools::Itertools;
-use secp256k1::PublicKey;
-use tokio::sync::mpsc::error::TryRecvError;
 
 // Data for any stage that arrives one stage too early should be properly delayed
 // and processed after the stage transition is made
@@ -217,18 +215,12 @@ async fn should_ignore_duplicate_rts() {
 }
 
 #[tokio::test]
-async fn should_delay_rts_until_key_is_ready() {
+async fn should_ignore_rts_for_unknown_key() {
     let account_id = &ACCOUNT_IDS[0];
-    let (key_id, key_data, _, _) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
-    let (keygen_request_sender, mut keygen_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (signing_request_sender, mut signing_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+
+    let key_id = KeyId(Vec::from([0u8; 32]));
+    let (keygen_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
+    let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
 
     let client = MultisigClient::new(
         account_id.clone(),
@@ -239,18 +231,8 @@ async fn should_delay_rts_until_key_is_ready() {
         &logging::test_utils::new_test_logger(),
     );
 
-    // Send Keygen Request
-    let keygen_request_fut =
-        client.initiate_keygen(DEFAULT_KEYGEN_CEREMONY_ID, ACCOUNT_IDS.to_vec());
-
-    // Fake completion of requests keygen (But the MultisigClient will not receive the result and handle it yet)
-    let (_, _, _, _, result_sender) = keygen_request_receiver.recv().await.unwrap();
-    result_sender
-        .send(Ok(key_data[account_id].clone()))
-        .unwrap();
-
     // Send Sign Request
-    let mut signing_request_fut = client
+    let signing_request_fut = client
         .initiate_signing(
             DEFAULT_SIGNING_CEREMONY_ID,
             key_id,
@@ -259,32 +241,9 @@ async fn should_delay_rts_until_key_is_ready() {
         )
         .await;
 
-    // Check Sign Request Has been Delayed
-    assert_future_awaits(&mut signing_request_fut);
-    assert_eq!(
-        signing_request_receiver.try_recv().unwrap_err(),
-        TryRecvError::Empty
-    );
-
-    // Wait for and handle keygen completion
-    assert_ok!(keygen_request_fut.await);
-
-    // Check Sign Request cannot return Until signature is provided
-    assert_future_awaits(&mut signing_request_fut);
-
-    // Fake completion of requests keygen
-    let fake_signature = SchnorrSignature {
-        s: [0; 32],
-        r: PublicKey::from(unsafe { secp256k1::ffi::PublicKey::new() }),
-    };
-    let (.., result_sender) = signing_request_receiver.recv().await.unwrap();
-    result_sender.send(Ok(fake_signature.clone())).unwrap();
-
     // Check sign request completes after signature is provided
-    assert_eq!(
-        assert_ok!(assert_future_can_complete(signing_request_fut)),
-        fake_signature
-    );
+    let error = assert_err!(assert_future_can_complete(signing_request_fut));
+    assert_eq!(&error.1.to_string(), "Signing request ignored: unknown key");
 }
 
 #[tokio::test]
@@ -358,48 +317,6 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
         signing_ceremony.ceremony_id
     ));
     assert!(node_0.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-}
-
-#[tokio::test]
-async fn pending_rts_should_expire() {
-    let (key_id, ..) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
-
-    let account_id = &ACCOUNT_IDS[0];
-    let (keygen_request_sender, mut _keygen_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (signing_request_sender, mut _signing_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-
-    let client = MultisigClient::new(
-        account_id.clone(),
-        KeyDBMock::default(),
-        keygen_request_sender,
-        signing_request_sender,
-        KeygenOptions::default(),
-        &logging::test_utils::new_test_logger(),
-    );
-
-    let mut signing_request_fut = client
-        .initiate_signing(
-            DEFAULT_SIGNING_CEREMONY_ID,
-            key_id,
-            ACCOUNT_IDS.to_vec(),
-            MessageHash([0; 32]),
-        )
-        .await;
-
-    assert_future_awaits(&mut signing_request_fut);
-
-    client.expire_all();
-
-    client.check_timeouts().await;
-
-    assert_future_can_complete(signing_request_fut).unwrap_err();
 }
 
 // Ignore unexpected messages at all stages. This includes:

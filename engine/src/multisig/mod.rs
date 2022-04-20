@@ -81,7 +81,6 @@ where
 
         let mut ceremony_manager =
             CeremonyManager::new(my_account_id, outgoing_p2p_message_sender, &logger);
-        let multisig_client = multisig_client.clone();
 
         async move {
             // Stream outputs () approximately every ten seconds
@@ -101,7 +100,6 @@ where
                     _ = check_timeouts_tick.tick() => {
                         slog::trace!(logger, "Checking for expired multisig states");
                         ceremony_manager.check_timeouts();
-                        multisig_client.check_timeouts().await;
                     }
                 }
             }

@@ -13,10 +13,6 @@ pub mod cfe {
 	pub struct CfeSettings {
 		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
 		pub eth_block_safety_margin: u32,
-		/// Defines how long a signing ceremony remains pending. i.e. how long it waits for the key
-		/// that is supposed to sign this message to be generated. (Since we can receive requests
-		/// to sign for the next key, if other nodes are ahead of us)
-		pub pending_sign_duration: u32,
 		/// Maximum duration a ceremony stage can last
 		pub max_ceremony_stage_duration: u32,
 	}
@@ -24,11 +20,7 @@ pub mod cfe {
 	/// Sensible default values for the CFE setting.
 	impl Default for CfeSettings {
 		fn default() -> Self {
-			Self {
-				eth_block_safety_margin: 6,
-				pending_sign_duration: 500,
-				max_ceremony_stage_duration: 300,
-			}
+			Self { eth_block_safety_margin: 6, max_ceremony_stage_duration: 300 }
 		}
 	}
 }
