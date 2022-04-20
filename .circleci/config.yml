@@ -27,6 +27,7 @@ cargo-base-job: &cargo-base-job
   environment:
     SCCACHE_CACHE_SIZE: 14G
   resource_class: xlarge
+
 ######################## /Anchors ########################
 
 ######################## Config ########################
@@ -48,6 +49,10 @@ executors:
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
+        auth: *dockerconfig
+  java-executor:
+    docker:
+      - image: cimg/openjdk:17.0.2
         auth: *dockerconfig
 orbs:
   docker: circleci/docker@1.7.0
@@ -596,8 +601,19 @@ jobs:
             export TYPES_FILE="../state-chain/types.json"
             cd ./chainflip-docgen/
             npm run generate
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - chainflip-docgen/*
       - store_artifacts:
           path: target/release
+
+  generate-class-diagram:
+    executor: java-executor
+    steps:
+      - attach_workspace:
+          at: ./
+      - run: java -jar plantuml.jar generated/class.puml
       - store_artifacts:
           path: ./chainflip-docgen/generated/
 
