@@ -18,8 +18,26 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		let number_of_current_validators = Validators::<T>::get().len() as u32;
 		EpochValidatorCount::<T>::insert(T::EpochInfo::epoch_index(), number_of_current_validators);
+
+		// Get the current state of the storage.
+		let current_epoch = T::EpochInfo::epoch_index();
+		let current_validators = Validators::<T>::get();
+		let current_bond = Bond::<T>::get();
+
+		// We have 5 stable writes as well as n for itterating over all validators.
+		let writes = 5 + current_validators.len();
+
+		// Insert the´current epoch bond into the storage.
+		HistoricalBonds::<T>::insert(current_epoch, current_bond);
+		for validator in &current_validators {
+			HistoricalActiveEpochs::<T>::insert(validator, vec![current_epoch]);
+		}
+
+		// Set the historical state for the current epoch.
+		HistoricalValidators::<T>::insert(current_epoch, current_validators);
+
 		#[allow(clippy::unnecessary_cast)]
-		T::DbWeight::get().reads_writes(2 as Weight, 3 as Weight)
+		T::DbWeight::get().reads_writes(5 as Weight, writes as Weight)
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -36,7 +54,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			storage_iter::<()>(VALIDATOR_NAME, VALIDATOR_LOOKUP_NAME).next().is_some(),
 			"ValidatorLookup not found in Validator"
 		);
-
 		Ok(())
 	}
 
@@ -50,6 +67,23 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			storage_iter::<()>(VALIDATOR_NAME, b"EpochValidatorCount").next().is_some(),
 			"EpochValidatorCount not found in Validator"
 		);
+		assert_eq!(
+			HistoricalValidators::<T>::get(T::EpochInfo::epoch_index()),
+			Validators::<T>::get(),
+			"HistoricalValidators for this Epoch and Current Validators are not equal"
+		);
+		assert_eq!(
+			HistoricalBonds::<T>::get(T::EpochInfo::epoch_index()),
+			Bond::<T>::get(),
+			"HistoricalBonds and Bond are not equal"
+		);
+		for validator in Validators::<T>::get() {
+			assert_eq!(
+				HistoricalActiveEpochs::<T>::get(validator),
+				vec![T::EpochInfo::epoch_index()],
+				"HistoricalActiveEpochs and known current active epochs are not equal"
+			);
+		}
 		Ok(())
 	}
 }
