@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts, Pallet,
-	PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, AccountRetired, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts,
+	Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::RegisterClaim;
 use cf_traits::mocks::time_source;
@@ -36,6 +36,16 @@ macro_rules! assert_event_stack {
 			}
 		)*
 	};
+}
+
+#[test]
+fn genesis_nodes_are_activated_by_default() {
+	new_test_ext().execute_with(|| {
+		// Expect the genesis node to be activated.
+		assert!(AccountRetired::<Test>::contains_key(&CHARLIE));
+		// Expect a not genesis node not to be activated.
+		assert!(!AccountRetired::<Test>::contains_key(&ALICE));
+	});
 }
 
 #[test]

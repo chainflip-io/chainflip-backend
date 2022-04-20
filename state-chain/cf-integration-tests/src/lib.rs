@@ -202,7 +202,7 @@ mod tests {
 
 			// Handle events from contract
 			fn on_contract_event(&self, event: &ContractEvent) {
-				if self.state() == ChainflipAccountState::Validator && self.active {
+				if self.state() == ChainflipAccountState::CurrentAuthority && self.active {
 					match event {
 						ContractEvent::Staked { node_id: validator_id, amount, .. } => {
 							// Witness event -> send transaction to state chain
@@ -225,7 +225,7 @@ mod tests {
 				// If active handle events
 				if self.active {
 					// Being a validator we would respond to certain events
-					if self.state() == ChainflipAccountState::Validator {
+					if self.state() == ChainflipAccountState::CurrentAuthority {
 						on_events!(
 							events,
 							Event::Validator(
@@ -748,12 +748,8 @@ mod tests {
 
 				for account in accounts.iter() {
 					let account_data = ChainflipAccountStore::<Runtime>::get(account);
-					assert_eq!(
-						Some(1),
-						account_data.last_active_epoch,
-						"validator should be active in the genesis epoch(1)"
-					);
-					assert_eq!(ChainflipAccountState::Validator, account_data.state);
+					// TODO: Check historical epochs
+					assert_eq!(ChainflipAccountState::CurrentAuthority, account_data.state);
 				}
 			});
 		}
@@ -766,7 +762,8 @@ mod tests {
 		use super::{genesis::GENESIS_BALANCE, *};
 		use crate::tests::network::setup_account_and_peer_mapping;
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
+			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+			EpochInfo,
 		};
 		use pallet_cf_validator::RotationStatus;
 		use state_chain_runtime::{HeartbeatBlockInterval, Validator};
@@ -816,11 +813,6 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
-
-					// Activate the accounts
-					for node in &nodes {
-						network::Cli::activate_account(node.clone());
-					}
 
 					// Move to start of auction
 					testnet.move_forward_blocks(1);
@@ -875,6 +867,11 @@ mod tests {
 					let (mut testnet, mut passive_nodes) =
 						network::Network::create(number_of_passive_nodes as u8, &nodes);
 
+					// Activate the passiv nodes
+					for node in &passive_nodes {
+						network::Cli::activate_account(node.clone());
+					}
+
 					nodes.append(&mut passive_nodes);
 					assert_eq!(nodes.len() as u32, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
@@ -900,11 +897,6 @@ mod tests {
 
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-
-					// Activate the accounts
-					for node in &nodes {
-						network::Cli::activate_account(node.clone());
-					}
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
@@ -945,27 +937,18 @@ mod tests {
 					);
 
 					for account in keyless_nodes.iter() {
+						// TODO: Check historical epochs
 						assert_eq!(
-							None,
-							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
-							"this node should have never been active"
-						);
-						assert_eq!(
-							ChainflipAccountState::Passive,
+							ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
 							ChainflipAccountStore::<Runtime>::get(account).state,
 							"should be a passive node"
 						);
 					}
 
-					let current_epoch = Validator::epoch_index();
 					for account in new_validators.iter() {
+						// TODO: Check historical epochs
 						assert_eq!(
-							Some(current_epoch),
-							ChainflipAccountStore::<Runtime>::get(account).last_active_epoch,
-							"validator should have been active in current epoch"
-						);
-						assert_eq!(
-							ChainflipAccountState::Validator,
+							ChainflipAccountState::CurrentAuthority,
 							ChainflipAccountStore::<Runtime>::get(account).state,
 							"should be validator"
 						);
@@ -976,7 +959,7 @@ mod tests {
 					testnet.stake_manager_contract.stake(late_staker.clone(), stake_amount);
 					testnet.move_forward_blocks(1);
 					assert_eq!(
-						ChainflipAccountState::Backup,
+						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
 						"late staker should be a backup validator"
 					);
@@ -1013,13 +996,17 @@ mod tests {
 					// Create the test network with some fresh nodes and the genesis validators
 					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
 
+					// Activate passive nodes
+					for passive_node in passive_nodes.clone() {
+						network::Cli::activate_account(passive_node);
+					}
+
 					nodes.append(&mut passive_nodes);
 
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
 						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
-						network::Cli::activate_account(node.clone());
 					}
 
 					// Move forward one block to process events
@@ -1129,8 +1116,8 @@ mod tests {
 	mod validators {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, FlipBalance,
-			IsOnline, StakeTransfer,
+			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+			EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
@@ -1140,10 +1127,8 @@ mod tests {
 		use std::collections::HashMap;
 
 		#[test]
-		// We have a set of backup validators who receive rewards
-		// A network is created where we have a validating set with a set of backup validators
-		// The backup validators would receive emissions on each heartbeat
-		fn backup_rewards() {
+
+		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// We want to have at least one heartbeat within our reduced epoch
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
@@ -1161,28 +1146,23 @@ mod tests {
 					let (mut testnet, mut init_passive_nodes) =
 						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
 
-					// An initial stake which is superior to the genesis stakes
-					// The current validators would have been rewarded on us leaving the current
-					// epoch so let's up the stakes for the passive nodes.
+					// An initial stake which is greater than the genesis stakes
+					// We intend for these initially passive nodes to win the auction
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &init_passive_nodes {
 						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
+						network::Cli::activate_account(node.clone());
 					}
 
 					// Start an auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 
 					assert_eq!(
-						1,
+						GENESIS_EPOCH,
 						Validator::epoch_index(),
 						"We should still be in the genesis epoch"
 					);
-
-					// Activate the accounts
-					for node in [genesis_validators.clone(), init_passive_nodes.clone()].concat() {
-						network::Cli::activate_account(node);
-					}
 
 					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
@@ -1205,9 +1185,10 @@ mod tests {
 
 					current_validators.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-						assert_eq!(account_data.state, ChainflipAccountState::Validator);
+						assert_eq!(account_data.state, ChainflipAccountState::CurrentAuthority);
 						// we were active in teh first epoch
-						assert_eq!(account_data.last_active_epoch, Some(2));
+
+						// TODO: Check historical epochs
 					});
 
 					// assert list of backup validators as being the genesis validators
@@ -1227,9 +1208,12 @@ mod tests {
 
 					current_backup_validators.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-						assert_eq!(account_data.state, ChainflipAccountState::Backup);
+						assert_eq!(
+							account_data.state,
+							ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup)
+						);
 						// we were active in teh first epoch
-						assert_eq!(account_data.last_active_epoch, Some(1));
+						// TODO: Check historical epochs
 					});
 
 					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
@@ -1276,6 +1260,10 @@ mod tests {
 					let (mut testnet, mut passive_nodes) =
 						network::Network::create(MAX_VALIDATORS as u8, &nodes);
 
+					for passive_node in passive_nodes.clone() {
+						network::Cli::activate_account(passive_node);
+					}
+
 					nodes.append(&mut passive_nodes);
 					// An initial stake which is superior to the genesis stakes
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
@@ -1292,11 +1280,6 @@ mod tests {
 
 					// Start an auction and wait for rotation
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-
-					// Activate the accounts
-					for node in &nodes {
-						network::Cli::activate_account(node.clone());
-					}
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -1426,9 +1409,6 @@ mod tests {
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
 					// Activate accounts
-					network::Cli::activate_account(genesis_node_1.clone());
-					network::Cli::activate_account(genesis_node_2.clone());
-					network::Cli::activate_account(genesis_node_3.clone());
 					network::Cli::activate_account(init_passive_node_1.clone());
 					network::Cli::activate_account(init_passive_node_2.clone());
 
@@ -1524,9 +1504,6 @@ mod tests {
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
 					// Activate accounts
-					network::Cli::activate_account(genesis_node_1.clone());
-					network::Cli::activate_account(genesis_node_2.clone());
-					network::Cli::activate_account(genesis_node_3.clone());
 					network::Cli::activate_account(init_passive_node_1.clone());
 					network::Cli::activate_account(init_passive_node_2.clone());
 
