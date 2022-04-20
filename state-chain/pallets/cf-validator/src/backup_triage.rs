@@ -100,7 +100,20 @@ where
 	{
 		if new_bid_amount.is_zero() {
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Passive);
-			self.kill(validator_id);
+			// remove the validator from whichever list it was a part of
+			self.passive
+				.binary_search_by(|bid| bid.validator_id.cmp(&validator_id))
+				.map(|i| {
+					self.passive.remove(i);
+				})
+				.or_else(|_| {
+					self.backup.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)).map(
+						|i| {
+							self.backup.remove(i);
+						},
+					)
+				})
+				.expect("Must be in backup or passive");
 			self.resize::<AccountState>();
 			return
 		}
@@ -196,22 +209,6 @@ where
 
 		// Restore the original sort order.
 		self.sort_backups_and_passives_by_validator_id();
-	}
-
-	fn kill(&mut self, validator_id: Id) {
-		let _ = self
-			.passive
-			.binary_search_by(|bid| bid.validator_id.cmp(&validator_id))
-			.map(|i| {
-				self.passive.remove(i);
-			})
-			.or_else(|_| {
-				self.backup
-					.binary_search_by(|bid| bid.validator_id.cmp(&validator_id))
-					.map(|i| {
-						self.backup.remove(i);
-					})
-			});
 	}
 
 	fn sort_backups_and_passives_by_validator_id(&mut self) {
