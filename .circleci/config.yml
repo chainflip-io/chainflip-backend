@@ -203,7 +203,7 @@ workflows:
             - do-credentials
             - infura-endpoints
             - aws-credentials
-      - generate-class-diagram:
+      - docgen-store-artifacts:
           requires:
             - test-single-node
           context:
@@ -611,10 +611,8 @@ jobs:
             - chainflip-docgen/*
       - store_artifacts:
           path: target/release
-      - store_artifacts:
-          path: ./chainflip-docgen/generated/
 
-  generate-class-diagram:
+  docgen-store-artifacts:
     executor: java-executor
     steps:
       - attach_workspace:
@@ -630,7 +628,7 @@ jobs:
             cd ./chainflip-docgen/
             java -jar plantuml.jar generated/class.puml
       - store_artifacts:
-          path: ./chainflip-docgen/generated/class.png
+          path: ./chainflip-docgen/generated
 
   create-testnet:
     parameters:
