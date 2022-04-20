@@ -611,6 +611,8 @@ jobs:
             - chainflip-docgen/*
       - store_artifacts:
           path: target/release
+      - store_artifacts:
+          path: ./chainflip-docgen/generated/
 
   generate-class-diagram:
     executor: java-executor
@@ -628,7 +630,7 @@ jobs:
             cd ./chainflip-docgen/
             java -jar plantuml.jar generated/class.puml
       - store_artifacts:
-          path: ./chainflip-docgen/generated/
+          path: ./chainflip-docgen/generated/class.png
 
   create-testnet:
     parameters:
