@@ -614,7 +614,6 @@ jobs:
 
   generate-class-diagram:
     executor: java-executor
-    working_directory: ./chainflip-docgen
     steps:
       - attach_workspace:
           at: ./
@@ -625,7 +624,9 @@ jobs:
             sudo apt-get install -y graphviz
       - run:
           name: Generate class diagram
-          command: java -jar plantuml.jar generated/class.puml
+          command: |
+            cd ./chainflip-docgen/
+            java -jar plantuml.jar generated/class.puml
       - store_artifacts:
           path: ./chainflip-docgen/generated/
 
