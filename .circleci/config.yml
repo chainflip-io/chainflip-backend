@@ -203,7 +203,11 @@ workflows:
             - do-credentials
             - infura-endpoints
             - aws-credentials
-
+      - generate-class-diagram:
+          requires:
+            - test-single-node
+          context:
+            - do-credentials
       # The follow jobs run on all successful merges to protected branches.
       # Protected branches include main, develop, release/*, epic/*
       - docker-build:
