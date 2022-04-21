@@ -103,7 +103,7 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
 	pub const BackupValidatorRatio: u32 = BACKUP_VALIDATOR_RATIO;
-	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
+	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
 }
 
 pub struct MockEmergencyRotation;
@@ -150,7 +150,7 @@ impl Config for Test {
 	type KeygenExclusionSet = MockKeygenExclusion<Self>;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
-	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
 	type ValidatorQualification = MockQualifyValidator;
 }
 

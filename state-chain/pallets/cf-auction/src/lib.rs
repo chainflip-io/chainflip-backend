@@ -64,7 +64,7 @@ pub mod pallet {
 		type ActiveToBackupValidatorRatio: Get<u32>;
 		/// Percentage of backup validators in validating set in a emergency rotation
 		#[pallet::constant]
-		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
+		type PercentageOfBackupNodesInEmergency: Get<u32>;
 	}
 
 	/// Pallet implements \[Hooks\] trait
@@ -228,7 +228,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			bids.iter().take(target_authority_set_size as usize).collect();
 
 		if T::EmergencyRotation::emergency_rotation_in_progress() {
-			// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
+			// We are interested in only have `PercentageOfBackupNodesInEmergency`
 			// of existing BVs in the validating set.  We ensure this by using the last
 			// MAB to understand who were BVs and ensure we only maintain the required
 			// amount under this level to avoid a superminority of low collateralised
@@ -243,7 +243,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 
 				let number_of_backup_validators_to_be_included = (number_of_existing_backup_nodes
 					as u32)
-					.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get()) /
+					.saturating_mul(T::PercentageOfBackupNodesInEmergency::get()) /
 					100;
 
 				target_authority_set_size = new_target_authority_set_size +
