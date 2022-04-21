@@ -38,6 +38,10 @@ pub trait Tokenizable {
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SigData {
+	/// The address of the Key Manager contract, to prevent replay attacks
+	key_manager_addr: Address,
+	/// The ID of the chain we're broadcasting to, to prevent x-chain replays
+	chain_id: Uint,
 	/// The message hash aka. payload to be signed over.
 	msg_hash: H256,
 	/// The Schnorr signature.
@@ -56,8 +60,8 @@ pub struct SigData {
 
 impl SigData {
 	/// Initiate a new `SigData` with a given nonce value.
-	pub fn new_empty(nonce: Uint) -> Self {
-		Self { nonce, ..Default::default() }
+	pub fn new_empty(key_manager_addr: Address, chain_id: Uint, nonce: Uint) -> Self {
+		Self { key_manager_addr, chain_id, nonce, ..Default::default() }
 	}
 
 	/// Inserts the `msg_hash` value derived from the provided calldata.
@@ -83,6 +87,8 @@ impl SigData {
 impl Tokenizable for SigData {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
+			Token::Address(self.key_manager_addr),
+			Token::Uint(self.chain_id),
 			Token::Uint(self.msg_hash.0.into()),
 			Token::Uint(self.sig),
 			Token::Uint(self.nonce),

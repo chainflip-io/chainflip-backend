@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+pub use cf_traits::EthEnvironmentProvider;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
@@ -42,6 +43,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Governance origin to secure extrinsic
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		/// Eth Environment provider
+		type EthEnvironmentProvider: EthEnvironmentProvider;
 	}
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -92,6 +95,15 @@ pub mod pallet {
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
+		}
+	}
+
+	impl<T: Config> EthEnvironmentProvider for Pallet<T> {
+		fn key_manager_address() -> [u8; 20] {
+			KeyManagerAddress::<T>::get()
+		}
+		fn chain_id() -> u64 {
+			EthereumChainId::<T>::get()
 		}
 	}
 }

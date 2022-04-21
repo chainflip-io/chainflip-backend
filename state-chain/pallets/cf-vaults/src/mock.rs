@@ -15,7 +15,10 @@ use crate as pallet_cf_vaults;
 use super::*;
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo},
+	mocks::{
+		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
+		eth_environment_provider::MockEthEnvironmentProvider,
+	},
 	Chainflip,
 };
 
@@ -95,16 +98,20 @@ impl UnfilteredDispatchable for MockCallback {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockSetAggKeyWithAggKey {
+	key_manager_address: [u8; 20],
+	chain_id: u64,
 	nonce: <MockEthereum as ChainAbi>::Nonce,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
 }
 
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
 		nonce: <MockEthereum as ChainAbi>::Nonce,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Self {
-		Self { nonce, new_key }
+		Self { key_manager_address: key_manager_address.clone(), chain_id, nonce, new_key }
 	}
 }
 
@@ -162,6 +169,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type WeightInfo = ();
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type Broadcaster = MockBroadcaster;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

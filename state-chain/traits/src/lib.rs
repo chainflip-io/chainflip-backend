@@ -314,6 +314,12 @@ pub trait NonceProvider<Abi: ChainAbi> {
 	fn next_nonce() -> Abi::Nonce;
 }
 
+/// Provides the environment data for ethereum-like chains.
+pub trait EthEnvironmentProvider {
+	fn key_manager_address() -> [u8; 20];
+	fn chain_id() -> u64;
+}
+
 pub trait IsOnline {
 	/// The validator id used
 	type ValidatorId;

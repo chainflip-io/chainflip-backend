@@ -5,7 +5,8 @@ use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, key_provider::MockKeyProvider,
+		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
+		key_provider::MockKeyProvider,
 	},
 	Chainflip, NonceProvider,
 };
@@ -129,6 +130,7 @@ impl pallet_cf_staking::Config for Test {
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = EthereumApi;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 type Amount = u128;
@@ -226,6 +228,7 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type ApiCall = EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 impl pallet_cf_witness_api::Config for Test {

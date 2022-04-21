@@ -21,9 +21,16 @@ pub struct SetAggKeyWithAggKey {
 }
 
 impl SetAggKeyWithAggKey {
-	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(nonce: Nonce, new_key: Key) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(nonce.into()), new_key: new_key.into() };
+	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
+		nonce: Nonce,
+		new_key: Key,
+	) -> Self {
+		let mut calldata = Self {
+			sig_data: SigData::new_empty(key_manager_address.into(), chain_id.into(), nonce.into()),
+			new_key: new_key.into(),
+		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
@@ -113,8 +120,9 @@ mod test_set_agg_key_with_agg_key {
 			)
 			.as_ref(),
 		);
-
 		let call = SetAggKeyWithAggKey::new_unsigned(
+			&[0xcf; 20],
+			1,
 			0,
 			AggKey::from_pubkey_compressed(hex_literal::hex!(
 				"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
@@ -128,6 +136,8 @@ mod test_set_agg_key_with_agg_key {
 	fn test_set_agg_key_with_agg_key_payload() {
 		use crate::eth::{tests::asymmetrise, ParityBit};
 		use ethabi::Token;
+		const CHAIN_ID: u64 = 1;
+		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const NONCE: u64 = 6;
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
@@ -142,6 +152,8 @@ mod test_set_agg_key_with_agg_key {
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
 		let set_agg_key_runtime = SetAggKeyWithAggKey::new_unsigned(
+			&FAKE_KEYMAN_ADDR,
+			CHAIN_ID,
 			NONCE,
 			AggKey { pub_key_x: FAKE_NEW_KEY_X, pub_key_y_parity: FAKE_NEW_KEY_Y },
 		);

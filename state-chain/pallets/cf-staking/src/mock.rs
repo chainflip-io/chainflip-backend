@@ -15,7 +15,10 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck,
+		eth_environment_provider::MockEthEnvironmentProvider, time_source,
+	},
 	Chainflip, NonceProvider,
 };
 
@@ -166,6 +169,7 @@ impl pallet_cf_staking::Config for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = eth::api::EthereumApi;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);

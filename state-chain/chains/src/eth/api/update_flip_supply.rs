@@ -18,12 +18,14 @@ pub struct UpdateFlipSupply {
 
 impl UpdateFlipSupply {
 	pub fn new_unsigned<Nonce: Into<Uint>, TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
 		nonce: Nonce,
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(nonce.into()),
+			sig_data: SigData::new_empty(key_manager_address.into(), chain_id.into(), nonce.into()),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
 		};
@@ -100,6 +102,8 @@ mod test_update_flip_supply {
 	fn test_update_flip_supply_payload() {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
+		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
+		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 6;
 		const NEW_TOTAL_SUPPLY: u64 = 10;
 		const STATE_CHAIN_BLOCK_NUMBER: u64 = 5;
@@ -113,8 +117,13 @@ mod test_update_flip_supply {
 
 		let stake_manager_reference = stake_manager.function("updateFlipSupply").unwrap();
 
-		let update_flip_supply_runtime =
-			UpdateFlipSupply::new_unsigned(NONCE, NEW_TOTAL_SUPPLY, STATE_CHAIN_BLOCK_NUMBER);
+		let update_flip_supply_runtime = UpdateFlipSupply::new_unsigned(
+			&FAKE_KEYMAN_ADDR,
+			CHAIN_ID,
+			NONCE,
+			NEW_TOTAL_SUPPLY,
+			STATE_CHAIN_BLOCK_NUMBER,
+		);
 
 		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
 

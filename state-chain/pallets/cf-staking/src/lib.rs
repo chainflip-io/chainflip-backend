@@ -16,7 +16,10 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{ApiCall, RegisterClaim};
-use cf_traits::{Bid, BidderProvider, EpochInfo, NonceProvider, StakeTransfer, ThresholdSigner};
+use cf_traits::{
+	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, NonceProvider, StakeTransfer,
+	ThresholdSigner,
+};
 use core::time::Duration;
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -86,6 +89,9 @@ pub mod pallet {
 
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<Ethereum>;
+
+		/// Something that can provide the key manager address and chain id.
+		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
@@ -629,6 +635,8 @@ impl<T: Config> Pallet<T> {
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(
+			&T::EthEnvironmentProvider::key_manager_address(),
+			T::EthEnvironmentProvider::chain_id(),
 			T::NonceProvider::next_nonce(),
 			<T as Config>::StakerId::from_ref(account_id).as_ref(),
 			amount.into(),
