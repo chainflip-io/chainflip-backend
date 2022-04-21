@@ -706,7 +706,7 @@ mod tests {
 
 				for account in accounts.iter() {
 					assert!(
-						Validator::validator_index(current_epoch, account).is_some(),
+						Validator::authority_index(current_epoch, account).is_some(),
 						"validator is present in lookup"
 					);
 				}

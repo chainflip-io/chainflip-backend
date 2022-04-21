@@ -563,10 +563,10 @@ pub mod pallet {
 	#[pallet::getter(fn current_epoch)]
 	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
-	/// Defines a unique index for each validator for every epoch.
+	/// Defines a unique index for each authority for each epoch.
 	#[pallet::storage]
-	#[pallet::getter(fn validator_index)]
-	pub type ValidatorIndex<T: Config> = StorageDoubleMap<
+	#[pallet::getter(fn authority_index)]
+	pub type AuthorityIndex<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		EpochIndex,
@@ -703,7 +703,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
-		ValidatorIndex::<T>::get(epoch_index, account)
+		AuthorityIndex::<T>::get(epoch_index, account)
 	}
 
 	fn bond() -> Self::Amount {
@@ -738,16 +738,16 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_validator_info_for_epoch(
+	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_validators: Vec<Self::ValidatorId>,
+		new_authorities: Vec<Self::ValidatorId>,
 	) {
-		EpochValidatorCount::<T>::insert(epoch_index, new_validators.len() as u32);
-		for (i, validator) in new_validators.iter().enumerate() {
-			ValidatorIndex::<T>::insert(epoch_index, validator, i as u16);
-			HistoricalActiveEpochs::<T>::append(validator, epoch_index);
+		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as u32);
+		for (i, authority) in new_authorities.iter().enumerate() {
+			AuthorityIndex::<T>::insert(epoch_index, authority, i as u16);
+			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
 		}
-		HistoricalValidators::<T>::insert(epoch_index, new_validators);
+		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);
 	}
 }
 
@@ -782,7 +782,7 @@ impl<T: Config> Pallet<T> {
 		Validators::<T>::set(epoch_validators.to_vec());
 
 		epoch_validators.iter().enumerate().for_each(|(index, account_id)| {
-			ValidatorIndex::<T>::insert(&new_epoch, account_id, index as u16);
+			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as u16);
 		});
 
 		EpochValidatorCount::<T>::insert(new_epoch, epoch_validators.len() as u32);
