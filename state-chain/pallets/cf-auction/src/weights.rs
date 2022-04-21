@@ -34,7 +34,7 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_auction using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: Auction ActiveValidatorSizeRange (r:1 w:1)
+	// Storage: Auction CurrentAuthoritySetSizeRange (r:1 w:1)
 	fn set_current_authority_set_size_range() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(31_000_000 as Weight)
@@ -45,7 +45,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: Auction ActiveValidatorSizeRange (r:1 w:1)
+	// Storage: Auction CurrentAuthoritySetSizeRange (r:1 w:1)
 	fn set_current_authority_set_size_range() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(31_000_000 as Weight)
