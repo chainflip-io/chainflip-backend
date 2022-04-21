@@ -178,11 +178,11 @@ pub trait Auctioneer {
 	fn update_backup_and_passive_states();
 }
 
-pub trait BackupValidators {
+pub trait BackupNodes {
 	type ValidatorId;
 
-	/// The current set of backup validators.  The set may change at anytime.
-	fn backup_validators() -> Vec<Self::ValidatorId>;
+	/// The current set of backup nodes.  The set may change on any stake or claim event
+	fn backup_nodes() -> Vec<Self::ValidatorId>;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]

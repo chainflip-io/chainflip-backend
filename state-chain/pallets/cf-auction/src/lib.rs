@@ -15,9 +15,9 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	ActiveValidatorRange, AuctionResult, Auctioneer, BackupOrPassive, BackupValidators,
-	BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	EpochInfo, QualifyValidator, RemainingBid, StakeHandler,
+	ActiveValidatorRange, AuctionResult, Auctioneer, BackupNodes, BackupOrPassive, BidderProvider,
+	Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo,
+	QualifyValidator, RemainingBid, StakeHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -450,10 +450,10 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	}
 }
 
-impl<T: Config> BackupValidators for Pallet<T> {
+impl<T: Config> BackupNodes for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
-	fn backup_validators() -> Vec<Self::ValidatorId> {
+	fn backup_nodes() -> Vec<Self::ValidatorId> {
 		RemainingBidders::<T>::get()
 			.iter()
 			.take(BackupGroupSize::<T>::get() as usize)

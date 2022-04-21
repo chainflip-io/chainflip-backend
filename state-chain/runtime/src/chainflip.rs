@@ -21,7 +21,7 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
@@ -155,7 +155,7 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		let backup_validators = <Auction as BackupValidators>::backup_validators();
+		let backup_validators = <Auction as BackupNodes>::backup_nodes();
 		BackupValidatorEmissions::distribute_rewards(&backup_validators);
 
 		// Check the state of the network and if we are within the emergency rotation range
