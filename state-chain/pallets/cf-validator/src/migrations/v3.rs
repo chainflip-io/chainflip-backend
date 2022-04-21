@@ -16,16 +16,16 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		remove_storage_prefix(VALIDATOR_NAME, VALIDATOR_LOOKUP_NAME, b"");
 		remove_storage_prefix(WITNESSER_NAME, NUM_VALIDATORS_NAME, b"");
 
-		let number_of_current_validators = Validators::<T>::get().len() as u32;
-		EpochValidatorCount::<T>::insert(T::EpochInfo::epoch_index(), number_of_current_validators);
-
 		// Get the current state of the storage.
 		let current_epoch = T::EpochInfo::epoch_index();
 		let current_validators = Validators::<T>::get();
 		let current_bond = Bond::<T>::get();
+		let number_of_current_validators = current_validators.len() as u32;
 
-		// We have 5 stable writes as well as n for itterating over all validators.
-		let writes = 5 + current_validators.len();
+		EpochValidatorCount::<T>::insert(current_epoch, number_of_current_validators);
+
+		// We have 2 stable writes as well as n for itterating over all validators.
+		let writes = 2 + number_of_current_validators;
 
 		// Insert the´current epoch bond into the storage.
 		HistoricalBonds::<T>::insert(current_epoch, current_bond);
@@ -37,7 +37,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		HistoricalValidators::<T>::insert(current_epoch, current_validators);
 
 		#[allow(clippy::unnecessary_cast)]
-		T::DbWeight::get().reads_writes(5 as Weight, writes as Weight)
+		T::DbWeight::get().reads_writes(3 as Weight, writes as Weight)
 	}
 
 	#[cfg(feature = "try-runtime")]
