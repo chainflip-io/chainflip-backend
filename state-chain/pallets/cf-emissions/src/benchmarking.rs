@@ -14,12 +14,12 @@ benchmarks! {
 	update_backup_validator_emission_inflation {
 	}: _(RawOrigin::Root, 100u32.into())
 	verify {
-		assert_eq!(ValidatorEmissionInflation::<T>::get(), 1000);
+		assert_eq!(CurrentAuthorityEmissionInflation::<T>::get(), 1000);
 	}
 	update_validator_emission_inflation {
 	}: _(RawOrigin::Root, (100 as u32).into())
 	verify {
-		assert_eq!(BackupValidatorEmissionInflation::<T>::get(), 100);
+		assert_eq!(BackupNodeEmissionInflation::<T>::get(), 100);
 	}
 	no_rewards_minted {
 	} : {
