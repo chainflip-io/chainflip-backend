@@ -153,9 +153,9 @@ pub struct NetworkStateAccess<T>(PhantomData<T>);
 
 impl<T: Config> NetworkStateInfo for NetworkStateAccess<T> {
 	fn ensure_paused() -> frame_support::sp_runtime::DispatchResult {
-		match pallet::CurrentNetworkState::<T>::get() {
-			NetworkState::Paused => Err(Error::<T>::NetworkIsPaused)?,
-			NetworkState::Running => Ok(().into()),
+		if <pallet::CurrentNetworkState<T>>::get() == NetworkState::Paused {
+			return Err(Error::<T>::NetworkIsPaused.into())
 		}
+		Ok(())
 	}
 }
