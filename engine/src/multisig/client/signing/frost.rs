@@ -268,29 +268,29 @@ pub fn aggregate_signature(
         msg,
     );
 
-    let mut invalid_idxs = BTreeSet::new();
+    let invalid_idxs: BTreeSet<usize> = signer_idxs
+        .iter()
+        .cloned()
+        .filter(|signer_idx| {
+            let rho_i = &bindings[signer_idx];
+            let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
-    for signer_idx in signer_idxs {
-        let rho_i = &bindings[signer_idx];
-        let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
+            let commitment = &commitments[signer_idx];
+            let commitment_i = commitment.d + (commitment.e * rho_i);
 
-        let commitment = &commitments[signer_idx];
-        let commitment_i = commitment.d + (commitment.e * rho_i);
+            let y_i = pubkeys[signer_idx];
 
-        let y_i = pubkeys[signer_idx];
+            let response = &responses[signer_idx];
 
-        let response = &responses[signer_idx];
-
-        if !is_party_response_valid(
-            &y_i,
-            &lambda_i,
-            &commitment_i,
-            &challenge,
-            &response.response,
-        ) {
-            invalid_idxs.insert(*signer_idx);
-        }
-    }
+            !is_party_response_valid(
+                &y_i,
+                &lambda_i,
+                &commitment_i,
+                &challenge,
+                &response.response,
+            )
+        })
+        .collect();
 
     if invalid_idxs.is_empty() {
         // Response shares/shards are additive, so we simply need to

@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     convert::{TryFrom, TryInto},
     fmt::Display,
     iter::FromIterator,
@@ -399,18 +399,22 @@ where
                 >,
             >>()?;
 
-        let (ok_results, error_results): (HashMap<_, _>, BTreeMap<_, _>) = results
+        let (ok_results, all_reported_parties): (HashMap<_, _>, BTreeSet<_>) = results
             .into_iter()
             .partition_map(|(account_id, result)| match result {
                 Ok(output) => Either::Left((account_id, output)),
-                Err(error) => Either::Right(error),
+                Err((reported_parties, _error)) => Either::Right(reported_parties),
             });
 
-        if !ok_results.is_empty() && error_results.is_empty() {
+        if !ok_results.is_empty() && all_reported_parties.is_empty() {
             Some(Ok(self.post_successful_complete_check(ok_results)))
-        } else if ok_results.is_empty() && !error_results.is_empty() {
-            Some(Err(all_same(error_results.into_keys())
-                .expect("Reported parties weren't the same for all nodes")))
+        } else if ok_results.is_empty() && !all_reported_parties.is_empty() {
+            assert_eq!(
+                all_reported_parties.len(),
+                1,
+                "Reported parties weren't the same for all nodes"
+            );
+            Some(Err(all_reported_parties.into_iter().next().unwrap()))
         } else {
             panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
         }

@@ -245,7 +245,7 @@ where
             match &self.inner {
                 None => {
                     // Report the parties that tried to initiate the ceremony.
-                    let reported_ids: BTreeSet<_> = self
+                    let reported_ids = self
                         .delayed_messages
                         .iter()
                         .map(|(id, _)| id.clone())
