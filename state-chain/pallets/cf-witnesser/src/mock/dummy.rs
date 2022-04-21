@@ -62,7 +62,16 @@ pub mod pallet {
 			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Update storage.
-			<Something<T>>::put(amount);
+			match <Something<T>>::get() {
+				// Set the value to the incoming amount if the storage is currently empty.
+				None => <Something<T>>::put(amount),
+				Some(old) => {
+					// Increment the value read from storage; will error in the event of overflow.
+					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
+					// Update the value in storage with the incremented result.
+					<Something<T>>::put(new);
+				},
+			}
 
 			// Emit an event.
 			Self::deposit_event(Event::ValueIncremented(amount));

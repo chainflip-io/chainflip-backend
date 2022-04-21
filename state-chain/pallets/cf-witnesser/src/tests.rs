@@ -107,7 +107,6 @@ fn no_double_call_on_epoch_boundary() {
 			} else {
 				panic!("Expected WitnessExecuted event!")
 			};
-
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
 
 		// Vote for the same call, this time in another epoch. Threshold for the same call should be
@@ -118,6 +117,7 @@ fn no_double_call_on_epoch_boundary() {
 			2,
 			Default::default()
 		));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
 
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
 		assert_event_sequence::<Test>(vec![
