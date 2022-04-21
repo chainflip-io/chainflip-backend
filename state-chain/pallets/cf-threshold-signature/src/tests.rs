@@ -407,7 +407,7 @@ mod failure_reporting {
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
 	) -> CeremonyContext<Test, Instance1> {
-		MockEpochInfo::set_validators(Vec::from_iter(validator_set));
+		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
 		CeremonyContext::<Test, Instance1> {
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),

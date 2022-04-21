@@ -395,7 +395,7 @@ fn cannot_claim_bond() {
 		const STAKE: u128 = 200;
 		const BOND: u128 = 102;
 		MockEpochInfo::set_bond(BOND);
-		MockEpochInfo::add_validator(ALICE);
+		MockEpochInfo::add_authorities(ALICE);
 
 		// Alice and Bob stake the same amount.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
@@ -430,7 +430,7 @@ fn cannot_claim_bond() {
 #[test]
 fn test_retirement() {
 	new_test_ext().execute_with(|| {
-		MockEpochInfo::add_validator(ALICE);
+		MockEpochInfo::add_authorities(ALICE);
 		const STAKE: u128 = 100;
 
 		// Need to be staked in order to retire or activate.

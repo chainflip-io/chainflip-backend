@@ -231,7 +231,7 @@ impl ExtBuilder {
 
 	pub fn with_validators(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			MockEpochInfo::set_validators(Vec::from_iter(validators));
+			MockEpochInfo::set_authorities(Vec::from_iter(validators));
 		});
 		self
 	}
