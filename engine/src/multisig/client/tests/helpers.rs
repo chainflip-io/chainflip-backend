@@ -1,8 +1,9 @@
 use std::{
     any::Any,
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     convert::{TryFrom, TryInto},
     fmt::Display,
+    iter::FromIterator,
     pin::Pin,
     time::Duration,
 };
@@ -359,7 +360,7 @@ where
             AccountId,
             CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
         >,
-    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, Vec<AccountId>>> {
+    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, BTreeSet<AccountId>>> {
         let results = self
             .nodes
             .iter_mut()
@@ -383,7 +384,7 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (Vec<AccountId>, anyhow::Error),
+                        (BTreeSet<AccountId>, anyhow::Error),
                     >,
                 )>,
             >>()
@@ -393,25 +394,27 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (Vec<AccountId>, anyhow::Error),
+                        (BTreeSet<AccountId>, anyhow::Error),
                     >,
                 >,
             >>()?;
 
-        let (ok_results, error_results): (HashMap<_, _>, Vec<_>) = results
+        let (ok_results, all_reported_parties): (HashMap<_, _>, BTreeSet<_>) = results
             .into_iter()
             .partition_map(|(account_id, result)| match result {
                 Ok(output) => Either::Left((account_id, output)),
-                Err(error) => Either::Right(error),
+                Err((reported_parties, _error)) => Either::Right(reported_parties),
             });
 
-        if !ok_results.is_empty() && error_results.is_empty() {
+        if !ok_results.is_empty() && all_reported_parties.is_empty() {
             Some(Ok(self.post_successful_complete_check(ok_results)))
-        } else if ok_results.is_empty() && !error_results.is_empty() {
-            Some(Err(all_same(error_results.into_iter().map(
-                |(reported, _error)| (reported.into_iter().sorted().collect::<Vec<_>>()),
-            ))
-            .expect("Reported parties weren't the same for all nodes")))
+        } else if ok_results.is_empty() && !all_reported_parties.is_empty() {
+            assert_eq!(
+                all_reported_parties.len(),
+                1,
+                "Reported parties weren't the same for all nodes"
+            );
+            Some(Err(all_reported_parties.into_iter().next().unwrap()))
         } else {
             panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
         }
@@ -442,7 +445,10 @@ where
             .try_gather_outcomes(result_receivers)
             .await?
             .unwrap_err();
-        assert_eq!(bad_account_ids, &reported[..]);
+        assert_eq!(
+            BTreeSet::from_iter(bad_account_ids.iter()),
+            reported.iter().collect()
+        );
         Some(())
     }
 

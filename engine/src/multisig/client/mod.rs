@@ -15,7 +15,7 @@ pub mod ceremony_manager;
 #[cfg(test)]
 mod genesis;
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
     common::format_iterator,
@@ -125,14 +125,14 @@ pub trait MultisigClientApi {
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<secp256k1::PublicKey, (Vec<AccountId>, anyhow::Error)>;
+    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)>;
     async fn sign(
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>;
+    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>;
 }
 
 /// Multisig client is is responsible for persistently storing generated keys and
@@ -210,7 +210,7 @@ where
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> impl '_ + Future<Output = Result<secp256k1::PublicKey, (Vec<AccountId>, anyhow::Error)>>
+    ) -> impl '_ + Future<Output = Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)>>
     {
         assert!(participants.contains(&self.my_account_id));
 
@@ -259,7 +259,10 @@ where
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
                 Some(Err(error)) => Err(error),
-                None => Err((vec![], anyhow::Error::msg("Keygen request ignored"))),
+                None => Err((
+                    BTreeSet::new(),
+                    anyhow::Error::msg("Keygen request ignored"),
+                )),
             }
         }
     }
@@ -274,7 +277,8 @@ where
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> impl '_ + Future<Output = Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>> {
+    ) -> impl '_ + Future<Output = Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>>
+    {
         assert!(signers.contains(&self.my_account_id));
 
         slog::debug!(
@@ -319,11 +323,14 @@ where
                     if let Ok(result) = result_receiver.await {
                         result
                     } else {
-                        Err((vec![], anyhow::Error::msg("Signing request ignored")))
+                        Err((
+                            BTreeSet::new(),
+                            anyhow::Error::msg("Signing request ignored"),
+                        ))
                     }
                 }
                 None => Err((
-                    vec![],
+                    Default::default(),
                     anyhow::Error::msg("Signing request ignored: unknown key"),
                 )),
             }
@@ -407,7 +414,7 @@ impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyD
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<secp256k1::PublicKey, (Vec<AccountId>, anyhow::Error)> {
+    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)> {
         self.initiate_keygen(ceremony_id, participants).await
     }
 
@@ -417,7 +424,7 @@ impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyD
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)> {
+    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)> {
         self.initiate_signing(ceremony_id, key_id, signers, data)
             .await
             .await
