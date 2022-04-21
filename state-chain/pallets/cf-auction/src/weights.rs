@@ -36,10 +36,7 @@ pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Auction CurrentAuthoritySetSizeRange (r:1 w:1)
 	fn set_current_authority_set_size_range() -> Weight {
-		#[allow(clippy::unnecessary_cast)]
-		(31_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		inner_set_current_authority_set_size_range()
 	}
 }
 
@@ -47,9 +44,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 impl WeightInfo for () {
 	// Storage: Auction CurrentAuthoritySetSizeRange (r:1 w:1)
 	fn set_current_authority_set_size_range() -> Weight {
-		#[allow(clippy::unnecessary_cast)]
-		(31_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		inner_set_current_authority_set_size_range()
 	}
+}
+
+fn inner_set_current_authority_set_size_range() -> Weight {
+	#[allow(clippy::unnecessary_cast)]
+	(31_000_000 as Weight)
+		.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 }
