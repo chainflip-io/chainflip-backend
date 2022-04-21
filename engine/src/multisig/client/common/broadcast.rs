@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, BTreeSet},
     convert::{TryFrom, TryInto},
     fmt::Display,
 };
@@ -19,7 +19,7 @@ pub use super::broadcast_verification::verify_broadcasts;
 /// parties in private
 pub enum DataToSend<T> {
     Broadcast(T),
-    Private(HashMap<usize, T>),
+    Private(BTreeMap<usize, T>),
 }
 
 /// Abstracts away computations performed during every "broadcast" stage
@@ -39,7 +39,7 @@ pub trait BroadcastStageProcessor<D, Result>: Display {
     /// Determines how the data for this stage (of type `Self::Message`)
     /// should be processed once it either received it from all other parties
     /// or the stage timed out (None is used for missing messages)
-    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> StageResult<D, Result>;
+    fn process(self, messages: BTreeMap<usize, Option<Self::Message>>) -> StageResult<D, Result>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
@@ -50,7 +50,7 @@ where
 {
     common: CeremonyCommon,
     /// Messages collected so far
-    messages: HashMap<usize, P::Message>,
+    messages: BTreeMap<usize, P::Message>,
     /// Determines the actual computations before/after
     /// the data is collected
     processor: P,
@@ -64,7 +64,7 @@ where
     pub fn new(processor: P, common: CeremonyCommon) -> Self {
         BroadcastStage {
             common,
-            messages: HashMap::new(),
+            messages: BTreeMap::new(),
             processor,
         }
     }
@@ -206,7 +206,7 @@ where
 
         // Turns values T into Option<T>, inserting `None` where
         // data hasn't been received for `idx`
-        let messages: HashMap<_, _> = self
+        let messages: BTreeMap<_, _> = self
             .common
             .all_idxs
             .iter()
@@ -216,12 +216,12 @@ where
         self.processor.process(messages)
     }
 
-    fn awaited_parties(&self) -> Vec<usize> {
-        let mut awaited = vec![];
+    fn awaited_parties(&self) -> BTreeSet<usize> {
+        let mut awaited = BTreeSet::new();
 
         for idx in &self.common.all_idxs {
             if !self.messages.contains_key(idx) {
-                awaited.push(*idx);
+                awaited.insert(*idx);
             }
         }
 

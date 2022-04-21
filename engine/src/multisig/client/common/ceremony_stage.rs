@@ -13,7 +13,7 @@ pub enum StageResult<M, Result> {
     /// Ceremony proceeds to the next stage
     NextStage(Box<dyn CeremonyStage<Message = M, Result = Result>>),
     /// Ceremony aborted (contains parties to report)
-    Error(Vec<usize>, anyhow::Error),
+    Error(BTreeSet<usize>, anyhow::Error),
     /// Ceremony finished and successful
     Done(Result),
 }
@@ -51,7 +51,7 @@ pub trait CeremonyStage: std::fmt::Display {
     fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result>;
 
     /// Parties we haven't heard from for the current stage
-    fn awaited_parties(&self) -> Vec<usize>;
+    fn awaited_parties(&self) -> BTreeSet<usize>;
 }
 
 /// Data useful during any stage of a ceremony
