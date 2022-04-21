@@ -17,7 +17,9 @@ pub mod pallet {
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
 	};
 	use frame_system::pallet_prelude::*;
-	use pallet_cf_broadcast::{Call as BroadcastCall, Config as BroadcastConfig};
+	use pallet_cf_broadcast::{
+		Call as BroadcastCall, Config as BroadcastConfig, SignerIdFor, ThresholdSignatureFor,
+	};
 	use pallet_cf_staking::{
 		Call as StakingCall, Config as StakingConfig, EthTransactionHash, EthereumAddress,
 		FlipBalance,
@@ -196,6 +198,39 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::<T, Instance1>::vault_key_rotated(
 				new_public_key,
+				block_number,
+				tx_hash,
+			);
+			T::Witnesser::witness(who, call.into())
+		}
+
+		/// Witness the acceptance of a signature on the target chain
+		///
+		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - None
+		// #[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T,
+		// Instance1>::signature_accepted(*payload) .get_dispatch_info()
+		// .weight))]
+		/// FIXME - weight
+		#[pallet::weight(10000)]
+		pub fn witness_signature_accepted(
+			origin: OriginFor<T>,
+			payload: ThresholdSignatureFor<T, Instance1>,
+			broadcaster: SignerIdFor<T, Instance1>,
+			block_number: u64,
+			tx_hash: <Ethereum as ChainCrypto>::TransactionHash,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = BroadcastCall::<T, Instance1>::signature_accepted(
+				payload,
+				broadcaster,
 				block_number,
 				tx_hash,
 			);

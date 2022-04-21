@@ -128,7 +128,13 @@ impl MockCfe {
 				)
 			},
 			Scenario::SignatureAccepted => {
-				MockBroadcast::signature_accepted(Origin::root(), MockThresholdSignature::default())
+				MockBroadcast::signature_accepted(
+					Origin::root(),
+					MockThresholdSignature::default(),
+					Validity::Valid,
+					10,
+					[0xcf; 4],
+				)
 			},
 			_ => unimplemented!(),
 		});
