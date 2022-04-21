@@ -157,8 +157,8 @@ pub struct AuctionResult<ValidatorId, Amount> {
 	pub minimum_active_bid: Amount,
 }
 
-/// A range of min, max for active validator set
-pub type ActiveValidatorRange = (u32, u32);
+/// A min and max number of validators for an authority set
+pub type AuthoritySetSizeRange = (u32, u32);
 
 /// Auctioneer
 ///

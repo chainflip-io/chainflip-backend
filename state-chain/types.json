@@ -6,7 +6,7 @@
     "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
-  "ActiveValidatorRange": "(u32,u32)",
+  "AuthoritySetSizeRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
   "AggKey": {

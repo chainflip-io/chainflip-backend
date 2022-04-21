@@ -15,7 +15,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	ActiveValidatorRange, AuctionResult, Auctioneer, BackupNodes, BackupOrPassive, BidderProvider,
+	AuctionResult, Auctioneer, AuthoritySetSizeRange, BackupNodes, BackupOrPassive, BidderProvider,
 	Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo,
 	QualifyValidator, RemainingBid, StakeHandler,
 };
@@ -89,7 +89,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_authority_set_size_range)]
 	pub(super) type CurrentAuthoritySetSizeRange<T: Config> =
-		StorageValue<_, ActiveValidatorRange, ValueQuery>;
+		StorageValue<_, AuthoritySetSizeRange, ValueQuery>;
 
 	/// List of bidders that were not winners of the last auction, sorted from
 	/// highest to lowest bid.
@@ -118,8 +118,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An auction has a set of winners \[auction_index, winners\]
 		AuctionCompleted(Vec<T::ValidatorId>),
-		/// The active validator range upper limit has changed \[before, after\]
-		ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange),
+		/// The authority set size range has changed \[before, after\]
+		AuthoritySetSizeRangeChanged(AuthoritySetSizeRange, AuthoritySetSizeRange),
 	}
 
 	#[pallet::error]
@@ -138,7 +138,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ActiveValidatorRangeChanged](Event::ActiveValidatorRangeChanged)
+		/// - [AuthoritySetSizeRangeChanged](Event::AuthoritySetSizeRangeChanged)
 		///
 		/// ## Errors
 		///
@@ -146,18 +146,18 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
 		pub fn set_active_validator_range(
 			origin: OriginFor<T>,
-			range: ActiveValidatorRange,
+			range: AuthoritySetSizeRange,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let old = Self::set_active_range(range)?;
-			Self::deposit_event(Event::ActiveValidatorRangeChanged(old, range));
+			Self::deposit_event(Event::AuthoritySetSizeRangeChanged(old, range));
 			Ok(().into())
 		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub validator_size_range: ActiveValidatorRange,
+		pub validator_size_range: AuthoritySetSizeRange,
 	}
 
 	#[cfg(feature = "std")]
@@ -180,7 +180,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, Error<T>> {
+	fn set_active_range(range: AuthoritySetSizeRange) -> Result<AuthoritySetSizeRange, Error<T>> {
 		let (low, high) = range;
 		ensure!(high >= low && low >= T::MinValidators::get(), Error::<T>::InvalidRange);
 		let old = CurrentAuthoritySetSizeRange::<T>::get();

@@ -243,7 +243,7 @@ fn changing_range() {
 		// Confirm we have an event
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::AuctionPallet(crate::Event::ActiveValidatorRangeChanged(
+			mock::Event::AuctionPallet(crate::Event::AuthoritySetSizeRangeChanged(
 				(MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 				(2, 100)
 			)),
