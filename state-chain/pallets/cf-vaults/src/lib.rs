@@ -449,8 +449,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid ceremony id
 		InvalidCeremonyId,
-		/// We have an empty validator set
-		EmptyValidatorSet,
+		/// We have an empty authority set
+		EmptyAuthoritySet,
 		/// The rotation has not been confirmed
 		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
@@ -461,7 +461,7 @@ pub mod pallet {
 		InvalidPublicKey,
 		/// A rotation for the requested ChainId is already underway.
 		DuplicateRotationRequest,
-		/// A validator sent a response for a ceremony in which they weren't involved, or to which
+		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
 	}
@@ -669,7 +669,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
 		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
+		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyAuthoritySet);
 		ensure!(
 			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
 			Error::<T, I>::DuplicateRotationRequest
