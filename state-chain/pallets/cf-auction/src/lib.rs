@@ -85,10 +85,10 @@ pub mod pallet {
 		}
 	}
 
-	/// Size range for number of validators we want in our validating set
+	/// Size range for number of authorities we want in our authority set
 	#[pallet::storage]
-	#[pallet::getter(fn active_validator_size_range)]
-	pub(super) type ActiveValidatorSizeRange<T: Config> =
+	#[pallet::getter(fn current_authority_set_size_range)]
+	pub(super) type CurrentAuthoritySetSizeRange<T: Config> =
 		StorageValue<_, ActiveValidatorRange, ValueQuery>;
 
 	/// List of bidders that were not winners of the last auction, sorted from
@@ -183,9 +183,9 @@ impl<T: Config> Pallet<T> {
 	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, Error<T>> {
 		let (low, high) = range;
 		ensure!(high >= low && low >= T::MinValidators::get(), Error::<T>::InvalidRange);
-		let old = ActiveValidatorSizeRange::<T>::get();
+		let old = CurrentAuthoritySetSizeRange::<T>::get();
 		if old != range {
-			ActiveValidatorSizeRange::<T>::put(range);
+			CurrentAuthoritySetSizeRange::<T>::put(range);
 		}
 		Ok(old)
 	}
@@ -208,7 +208,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 		let number_of_bidders = bids.len() as u32;
 		let (min_number_of_validators, max_number_of_validators) =
-			ActiveValidatorSizeRange::<T>::get();
+			CurrentAuthoritySetSizeRange::<T>::get();
 		// Final rule - Confirm we have our set size
 		ensure!(number_of_bidders >= min_number_of_validators, {
 			log::error!(
