@@ -98,17 +98,17 @@ pub mod pallet {
 	pub(super) type RemainingBidders<T: Config> =
 		StorageValue<_, Vec<RemainingBid<T::ValidatorId, T::Amount>>, ValueQuery>;
 
-	/// A size calculated for our backup validator group
+	/// A size calculated for our backup node group
 	#[pallet::storage]
 	#[pallet::getter(fn backup_group_size)]
 	pub(super) type BackupGroupSize<T: Config> = StorageValue<_, u32, ValueQuery>;
 
-	/// The lowest backup validator bid
+	/// The lowest backup node bid
 	#[pallet::storage]
-	#[pallet::getter(fn lowest_backup_validator_bid)]
-	pub(super) type LowestBackupValidatorBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+	#[pallet::getter(fn lowest_backup_node_bid)]
+	pub(super) type LowestBackupNodeBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
-	/// The highest passive validator bid
+	/// The highest passive node bid
 	#[pallet::storage]
 	#[pallet::getter(fn highest_passive_node_bid)]
 	pub(super) type HighestPassiveNodeBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
@@ -285,7 +285,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		let highest_passive_node_bid = Self::highest_bid(&passive_nodes);
 
 		// TODO: Look into removing these, we should only need to set this in one place
-		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
+		LowestBackupNodeBid::<T>::put(lowest_backup_validator_bid);
 		HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
 
 		for (validator_id, _amount) in backup_validators {
@@ -350,7 +350,7 @@ impl<T: Config> Pallet<T> {
 			let highest_passive_node_bid =
 				Self::highest_bid(&Self::current_passive_nodes(remaining_bidders));
 
-			LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
+			LowestBackupNodeBid::<T>::put(lowest_backup_validator_bid);
 			HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);
 			RemainingBidders::<T>::put(remaining_bidders);
 		}
@@ -406,7 +406,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 
 		match T::ChainflipAccount::get(&(validator_id.clone().into())).state {
 			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
-				if amount > LowestBackupValidatorBid::<T>::get() =>
+				if amount > LowestBackupNodeBid::<T>::get() =>
 			{
 				let remaining_bidders = &mut RemainingBidders::<T>::get();
 				// Update bid for bidder and state
@@ -430,14 +430,14 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 				);
 			},
 			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
-				if amount != LowestBackupValidatorBid::<T>::get() =>
+				if amount != LowestBackupNodeBid::<T>::get() =>
 			{
 				let remaining_bidders = &mut RemainingBidders::<T>::get();
 				Pallet::<T>::update_stake_for_bidder(
 					remaining_bidders,
 					(validator_id.clone(), amount),
 				);
-				if amount < LowestBackupValidatorBid::<T>::get() {
+				if amount < LowestBackupNodeBid::<T>::get() {
 					Pallet::<T>::set_validator_state_and_adjust_at_boundary(
 						validator_id,
 						BackupOrPassive::Backup,

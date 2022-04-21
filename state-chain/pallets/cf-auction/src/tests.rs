@@ -119,14 +119,13 @@ fn should_promote_passive_node_if_stake_qualifies_for_backup() {
 		let backup_validators = current_backup_validators();
 		let passive_nodes = current_passive_nodes();
 
-		let (bottom_backup_validator, lowest_backup_validator_bid) =
-			backup_validators.last().unwrap();
+		let (bottom_backup_validator, lowest_backup_node_bid) = backup_validators.last().unwrap();
 		let (top_passive_node, highest_passive_node_bid) = passive_nodes.first().unwrap();
 
-		assert_eq!(*lowest_backup_validator_bid, AuctionPallet::lowest_backup_validator_bid());
+		assert_eq!(*lowest_backup_node_bid, AuctionPallet::lowest_backup_node_bid());
 
 		assert_eq!(*highest_passive_node_bid, AuctionPallet::highest_passive_node_bid());
-		let new_bid = lowest_backup_validator_bid + 1;
+		let new_bid = lowest_backup_node_bid + 1;
 
 		// Promote a passive node to the backup set
 		HandleStakes::<Test>::stake_updated(top_passive_node, new_bid);
@@ -144,10 +143,10 @@ fn should_promote_passive_node_if_stake_qualifies_for_backup() {
 
 		assert_eq!(
 			*new_top_of_the_passive_nodes,
-			(*bottom_backup_validator, *lowest_backup_validator_bid)
+			(*bottom_backup_validator, *lowest_backup_node_bid)
 		);
 
-		assert_eq!(AuctionPallet::lowest_backup_validator_bid(), new_bid);
+		assert_eq!(AuctionPallet::lowest_backup_node_bid(), new_bid);
 	});
 }
 
@@ -177,7 +176,7 @@ fn should_demote_backup_validator_on_poor_stake() {
 }
 
 #[test]
-fn should_establish_a_new_lowest_backup_validator_bid() {
+fn should_establish_a_new_lowest_backup_node_bid() {
 	new_test_ext().execute_with(|| {
 		generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
 		AuctionPallet::resolve_auction().expect("the auction should run");
@@ -187,13 +186,13 @@ fn should_establish_a_new_lowest_backup_validator_bid() {
 		// validator would not change
 		let backup_validators = current_backup_validators();
 
-		let new_bid = AuctionPallet::lowest_backup_validator_bid() - 1;
+		let new_bid = AuctionPallet::lowest_backup_node_bid() - 1;
 		// Take the top and update bid to one less than the lowest bid. e.g.
 		let (top_backup_validator_id, _) = backup_validators.first().unwrap();
 		HandleStakes::<Test>::stake_updated(top_backup_validator_id, new_bid);
 
 		assert_eq!(
-			AuctionPallet::lowest_backup_validator_bid(),
+			AuctionPallet::lowest_backup_node_bid(),
 			new_bid,
 			"the new lower bid is now the lowest bid for the backup validator group"
 		);
