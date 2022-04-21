@@ -593,6 +593,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     extrinsic,
                     tx_hash
                 );
+                assert_eq!(
+                    tx_hash, expected_hash,
+                    "tx_hash returned from RPC does not match expected hash"
+                );
                 Ok(tx_hash)
             }
             Err(rpc_err) => {
