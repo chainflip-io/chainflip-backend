@@ -22,9 +22,9 @@ use keygen::{
         VerifyComplaints5,
     },
     keygen_frost::{
-        derive_aggregate_pubkey, derive_local_pubkeys_for_parties, generate_shares_and_commitment,
-        validate_commitments, verify_share, DKGCommitment, DKGUnverifiedCommitment, IncomingShares,
-        OutgoingShares,
+        check_high_degree_commitments, derive_aggregate_pubkey, derive_local_pubkeys_for_parties,
+        generate_shares_and_commitment, validate_commitments, verify_share, DKGCommitment,
+        DKGUnverifiedCommitment, IncomingShares, OutgoingShares,
     },
 };
 
@@ -451,10 +451,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
 
         if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
             // if all complaints are empty, we can finalize the ceremony
-            let keygen_result_info =
-                compute_keygen_result_info(self.common, self.shares, &self.commitments);
-
-            return StageResult::Done(keygen_result_info);
+            return detail::finalize_keygen(self.common, self.shares, &self.commitments);
         };
 
         // Some complaints have been issued, entering the blaming stage
@@ -501,39 +498,66 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
     }
 }
 
-fn compute_keygen_result_info(
-    common: CeremonyCommon,
-    secret_shares: IncomingShares,
-    commitments: &BTreeMap<usize, DKGCommitment>,
-) -> KeygenResultInfo {
-    let share_count = common.all_idxs.len();
+mod detail {
 
-    let key_share = secret_shares
-        .0
-        .values()
-        .into_iter()
-        .map(|share| share.value.clone())
-        .sum();
+    use super::*;
 
-    // The shares are no longer needed so we zeroize them
-    drop(secret_shares);
+    pub fn finalize_keygen<KeygenData>(
+        common: CeremonyCommon,
+        secret_shares: IncomingShares,
+        commitments: &BTreeMap<usize, DKGCommitment>,
+    ) -> StageResult<KeygenData, KeygenResultInfo> {
+        // Sanity check (failing this should not be possible due to the
+        // hash commitment stage at the beginning of the ceremony)
+        if check_high_degree_commitments(commitments) {
+            return StageResult::Error(
+                Default::default(),
+                anyhow::Error::msg("High degree coefficient is zero"),
+            );
+        }
 
-    let agg_pubkey = derive_aggregate_pubkey(commitments);
+        StageResult::Done(compute_keygen_result_info(
+            common,
+            secret_shares,
+            commitments,
+        ))
+    }
 
-    let params = ThresholdParameters::from_share_count(share_count);
+    /// This is intentionally private to ensure it is not called
+    /// without additional checks in finalize keygen
+    fn compute_keygen_result_info(
+        common: CeremonyCommon,
+        secret_shares: IncomingShares,
+        commitments: &BTreeMap<usize, DKGCommitment>,
+    ) -> KeygenResultInfo {
+        let share_count = common.all_idxs.len();
 
-    let party_public_keys = derive_local_pubkeys_for_parties(params, commitments);
+        let key_share = secret_shares
+            .0
+            .values()
+            .map(|share| share.value.clone())
+            .sum();
 
-    KeygenResultInfo {
-        params: ThresholdParameters::from_share_count(party_public_keys.len()),
-        key: Arc::new(KeygenResult {
-            key_share: KeyShare {
-                y: agg_pubkey,
-                x_i: key_share,
-            },
-            party_public_keys,
-        }),
-        validator_map: common.validator_mapping,
+        // The shares are no longer needed so we zeroize them
+        drop(secret_shares);
+
+        let agg_pubkey = derive_aggregate_pubkey(commitments);
+
+        let params = ThresholdParameters::from_share_count(share_count);
+
+        let party_public_keys = derive_local_pubkeys_for_parties(params, commitments);
+
+        KeygenResultInfo {
+            params: ThresholdParameters::from_share_count(party_public_keys.len()),
+            key: Arc::new(KeygenResult {
+                key_share: KeyShare {
+                    y: agg_pubkey,
+                    x_i: key_share,
+                },
+                party_public_keys,
+            }),
+            validator_map: common.validator_mapping,
+        }
     }
 }
 
@@ -724,10 +748,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
                     self.shares.0.insert(sender_idx, share);
                 }
 
-                let keygen_result_info =
-                    compute_keygen_result_info(self.common, self.shares, &self.commitments);
-
-                StageResult::Done(keygen_result_info)
+                detail::finalize_keygen(self.common, self.shares, &self.commitments)
             }
             Err(bad_parties) => StageResult::Error(
                 bad_parties,
