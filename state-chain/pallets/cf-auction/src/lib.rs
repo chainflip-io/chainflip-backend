@@ -143,8 +143,8 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidRange](Error::InvalidRange)
-		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
-		pub fn set_active_validator_range(
+		#[pallet::weight(T::WeightInfo::set_current_authority_set_size_range())]
+		pub fn set_current_authority_set_size_range(
 			origin: OriginFor<T>,
 			range: AuthoritySetSizeRange,
 		) -> DispatchResultWithPostInfo {
@@ -157,7 +157,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub validator_size_range: AuthoritySetSizeRange,
+		pub authority_set_size_range: AuthoritySetSizeRange,
 	}
 
 	#[cfg(feature = "std")]
@@ -165,7 +165,7 @@ pub mod pallet {
 		fn default() -> Self {
 			use sp_runtime::traits::Zero;
 
-			Self { validator_size_range: (Zero::zero(), Zero::zero()) }
+			Self { authority_set_size_range: (Zero::zero(), Zero::zero()) }
 		}
 	}
 
@@ -173,7 +173,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			Pallet::<T>::set_active_range(self.validator_size_range)
+			Pallet::<T>::set_active_range(self.authority_set_size_range)
 				.expect("we should be able to set the range of the active set");
 		}
 	}

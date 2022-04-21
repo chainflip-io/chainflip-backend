@@ -177,7 +177,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		auction_pallet: AuctionPalletConfig {
-			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
+			authority_set_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 		},
 	};
 

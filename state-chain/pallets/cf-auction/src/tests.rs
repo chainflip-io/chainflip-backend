@@ -230,15 +230,15 @@ fn changing_range() {
 		assert_eq!(<Test as Config>::MinValidators::get(), MIN_VALIDATOR_SIZE);
 		// Check we are throwing up an error when we send anything less than the minimum of 1
 		assert_noop!(
-			AuctionPallet::set_active_validator_range(Origin::root(), (0, 0)),
+			AuctionPallet::set_current_authority_set_size_range(Origin::root(), (0, 0)),
 			Error::<Test>::InvalidRange
 		);
 		assert_noop!(
-			AuctionPallet::set_active_validator_range(Origin::root(), (0, 1)),
+			AuctionPallet::set_current_authority_set_size_range(Origin::root(), (0, 1)),
 			Error::<Test>::InvalidRange
 		);
 		// This should now work
-		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
+		assert_ok!(AuctionPallet::set_current_authority_set_size_range(Origin::root(), (2, 100)));
 		// Confirm we have an event
 		assert_eq!(
 			last_event::<Test>(),
@@ -247,8 +247,8 @@ fn changing_range() {
 				(2, 100)
 			)),
 		);
-		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
-		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (3, 3)));
+		assert_ok!(AuctionPallet::set_current_authority_set_size_range(Origin::root(), (2, 100)));
+		assert_ok!(AuctionPallet::set_current_authority_set_size_range(Origin::root(), (3, 3)));
 	});
 }
 

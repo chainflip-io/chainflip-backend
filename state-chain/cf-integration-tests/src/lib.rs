@@ -572,7 +572,7 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_auction::GenesisConfig {
-					validator_size_range: (self.min_validators, self.max_validators),
+					authority_set_size_range: (self.min_validators, self.max_validators),
 				},
 				storage,
 			)
@@ -1601,9 +1601,10 @@ mod tests {
 					assert!(current_validators.contains(init_passive_node_2));
 
 					// Increase the active set size to simulate an decrease of the MAB
-					assert_ok!(
-						Auction::set_active_validator_range(RawOrigin::Root.into(), (4, 5),)
-					);
+					assert_ok!(Auction::set_current_authority_set_size_range(
+						RawOrigin::Root.into(),
+						(4, 5),
+					));
 
 					// give the genesis nodes some extra stake (bringing their stake to 6
 					testnet.stake_manager_contract.stake(
