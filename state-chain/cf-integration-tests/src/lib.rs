@@ -496,8 +496,8 @@ mod tests {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
-		max_validators: u32,
-		min_validators: u32,
+		max_authorities: u32,
+		min_authorities: u32,
 	}
 
 	impl Default for ExtBuilder {
@@ -506,8 +506,8 @@ mod tests {
 				accounts: vec![],
 				root: AccountId::default(),
 				blocks_per_epoch: Zero::zero(),
-				max_validators: MAX_VALIDATORS,
-				min_validators: 1,
+				max_authorities: MAX_AUTHORITIES,
+				min_authorities: 1,
 			}
 		}
 	}
@@ -528,13 +528,13 @@ mod tests {
 			self
 		}
 
-		fn max_validators(mut self, max_validators: u32) -> Self {
-			self.max_validators = max_validators;
+		fn min_authorities(mut self, min_authorities: u32) -> Self {
+			self.min_authorities = min_authorities;
 			self
 		}
 
-		fn min_validators(mut self, min_validators: u32) -> Self {
-			self.min_validators = min_validators;
+		fn max_authorities(mut self, max_authorities: u32) -> Self {
+			self.max_authorities = max_authorities;
 			self
 		}
 
@@ -572,7 +572,7 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_auction::GenesisConfig {
-					authority_set_size_range: (self.min_validators, self.max_validators),
+					authority_set_size_range: (self.min_authorities, self.max_authorities),
 				},
 				storage,
 			)
@@ -657,20 +657,20 @@ mod tests {
 		#[test]
 		// The following state is to be expected at genesis
 		// - Total issuance
-		// - The genesis validators are all staked equally
-		// - The minimum active bid is set at the stake for a genesis validator
-		// - The genesis validators are available via validator_lookup()
-		// - The genesis validators are in the session
-		// - The genesis validators are considered offline for this heartbeat interval
+		// - The genesis authorities are all staked equally
+		// - The minimum active bid is set at the stake for a genesis authority
+		// - The genesis authorities are available via authority_lookup()
+		// - The genesis authorities are in the session
+		// - The genesis authorities are considered offline for this heartbeat interval
 		// - No emissions have been made
 		// - No rewards have been distributed
 		// - No vault rotation has occurred
 		// - Relevant nonce are at 0
 		// - Governance has its member
 		// - There have been no proposals
-		// - Emission inflation for both validators and backup validators are set
+		// - Emission inflation for both authorities and backup authorities are set
 		// - No one has reputation
-		// - The genesis validators have last active epoch set
+		// - The genesis authorities have last active epoch set
 		fn state_of_genesis_is_as_expected() {
 			default().build().execute_with(|| {
 				// Confirmation that we have our assumed state at block 1
@@ -694,7 +694,7 @@ mod tests {
 				assert_eq!(Validator::bond(), GENESIS_BALANCE);
 				let mut authorities = Validator::authorities();
 				authorities.sort();
-				assert_eq!(authorities, accounts, "the validators are those expected at genesis");
+				assert_eq!(authorities, accounts, "the authorities are those expected at genesis");
 
 				assert_eq!(
 					Validator::epoch_number_of_blocks(),
@@ -734,20 +734,20 @@ mod tests {
 				assert_eq!(
 					Emissions::current_authority_emission_inflation(),
 					CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
-					"invalid emission inflation for validators"
+					"invalid emission inflation for authorities"
 				);
 
 				assert_eq!(
 					Emissions::backup_node_emission_inflation(),
 					BACKUP_NODE_EMISSION_INFLATION_BPS,
-					"invalid emission inflation for backup validators"
+					"invalid emission inflation for backup authorities"
 				);
 
 				for account in accounts.iter() {
 					assert_eq!(
 						Reputation::reputation(account),
 						pallet_cf_reputation::ReputationTracker::<Runtime>::default(),
-						"validator shouldn't have reputation points"
+						"authority shouldn't have reputation points"
 					);
 				}
 
@@ -793,7 +793,7 @@ mod tests {
 					(AccountId::from([0xfc; 32]), GENESIS_BALANCE),
 					(AccountId::from([0xfb; 32]), GENESIS_BALANCE),
 				])
-				.min_validators(5)
+				.min_authorities(5)
 				.build()
 				.execute_with(|| {
 					let mut nodes = Validator::current_validators();
@@ -861,7 +861,7 @@ mod tests {
 			const MAX_SET_SIZE: u32 = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_SET_SIZE)
+				.min_authorities(MAX_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					// Genesis nodes
@@ -1005,10 +1005,10 @@ mod tests {
 		// not claim when out of the period
 		fn cannot_claim_stake_out_of_claim_period() {
 			const EPOCH_BLOCKS: u32 = 100;
-			const MAX_VALIDATORS: u32 = 3;
+			const MAX_AUTHORITIES: u32 = 3;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_VALIDATORS)
+				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
 					let mut nodes = Validator::current_validators();
@@ -1156,18 +1156,18 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
-			const MAX_VALIDATORS: u32 = 10;
+			const MAX_AUTHORITIES: u32 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_VALIDATORS)
+				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					// Create MAX_VALIDATORS passive nodes and stake them above our genesis
+					// Create min_authorities passive nodes and stake them above our genesis
 					// validators The result will be our newly created nodes will be validators and
 					// the genesis validators will become backup validators
 					let mut genesis_validators = Validator::current_validators();
 					let (mut testnet, mut init_passive_nodes) =
-						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
+						network::Network::create(MAX_AUTHORITIES as u8, &genesis_validators);
 
 					// An initial stake which is greater than the genesis stakes
 					// We intend for these initially passive nodes to win the auction
@@ -1277,15 +1277,15 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
-			const MAX_VALIDATORS: u32 = 10;
+			const MAX_AUTHORITIES: u32 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_VALIDATORS)
+				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
 					let mut nodes = Validator::current_validators();
 					let (mut testnet, mut passive_nodes) =
-						network::Network::create(MAX_VALIDATORS as u8, &nodes);
+						network::Network::create(MAX_AUTHORITIES as u8, &nodes);
 
 					for passive_node in passive_nodes.clone() {
 						network::Cli::activate_account(passive_node);
@@ -1323,7 +1323,7 @@ mod tests {
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
 					let percentage_top_offline = 100 - top as u32;
-					let number_offline = (MAX_VALIDATORS * percentage_top_offline / 100) as usize;
+					let number_offline = (MAX_AUTHORITIES * percentage_top_offline / 100) as usize;
 
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
@@ -1425,7 +1425,7 @@ mod tests {
 					(AccountId::from(BOB), GENESIS_BALANCE),
 					(AccountId::from(CHARLIE), GENESIS_BALANCE),
 				])
-				.max_validators(ACTIVE_SET_SIZE)
+				.max_authorities(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
@@ -1535,7 +1535,7 @@ mod tests {
 					(AccountId::from(BOB), GENESIS_BALANCE),
 					(AccountId::from(CHARLIE), GENESIS_BALANCE),
 				])
-				.max_validators(ACTIVE_SET_SIZE)
+				.max_authorities(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					assert_eq!(

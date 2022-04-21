@@ -91,6 +91,7 @@ pub trait EpochInfo {
 	/// The last expired epoch
 	fn last_expired_epoch() -> EpochIndex;
 
+	// TODO: Name
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
 

@@ -9,7 +9,7 @@ pub mod common {
 		TOKEN_ISSUANCE * TOKEN_FRACTIONS
 	};
 
-	pub const MAX_VALIDATORS: u32 = 150;
+	pub const MAX_AUTHORITIES: u32 = 150;
 	// Number of blocks to be online to accrue a point
 	pub const ACCRUAL_BLOCKS: u32 = 2500;
 	// Number of accrual points
