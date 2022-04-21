@@ -1200,17 +1200,17 @@ mod tests {
 					);
 
 					// assert list of validators as being the new nodes
-					let mut current_validators: Vec<NodeId> = Validator::current_authorities();
+					let mut current_authorities: Vec<NodeId> = Validator::current_authorities();
 
-					current_validators.sort();
+					current_authorities.sort();
 					init_passive_nodes.sort();
 
 					assert_eq!(
-						init_passive_nodes, current_validators,
+						init_passive_nodes, current_authorities,
 						"our new initial passive nodes should be the new validators"
 					);
 
-					current_validators.iter().for_each(|account_id| {
+					current_authorities.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						assert_eq!(account_data.state, ChainflipAccountState::CurrentAuthority);
 						// we were active in teh first epoch
@@ -1429,13 +1429,13 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
-					let current_validators = Validator::current_authorities();
+					let current_authorities = Validator::current_authorities();
 					let (mut testnet, passive_nodes) =
-						network::Network::create(2, &current_validators);
+						network::Network::create(2, &current_authorities);
 					// Define 5 nodes
-					let genesis_node_1 = current_validators.get(0).unwrap();
-					let genesis_node_2 = current_validators.get(1).unwrap();
-					let genesis_node_3 = current_validators.get(2).unwrap();
+					let genesis_node_1 = current_authorities.get(0).unwrap();
+					let genesis_node_2 = current_authorities.get(1).unwrap();
+					let genesis_node_3 = current_authorities.get(2).unwrap();
 					let init_passive_node_1 = passive_nodes.get(0).unwrap();
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
@@ -1469,12 +1469,12 @@ mod tests {
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
 
-					let current_validators = Validator::current_authorities();
+					let current_authorities = Validator::current_authorities();
 					// Expect the genesis nodes in the active set, and only them
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(genesis_node_2));
-					assert!(current_validators.contains(genesis_node_3));
-					assert_eq!(current_validators.len(), 3);
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(genesis_node_2));
+					assert!(current_authorities.contains(genesis_node_3));
+					assert_eq!(current_authorities.len(), 3);
 
 					// Stake the passive nodes
 					testnet.stake_manager_contract.stake(
@@ -1495,11 +1495,11 @@ mod tests {
 					// 110 the 3rd highest genesis node has a stake of 100 (99 + 1)
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
 
-					let current_validators = Validator::current_authorities();
+					let current_authorities = Validator::current_authorities();
 					// Expect 1, 4 and 5 in the active set
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(init_passive_node_1));
-					assert!(current_validators.contains(init_passive_node_2));
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(init_passive_node_1));
+					assert!(current_authorities.contains(init_passive_node_2));
 
 					// Check activity in epochs
 					ensure_epoch_activity(genesis_node_1, vec![2, 3]);
@@ -1538,19 +1538,15 @@ mod tests {
 				.max_authorities(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					assert_eq!(
-						GENESIS_EPOCH,
-						Validator::epoch_index(),
-						"We should be in the first epoch"
-					);
-					let current_validators = &Validator::current_authorities();
+					assert_eq!(GENESIS_EPOCH, Validator::epoch_index(), "We should be in the first epoch");
+					let current_authorities = &Validator::current_authorities();
 					let (mut testnet, passive_nodes) =
-						network::Network::create(2, current_validators);
+						network::Network::create(2, current_authorities);
 
 					// Define 5 nodes
-					let genesis_node_1 = current_validators.get(0).unwrap();
-					let genesis_node_2 = current_validators.get(1).unwrap();
-					let genesis_node_3 = current_validators.get(2).unwrap();
+					let genesis_node_1 = current_authorities.get(0).unwrap();
+					let genesis_node_2 = current_authorities.get(1).unwrap();
+					let genesis_node_3 = current_authorities.get(2).unwrap();
 					let init_passive_node_1 = passive_nodes.get(0).unwrap();
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
@@ -1594,11 +1590,11 @@ mod tests {
 
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
-					let current_validators = Validator::current_authorities();
+					let current_authorities = Validator::current_authorities();
 					// Expect the staked nodes to be in the active set
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(init_passive_node_1));
-					assert!(current_validators.contains(init_passive_node_2));
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(init_passive_node_1));
+					assert!(current_authorities.contains(init_passive_node_2));
 
 					// Increase the active set size to simulate an decrease of the MAB
 					assert_ok!(Auction::set_current_authority_set_size_range(
@@ -1623,13 +1619,13 @@ mod tests {
 					// Bond has decreased from 31 to 6
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
 
-					let current_validators = Validator::current_authorities();
+					let current_authorities = Validator::current_authorities();
 					// Expect all nodes to be in the active set
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(genesis_node_2));
-					assert!(current_validators.contains(genesis_node_3));
-					assert!(current_validators.contains(init_passive_node_1));
-					assert!(current_validators.contains(init_passive_node_2));
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(genesis_node_2));
+					assert!(current_authorities.contains(genesis_node_3));
+					assert!(current_authorities.contains(init_passive_node_1));
+					assert!(current_authorities.contains(init_passive_node_2));
 
 					// Expect Node 1, 2 and 3 to be active in 2 epochs
 					ensure_epoch_activity(genesis_node_1, vec![2, 3]);
