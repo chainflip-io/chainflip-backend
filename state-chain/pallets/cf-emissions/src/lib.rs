@@ -208,13 +208,14 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ValidatorInflationEmissionsUpdated](Event::ValidatorInflationEmissionsUpdated)
+		/// - [CurrentAuthorityInflationEmissionsUpdated](Event::
+		///   CurrentAuthorityInflationEmissionsUpdated)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_validator_emission_inflation())]
-		pub fn update_validator_emission_inflation(
+		#[pallet::weight(T::WeightInfo::update_current_authority_emission_inflation())]
+		pub fn update_current_authority_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
@@ -224,18 +225,17 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Updates the emission rate to Backup Validators.
+		/// Updates the emission rate to Backup nodes.
 		///
 		/// ## Events
 		///
-		/// - [BackupValidatorInflationEmissionsUpdated](Event::
-		///   BackupValidatorInflationEmissionsUpdated)
+		/// - [BackupNodeInflationEmissionsUpdated](Event:: BackupNodeInflationEmissionsUpdated)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_backup_validator_emission_inflation())]
-		pub fn update_backup_validator_emission_inflation(
+		#[pallet::weight(T::WeightInfo::update_backup_node_emission_inflation())]
+		pub fn update_backup_node_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {

@@ -10,13 +10,13 @@ use frame_system::RawOrigin;
 const MINT_INTERVAL: u32 = 100;
 
 benchmarks! {
-	// Benchmark for the backup validator extrinsic
-	update_backup_validator_emission_inflation {
+	// Benchmark for the backup node emission inflation update extrinsic
+	update_backup_node_emission_inflation {
 	}: _(RawOrigin::Root, 100u32.into())
 	verify {
 		assert_eq!(CurrentAuthorityEmissionInflation::<T>::get(), 1000);
 	}
-	update_validator_emission_inflation {
+	update_current_authority_emission_inflation {
 	}: _(RawOrigin::Root, (100 as u32).into())
 	verify {
 		assert_eq!(BackupNodeEmissionInflation::<T>::get(), 100);

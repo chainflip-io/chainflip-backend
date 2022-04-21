@@ -28,8 +28,8 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_emissions.
 pub trait WeightInfo {
-	fn update_backup_validator_emission_inflation() -> Weight;
-	fn update_validator_emission_inflation() -> Weight;
+	fn update_backup_node_emission_inflation() -> Weight;
+	fn update_current_authority_emission_inflation() -> Weight;
 	fn no_rewards_minted() -> Weight;
 	fn rewards_minted() -> Weight;
 	fn update_mint_interval() -> Weight;
@@ -40,14 +40,14 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_emissions using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: Emissions BackupValidatorEmissionInflation (r:0 w:1)
-	fn update_backup_validator_emission_inflation() -> Weight {
+	// Storage: Emissions BackupNodeEmissionInflation (r:0 w:1)
+	fn update_backup_node_emission_inflation() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(22_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Emissions ValidatorEmissionInflation (r:0 w:1)
-	fn update_validator_emission_inflation() -> Weight {
+	// Storage: Emissions CurrentAuthorityEmissionInflation (r:0 w:1)
+	fn update_current_authority_emission_inflation() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(19_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -103,14 +103,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: Emissions BackupValidatorEmissionInflation (r:0 w:1)
-	fn update_backup_validator_emission_inflation() -> Weight {
+	// Storage: Emissions BackupNodeEmissionInflation (r:0 w:1)
+	fn update_backup_node_emission_inflation() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(22_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Emissions ValidatorEmissionInflation (r:0 w:1)
-	fn update_validator_emission_inflation() -> Weight {
+	// Storage: Emissions CurrentAuthorityEmissionInflation (r:0 w:1)
+	fn update_current_authority_emission_inflation() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(19_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
