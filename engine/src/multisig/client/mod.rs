@@ -272,7 +272,7 @@ where
     // Once the async function returns it has sent the request to the CeremonyManager/Backend
     // and outputs a second future that will complete only once the CeremonyManager has finished
     // the ceremony. This allows tests to split making the request and waiting for the result.
-    pub async fn initiate_signing(
+    pub fn initiate_signing(
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
@@ -427,7 +427,6 @@ impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyD
         data: MessageHash,
     ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)> {
         self.initiate_signing(ceremony_id, key_id, signers, data)
-            .await
             .await
     }
 }

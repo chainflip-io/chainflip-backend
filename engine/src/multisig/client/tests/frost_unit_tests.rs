@@ -232,14 +232,12 @@ async fn should_ignore_rts_for_unknown_key() {
     );
 
     // Send Sign Request
-    let signing_request_fut = client
-        .initiate_signing(
-            DEFAULT_SIGNING_CEREMONY_ID,
-            key_id,
-            ACCOUNT_IDS.to_vec(),
-            MessageHash([0; 32]),
-        )
-        .await;
+    let signing_request_fut = client.initiate_signing(
+        DEFAULT_SIGNING_CEREMONY_ID,
+        key_id,
+        ACCOUNT_IDS.to_vec(),
+        MessageHash([0; 32]),
+    );
 
     // Check sign request completes after signature is provided
     let error = assert_err!(assert_future_can_complete(signing_request_fut));
