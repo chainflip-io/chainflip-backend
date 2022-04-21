@@ -56,9 +56,9 @@ pub mod pallet {
 		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
 		/// Key generation exclusion set
 		type KeygenExclusionSet: Get<BTreeSet<Self::ValidatorId>>;
-		/// Minimum amount of validators
+		/// Minimum number of authorities required
 		#[pallet::constant]
-		type MinValidators: Get<u32>;
+		type MinAuthorities: Get<u32>;
 		/// Ratio of current authorities to backups
 		#[pallet::constant]
 		type AuthorityToBackupRatio: Get<u32>;
@@ -182,7 +182,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn set_active_range(range: AuthoritySetSizeRange) -> Result<AuthoritySetSizeRange, Error<T>> {
 		let (low, high) = range;
-		ensure!(high >= low && low >= T::MinValidators::get(), Error::<T>::InvalidRange);
+		ensure!(high >= low && low >= T::MinAuthorities::get(), Error::<T>::InvalidRange);
 		let old = CurrentAuthoritySetSizeRange::<T>::get();
 		if old != range {
 			CurrentAuthoritySetSizeRange::<T>::put(range);

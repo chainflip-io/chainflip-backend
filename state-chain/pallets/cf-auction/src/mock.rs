@@ -24,9 +24,9 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
-pub const MIN_VALIDATOR_SIZE: u32 = 1;
-pub const MAX_VALIDATOR_SIZE: u32 = 3;
-pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
+pub const MIN_AUTHORITY_SIZE: u32 = 1;
+pub const MAX_AUTHORITY_SIZE: u32 = 3;
+pub const BACKUP_NODE_RATIO: u32 = 3;
 pub const NUMBER_OF_BIDDERS: u32 = 9;
 pub const BIDDER_GROUP_A: u32 = 1;
 pub const BIDDER_GROUP_B: u32 = 2;
@@ -55,7 +55,7 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 // The set we would expect
 pub fn expected_winning_set() -> (Vec<ValidatorId>, Amount) {
 	let mut bidders = MockBidderProvider::get_bidders();
-	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
+	bidders.truncate(MAX_AUTHORITY_SIZE as usize);
 	(bidders.iter().map(|(validator_id, _)| *validator_id).collect(), bidders.last().unwrap().1)
 }
 
@@ -101,8 +101,8 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
-	pub const BackupValidatorRatio: u32 = BACKUP_VALIDATOR_RATIO;
+	pub const MinAuthorities: u32 = MIN_AUTHORITY_SIZE;
+	pub const BackupValidatorRatio: u32 = BACKUP_NODE_RATIO;
 	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
 }
 
@@ -144,7 +144,7 @@ impl Chainflip for Test {
 impl Config for Test {
 	type Event = Event;
 	type BidderProvider = MockBidderProvider;
-	type MinValidators = MinValidators;
+	type MinAuthorities = MinAuthorities;
 	type ChainflipAccount = MockChainflipAccount;
 	type AuthorityToBackupRatio = BackupValidatorRatio;
 	type KeygenExclusionSet = MockKeygenExclusion<Self>;
@@ -177,7 +177,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		auction_pallet: AuctionPalletConfig {
-			authority_set_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
+			authority_set_size_range: (MIN_AUTHORITY_SIZE, MAX_AUTHORITY_SIZE),
 		},
 	};
 

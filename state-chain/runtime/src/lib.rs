@@ -120,7 +120,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = 1;
+	pub const MinAuthorities: u32 = 1;
 	pub const AuthorityToBackupRatio: u32 = 3;
 	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
 }
@@ -128,7 +128,7 @@ parameter_types! {
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type MinValidators = MinValidators;
+	type MinAuthorities = MinAuthorities;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type ValidatorQualification = (

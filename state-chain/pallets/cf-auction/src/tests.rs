@@ -34,9 +34,9 @@ fn should_provide_winning_set() {
 }
 
 fn expected_group_sizes(number_of_bidders: u32) -> (u32, u32, u32) {
-	let expected_number_of_validators = min(MAX_VALIDATOR_SIZE, number_of_bidders);
+	let expected_number_of_validators = min(MAX_AUTHORITY_SIZE, number_of_bidders);
 	let expected_number_of_backup_validators = min(
-		expected_number_of_validators / BACKUP_VALIDATOR_RATIO,
+		expected_number_of_validators / BACKUP_NODE_RATIO,
 		number_of_bidders.saturating_sub(expected_number_of_validators),
 	);
 	let expected_number_of_passive_nodes = number_of_bidders
@@ -77,10 +77,10 @@ fn should_create_correct_size_of_groups() {
 
 		// Run a few auctions and validate groups
 		let numbers_of_auction_bidders = [
-			MAX_VALIDATOR_SIZE - 1,
-			MAX_VALIDATOR_SIZE + 1,
-			MAX_VALIDATOR_SIZE * 4 / 3,
-			MAX_VALIDATOR_SIZE + MAX_VALIDATOR_SIZE / BACKUP_VALIDATOR_RATIO + 1,
+			MAX_AUTHORITY_SIZE - 1,
+			MAX_AUTHORITY_SIZE + 1,
+			MAX_AUTHORITY_SIZE * 4 / 3,
+			MAX_AUTHORITY_SIZE + MAX_AUTHORITY_SIZE / BACKUP_NODE_RATIO + 1,
 		];
 		for number_of_bidders in numbers_of_auction_bidders.iter() {
 			generate_bids(*number_of_bidders, BIDDER_GROUP_A);
@@ -227,7 +227,7 @@ fn should_establish_a_highest_passive_node_bid() {
 fn changing_range() {
 	new_test_ext().execute_with(|| {
 		// Assert our minimum is set to 2
-		assert_eq!(<Test as Config>::MinValidators::get(), MIN_VALIDATOR_SIZE);
+		assert_eq!(<Test as Config>::MinAuthorities::get(), MIN_AUTHORITY_SIZE);
 		// Check we are throwing up an error when we send anything less than the minimum of 1
 		assert_noop!(
 			AuctionPallet::set_current_authority_set_size_range(Origin::root(), (0, 0)),
@@ -243,7 +243,7 @@ fn changing_range() {
 		assert_eq!(
 			last_event::<Test>(),
 			mock::Event::AuctionPallet(crate::Event::AuthoritySetSizeRangeChanged(
-				(MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
+				(MIN_AUTHORITY_SIZE, MAX_AUTHORITY_SIZE),
 				(2, 100)
 			)),
 		);
@@ -280,7 +280,7 @@ fn should_exclude_bad_validators_in_next_auction() {
 				.winners,
 			good_bidders
 				.iter()
-				.take(MAX_VALIDATOR_SIZE as usize)
+				.take(MAX_AUTHORITY_SIZE as usize)
 				.cloned()
 				.collect::<Vec<_>>(),
 		);
@@ -310,7 +310,7 @@ fn should_exclude_excluded_from_keygen_set() {
 				.winners,
 			good_bidders
 				.iter()
-				.take(MAX_VALIDATOR_SIZE as usize)
+				.take(MAX_AUTHORITY_SIZE as usize)
 				.cloned()
 				.collect::<Vec<_>>(),
 		);
