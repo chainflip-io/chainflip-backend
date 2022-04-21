@@ -68,6 +68,71 @@ fn call_on_threshold() {
 }
 
 #[test]
+fn no_double_call_on_epoch_boundary() {
+	new_test_ext().execute_with(|| {
+		let answer = 42;
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
+
+		// Only one vote, nothing should happen yet.
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(ALISSA),
+			call.clone(),
+			1,
+			Default::default()
+		));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
+		MockEpochInfo::next_epoch([ALISSA, BOBSON, CHARLEMAGNE].to_vec());
+		// Vote for the same call, this time in another epoch.
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(ALISSA),
+			call.clone(),
+			2,
+			Default::default()
+		));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
+
+		// Vote again, we should reach the threshold and dispatch the call.
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(BOBSON),
+			call.clone(),
+			1,
+			Default::default()
+		));
+		let dispatch_result =
+			if let Event::Witnesser(crate::Event::WitnessExecuted(_, dispatch_result)) =
+				pop_last_event()
+			{
+				assert_ok!(dispatch_result);
+				dispatch_result
+			} else {
+				panic!("Expected WitnessExecuted event!")
+			};
+
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
+
+		// Vote for the same call, this time in another epoch. Threshold for the same call should be
+		// reached but call shouldn't be dispatched again.
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(BOBSON),
+			call.clone(),
+			2,
+			Default::default()
+		));
+
+		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
+		assert_event_sequence::<Test>(vec![
+			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
+			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
+			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
+			crate::Event::ThresholdReached(call_hash, 2).into(),
+			dummy::Event::<Test>::ValueIncremented(answer).into(),
+			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
+			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
+		]);
+	});
+}
+
+#[test]
 fn cannot_double_witness() {
 	new_test_ext().execute_with(|| {
 		let answer = 42;
