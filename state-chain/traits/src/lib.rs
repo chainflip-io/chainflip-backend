@@ -15,7 +15,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
 	Hashable, Parameter,
 };
-use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, RuntimeDebug};
+use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, DispatchResult, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -678,4 +678,8 @@ pub trait CeremonyIdProvider {
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
 	fn missed_slots() -> Vec<u64>;
+}
+
+pub trait NetworkManager {
+	fn ensure_paused() -> DispatchResult;
 }

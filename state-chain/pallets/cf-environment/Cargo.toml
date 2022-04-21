@@ -13,6 +13,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+cf-traits = { path = '../../traits', default-features = false }
 serde = {optional = true, version = "1.0.126", features = ['derive']}
 
 # Parity deps
@@ -42,6 +43,12 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'merge-config-option'
 
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+optional = true
+tag = 'merge-config-option'
+
 [features]
 default = ['std']
 std = [
@@ -52,3 +59,10 @@ std = [
 	'serde',
 	'sp-std/std',
 ]
+runtime-benchmarks = [
+    'cf-traits/runtime-benchmarks',
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+]
+try-runtime = ['frame-support/try-runtime']

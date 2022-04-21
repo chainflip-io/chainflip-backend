@@ -216,6 +216,7 @@ runtime-benchmarks = [
   'pallet-cf-emissions/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
+  'pallet-cf-environment/runtime-benchmarks',
 ]
 std = [
   'frame-try-runtime/std',
@@ -272,4 +273,5 @@ try-runtime = [
   "pallet-cf-reputation/try-runtime",
   "pallet-cf-online/try-runtime",
   "pallet-cf-emissions/try-runtime",
+  "pallet-cf-environment/try-runtime",
 ]
