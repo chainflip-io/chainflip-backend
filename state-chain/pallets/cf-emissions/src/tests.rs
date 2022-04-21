@@ -92,7 +92,7 @@ fn should_calculate_block_emissions() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		// Block emissions are calculated at genesis.
 		assert!(Emissions::validator_emission_per_block() > 0);
-		assert!(Emissions::backup_validator_emission_per_block() > 0);
+		assert!(Emissions::backup_node_emission_per_block() > 0);
 	});
 }
 

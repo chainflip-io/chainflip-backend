@@ -119,10 +119,9 @@ pub mod pallet {
 	pub type ValidatorEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn backup_validator_emission_per_block)]
+	#[pallet::getter(fn backup_node_emission_per_block)]
 	/// The block number at which we last minted Flip.
-	pub type BackupValidatorEmissionPerBlock<T: Config> =
-		StorageValue<_, T::FlipBalance, ValueQuery>;
+	pub type BackupNodeEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn validator_emission_inflation)]
@@ -132,10 +131,10 @@ pub mod pallet {
 		StorageValue<_, BasisPoints, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn backup_validator_emission_inflation)]
+	#[pallet::getter(fn backup_node_emission_inflation)]
 	/// Annual inflation set aside for *backup* validators, expressed as basis points ie. hundredths
 	/// of a percent.
-	pub(super) type BackupValidatorEmissionInflation<T: Config> =
+	pub(super) type BackupNodeEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
 
 	#[pallet::storage]
@@ -152,7 +151,7 @@ pub mod pallet {
 		/// Validator inflation emission has been updated \[new\]
 		ValidatorInflationEmissionsUpdated(BasisPoints),
 		/// Backup Validator inflation emission has been updated \[new\]
-		BackupValidatorInflationEmissionsUpdated(BasisPoints),
+		BackupNodeInflationEmissionsUpdated(BasisPoints),
 		/// MintInterval has been updated [block_number]
 		MintIntervalUpdated(BlockNumberFor<T>),
 	}
@@ -241,8 +240,8 @@ pub mod pallet {
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			BackupValidatorEmissionInflation::<T>::set(inflation);
-			Self::deposit_event(Event::<T>::BackupValidatorInflationEmissionsUpdated(inflation));
+			BackupNodeEmissionInflation::<T>::set(inflation);
+			Self::deposit_event(Event::<T>::BackupNodeInflationEmissionsUpdated(inflation));
 			Ok(().into())
 		}
 
@@ -279,7 +278,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
-			BackupValidatorEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
+			BackupNodeEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
 			MintInterval::<T>::put(T::BlockNumber::from(100_u32));
 			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
@@ -355,7 +354,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	}
 
 	fn update_backup_validator_block_emission(emission: Self::Balance) {
-		BackupValidatorEmissionPerBlock::<T>::put(emission);
+		BackupNodeEmissionPerBlock::<T>::put(emission);
 	}
 
 	fn calculate_block_emissions() {
@@ -376,7 +375,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 		));
 
 		Self::update_backup_validator_block_emission(inflation_to_block_reward::<T>(
-			BackupValidatorEmissionInflation::<T>::get(),
+			BackupNodeEmissionInflation::<T>::get(),
 		));
 	}
 }

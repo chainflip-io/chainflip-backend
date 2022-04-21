@@ -738,7 +738,7 @@ mod tests {
 				);
 
 				assert_eq!(
-					Emissions::backup_validator_emission_inflation(),
+					Emissions::backup_node_emission_inflation(),
 					BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
 					"invalid emission inflation for backup validators"
 				);

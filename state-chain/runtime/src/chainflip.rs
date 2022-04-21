@@ -72,9 +72,9 @@ trait RewardDistribution {
 	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight;
 }
 
-struct BackupValidatorEmissions;
+struct BackupNodeEmissions;
 
-impl RewardDistribution for BackupValidatorEmissions {
+impl RewardDistribution for BackupNodeEmissions {
 	type EpochInfo = Validator;
 	type StakeTransfer = Flip;
 	type ValidatorId = AccountId;
@@ -90,7 +90,7 @@ impl RewardDistribution for BackupValidatorEmissions {
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
-		let emissions_cap = Emissions::backup_validator_emission_per_block() *
+		let emissions_cap = Emissions::backup_node_emission_per_block() *
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// Emissions for this heartbeat interval for the active set
@@ -156,7 +156,7 @@ impl Heartbeat for ChainflipHeartbeat {
 		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
 		let backup_validators = <Auction as BackupNodes>::backup_nodes();
-		BackupValidatorEmissions::distribute_rewards(&backup_validators);
+		BackupNodeEmissions::distribute_rewards(&backup_validators);
 
 		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request
