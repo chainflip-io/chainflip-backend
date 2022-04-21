@@ -24,8 +24,7 @@ fn pop_last_event() -> Event {
 #[test]
 fn call_on_threshold() {
 	new_test_ext().execute_with(|| {
-		let answer = 42;
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
@@ -43,11 +42,11 @@ fn call_on_threshold() {
 				panic!("Expected WitnessExecuted event!")
 			};
 
-		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		// Vote again, should count the vote but the call should not be dispatched again.
 		assert_ok!(Witnesser::witness(Origin::signed(CHARLEMAGNE), call.clone()));
-		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		// Check the deposited event to get the vote count.
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
@@ -60,7 +59,7 @@ fn call_on_threshold() {
 			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
 			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
 			crate::Event::ThresholdReached(call_hash, 2).into(),
-			dummy::Event::<Test>::ValueIncremented(answer).into(),
+			dummy::Event::<Test>::ValueIncremented(0u32).into(),
 			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
 			crate::Event::WitnessReceived(call_hash, CHARLEMAGNE, 3).into(),
 		]);
@@ -70,8 +69,7 @@ fn call_on_threshold() {
 #[test]
 fn no_double_call_on_epoch_boundary() {
 	new_test_ext().execute_with(|| {
-		let answer = 42;
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(
@@ -107,7 +105,7 @@ fn no_double_call_on_epoch_boundary() {
 			} else {
 				panic!("Expected WitnessExecuted event!")
 			};
-		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		// Vote for the same call, this time in another epoch. Threshold for the same call should be
 		// reached but call shouldn't be dispatched again.
@@ -117,7 +115,7 @@ fn no_double_call_on_epoch_boundary() {
 			2,
 			Default::default()
 		));
-		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
 		assert_event_sequence::<Test>(vec![
@@ -125,7 +123,7 @@ fn no_double_call_on_epoch_boundary() {
 			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
 			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
 			crate::Event::ThresholdReached(call_hash, 2).into(),
-			dummy::Event::<Test>::ValueIncremented(answer).into(),
+			dummy::Event::<Test>::ValueIncremented(0u32).into(),
 			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
 			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
 		]);
@@ -135,8 +133,7 @@ fn no_double_call_on_epoch_boundary() {
 #[test]
 fn cannot_double_witness() {
 	new_test_ext().execute_with(|| {
-		let answer = 42;
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
@@ -153,8 +150,7 @@ fn cannot_double_witness() {
 #[test]
 fn only_validators_can_witness() {
 	new_test_ext().execute_with(|| {
-		let answer = 42;
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(answer)));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// Validators can witness
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));

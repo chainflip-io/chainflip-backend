@@ -58,13 +58,13 @@ pub mod pallet {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn increment_value(origin: OriginFor<T>, amount: u32) -> DispatchResultWithPostInfo {
+		pub fn increment_value(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Update storage.
 			match <Something<T>>::get() {
-				// Set the value to the incoming amount if the storage is currently empty.
-				None => <Something<T>>::put(amount),
+				// Set the value to 0 if the storage is currently empty.
+				None => <Something<T>>::put(0u32),
 				Some(old) => {
 					// Increment the value read from storage; will error in the event of overflow.
 					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
@@ -73,6 +73,7 @@ pub mod pallet {
 				},
 			}
 
+			let amount = <Something<T>>::get().unwrap();
 			// Emit an event.
 			Self::deposit_event(Event::ValueIncremented(amount));
 			// Return a successful DispatchResultWithPostInfo
