@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_traits::NetworkManager;
+use cf_traits::NetworkStateInfo;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -149,9 +149,9 @@ pub mod pallet {
 	}
 }
 
-pub struct NetworkPaused<T>(PhantomData<T>);
+pub struct NetworkStateAccess<T>(PhantomData<T>);
 
-impl<T: Config> NetworkManager for NetworkPaused<T> {
+impl<T: Config> NetworkStateInfo for NetworkStateAccess<T> {
 	fn ensure_paused() -> frame_support::sp_runtime::DispatchResult {
 		match pallet::CurrentNetworkState::<T>::get() {
 			NetworkState::Paused => Err(Error::<T>::NetworkIsPaused)?,

@@ -421,7 +421,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Call = Call;
 	type Witnesser = Witnesser;
 	type WeightInfoWitnesser = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
-	type NetworkIsPaused = pallet_cf_environment::NetworkPaused<Runtime>;
+	type NetworkStateAccess = pallet_cf_environment::NetworkStateAccess<Runtime>;
 }
 
 parameter_types! {

@@ -12,7 +12,7 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::{ChainCrypto, Ethereum};
-	use cf_traits::{NetworkManager, Witnesser};
+	use cf_traits::{NetworkStateInfo, Witnesser};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
 	};
@@ -50,8 +50,8 @@ pub mod pallet {
 		/// Benchmark stuff
 		type WeightInfoWitnesser: pallet_cf_witnesser::WeightInfo;
 
-		/// The network manager
-		type NetworkIsPaused: NetworkManager;
+		/// Handles access to the network state.
+		type NetworkStateAccess: NetworkStateInfo;
 	}
 
 	#[pallet::pallet]
@@ -85,7 +85,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Check if the network is paused
-			T::NetworkIsPaused::ensure_paused()?;
+			T::NetworkStateAccess::ensure_paused()?;
 			let call =
 				BroadcastCall::<T, Instance1>::transmission_success(broadcast_attempt_id, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
@@ -114,7 +114,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Check if the network is paused
-			T::NetworkIsPaused::ensure_paused()?;
+			T::NetworkStateAccess::ensure_paused()?;
 			let call = BroadcastCall::<T, Instance1>::transmission_failure(
 				broadcast_attempt_id,
 				failure,
@@ -149,7 +149,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Check if the network is paused
-			T::NetworkIsPaused::ensure_paused()?;
+			T::NetworkStateAccess::ensure_paused()?;
 			let call = StakingCall::staked(staker_account_id, amount, withdrawal_address, tx_hash);
 			T::Witnesser::witness(who, call.into())
 		}
@@ -176,7 +176,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Check if the network is paused
-			T::NetworkIsPaused::ensure_paused()?;
+			T::NetworkStateAccess::ensure_paused()?;
 			let call = StakingCall::claimed(account_id, claimed_amount, tx_hash);
 			T::Witnesser::witness(who, call.into())
 		}
@@ -206,7 +206,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Check if the network is paused
-			T::NetworkIsPaused::ensure_paused()?;
+			T::NetworkStateAccess::ensure_paused()?;
 			let call = VaultsCall::<T, Instance1>::vault_key_rotated(
 				new_public_key,
 				block_number,

@@ -7,7 +7,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, key_provider::MockKeyProvider,
 	},
-	Chainflip, NetworkManager, NonceProvider,
+	Chainflip, NetworkStateInfo, NonceProvider,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types, traits::IsType};
@@ -170,9 +170,9 @@ impl From<pallet_cf_vaults::PalletOffence> for MockRuntimeOffence {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, MockRuntimeOffence>;
 
-pub struct MockIsNetworkPaused;
+pub struct MockNetworkStateAccess;
 
-impl NetworkManager for MockIsNetworkPaused {
+impl NetworkStateInfo for MockNetworkStateAccess {
 	fn ensure_paused() -> Result<(), DispatchError> {
 		Ok(())
 	}
@@ -241,7 +241,7 @@ impl pallet_cf_witness_api::Config for Test {
 	type Call = Call;
 	type Witnesser = MockWitnesser;
 	type WeightInfoWitnesser = ();
-	type NetworkIsPaused = MockIsNetworkPaused;
+	type NetworkStateAccess = MockNetworkStateAccess;
 }
 
 // Build genesis storage according to the mock runtime.
