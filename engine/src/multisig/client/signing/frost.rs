@@ -270,7 +270,7 @@ pub fn aggregate_signature(
 
     let invalid_idxs: BTreeSet<usize> = signer_idxs
         .iter()
-        .cloned()
+        .copied()
         .filter(|signer_idx| {
             let rho_i = &bindings[signer_idx];
             let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
