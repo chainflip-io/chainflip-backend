@@ -538,7 +538,6 @@ mod detail {
         let key_share = secret_shares
             .0
             .values()
-            .into_iter()
             .map(|share| share.value.clone())
             .sum();
 
