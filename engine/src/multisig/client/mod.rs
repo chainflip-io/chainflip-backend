@@ -135,8 +135,9 @@ pub trait MultisigClientApi {
     ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>;
 }
 
-/// Multisig client is is responsible for persistently storing generated keys and
-/// delaying signing requests (delegating the actual ceremony management to sub components)
+/// Multisig client acts as the frontend for the multisig functionality, delegating
+/// the actual signing to "Ceremony Manager". It is additionally responsible for
+/// persistently storing generated keys and providing them to the signing ceremonies.
 pub struct MultisigClient<KeyDatabase>
 where
     KeyDatabase: KeyDB,
