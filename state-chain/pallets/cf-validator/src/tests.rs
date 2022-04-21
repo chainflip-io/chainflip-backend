@@ -495,15 +495,15 @@ fn highest_bond() {
 	new_test_ext().execute_with(|| {
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
-		HistoricalValidators::<Test>::insert(1, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(1, vec![ALICE]);
 		HistoricalBonds::<Test>::insert(1, 10);
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
-		HistoricalValidators::<Test>::insert(2, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(2, vec![ALICE]);
 		HistoricalBonds::<Test>::insert(2, 30);
 		// Epoch 3
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
-		HistoricalValidators::<Test>::insert(3, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(3, vec![ALICE]);
 		HistoricalBonds::<Test>::insert(3, 20);
 		// Expect the bond of epoch 2
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);

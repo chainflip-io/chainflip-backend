@@ -634,7 +634,7 @@ pub mod pallet {
 
 	/// A map between an epoch and an vector of validators (participating in this epoch)
 	#[pallet::storage]
-	pub type HistoricalValidators<T: Config> =
+	pub type HistoricalAuthorities<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// A map between an epoch and the bonded balance (MAB)
@@ -803,7 +803,7 @@ impl<T: Config> Pallet<T> {
 		Self::emergency_rotation_completed();
 
 		// Save the epoch -> validators map
-		HistoricalValidators::<T>::insert(new_epoch, epoch_validators);
+		HistoricalAuthorities::<T>::insert(new_epoch, epoch_validators);
 
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
@@ -859,7 +859,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type EpochIndex = EpochIndex;
 	type Amount = T::Amount;
 	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
-		HistoricalValidators::<T>::get(epoch)
+		HistoricalAuthorities::<T>::get(epoch)
 	}
 
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount {

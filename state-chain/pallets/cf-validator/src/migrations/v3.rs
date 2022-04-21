@@ -31,7 +31,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		}
 
 		// Set the historical state for the current epoch.
-		HistoricalValidators::<T>::insert(current_epoch, current_validators);
+		HistoricalAuthorities::<T>::insert(current_epoch, current_validators);
 
 		// We have 6 stable writes as well as n for itterating over all validators.
 		#[allow(clippy::unnecessary_cast)]
@@ -66,7 +66,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			"EpochValidatorCount not found in Validator"
 		);
 		assert_eq!(
-			HistoricalValidators::<T>::get(T::EpochInfo::epoch_index()),
+			HistoricalAuthorities::<T>::get(T::EpochInfo::epoch_index()),
 			Validators::<T>::get(),
 			"HistoricalValidators for this Epoch and Current Validators are not equal"
 		);
