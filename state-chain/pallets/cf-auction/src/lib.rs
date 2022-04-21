@@ -207,14 +207,14 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		let excluded = T::KeygenExclusionSet::get();
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 		let number_of_bidders = bids.len() as u32;
-		let (min_number_of_validators, max_number_of_validators) =
+		let (min_number_of_authorities, max_number_of_authorities) =
 			CurrentAuthoritySetSizeRange::<T>::get();
 		// Final rule - Confirm we have our set size
-		ensure!(number_of_bidders >= min_number_of_validators, {
+		ensure!(number_of_bidders >= min_number_of_authorities, {
 			log::error!(
 				"[cf-auction] insufficient bidders to proceed. {} < {}",
 				number_of_bidders,
-				min_number_of_validators
+				min_number_of_authorities
 			);
 			Error::<T>::NotEnoughBidders
 		});
@@ -222,10 +222,10 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		bids.sort_unstable_by_key(|k| k.1);
 		bids.reverse();
 
-		let mut target_validator_group_size =
-			min(max_number_of_validators, number_of_bidders) as usize;
-		let mut next_validator_group: Vec<_> =
-			bids.iter().take(target_validator_group_size as usize).collect();
+		let mut target_authority_set_size =
+			min(max_number_of_authorities, number_of_bidders) as usize;
+		let mut next_authority_set: Vec<_> =
+			bids.iter().take(target_authority_set_size as usize).collect();
 
 		if T::EmergencyRotation::emergency_rotation_in_progress() {
 			// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
@@ -233,45 +233,43 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			// MAB to understand who were BVs and ensure we only maintain the required
 			// amount under this level to avoid a superminority of low collateralised
 			// nodes.
-			if let Some(new_target_validator_group_size) = next_validator_group
-				.iter()
-				.position(|(_, amount)| amount < &T::EpochInfo::bond())
+			if let Some(new_target_authority_set_size) =
+				next_authority_set.iter().position(|(_, amount)| amount < &T::EpochInfo::bond())
 			{
-				let number_of_existing_backup_validators = (target_validator_group_size -
-					new_target_validator_group_size) as u32 *
+				let number_of_existing_backup_nodes = (target_authority_set_size -
+					new_target_authority_set_size) as u32 *
 					(T::ActiveToBackupValidatorRatio::get() - 1) /
 					T::ActiveToBackupValidatorRatio::get();
 
-				let number_of_backup_validators_to_be_included =
-					(number_of_existing_backup_validators as u32)
-						.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get()) /
-						100;
+				let number_of_backup_validators_to_be_included = (number_of_existing_backup_nodes
+					as u32)
+					.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get()) /
+					100;
 
-				target_validator_group_size = new_target_validator_group_size +
+				target_authority_set_size = new_target_authority_set_size +
 					number_of_backup_validators_to_be_included as usize;
 
-				next_validator_group.truncate(target_validator_group_size);
+				next_authority_set.truncate(target_authority_set_size);
 			}
 		}
 
-		let winners: Vec<_> = next_validator_group
+		let winners: Vec<_> = next_authority_set
 			.iter()
 			.map(|(validator_id, _)| (*validator_id).clone())
 			.collect();
 
 		let backup_group_size =
-			target_validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
+			target_authority_set_size as u32 / T::ActiveToBackupValidatorRatio::get();
 
 		let remaining_bidders: Vec<_> =
-			bids.iter().skip(target_validator_group_size as usize).collect();
+			bids.iter().skip(target_authority_set_size as usize).collect();
 
 		RemainingBidders::<T>::put(remaining_bidders);
 		BackupGroupSize::<T>::put(backup_group_size);
 
 		Self::deposit_event(Event::AuctionCompleted(winners.clone()));
 
-		let minimum_active_bid =
-			next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
+		let minimum_active_bid = next_authority_set.last().map(|(_, bid)| *bid).unwrap_or_default();
 
 		Ok(AuctionResult { winners, minimum_active_bid })
 	}
