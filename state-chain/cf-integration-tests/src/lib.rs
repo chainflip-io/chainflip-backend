@@ -796,7 +796,7 @@ mod tests {
 				.min_authorities(5)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_validators();
+					let mut nodes = Validator::current_authorities();
 					let (mut testnet, mut passive_nodes) = network::Network::create(3, &nodes);
 
 					nodes.append(&mut passive_nodes);
@@ -865,7 +865,7 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// Genesis nodes
-					let mut nodes = Validator::current_validators();
+					let mut nodes = Validator::current_authorities();
 
 					let number_of_passive_nodes = MAX_SET_SIZE
 						.checked_sub(nodes.len() as u32)
@@ -941,7 +941,7 @@ mod tests {
 						"the new winners should be those genesis validators and the passive nodes that have keys"
 					);
 
-					let mut new_validators = Validator::current_validators();
+					let mut new_validators = Validator::current_authorities();
 					new_validators.sort();
 
 					// This new set of winners should also be the validators of the network
@@ -1011,7 +1011,7 @@ mod tests {
 				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_validators();
+					let mut nodes = Validator::current_authorities();
 					// Create the test network with some fresh nodes and the genesis validators
 					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
 
@@ -1165,7 +1165,7 @@ mod tests {
 					// Create min_authorities passive nodes and stake them above our genesis
 					// validators The result will be our newly created nodes will be validators and
 					// the genesis validators will become backup validators
-					let mut genesis_validators = Validator::current_validators();
+					let mut genesis_validators = Validator::current_authorities();
 					let (mut testnet, mut init_passive_nodes) =
 						network::Network::create(MAX_AUTHORITIES as u8, &genesis_validators);
 
@@ -1200,7 +1200,7 @@ mod tests {
 					);
 
 					// assert list of validators as being the new nodes
-					let mut current_validators: Vec<NodeId> = Validator::current_validators();
+					let mut current_validators: Vec<NodeId> = Validator::current_authorities();
 
 					current_validators.sort();
 					init_passive_nodes.sort();
@@ -1283,7 +1283,7 @@ mod tests {
 				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_validators();
+					let mut nodes = Validator::current_authorities();
 					let (mut testnet, mut passive_nodes) =
 						network::Network::create(MAX_AUTHORITIES as u8, &nodes);
 
@@ -1429,7 +1429,7 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
-					let current_validators = Validator::current_validators();
+					let current_validators = Validator::current_authorities();
 					let (mut testnet, passive_nodes) =
 						network::Network::create(2, &current_validators);
 					// Define 5 nodes
@@ -1469,7 +1469,7 @@ mod tests {
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
 
-					let current_validators = Validator::current_validators();
+					let current_validators = Validator::current_authorities();
 					// Expect the genesis nodes in the active set, and only them
 					assert!(current_validators.contains(genesis_node_1));
 					assert!(current_validators.contains(genesis_node_2));
@@ -1495,7 +1495,7 @@ mod tests {
 					// 110 the 3rd highest genesis node has a stake of 100 (99 + 1)
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
 
-					let current_validators = Validator::current_validators();
+					let current_validators = Validator::current_authorities();
 					// Expect 1, 4 and 5 in the active set
 					assert!(current_validators.contains(genesis_node_1));
 					assert!(current_validators.contains(init_passive_node_1));
@@ -1543,7 +1543,7 @@ mod tests {
 						Validator::epoch_index(),
 						"We should be in the first epoch"
 					);
-					let current_validators = &Validator::current_validators();
+					let current_validators = &Validator::current_authorities();
 					let (mut testnet, passive_nodes) =
 						network::Network::create(2, current_validators);
 
@@ -1594,7 +1594,7 @@ mod tests {
 
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
-					let current_validators = Validator::current_validators();
+					let current_validators = Validator::current_authorities();
 					// Expect the staked nodes to be in the active set
 					assert!(current_validators.contains(genesis_node_1));
 					assert!(current_validators.contains(init_passive_node_1));
@@ -1623,7 +1623,7 @@ mod tests {
 					// Bond has decreased from 31 to 6
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
 
-					let current_validators = Validator::current_validators();
+					let current_validators = Validator::current_authorities();
 					// Expect all nodes to be in the active set
 					assert!(current_validators.contains(genesis_node_1));
 					assert!(current_validators.contains(genesis_node_2));

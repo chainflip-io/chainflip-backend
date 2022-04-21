@@ -126,7 +126,7 @@ pub mod pallet {
 		/// Partitions the validators based on whether they are considered online or offline.
 		fn current_network_state() -> NetworkState<T::ValidatorId> {
 			let (online, offline) =
-				T::EpochInfo::current_validators().into_iter().partition(Self::is_online);
+				T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
 
 			NetworkState { online, offline }
 		}

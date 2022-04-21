@@ -91,18 +91,17 @@ pub trait EpochInfo {
 	/// The last expired epoch
 	fn last_expired_epoch() -> EpochIndex;
 
-	// TODO: Name
-	/// The current set of validators
-	fn current_validators() -> Vec<Self::ValidatorId>;
+	/// The current authority set's validator ids
+	fn current_authorities() -> Vec<Self::ValidatorId>;
 
-	/// Get the current number of validators
-	fn current_validator_count() -> u32;
+	/// Get the current number of authorities
+	fn current_authority_count() -> u32;
 
-	/// Gets validator index of a particular validator for a given epoch
-	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
+	/// Gets authority index of a particular authority for a given epoch
+	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
 
-	/// Validator count at a particular epoch.
-	fn validator_count_at_epoch(epoch_index: EpochIndex) -> Option<u32>;
+	/// Authority count at a particular epoch.
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
 	/// current candidate validator set
@@ -115,9 +114,9 @@ pub trait EpochInfo {
 	fn is_auction_phase() -> bool;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_validator_info_for_epoch(
+	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_validators: Vec<Self::ValidatorId>,
+		new_authorities: Vec<Self::ValidatorId>,
 	);
 }
 

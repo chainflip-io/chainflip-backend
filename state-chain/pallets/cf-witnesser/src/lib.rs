@@ -231,9 +231,9 @@ impl<T: Config> Pallet<T> {
 		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
 		// validator count.
 		let num_validators =
-			T::EpochInfo::validator_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
+			T::EpochInfo::authority_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
 
-		let index = T::EpochInfo::validator_index(epoch_index, &who.clone().into())
+		let index = T::EpochInfo::authority_index(epoch_index, &who.clone().into())
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote

@@ -139,7 +139,7 @@ fn can_continue_to_witness_for_old_epochs() {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// These are ALISSA, BOBSON, CHARLEMAGNE
-		let mut current_validators = MockEpochInfo::current_validators();
+		let mut current_validators = MockEpochInfo::current_authorities();
 		// same validators for each epoch - we should change this though
 		MockEpochInfo::next_epoch(current_validators.clone());
 		MockEpochInfo::next_epoch(current_validators.clone());

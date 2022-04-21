@@ -44,7 +44,7 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 fn eligible_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
 	let exluded_from_signing = ExclusionSetFor::<SigningOffences>::get();
 
-	<Validator as EpochInfo>::current_validators()
+	<Validator as EpochInfo>::current_authorities()
 		.into_iter()
 		.collect::<BTreeSet<_>>()
 		.difference(&exluded_from_signing)

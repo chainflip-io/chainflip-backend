@@ -207,7 +207,7 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 		// Run to the epoch boundary.
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_validators(),
+			<ValidatorPallet as EpochInfo>::current_authorities(),
 			DUMMY_GENESIS_VALIDATORS,
 			"we should still be validating with the genesis validators"
 		);
@@ -220,7 +220,7 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
 		assert_next_epoch();
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_validators(),
+			<ValidatorPallet as EpochInfo>::current_authorities(),
 			new_validators,
 			"the new validators are now validating"
 		);

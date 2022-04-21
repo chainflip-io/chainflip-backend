@@ -99,7 +99,9 @@ impl RewardDistribution for BackupNodeEmissions {
 
 		// The average validator emission
 		let average_validator_reward: Self::FlipBalance = validator_rewards /
-			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
+			Self::FlipBalance::unique_saturated_from(
+				Self::EpochInfo::current_authorities().len(),
+			);
 
 		let mut total_rewards = 0;
 

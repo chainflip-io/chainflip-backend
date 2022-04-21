@@ -225,9 +225,9 @@ pub mod pallet {
 
 			// Punish any validators that missed their authorship slot.
 			for slot in T::MissedAuthorshipSlots::missed_slots() {
-				let validator_index = slot % <Self as EpochInfo>::current_validator_count() as u64;
+				let validator_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
 				if let Some(id) =
-					<Self as EpochInfo>::current_validators().get(validator_index as usize)
+					<Self as EpochInfo>::current_authorities().get(validator_index as usize)
 				{
 					T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 				} else {
@@ -694,15 +694,15 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		LastExpiredEpoch::<T>::get()
 	}
 
-	fn current_validators() -> Vec<Self::ValidatorId> {
+	fn current_authorities() -> Vec<Self::ValidatorId> {
 		Authorities::<T>::get()
 	}
 
-	fn current_validator_count() -> u32 {
+	fn current_authority_count() -> u32 {
 		Authorities::<T>::decode_len().unwrap_or_default() as u32
 	}
 
-	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
+	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
 		AuthorityIndex::<T>::get(epoch_index, account)
 	}
 
@@ -733,7 +733,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		last_block_for_claims <= current_block_number
 	}
 
-	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
 		EpochAuthorityCount::<T>::get(epoch)
 	}
 
