@@ -128,10 +128,9 @@ impl Scalar {
     pub fn random(mut rng: &mut Rng) -> Self {
         use curv::elliptic::curves::secp256_k1::SK;
 
-        let scalar = secp256k1::SecretKey::new(&mut rng);
-
-        let scalar = Secp256k1Scalar::from_underlying(Some(SK(scalar)));
-        Scalar(scalar)
+        Scalar(Secp256k1Scalar::from_underlying(Some(SK(
+            secp256k1::SecretKey::new(&mut rng),
+        ))))
     }
 
     pub fn zero() -> Self {
