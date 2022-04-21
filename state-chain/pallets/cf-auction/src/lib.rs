@@ -116,7 +116,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An auction has a set of winners \[auction_index, winners\]
+		/// An auction has a set of winners \[winners\]
 		AuctionCompleted(Vec<T::ValidatorId>),
 		/// The authority set size range has changed \[before, after\]
 		AuthoritySetSizeRangeChanged(AuthoritySetSizeRange, AuthoritySetSizeRange),
