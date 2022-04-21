@@ -692,9 +692,9 @@ mod tests {
 				}
 
 				assert_eq!(Validator::bond(), GENESIS_BALANCE);
-				let mut validators = Validator::validators();
-				validators.sort();
-				assert_eq!(validators, accounts, "the validators are those expected at genesis");
+				let mut authorities = Validator::authorities();
+				authorities.sort();
+				assert_eq!(authorities, accounts, "the validators are those expected at genesis");
 
 				assert_eq!(
 					Validator::epoch_number_of_blocks(),
@@ -932,7 +932,7 @@ mod tests {
 						"minimum active bid should be that of the new stake"
 					);
 
-					let mut winners = Validator::validators();
+					let mut winners = Validator::authorities();
 					winners.sort();
 					nodes.sort();
 					assert_eq!(

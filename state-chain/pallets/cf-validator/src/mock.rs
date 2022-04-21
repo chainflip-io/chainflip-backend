@@ -255,7 +255,7 @@ pub(crate) struct TestExternalitiesWithCheck {
 
 impl TestExternalitiesWithCheck {
 	fn check_invariants() {
-		assert_eq!(Validators::<Test>::get(), Session::validators(),);
+		assert_eq!(Authorities::<Test>::get(), Session::validators(),);
 	}
 
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {

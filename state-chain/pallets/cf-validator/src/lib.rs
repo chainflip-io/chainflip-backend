@@ -575,20 +575,20 @@ pub mod pallet {
 		u16,
 	>;
 
-	/// Track epochs and their associated validator count
+	/// Track epochs and their associated authority count
 	#[pallet::storage]
-	#[pallet::getter(fn epoch_validator_count)]
-	pub type EpochValidatorCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
+	#[pallet::getter(fn epoch_authority_count)]
+	pub type EpochAuthorityCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
 	#[pallet::getter(fn rotation_phase)]
 	pub type RotationPhase<T: Config> = StorageValue<_, RotationStatusOf<T>, ValueQuery>;
 
-	/// A list of the current validators
+	/// A list of the current authorites
 	#[pallet::storage]
-	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
+	#[pallet::getter(fn authorities)]
+	pub type Authorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// Vanity names of the validators stored as a Map with the current validator IDs as key
 	#[pallet::storage]
@@ -695,11 +695,11 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
-		Validators::<T>::get()
+		Authorities::<T>::get()
 	}
 
 	fn current_validator_count() -> u32 {
-		Validators::<T>::decode_len().unwrap_or_default() as u32
+		Authorities::<T>::decode_len().unwrap_or_default() as u32
 	}
 
 	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
@@ -734,7 +734,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
-		EpochValidatorCount::<T>::get(epoch)
+		EpochAuthorityCount::<T>::get(epoch)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -777,15 +777,15 @@ impl<T: Config> Pallet<T> {
 			(*epoch - 1, *epoch)
 		});
 
-		let mut old_validators = Validators::<T>::get();
+		let mut old_validators = Authorities::<T>::get();
 		// Update state of current validators
-		Validators::<T>::set(epoch_validators.to_vec());
+		Authorities::<T>::set(epoch_validators.to_vec());
 
 		epoch_validators.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as u16);
 		});
 
-		EpochValidatorCount::<T>::insert(new_epoch, epoch_validators.len() as u32);
+		EpochAuthorityCount::<T>::insert(new_epoch, epoch_validators.len() as u32);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);

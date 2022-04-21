@@ -200,7 +200,7 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 		}));
 
 		assert_eq!(
-			Validators::<Test>::get(),
+			Authorities::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
 			"the current validators should be the genesis validators"
 		);
@@ -240,7 +240,7 @@ fn genesis() {
 	new_test_ext().execute_with(|| {
 		// We should have a set of validators on genesis with a minimum bid set
 		assert_eq!(
-			Validators::<Test>::get(),
+			Authorities::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
 			"We should have a set of validators at genesis"
 		);
@@ -545,7 +545,7 @@ fn test_missing_author_punishment() {
 		move_forward_blocks(1);
 		MockOffenceReporter::assert_reported(
 			PalletOffence::MissedAuthorshipSlot,
-			ValidatorPallet::validators().get(1..=2).unwrap().to_vec(),
+			ValidatorPallet::authorities().get(1..=2).unwrap().to_vec(),
 		)
 	})
 }
