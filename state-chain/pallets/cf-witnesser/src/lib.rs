@@ -93,7 +93,7 @@ pub mod pallet {
 
 	/// A flag indicating that the CallHash has been executed.
 	#[pallet::storage]
-	pub type CallHashExecuted<T: Config> = StorageMap<_, Identity, CallHash, bool>;
+	pub type CallHashExecuted<T: Config> = StorageMap<_, Identity, CallHash, ()>;
 
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
@@ -292,7 +292,7 @@ impl<T: Config> Pallet<T> {
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
-			CallHashExecuted::<T>::insert(&call_hash, true);
+			CallHashExecuted::<T>::insert(&call_hash, ());
 		}
 
 		Ok(().into())
