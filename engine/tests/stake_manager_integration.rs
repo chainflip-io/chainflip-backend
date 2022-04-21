@@ -45,7 +45,7 @@ pub async fn test_all_stake_manager_events() {
         .event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger)
         .await
         .unwrap()
-        .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))
+        .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
         .collect::<Vec<_>>()
         .await
         .into_iter()
@@ -168,36 +168,13 @@ pub async fn test_all_stake_manager_events() {
 
     sm_events
         .iter()
-        .find(|event| match event.event_parameters {
-            StakeManagerEvent::FlipSupplyUpdated {
-                old_supply,
-                new_supply,
-                block_number,
-            } => {
-                assert_eq!(
-                    old_supply,
-                    U256::from_dec_str("90000000000000000000000000").unwrap()
-                );
-                assert_eq!(
-                    new_supply,
-                    U256::from_dec_str("100000000000000000000000000").unwrap()
-                );
-                assert!(block_number > U256::from_str("0").unwrap());
-                true
-            }
-            _ => false,
-        })
-        .expect("Didn't find the FlipSupplyUpdated event");
-
-    sm_events
-        .iter()
         .find(|event| match &event.event_parameters {
             StakeManagerEvent::GovernanceWithdrawal { to, amount, .. } => {
                 assert_eq!(
                     to,
                     &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
                 );
-                assert_eq!(amount, &10276666666666666665967616);
+                assert_eq!(amount, &276666666666666665967616);
                 true
             }
             _ => false,
