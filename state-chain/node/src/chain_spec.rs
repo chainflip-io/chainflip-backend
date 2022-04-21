@@ -578,8 +578,8 @@ fn testnet_genesis(
 			deployment_block: ethereum_deployment_block,
 		},
 		emissions: EmissionsConfig {
-			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
-			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
+			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 		},
 	}
 }

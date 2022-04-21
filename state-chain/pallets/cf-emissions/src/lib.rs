@@ -124,15 +124,15 @@ pub mod pallet {
 	pub type BackupNodeEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn validator_emission_inflation)]
-	/// Annual inflation set aside for *active* validators, expressed as basis points ie. hundredths
+	#[pallet::getter(fn current_authority_emission_inflation)]
+	/// Annual inflation set aside for current authorities, expressed as basis points ie. hundredths
 	/// of a percent.
-	pub(super) type ValidatorEmissionInflation<T: Config> =
+	pub(super) type CurrentAuthorityEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_node_emission_inflation)]
-	/// Annual inflation set aside for *backup* validators, expressed as basis points ie. hundredths
+	/// Annual inflation set aside for *backup* nodes, expressed as basis points ie. hundredths
 	/// of a percent.
 	pub(super) type BackupNodeEmissionInflation<T: Config> =
 		StorageValue<_, BasisPoints, ValueQuery>;
@@ -148,9 +148,9 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Emissions have been distributed. \[block_number, amount_minted\]
 		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
-		/// Validator inflation emission has been updated \[new\]
-		ValidatorInflationEmissionsUpdated(BasisPoints),
-		/// Backup Validator inflation emission has been updated \[new\]
+		/// Current authority inflation emission has been updated \[new\]
+		CurrentAuthorityInflationEmissionsUpdated(BasisPoints),
+		/// Backup node inflation emission has been updated \[new\]
 		BackupNodeInflationEmissionsUpdated(BasisPoints),
 		/// MintInterval has been updated [block_number]
 		MintIntervalUpdated(BlockNumberFor<T>),
@@ -219,8 +219,8 @@ pub mod pallet {
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ValidatorEmissionInflation::<T>::set(inflation);
-			Self::deposit_event(Event::<T>::ValidatorInflationEmissionsUpdated(inflation));
+			CurrentAuthorityEmissionInflation::<T>::set(inflation);
+			Self::deposit_event(Event::<T>::CurrentAuthorityInflationEmissionsUpdated(inflation));
 			Ok(().into())
 		}
 
@@ -269,16 +269,16 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
-		pub validator_emission_inflation: BasisPoints,
-		pub backup_validator_emission_inflation: BasisPoints,
+		pub current_authority_emission_inflation: BasisPoints,
+		pub backup_node_emission_inflation: BasisPoints,
 	}
 
 	/// At genesis we need to set the inflation rates for active and passive validators.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			ValidatorEmissionInflation::<T>::put(self.validator_emission_inflation);
-			BackupNodeEmissionInflation::<T>::put(self.backup_validator_emission_inflation);
+			CurrentAuthorityEmissionInflation::<T>::put(self.current_authority_emission_inflation);
+			BackupNodeEmissionInflation::<T>::put(self.backup_node_emission_inflation);
 			MintInterval::<T>::put(T::BlockNumber::from(100_u32));
 			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
@@ -371,7 +371,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 		}
 
 		Self::update_validator_block_emission(inflation_to_block_reward::<T>(
-			ValidatorEmissionInflation::<T>::get(),
+			CurrentAuthorityEmissionInflation::<T>::get(),
 		));
 
 		Self::update_backup_validator_block_emission(inflation_to_block_reward::<T>(

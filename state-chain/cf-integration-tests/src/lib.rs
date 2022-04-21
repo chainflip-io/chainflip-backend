@@ -580,8 +580,8 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_emissions::GenesisConfig {
-					validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
-					backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
+					current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+					backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 				},
 				storage,
 			)
@@ -732,14 +732,14 @@ mod tests {
 				assert_eq!(Governance::proposal_id_counter(), 0, "no proposal for governance");
 
 				assert_eq!(
-					Emissions::validator_emission_inflation(),
-					VALIDATOR_EMISSION_INFLATION_BPS,
+					Emissions::current_authority_emission_inflation(),
+					CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 					"invalid emission inflation for validators"
 				);
 
 				assert_eq!(
 					Emissions::backup_node_emission_inflation(),
-					BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
+					BACKUP_NODE_EMISSION_INFLATION_BPS,
 					"invalid emission inflation for backup validators"
 				);
 
