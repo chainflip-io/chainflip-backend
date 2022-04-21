@@ -250,7 +250,6 @@
     "public_key": "AggKeyFor",
     "active_from_block": "u64"
   },
-  "ValidatorSize": "u32",
   "AwaitingKeygen": {
     "ceremony_id": "CeremonyId",
     "response_status": "KeygenResponseStatus"

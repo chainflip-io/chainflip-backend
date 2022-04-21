@@ -34,7 +34,6 @@ use cf_traits::Bonding;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
-pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode)]
