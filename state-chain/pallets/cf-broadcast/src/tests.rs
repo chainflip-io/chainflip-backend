@@ -1,7 +1,7 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Expiries, Instance1, SignatureToBroadcastIdLookup,
+	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
 	TransmissionFailure,
 };
 use cf_chains::{
@@ -218,8 +218,11 @@ fn test_broadcast_rejected() {
 			.attempt_count == 1
 		);
 
-		// The nominee was not reported.
-		assert_eq!(MockOffenceReporter::get_reported(), vec![RANDOM_NOMINEE]);
+		// The nominee was reported.
+		MockOffenceReporter::assert_reported(
+			PalletOffence::TransactionFailedOnTransmission,
+			vec![RANDOM_NOMINEE],
+		);
 	})
 }
 
@@ -314,7 +317,10 @@ fn test_bad_signature() {
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// The nominee was reported.
-		assert_eq!(MockOffenceReporter::get_reported(), vec![RANDOM_NOMINEE]);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::InvalidTransactionAuthored,
+			vec![RANDOM_NOMINEE],
+		);
 	})
 }
 
@@ -403,16 +409,98 @@ fn cfe_responds_success_already_expired_transaction_sig_broadcast_attempt_id_is_
 			MockBroadcast::transaction_ready_for_transmission(
 				RawOrigin::Signed(tx_sig_request.nominee).into(),
 				broadcast_attempt_id,
-				tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid),
+				tx_sig_request.broadcast_attempt.unsigned_tx.clone().signed(Validity::Valid),
 				Validity::Valid,
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
+
+		// We should have removed the earlier mapping, as that retry is invalid now
+		// and still have the latest retry attempt count
+		assert_eq!(
+			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+				.unwrap(),
+			vec![1]
+		);
+
+		// TODO: should we move this testing below into a separate test
+
+		// We now succeed on submitting the second one
+		assert_ok!(MockBroadcast::transaction_ready_for_transmission(
+			RawOrigin::Signed(tx_sig_request.nominee).into(),
+			tx_sig_request.broadcast_attempt.broadcast_attempt_id,
+			tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid),
+			Validity::Valid,
+		));
+
+		// only the latest attempt is valid
+		assert_eq!(
+			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+				.unwrap(),
+			vec![1]
+		);
+
+		// we should not have a transmission attempt for the old attempt id that did not succeed
+		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
+
+		// We should have a transmission attempt for the new attempt that did succeed
+		assert!(AwaitingTransmission::<Test, Instance1>::get(
+			tx_sig_request.broadcast_attempt.broadcast_attempt_id
+		)
+		.is_some());
+
+		let transmission_expiry_block = current_block + TRANSMISSION_EXPIRY_BLOCKS;
+		assert_eq!(
+			Expiries::<Test, Instance1>::get(transmission_expiry_block),
+			vec![(
+				BroadcastStage::Transmission,
+				tx_sig_request.broadcast_attempt.broadcast_attempt_id
+			)]
+		);
+
+		// expire the transmission attempt, success not reached yet
+		MockBroadcast::on_initialize(transmission_expiry_block);
+
+		// We should still have the transmission
+		assert!(AwaitingTransmission::<Test, Instance1>::get(
+			tx_sig_request.broadcast_attempt.broadcast_attempt_id
+		)
+		.is_some());
+
+		// We now have a valid attempt count (1) for the awaiting transmission
+		// and a valid attempt count (2) for the awaiting transaction signature
+		assert_eq!(
+			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+				.unwrap(),
+			vec![1, 2]
+		);
+
+		// we now submit the transmission success for 0
+
+		assert_ok!(MockBroadcast::transmission_success(
+			RawOrigin::Signed(tx_sig_request.nominee).into(),
+			tx_sig_request.broadcast_attempt.broadcast_attempt_id,
+			Default::default(),
+		));
+
+		// Attempt numbers, signature requests and transmission should be cleaned up
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
+			broadcast_attempt_id.broadcast_id
+		)
+		.is_none());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(
+			tx_sig_request.broadcast_attempt.broadcast_attempt_id
+		)
+		.is_none());
+		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(
+			tx_sig_request.broadcast_attempt.broadcast_attempt_id.next_attempt()
+		)
+		.is_none())
 	});
 }
 
 #[test]
-fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attempt_id_is_noop() {
+fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attempt_id_is_success() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 
@@ -483,18 +571,28 @@ fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attemp
 			1
 		);
 
-		// submit success for a transaction that has expired, is success
-		// NB: At this point we do have BroadcastAttemptId (BAID) (1, 1) => the mapping
-		// BroadcastAttemptIdToAttemptNumbers mapping for key of 1, contains the
-		// AttemptCount of 1. However, this transmission_success is submitted with BAID(1, 0).
-		// Thus, when we attempt to clean up on success we will log that we have an invalid
-		// BAID, since we will be trying to ::take() a TransmissionAttempt of 1, when it
-		// does not exist yet.
+		// Should contain both attempt counts
+		assert_eq!(
+			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+				.unwrap(),
+			vec![0, 1]
+		);
+
+		// submit the transmission success for the old broadcast attempt
 		assert_ok!(MockBroadcast::transmission_success(
 			RawOrigin::Signed(tx_sig_request.nominee).into(),
 			broadcast_attempt_id,
 			Default::default(),
 		));
+
+		// Success should clear these out
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
+			broadcast_attempt_id.broadcast_id
+		)
+		.is_none());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
+		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
+			.is_none());
 	});
 }
 
@@ -595,8 +693,8 @@ fn test_transmission_request_expiry() {
 		MockCfe::respond(Scenario::Timeout);
 
 		let check_end_state = || {
-			// Old attempt has expired.
-			assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
+			// We still allow nodes to submit transmission successes for retried broadcasts
+			assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 			assert_eq!(
 				EXPIRED_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
 				(broadcast_attempt_id, BroadcastStage::Transmission),

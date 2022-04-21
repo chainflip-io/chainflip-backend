@@ -1,4 +1,7 @@
-use std::{collections::HashMap, convert::TryInto};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::TryInto,
+};
 
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -60,9 +63,8 @@ impl ShamirShare {
 
 /// Test-only helper function used to sanity check our sharing polynomial
 #[cfg(test)]
-fn reconstruct_secret(shares: &HashMap<usize, ShamirShare>) -> Scalar {
+fn reconstruct_secret(shares: &BTreeMap<usize, ShamirShare>) -> Scalar {
     use crate::multisig::client::signing::frost;
-    use std::collections::BTreeSet;
 
     let all_idxs: BTreeSet<usize> = shares.keys().into_iter().cloned().collect();
 
@@ -124,9 +126,9 @@ fn generate_zkp_of_secret(
 }
 
 #[derive(Default)]
-pub struct OutgoingShares(pub HashMap<usize, ShamirShare>);
+pub struct OutgoingShares(pub BTreeMap<usize, ShamirShare>);
 
-pub struct IncomingShares(pub HashMap<usize, ShamirShare>);
+pub struct IncomingShares(pub BTreeMap<usize, ShamirShare>);
 
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
@@ -156,7 +158,7 @@ fn generate_secret_and_shares(
     mut rng: &mut Rng,
     n: usize,
     t: usize,
-) -> (Scalar, CoefficientCommitments, HashMap<usize, ShamirShare>) {
+) -> (Scalar, CoefficientCommitments, BTreeMap<usize, ShamirShare>) {
     // Our secret contribution to the aggregate key
     let secret = Scalar::random(&mut rng);
 
@@ -240,11 +242,11 @@ fn is_valid_hash_commitment(
 
 // (Figure 1: Round 1, Step 5)
 pub fn validate_commitments(
-    public_coefficients: HashMap<usize, DKGUnverifiedCommitment>,
-    hash_commitments: HashMap<usize, HashComm1>,
+    public_coefficients: BTreeMap<usize, DKGUnverifiedCommitment>,
+    hash_commitments: BTreeMap<usize, HashComm1>,
     context: &HashContext,
-) -> Result<HashMap<usize, DKGCommitment>, Vec<usize>> {
-    let invalid_idxs: Vec<_> = public_coefficients
+) -> Result<BTreeMap<usize, DKGCommitment>, BTreeSet<usize>> {
+    let invalid_idxs: BTreeSet<_> = public_coefficients
         .iter()
         .filter_map(|(idx, c)| {
             let challenge = generate_dkg_challenge(*idx, context, c.commitments.0[0], c.zkp.r);
@@ -282,7 +284,7 @@ pub fn validate_commitments(
 }
 
 /// Derive aggregate pubkey from party commitments
-pub fn derive_aggregate_pubkey(commitments: &HashMap<usize, DKGCommitment>) -> Point {
+pub fn derive_aggregate_pubkey(commitments: &BTreeMap<usize, DKGCommitment>) -> Point {
     commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum()
 }
 
@@ -292,7 +294,7 @@ pub fn derive_local_pubkeys_for_parties(
         share_count: n,
         threshold: t,
     }: ThresholdParameters,
-    commitments: &HashMap<usize, DKGCommitment>,
+    commitments: &BTreeMap<usize, DKGCommitment>,
 ) -> Vec<Point> {
     // Recall that each party i's secret key share `s` is the sum
     // of secret shares they receive from all other parties, which
@@ -320,7 +322,7 @@ pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitmen
     let mut hasher = Sha256::new();
 
     for comm in &coefficient_commitments.commitments.0 {
-        hasher.update(bincode::serialize(&comm).expect("serialiation can't fail"));
+        hasher.update(bincode::serialize(&comm).expect("serialization can't fail"));
     }
 
     H256::from(hasher.finalize().as_ref())
@@ -382,9 +384,9 @@ mod tests {
         let mut rng = Rng::from_seed([0; 32]);
 
         let (commitments, hash_commitments, outgoing_shares): (
-            HashMap<_, _>,
-            HashMap<_, _>,
-            HashMap<_, _>,
+            BTreeMap<_, _>,
+            BTreeMap<_, _>,
+            BTreeMap<_, _>,
         ) = itertools::multiunzip((1..=n).map(|idx| {
             let (secret, shares_commitments, shares) = generate_secret_and_shares(&mut rng, n, t);
             // Zero-knowledge proof of `secret`

@@ -28,8 +28,9 @@ use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashCommitments1, HashContext, KeygenData, KeygenOptions};
 use super::{MultisigData, MultisigMessage};
 
-pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (Vec<AccountId>, anyhow::Error)>>;
-pub type CeremonyResultReceiver<T> = oneshot::Receiver<Result<T, (Vec<AccountId>, anyhow::Error)>>;
+pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
+pub type CeremonyResultReceiver<T> =
+    oneshot::Receiver<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
@@ -77,14 +78,13 @@ impl CeremonyManager {
             if let Some(result) = state.try_expiring() {
                 // NOTE: we only respond (and consume the ceremony id)
                 //  if we have received a ceremony request from
-                // SC (i.e. the ceremony is "authorised")
-                // TODO: report nodes via a different extrinsic instead
+                // SC (i.e. the ceremony is "authorized")
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized() {
                     self.process_signing_ceremony_outcome(*ceremony_id, result);
                 } else {
+                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
-
                     self.signing_states.remove(ceremony_id);
                 }
             }
@@ -101,10 +101,10 @@ impl CeremonyManager {
                 // NOTE: we only respond (and consume the ceremony id)
                 // if we have received a ceremony request from
                 // SC (i.e. the ceremony is "authorised")
-                // TODO: report nodes via a different extrinsic instead
                 if state.is_authorized() {
                     self.process_keygen_ceremony_outcome(*ceremony_id, result);
                 } else {
+                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.keygen_states.remove(ceremony_id);
                 }
@@ -144,7 +144,7 @@ impl CeremonyManager {
     fn process_signing_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<SchnorrSignature, (Vec<AccountId>, anyhow::Error)>,
+        result: Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>,
     ) {
         let result_sender = self
             .signing_states
@@ -169,15 +169,14 @@ impl CeremonyManager {
     fn process_keygen_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<KeygenResultInfo, (Vec<AccountId>, anyhow::Error)>,
+        result: Result<KeygenResultInfo, (BTreeSet<AccountId>, anyhow::Error)>,
     ) {
         let result_sender = self
             .keygen_states
             .remove(&ceremony_id)
             .unwrap()
-            .inner
-            .unwrap()
-            .result_sender;
+            .try_into_result_sender()
+            .unwrap();
         self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
             slog::warn!(
@@ -224,10 +223,10 @@ impl CeremonyManager {
             return;
         }
 
-        let state = self
-            .keygen_states
-            .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, &logger));
+        let logger_no_ceremony_id = &self.logger;
+        let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
+            KeygenStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+        });
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, participants);
@@ -303,12 +302,11 @@ impl CeremonyManager {
         }
 
         // We have the key and have received a request to sign
-        let logger = &self.logger;
+        let logger_no_ceremony_id = &self.logger;
 
-        let state = self
-            .signing_states
-            .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
+        let state = self.signing_states.entry(ceremony_id).or_insert_with(|| {
+            SigningStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+        });
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -319,7 +317,7 @@ impl CeremonyManager {
                 validator_mapping: key_info.validator_map.clone(),
                 own_idx,
                 all_idxs: signer_idxs,
-                logger: self.logger.clone(),
+                logger: logger.clone(),
                 rng,
             };
 

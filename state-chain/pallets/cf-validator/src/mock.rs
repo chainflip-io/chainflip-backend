@@ -10,8 +10,7 @@ use cf_traits::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, IsOutgoing,
-	QualifyValidator,
+	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -119,26 +118,19 @@ impl Auctioneer for MockAuctioneer {
 	type Error = &'static str;
 
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error> {
-		AUCTION_RUN_BEHAVIOUR.with(|cell| (*cell.borrow()).clone())
+		AUCTION_RUN_BEHAVIOUR.with(|cell| {
+			let run_behaviour = (*cell.borrow()).clone();
+			run_behaviour.map(|result| {
+				AUCTION_WINNERS.with(|cell| {
+					*cell.borrow_mut() = Some(result.winners.to_vec());
+				});
+				result
+			})
+		})
 	}
 
-	fn update_validator_status(winners: &[Self::ValidatorId]) {
-		AUCTION_WINNERS.with(|cell| {
-			*cell.borrow_mut() = Some(winners.to_vec());
-		});
-	}
-}
-
-pub struct MockIsOutgoing;
-impl IsOutgoing for MockIsOutgoing {
-	type AccountId = u64;
-
-	fn is_outgoing(account_id: &Self::AccountId) -> bool {
-		if let Some(last_active_epoch) = MockChainflipAccount::get(account_id).last_active_epoch {
-			let current_epoch_index = ValidatorPallet::epoch_index();
-			return last_active_epoch.saturating_add(1) == current_epoch_index
-		}
-		false
+	fn update_backup_and_passive_states() {
+		// no op
 	}
 }
 
@@ -162,12 +154,9 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
-		for validator in new_validators {
-			MockChainflipAccount::update_last_active_epoch(
-				validator,
-				ValidatorPallet::epoch_index(),
-			);
+	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]) {
+		for validator in epoch_validators {
+			MockChainflipAccount::set_current_authority(validator);
 		}
 	}
 }
@@ -203,8 +192,6 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
-cf_traits::impl_mock_offence_reporting!(ValidatorId);
-
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u32 = 2;
@@ -234,8 +221,12 @@ impl Bonding for MockBonder {
 	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
+
 impl Config for Test {
 	type Event = Event;
+	type Offence = PalletOffence;
 	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();

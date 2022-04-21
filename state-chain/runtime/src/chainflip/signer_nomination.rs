@@ -1,9 +1,10 @@
-use crate::{Online, Reputation, Runtime, System, Validator};
-use cf_traits::{Chainflip, EpochInfo, IsOnline};
-use frame_support::Hashable;
+use crate::{Runtime, Validator};
+use cf_traits::{Chainflip, EpochInfo};
+use frame_support::{traits::Get, Hashable};
 use nanorand::{Rng, WyRand};
-use sp_runtime::traits::BlockNumberProvider;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+
+use super::{ExclusionSetFor, SigningOffences};
 
 /// Tries to select `n` items randomly from the provided Vec.
 ///
@@ -40,14 +41,13 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 	u64::from_be_bytes(bytes)
 }
 
-fn online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	let block_number = <System as BlockNumberProvider>::current_block_number();
+fn eligible_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
+	let exluded_from_signing = ExclusionSetFor::<SigningOffences>::get();
+
 	<Validator as EpochInfo>::current_validators()
-		.iter()
-		.filter(|validator_id| {
-			!Reputation::is_suspended_at(block_number, validator_id) &&
-				Online::is_online(validator_id)
-		})
+		.into_iter()
+		.collect::<BTreeSet<_>>()
+		.difference(&exluded_from_signing)
 		.cloned()
 		.collect()
 }
@@ -59,14 +59,14 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId> {
-		select_one(seed_from_hashable(seed), online_validators())
+		select_one(seed_from_hashable(seed), eligible_validators())
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>> {
 		try_select_random_subset(
 			seed_from_hashable(seed),
 			<Validator as EpochInfo>::consensus_threshold() as usize,
-			online_validators(),
+			eligible_validators(),
 		)
 	}
 }

@@ -4,16 +4,26 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-use frame_system::RawOrigin;
+use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
 	update_accrual_ratio {
-	} : _(RawOrigin::Root, 2, (151 as u32).into())
-	update_reputation_point_penalty {
-		 let reputation_points_penalty = ReputationPenalty { points: 1, blocks: (10 as u32).into() };
-	} : _(RawOrigin::Root, reputation_points_penalty)
+		let call = Call::<T>::update_accrual_ratio(2, 151u32.into());
+	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
+	set_penalty {
+		let call = Call::<T>::set_penalty(PalletOffence::MissedHeartbeat.into(), Default::default());
+	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
+	update_missed_heartbeat_penalty {
+		let call = Call::<T>::update_missed_heartbeat_penalty(ReputationPenaltyRate {
+			points: 1,
+			per_blocks: (10 as u32).into()
+		});
+	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
 	verify {
-		assert_eq!(ReputationPointPenalty::<T>::get(), ReputationPenalty { points: 1, blocks: (10 as u32).into() });
+		assert_eq!(
+			Pallet::<T>::resolve_penalty_for(PalletOffence::MissedHeartbeat),
+			Penalty { reputation: 15, suspension: 0_u32.into() }
+		);
 	}
 	on_runtime_upgrade {
 	} : {

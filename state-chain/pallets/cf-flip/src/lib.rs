@@ -152,7 +152,7 @@ pub mod pallet {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Set the slashing rate
-			<SlashingRate<T>>::set(slashing_rate);
+			SlashingRate::<T>::set(slashing_rate);
 			Ok(().into())
 		}
 	}
@@ -174,6 +174,7 @@ pub mod pallet {
 		fn build(&self) {
 			TotalIssuance::<T>::set(self.total_issuance);
 			OffchainFunds::<T>::set(self.total_issuance);
+			SlashingRate::<T>::set(Default::default());
 		}
 	}
 }
@@ -489,11 +490,11 @@ where
 	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Get the slashing rate
 		let slashing_rate: T::Balance = SlashingRate::<T>::get();
-		// Get the MBA aka the bond
+		// Get the MAB aka the bond
 		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get blocks_offline as Balance
 		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
-		// slash per day = n % of MBA
+		// slash per day = n % of MAB
 		let slash_per_day = (bond / T::Balance::from(100_u32)).saturating_mul(slashing_rate);
 		// Burn per block
 		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();

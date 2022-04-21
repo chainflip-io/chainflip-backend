@@ -9,6 +9,7 @@ use cf_traits::{
 	},
 	Chainflip, NonceProvider,
 };
+use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types, traits::IsType};
 use frame_system as system;
 use sp_core::H256;
@@ -143,7 +144,30 @@ impl Chainflip for Test {
 }
 
 cf_traits::impl_mock_signer_nomination!(u64);
-cf_traits::impl_mock_offence_reporting!(u64);
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockRuntimeOffence;
+
+impl From<pallet_cf_threshold_signature::PalletOffence> for MockRuntimeOffence {
+	fn from(_: pallet_cf_threshold_signature::PalletOffence) -> Self {
+		Self
+	}
+}
+
+impl From<pallet_cf_broadcast::PalletOffence> for MockRuntimeOffence {
+	fn from(_: pallet_cf_broadcast::PalletOffence) -> Self {
+		Self
+	}
+}
+
+impl From<pallet_cf_vaults::PalletOffence> for MockRuntimeOffence {
+	fn from(_: pallet_cf_vaults::PalletOffence) -> Self {
+		Self
+	}
+}
+
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, MockRuntimeOffence>;
 
 parameter_types! {
 	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
@@ -152,6 +176,7 @@ parameter_types! {
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
+	type Offence = MockRuntimeOffence;
 	type RuntimeOrigin = Origin;
 	type ThresholdCallable = Call;
 	type TargetChain = Ethereum;
@@ -173,6 +198,7 @@ parameter_types! {
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
+	type Offence = MockRuntimeOffence;
 	type TargetChain = Ethereum;
 	type ApiCall = EthereumApi;
 	type TransactionBuilder = MockTransactionBuilder<Ethereum, EthereumApi>;
@@ -192,6 +218,7 @@ parameter_types! {
 
 impl pallet_cf_vaults::Config<Instance1> for Test {
 	type Event = Event;
+	type Offence = MockRuntimeOffence;
 	type Chain = Ethereum;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider<u64>;

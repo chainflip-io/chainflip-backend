@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, iter::FromIterator, marker::PhantomData};
 
 use crate::{
 	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,
-	OpenRequests, RequestId,
+	OpenRequests, PalletOffence, RequestId,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
@@ -169,9 +169,6 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	}
 }
 
-// Mock OffenceReporter
-cf_traits::impl_mock_offence_reporting!(u64);
-
 pub fn sign(
 	payload: <MockEthereum as ChainCrypto>::Payload,
 ) -> MockThresholdSignature<
@@ -189,8 +186,12 @@ parameter_types! {
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
+	type Offence = PalletOffence;
 	type RuntimeOrigin = Origin;
 	type ThresholdCallable = MockCallback<MockEthereum>;
 	type TargetChain = MockEthereum;

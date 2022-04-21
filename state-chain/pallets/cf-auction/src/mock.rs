@@ -51,24 +51,6 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 	});
 }
 
-pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
-	BIDDER_SET.with(|cell| {
-		*cell.borrow_mut() = bidders;
-	});
-}
-
-pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
-	let auction_result =
-		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
-
-	<AuctionPallet as Auctioneer>::update_validator_status(&auction_result.winners);
-
-	MockEpochInfo::set_bond(auction_result.minimum_active_bid);
-	MockEpochInfo::set_validators(auction_result.winners.clone());
-
-	auction_result
-}
-
 pub fn last_event() -> mock::Event {
 	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }

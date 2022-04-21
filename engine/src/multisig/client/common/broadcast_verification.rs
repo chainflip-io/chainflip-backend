@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -50,7 +50,7 @@ impl BroadcastFailureReason {
 /// `None` indicates that the data hasn't been received.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BroadcastVerificationMessage<T: Clone> {
-    pub data: HashMap<usize, Option<T>>,
+    pub data: BTreeMap<usize, Option<T>>,
 }
 
 fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
@@ -82,9 +82,9 @@ where
 // or (c) that ~1/3 of parties colluded to slash the broadcasting party. (Should we reduce
 // the threshold to 50% for symmetry?)
 pub fn verify_broadcasts<T>(
-    verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<T>>>,
+    verification_messages: BTreeMap<usize, Option<BroadcastVerificationMessage<T>>>,
     logger: &slog::Logger,
-) -> Result<HashMap<usize, T>, BroadcastFailureReason>
+) -> Result<BTreeMap<usize, T>, BroadcastFailureReason>
 where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
 {
@@ -98,7 +98,7 @@ where
     // Even if we haven't received data from all parties at this point, we
     // might still be able to recover as long as there is a quorum agreement
     // on every value.
-    let verification_messages: HashMap<_, _> = verification_messages
+    let verification_messages: BTreeMap<_, _> = verification_messages
         .into_iter()
         .filter_map(|(k, v)| v.map(|unwrapped_v| (k, unwrapped_v)))
         // We ignore all messages that don't contain all (and only) expected signer indexes
@@ -146,7 +146,7 @@ where
             <= threshold
     });
 
-    let mut agreed_on_values = HashMap::<usize, T>::new();
+    let mut agreed_on_values = BTreeMap::<usize, T>::new();
 
     let mut reported_parties = BTreeSet::new();
 
@@ -193,12 +193,12 @@ mod tests {
     /// Transforms the (more concise) test data into the expected "shape";
     fn to_broadcast_verification_messages(
         test_data: Vec<(usize, Option<Vec<Option<i32>>>)>,
-    ) -> HashMap<usize, Option<BroadcastVerificationMessage<i32>>> {
+    ) -> BTreeMap<usize, Option<BroadcastVerificationMessage<i32>>> {
         test_data
             .into_iter()
             .map(|(idx, opt_values)| {
                 let opt_data = opt_values.map(|values| {
-                    let data: HashMap<_, _> = values
+                    let data: BTreeMap<_, _> = values
                         .iter()
                         .enumerate()
                         .map(|(i, d)| (i + 1, *d))
@@ -215,10 +215,10 @@ mod tests {
     /// check that the result matches `expected` (transforming the reported idxs Vec into a Set
     /// to make it *NOT* sensitive to the order of elements)
     fn check_broadcast_verification(
-        verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<i32>>>,
+        verification_messages: BTreeMap<usize, Option<BroadcastVerificationMessage<i32>>>,
         expected: Result<Vec<(usize, i32)>, BroadcastFailureReason>,
     ) {
-        let expected = expected.map(|values| values.into_iter().collect::<HashMap<_, _>>());
+        let expected = expected.map(|values| values.into_iter().collect::<BTreeMap<_, _>>());
 
         assert_eq!(
             verify_broadcasts(verification_messages, &new_test_logger()),

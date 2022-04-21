@@ -2,9 +2,11 @@ use cf_chains::Ethereum;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
 use pallet_cf_broadcast::TransmissionFailure;
+use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
 use sp_core::H256;
+use sp_runtime::AccountId32;
 use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
@@ -16,6 +18,65 @@ use crate::{
     multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
+
+async fn handle_keygen_request<MultisigClient, RpcClient>(
+    multisig_client: Arc<MultisigClient>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    ceremony_id: CeremonyId,
+    validator_candidates: Vec<AccountId32>,
+    logger: slog::Logger,
+) where
+    MultisigClient: MultisigClientApi + Send + Sync + 'static,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+{
+    use pallet_cf_vaults::KeygenOutcome;
+
+    tokio::spawn(async move {
+        let keygen_outcome = multisig_client
+            .keygen(ceremony_id, validator_candidates.clone())
+            .await;
+
+        let keygen_outcome = match keygen_outcome {
+            Ok(public_key) => {
+                // Keygen verification: before the new key is returned to the SC,
+                // we first ensure that all parties can use it for signing
+
+                let public_key_bytes = public_key.serialize();
+
+                // We arbitrarily choose the data to sign over to be the hash of the generated pubkey
+                let data_to_sign = sp_core::hashing::blake2_256(&public_key_bytes);
+                match multisig_client
+                    .sign(
+                        ceremony_id,
+                        KeyId(public_key_bytes.to_vec()),
+                        validator_candidates,
+                        MessageHash(data_to_sign),
+                    )
+                    .await
+                {
+                    // Report keygen success if we are able to sign
+                    Ok(_signature) => KeygenOutcome::Success(
+                        cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
+                    ),
+                    // Report keygen failure if we failed to sign
+                    Err((bad_account_ids, _error)) => {
+                        KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                    }
+                }
+            }
+            Err((bad_account_ids, _error)) => {
+                KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+            }
+        };
+
+        let _result = state_chain_client
+            .submit_signed_extrinsic(
+                pallet_cf_vaults::Call::report_keygen_outcome(ceremony_id, keygen_outcome),
+                &logger,
+            )
+            .await;
+    });
+}
 
 pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
@@ -54,48 +115,38 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    async fn get_current_account_state<RpcClient: StateChainRpcApi>(
+    async fn get_current_account_data<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
         logger: &slog::Logger,
-    ) -> (ChainflipAccountData, bool) {
+    ) -> ChainflipAccountData {
         let new_account_data = state_chain_client
             .get_account_data(block_hash)
             .await
             .expect("Could not get account data");
 
-        let current_epoch = state_chain_client
-            .epoch_at_block(block_hash)
-            .await
-            .expect("Could not get current epoch");
+        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state);
 
-        let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
-            last_active_epoch + 1 == current_epoch
-        } else {
-            false
-        };
-
-        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state;
-        "is_outgoing" => is_outgoing, "last_active_epoch" => new_account_data.last_active_epoch);
-
-        (new_account_data, is_outgoing)
+        new_account_data
     }
 
     async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
-        account_data: ChainflipAccountData,
         sm_window_sender: &UnboundedSender<BlockHeightWindow>,
         km_window_sender: &UnboundedSender<BlockHeightWindow>,
     ) -> anyhow::Result<()> {
+        // TODO: Use all the historical epochs: https://github.com/chainflip-io/chainflip-backend/issues/1218
+        let last_active_epoch = *state_chain_client
+            .get_historical_active_epochs(block_hash)
+            .await?
+            .last()
+            .expect("Must exist if we're sending windows to witness processes");
+
         let eth_vault = state_chain_client
-            .get_vault::<Ethereum>(
-                block_hash,
-                account_data
-                    .last_active_epoch
-                    .expect("we are active or outgoing"),
-            )
+            .get_vault::<Ethereum>(block_hash, last_active_epoch)
             .await?;
+
         sm_window_sender
             .send(eth_vault.active_window.clone())
             .unwrap();
@@ -104,14 +155,16 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     }
 
     // Initialise the account state
-    let (mut account_data, mut is_outgoing) =
-        get_current_account_state(state_chain_client.clone(), initial_block_hash, &logger).await;
+    let mut account_data =
+        get_current_account_data(state_chain_client.clone(), initial_block_hash, &logger).await;
 
-    if account_data.state == ChainflipAccountState::Validator || is_outgoing {
+    if matches!(
+        account_data.state,
+        ChainflipAccountState::HistoricalAuthority(_) | ChainflipAccountState::CurrentAuthority
+    ) {
         send_windows_to_witness_processes(
             state_chain_client.clone(),
             initial_block_hash,
-            account_data,
             &sm_window_sender,
             &km_window_sender,
         )
@@ -189,35 +242,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         validator_candidates,
                                                     ),
                                                 ) if validator_candidates.contains(&state_chain_client.our_account_id) => {
-                                                    let multisig_client = multisig_client.clone();
-                                                    let state_chain_client = state_chain_client.clone();
-                                                    let logger = logger.clone();
-                                                    tokio::spawn(async move {
-                                                        let result_public_key = multisig_client.keygen(ceremony_id, validator_candidates).await;
-
-                                                        let _result = state_chain_client
-                                                            .submit_signed_extrinsic(
-                                                                pallet_cf_vaults::Call::report_keygen_outcome(
-                                                                    ceremony_id,
-                                                                    match result_public_key {
-                                                                        Ok(public_key) => {
-                                                                            pallet_cf_vaults::KeygenOutcome::Success(
-                                                                                cf_chains::eth::AggKey::from_pubkey_compressed(
-                                                                                    public_key.serialize(),
-                                                                                ),
-                                                                            )
-                                                                        }
-                                                                        Err((bad_account_ids, _error)) => {
-                                                                            pallet_cf_vaults::KeygenOutcome::Failure(BTreeSet::from_iter(
-                                                                                bad_account_ids,
-                                                                            ))
-                                                                        }
-                                                                    },
-                                                                ),
-                                                                &logger,
-                                                            )
-                                                            .await;
-                                                    });
+                                                    handle_keygen_request(multisig_client.clone(), state_chain_client.clone(), ceremony_id, validator_candidates, logger.clone()).await;
                                                 }
                                                 state_chain_runtime::Event::EthereumThresholdSigner(
                                                     pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
@@ -356,28 +381,23 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                     }
                                 }
 
-                                // Backup and passive nodes need to update their state on every block (since it's possible to move
-                                // between Backup and Passive on every block), while Active nodes only need to update every new epoch.
+                                // Backup and passive nodes (could be historical backup or passive) need to update their state on every block (since it's possible to move
+                                // between Backup and Passive on every block), while CurrentAuthority nodes only need to update every new epoch.
                                 if received_new_epoch || matches!(
                                     account_data.state,
-                                    ChainflipAccountState::Backup | ChainflipAccountState::Passive
-                                ) {
-                                    let (new_account_data, new_is_outgoing) =
-                                        get_current_account_state(state_chain_client.clone(), current_block_hash, &logger).await;
-                                    account_data = new_account_data;
-                                    is_outgoing = new_is_outgoing;
-
+                                    ChainflipAccountState::BackupOrPassive(_) | ChainflipAccountState::HistoricalAuthority(_))
+                                 {
+                                    account_data = get_current_account_data(state_chain_client.clone(), current_block_hash, &logger).await;
                                 }
 
-                                // New windows should be sent to outgoing validators (so they know when to finish) or to
-                                // new/existing validators (so they know when to start)
+                                // New windows should be sent to HistoricalAuthority validators (so they know when to finish) or to
+                                // new/existing CurrentAuthoritys (so they know when to start)
                                 // Note: nodes that were outgoing in the last epoch (active 2 epochs ago) have already
                                 // received their end window, so we don't need to send anything to them
-                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::Validator) || is_outgoing) {
+                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::CurrentAuthority | ChainflipAccountState::HistoricalAuthority(_))) {
                                     send_windows_to_witness_processes(
                                         state_chain_client.clone(),
                                         current_block_hash,
-                                        account_data,
                                         &sm_window_sender,
                                         &km_window_sender,
                                     )

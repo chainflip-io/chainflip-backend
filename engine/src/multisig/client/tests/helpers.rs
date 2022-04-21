@@ -1,8 +1,9 @@
 use std::{
     any::Any,
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     convert::{TryFrom, TryInto},
     fmt::Display,
+    iter::FromIterator,
     pin::Pin,
     time::Duration,
 };
@@ -52,11 +53,12 @@ use crate::{
 
 use state_chain_runtime::AccountId;
 
-use super::ACCOUNT_IDS;
+use super::{
+    ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
+    DEFAULT_SIGNING_SEED, STAGE_FINISHED_OR_NOT_STARTED,
+};
 
 use crate::multisig::tests::fixtures::MESSAGE_HASH;
-
-pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 
@@ -86,6 +88,7 @@ pub struct Node {
 
 pub fn new_node(account_id: AccountId) -> Node {
     let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
+    let logger = logger.new(slog::o!("account_id" => format!("{}",account_id)));
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
     let ceremony_manager = CeremonyManager::new(account_id, outgoing_p2p_message_sender, &logger);
@@ -265,7 +268,7 @@ where
         }
     }
 
-    async fn gather_outgoing_messages<
+    pub async fn gather_outgoing_messages<
         NextStageData: TryFrom<<Self as CeremonyRunnerStrategy>::CeremonyData, Error = Error> + Clone,
         Error: Display,
     >(
@@ -357,7 +360,7 @@ where
             AccountId,
             CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
         >,
-    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, Vec<AccountId>>> {
+    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, BTreeSet<AccountId>>> {
         let results = self
             .nodes
             .iter_mut()
@@ -381,7 +384,7 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (Vec<AccountId>, anyhow::Error),
+                        (BTreeSet<AccountId>, anyhow::Error),
                     >,
                 )>,
             >>()
@@ -391,25 +394,27 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (Vec<AccountId>, anyhow::Error),
+                        (BTreeSet<AccountId>, anyhow::Error),
                     >,
                 >,
             >>()?;
 
-        let (ok_results, error_results): (HashMap<_, _>, Vec<_>) = results
+        let (ok_results, all_reported_parties): (HashMap<_, _>, BTreeSet<_>) = results
             .into_iter()
             .partition_map(|(account_id, result)| match result {
                 Ok(output) => Either::Left((account_id, output)),
-                Err(error) => Either::Right(error),
+                Err((reported_parties, _error)) => Either::Right(reported_parties),
             });
 
-        if !ok_results.is_empty() && error_results.is_empty() {
+        if !ok_results.is_empty() && all_reported_parties.is_empty() {
             Some(Ok(self.post_successful_complete_check(ok_results)))
-        } else if ok_results.is_empty() && !error_results.is_empty() {
-            Some(Err(all_same(error_results.into_iter().map(
-                |(reported, _error)| (reported.into_iter().sorted().collect::<Vec<_>>()),
-            ))
-            .expect("Reported parties weren't the same for all nodes")))
+        } else if ok_results.is_empty() && !all_reported_parties.is_empty() {
+            assert_eq!(
+                all_reported_parties.len(),
+                1,
+                "Reported parties weren't the same for all nodes"
+            );
+            Some(Err(all_reported_parties.into_iter().next().unwrap()))
         } else {
             panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
         }
@@ -425,7 +430,7 @@ where
         assert_ok!(self
             .try_gather_outcomes(&mut result_receivers)
             .await
-            .unwrap())
+            .expect("Failed to get all ceremony outcomes"))
     }
 
     pub async fn try_complete_with_error(
@@ -440,7 +445,10 @@ where
             .try_gather_outcomes(result_receivers)
             .await?
             .unwrap_err();
-        assert_eq!(bad_account_ids, &reported[..]);
+        assert_eq!(
+            BTreeSet::from_iter(bad_account_ids.iter()),
+            reported.iter().collect()
+        );
         Some(())
     }
 
@@ -454,7 +462,7 @@ where
     ) {
         self.try_complete_with_error(bad_account_ids, &mut result_receivers)
             .await
-            .unwrap();
+            .expect("Failed to get all ceremony outcomes");
     }
 
     pub fn request_without_gather(
@@ -574,6 +582,16 @@ impl KeygenCeremonyRunner {
             keygen_options: self.ceremony_runner_data,
         }
     }
+
+    /// Create a keygen ceremony with all ACCOUNT_IDS and default parameters
+    pub fn new_with_default() -> Self {
+        KeygenCeremonyRunner::new(
+            new_nodes(ACCOUNT_IDS.clone()),
+            DEFAULT_KEYGEN_CEREMONY_ID,
+            KeygenOptions::allowing_high_pubkey(),
+            Rng::from_seed(DEFAULT_KEYGEN_SEED),
+        )
+    }
 }
 
 pub struct SigningCeremonyRunnerData {
@@ -687,18 +705,18 @@ pub async fn new_signing_ceremony_with_keygen() -> (SigningCeremonyRunner, HashM
 {
     let (key_id, key_data, _messages, nodes) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenOptions::allowing_high_pubkey(),
     )
     .await;
 
     SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         nodes,
-        1,
+        DEFAULT_SIGNING_CEREMONY_ID,
         key_id,
         key_data,
         MESSAGE_HASH.clone(),
-        Rng::from_seed([4; 32]),
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
     )
 }
 
@@ -912,8 +930,12 @@ pub async fn run_keygen(
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
-    let keygen_ceremony =
-        KeygenCeremonyRunner::new(nodes, ceremony_id, keygen_options, Rng::from_seed([8; 32]));
+    let keygen_ceremony = KeygenCeremonyRunner::new(
+        nodes,
+        ceremony_id,
+        keygen_options,
+        Rng::from_seed(DEFAULT_KEYGEN_SEED),
+    );
     standard_keygen(keygen_ceremony).await
 }
 
@@ -929,7 +951,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 > {
     let mut keygen_ceremony = KeygenCeremonyRunner::new(
         new_nodes(account_ids),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenOptions::default(),
         Rng::from_entropy(),
     );

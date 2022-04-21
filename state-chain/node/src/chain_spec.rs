@@ -4,10 +4,10 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, CfeSettings,
-	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
-	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
+	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumVaultConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
@@ -59,7 +59,6 @@ pub struct StateChainEnvironment {
 	eth_block_safety_margin: u32,
 	pending_sign_duration: u32,
 	max_ceremony_stage_duration: u32,
-	max_extrinsic_retry_attempts: u32,
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
@@ -98,11 +97,6 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<u32>()
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
-	let max_extrinsic_retry_attempts = env::var("MAX_EXTRINSIC_RETRY_ATTEMPTS")
-		.unwrap_or(format!("{}", CfeSettings::default().max_extrinsic_retry_attempts))
-		.parse::<u32>()
-		.expect("MAX_EXTRINSIC_RETRY_ATTEMPTS env var could not be parsed to u32");
-
 	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
 		.unwrap_or(format!("{}", CfeSettings::default().max_ceremony_stage_duration))
 		.parse::<u32>()
@@ -123,9 +117,18 @@ pub fn get_environment() -> StateChainEnvironment {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	}
 }
+
+/// The reputation penalty and suspension duration for each offence.
+const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
+	(Offence::ParticipateKeygenFailed, (15, u32::MAX)),
+	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::InvalidTransactionAuthored, (15, 0)),
+	(Offence::TransactionFailedOnTransmission, (15, 0)),
+];
 
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
@@ -150,7 +153,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -179,7 +181,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -219,7 +220,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -254,7 +254,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -320,7 +319,6 @@ fn chainflip_three_node_testnet_config_from_env(
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = environment;
 	Ok(ChainSpec::from_genesis(
 		name,
@@ -379,7 +377,6 @@ fn chainflip_three_node_testnet_config_from_env(
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -426,7 +423,6 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -507,7 +503,6 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 						eth_block_safety_margin,
 						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -572,7 +567,10 @@ fn testnet_genesis(
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
-		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
+		reputation: ReputationConfig {
+			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+			penalties: PENALTIES.to_vec(),
+		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),

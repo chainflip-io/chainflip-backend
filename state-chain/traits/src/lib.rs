@@ -93,8 +93,14 @@ pub trait EpochInfo {
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
 
-	/// Checks if the account is currently a validator.
-	fn is_validator(account: &Self::ValidatorId) -> bool;
+	/// Get the current number of validators
+	fn current_validator_count() -> u32;
+
+	/// Gets validator index of a particular validator for a given epoch
+	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
+
+	/// Validator count at a particular epoch.
+	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
 	/// current candidate validator set
@@ -106,16 +112,19 @@ pub trait EpochInfo {
 	/// Are we in the auction phase of the epoch?
 	fn is_auction_phase() -> bool;
 
-	/// The number of validators in the current active set.
-	fn active_validator_count() -> u32;
-
 	/// The consensus threshold for the current epoch.
 	///
 	/// This is the number of parties required to conduct a *successful* threshold
 	/// signature ceremony based on the number of active validators.
 	fn consensus_threshold() -> u32 {
-		cf_utilities::success_threshold_from_share_count(Self::active_validator_count())
+		cf_utilities::success_threshold_from_share_count(Self::current_validator_count() as u32)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_validator_count_for_epoch(epoch: EpochIndex, count: u32);
 }
 
 pub struct CurrentThreshold<T>(PhantomData<T>);
@@ -169,10 +178,7 @@ pub type ActiveValidatorRange = (u32, u32);
 /// Auctioneer
 ///
 /// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
-/// returned as an `AuctionResult` calling `run_aucion()`. The result would then be provided to
-/// `update_validator_status()` when have rotated the active set.  A new auction is ran on each call
-/// of `resolve_auction()` which discards the previous auction run.
-
+/// returned as an `AuctionResult` calling `run_auction()`.
 pub trait Auctioneer {
 	type ValidatorId;
 	type Amount;
@@ -181,8 +187,10 @@ pub trait Auctioneer {
 	/// Run an auction by qualifying a validator
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error>;
 
-	/// Update validator status for the winners
-	fn update_validator_status(winners: &[Self::ValidatorId]);
+	// TODO: there's probably a better place to put this (both in terms of being in this trait)
+	// and where it's called
+	/// Update the states of backup and passive nodes
+	fn update_backup_and_passive_states();
 }
 
 pub trait BackupValidators {
@@ -216,9 +224,9 @@ pub trait EpochTransitionHandler {
 	type ValidatorId;
 	/// A new epoch has started
 	///
-	/// The `old_validators` have moved on to leave the `new_validators` securing the network with
-	/// a `new_bond`
-	fn on_new_epoch(old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]);
+	/// The `previous_epoch_validators` now let `epoch_validators` take control
+	/// There can be an overlap between these two sets of validators
+	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]);
 }
 
 /// Providing bidders for an auction
@@ -352,32 +360,49 @@ pub trait EmergencyRotation {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
-pub enum ChainflipAccountState {
-	Passive,
+pub enum BackupOrPassive {
 	Backup,
-	Validator,
+	Passive,
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+pub enum ChainflipAccountState {
+	CurrentAuthority,
+	HistoricalAuthority(BackupOrPassive),
+	BackupOrPassive(BackupOrPassive),
+}
+
+// TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
-	pub last_active_epoch: Option<EpochIndex>,
 }
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Passive, last_active_epoch: None }
+		ChainflipAccountData {
+			state: ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+		}
 	}
 }
 
 pub trait ChainflipAccount {
 	type AccountId;
 
+	/// Get the account data for the given account id.
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
-	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex);
+	/// Updates the state of a
+	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
+	/// Set the validator to be the current authority
+	fn set_current_authority(account_id: &Self::AccountId);
+	/// Sets the validator state to historical
+	fn set_historical_validator(account_id: &Self::AccountId);
+	/// Sets the current validator to the historical validator, should be called
+	/// once the validator has no more active epochs
+	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
 }
 
+// Remove in place of a proper validator enum
 /// An outgoing node
 pub trait IsOutgoing {
 	type AccountId;
@@ -398,16 +423,49 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::get(account_id)
 	}
 
-	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state = state;
+	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
+			ChainflipAccountState::CurrentAuthority => {
+				log::warn!("Attempted to set backup or passive on a current authority account");
+			},
+			ChainflipAccountState::HistoricalAuthority(_) => {
+				(*account_data).state = ChainflipAccountState::HistoricalAuthority(state);
+			},
+			ChainflipAccountState::BackupOrPassive(_) => {
+				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
+			},
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
-	fn update_last_active_epoch(account_id: &Self::AccountId, index: EpochIndex) {
+	/// Set the last epoch number and set the account state to Validator
+	fn set_current_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).last_active_epoch = Some(index);
+			(*account_data).state = ChainflipAccountState::CurrentAuthority;
+		})
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+	}
+
+	// TODO: How to check if we set to backup or passive
+	// we might want to combine this with an update_backup_or_passive
+	fn set_historical_validator(account_id: &Self::AccountId) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			(*account_data).state =
+				ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive);
+		})
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+	}
+
+	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
+			ChainflipAccountState::HistoricalAuthority(state) => {
+				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
+			},
+			_ => {
+				log::error!(
+					"Attempted to set backup or passive on a CurrentAuthority or BackupOrPassive"
+				);
+			},
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
@@ -593,6 +651,8 @@ pub trait HistoricalEpoch {
 	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
 	///  Returns the amount of a validator's stake that is currently bonded.
 	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
+	/// Returns the number of active epochs a validator is still active in
+	fn number_of_active_epochs_for_validator(id: &Self::ValidatorId) -> u32;
 }
 
 /// Handles the expiry of an epoch

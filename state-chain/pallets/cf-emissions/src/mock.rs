@@ -73,8 +73,6 @@ impl system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_offence_reporting!(u64);
-
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;

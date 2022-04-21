@@ -172,7 +172,7 @@ fn should_rotate_when_forced() {
 }
 
 #[test]
-fn should_rotate_at_epoch() {
+fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 	new_test_ext().execute_with(|| {
 		let new_bond = 10;
 		let new_validators = vec![1, 2];
@@ -526,9 +526,9 @@ fn test_missing_author_punishment() {
 		let offset = 4 * 123456;
 		MockMissedAuthorshipSlots::set(vec![1 + offset, 2 + offset]);
 		move_forward_blocks(1);
-		assert_eq!(
-			MockOffenceReporter::get_reported(),
-			ValidatorPallet::validators().get(1..=2).unwrap().to_vec()
+		MockOffenceReporter::assert_reported(
+			PalletOffence::MissedAuthorshipSlot,
+			ValidatorPallet::validators().get(1..=2).unwrap().to_vec(),
 		)
 	})
 }

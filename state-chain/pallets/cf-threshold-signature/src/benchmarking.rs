@@ -8,7 +8,7 @@ use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account}
 use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use frame_system::RawOrigin;
 use pallet_cf_online::Call as OnlineCall;
-use pallet_cf_validator::{ValidatorLookup, Validators};
+use pallet_cf_validator::Validators;
 use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
@@ -23,7 +23,6 @@ where
 	Validators::<T>::put(accounts.clone().collect::<Vec<_>>());
 	for account in accounts {
 		whitelist_account!(account);
-		ValidatorLookup::<T>::insert(&account, ());
 		OnlineCall::<T>::heartbeat()
 			.dispatch_bypass_filter(RawOrigin::Signed(account).into())
 			.unwrap();

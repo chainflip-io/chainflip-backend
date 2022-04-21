@@ -5,11 +5,10 @@ use crate::{
             self,
             signing::frost,
             tests::helpers::{
-                gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
-                new_signing_ceremony_with_keygen, split_messages_for, standard_signing,
-                SigningCeremonyRunner, STAGE_FINISHED_OR_NOT_STARTED,
+                for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
+                new_signing_ceremony_with_keygen, run_keygen, run_stages, split_messages_for,
+                standard_signing, standard_signing_coroutine, SigningCeremonyRunner,
             },
-            tests::*,
             KeygenOptions,
         },
         crypto::Rng,
@@ -18,14 +17,15 @@ use crate::{
     },
     testing::{assert_future_awaits, assert_future_can_complete, assert_ok},
 };
+
+use super::*;
+
 use client::{MultisigClient, SchnorrSignature};
 use rand_legacy::SeedableRng;
 
 use itertools::Itertools;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc::error::TryRecvError;
-
-use super::helpers::{self, for_each_stage, run_keygen, standard_signing_coroutine};
 
 // Data for any stage that arrives one stage too early should be properly delayed
 // and processed after the stage transition is made
@@ -80,8 +80,6 @@ async fn should_delay_stage_data() {
 // they should be delayed and processed after it arrives
 #[tokio::test]
 async fn should_delay_comm1_before_rts() {
-    let test_id = &ACCOUNT_IDS[0];
-
     let mut signing_ceremony = new_signing_ceremony_with_keygen().await.0;
     let (_, signing_messages) = standard_signing(&mut signing_ceremony).await;
 
@@ -90,6 +88,7 @@ async fn should_delay_comm1_before_rts() {
     // Send comm1 messages from the other clients
     signing_ceremony.distribute_messages(signing_messages.stage_1_messages);
 
+    let [test_id] = &signing_ceremony.select_account_ids();
     assert_ok!(
         signing_ceremony.nodes[test_id].ensure_ceremony_at_signing_stage(
             STAGE_FINISHED_OR_NOT_STARTED,
@@ -106,11 +105,11 @@ async fn should_delay_comm1_before_rts() {
 }
 
 #[tokio::test]
-async fn should_handle_invalid_local_sig() {
+async fn should_report_on_invalid_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
-    let mut messages = helpers::run_stages!(
+    let mut messages = run_stages!(
         signing_ceremony,
         messages,
         frost::VerifyComm2,
@@ -138,7 +137,7 @@ async fn should_handle_invalid_local_sig() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_com1() {
+async fn should_report_on_inconsistent_broadcast_comm1() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (mut messages, result_receivers) = signing_ceremony.request().await;
@@ -163,12 +162,12 @@ async fn should_handle_inconsistent_broadcast_com1() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_sig3() {
+async fn should_report_on_inconsistent_broadcast_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
 
-    let mut messages = helpers::run_stages!(
+    let mut messages = run_stages!(
         signing_ceremony,
         messages,
         frost::VerifyComm2,
@@ -201,7 +200,7 @@ async fn should_ignore_duplicate_rts() {
 
     let (messages, _result_receivers) = signing_ceremony.request().await;
 
-    helpers::run_stages!(signing_ceremony, messages, frost::VerifyComm2,);
+    run_stages!(signing_ceremony, messages, frost::VerifyComm2,);
 
     assert_ok!(signing_ceremony.nodes[&test_id]
         .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
@@ -219,12 +218,10 @@ async fn should_ignore_duplicate_rts() {
 
 #[tokio::test]
 async fn should_delay_rts_until_key_is_ready() {
-    let logger = logging::test_utils::new_test_logger();
-
     let account_id = &ACCOUNT_IDS[0];
     let (key_id, key_data, _, _) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenOptions::allowing_high_pubkey(),
     )
     .await;
@@ -239,11 +236,12 @@ async fn should_delay_rts_until_key_is_ready() {
         keygen_request_sender,
         signing_request_sender,
         KeygenOptions::default(),
-        &logger,
+        &logging::test_utils::new_test_logger(),
     );
 
     // Send Keygen Request
-    let keygen_request_fut = client.initiate_keygen(1, ACCOUNT_IDS.to_vec());
+    let keygen_request_fut =
+        client.initiate_keygen(DEFAULT_KEYGEN_CEREMONY_ID, ACCOUNT_IDS.to_vec());
 
     // Fake completion of requests keygen (But the MultisigClient will not receive the result and handle it yet)
     let (_, _, _, _, result_sender) = keygen_request_receiver.recv().await.unwrap();
@@ -253,7 +251,12 @@ async fn should_delay_rts_until_key_is_ready() {
 
     // Send Sign Request
     let mut signing_request_fut = client
-        .initiate_signing(1, key_id, ACCOUNT_IDS.to_vec(), MessageHash([0; 32]))
+        .initiate_signing(
+            DEFAULT_SIGNING_CEREMONY_ID,
+            key_id,
+            ACCOUNT_IDS.to_vec(),
+            MessageHash([0; 32]),
+        )
         .await;
 
     // Check Sign Request Has been Delayed
@@ -332,11 +335,11 @@ async fn should_panic_rts_if_not_participating() {
 async fn should_ignore_rts_with_insufficient_number_of_signers() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let [test_node_id] = signing_ceremony.select_account_ids();
+    let [test_node_id] = &signing_ceremony.select_account_ids();
 
     assert_ok!(signing_ceremony
         .nodes
-        .get(&test_node_id)
+        .get(test_node_id)
         .unwrap()
         .ensure_ceremony_at_signing_stage(
             STAGE_FINISHED_OR_NOT_STARTED,
@@ -344,9 +347,9 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
         ));
 
     // Send the request to sign with insufficient signer_ids specified
-    let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(&test_node_id);
+    let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(test_node_id);
     signing_ceremony_details.signers.pop();
-    let node_0 = signing_ceremony.nodes.get_mut(&test_node_id).unwrap();
+    let node_0 = signing_ceremony.nodes.get_mut(test_node_id).unwrap();
     node_0.request_signing(signing_ceremony_details);
 
     // The request to sign should not have started a ceremony
@@ -359,11 +362,9 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
 
 #[tokio::test]
 async fn pending_rts_should_expire() {
-    let logger = logging::test_utils::new_test_logger();
-
     let (key_id, ..) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenOptions::allowing_high_pubkey(),
     )
     .await;
@@ -380,11 +381,16 @@ async fn pending_rts_should_expire() {
         keygen_request_sender,
         signing_request_sender,
         KeygenOptions::default(),
-        &logger,
+        &logging::test_utils::new_test_logger(),
     );
 
     let mut signing_request_fut = client
-        .initiate_signing(1, key_id, ACCOUNT_IDS.to_vec(), MessageHash([0; 32]))
+        .initiate_signing(
+            DEFAULT_SIGNING_CEREMONY_ID,
+            key_id,
+            ACCOUNT_IDS.to_vec(),
+            MessageHash([0; 32]),
+        )
         .await;
 
     assert_future_awaits(&mut signing_request_fut);
@@ -408,7 +414,8 @@ async fn should_ignore_unexpected_message_for_stage() {
         standard_signing_coroutine,
         |stage_number, mut ceremony, (_, messages, _)| async move {
             let previous_stage = stage_number - 1;
-            let test_node_id = &ACCOUNT_IDS[0];
+
+            let [test_node_id] = &ceremony.select_account_ids();
 
             let get_messages_for_stage = |stage_index: usize| {
                 split_messages_for(messages[stage_index].clone(), test_node_id, &ACCOUNT_IDS[1])
@@ -538,7 +545,7 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
-    let messages = helpers::run_stages!(
+    let messages = run_stages!(
         signing_ceremony,
         messages,
         frost::VerifyComm2,
@@ -568,22 +575,19 @@ async fn should_ignore_rts_with_used_ceremony_id() {
 async fn should_ignore_stage_data_with_used_ceremony_id() {
     let (key_id, key_data, _, nodes) = helpers::run_keygen(
         helpers::new_nodes(ACCOUNT_IDS.clone()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         client::KeygenOptions::allowing_high_pubkey(),
     )
     .await;
 
-    let signing_ceremony_id = 1;
-
-    let mut signing_ceremony = SigningCeremonyRunner::new_with_threshold_subset_of_signers(
+    let (mut signing_ceremony, _) = SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         nodes,
-        signing_ceremony_id,
+        DEFAULT_SIGNING_CEREMONY_ID,
         key_id,
         key_data,
         MESSAGE_HASH.clone(),
-        Rng::from_seed([4; 32]),
-    )
-    .0;
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
+    );
 
     let [node_0_id, node_1_id] = signing_ceremony.select_account_ids();
 
@@ -607,7 +611,10 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     // to see if a unauthorised state was created.
     assert_ok!(signing_ceremony
         .get_mut_node(&node_0_id)
-        .ensure_ceremony_at_signing_stage(STAGE_FINISHED_OR_NOT_STARTED, signing_ceremony_id));
+        .ensure_ceremony_at_signing_stage(
+            STAGE_FINISHED_OR_NOT_STARTED,
+            DEFAULT_SIGNING_CEREMONY_ID
+        ));
     assert_eq!(
         signing_ceremony
             .get_mut_node(&node_0_id)
@@ -645,7 +652,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
     // Do a signing ceremony as normal, using the default signing_ceremony
     let (messages, result_receivers) = signing_ceremony.request().await;
-    let messages = helpers::run_stages!(
+    let messages = run_stages!(
         signing_ceremony,
         messages,
         frost::VerifyComm2,
@@ -658,27 +665,26 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     signing_ceremony.complete(result_receivers).await;
 }
 
-// TODO: Come back and do this such that it signs with all parties
 #[tokio::test]
 async fn should_sign_with_all_parties() {
     let (key_id, key_data, _messages, nodes) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone()),
-        1,
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenOptions::allowing_high_pubkey(),
     )
     .await;
 
     let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
         nodes,
-        1,
+        DEFAULT_SIGNING_CEREMONY_ID,
         key_id,
         key_data,
         MESSAGE_HASH.clone(),
-        Rng::from_seed([4; 32]),
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
     );
 
     let (messages, result_receivers) = signing_ceremony.request().await;
-    let messages = helpers::run_stages!(
+    let messages = run_stages!(
         signing_ceremony,
         messages,
         frost::VerifyComm2,
@@ -691,15 +697,10 @@ async fn should_sign_with_all_parties() {
 
 mod timeout {
 
-    // TODO:
-    // - Same as the tests for `offline_party_should_be_reported_*`, but the nodes are reported if the majority can't agree on any one value
-    // (even if all values are `Some(...)` such as when a node does an inconsistent broadcast)
-    // - If timeout before the key is ready, the ceremony should be ignored, but need to ensure that
-    //    we return a response
-
     use super::*;
 
     /* TODO: Refactor once feature re-enabled
+    // [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
 
     // If timeout during an "unauthorised" ceremony, we report the nodes that attempted to start it
     // (i.e. whoever send stage data for the ceremony)
@@ -736,17 +737,19 @@ mod timeout {
 
     mod during_regular_stage {
 
+        use crate::multisig::client::signing::frost::SigningData;
+
         use super::*;
 
         // ======================
 
         // The following tests cover:
-        // If timeout during a regular stage, but the majority of nodes can agree on all values,
+        // If timeout during a regular (broadcast) stage, but the majority of nodes can agree on all values,
         // we proceed with the ceremony and use the data received by the majority. If majority of nodes
-        // agree on a party timing out in the following stage (broadcast verification), the party gets reported
+        // agree on a party timing out in the following broadcast verification stage, the party gets reported
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage1() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let (mut messages, result_receivers) = signing_ceremony.request().await;
@@ -758,17 +761,22 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            // this node doesn't receive non_sending_party's message, so must timeout
+            signing_ceremony.distribute_messages(messages);
+
+            // This node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
                 .nodes
                 .get_mut(&timed_out_party_id)
                 .unwrap()
                 .force_stage_timeout();
 
-            let messages = helpers::run_stages!(
+            let messages = signing_ceremony
+                .gather_outgoing_messages::<frost::VerifyComm2, SigningData>()
+                .await;
+
+            let messages = run_stages!(
                 signing_ceremony,
                 messages,
-                frost::VerifyComm2,
                 frost::LocalSig3,
                 frost::VerifyLocalSig4
             );
@@ -777,12 +785,12 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage3() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage3() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let (messages, result_receivers) = signing_ceremony.request().await;
 
-            let mut messages = helpers::run_stages!(
+            let mut messages = run_stages!(
                 signing_ceremony,
                 messages,
                 frost::VerifyComm2,
@@ -796,75 +804,21 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            // this node doesn't receive non_sending_party's message, so must timeout
+            signing_ceremony.distribute_messages(messages);
+
+            // This node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
                 .nodes
                 .get_mut(&timed_out_party_id)
                 .unwrap()
                 .force_stage_timeout();
 
-            let messages =
-                helpers::run_stages!(signing_ceremony, messages, frost::VerifyLocalSig4,);
+            let messages = signing_ceremony
+                .gather_outgoing_messages::<frost::VerifyLocalSig4, SigningData>()
+                .await;
 
             signing_ceremony.distribute_messages(messages);
             signing_ceremony.complete(result_receivers).await;
-        }
-
-        // ======================
-
-        // ======================
-
-        // The following tests cover:
-        // If timeout during a regular stage, and the majority of nodes didn't receive the data
-        // from some nodes (i.e. they vote on value `None`), those nodes are reported
-
-        #[tokio::test]
-        async fn offline_party_should_be_reported_stage1() {
-            let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
-
-            let (messages, result_receivers) = signing_ceremony.request().await;
-
-            let [non_sending_party_id] = signing_ceremony.select_account_ids();
-
-            // non sending party sends to no one
-            let messages = signing_ceremony
-                .run_stage_with_non_sender::<frost::VerifyComm2, _, _>(
-                    messages,
-                    &non_sending_party_id,
-                )
-                .await;
-            signing_ceremony.distribute_messages(messages);
-            signing_ceremony
-                .complete_with_error(&[non_sending_party_id], result_receivers)
-                .await;
-        }
-
-        #[tokio::test]
-        async fn offline_party_should_be_reported_stage3() {
-            let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
-
-            let (messages, result_receivers) = signing_ceremony.request().await;
-
-            let messages = helpers::run_stages!(
-                signing_ceremony,
-                messages,
-                frost::VerifyComm2,
-                frost::LocalSig3
-            );
-
-            let [non_sending_party_id] = signing_ceremony.select_account_ids();
-
-            // non sending party sends to no one
-            let messages = signing_ceremony
-                .run_stage_with_non_sender::<frost::VerifyLocalSig4, _, _>(
-                    messages,
-                    &non_sending_party_id,
-                )
-                .await;
-            signing_ceremony.distribute_messages(messages);
-            signing_ceremony
-                .complete_with_error(&[non_sending_party_id], result_receivers)
-                .await;
         }
 
         // ======================
@@ -880,10 +834,10 @@ mod timeout {
         // If timeout during a broadcast verification stage, and we have enough data, we can recover
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage2() {
+        async fn should_recover_if_agree_on_values_stage2() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let bad_node_id = ceremony.nodes.keys().next().unwrap().clone();
+            let [bad_node_id] = &ceremony.select_account_ids();
 
             let (messages, result_receivers) = ceremony.request().await;
             let messages = ceremony
@@ -891,7 +845,7 @@ mod timeout {
                 .await;
 
             let messages = ceremony
-                .run_stage_with_non_sender::<frost::LocalSig3, _, _>(messages, &bad_node_id)
+                .run_stage_with_non_sender::<frost::LocalSig3, _, _>(messages, bad_node_id)
                 .await;
 
             let messages = ceremony
@@ -902,13 +856,13 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage4() {
+        async fn should_recover_if_agree_on_values_stage4() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let bad_node_id = ceremony.nodes.keys().next().unwrap().clone();
+            let [bad_node_id] = &ceremony.select_account_ids();
 
             let (messages, result_receivers) = ceremony.request().await;
-            let messages = helpers::run_stages!(
+            let messages = run_stages!(
                 ceremony,
                 messages,
                 frost::VerifyComm2,
@@ -916,7 +870,7 @@ mod timeout {
                 frost::VerifyLocalSig4
             );
 
-            ceremony.distribute_messages_with_non_sender(messages, &bad_node_id);
+            ceremony.distribute_messages_with_non_sender(messages, bad_node_id);
 
             ceremony.complete(result_receivers).await;
         }
@@ -926,24 +880,24 @@ mod timeout {
         // ======================
 
         // The following tests cover:
-        // If timeout during a broadcast verification stage, and we don't have enough data to
-        // recover some of the parties messages, we report those parties (note that we can't report
-        // the parties that were responsible for the timeout in the first place as we would need
-        // another round of "voting" which can also timeout, and then we are back where we started)
+        // Timeout during both the broadcast & broadcast verification stages means that
+        // we don't have enough data to recover:
+        // The parties that timeout during the broadcast stage will be reported,
+        // but the parties the timeout during the verification stage will not
+        // because that would need another round of "voting" which can also timeout.
 
         #[tokio::test]
-        async fn report_if_cannot_agree_on_values_stage_2() {
+        async fn should_report_if_insufficient_messages_stage2() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            // bad party 1 will timeout during a broadcast verification stage. It should be reported
+            // bad party 1 will timeout during a broadcast stage. It should be reported
             // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
-            // (Ideally it should be reported, but we can't due to the limitations of the protocol)
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
             let (messages, result_receivers) = signing_ceremony.request().await;
 
-            // bad party one times out here
+            // bad party 1 times out here
             let messages = signing_ceremony
                 .run_stage_with_non_sender::<frost::VerifyComm2, _, _>(
                     messages,
@@ -951,7 +905,7 @@ mod timeout {
                 )
                 .await;
 
-            // bad party two times out here (NB: They are different parties)
+            // bad party 2 times out here (NB: They are different parties)
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
@@ -960,25 +914,24 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_cannot_agree_on_values_stage_4() {
+        async fn should_report_if_insufficient_messages_stage4() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            // bad party 1 will timeout during a broadcast verification stage. It should be reported
+            // bad party 1 will timeout during a broadcast stage. It should be reported
             // bad party 2 will timeout during a broadcast verification stage. It won't get reported.
-            // (Ideally it should be reported, but we can't due to the limitations of the protocol
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
             let (messages, result_receivers) = signing_ceremony.request().await;
 
-            let messages = helpers::run_stages!(
+            let messages = run_stages!(
                 signing_ceremony,
                 messages,
                 frost::VerifyComm2,
                 frost::LocalSig3
             );
 
-            // bad party one times out here
+            // bad party 1 times out here
             let messages = signing_ceremony
                 .run_stage_with_non_sender::<frost::VerifyLocalSig4, _, _>(
                     messages,
@@ -986,7 +939,7 @@ mod timeout {
                 )
                 .await;
 
-            // bad party two times out here (NB: They are different parties)
+            // bad party 2 times out here (NB: They are different parties)
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
