@@ -3,7 +3,7 @@ use crate::{
 	CallHash, Error, VoteMask, Votes,
 };
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo};
-use frame_support::{assert_noop, assert_ok, Hashable};
+use frame_support::{assert_noop, assert_ok};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
 	let events = frame_system::Pallet::<T>::events()
@@ -166,27 +166,9 @@ fn only_validators_can_witness() {
 }
 
 #[test]
-fn delegated_call_should_emit_but_not_return_error() {
-	new_test_ext().execute_with(|| {
-		// Our callable extrinsic which will fail when called
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
-
-		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
-		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
-
-		// The second witness should have triggered the failing call.
-		assert_event_sequence::<Test>(vec![crate::Event::<Test>::WitnessExecuted(
-			CallHash(Hashable::blake2_256(&call)),
-			Err(pallet_dummy::Error::<Test>::NoneValue.into()),
-		)
-		.into()]);
-	});
-}
-
-#[test]
 fn can_continue_to_witness_for_old_epochs() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// These are ALISSA, BOBSON, CHARLEMAGNE
 		let mut current_validators = MockEpochInfo::current_validators();

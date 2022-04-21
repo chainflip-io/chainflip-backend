@@ -37,16 +37,15 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
+		/// Value Incremented [value]
 		ValueIncremented(u32),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Error names should be descriptive.
+		/// Empty Storage
 		NoneValue,
-		/// Errors should have helpful documentation associated with them.
+		/// Storage overflow while incrementing
 		StorageOverflow,
 	}
 
@@ -55,8 +54,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+		/// increments value, starting from 0
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn increment_value(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
@@ -78,25 +76,6 @@ pub mod pallet {
 			Self::deposit_event(Event::ValueIncremented(amount));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(().into())
-		}
-
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn try_get_value(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => Err(Error::<T>::NoneValue.into()),
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(().into())
-				},
-			}
 		}
 	}
 }
