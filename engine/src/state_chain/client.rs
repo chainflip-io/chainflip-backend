@@ -603,6 +603,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 match rpc_err {
                     RpcError::JsonRpcError(ref e)
                         // POOL_ALREADY_IMPORTED error occurs when the transaction is already in the pool
+                        // More than one node can submit the same unsigned extrinsic. E.g. in the case of
+                        // a threshold signature success. Thus, if we get a "Transaction already in pool" "error"
+                        // we know that this particular extrinsic has already been submitted. And so we can
+                        // ignore the error and return the transaction hash
                         if e.code == ErrorCode::ServerError(1013) =>
                     {
                         slog::trace!(logger, "Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.", extrinsic, expected_hash);
