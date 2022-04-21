@@ -41,7 +41,7 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 	u64::from_be_bytes(bytes)
 }
 
-fn eligible_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
+fn eligible_authorities() -> Vec<<Runtime as Chainflip>::ValidatorId> {
 	let exluded_from_signing = ExclusionSetFor::<SigningOffences>::get();
 
 	<Validator as EpochInfo>::current_authorities()
@@ -59,7 +59,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId> {
-		select_one(seed_from_hashable(seed), eligible_validators())
+		select_one(seed_from_hashable(seed), eligible_authorities())
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(
@@ -69,9 +69,9 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 		try_select_random_subset(
 			seed_from_hashable(seed),
 			cf_utilities::success_threshold_from_share_count(
-				<Validator as EpochInfo>::validator_count_at_epoch(epoch_index).unwrap_or_default(),
 			) as usize,
-			eligible_validators(),
+			eligible_authorities(),
+				<Validator as EpochInfo>::authority_count_at_epoch(epoch_index).unwrap_or_default(),
 		)
 	}
 }
