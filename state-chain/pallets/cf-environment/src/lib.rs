@@ -2,9 +2,28 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+use cf_traits::NetworkManager;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
+pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum NetworkState {
+	Paused,
+	Running,
+}
+
+impl Default for NetworkState {
+	fn default() -> Self {
+		NetworkState::Running
+	}
+}
 pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
@@ -25,7 +44,6 @@ pub mod cfe {
 	}
 }
 
-pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -42,7 +60,16 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Governance origin to secure extrinsic
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		/// Weight information
+		type WeightInfo: WeightInfo;
 	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// The network is currently paused.
+		NetworkIsPaused,
+	}
+
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -66,14 +93,40 @@ pub mod pallet {
 	/// The settings used by the CFE
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
-	#[pallet::event]
-	pub enum Event<T: Config> {}
+	#[pallet::storage]
+	#[pallet::getter(fn is_network_paused)]
+	/// Whether the network is paused
+	pub type CurrentNetworkState<T> = StorageValue<_, NetworkState, ValueQuery>;
 
-	#[pallet::error]
-	pub enum Error<T> {}
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// The network state has been chagned \[state\]
+		NetworkStateHasBeenChanged(NetworkState),
+	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
+	impl<T: Config> Pallet<T> {
+		/// Changes the current network state.
+		///
+		/// ## Events
+		///
+		/// - [NetworkStateHasBeenChanged](Event::NetworkStateHasBeenChanged)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::set_network_state())]
+		pub fn set_network_state(
+			origin: OriginFor<T>,
+			state: NetworkState,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			CurrentNetworkState::<T>::put(&state);
+			Self::deposit_event(Event::NetworkStateHasBeenChanged(state));
+			Ok(().into())
+		}
+	}
 
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -92,6 +145,17 @@ pub mod pallet {
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
+		}
+	}
+}
+
+pub struct NetworkPaused<T>(PhantomData<T>);
+
+impl<T: Config> NetworkManager for NetworkPaused<T> {
+	fn ensure_paused() -> frame_support::sp_runtime::DispatchResult {
+		match pallet::CurrentNetworkState::<T>::get() {
+			NetworkState::Paused => Err(Error::<T>::NetworkIsPaused)?,
+			NetworkState::Running => Ok(().into()),
 		}
 	}
 }
