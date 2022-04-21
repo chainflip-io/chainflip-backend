@@ -24,9 +24,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		EpochValidatorCount::<T>::insert(current_epoch, number_of_current_validators);
 
-		// We have 2 stable writes as well as n for itterating over all validators.
-		let writes = 2 + number_of_current_validators;
-
 		// Insert the´current epoch bond into the storage.
 		HistoricalBonds::<T>::insert(current_epoch, current_bond);
 		for validator in &current_validators {
@@ -36,8 +33,9 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		// Set the historical state for the current epoch.
 		HistoricalValidators::<T>::insert(current_epoch, current_validators);
 
+		// We have 6 stable writes as well as n for itterating over all validators.
 		#[allow(clippy::unnecessary_cast)]
-		T::DbWeight::get().reads_writes(3 as Weight, writes as Weight)
+		T::DbWeight::get().reads_writes(3 as Weight, 6 + number_of_current_validators as Weight)
 	}
 
 	#[cfg(feature = "try-runtime")]
