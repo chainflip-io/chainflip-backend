@@ -13,6 +13,7 @@ use jsonrpc_core_client::{RpcChannel, RpcError};
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use multisig_p2p_transport::PeerId;
+use pallet_cf_validator::HistoricalActiveEpochs;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
@@ -822,6 +823,18 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .data)
     }
 
+    /// Get the historical active epochs of this validator at a particular block
+    pub async fn get_historical_active_epochs(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<Vec<EpochIndex>> {
+        self.get_storage_map::<HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            block_hash,
+            &self.our_account_id,
+        )
+        .await
+    }
+
     /// Get the latest epoch number at the provided block hash
     pub async fn epoch_at_block(
         &self,
@@ -1084,6 +1097,7 @@ pub mod test_utils {
         StorageChangeSet { block, changes }
     }
 
+    // TODO: Get some chain data for this test
     #[test]
     fn storage_change_set_encoding_works() {
         let account_info = AccountInfo {
@@ -1092,8 +1106,7 @@ pub mod test_utils {
             providers: 2,
             sufficients: 0,
             data: ChainflipAccountData {
-                state: ChainflipAccountState::Validator,
-                last_active_epoch: Some(1),
+                state: ChainflipAccountState::CurrentAuthority,
             },
         };
 
@@ -1103,9 +1116,8 @@ pub mod test_utils {
         let storage_data = changes.1.unwrap().0;
 
         // this was retrieved from the chain itself
-        let storage_data_expected: Vec<u8> = vec![
-            12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 0, 0, 0,
-        ];
+        let storage_data_expected: Vec<u8> =
+            vec![12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0];
 
         assert_eq!(storage_data, storage_data_expected);
     }

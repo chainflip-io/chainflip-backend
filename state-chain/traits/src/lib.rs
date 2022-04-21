@@ -360,30 +360,46 @@ pub trait EmergencyRotation {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
-pub enum ChainflipAccountState {
-	Passive,
+pub enum BackupOrPassive {
 	Backup,
-	Validator,
+	Passive,
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+pub enum ChainflipAccountState {
+	CurrentAuthority,
+	HistoricalAuthority(BackupOrPassive),
+	BackupOrPassive(BackupOrPassive),
+}
+
+// TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
-	pub last_active_epoch: Option<EpochIndex>,
 }
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Passive, last_active_epoch: None }
+		ChainflipAccountData {
+			state: ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+		}
 	}
 }
 
 pub trait ChainflipAccount {
 	type AccountId;
 
+	/// Get the account data for the given account id.
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState);
-	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex);
+	/// Updates the state of a
+	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
+	/// Set the validator to be the current authority
+	fn set_current_authority(account_id: &Self::AccountId);
+	/// Sets the validator state to historical
+	fn set_historical_validator(account_id: &Self::AccountId);
+	/// Sets the current validator to the historical validator, should be called
+	/// once the validator has no more active epochs
+	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
 }
 
 // Remove in place of a proper validator enum
@@ -407,18 +423,49 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::get(account_id)
 	}
 
-	fn set_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state = state;
+	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
+			ChainflipAccountState::CurrentAuthority => {
+				log::warn!("Attempted to set backup or passive on a current authority account");
+			},
+			ChainflipAccountState::HistoricalAuthority(_) => {
+				(*account_data).state = ChainflipAccountState::HistoricalAuthority(state);
+			},
+			ChainflipAccountState::BackupOrPassive(_) => {
+				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
+			},
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	/// Set the last epoch number and set the account state to Validator
-	fn update_validator_account_data(account_id: &Self::AccountId, index: EpochIndex) {
+	fn set_current_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).last_active_epoch = Some(index);
-			(*account_data).state = ChainflipAccountState::Validator;
+			(*account_data).state = ChainflipAccountState::CurrentAuthority;
+		})
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+	}
+
+	// TODO: How to check if we set to backup or passive
+	// we might want to combine this with an update_backup_or_passive
+	fn set_historical_validator(account_id: &Self::AccountId) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			(*account_data).state =
+				ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive);
+		})
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+	}
+
+	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
+			ChainflipAccountState::HistoricalAuthority(state) => {
+				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
+			},
+			_ => {
+				log::error!(
+					"Attempted to set backup or passive on a CurrentAuthority or BackupOrPassive"
+				);
+			},
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
@@ -604,6 +651,8 @@ pub trait HistoricalEpoch {
 	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
 	///  Returns the amount of a validator's stake that is currently bonded.
 	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
+	/// Returns the number of active epochs a validator is still active in
+	fn number_of_active_epochs_for_validator(id: &Self::ValidatorId) -> u32;
 }
 
 /// Handles the expiry of an epoch
