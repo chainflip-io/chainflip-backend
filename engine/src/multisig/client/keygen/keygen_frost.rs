@@ -331,7 +331,7 @@ pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitmen
 /// We don't want the coefficient commitments to add up to the "point at infinity" as this corresponds
 /// to the sum of the actual coefficient being zero, which would reduce the degree of the sharing polynomial
 /// (in Shamir Secret Sharing) and thus would reduce the effective threshold of the aggregate key
-pub fn check_high_degree_commitments(commitments: &HashMap<usize, DKGCommitment>) -> bool {
+pub fn check_high_degree_commitments(commitments: &BTreeMap<usize, DKGCommitment>) -> bool {
     let high_degree_sum: Point = commitments
         .values()
         .map(|c| c.commitments.0.last().copied().unwrap())
