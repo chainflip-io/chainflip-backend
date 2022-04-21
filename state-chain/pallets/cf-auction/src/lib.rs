@@ -59,10 +59,10 @@ pub mod pallet {
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
-		/// Ratio of backup validators
+		/// Ratio of current authorities to backups
 		#[pallet::constant]
-		type ActiveToBackupValidatorRatio: Get<u32>;
-		/// Percentage of backup validators in validating set in a emergency rotation
+		type AuthorityToBackupRatio: Get<u32>;
+		/// Percentage of backup nodes in authority set in a emergency rotation
 		#[pallet::constant]
 		type PercentageOfBackupNodesInEmergency: Get<u32>;
 	}
@@ -238,8 +238,8 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			{
 				let number_of_existing_backup_nodes = (target_authority_set_size -
 					new_target_authority_set_size) as u32 *
-					(T::ActiveToBackupValidatorRatio::get() - 1) /
-					T::ActiveToBackupValidatorRatio::get();
+					(T::AuthorityToBackupRatio::get() - 1) /
+					T::AuthorityToBackupRatio::get();
 
 				let number_of_backup_validators_to_be_included = (number_of_existing_backup_nodes
 					as u32)
@@ -258,8 +258,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 			.map(|(validator_id, _)| (*validator_id).clone())
 			.collect();
 
-		let backup_group_size =
-			target_authority_set_size as u32 / T::ActiveToBackupValidatorRatio::get();
+		let backup_group_size = target_authority_set_size as u32 / T::AuthorityToBackupRatio::get();
 
 		let remaining_bidders: Vec<_> =
 			bids.iter().skip(target_authority_set_size as usize).collect();

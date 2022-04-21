@@ -146,7 +146,7 @@ impl Config for Test {
 	type BidderProvider = MockBidderProvider;
 	type MinValidators = MinValidators;
 	type ChainflipAccount = MockChainflipAccount;
-	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+	type AuthorityToBackupRatio = BackupValidatorRatio;
 	type KeygenExclusionSet = MockKeygenExclusion<Self>;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;

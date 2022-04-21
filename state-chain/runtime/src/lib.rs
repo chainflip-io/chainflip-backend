@@ -121,7 +121,7 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinValidators: u32 = 1;
-	pub const ActiveToBackupValidatorRatio: u32 = 3;
+	pub const AuthorityToBackupRatio: u32 = 3;
 	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
 }
 
@@ -139,7 +139,7 @@ impl pallet_cf_auction::Config for Runtime {
 			pallet_session::Pallet<Self>,
 		>,
 	);
-	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
+	type AuthorityToBackupRatio = AuthorityToBackupRatio;
 	type EmergencyRotation = Validator;
 	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
 	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
