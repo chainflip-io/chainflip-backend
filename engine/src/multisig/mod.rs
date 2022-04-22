@@ -20,7 +20,7 @@ use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageM
 use slog::o;
 use state_chain_runtime::AccountId;
 
-pub use client::{KeygenOptions, MultisigClient, MultisigMessage, SchnorrSignature};
+pub use client::{MultisigClient, MultisigMessage, SchnorrSignature};
 
 pub use db::{KeyDB, PersistentKeyDB};
 
@@ -52,7 +52,6 @@ pub fn start_client<S>(
     db: S,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    keygen_options: KeygenOptions,
     logger: &slog::Logger,
 ) -> (Arc<MultisigClient<S>>, impl futures::Future)
 where
@@ -72,7 +71,6 @@ where
         db,
         keygen_request_sender,
         signing_request_sender,
-        keygen_options,
         &logger,
     ));
 
@@ -88,8 +86,8 @@ where
 
             loop {
                 tokio::select! {
-                    Some((ceremony_id, participants, keygen_options, rng, result_sender)) = keygen_request_receiver.recv() => {
-                        ceremony_manager.on_keygen_request(ceremony_id, participants, keygen_options, rng, result_sender);
+                    Some((ceremony_id, participants, rng, result_sender)) = keygen_request_receiver.recv() => {
+                        ceremony_manager.on_keygen_request(ceremony_id, participants, rng, result_sender);
                     }
                     Some((ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender)) = signing_request_receiver.recv() => {
                         ceremony_manager.on_request_to_sign(ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender);
