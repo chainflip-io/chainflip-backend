@@ -915,9 +915,6 @@ mod tests {
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
-					// For each subsequent block the state chain will check if the vault has rotated
-					// until then we stay in the `ValidatorsSelected`
-					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 					assert_eq!(
@@ -1401,7 +1398,7 @@ mod tests {
 		// epochs
 		fn ensure_epoch_activity(account: &AccountId, epochs: Vec<EpochIndex>) {
 			assert_eq!(
-				EpochHistory::<Runtime>::active_epochs_for_validator(account),
+				EpochHistory::<Runtime>::active_epochs_for_authority(account),
 				epochs,
 				"The active epochs for the validator should be {:?}",
 				epochs

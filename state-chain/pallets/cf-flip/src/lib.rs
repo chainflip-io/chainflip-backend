@@ -393,7 +393,7 @@ impl<T: Config> Bonding for Bonder<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount) {
+	fn update_authority_bond(validator: &Self::ValidatorId, bond: Self::Amount) {
 		Pallet::<T>::set_validator_bond(validator, bond);
 	}
 }

@@ -155,8 +155,8 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
-	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]) {
-		for validator in epoch_validators {
+	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]) {
+		for validator in epoch_authorities {
 			MockChainflipAccount::set_current_authority(validator);
 		}
 	}
@@ -220,7 +220,7 @@ impl Bonding for MockBonder {
 	type Amount = Amount;
 
 	// Bond updates are tested in the integration tests
-	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+	fn update_authority_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
 pub type MockOffenceReporter =

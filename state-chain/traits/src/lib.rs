@@ -104,7 +104,7 @@ pub trait EpochInfo {
 	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
-	/// current candidate validator set
+	/// current candidate authority set
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
@@ -128,26 +128,9 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-/// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
-/// finally it is completed
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum AuctionPhase<ValidatorId, Amount> {
-	/// Waiting for bids
-	WaitingForBids,
-	/// We have ran the auction and have a set of validators with minimum active bid awaiting
-	/// confirmation
-	ValidatorsSelected(Vec<ValidatorId>, Amount),
-}
-
-impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
-	fn default() -> Self {
-		AuctionPhase::WaitingForBids
-	}
-}
-
-/// A bid represented by a validator and the amount they wish to bid
+/// A bid represented by an authority and the amount they wish to bid
 pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
-/// A bid that has been classified as out of the validating set
+/// A bid that has been classified as out of the authority set
 pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
 
 /// A successful auction result
@@ -157,7 +140,7 @@ pub struct AuctionResult<ValidatorId, Amount> {
 	pub minimum_active_bid: Amount,
 }
 
-/// A min and max number of validators for an authority set
+/// A min and max number of authorities for an authority set
 pub type AuthoritySetSizeRange = (u32, u32);
 
 /// Auctioneer
@@ -169,7 +152,7 @@ pub trait Auctioneer {
 	type Amount;
 	type Error: Into<DispatchError>;
 
-	/// Run an auction by qualifying a validator
+	/// Run an auction
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error>;
 
 	// TODO: there's probably a better place to put this (both in terms of being in this trait)
@@ -209,9 +192,9 @@ pub trait EpochTransitionHandler {
 	type ValidatorId;
 	/// A new epoch has started
 	///
-	/// The `previous_epoch_validators` now let `epoch_validators` take control
+	/// The `previous_epoch_authorities` now let `epoch_authorities` take control
 	/// There can be an overlap between these two sets of validators
-	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]);
+	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]);
 }
 
 /// Resetter for Reputation Points and Online Credits of a Validator
@@ -643,19 +626,19 @@ pub trait HistoricalEpoch {
 	type EpochIndex;
 	type Amount;
 	/// All validators which were in an epoch's authority set.
-	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
+	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	/// The unexpired epochs for which a validator was in the authority set.
-	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	fn active_epochs_for_authority(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
 	/// Removes an epoch from a validator's list of active epochs.
-	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
-	/// Add an epoch to a validator's list of active epochs.
-	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
-	///  Returns the amount of a validator's stake that is currently bonded.
-	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
-	/// Returns the number of active epochs a validator is still active in
-	fn number_of_active_epochs_for_validator(id: &Self::ValidatorId) -> u32;
+	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
+	/// Add an epoch to a authority's list of active epochs.
+	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
+	///  Returns the amount of a authority's stake that is currently bonded.
+	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
+	/// Returns the number of active epochs a authority is still active in
+	fn number_of_active_epochs_for_authority(id: &Self::ValidatorId) -> u32;
 }
 
 /// Handles the expiry of an epoch
@@ -667,8 +650,8 @@ pub trait EpochExpiry {
 pub trait Bonding {
 	type ValidatorId;
 	type Amount;
-	/// Update the bond of an validator
-	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount);
+	/// Update the bond of an authority
+	fn update_authority_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
 pub trait CeremonyIdProvider {
 	type CeremonyId;

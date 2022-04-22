@@ -770,7 +770,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(epoch_validators: &[ValidatorIdOf<T>], new_bond: T::Amount) {
+	fn start_new_epoch(epoch_authorities: &[ValidatorIdOf<T>], new_bond: T::Amount) {
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
@@ -779,13 +779,13 @@ impl<T: Config> Pallet<T> {
 
 		let mut old_validators = Authorities::<T>::get();
 		// Update state of current validators
-		Authorities::<T>::set(epoch_validators.to_vec());
+		Authorities::<T>::set(epoch_authorities.to_vec());
 
-		epoch_validators.iter().enumerate().for_each(|(index, account_id)| {
+		epoch_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as u16);
 		});
 
-		EpochAuthorityCount::<T>::insert(new_epoch, epoch_validators.len() as u32);
+		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as u32);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);
@@ -802,23 +802,23 @@ impl<T: Config> Pallet<T> {
 		Self::emergency_rotation_completed();
 
 		// Save the epoch -> validators map
-		HistoricalAuthorities::<T>::insert(new_epoch, epoch_validators);
+		HistoricalAuthorities::<T>::insert(new_epoch, epoch_authorities);
 
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		for validator in epoch_validators.iter() {
+		for validator in epoch_authorities.iter() {
 			// Remember in which epoch an validator was active
 			EpochHistory::<T>::activate_epoch(validator, new_epoch);
 			// Bond the validators
 			let bond = EpochHistory::<T>::active_bond(validator);
-			T::Bonder::update_validator_bond(validator, bond);
+			T::Bonder::update_authority_bond(validator, bond);
 
 			ChainflipAccountStore::<T>::set_current_authority(validator);
 		}
 
 		// find all the valitators moving out of the epoch
-		old_validators.retain(|validator| !epoch_validators.contains(validator));
+		old_validators.retain(|validator| !epoch_authorities.contains(validator));
 
 		old_validators.iter().for_each(|validator| {
 			ChainflipAccountStore::<T>::set_historical_validator(validator);
@@ -828,20 +828,20 @@ impl<T: Config> Pallet<T> {
 		T::Auctioneer::update_backup_and_passive_states();
 
 		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(epoch_validators);
+		T::EpochTransitionHandler::on_new_epoch(epoch_authorities);
 
 		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
 
 	fn expire_epoch(epoch: EpochIndex) {
-		for validator in EpochHistory::<T>::epoch_validators(epoch).iter() {
+		for validator in EpochHistory::<T>::epoch_authorities(epoch).iter() {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
-			if EpochHistory::<T>::number_of_active_epochs_for_validator(validator) == 0 {
+			if EpochHistory::<T>::number_of_active_epochs_for_authority(validator) == 0 {
 				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(validator);
 				T::ReputationResetter::reset_reputation(validator);
 			}
-			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
+			T::Bonder::update_authority_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}
 	}
 
@@ -857,7 +857,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type EpochIndex = EpochIndex;
 	type Amount = T::Amount;
-	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
+	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
 		HistoricalAuthorities::<T>::get(epoch)
 	}
 
@@ -865,11 +865,11 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 		HistoricalBonds::<T>::get(epoch)
 	}
 
-	fn active_epochs_for_validator(validator_id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
+	fn active_epochs_for_authority(validator_id: &Self::ValidatorId) -> Vec<Self::EpochIndex> {
 		HistoricalActiveEpochs::<T>::get(validator_id)
 	}
 
-	fn number_of_active_epochs_for_validator(validator_id: &Self::ValidatorId) -> u32 {
+	fn number_of_active_epochs_for_authority(validator_id: &Self::ValidatorId) -> u32 {
 		HistoricalActiveEpochs::<T>::decode_len(validator_id).unwrap_or_default() as u32
 	}
 
@@ -886,7 +886,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	}
 
 	fn active_bond(validator_id: &Self::ValidatorId) -> Self::Amount {
-		Self::active_epochs_for_validator(validator_id)
+		Self::active_epochs_for_authority(validator_id)
 			.iter()
 			.map(|epoch| Self::epoch_bond(*epoch))
 			.max()
