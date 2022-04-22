@@ -276,7 +276,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	// Update the state for backup and passive, as this can change every block
 	fn update_backup_and_passive_states() {
 		let remaining_bidders = RemainingBidders::<T>::get();
-		let backup_validators = Self::current_backup_validators(&remaining_bidders);
+		let backup_validators = Self::current_backup_nodes(&remaining_bidders);
 		let passive_nodes = Self::current_passive_nodes(&remaining_bidders);
 		let lowest_backup_validator_bid = Self::lowest_bid(&backup_validators);
 		let highest_passive_node_bid = Self::highest_bid(&passive_nodes);
@@ -302,7 +302,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn current_backup_validators(
+	fn current_backup_nodes(
 		remaining_bidders: &[RemainingBid<T::ValidatorId, T::Amount>],
 	) -> Vec<RemainingBid<T::ValidatorId, T::Amount>> {
 		remaining_bidders
@@ -342,7 +342,7 @@ impl<T: Config> Pallet<T> {
 			remaining_bidders.reverse();
 
 			let lowest_backup_validator_bid =
-				Self::lowest_bid(&Self::current_backup_validators(remaining_bidders));
+				Self::lowest_bid(&Self::current_backup_nodes(remaining_bidders));
 
 			let highest_passive_node_bid =
 				Self::highest_bid(&Self::current_passive_nodes(remaining_bidders));

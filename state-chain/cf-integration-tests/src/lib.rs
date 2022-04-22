@@ -1219,21 +1219,21 @@ mod tests {
 					});
 
 					// assert list of backup validators as being the genesis validators
-					let mut current_backup_validators: Vec<NodeId> = Auction::remaining_bidders()
+					let mut current_backup_nodes: Vec<NodeId> = Auction::remaining_bidders()
 						.iter()
 						.take(Auction::backup_group_size() as usize)
 						.map(|(validator_id, _)| validator_id.clone())
 						.collect();
 
-					current_backup_validators.sort();
+					current_backup_nodes.sort();
 					genesis_validators.sort();
 
 					assert_eq!(
-						genesis_validators, current_backup_validators,
+						genesis_validators, current_backup_nodes,
 						"we should have new backup validators"
 					);
 
-					current_backup_validators.iter().for_each(|account_id| {
+					current_backup_nodes.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						assert_eq!(
 							account_data.state,
@@ -1244,7 +1244,7 @@ mod tests {
 					});
 
 					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
-						current_backup_validators
+						current_backup_nodes
 							.iter()
 							.map(|validator_id| {
 								(validator_id.clone(), Flip::stakeable_balance(validator_id))
