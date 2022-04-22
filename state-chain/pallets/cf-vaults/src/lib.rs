@@ -4,7 +4,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
+use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
@@ -53,6 +53,7 @@ pub type CeremonyId = u64;
 pub type KeygenOutcomeFor<T, I = ()> =
 	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
+pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
 pub type TransactionHashFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionHash;
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
@@ -258,18 +259,18 @@ impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
 
 /// The bounds within which a public key for a vault should be used for witnessing.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct BlockHeightWindow {
-	pub from: u64,
-	pub to: Option<u64>,
+pub struct BlockHeightWindow<T: Chain> {
+	pub from: T::ChainBlockNumber,
+	pub to: Option<T::ChainBlockNumber>,
 }
 
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Vault<T: ChainCrypto> {
+pub struct Vault<T: ChainAbi> {
 	/// The vault's public key.
 	pub public_key: T::AggKey,
 	/// The active window for this vault
-	pub active_window: BlockHeightWindow,
+	pub active_window: BlockHeightWindow<T>,
 }
 
 pub mod releases {
@@ -569,7 +570,7 @@ pub mod pallet {
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
-			block_number: u64,
+			block_number: ChainBlockNumberFor<T, I>,
 			tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
@@ -613,7 +614,9 @@ pub mod pallet {
 				Vault {
 					public_key: new_public_key,
 					active_window: BlockHeightWindow {
-						from: block_number.saturating_add(1),
+						from: block_number.saturating_add(
+							<<T as Config<I>>::Chain as Chain>::ChainBlockNumber::one(),
+						),
 						to: None,
 					},
 				},
@@ -626,24 +629,24 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		/// The provided Vec must be convertible to the chain's AggKey.
 		///
 		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
 		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
 		pub vault_key: Vec<u8>,
-		pub deployment_block: u64,
+		pub deployment_block: ChainBlockNumberFor<T, I>,
 	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { vault_key: Default::default(), deployment_block: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
 			use sp_std::convert::TryFrom;
 

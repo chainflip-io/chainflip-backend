@@ -9,23 +9,20 @@ use crate::{
                 new_signing_ceremony_with_keygen, run_keygen, run_stages, split_messages_for,
                 standard_signing, standard_signing_coroutine, SigningCeremonyRunner,
             },
-            KeygenOptions,
         },
         crypto::Rng,
         tests::fixtures::MESSAGE_HASH,
-        KeyDBMock, MessageHash,
+        KeyDBMock, KeyId, MessageHash,
     },
-    testing::{assert_future_awaits, assert_future_can_complete, assert_ok},
+    testing::{assert_err, assert_future_can_complete, assert_ok},
 };
 
 use super::*;
 
-use client::{MultisigClient, SchnorrSignature};
+use client::MultisigClient;
 use rand_legacy::SeedableRng;
 
 use itertools::Itertools;
-use secp256k1::PublicKey;
-use tokio::sync::mpsc::error::TryRecvError;
 
 // Data for any stage that arrives one stage too early should be properly delayed
 // and processed after the stage transition is made
@@ -105,7 +102,7 @@ async fn should_delay_comm1_before_rts() {
 }
 
 #[tokio::test]
-async fn should_handle_invalid_local_sig() {
+async fn should_report_on_invalid_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
@@ -137,7 +134,7 @@ async fn should_handle_invalid_local_sig() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_com1() {
+async fn should_report_on_inconsistent_broadcast_comm1() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (mut messages, result_receivers) = signing_ceremony.request().await;
@@ -162,7 +159,7 @@ async fn should_handle_inconsistent_broadcast_com1() {
 }
 
 #[tokio::test]
-async fn should_handle_inconsistent_broadcast_sig3() {
+async fn should_report_on_inconsistent_broadcast_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
@@ -217,74 +214,32 @@ async fn should_ignore_duplicate_rts() {
 }
 
 #[tokio::test]
-async fn should_delay_rts_until_key_is_ready() {
+async fn should_ignore_rts_for_unknown_key() {
     let account_id = &ACCOUNT_IDS[0];
-    let (key_id, key_data, _, _) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
-    let (keygen_request_sender, mut keygen_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (signing_request_sender, mut signing_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+
+    let key_id = KeyId(Vec::from([0u8; 32]));
+    let (keygen_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
+    let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
 
     let client = MultisigClient::new(
         account_id.clone(),
         KeyDBMock::default(),
         keygen_request_sender,
         signing_request_sender,
-        KeygenOptions::default(),
         &logging::test_utils::new_test_logger(),
     );
 
-    // Send Keygen Request
-    let keygen_request_fut =
-        client.initiate_keygen(DEFAULT_KEYGEN_CEREMONY_ID, ACCOUNT_IDS.to_vec());
-
-    // Fake completion of requests keygen (But the MultisigClient will not receive the result and handle it yet)
-    let (_, _, _, _, result_sender) = keygen_request_receiver.recv().await.unwrap();
-    result_sender
-        .send(Ok(key_data[account_id].clone()))
-        .unwrap();
-
     // Send Sign Request
-    let mut signing_request_fut = client
-        .initiate_signing(
-            DEFAULT_SIGNING_CEREMONY_ID,
-            key_id,
-            ACCOUNT_IDS.to_vec(),
-            MessageHash([0; 32]),
-        )
-        .await;
-
-    // Check Sign Request Has been Delayed
-    assert_future_awaits(&mut signing_request_fut);
-    assert_eq!(
-        signing_request_receiver.try_recv().unwrap_err(),
-        TryRecvError::Empty
+    let signing_request_fut = client.initiate_signing(
+        DEFAULT_SIGNING_CEREMONY_ID,
+        key_id,
+        ACCOUNT_IDS.to_vec(),
+        MessageHash([0; 32]),
     );
-
-    // Wait for and handle keygen completion
-    assert_ok!(keygen_request_fut.await);
-
-    // Check Sign Request cannot return Until signature is provided
-    assert_future_awaits(&mut signing_request_fut);
-
-    // Fake completion of requests keygen
-    let fake_signature = SchnorrSignature {
-        s: [0; 32],
-        r: PublicKey::from(unsafe { secp256k1::ffi::PublicKey::new() }),
-    };
-    let (.., result_sender) = signing_request_receiver.recv().await.unwrap();
-    result_sender.send(Ok(fake_signature.clone())).unwrap();
 
     // Check sign request completes after signature is provided
-    assert_eq!(
-        assert_ok!(assert_future_can_complete(signing_request_fut)),
-        fake_signature
-    );
+    let error = assert_err!(assert_future_can_complete(signing_request_fut));
+    assert_eq!(&error.1.to_string(), "Signing request ignored: unknown key");
 }
 
 #[tokio::test]
@@ -358,48 +313,6 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
         signing_ceremony.ceremony_id
     ));
     assert!(node_0.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-}
-
-#[tokio::test]
-async fn pending_rts_should_expire() {
-    let (key_id, ..) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
-
-    let account_id = &ACCOUNT_IDS[0];
-    let (keygen_request_sender, mut _keygen_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (signing_request_sender, mut _signing_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-
-    let client = MultisigClient::new(
-        account_id.clone(),
-        KeyDBMock::default(),
-        keygen_request_sender,
-        signing_request_sender,
-        KeygenOptions::default(),
-        &logging::test_utils::new_test_logger(),
-    );
-
-    let mut signing_request_fut = client
-        .initiate_signing(
-            DEFAULT_SIGNING_CEREMONY_ID,
-            key_id,
-            ACCOUNT_IDS.to_vec(),
-            MessageHash([0; 32]),
-        )
-        .await;
-
-    assert_future_awaits(&mut signing_request_fut);
-
-    client.expire_all();
-
-    client.check_timeouts().await;
-
-    assert_future_can_complete(signing_request_fut).unwrap_err();
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -576,7 +489,6 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     let (key_id, key_data, _, nodes) = helpers::run_keygen(
         helpers::new_nodes(ACCOUNT_IDS.clone()),
         DEFAULT_KEYGEN_CEREMONY_ID,
-        client::KeygenOptions::allowing_high_pubkey(),
     )
     .await;
 
@@ -667,12 +579,8 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
 #[tokio::test]
 async fn should_sign_with_all_parties() {
-    let (key_id, key_data, _messages, nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
+    let (key_id, key_data, _messages, nodes) =
+        run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 
     let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
         nodes,
@@ -749,7 +657,7 @@ mod timeout {
         // agree on a party timing out in the following broadcast verification stage, the party gets reported
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage1() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let (mut messages, result_receivers) = signing_ceremony.request().await;
@@ -761,7 +669,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            signing_ceremony.distribute_messages(messages.clone());
+            signing_ceremony.distribute_messages(messages);
 
             // This node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
@@ -785,7 +693,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_party_appears_offline_to_minority_stage3() {
+        async fn should_recover_if_party_appears_offline_to_minority_stage3() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let (messages, result_receivers) = signing_ceremony.request().await;
@@ -804,7 +712,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            signing_ceremony.distribute_messages(messages.clone());
+            signing_ceremony.distribute_messages(messages);
 
             // This node doesn't receive non_sending_party's message, so must timeout
             signing_ceremony
@@ -834,7 +742,7 @@ mod timeout {
         // If timeout during a broadcast verification stage, and we have enough data, we can recover
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage2() {
+        async fn should_recover_if_agree_on_values_stage2() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let [bad_node_id] = &ceremony.select_account_ids();
@@ -856,7 +764,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn recover_if_agree_on_values_stage4() {
+        async fn should_recover_if_agree_on_values_stage4() {
             let (mut ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             let [bad_node_id] = &ceremony.select_account_ids();
@@ -887,7 +795,7 @@ mod timeout {
         // because that would need another round of "voting" which can also timeout.
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_2() {
+        async fn should_report_if_insufficient_messages_stage2() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             // bad party 1 will timeout during a broadcast stage. It should be reported
@@ -914,7 +822,7 @@ mod timeout {
         }
 
         #[tokio::test]
-        async fn report_if_insufficient_messages_stage_4() {
+        async fn should_report_if_insufficient_messages_stage4() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
             // bad party 1 will timeout during a broadcast stage. It should be reported

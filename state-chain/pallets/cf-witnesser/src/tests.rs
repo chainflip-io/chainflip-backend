@@ -72,30 +72,15 @@ fn no_double_call_on_epoch_boundary() {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// Only one vote, nothing should happen yet.
-		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(ALISSA),
-			call.clone(),
-			1,
-			Default::default()
-		));
+		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 		MockEpochInfo::next_epoch([ALISSA, BOBSON, CHARLEMAGNE].to_vec());
 		// Vote for the same call, this time in another epoch.
-		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(ALISSA),
-			call.clone(),
-			2,
-			Default::default()
-		));
+		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
 		// Vote again, we should reach the threshold and dispatch the call.
-		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(BOBSON),
-			call.clone(),
-			1,
-			Default::default()
-		));
+		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(BOBSON), call.clone(), 1));
 		let dispatch_result =
 			if let Event::Witnesser(crate::Event::WitnessExecuted(_, dispatch_result)) =
 				get_last_event()
@@ -109,12 +94,7 @@ fn no_double_call_on_epoch_boundary() {
 
 		// Vote for the same call, this time in another epoch. Threshold for the same call should be
 		// reached but call shouldn't be dispatched again.
-		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(BOBSON),
-			call.clone(),
-			2,
-			Default::default()
-		));
+		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(BOBSON), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
@@ -193,28 +173,17 @@ fn can_continue_to_witness_for_old_epochs() {
 			Origin::signed(ALISSA),
 			call.clone(),
 			current_epoch - 1,
-			Default::default()
 		));
 
 		// Try to witness in an epoch that has expired
 		assert_noop!(
-			Witnesser::witness_at_epoch(
-				Origin::signed(ALISSA),
-				call.clone(),
-				expired_epoch,
-				Default::default()
-			),
+			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), expired_epoch,),
 			Error::<Test>::EpochExpired
 		);
 
 		// Try to witness in a past epoch, which has yet to expire, and that we weren't a member
 		assert_noop!(
-			Witnesser::witness_at_epoch(
-				Origin::signed(DEIRDRE),
-				call.clone(),
-				current_epoch - 1,
-				Default::default()
-			),
+			Witnesser::witness_at_epoch(Origin::signed(DEIRDRE), call.clone(), current_epoch - 1,),
 			Error::<Test>::UnauthorisedWitness
 		);
 
@@ -223,17 +192,11 @@ fn can_continue_to_witness_for_old_epochs() {
 			Origin::signed(DEIRDRE),
 			call.clone(),
 			current_epoch,
-			Default::default()
 		));
 
 		// And cannot witness in an epoch that doesn't yet exist
 		assert_noop!(
-			Witnesser::witness_at_epoch(
-				Origin::signed(ALISSA),
-				call,
-				current_epoch + 1,
-				Default::default()
-			),
+			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call, current_epoch + 1,),
 			Error::<Test>::InvalidEpoch
 		);
 	});

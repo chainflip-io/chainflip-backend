@@ -77,7 +77,6 @@ pub trait Witnesser {
 		who: Self::AccountId,
 		call: Self::Call,
 		epoch: EpochIndex,
-		block_number: Self::BlockNumber,
 	) -> DispatchResultWithPostInfo;
 }
 
