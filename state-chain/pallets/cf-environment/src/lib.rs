@@ -10,6 +10,11 @@ pub use pallet::*;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -94,7 +99,7 @@ pub mod pallet {
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn is_network_paused)]
+	#[pallet::getter(fn network_state)]
 	/// Whether the network is paused
 	pub type CurrentNetworkState<T> = StorageValue<_, NetworkState, ValueQuery>;
 
