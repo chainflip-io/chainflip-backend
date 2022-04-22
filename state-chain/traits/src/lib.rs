@@ -562,7 +562,7 @@ pub trait BlockEmissions {
 	/// Update the emissions per block for a validator
 	fn update_validator_block_emission(emission: Self::Balance);
 	/// Update the emissions per block for a backup validator
-	fn update_backup_validator_block_emission(emission: Self::Balance);
+	fn update_backup_node_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
 	fn calculate_block_emissions();
 }

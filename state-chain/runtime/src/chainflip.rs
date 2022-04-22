@@ -69,7 +69,7 @@ trait RewardDistribution {
 	type Issuance: Issuance;
 
 	/// Distribute rewards
-	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight;
+	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight;
 }
 
 struct BackupNodeEmissions;
@@ -83,8 +83,8 @@ impl RewardDistribution for BackupNodeEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight {
-		if backup_validators.is_empty() {
+	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight {
+		if backup_nodes.is_empty() {
 			return 0
 		}
 		// The current minimum active bid
@@ -106,16 +106,16 @@ impl RewardDistribution for BackupNodeEmissions {
 		let mut total_rewards = 0;
 
 		// Calculate rewards for each backup validator and total rewards for capping
-		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_validators
+		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_nodes
 			.iter()
-			.map(|backup_validator| {
-				let backup_validator_stake =
-					Self::StakeTransfer::stakeable_balance(backup_validator);
+			.map(|backup_node| {
+				let backup_node_stake =
+					Self::StakeTransfer::stakeable_balance(backup_node);
 				let reward_scaling_factor =
-					min(1, (backup_validator_stake / minimum_active_bid) ^ 2);
+					min(1, (backup_node_stake / minimum_active_bid) ^ 2);
 				let reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
 				total_rewards += reward;
-				(backup_validator.clone(), reward)
+				(backup_node.clone(), reward)
 			})
 			.collect();
 
@@ -157,8 +157,8 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		let backup_validators = <Auction as BackupNodes>::backup_nodes();
-		BackupNodeEmissions::distribute_rewards(&backup_validators);
+		let backup_nodes = <Auction as BackupNodes>::backup_nodes();
+		BackupNodeEmissions::distribute_rewards(&backup_nodes);
 
 		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request

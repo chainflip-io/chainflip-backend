@@ -353,7 +353,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 		ValidatorEmissionPerBlock::<T>::put(emission);
 	}
 
-	fn update_backup_validator_block_emission(emission: Self::Balance) {
+	fn update_backup_node_block_emission(emission: Self::Balance) {
 		BackupNodeEmissionPerBlock::<T>::put(emission);
 	}
 
@@ -374,7 +374,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 			CurrentAuthorityEmissionInflation::<T>::get(),
 		));
 
-		Self::update_backup_validator_block_emission(inflation_to_block_reward::<T>(
+		Self::update_backup_node_block_emission(inflation_to_block_reward::<T>(
 			BackupNodeEmissionInflation::<T>::get(),
 		));
 	}

@@ -1238,7 +1238,7 @@ mod tests {
 						// TODO: Check historical epochs
 					});
 
-					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
+					let backup_node_balances: HashMap<NodeId, FlipBalance> =
 						current_backup_nodes
 							.iter()
 							.map(|validator_id| {
@@ -1253,8 +1253,8 @@ mod tests {
 
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
-					for (backup_validator, pre_balance) in backup_validator_balances {
-						assert!(pre_balance < Flip::stakeable_balance(&backup_validator));
+					for (backup_node, pre_balance) in backup_node_balances {
+						assert!(pre_balance < Flip::stakeable_balance(&backup_node));
 					}
 				});
 		}

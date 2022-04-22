@@ -241,13 +241,13 @@ impl<T: Config> Auctioneer for Pallet<T> {
 					(T::AuthorityToBackupRatio::get() - 1) /
 					T::AuthorityToBackupRatio::get();
 
-				let number_of_backup_validators_to_be_included = (number_of_existing_backup_nodes
+				let number_of_backup_nodes_to_be_included = (number_of_existing_backup_nodes
 					as u32)
 					.saturating_mul(T::PercentageOfBackupNodesInEmergency::get()) /
 					100;
 
-				target_authority_set_size = new_target_authority_set_size +
-					number_of_backup_validators_to_be_included as usize;
+				target_authority_set_size =
+					new_target_authority_set_size + number_of_backup_nodes_to_be_included as usize;
 
 				next_authority_set.truncate(target_authority_set_size);
 			}
@@ -276,16 +276,16 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	// Update the state for backup and passive, as this can change every block
 	fn update_backup_and_passive_states() {
 		let remaining_bidders = RemainingBidders::<T>::get();
-		let backup_validators = Self::current_backup_nodes(&remaining_bidders);
+		let backup_nodes = Self::current_backup_nodes(&remaining_bidders);
 		let passive_nodes = Self::current_passive_nodes(&remaining_bidders);
-		let lowest_backup_validator_bid = Self::lowest_bid(&backup_validators);
+		let lowest_backup_node_bid = Self::lowest_bid(&backup_nodes);
 		let highest_passive_node_bid = Self::highest_bid(&passive_nodes);
 
 		// TODO: Look into removing these, we should only need to set this in one place
-		LowestBackupNodeBid::<T>::put(lowest_backup_validator_bid);
+		LowestBackupNodeBid::<T>::put(lowest_backup_node_bid);
 		HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
 
-		for (validator_id, _amount) in backup_validators {
+		for (validator_id, _amount) in backup_nodes {
 			T::ChainflipAccount::set_backup_or_passive(
 				&validator_id.into(),
 				BackupOrPassive::Backup,
@@ -341,13 +341,13 @@ impl<T: Config> Pallet<T> {
 			remaining_bidders.sort_unstable_by_key(|k| k.1);
 			remaining_bidders.reverse();
 
-			let lowest_backup_validator_bid =
+			let lowest_backup_node_bid =
 				Self::lowest_bid(&Self::current_backup_nodes(remaining_bidders));
 
 			let highest_passive_node_bid =
 				Self::highest_bid(&Self::current_passive_nodes(remaining_bidders));
 
-			LowestBackupNodeBid::<T>::put(lowest_backup_validator_bid);
+			LowestBackupNodeBid::<T>::put(lowest_backup_node_bid);
 			HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);
 			RemainingBidders::<T>::put(remaining_bidders);
 		}
