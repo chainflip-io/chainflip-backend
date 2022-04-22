@@ -35,7 +35,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config},
+		VaultsPallet: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 

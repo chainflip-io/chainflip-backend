@@ -123,7 +123,7 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
 		let call = Call::<T, I>::vault_key_rotated(
-			new_public_key, 5u64,
+			new_public_key, 5u64.into(),
 			Decode::decode(&mut &TX_HASH[..]).unwrap()
 		);
 		let origin = T::EnsureWitnessed::successful_origin();

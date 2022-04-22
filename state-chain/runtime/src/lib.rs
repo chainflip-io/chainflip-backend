@@ -518,7 +518,7 @@ construct_runtime!(
 		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
-		EthereumVault: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config},
+		EthereumVault: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Online: pallet_cf_online::{Pallet, Call, Storage},
 		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>, ValidateUnsigned},

@@ -11,7 +11,7 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::{ChainCrypto, Ethereum};
+	use cf_chains::{Chain, ChainCrypto, Ethereum};
 	use cf_traits::{NetworkStateInfo, Witnesser};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
@@ -201,7 +201,7 @@ pub mod pallet {
 		pub fn witness_eth_aggkey_rotation(
 			origin: OriginFor<T>,
 			new_public_key: <Ethereum as ChainCrypto>::AggKey,
-			block_number: u64,
+			block_number: <Ethereum as Chain>::ChainBlockNumber,
 			tx_hash: <Ethereum as ChainCrypto>::TransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;

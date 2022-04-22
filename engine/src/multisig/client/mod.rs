@@ -49,8 +49,6 @@ use self::{
     signing::frost::SigningData,
 };
 
-pub use keygen::KeygenOptions;
-
 use super::MessageHash;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -135,6 +133,22 @@ pub trait MultisigClientApi {
     ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>;
 }
 
+type KeygenRequestSender = UnboundedSender<(
+    CeremonyId,
+    Vec<AccountId>,
+    Rng,
+    CeremonyResultSender<KeygenResultInfo>,
+)>;
+
+type SigningRequestSender = UnboundedSender<(
+    CeremonyId,
+    Vec<AccountId>,
+    MessageHash,
+    KeygenResultInfo,
+    Rng,
+    CeremonyResultSender<SchnorrSignature>,
+)>;
+
 /// Multisig client acts as the frontend for the multisig functionality, delegating
 /// the actual signing to "Ceremony Manager". It is additionally responsible for
 /// persistently storing generated keys and providing them to the signing ceremonies.
@@ -143,23 +157,9 @@ where
     KeyDatabase: KeyDB,
 {
     my_account_id: AccountId,
-    keygen_request_sender: UnboundedSender<(
-        CeremonyId,
-        Vec<AccountId>,
-        KeygenOptions,
-        Rng,
-        CeremonyResultSender<KeygenResultInfo>,
-    )>,
-    signing_request_sender: UnboundedSender<(
-        CeremonyId,
-        Vec<AccountId>,
-        MessageHash,
-        KeygenResultInfo,
-        Rng,
-        CeremonyResultSender<SchnorrSignature>,
-    )>,
+    keygen_request_sender: KeygenRequestSender,
+    signing_request_sender: SigningRequestSender,
     key_store: std::sync::Mutex<KeyStore<KeyDatabase>>,
-    keygen_options: KeygenOptions,
     logger: slog::Logger,
 }
 
@@ -175,22 +175,8 @@ where
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        keygen_request_sender: UnboundedSender<(
-            CeremonyId,
-            Vec<AccountId>,
-            KeygenOptions,
-            Rng,
-            CeremonyResultSender<KeygenResultInfo>,
-        )>,
-        signing_request_sender: UnboundedSender<(
-            CeremonyId,
-            Vec<AccountId>,
-            MessageHash,
-            KeygenResultInfo,
-            Rng,
-            CeremonyResultSender<SchnorrSignature>,
-        )>,
-        keygen_options: KeygenOptions,
+        keygen_request_sender: KeygenRequestSender,
+        signing_request_sender: SigningRequestSender,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
@@ -198,7 +184,6 @@ where
             key_store: std::sync::Mutex::new(KeyStore::new(db)),
             keygen_request_sender,
             signing_request_sender,
-            keygen_options,
             logger: logger.clone(),
         }
     }
@@ -230,13 +215,7 @@ where
         } else {
             let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
             self.keygen_request_sender
-                .send((
-                    ceremony_id,
-                    participants,
-                    self.keygen_options,
-                    rng,
-                    result_sender,
-                ))
+                .send((ceremony_id, participants, rng, result_sender))
                 .ok()
                 .unwrap();
             RequestStatus::WaitForOneshot(result_receiver)

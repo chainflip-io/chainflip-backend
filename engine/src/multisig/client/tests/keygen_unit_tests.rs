@@ -17,7 +17,6 @@ use crate::multisig::{
         utils::PartyIdxMapping,
     },
     crypto::Rng,
-    KeygenOptions,
 };
 
 use crate::testing::assert_ok;
@@ -30,12 +29,7 @@ use crate::logging::KEYGEN_REQUEST_IGNORED;
 /// generate a key without entering a blaming stage
 #[tokio::test]
 async fn happy_path_results_in_valid_key() {
-    let (_, _, _, _) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
+    let (_, _, _, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 }
 
 /*
@@ -48,7 +42,6 @@ async fn should_report_on_timeout_before_keygen_request() {
     let (_, _, messages, _nodes) = run_keygen(
         new_nodes(ACCOUNT_IDS.clone()),
         DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
     )
     .await;
 
@@ -383,14 +376,13 @@ async fn should_abort_on_blames_at_invalid_indexes() {
 #[tokio::test]
 #[should_panic]
 async fn should_panic_keygen_request_if_not_participating() {
-    let mut node = new_node(AccountId::new([0; 32]));
+    let mut node = new_node(AccountId::new([0; 32]), true);
 
     // Send a keygen request where participants doesn't include our account id
     let (result_sender, _result_receiver) = oneshot::channel();
     node.ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
         ACCOUNT_IDS.clone(),
-        KeygenOptions::allowing_high_pubkey(),
         Rng::from_seed(DEFAULT_KEYGEN_SEED),
         result_sender,
     );
@@ -816,13 +808,12 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     let mut keygen_ids = ACCOUNT_IDS.clone();
     keygen_ids[1] = keygen_ids[2].clone();
 
-    let mut node = new_node(ACCOUNT_IDS[2].clone());
+    let mut node = new_node(ACCOUNT_IDS[2].clone(), true);
 
     let (result_sender, _result_receiver) = oneshot::channel();
     node.ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
         keygen_ids,
-        KeygenOptions::allowing_high_pubkey(),
         Rng::from_seed(DEFAULT_KEYGEN_SEED),
         result_sender,
     );
@@ -839,7 +830,6 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     let (_, _, _messages, mut nodes) = run_keygen(
         new_nodes(ACCOUNT_IDS.iter().cloned()),
         DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
     )
     .await;
 
@@ -850,7 +840,6 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     node.ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
         ACCOUNT_IDS.clone(),
-        KeygenOptions::allowing_high_pubkey(),
         Rng::from_entropy(),
         result_sender,
     );
@@ -865,12 +854,8 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_used_ceremony_id() {
-    let (_, _, messages, mut nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
+    let (_, _, messages, mut nodes) =
+        run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 
     let node = nodes.get_mut(&ACCOUNT_IDS[0]).unwrap();
 

@@ -9,7 +9,6 @@ use crate::{
                 new_signing_ceremony_with_keygen, run_keygen, run_stages, split_messages_for,
                 standard_signing, standard_signing_coroutine, SigningCeremonyRunner,
             },
-            KeygenOptions,
         },
         crypto::Rng,
         tests::fixtures::MESSAGE_HASH,
@@ -227,7 +226,6 @@ async fn should_ignore_rts_for_unknown_key() {
         KeyDBMock::default(),
         keygen_request_sender,
         signing_request_sender,
-        KeygenOptions::default(),
         &logging::test_utils::new_test_logger(),
     );
 
@@ -491,7 +489,6 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     let (key_id, key_data, _, nodes) = helpers::run_keygen(
         helpers::new_nodes(ACCOUNT_IDS.clone()),
         DEFAULT_KEYGEN_CEREMONY_ID,
-        client::KeygenOptions::allowing_high_pubkey(),
     )
     .await;
 
@@ -582,12 +579,8 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
 #[tokio::test]
 async fn should_sign_with_all_parties() {
-    let (key_id, key_data, _messages, nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
+    let (key_id, key_data, _messages, nodes) =
+        run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 
     let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
         nodes,
