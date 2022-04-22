@@ -38,7 +38,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Value Incremented [value]
-		ValueIncremented(u32),
+		ValueIncrementedTo(u32),
 	}
 
 	#[pallet::error]
@@ -69,7 +69,7 @@ pub mod pallet {
 			// Update the value in storage with the incremented result.
 			<Something<T>>::put(new_val);
 			// Emit an event.
-			Self::deposit_event(Event::ValueIncremented(new_val));
+			Self::deposit_event(Event::ValueIncrementedTo(new_val));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(().into())
 		}

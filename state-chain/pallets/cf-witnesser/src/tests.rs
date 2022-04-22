@@ -59,7 +59,7 @@ fn call_on_threshold() {
 			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
 			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
 			crate::Event::ThresholdReached(call_hash, 2).into(),
-			dummy::Event::<Test>::ValueIncremented(0u32).into(),
+			dummy::Event::<Test>::ValueIncrementedTo(0u32).into(),
 			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
 			crate::Event::WitnessReceived(call_hash, CHARLEMAGNE, 3).into(),
 		]);
@@ -103,7 +103,7 @@ fn no_double_call_on_epoch_boundary() {
 			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
 			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
 			crate::Event::ThresholdReached(call_hash, 2).into(),
-			dummy::Event::<Test>::ValueIncremented(0u32).into(),
+			dummy::Event::<Test>::ValueIncrementedTo(0u32).into(),
 			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
 			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
 		]);
