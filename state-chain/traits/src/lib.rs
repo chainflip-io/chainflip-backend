@@ -385,16 +385,6 @@ pub trait ChainflipAccount {
 	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
 }
 
-// Remove in place of a proper validator enum
-/// An outgoing node
-pub trait IsOutgoing {
-	type AccountId;
-
-	/// Returns true if this account is an outgoer which by definition is a node that was in the
-	/// active set in the *last* epoch
-	fn is_outgoing(account_id: &Self::AccountId) -> bool;
-}
-
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
