@@ -198,11 +198,11 @@ impl<T: Config> Auctioneer for Pallet<T> {
 
 	// Resolve an auction.  Bids are taken and are qualified. In doing so a `AuctionResult` is
 	// returned with the winners of the auction and the MAB.  Unsuccessful bids are grouped for
-	// potential backup validator candidates.  If we are in an emergency rotation then the strategy
+	// potential backup node candidates.  If we are in an emergency rotation then the strategy
 	// of grouping is modified to avoid a superminority of low collateralised nodes.
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Error<T>> {
 		let mut bids = T::BidderProvider::get_bidders();
-		// Determine if this validator is qualified for bidding
+		// Determine if this node is qualified for bidding
 		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
 		let excluded = T::KeygenExclusionSet::get();
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));

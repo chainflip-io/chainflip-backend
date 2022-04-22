@@ -156,8 +156,8 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
 	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]) {
-		for validator in epoch_authorities {
-			MockChainflipAccount::set_current_authority(validator);
+		for authority in epoch_authorities {
+			MockChainflipAccount::set_current_authority(authority);
 		}
 	}
 }

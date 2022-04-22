@@ -401,7 +401,7 @@ fn cannot_claim_bond() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
-		// Alice becomes a validator
+		// Alice becomes an authority
 		Flip::set_authority_bond(&ALICE, BOND);
 
 		// Bob can withdraw all, but not Alice.
@@ -616,7 +616,7 @@ fn test_claim_all() {
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
-		// Alice becomes a validator.
+		// Alice becomes an authority.
 		Flip::set_authority_bond(&ALICE, BOND);
 
 		// Claim all available funds.

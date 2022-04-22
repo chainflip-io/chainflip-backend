@@ -79,7 +79,7 @@ pub mod pallet {
 		}
 	}
 
-	/// A validator is considered online if fewer than [T::HeartbeatBlockInterval] blocks
+	/// A node is considered online if fewer than [T::HeartbeatBlockInterval] blocks
 	/// have elapsed since their last heartbeat submission.
 	impl<T: Config> IsOnline for Pallet<T> {
 		type ValidatorId = T::ValidatorId;

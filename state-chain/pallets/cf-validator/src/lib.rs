@@ -512,7 +512,7 @@ pub mod pallet {
 		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 			let validator_id: ValidatorIdOf<T> = account_id;
-			ValidatorCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
+			NodeCFEVersion::<T>::try_mutate(validator_id.clone(), |current_version| {
 				if *current_version != version {
 					Self::deposit_event(Event::CFEVersionUpdated(
 						validator_id,
@@ -616,10 +616,10 @@ pub mod pallet {
 	#[pallet::getter(fn mapped_peer)]
 	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
 
-	/// Validator CFE version
+	/// Node CFE version
 	#[pallet::storage]
-	#[pallet::getter(fn validator_cfe_version)]
-	pub type ValidatorCFEVersion<T: Config> =
+	#[pallet::getter(fn node_cfe_version)]
+	pub type NodeCFEVersion<T: Config> =
 		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
 
 	/// The last expired epoch index

@@ -904,7 +904,7 @@ mod tests {
 					}
 
 					// A late staker which we will use after the auction.  They are yet to stake
-					// and will do after the auction with the intention of being a backup validator
+					// and will do after the auction with the intention of being a backup node
 					let late_staker = testnet.create_engine();
 					testnet.set_active(&late_staker, true);
 					let seed = late_staker.to_string();
@@ -962,11 +962,11 @@ mod tests {
 						assert_eq!(
 							ChainflipAccountState::CurrentAuthority,
 							ChainflipAccountStore::<Runtime>::get(account).state,
-							"should be validator"
+							"should be CurrentAuthority"
 						);
 					}
 
-					// A late staker comes along, they should become a backup validator as they have
+					// A late staker comes along, they should become a backup node as they have
 					// everything in place
 					testnet.stake_manager_contract.stake(
 						late_staker.clone(),
@@ -977,7 +977,7 @@ mod tests {
 					assert_eq!(
 						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
-						"late staker should be a backup validator"
+						"late staker should be a backup node"
 					);
 
 					// Run to the next epoch to start the auction
@@ -1391,13 +1391,13 @@ mod tests {
 		use state_chain_runtime::Validator;
 
 		// TODO: Rename
-		// Helper function that checks the epochs of a validator against a list of expected
+		// Helper function that checks the epochs of an authority against a list of expected
 		// epochs
 		fn ensure_epoch_activity(account: &AccountId, epochs: Vec<EpochIndex>) {
 			assert_eq!(
 				EpochHistory::<Runtime>::active_epochs_for_authority(account),
 				epochs,
-				"The active epochs for the validator should be {:?}",
+				"The active epochs for the authority should be {:?}",
 				epochs
 			);
 		}

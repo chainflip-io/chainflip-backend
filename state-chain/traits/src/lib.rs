@@ -218,7 +218,7 @@ pub trait BidderProvider {
 pub trait StakeHandler {
 	type ValidatorId;
 	type Amount;
-	/// A validator has updated their stake and now has a new total amount
+	/// A node has updated their stake and now has a new total amount
 	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
@@ -300,7 +300,7 @@ pub trait EthEnvironmentProvider {
 pub trait IsOnline {
 	/// The validator id used
 	type ValidatorId;
-	/// The online status of the validator
+	/// The online status of the node
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
@@ -316,12 +316,12 @@ pub struct NetworkState<ValidatorId: Default> {
 }
 
 impl<ValidatorId: Default> NetworkState<ValidatorId> {
-	/// Return the number of nodes with state Validator in the network
+	//// Returns the total number of nodes in the network.
 	pub fn number_of_nodes(&self) -> u32 {
 		(self.online.len() + self.offline.len()) as u32
 	}
 
-	/// Return the percentage of validators online rounded down
+	/// Return the percentage of nodes online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
 

@@ -262,15 +262,15 @@ fn genesis() {
 fn send_cfe_version() {
 	new_test_ext().execute_with(|| {
 		// We initially submit version
-		let validator = DUMMY_GENESIS_VALIDATORS[0];
+		let authority = DUMMY_GENESIS_VALIDATORS[0];
 
 		let version = SemVer { major: 4, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), version.clone(),));
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), version.clone(),));
 
 		assert_eq!(
 			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				validator,
+				authority,
 				SemVer::default(),
 				version.clone()
 			)),
@@ -279,18 +279,18 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			version,
-			ValidatorPallet::validator_cfe_version(validator),
+			ValidatorPallet::node_cfe_version(authority),
 			"version should be stored"
 		);
 
 		// We submit a new version
 		let new_version = SemVer { major: 5, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), new_version.clone()));
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
 
 		assert_eq!(
 			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				validator,
+				authority,
 				version,
 				new_version.clone()
 			)),
@@ -299,13 +299,13 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			new_version,
-			ValidatorPallet::validator_cfe_version(validator),
+			ValidatorPallet::node_cfe_version(authority),
 			"new version should be stored"
 		);
 
 		// When we submit the same version we should see no `CFEVersionUpdated` event
 		frame_system::Pallet::<Test>::reset_events();
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), new_version.clone()));
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
 
 		assert_eq!(
 			0,
@@ -315,7 +315,7 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			new_version,
-			ValidatorPallet::validator_cfe_version(validator),
+			ValidatorPallet::node_cfe_version(authority),
 			"we should be still on the same new version"
 		);
 	});
