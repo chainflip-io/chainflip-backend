@@ -17,7 +17,7 @@ fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
 	assert_eq!(events, expected)
 }
 
-fn pop_last_event() -> Event {
+fn get_last_event() -> Event {
 	frame_system::Pallet::<Test>::events().pop().expect("Expected an event").event
 }
 
@@ -34,7 +34,7 @@ fn call_on_threshold() {
 		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
 		let dispatch_result =
 			if let Event::Witnesser(crate::Event::WitnessExecuted(_, dispatch_result)) =
-				pop_last_event()
+				get_last_event()
 			{
 				assert_ok!(dispatch_result);
 				dispatch_result
@@ -98,7 +98,7 @@ fn no_double_call_on_epoch_boundary() {
 		));
 		let dispatch_result =
 			if let Event::Witnesser(crate::Event::WitnessExecuted(_, dispatch_result)) =
-				pop_last_event()
+				get_last_event()
 			{
 				assert_ok!(dispatch_result);
 				dispatch_result
