@@ -214,7 +214,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let prometheus_registry = config.prometheus_registry().cloned();
 
 	let (rpc_request_handler, p2p_message_handler_future) =
-		multisig_p2p_transport::new_p2p_validator_network_node(
+		multisig_p2p_transport::new_p2p_authority_network_node(
 			network.clone(),
 			task_manager.spawn_handle(),
 			sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),

@@ -65,7 +65,7 @@ mod tests {
 		}
 
 		impl StakingContract {
-			// Stake for validator
+			// Stake for NODE
 			pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
 				let current_amount = self.stakes.get(&node_id).unwrap_or(&0);
 				let total = current_amount + amount;
@@ -87,7 +87,7 @@ mod tests {
 		pub struct Cli;
 
 		impl Cli {
-			// Activates an account to become a validator in the next epoch
+			// Activates an account to become an authority in the next epoch
 			pub fn activate_account(account: NodeId) {
 				AccountRetired::<Runtime>::insert(account, false);
 			}
@@ -225,7 +225,7 @@ mod tests {
 			fn handle_state_chain_events(&mut self, events: &[Event]) {
 				// If active handle events
 				if self.active {
-					// Being a validator we would respond to certain events
+					// Being a CurrentAuthority we would respond to certain events
 					if self.state() == ChainflipAccountState::CurrentAuthority {
 						on_events!(
 							events,
@@ -707,7 +707,7 @@ mod tests {
 				for account in accounts.iter() {
 					assert!(
 						Validator::authority_index(current_epoch, account).is_some(),
-						"validator is present in lookup"
+						"authority is present in lookup"
 					);
 				}
 
@@ -1238,15 +1238,14 @@ mod tests {
 						// TODO: Check historical epochs
 					});
 
-					let backup_node_balances: HashMap<NodeId, FlipBalance> =
-						current_backup_nodes
-							.iter()
-							.map(|validator_id| {
-								(validator_id.clone(), Flip::stakeable_balance(validator_id))
-							})
-							.collect::<Vec<(NodeId, FlipBalance)>>()
-							.into_iter()
-							.collect();
+					let backup_node_balances: HashMap<NodeId, FlipBalance> = current_backup_nodes
+						.iter()
+						.map(|validator_id| {
+							(validator_id.clone(), Flip::stakeable_balance(validator_id))
+						})
+						.collect::<Vec<(NodeId, FlipBalance)>>()
+						.into_iter()
+						.collect();
 
 					// Move forward a heartbeat, emissions should be shared to backup nodes
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
