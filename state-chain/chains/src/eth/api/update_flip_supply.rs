@@ -1,6 +1,6 @@
 use crate::{eth::Tokenizable, ChainCrypto, Ethereum};
 use codec::{Decode, Encode};
-use ethabi::{Param, ParamType, StateMutability, Token, Uint, Address};
+use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint};
 use frame_support::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
@@ -132,7 +132,7 @@ mod test_update_flip_supply {
 			NONCE,
 			NEW_TOTAL_SUPPLY,
 			STATE_CHAIN_BLOCK_NUMBER,
-			&FAKE_STAKE_MANAGER_ADDRESS
+			&FAKE_STAKE_MANAGER_ADDRESS,
 		);
 
 		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
