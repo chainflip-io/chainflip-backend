@@ -174,19 +174,19 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	/// RPC Metadata
 	type Metadata;
 
-	/// Connect to validators and disconnect from old validators
+	/// Connect to authorities and disconnect from old authorities
 	#[rpc(name = "p2p_set_peers")]
 	fn set_peers(&self, peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>) -> Result<u64>;
 
-	/// Connect to a validator
+	/// Connect to a authority
 	#[rpc(name = "p2p_add_peer")]
 	fn add_peer(&self, peer_id: PeerIdTransferable, port: u16, address: Ipv6Addr) -> Result<u64>;
 
-	/// Disconnect from a validator
+	/// Disconnect from a authority
 	#[rpc(name = "p2p_remove_peer")]
 	fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64>;
 
-	/// Send a message to validators returning a HTTP status code
+	/// Send a message to authorities returning a HTTP status code
 	#[rpc(name = "p2p_send_message")]
 	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> Result<u64>;
 
@@ -284,7 +284,7 @@ pub fn new_p2p_authority_network_node<
 			{
 				type Metadata = MetaData;
 
-				/// Connect to validators
+				/// Connect to authorities
 				fn set_peers(
 					&self,
 					peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>,
@@ -321,7 +321,7 @@ pub fn new_p2p_authority_network_node<
 					Ok(200)
 				}
 
-				/// Connect to a validator
+				/// Connect to an authority
 				fn add_peer(
 					&self,
 					peer_id: PeerIdTransferable,
@@ -346,7 +346,7 @@ pub fn new_p2p_authority_network_node<
 					}
 				}
 
-				/// Disconnect from a validator
+				/// Disconnect from an authority
 				fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64> {
 					let peer_id: PeerId = peer_id.try_into()?;
 					let mut state = self.state.write().unwrap();
