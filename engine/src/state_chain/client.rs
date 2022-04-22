@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::ChainAbi;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
 use frame_support::metadata::RuntimeMetadataPrefixed;
@@ -774,7 +774,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         epoch_index: EpochIndex,
     ) -> Result<Vault<C>>
     where
-        C: Chain + ChainCrypto + Debug + Clone + 'static + PalletInstanceAlias,
+        C: ChainAbi + Debug + Clone + 'static + PalletInstanceAlias,
         state_chain_runtime::Runtime:
             pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
     {

@@ -150,28 +150,17 @@ fn can_continue_to_witness_for_old_epochs() {
 			Origin::signed(ALISSA),
 			call.clone(),
 			current_epoch - 1,
-			Default::default()
 		));
 
 		// Try to witness in an epoch that has expired
 		assert_noop!(
-			Witnesser::witness_at_epoch(
-				Origin::signed(ALISSA),
-				call.clone(),
-				expired_epoch,
-				Default::default()
-			),
+			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), expired_epoch,),
 			Error::<Test>::EpochExpired
 		);
 
 		// Try to witness in a past epoch, which has yet to expire, and that we weren't a member
 		assert_noop!(
-			Witnesser::witness_at_epoch(
-				Origin::signed(DEIRDRE),
-				call.clone(),
-				current_epoch - 1,
-				Default::default()
-			),
+			Witnesser::witness_at_epoch(Origin::signed(DEIRDRE), call.clone(), current_epoch - 1,),
 			Error::<Test>::UnauthorisedWitness
 		);
 
@@ -180,17 +169,11 @@ fn can_continue_to_witness_for_old_epochs() {
 			Origin::signed(DEIRDRE),
 			call.clone(),
 			current_epoch,
-			Default::default()
 		));
 
 		// And cannot witness in an epoch that doesn't yet exist
 		assert_noop!(
-			Witnesser::witness_at_epoch(
-				Origin::signed(ALISSA),
-				call,
-				current_epoch + 1,
-				Default::default()
-			),
+			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call, current_epoch + 1,),
 			Error::<Test>::InvalidEpoch
 		);
 	});

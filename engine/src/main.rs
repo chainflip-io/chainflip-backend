@@ -11,7 +11,6 @@ use chainflip_engine::{
     state_chain,
 };
 use pallet_cf_validator::SemVer;
-use pallet_cf_vaults::BlockHeightWindow;
 use sp_core::U256;
 use structopt::StructOpt;
 
@@ -83,10 +82,8 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel();
 
     // TODO: multi consumer, single producer?
-    let (sm_window_sender, sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     {
         // ensure configured eth node is pointing to the correct chain id
