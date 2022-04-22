@@ -118,7 +118,7 @@ pub mod pallet {
 		/// CRITICAL: The authority index is out of bounds. This should never happen.
 		AuthorityIndexOutOfBounds,
 
-		/// Witness is not a validator.
+		/// Witness is not an authority.
 		UnauthorisedWitness,
 
 		/// A witness vote was cast twice by the same authority.
@@ -207,13 +207,13 @@ impl<T: Config> Pallet<T> {
 	/// high level:
 	///
 	/// 1. Ensure we are not submitting a witness for an expired epoch
-	/// 2. Look up the account id in the list of validators.
+	/// 2. Look up the account id in the list of authorities.
 	/// 3. Get the list of votes for the epoch and call, or an empty list if this is the first vote.
 	/// 4. Add the account's vote to the list.
 	/// 5. Check the number of votes against the required threshold.
 	/// 6. If the threshold is exceeded, execute the voted-on `call`.
 	///
-	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator
+	/// This implementation uses a bitmask whereby each index to the bitmask represents an authority
 	/// account ID in the current Epoch.
 	///
 	/// **Note:**
