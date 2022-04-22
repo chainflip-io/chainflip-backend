@@ -511,7 +511,7 @@ fn highest_bond() {
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 1);
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 2);
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 3);
-		// Expect the bond to be zero if there is no epoch the validator is active in
+		// Expect the bond to be zero if there is no epoch the node is active in
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 0);
 	});
 }

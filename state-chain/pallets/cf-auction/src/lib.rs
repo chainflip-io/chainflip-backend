@@ -124,7 +124,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Invalid range used for the active validator range.
+		/// Invalid range used for the authority set size
 		InvalidRange,
 		/// Not enough bidders were available to resolve the auction.
 		NotEnoughBidders,

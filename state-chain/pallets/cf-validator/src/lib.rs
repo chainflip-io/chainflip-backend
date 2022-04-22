@@ -184,14 +184,14 @@ pub mod pallet {
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(ValidatorIdOf<T>, Version, Version),
-		/// A validator has register her current PeerId \[account_id, public_key, port,
+		/// An authority has register her current PeerId \[account_id, public_key, port,
 		/// ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
-		/// A validator has unregistered her current PeerId \[account_id, public_key\]
+		/// A authority has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 		/// Ratio of claim period updated \[percentage\]
 		ClaimPeriodUpdated(Percentage),
-		/// Vanity Name for a validator has been set \[validator_id, vanity_name\]
+		/// Vanity Name for a authority has been set \[validator_id, vanity_name\]
 		VanityNameSet(ValidatorIdOf<T>, VanityName),
 	}
 
@@ -397,7 +397,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a validator to set their keys for upcoming sessions
+		/// Allow a node to set their keys for upcoming sessions
 		///
 		/// The dispatch origin of this function must be signed.
 		///
@@ -422,7 +422,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a validator to link their validator id to a peer id
+		/// Allow a node to link their validator id to a peer id
 		///
 		/// The dispatch origin of this function must be signed.
 		///
@@ -493,7 +493,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a validator to send their current cfe version.  We validate that the version is a
+		/// Allow a node to send their current cfe version.  We validate that the version is a
 		/// not the same version stored and if not we store and emit `CFEVersionUpdated`.
 		///
 		/// The dispatch origin of this function must be signed.

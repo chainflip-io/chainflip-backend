@@ -480,7 +480,7 @@ mod test_slashing {
 	#[test]
 	fn test_slash_validator() {
 		new_test_ext().execute_with(|| {
-			// Amount of blocks the validator was offline
+			// Amount of blocks the node was offline
 			const BLOCKS_OFFLINE: u64 = 20;
 			// Amount of extra token we need to mint
 			const MINT: u128 = 80_000_000;

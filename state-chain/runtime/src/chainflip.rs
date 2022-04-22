@@ -97,7 +97,7 @@ impl RewardDistribution for BackupNodeEmissions {
 		let authority_rewards = Emissions::validator_emission_per_block() *
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
-		// The average validator emission
+		// The average authority emission
 		let average_authority_reward: Self::FlipBalance = authority_rewards /
 			Self::FlipBalance::unique_saturated_from(
 				Self::EpochInfo::current_authorities().len(),
