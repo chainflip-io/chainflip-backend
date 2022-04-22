@@ -230,7 +230,7 @@ impl<T: Config> Pallet<T> {
 		// The number of authorities for the epoch
 		// This value is updated alongside ValidatorIndex, so if we have a authority, we have an
 		// authority count.
-		let num_validators =
+		let num_authorities =
 			T::EpochInfo::authority_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
 
 		let index = T::EpochInfo::authority_index(epoch_index, &who.clone().into())
@@ -244,7 +244,7 @@ impl<T: Config> Pallet<T> {
 			|buffer| {
 				// If there is no storage item, create an empty one.
 				if buffer.is_none() {
-					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators as usize);
+					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_authorities as usize);
 					*buffer = Some(empty_mask.into_vec())
 				}
 
@@ -254,7 +254,7 @@ impl<T: Config> Pallet<T> {
 
 				// Convert to an addressable bitmask
 				let bits = VoteMask::from_slice_mut(bytes)
-				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
+				.expect("Only panics if the slice size exceeds the max; The number of authorities should never exceed this;");
 
 				let mut vote_count = bits.count_ones();
 
@@ -281,7 +281,7 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == success_threshold_from_share_count(num_validators) as usize &&
+		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
 			CallHashExecuted::<T>::get(&call_hash).is_none()
 		{
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
