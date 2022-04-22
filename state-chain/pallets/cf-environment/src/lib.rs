@@ -51,7 +51,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn flip_token_address)]
-	/// The address of the ETH stake manager contract
+	/// The address of the ETH Flip token contract
 	pub type FlipTokenAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
