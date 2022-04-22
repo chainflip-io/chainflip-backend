@@ -99,6 +99,7 @@ pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 		nonce: Abi::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
+		stake_manager_address: &[u8; 20],
 	) -> Self;
 }
 

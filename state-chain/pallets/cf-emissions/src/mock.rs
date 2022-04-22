@@ -155,6 +155,7 @@ pub struct MockUpdateFlipSupply {
 	pub nonce: <MockEthereum as ChainAbi>::Nonce,
 	pub new_total_supply: u128,
 	pub block_number: u64,
+	pub stake_manager_address: [u8; 20],
 }
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
@@ -164,6 +165,7 @@ impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 		nonce: <MockEthereum as ChainAbi>::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
+		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self {
 			key_manager_address: key_manager_address.clone(),
@@ -171,6 +173,7 @@ impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 			nonce,
 			new_total_supply,
 			block_number,
+			stake_manager_address: stake_manager_address.clone(),
 		}
 	}
 }

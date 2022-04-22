@@ -311,6 +311,7 @@ impl<T: Config> Pallet<T> {
 			T::NonceProvider::next_nonce(),
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
+			&T::EthEnvironmentProvider::stake_manager_address(),
 		));
 	}
 

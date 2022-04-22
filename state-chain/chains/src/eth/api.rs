@@ -83,6 +83,7 @@ impl UpdateFlipSupply<Ethereum> for EthereumApi {
 		nonce: <Ethereum as ChainAbi>::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
+		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
 			key_manager_address,
@@ -90,6 +91,7 @@ impl UpdateFlipSupply<Ethereum> for EthereumApi {
 			nonce,
 			new_total_supply,
 			block_number,
+			stake_manager_address,
 		))
 	}
 }
