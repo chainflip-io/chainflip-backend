@@ -57,7 +57,7 @@ impl ChainflipAccount for MockChainflipAccount {
 		});
 	}
 
-	fn set_historical_validator(_account_id: &Self::AccountId) {
+	fn set_historical_authority(_account_id: &Self::AccountId) {
 		todo!("Implement when required");
 	}
 

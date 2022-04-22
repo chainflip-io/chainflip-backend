@@ -376,12 +376,12 @@ pub trait ChainflipAccount {
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	/// Updates the state of a
 	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
-	/// Set the validator to be the current authority
+	/// Set the node to be a current authority
 	fn set_current_authority(account_id: &Self::AccountId);
-	/// Sets the validator state to historical
-	fn set_historical_validator(account_id: &Self::AccountId);
-	/// Sets the current validator to the historical validator, should be called
-	/// once the validator has no more active epochs
+	/// Sets the authority state to historical
+	fn set_historical_authority(account_id: &Self::AccountId);
+	/// Sets the current authority to the historical authority, should be called
+	/// once the authority has no more active epochs
 	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
 }
 
@@ -431,7 +431,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 
 	// TODO: How to check if we set to backup or passive
 	// we might want to combine this with an update_backup_or_passive
-	fn set_historical_validator(account_id: &Self::AccountId) {
+	fn set_historical_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state =
 				ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive);
