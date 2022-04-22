@@ -17,7 +17,7 @@ pub use weights::WeightInfo;
 use cf_traits::{
 	AuctionResult, Auctioneer, AuthoritySetSizeRange, BackupNodes, BackupOrPassive, BidderProvider,
 	Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo,
-	QualifyValidator, RemainingBid, StakeHandler,
+	QualifyAuthorityCandidate, RemainingBid, StakeHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -52,8 +52,8 @@ pub mod pallet {
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
-		/// Qualify a validator
-		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
+		/// Qualify an authority
+		type AuthorityQualification: QualifyAuthorityCandidate<ValidatorId = Self::ValidatorId>;
 		/// Key generation exclusion set
 		type KeygenExclusionSet: Get<BTreeSet<Self::ValidatorId>>;
 		/// Minimum number of authorities required
@@ -203,7 +203,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Error<T>> {
 		let mut bids = T::BidderProvider::get_bidders();
 		// Determine if this node is qualified for bidding
-		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
+		bids.retain(|(validator_id, _)| T::AuthorityQualification::is_qualified(validator_id));
 		let excluded = T::KeygenExclusionSet::get();
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 		let number_of_bidders = bids.len() as u32;
@@ -392,7 +392,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
 		// We validate that the staker is qualified and can be considered to be a BV if the stake
 		// meets the requirements
-		if !T::ValidatorQualification::is_qualified(validator_id) {
+		if !T::AuthorityQualification::is_qualified(validator_id) {
 			return
 		}
 

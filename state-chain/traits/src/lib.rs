@@ -565,7 +565,7 @@ pub trait WaivedFees {
 }
 
 /// Qualify what is considered as a potential authority for the network
-pub trait QualifyValidator {
+pub trait QualifyAuthorityCandidate {
 	type ValidatorId;
 	/// Is the node qualified to be an authority and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
@@ -574,7 +574,7 @@ pub trait QualifyValidator {
 /// Qualify if the node has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
-impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyValidator
+impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyAuthorityCandidate
 	for SessionKeysRegistered<T, R>
 {
 	type ValidatorId = T;
@@ -583,11 +583,11 @@ impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyValidator
 	}
 }
 
-impl<A, B, C> QualifyValidator for (A, B, C)
+impl<A, B, C> QualifyAuthorityCandidate for (A, B, C)
 where
-	A: QualifyValidator<ValidatorId = B::ValidatorId>,
-	B: QualifyValidator,
-	C: QualifyValidator<ValidatorId = B::ValidatorId>,
+	A: QualifyAuthorityCandidate<ValidatorId = B::ValidatorId>,
+	B: QualifyAuthorityCandidate,
+	C: QualifyAuthorityCandidate<ValidatorId = B::ValidatorId>,
 {
 	type ValidatorId = A::ValidatorId;
 

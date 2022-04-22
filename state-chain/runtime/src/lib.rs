@@ -131,7 +131,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type MinAuthorities = MinAuthorities;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type ValidatorQualification = (
+	type AuthorityQualification = (
 		Online,
 		pallet_cf_validator::PeerMapping<Self>,
 		SessionKeysRegistered<

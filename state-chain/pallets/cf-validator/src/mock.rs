@@ -11,7 +11,8 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
+	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline,
+	QualifyAuthorityCandidate,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -163,7 +164,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 }
 
 pub struct MockQualifyValidator;
-impl QualifyValidator for MockQualifyValidator {
+impl QualifyAuthorityCandidate for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {

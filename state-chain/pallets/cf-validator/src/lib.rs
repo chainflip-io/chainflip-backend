@@ -19,7 +19,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
 	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyValidator, ReputationResetter, SuccessOrFailure, VaultRotator,
+	QualifyAuthorityCandidate, SuccessOrFailure, ReputationResetter, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1000,7 +1000,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 
 pub struct PeerMapping<T>(PhantomData<T>);
 
-impl<T: Config> QualifyValidator for PeerMapping<T> {
+impl<T: Config> QualifyAuthorityCandidate for PeerMapping<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
