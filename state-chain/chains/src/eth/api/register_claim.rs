@@ -85,6 +85,10 @@ impl RegisterClaim {
 				Param::new(
 					"sigData",
 					ParamType::Tuple(vec![
+						// keyManagerAddress
+						ParamType::Address,
+						// chainId
+						ParamType::Uint(256),
 						// msgHash
 						ParamType::Uint(256),
 						// sig
@@ -168,7 +172,7 @@ mod test_register_claim {
 		assert_eq!(
 			// Our encoding:
 			runtime_payload,
-			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
+			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			register_claim_reference
 				.encode_input(&[
 					// sigData: SigData(address, uint, uint, uint, uint, address)

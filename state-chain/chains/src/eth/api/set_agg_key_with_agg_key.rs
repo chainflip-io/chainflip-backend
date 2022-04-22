@@ -66,6 +66,8 @@ impl SetAggKeyWithAggKey {
 				Param::new(
 					"sigData",
 					ParamType::Tuple(vec![
+						ParamType::Address,
+						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
@@ -103,27 +105,14 @@ mod test_set_agg_key_with_agg_key {
 	fn test_known_payload() {
 		let expected_payload = Keccak256::hash(
 			hex_literal::hex!(
-				"
-				24969d5d 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 1742daac d4dbfbe6 6d4c8965
-				55029587 3c683cb3 b65019d3 a53975ba
-				553cc31d 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000001"
+				"31b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001"
 			)
 			.as_ref(),
 		);
 		let call = SetAggKeyWithAggKey::new_unsigned(
-			&[0xcf; 20],
-			1,
-			0,
+			&hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
+			31337,
+			15,
 			AggKey::from_pubkey_compressed(hex_literal::hex!(
 				"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
 			)),
@@ -174,11 +163,13 @@ mod test_set_agg_key_with_agg_key {
 		assert_eq!(
 			// Our encoding:
 			runtime_payload,
-			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
+			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			set_agg_key_reference
 				.encode_input(&[
-					// sigData: SigData(uint, uint, uint, address)
+					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
+						Token::Address(FAKE_KEYMAN_ADDR.into()),
+						Token::Uint(CHAIN_ID.into()),
 						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
