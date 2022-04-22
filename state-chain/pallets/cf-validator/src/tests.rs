@@ -377,7 +377,7 @@ fn register_peer_id() {
 			Error::<Test>::AccountPeerMappingOverlap
 		);
 
-		// New validator mapping works
+		// New authority mapping works
 		let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob", None);
 		let bob_peer_public_key = bob_peer_keypair.public();
 		assert_ok!(ValidatorPallet::register_peer_id(

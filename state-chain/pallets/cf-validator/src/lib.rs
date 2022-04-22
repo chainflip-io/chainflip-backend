@@ -158,11 +158,11 @@ pub mod pallet {
 			Offence = Self::Offence,
 		>;
 
-		/// The range of online validators we would trigger an emergency rotation
+		/// The range of online authorities we would trigger an emergency rotation
 		#[pallet::constant]
 		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 
-		/// Updates the bond of a validator
+		/// Updates the bond of an authority
 		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
 
 		/// This is used to reset the validator's reputation
@@ -631,7 +631,7 @@ pub mod pallet {
 	pub type EpochExpiries<T: Config> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
-	/// A map between an epoch and an vector of validators (participating in this epoch)
+	/// A map between an epoch and an vector of authorities (participating in this epoch)
 	#[pallet::storage]
 	pub type HistoricalAuthorities<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
@@ -641,7 +641,7 @@ pub mod pallet {
 	pub type HistoricalBonds<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, T::Amount, ValueQuery>;
 
-	/// A map between an validator and an vector of epoch he attended
+	/// A map between an authority and a set of all the epochs it has been an authority in
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
@@ -678,10 +678,11 @@ pub mod pallet {
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			const GENESIS_EPOCH: u32 = 0;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
-			let genesis_validators = <pallet_session::Pallet<T>>::validators();
 			EpochValidatorCount::<T>::insert(GENESIS_EPOCH, genesis_validators.len() as u32);
 			CurrentEpochStartedAt::<T>::set(Default::default());
-			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
+			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
+			let genesis_authorities = pallet_session::Pallet::<T>::validators();
+			Pallet::<T>::start_new_epoch(&genesis_authorities, self.bond);
 		}
 	}
 }
