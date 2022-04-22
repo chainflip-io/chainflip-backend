@@ -94,26 +94,24 @@ impl RewardDistribution for BackupNodeEmissions {
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// Emissions for this heartbeat interval for the active set
-		let validator_rewards = Emissions::validator_emission_per_block() *
+		let authority_rewards = Emissions::validator_emission_per_block() *
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// The average validator emission
-		let average_validator_reward: Self::FlipBalance = validator_rewards /
+		let average_authority_reward: Self::FlipBalance = authority_rewards /
 			Self::FlipBalance::unique_saturated_from(
 				Self::EpochInfo::current_authorities().len(),
 			);
 
 		let mut total_rewards = 0;
 
-		// Calculate rewards for each backup validator and total rewards for capping
+		// Calculate rewards for each backup node and total rewards for capping
 		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_nodes
 			.iter()
 			.map(|backup_node| {
-				let backup_node_stake =
-					Self::StakeTransfer::stakeable_balance(backup_node);
-				let reward_scaling_factor =
-					min(1, (backup_node_stake / minimum_active_bid) ^ 2);
-				let reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
+				let backup_node_stake = Self::StakeTransfer::stakeable_balance(backup_node);
+				let reward_scaling_factor = min(1, (backup_node_stake / minimum_active_bid) ^ 2);
+				let reward = (reward_scaling_factor * average_authority_reward * 8) / 10;
 				total_rewards += reward;
 				(backup_node.clone(), reward)
 			})
