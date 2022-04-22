@@ -62,13 +62,6 @@ impl pallet_cf_environment::Config for Test {
 	type WeightInfo = ();
 }
 
-// pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-// pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-// pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
-// pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
-// pub const PETER: <Test as frame_system::Config>::AccountId = 988u64;
-// pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
-
 pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
 pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
