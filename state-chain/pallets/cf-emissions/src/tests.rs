@@ -37,7 +37,7 @@ mod test_block_rewards {
 
 	fn test_with(block_number: u64, emissions_per_block: u128, expected_mint: u128) {
 		new_test_ext(vec![1, 2], Some(1000)).execute_with(|| {
-			Emissions::update_validator_block_emission(emissions_per_block);
+			Emissions::update_authority_block_emission(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
 			let _weights = Emissions::mint_rewards_for_block(block_number);
@@ -70,7 +70,7 @@ fn test_duplicate_emission_should_be_noop() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		const BLOCK_NUMBER: u64 = 5;
 
-		Emissions::update_validator_block_emission(EMISSION_RATE);
+		Emissions::update_authority_block_emission(EMISSION_RATE);
 
 		let before = Flip::<Test>::total_issuance();
 		let _weights = Emissions::mint_rewards_for_block(BLOCK_NUMBER);

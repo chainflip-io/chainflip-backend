@@ -556,12 +556,12 @@ pub trait Heartbeat {
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }
 
-/// Updating and calculating emissions per block for validators and backup validators
+/// Updating and calculating emissions per block for authorities and backup nodes
 pub trait BlockEmissions {
 	type Balance;
-	/// Update the emissions per block for a validator
-	fn update_validator_block_emission(emission: Self::Balance);
-	/// Update the emissions per block for a backup validator
+	/// Update the emissions per block for an authority
+	fn update_authority_block_emission(emission: Self::Balance);
+	/// Update the emissions per block for a backup node
 	fn update_backup_node_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
 	fn calculate_block_emissions();

@@ -349,7 +349,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> BlockEmissions for Pallet<T> {
 	type Balance = T::FlipBalance;
 
-	fn update_validator_block_emission(emission: Self::Balance) {
+	fn update_authority_block_emission(emission: Self::Balance) {
 		ValidatorEmissionPerBlock::<T>::put(emission);
 	}
 
@@ -370,7 +370,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 			})
 		}
 
-		Self::update_validator_block_emission(inflation_to_block_reward::<T>(
+		Self::update_authority_block_emission(inflation_to_block_reward::<T>(
 			CurrentAuthorityEmissionInflation::<T>::get(),
 		));
 
