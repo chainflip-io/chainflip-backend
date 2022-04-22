@@ -155,7 +155,6 @@ async fn main() {
         db,
         incoming_p2p_message_receiver,
         outgoing_p2p_message_sender,
-        multisig::KeygenOptions::default(),
         &root_logger,
     );
 
