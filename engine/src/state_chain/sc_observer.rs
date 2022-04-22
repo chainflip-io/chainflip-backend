@@ -90,8 +90,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     )>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
-    sm_window_sender: UnboundedSender<BlockHeightWindow>,
-    km_window_sender: UnboundedSender<BlockHeightWindow>,
+    sm_window_sender: UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
+    km_window_sender: UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
     initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
@@ -133,8 +133,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
-        sm_window_sender: &UnboundedSender<BlockHeightWindow>,
-        km_window_sender: &UnboundedSender<BlockHeightWindow>,
+        sm_window_sender: &UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
+        km_window_sender: &UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
     ) -> anyhow::Result<()> {
         // TODO: Use all the historical epochs: https://github.com/chainflip-io/chainflip-backend/issues/1218
         let last_active_epoch = *state_chain_client
