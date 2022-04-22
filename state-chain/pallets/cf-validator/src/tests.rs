@@ -189,27 +189,27 @@ fn should_rotate_when_forced() {
 }
 
 #[test]
-fn auction_winners_should_be_the_new_validators_on_new_epoch() {
+fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext().execute_with(|| {
 		let new_bond = 10;
-		let new_validators = vec![1, 2];
+		let new_authorities = vec![1, 2];
 
 		MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
-			winners: new_validators.clone(),
+			winners: new_authorities.clone(),
 			minimum_active_bid: new_bond,
 		}));
 
 		assert_eq!(
 			Authorities::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
-			"the current validators should be the genesis validators"
+			"the current authorities should be the genesis authorities"
 		);
 		// Run to the epoch boundary.
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::current_authorities(),
 			DUMMY_GENESIS_VALIDATORS,
-			"we should still be validating with the genesis validators"
+			"we should still be validating with the genesis authorities"
 		);
 		assert!(matches!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction));
 		move_forward_blocks(1);
@@ -221,8 +221,8 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 		assert_next_epoch();
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::current_authorities(),
-			new_validators,
-			"the new validators are now validating"
+			new_authorities,
+			"the new authorities are now validating"
 		);
 		assert_eq!(Bond::<Test>::get(), new_bond, "bond should be updated");
 
@@ -230,8 +230,8 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 			.with(|cell| (*cell.borrow()).clone())
 			.expect("no value for auction winners is provided!");
 
-		// Expect new_validators to be auction winners as well
-		assert_eq!(new_validators, auction_winners);
+		// Expect new_authorities to be auction winners as well
+		assert_eq!(new_authorities, auction_winners);
 	});
 }
 
