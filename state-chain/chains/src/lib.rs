@@ -83,17 +83,31 @@ where
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(nonce: Abi::Nonce, new_key: <Abi as ChainCrypto>::AggKey) -> Self;
+	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
+		nonce: Abi::Nonce,
+		new_key: <Abi as ChainCrypto>::AggKey,
+	) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(nonce: Abi::Nonce, new_total_supply: u128, block_number: u64) -> Self;
+	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
+		nonce: Abi::Nonce,
+		new_total_supply: u128,
+		block_number: u64,
+		stake_manager_address: &[u8; 20],
+	) -> Self;
 }
 
 /// Constructs the `RegisterClaim` api call.
 pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
 		nonce: Abi::Nonce,
 		node_id: &[u8; 32],
 		amount: u128,

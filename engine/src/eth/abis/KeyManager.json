@@ -136,44 +136,6 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "currentBalance",
-        "type": "uint256"
-      }
-    ],
-    "name": "RefundFailed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "Refunded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
         "components": [
           {
             "internalType": "address",
@@ -222,24 +184,6 @@
     "type": "event"
   },
   {
-    "inputs": [],
-    "name": "aggKey",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "pubKeyX",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint8",
-        "name": "pubKeyYParity",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
@@ -247,7 +191,7 @@
         "type": "address"
       }
     ],
-    "name": "canValidateSig",
+    "name": "canConsumeKeyNonce",
     "outputs": [
       {
         "internalType": "bool",
@@ -260,90 +204,7 @@
   },
   {
     "inputs": [],
-    "name": "canValidateSigSet",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getAggregateKey",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "pubKeyX",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint8",
-            "name": "pubKeyYParity",
-            "type": "uint8"
-          }
-        ],
-        "internalType": "struct IShared.Key",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getGovernanceKey",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getLastValidateTime",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "govKey",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "nonce",
-        "type": "uint256"
-      }
-    ],
-    "name": "isNonceUsedByAggKey",
+    "name": "canConsumeKeyNonceSet",
     "outputs": [
       {
         "internalType": "bool",
@@ -399,7 +260,84 @@
         "type": "bytes32"
       }
     ],
-    "name": "isUpdatedValidSig",
+    "name": "consumeKeyNonce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getAggregateKey",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getGovernanceKey",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getLastValidateTime",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getNumberWhitelistedAddresses",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
+      }
+    ],
+    "name": "isNonceUsedByAggKey",
     "outputs": [
       {
         "internalType": "bool",
@@ -407,25 +345,7 @@
         "type": "bool"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "refundEth",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -523,7 +443,7 @@
         "type": "address[]"
       }
     ],
-    "name": "setCanValidateSig",
+    "name": "setCanConsumeKeyNonce",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -539,6 +459,74 @@
     "name": "setGovKeyWithGovKey",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "address[]",
+        "name": "currentAddrs",
+        "type": "address[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "newAddrs",
+        "type": "address[]"
+      }
+    ],
+    "name": "updateCanConsumeKeyNonce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "signingPubKeyX",
+        "type": "uint256"
+      }
+    ],
+    "name": "verifySigningKeyX",
+    "outputs": [],
+    "stateMutability": "pure",
     "type": "function"
   },
   {

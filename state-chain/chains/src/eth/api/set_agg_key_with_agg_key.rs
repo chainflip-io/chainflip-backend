@@ -21,9 +21,16 @@ pub struct SetAggKeyWithAggKey {
 }
 
 impl SetAggKeyWithAggKey {
-	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(nonce: Nonce, new_key: Key) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(nonce.into()), new_key: new_key.into() };
+	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
+		nonce: Nonce,
+		new_key: Key,
+	) -> Self {
+		let mut calldata = Self {
+			sig_data: SigData::new_empty(key_manager_address.into(), chain_id.into(), nonce.into()),
+			new_key: new_key.into(),
+		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
@@ -59,6 +66,8 @@ impl SetAggKeyWithAggKey {
 				Param::new(
 					"sigData",
 					ParamType::Tuple(vec![
+						ParamType::Address,
+						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
@@ -96,26 +105,14 @@ mod test_set_agg_key_with_agg_key {
 	fn test_known_payload() {
 		let expected_payload = Keccak256::hash(
 			hex_literal::hex!(
-				"
-				24969d5d 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000000 1742daac d4dbfbe6 6d4c8965
-				55029587 3c683cb3 b65019d3 a53975ba
-				553cc31d 00000000 00000000 00000000
-				00000000 00000000 00000000 00000000
-				00000001"
+				"31b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001"
 			)
 			.as_ref(),
 		);
-
 		let call = SetAggKeyWithAggKey::new_unsigned(
-			0,
+			&hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
+			31337,
+			15,
 			AggKey::from_pubkey_compressed(hex_literal::hex!(
 				"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
 			)),
@@ -128,6 +125,8 @@ mod test_set_agg_key_with_agg_key {
 	fn test_set_agg_key_with_agg_key_payload() {
 		use crate::eth::{tests::asymmetrise, ParityBit};
 		use ethabi::Token;
+		const CHAIN_ID: u64 = 1;
+		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const NONCE: u64 = 6;
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
@@ -142,6 +141,8 @@ mod test_set_agg_key_with_agg_key {
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
 		let set_agg_key_runtime = SetAggKeyWithAggKey::new_unsigned(
+			&FAKE_KEYMAN_ADDR,
+			CHAIN_ID,
 			NONCE,
 			AggKey { pub_key_x: FAKE_NEW_KEY_X, pub_key_y_parity: FAKE_NEW_KEY_Y },
 		);
@@ -162,11 +163,13 @@ mod test_set_agg_key_with_agg_key {
 		assert_eq!(
 			// Our encoding:
 			runtime_payload,
-			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
+			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			set_agg_key_reference
 				.encode_input(&[
-					// sigData: SigData(uint, uint, uint, address)
+					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
+						Token::Address(FAKE_KEYMAN_ADDR.into()),
+						Token::Uint(CHAIN_ID.into()),
 						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),

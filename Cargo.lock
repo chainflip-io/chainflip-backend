@@ -5181,6 +5181,7 @@ dependencies = [
 name = "pallet-cf-environment"
 version = "0.1.0"
 dependencies = [
+ "cf-traits",
  "frame-support",
  "frame-system",
  "parity-scale-codec",

@@ -31,15 +31,25 @@ impl ChainAbi for Ethereum {
 }
 
 impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
-	fn new_unsigned(nonce: u64, new_key: <Ethereum as ChainCrypto>::AggKey) -> Self {
+	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
+		nonce: u64,
+		new_key: <Ethereum as ChainCrypto>::AggKey,
+	) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
-			nonce, new_key,
+			key_manager_address,
+			chain_id,
+			nonce,
+			new_key,
 		))
 	}
 }
 
 impl RegisterClaim<Ethereum> for EthereumApi {
 	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
 		nonce: <Ethereum as ChainAbi>::Nonce,
 		node_id: &[u8; 32],
 		amount: u128,
@@ -47,7 +57,13 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 		expiry: u64,
 	) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
-			nonce, node_id, amount, address, expiry,
+			key_manager_address,
+			chain_id,
+			nonce,
+			node_id,
+			amount,
+			address,
+			expiry,
 		))
 	}
 
@@ -62,14 +78,20 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 impl UpdateFlipSupply<Ethereum> for EthereumApi {
 	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
 		nonce: <Ethereum as ChainAbi>::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
+		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
+			key_manager_address,
+			chain_id,
 			nonce,
 			new_total_supply,
 			block_number,
+			stake_manager_address,
 		))
 	}
 }

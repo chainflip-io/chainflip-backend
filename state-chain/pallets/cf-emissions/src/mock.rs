@@ -14,7 +14,9 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::{Broadcaster, WaivedFees};
+use cf_traits::{
+	mocks::eth_environment_provider::MockEthEnvironmentProvider, Broadcaster, WaivedFees,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -148,18 +150,31 @@ impl RewardsDistribution for MockRewardsDistribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockUpdateFlipSupply {
+	pub key_manager_address: [u8; 20],
+	pub chain_id: u64,
 	pub nonce: <MockEthereum as ChainAbi>::Nonce,
 	pub new_total_supply: u128,
 	pub block_number: u64,
+	pub stake_manager_address: [u8; 20],
 }
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
+		key_manager_address: &[u8; 20],
+		chain_id: u64,
 		nonce: <MockEthereum as ChainAbi>::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
+		stake_manager_address: &[u8; 20],
 	) -> Self {
-		Self { nonce, new_total_supply, block_number }
+		Self {
+			key_manager_address: key_manager_address.clone(),
+			chain_id,
+			nonce,
+			new_total_supply,
+			block_number,
+			stake_manager_address: stake_manager_address.clone(),
+		}
 	}
 }
 
@@ -211,6 +226,7 @@ impl pallet_cf_emissions::Config for Test {
 	type RewardsDistribution = MockRewardsDistribution;
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = Self;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 }

@@ -8,8 +8,8 @@ use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochIndex, EpochInfo, EpochTransitionHandler, KeyProvider, NonceProvider,
-	SuccessOrFailure, VaultRotator,
+	CurrentEpochIndex, EpochIndex, EpochInfo, EpochTransitionHandler, EthEnvironmentProvider,
+	KeyProvider, NonceProvider, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -324,6 +324,9 @@ pub mod pallet {
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+
+		/// Something that can provide the key manager address and chain id.
+		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -678,6 +681,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
+				&T::EthEnvironmentProvider::key_manager_address(),
+				T::EthEnvironmentProvider::chain_id(),
 				<Self as NonceProvider<_>>::next_nonce(),
 				new_public_key,
 			),
