@@ -444,9 +444,9 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	}
 }
 
-/// Slashing a validator
+/// Slashing a node
 pub trait Slashing {
-	/// An identifier for our validator
+	/// An identifier for our node
 	type AccountId;
 	/// Block number
 	type BlockNumber;
@@ -564,14 +564,14 @@ pub trait WaivedFees {
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
 }
 
-/// Qualify what is considered as a potential validator for the network
+/// Qualify what is considered as a potential authority for the network
 pub trait QualifyValidator {
 	type ValidatorId;
-	/// Is the validator qualified to be a validator and meet our expectations of one
+	/// Is the node qualified to be an authority and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// Qualify if the validator has registered
+/// Qualify if the node has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
 impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyValidator
@@ -619,7 +619,7 @@ pub trait HistoricalEpoch {
 	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
-	/// The unexpired epochs for which a validator was in the authority set.
+	/// The unexpired epochs for which a node was in the authority set.
 	fn active_epochs_for_authority(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
 	/// Removes an epoch from a validator's list of active epochs.
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
