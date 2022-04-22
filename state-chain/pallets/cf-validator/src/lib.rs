@@ -801,7 +801,7 @@ impl<T: Config> Pallet<T> {
 		// If we were in an emergency, mark as completed
 		Self::emergency_rotation_completed();
 
-		// Save the epoch -> validators map
+		// Save the epoch -> authorities map
 		HistoricalAuthorities::<T>::insert(new_epoch, epoch_authorities);
 
 		// Save the bond for each epoch
@@ -814,7 +814,7 @@ impl<T: Config> Pallet<T> {
 			let bond = EpochHistory::<T>::active_bond(authority);
 			T::Bonder::update_authority_bond(authority, bond);
 
-			ChainflipAccountStore::<T>::set_current_authority(validator);
+			ChainflipAccountStore::<T>::set_current_authority(authority);
 		}
 
 		// find all the valitators moving out of the epoch
@@ -824,7 +824,7 @@ impl<T: Config> Pallet<T> {
 			ChainflipAccountStore::<T>::set_historical_authority(authority);
 		});
 
-		// We've got new validators, which means the backups and passives may have changed
+		// We've got new authorities, which means the backups and passives may have changed
 		T::Auctioneer::update_backup_and_passive_states();
 
 		// Handler for a new epoch

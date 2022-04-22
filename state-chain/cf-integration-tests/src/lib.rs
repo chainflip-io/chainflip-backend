@@ -280,8 +280,8 @@ mod tests {
 						events,
 						Event::EthereumVault(
 							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, validators)) => {
-								if validators.contains(&self.node_id) {
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, authorities)) => {
+								if authorities.contains(&self.node_id) {
 									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
@@ -359,7 +359,7 @@ mod tests {
 				[self.node_counter as u8; 32].into()
 			}
 
-			// Create a network which includes the validators in genesis of number of nodes
+			// Create a network which includes the authorities in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(
 				number_of_passive_nodes: u8,
@@ -785,7 +785,7 @@ mod tests {
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				// As we run a rotation at genesis we will need accounts to support
-				// having 5 validators as the default is 3 (Alice, Bob and Charlie)
+				// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
 				.accounts(vec![
 					(AccountId::from(ALICE), GENESIS_BALANCE),
 					(AccountId::from(BOB), GENESIS_BALANCE),
@@ -854,7 +854,7 @@ mod tests {
 		// - When the epoch is reached an auction is started and completed
 		// - All nodes stake above the MAB
 		// - We have two nodes that haven't registered their session keys
-		// - New validators have the state of Validator with the last active epoch stored
+		// - New authorities have the state of Validator with the last active epoch stored
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
@@ -869,7 +869,7 @@ mod tests {
 
 					let number_of_passive_nodes = MAX_SET_SIZE
 						.checked_sub(nodes.len() as u32)
-						.expect("Max set size must be at least the number of genesis validators");
+						.expect("Max set size must be at least the number of genesis authorities");
 
 					let (mut testnet, mut passive_nodes) =
 						network::Network::create(number_of_passive_nodes as u8, &nodes);
@@ -935,17 +935,17 @@ mod tests {
 					assert_eq!(
 						winners,
 						nodes,
-						"the new winners should be those genesis validators and the passive nodes that have keys"
+						"the new winners should be those genesis authorities and the passive nodes that have keys"
 					);
 
-					let mut new_validators = Validator::current_authorities();
-					new_validators.sort();
+					let mut new_authorities = Validator::current_authorities();
+					new_authorities.sort();
 
-					// This new set of winners should also be the validators of the network
+					// This new set of winners should also be the authorities of the network
 					assert_eq!(
-						new_validators,
+						new_authorities,
 						nodes,
-						"the new validators should be those genesis validators and the new nodes created in test"
+						"the new authorities should be those genesis authorities and the new nodes created in test"
 					);
 
 					for account in keyless_nodes.iter() {
@@ -957,7 +957,7 @@ mod tests {
 						);
 					}
 
-					for account in new_validators.iter() {
+					for account in new_authorities.iter() {
 						// TODO: Check historical epochs
 						assert_eq!(
 							ChainflipAccountState::CurrentAuthority,
@@ -1009,10 +1009,8 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					let mut nodes = Validator::current_authorities();
-					// Create the test network with some fresh nodes and the genesis validators
 					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
 
-					// Activate passive nodes
 					for passive_node in passive_nodes.clone() {
 						network::Cli::activate_account(passive_node);
 					}
@@ -1133,7 +1131,7 @@ mod tests {
 		}
 	}
 
-	mod validators {
+	mod authorities {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{
 			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
@@ -1159,12 +1157,12 @@ mod tests {
 				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					// Create min_authorities passive nodes and stake them above our genesis
-					// validators The result will be our newly created nodes will be validators and
-					// the genesis validators will become backup validators
-					let mut genesis_validators = Validator::current_authorities();
+					// Create MAX_AUTHORITIES passive nodes and stake them above our genesis
+					// authorities The result will be our newly created nodes will be authorities
+					// and the genesis authorities will become backup nodes
+					let mut genesis_authorities = Validator::current_authorities();
 					let (mut testnet, mut init_passive_nodes) =
-						network::Network::create(MAX_AUTHORITIES as u8, &genesis_validators);
+						network::Network::create(MAX_AUTHORITIES as u8, &genesis_authorities);
 
 					// An initial stake which is greater than the genesis stakes
 					// We intend for these initially passive nodes to win the auction
@@ -1196,7 +1194,7 @@ mod tests {
 						"We should be in a new epoch"
 					);
 
-					// assert list of validators as being the new nodes
+					// assert list of authorities as being the new nodes
 					let mut current_authorities: Vec<NodeId> = Validator::current_authorities();
 
 					current_authorities.sort();
@@ -1204,7 +1202,7 @@ mod tests {
 
 					assert_eq!(
 						init_passive_nodes, current_authorities,
-						"our new initial passive nodes should be the new validators"
+						"our new initial passive nodes should be the new authorities"
 					);
 
 					current_authorities.iter().for_each(|account_id| {
@@ -1215,7 +1213,7 @@ mod tests {
 						// TODO: Check historical epochs
 					});
 
-					// assert list of backup validators as being the genesis validators
+					// assert list of backup nodes as being the genesis authorities
 					let mut current_backup_nodes: Vec<NodeId> = Auction::remaining_bidders()
 						.iter()
 						.take(Auction::backup_group_size() as usize)
@@ -1223,11 +1221,11 @@ mod tests {
 						.collect();
 
 					current_backup_nodes.sort();
-					genesis_validators.sort();
+					genesis_authorities.sort();
 
 					assert_eq!(
-						genesis_validators, current_backup_nodes,
-						"we should have new backup validators"
+						genesis_authorities, current_backup_nodes,
+						"the genesis authorities should now be the backup nodes"
 					);
 
 					current_backup_nodes.iter().for_each(|account_id| {
@@ -1250,7 +1248,7 @@ mod tests {
 							.into_iter()
 							.collect();
 
-					// Move forward a heartbeat, emissions should be shared to backup validators
+					// Move forward a heartbeat, emissions should be shared to backup nodes
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We won't calculate the exact emissions but they should be greater than their
@@ -1262,11 +1260,11 @@ mod tests {
 		}
 
 		#[test]
-		// A network is created with a set of validators and backup validators.
-		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
-		// with 20% going offline and forcing an emergency rotation in which a new set of validators
-		// start to validate the network which includes live validators and previous backup
-		// validators
+		// A network is created with a set of authorities and backup nodes.
+		// EmergencyRotationPercentageTrigger(80%) of the authorities continue to submit heartbeats
+		// with 20% going offline and forcing an emergency rotation in which a new set of
+		// authorities start to validate the network which includes live authorities and previous
+		// backup nodes
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 1 heartbeat interval
@@ -1515,7 +1513,7 @@ mod tests {
 		}
 
 		// In this scenario, we test the case when the MAB drops from one epoch to another. We
-		// expect the validators to be bonded for the epoch with the highest bond in which they are
+		// expect the authorities to be bonded for the epoch with the highest bond in which they are
 		// currently active. To simulate this scenario we have to extend the set size during the
 		// test to simulate a drop in the MAB.
 		#[test]
