@@ -182,7 +182,7 @@ fn stake_transfers() {
 		check_balance_integrity();
 
 		// Bond all of it
-		Flip::set_validator_bond(&ALICE, 200);
+		Flip::set_authority_bond(&ALICE, 200);
 		assert_eq!(<Flip as StakeTransfer>::stakeable_balance(&ALICE), 200);
 		assert_eq!(<Flip as StakeTransfer>::claimable_balance(&ALICE), 0);
 
@@ -193,7 +193,7 @@ fn stake_transfers() {
 		);
 
 		// Reduce the bond
-		Flip::set_validator_bond(&ALICE, 100);
+		Flip::set_authority_bond(&ALICE, 100);
 		assert_eq!(<Flip as StakeTransfer>::claimable_balance(&ALICE), 100);
 		assert_ok!(<Flip as StakeTransfer>::try_claim(&ALICE, 1));
 		assert!(MockStakeHandler::has_stake_updated(&ALICE));
@@ -494,7 +494,7 @@ mod test_slashing {
 			// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
 			Flip::settle(&ALICE, Flip::mint(MINT).into());
 			let initial_balance: u128 = Flip::total_balance_of(&ALICE);
-			Flip::set_validator_bond(&ALICE, BOND);
+			Flip::set_authority_bond(&ALICE, BOND);
 			// Set the slashing rate to 5%
 			SlashingRate::<Test>::set(SLASHING_RATE);
 			FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE);

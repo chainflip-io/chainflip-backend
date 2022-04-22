@@ -84,7 +84,7 @@
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
     "stake": "Amount",
-    "validator_bond": "Amount"
+    "authority_bond": "Amount"
   },
   "FlipBalance": "u128",
   "H256": "[u8; 32]",
