@@ -116,7 +116,7 @@ fn cannot_double_witness() {
 }
 
 #[test]
-fn only_validators_can_witness() {
+fn only_authorities_can_witness() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
