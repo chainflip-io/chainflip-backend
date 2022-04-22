@@ -35,7 +35,7 @@ pub trait Chainflip: frame_system::Config {
 		+ AtLeast32BitUnsigned
 		+ MaybeSerializeDeserialize;
 
-	/// An identity for a validator
+	/// An identity for a node
 	type ValidatorId: Member
 		+ Default
 		+ Parameter
@@ -621,7 +621,7 @@ pub trait HistoricalEpoch {
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	/// The unexpired epochs for which a node was in the authority set.
 	fn active_epochs_for_authority(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
-	/// Removes an epoch from a validator's list of active epochs.
+	/// Removes an epoch from an authority's list of active epochs.
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
 	/// Add an epoch to a authority's list of active epochs.
 	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);

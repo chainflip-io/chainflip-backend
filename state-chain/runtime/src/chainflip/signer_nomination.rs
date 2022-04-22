@@ -82,17 +82,17 @@ mod tests {
 
 	use super::*;
 
-	/// Generates a set of validators with the SignerId = index + 1
-	fn validator_set(len: usize) -> Vec<u64> {
+	/// Generates a set of authorities with the SignerId = index + 1
+	fn authority_set(len: usize) -> Vec<u64> {
 		(0..len as u64).collect::<Vec<_>>()
 	}
 
 	#[test]
 	fn test_select_one() {
-		// Expect a validator in a set of 150 validators.
-		let a = select_one(seed_from_hashable(String::from("seed")), validator_set(150)).unwrap();
+		// Expect an authority in a set of 150 authorities.
+		let a = select_one(seed_from_hashable(String::from("seed")), authority_set(150)).unwrap();
 		// Expect a different value for different seed (collision is unlikely).
-		let b = select_one(seed_from_hashable(String::from("seedy")), validator_set(150)).unwrap();
+		let b = select_one(seed_from_hashable(String::from("seedy")), authority_set(150)).unwrap();
 		assert_ne!(a, b);
 		// If an empty set is provided, the result is `None`
 		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), vec![],).is_none());
