@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 
 use super::{
-    event_common::EventWithCommon, DecodeLogClosure, EthObserver
+    event_common::EventWithCommon, DecodeLogClosure, EthObserver, EventParseError
 };
 
 /// A wrapper for the StakeManager Ethereum contract.
@@ -67,16 +67,6 @@ pub enum StakeManagerEvent {
         account_id: AccountId32,
         /// The amount of FLIP that was claimed
         amount: u128,
-    },
-
-    /// `FlipSupplyUpdated(oldSupply, newTotalSupply, stateChainBlockNumber)` event
-    FlipSupplyUpdated {
-        /// Old emission per block
-        old_supply: ethabi::Uint,
-        /// New emission per block
-        new_supply: ethabi::Uint,
-        /// State Chain block number for the new total supply
-        block_number: ethabi::Uint,
     },
 
     /// `MinStakeChanged(oldMinStake, newMinStake)`
@@ -158,7 +148,6 @@ impl EthObserver for StakeManager {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
-        let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
         let gov_withdrawal = SignatureAndEvent::new(&self.contract, "GovernanceWithdrawal")?;
 
@@ -201,13 +190,6 @@ impl EthObserver for StakeManager {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     }
-                } else if signature == flip_supply_updated.signature {
-                    let log = flip_supply_updated.event.parse_log(raw_log)?;
-                    StakeManagerEvent::FlipSupplyUpdated {
-                        old_supply: utils::decode_log_param(&log, "oldSupply")?,
-                        new_supply: utils::decode_log_param(&log, "newSupply")?,
-                        block_number: utils::decode_log_param(&log, "stateChainBlockNumber")?,
-                    }
                 } else if signature == min_stake_changed.signature {
                     let log = min_stake_changed.event.parse_log(raw_log)?;
                     StakeManagerEvent::MinStakeChanged {
@@ -221,7 +203,7 @@ impl EthObserver for StakeManager {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     }
                 } else {
-                    return Err(anyhow::anyhow!("Unknown event signature"));
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(H256::from(signature))));
                 })
             },
         ))
@@ -388,45 +370,6 @@ mod tests {
                 assert_eq!(amount, 13333333333333334032384);
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
-        }
-    }
-
-    #[test]
-    fn flip_supply_updated_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
-
-        let flip_supply_updated_event_signature =
-            H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
-                .unwrap();
-        match decode_log(
-            flip_supply_updated_event_signature,
-            RawLog {
-                topics: vec![flip_supply_updated_event_signature],
-                data: hex::decode(
-                    "0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064",
-                )
-                .unwrap(),
-            },
-        )
-        .unwrap()
-        {
-            StakeManagerEvent::FlipSupplyUpdated {
-                old_supply,
-                new_supply,
-                block_number,
-            } => {
-                assert_eq!(
-                    old_supply,
-                    U256::from_dec_str("90000000000000000000000000").unwrap()
-                );
-                assert_eq!(
-                    new_supply,
-                    U256::from_dec_str("100000000000000000000000000").unwrap()
-                );
-                assert_eq!(block_number, U256::from_dec_str("100").unwrap());
-            }
-            _ => panic!("Expected Staking::FlipSupplyUpdated, got a different variant"),
         }
     }
 

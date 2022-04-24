@@ -1,6 +1,7 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
+use crate::eth::EventParseError;
 use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
@@ -269,7 +270,7 @@ impl EthObserver for KeyManager {
                         broadcaster: utils::decode_log_param(&log, "broadcaster")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!("Unknown event signature"));
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(H256::from(signature))));
                 })
             },
         ))
