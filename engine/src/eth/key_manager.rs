@@ -22,8 +22,8 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 
 use super::event_common::EventWithCommon;
-use super::EthObserver;
 use super::DecodeLogClosure;
+use super::EthObserver;
 
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
@@ -270,7 +270,9 @@ impl EthObserver for KeyManager {
                         broadcaster: utils::decode_log_param(&log, "broadcaster")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(H256::from(signature))));
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
+                        H256::from(signature)
+                    )));
                 })
             },
         ))
