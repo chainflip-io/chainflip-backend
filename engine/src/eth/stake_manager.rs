@@ -23,8 +23,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 
 use super::{
-    decode_shared_event_closure, event_common::EventWithCommon, DecodeLogClosure, EthObserver,
-    SharedEvent,
+    event_common::EventWithCommon, DecodeLogClosure, EthObserver
 };
 
 /// A wrapper for the StakeManager Ethereum contract.
@@ -95,10 +94,6 @@ pub enum StakeManagerEvent {
         /// Withdrawal amount
         amount: u128,
     },
-
-    // TODO: Should be able to remove shared from here
-    /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
-    Shared(SharedEvent),
 }
 
 #[async_trait]
@@ -167,8 +162,6 @@ impl EthObserver for StakeManager {
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
         let gov_withdrawal = SignatureAndEvent::new(&self.contract, "GovernanceWithdrawal")?;
 
-        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
-
         Ok(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
                 // get the node_id from the log and return as AccountId32
@@ -228,7 +221,7 @@ impl EthObserver for StakeManager {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     }
                 } else {
-                    StakeManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
+                    return Err(anyhow::anyhow!("Unknown event signature"));
                 })
             },
         ))
@@ -504,34 +497,6 @@ mod tests {
                 );
             }
             _ => panic!("Expected Staking::GovernanceWithdrawal, got a different variant"),
-        }
-    }
-
-    #[test]
-    fn refunded_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
-
-        let refunded_event_signature =
-            H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
-                .unwrap();
-
-        match decode_log(
-            refunded_event_signature,
-            RawLog {
-                topics: vec![refunded_event_signature],
-                data: hex::decode(
-                    "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
-                )
-                .unwrap(),
-            },
-        )
-        .unwrap()
-        {
-            StakeManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
-                assert_eq!(11126819398980, amount);
-            }
-            _ => panic!("Expected StakeManagerEvent::Refunded, got a different variant"),
         }
     }
 }
