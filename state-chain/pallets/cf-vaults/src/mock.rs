@@ -111,7 +111,7 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 		nonce: <MockEthereum as ChainAbi>::Nonce,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Self {
-		Self { key_manager_address: key_manager_address.clone(), chain_id, nonce, new_key }
+		Self { key_manager_address: *key_manager_address, chain_id, nonce, new_key }
 	}
 }
 

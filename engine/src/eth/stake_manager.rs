@@ -201,9 +201,7 @@ impl EthObserver for StakeManager {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
-                        H256::from(signature)
-                    )));
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
                 })
             },
         ))

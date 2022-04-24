@@ -168,12 +168,12 @@ impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self {
-			key_manager_address: key_manager_address.clone(),
+			key_manager_address: *key_manager_address,
 			chain_id,
 			nonce,
 			new_total_supply,
 			block_number,
-			stake_manager_address: stake_manager_address.clone(),
+			stake_manager_address: *stake_manager_address,
 		}
 	}
 }

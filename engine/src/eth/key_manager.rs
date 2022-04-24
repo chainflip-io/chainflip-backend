@@ -270,9 +270,7 @@ impl EthObserver for KeyManager {
                         broadcaster: utils::decode_log_param(&log, "broadcaster")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
-                        H256::from(signature)
-                    )));
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
                 })
             },
         ))
