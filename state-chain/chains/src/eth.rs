@@ -59,7 +59,7 @@ pub struct SigData {
 }
 
 impl SigData {
-	/// Initiate a new `SigData` with a given nonce value.
+	/// Initiate a new `SigData` with given key manager address, chain id, and nonce values
 	pub fn new_empty(key_manager_addr: Address, chain_id: Uint, nonce: Uint) -> Self {
 		Self { key_manager_addr, chain_id, nonce, ..Default::default() }
 	}
