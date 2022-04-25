@@ -241,7 +241,7 @@ where
 		EthereumNonce {
 			key_manager_address: Environment::key_manager_address(),
 			chain_id: Environment::ethereum_chain_id(),
-			counter: Environment::next_global_key_nonce(),
+			counter: Environment::next_global_signature_counter(),
 		}
 		.into()
 	}
