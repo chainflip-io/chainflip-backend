@@ -77,7 +77,7 @@ pub mod pallet {
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::storage]
-	// The global signature nonce counter
+	// The global signature counter
 	// We don't need a getter for this, since we only ever use the next value
 	pub type GlobalSignatureCounter<T> = StorageValue<_, SignatureCounter, ValueQuery>;
 
@@ -130,9 +130,9 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	pub fn next_global_signature_counter() -> SignatureCounter {
-		GlobalSignatureCounter::<T>::mutate(|nonce| {
-			*nonce += 1;
-			*nonce
+		GlobalSignatureCounter::<T>::mutate(|counter| {
+			*counter += 1;
+			*counter
 		})
 	}
 }
