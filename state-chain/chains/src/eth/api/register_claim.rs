@@ -43,7 +43,6 @@ impl RegisterClaim {
 			address: address.into(),
 			expiry: expiry.into(),
 		};
-		// calldata.sig_data.insert_chain_details(key_manager_addr, chain_id)
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
