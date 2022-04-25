@@ -110,11 +110,11 @@ fn keygen_failure() {
 
 		MockOffenceReporter::assert_reported(
 			PalletOffence::ParticipateKeygenFailed,
-			BAD_CANDIDATES.into_iter().cloned(),
+			BAD_CANDIDATES.iter().cloned(),
 		);
 		MockOffenceReporter::assert_reported(
 			PalletOffence::SigningOffence,
-			BAD_CANDIDATES.into_iter().cloned(),
+			BAD_CANDIDATES.iter().cloned(),
 		);
 	});
 }
