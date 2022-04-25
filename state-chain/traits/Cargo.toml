@@ -10,7 +10,6 @@ log = { version = '0.4.14', default-features = false }
 
 # Internal
 cf-chains = { path ='../chains', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -62,7 +61,6 @@ tag = 'merge-config-option'
 default = ['std']
 std = [
     'cf-chains/std',
-    'cf-utilities/std',
     'codec/std',
     'scale-info/std',
     'sp-std/std',
