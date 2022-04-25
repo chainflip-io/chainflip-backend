@@ -4,6 +4,7 @@
 pub mod chainflip;
 pub mod constants;
 mod migrations;
+pub mod runtime_apis;
 #[cfg(test)]
 mod tests;
 use cf_chains::{eth, Ethereum};
@@ -29,6 +30,8 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
+
+use cf_traits::EpochInfo;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -565,6 +568,13 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
+	// START custom runtime APIs
+	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
+		fn is_auction_phase() -> bool {
+			Validator::is_auction_phase()
+		}
+	}
+	// END custom runtime APIs
 
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {

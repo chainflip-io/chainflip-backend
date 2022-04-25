@@ -1,0 +1,34 @@
+[package]
+name = 'custom-rpc'
+version = '0.1.0'
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
+edition = '2018'
+
+# Chainflip Runtime
+[dependencies.state-chain-runtime]
+path = '../runtime'
+
+[dependencies]
+jsonrpc-derive = '18.0.0'
+jsonrpc-core = '18.0.0'
+jsonrpc-core-client = '18.0.0'
+
+[dependencies.sp-runtime]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
+[dependencies.sp-api]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
+[dependencies.sc-client-api]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
+[dependencies.sc-rpc]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
+[dependencies.sc-rpc-api]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
