@@ -78,6 +78,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::KeyProvider;
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -99,6 +100,9 @@ pub mod pallet {
 	/// Type alias for the payload hash
 	pub type ThresholdSignatureFor<T, I> =
 		<<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+
+	/// Type alias for the instance's configured Payload.
+	pub type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
@@ -177,6 +181,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type TransmissionTimeout: Get<BlockNumberFor<Self>>;
 
+		/// Something that provides the current key for signing.
+		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
+
 		/// Maximum number of attempts
 		#[pallet::constant]
 		type MaximumAttempts: Get<AttemptCount>;
@@ -234,6 +241,11 @@ pub mod pallet {
 		Vec<(BroadcastStage, BroadcastAttemptId)>,
 		ValueQuery,
 	>;
+
+	/// A mapping from Signature to Payload.
+	#[pallet::storage]
+	pub type SignatureToPayloadLookup<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, ThresholdSignatureFor<T, I>, PayloadFor<T, I>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -517,11 +529,28 @@ pub mod pallet {
 			} else {
 				match failure {
 					TransmissionFailure::TransactionRejected => {
+						// let signature = broadcast_attempt.unsigned_tx.clone();
+						// let payload = SignatureToBroadcastIdLookup::<T,
+						// I>::get(signature).unwrap();
 						Self::report_and_schedule_retry(
 							&signer,
 							broadcast_attempt,
 							PalletOffence::TransactionFailedOnTransmission,
 						);
+						// if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
+						// 	&T::KeyProvider::current_key(),
+						// 	&payload,
+						// 	signature,
+						// ) {
+						// 	Self::report_and_schedule_retry(
+						// 		&signer,
+						// 		broadcast_attempt,
+						// 		PalletOffence::TransactionFailedOnTransmission,
+						// 	);
+						// } else {
+						// 	// if the signature is invalid, we have to re-request the signature
+						// 	// TODO: report this to the chain
+						// }
 					},
 					TransmissionFailure::TransactionFailed => {
 						Self::deposit_event(Event::<T, I>::BroadcastFailed(
@@ -562,6 +591,9 @@ pub mod pallet {
 					);
 					Error::<T, I>::ThresholdSignatureUnavailable
 				})?;
+
+			// Save the payload in case we need to re-request the signature.
+			SignatureToPayloadLookup::<T, I>::insert(&sig, api_call.threshold_signature_payload());
 
 			Self::start_broadcast(
 				&sig,
