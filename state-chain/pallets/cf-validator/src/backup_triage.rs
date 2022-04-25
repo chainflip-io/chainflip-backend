@@ -104,120 +104,109 @@ where
 		Id: IsType<AccountState::AccountId>,
 	{
 		if new_bid_amount.is_zero() {
+			let _ = self
+				.passive
+				.binary_search_by(|bid| bid.validator_id.cmp(&validator_id))
+				.map(|i| {
+					self.passive.remove(i);
+				})
+				.or_else(|_| {
+					self.backup.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)).map(
+						|i| {
+							self.backup.remove(i);
+						},
+					)
+				});
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Passive);
-			self.remove_validator(validator_id);
-			self.resize::<AccountState>();
-			return
-		}
+		} else {
+			// Cache these here before we start mutating the sets.
+			let (lowest_backup_bid, highest_passive_bid) =
+				(self.lowest_backup_bid(), self.highest_passive_bid());
 
-		// Cache these here before we start mutating the sets.
-		let (lowest_backup_bid, highest_passive_bid) =
-			(self.lowest_backup_bid(), self.highest_passive_bid());
-
-		match (
-			self.passive.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)),
-			self.backup.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)),
-		) {
-			// The validator is in the passive set.
-			(Ok(p), Err(b)) =>
-				if new_bid_amount > lowest_backup_bid {
-					// Promote the bidder to the backup set.
-					let mut promoted = self.passive.remove(p);
-					AccountState::set_backup_or_passive(
-						promoted.validator_id.into_ref(),
-						BackupOrPassive::Backup,
-					);
-					promoted.amount = new_bid_amount;
-					self.backup.insert(b, promoted);
-				} else {
-					// No change, just update the bid.
-					self.passive[p].amount = new_bid_amount;
-				},
-			// The validator is in the backup set.
-			(Err(p), Ok(b)) =>
-				if new_bid_amount < highest_passive_bid {
-					// Demote the bidder to the passive set.
-					let mut demoted = self.backup.remove(b);
-					AccountState::set_backup_or_passive(
-						demoted.validator_id.into_ref(),
-						BackupOrPassive::Passive,
-					);
-					demoted.amount = new_bid_amount;
-					self.passive.insert(p, demoted);
-				} else {
-					self.backup[b].amount = new_bid_amount;
-				},
-			// The validator is in neither the passive nor backup set.
-			(Err(p), Err(b)) =>
-				if new_bid_amount > lowest_backup_bid {
-					AccountState::set_backup_or_passive(
-						validator_id.into_ref(),
-						BackupOrPassive::Backup,
-					);
-					self.backup.insert(b, Bid::from((validator_id, new_bid_amount)));
-				} else {
-					AccountState::set_backup_or_passive(
-						validator_id.into_ref(),
-						BackupOrPassive::Passive,
-					);
-					self.passive.insert(p, Bid::from((validator_id, new_bid_amount)));
-				},
-			(Ok(_), Ok(_)) => unreachable!("Validator cannot be in both backup and passive"),
+			match (
+				self.passive.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)),
+				self.backup.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)),
+			) {
+				// The validator is in the passive set.
+				(Ok(p), Err(b)) =>
+					if new_bid_amount > lowest_backup_bid {
+						// Promote the bidder to the backup set.
+						let mut promoted = self.passive.remove(p);
+						AccountState::set_backup_or_passive(
+							promoted.validator_id.into_ref(),
+							BackupOrPassive::Backup,
+						);
+						promoted.amount = new_bid_amount;
+						self.backup.insert(b, promoted);
+					} else {
+						// No change, just update the bid.
+						self.passive[p].amount = new_bid_amount;
+					},
+				// The validator is in the backup set.
+				(Err(p), Ok(b)) =>
+					if new_bid_amount < highest_passive_bid {
+						// Demote the bidder to the passive set.
+						let mut demoted = self.backup.remove(b);
+						AccountState::set_backup_or_passive(
+							demoted.validator_id.into_ref(),
+							BackupOrPassive::Passive,
+						);
+						demoted.amount = new_bid_amount;
+						self.passive.insert(p, demoted);
+					} else {
+						self.backup[b].amount = new_bid_amount;
+					},
+				// The validator is in neither the passive nor backup set.
+				(Err(p), Err(b)) =>
+					if new_bid_amount > lowest_backup_bid {
+						AccountState::set_backup_or_passive(
+							validator_id.into_ref(),
+							BackupOrPassive::Backup,
+						);
+						self.backup.insert(b, Bid::from((validator_id, new_bid_amount)));
+					} else {
+						AccountState::set_backup_or_passive(
+							validator_id.into_ref(),
+							BackupOrPassive::Passive,
+						);
+						self.passive.insert(p, Bid::from((validator_id, new_bid_amount)));
+					},
+				(Ok(_), Ok(_)) => unreachable!("Validator cannot be in both backup and passive"),
+			}
 		}
 
 		// We might have to resize the backup set to fit within the target size.
-		self.resize::<AccountState>();
-	}
+		if self.backup.len() != self.backup_group_size_target as usize {
+			// First, sort by bid such that we can pop the lowest backup and highest passive
+			// respectively.
+			self.backup.sort_unstable_by_key(|bid| Reverse(bid.amount));
+			self.passive.sort_unstable_by_key(|bid| bid.amount);
 
-	fn resize<AccountState: ChainflipAccount>(&mut self)
-	where
-		Id: IsType<AccountState::AccountId>,
-	{
-		// First, sort by bid such that we can pop the lowest backup and highest passive
-		// respectively.
-		self.backup.sort_unstable_by_key(|bid| Reverse(bid.amount));
-		self.passive.sort_unstable_by_key(|bid| bid.amount);
+			// Demote any excess backups.
+			while self.backup.len() > self.backup_group_size_target as usize {
+				let demoted = self.backup.pop().expect("backup set is not empty");
+				AccountState::set_backup_or_passive(
+					demoted.validator_id.into_ref(),
+					BackupOrPassive::Passive,
+				);
+				self.passive.push(demoted);
+			}
 
-		// Demote any excess backups.
-		while self.backup.len() > self.backup_group_size_target as usize {
-			let demoted = self.backup.pop().expect("backup set is not empty");
-			AccountState::set_backup_or_passive(
-				demoted.validator_id.into_ref(),
-				BackupOrPassive::Passive,
-			);
-			self.passive.push(demoted);
+			// Promote any passives that fit in the backup target size.
+			while self.backup.len() < self.backup_group_size_target as usize &&
+				!self.passive.is_empty()
+			{
+				let promoted = self.passive.pop().expect("passive set is not empty");
+				AccountState::set_backup_or_passive(
+					promoted.validator_id.into_ref(),
+					BackupOrPassive::Backup,
+				);
+				self.backup.push(promoted);
+			}
+
+			// Restore the original sort order.
+			self.sort_all_by_validator_id();
 		}
-
-		// Promote any passives that fit in the backup target size.
-		while self.backup.len() < self.backup_group_size_target as usize && !self.passive.is_empty()
-		{
-			let promoted = self.passive.pop().expect("passive set is not empty");
-			AccountState::set_backup_or_passive(
-				promoted.validator_id.into_ref(),
-				BackupOrPassive::Backup,
-			);
-			self.backup.push(promoted);
-		}
-
-		// Restore the original sort order.
-		self.sort_all_by_validator_id();
-	}
-
-	/// Removes the account from passive and/or backup sets.
-	fn remove_validator(&mut self, validator_id: Id) {
-		let _ = self
-			.passive
-			.binary_search_by(|bid| bid.validator_id.cmp(&validator_id))
-			.map(|i| {
-				self.passive.remove(i);
-			})
-			.or_else(|_| {
-				self.backup
-					.binary_search_by(|bid| bid.validator_id.cmp(&validator_id))
-					.map(|i| {
-						self.backup.remove(i);
-					})
-			});
 	}
 
 	fn sort_all_by_validator_id(&mut self) {
