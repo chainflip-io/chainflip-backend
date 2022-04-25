@@ -7,7 +7,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, key_provider::MockKeyProvider,
 	},
-	Chainflip, NetworkStateInfo, NonceProvider,
+	Chainflip, NonceProvider,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types, traits::IsType};
@@ -16,7 +16,6 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	DispatchError,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -170,14 +169,6 @@ impl From<pallet_cf_vaults::PalletOffence> for MockRuntimeOffence {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, MockRuntimeOffence>;
 
-pub struct MockNetworkStateAccess;
-
-impl NetworkStateInfo for MockNetworkStateAccess {
-	fn ensure_paused() -> Result<(), DispatchError> {
-		Ok(())
-	}
-}
-
 parameter_types! {
 	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
@@ -241,7 +232,6 @@ impl pallet_cf_witness_api::Config for Test {
 	type Call = Call;
 	type Witnesser = MockWitnesser;
 	type WeightInfoWitnesser = ();
-	type NetworkStateAccess = MockNetworkStateAccess;
 }
 
 // Build genesis storage according to the mock runtime.
