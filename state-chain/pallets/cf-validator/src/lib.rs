@@ -958,7 +958,9 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			Self::set_rotation_status(RotationStatus::RunAuction);
+			if RotationPhase::<T>::get() == RotationStatusOf::<T>::Idle {
+				Self::set_rotation_status(RotationStatus::RunAuction);
+			}
 		}
 	}
 
