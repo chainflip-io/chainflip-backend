@@ -37,11 +37,7 @@ impl RegisterClaim {
 		expiry: u64,
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(
-				nonce.into().key_manager_address.into(),
-				nonce.into().chain_id.into(),
-				nonce.into().counter.into(),
-			),
+			sig_data: SigData::new_empty(nonce.into()),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),

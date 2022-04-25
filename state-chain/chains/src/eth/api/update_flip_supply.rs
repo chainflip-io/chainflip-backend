@@ -32,11 +32,7 @@ impl UpdateFlipSupply {
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(
-				nonce.into().key_manager_address.into(),
-				nonce.into().chain_id.into(),
-				nonce.into().counter.into(),
-			),
+			sig_data: SigData::new_empty(nonce.into()),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
 			stake_manager_address: stake_manager_address.into(),

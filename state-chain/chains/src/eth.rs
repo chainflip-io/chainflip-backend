@@ -23,6 +23,8 @@ use sp_std::{
 	str, vec,
 };
 
+use self::api::EthereumNonce;
+
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
@@ -59,9 +61,14 @@ pub struct SigData {
 }
 
 impl SigData {
-	/// Initiate a new `SigData` with given key manager address, chain id, and nonce values
-	pub fn new_empty(key_manager_addr: Address, chain_id: Uint, nonce: Uint) -> Self {
-		Self { key_manager_addr, chain_id, nonce, ..Default::default() }
+	/// Initiate a new `SigData` with given nonce value
+	pub fn new_empty(nonce: EthereumNonce) -> Self {
+		Self {
+			key_manager_addr: nonce.key_manager_address.into(),
+			chain_id: nonce.chain_id.into(),
+			nonce: nonce.counter.into(),
+			..Default::default()
+		}
 	}
 
 	/// Inserts the `msg_hash` value derived from the provided calldata.

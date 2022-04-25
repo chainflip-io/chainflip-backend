@@ -27,14 +27,8 @@ impl SetAggKeyWithAggKey {
 		nonce: Nonce,
 		new_key: Key,
 	) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(
-				nonce.into().key_manager_address.into(),
-				nonce.into().chain_id.into(),
-				nonce.into().counter.into(),
-			),
-			new_key: new_key.into(),
-		};
+		let mut calldata =
+			Self { sig_data: SigData::new_empty(nonce.into()), new_key: new_key.into() };
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
