@@ -1,5 +1,6 @@
 use crate::*;
-use cf_traits::{BackupOrPassive, BackupValidators, MaxValue};
+use cf_traits::{BackupOrPassive, BackupValidators};
+use sp_runtime::traits::Bounded;
 use sp_std::cmp::Reverse;
 
 /// Tracker for backup and passive validators.
@@ -34,7 +35,7 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 impl<Id, Amount> BackupTriage<Id, Amount>
 where
 	Id: Ord,
-	Amount: Ord + Copy + Default + Zero + MaxValue,
+	Amount: Ord + Copy + Default + Zero + Bounded,
 {
 	pub fn new<AccountState: ChainflipAccount>(
 		mut backup_candidates: Vec<(Id, Amount)>,
@@ -86,7 +87,7 @@ where
 
 	fn lowest_backup_bid(&self) -> Amount {
 		if self.backup_group_size_target == 0 {
-			return Amount::MAX
+			return Amount::max_value()
 		}
 		self.backup.iter().map(|bid| bid.amount).min().unwrap_or_default()
 	}

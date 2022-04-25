@@ -1,12 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
-mod max_value;
 pub mod mocks;
 pub mod offence_reporting;
 
 pub use async_result::AsyncResult;
-pub use max_value::*;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode};
@@ -17,7 +15,10 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
 	Hashable, Parameter,
 };
-use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, RuntimeDebug};
+use sp_runtime::{
+	traits::{Bounded, MaybeSerializeDeserialize},
+	DispatchError, RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -36,7 +37,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Copy
 		+ AtLeast32BitUnsigned
 		+ MaybeSerializeDeserialize
-		+ MaxValue;
+		+ Bounded;
 
 	/// An identity for a validator
 	type ValidatorId: Member
