@@ -123,7 +123,10 @@ pub trait EpochInfo {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_validators_for_epoch(epoch_index: EpochIndex, new_validators: Vec<Self::ValidatorId>);
+	fn add_validator_info_for_epoch(
+		epoch_index: EpochIndex,
+		new_validators: Vec<Self::ValidatorId>,
+	);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
