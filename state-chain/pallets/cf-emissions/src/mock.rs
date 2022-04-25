@@ -14,7 +14,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::{Broadcaster, WaivedFees};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Broadcaster, WaivedFees};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -213,6 +213,7 @@ impl pallet_cf_emissions::Config for Test {
 	type NonceProvider = Self;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
+	type SystemState = MockSystemStateInfo;
 }
 
 // Build genesis storage according to the mock runtime.

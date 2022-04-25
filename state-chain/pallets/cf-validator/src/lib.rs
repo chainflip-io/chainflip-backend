@@ -106,6 +106,7 @@ pub type Percentage = u8;
 pub mod pallet {
 
 	use super::*;
+	use cf_traits::SystemStateInfo;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -164,6 +165,9 @@ pub mod pallet {
 
 		/// Updates the bond of a validator
 		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
+
+		/// Access to information about the current system state
+		type SystemState: SystemStateInfo;
 	}
 
 	#[pallet::event]
@@ -241,7 +245,9 @@ pub mod pallet {
 					if blocks_per_epoch > Zero::zero() {
 						let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 						let diff = block_number.saturating_sub(current_epoch_started_at);
-						if diff >= blocks_per_epoch {
+						if diff >= blocks_per_epoch &&
+							T::SystemState::ensure_no_maintanace().is_ok()
+						{
 							Self::set_rotation_status(RotationStatus::RunAuction);
 						}
 					}
@@ -254,9 +260,9 @@ pub mod pallet {
 								auction_result,
 							)),
 							// We are assuming here that this is unlikely as the only reason it
-							// would fail is if we have no validators, which is already checked by
-							// the auction pallet, of if there is already a rotation in progress
-							// which isn't possible.
+							// would fail is if we have no validators, which is already checked
+							// by the auction pallet, of if there is already a rotation in
+							// progress which isn't possible.
 							Err(e) => {
 								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
 							},

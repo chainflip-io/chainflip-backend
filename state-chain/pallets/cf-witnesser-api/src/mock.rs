@@ -6,6 +6,7 @@ use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, key_provider::MockKeyProvider,
+		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip, NonceProvider,
 };
@@ -129,6 +130,7 @@ impl pallet_cf_staking::Config for Test {
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = EthereumApi;
+	type SystemState = MockSystemStateInfo;
 }
 
 type Amount = u128;

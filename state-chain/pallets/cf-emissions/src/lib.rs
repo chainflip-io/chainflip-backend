@@ -31,6 +31,8 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 
+use cf_traits::SystemStateInfo;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -41,6 +43,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
+	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
@@ -97,6 +100,9 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
+
+		/// Access to information about the current system state
+		type SystemState: SystemStateInfo;
 	}
 
 	#[pallet::pallet]
@@ -302,11 +308,13 @@ impl<T: Config> Pallet<T> {
 	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
 		// Emit a threshold signature request.
 		// TODO: See if we can replace an old request if there is one.
-		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
-			T::NonceProvider::next_nonce(),
-			total_supply.unique_saturated_into(),
-			block_number.saturated_into(),
-		));
+		if T::SystemState::ensure_no_maintanace().is_ok() {
+			T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
+				T::NonceProvider::next_nonce(),
+				total_supply.unique_saturated_into(),
+				block_number.saturated_into(),
+			));
+		}
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to

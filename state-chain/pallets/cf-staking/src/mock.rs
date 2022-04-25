@@ -1,6 +1,9 @@
 use crate as pallet_cf_staking;
 use cf_chains::{eth, ChainAbi, ChainCrypto, Ethereum};
-use cf_traits::{impl_mock_waived_fees, AsyncResult, ThresholdSigner, WaivedFees};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
+	ThresholdSigner, WaivedFees,
+};
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
@@ -166,6 +169,7 @@ impl pallet_cf_staking::Config for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = eth::api::EthereumApi;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);

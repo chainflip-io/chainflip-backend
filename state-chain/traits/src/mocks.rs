@@ -21,6 +21,8 @@ pub mod vault_rotation;
 pub mod waived_fees_mock;
 pub mod witnesser;
 
+pub mod system_state_info;
+
 trait MockPallet {
 	const PREFIX: &'static [u8];
 }

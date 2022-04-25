@@ -28,6 +28,8 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 
+use cf_traits::SystemStateInfo;
+
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
 	DispatchError,
@@ -101,6 +103,9 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
+
+		/// Access to information about the current system state
+		type SystemState: SystemStateInfo;
 	}
 
 	#[pallet::pallet]
@@ -241,6 +246,7 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
+			T::SystemState::ensure_no_maintanace()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				Self::stake_account(&account_id, amount);
 			}

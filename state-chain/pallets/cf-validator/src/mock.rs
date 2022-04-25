@@ -8,7 +8,8 @@ use frame_support::{
 use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
+		epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
 	},
 	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
 };
@@ -238,6 +239,7 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
+	type SystemState = MockSystemStateInfo;
 }
 
 /// Session pallet requires a set of validators at genesis.
