@@ -9,12 +9,12 @@ use frame_benchmarking::whitelisted_caller;
 use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
-	set_network_state {
+	set_system_state {
 		let caller: T::AccountId = whitelisted_caller();
-		let call = Call::<T>::set_network_state(NetworkState::Paused);
+		let call = Call::<T>::set_system_state(SystemState::Maintenance);
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(CurrentNetworkState::<T>::get(), NetworkState::Paused);
+		assert_eq!(CurrentSystemState::<T>::get(), SystemState::Maintenance);
 	}
 }

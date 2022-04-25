@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_traits::NetworkStateInfo;
+use cf_traits::SystemStateInfo;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -19,14 +19,14 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum NetworkState {
-	Paused,
-	Running,
+pub enum SystemState {
+	Normal,
+	Maintenance,
 }
 
-impl Default for NetworkState {
+impl Default for SystemState {
 	fn default() -> Self {
-		NetworkState::Running
+		SystemState::Normal
 	}
 }
 pub mod cfe {
@@ -72,7 +72,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The network is currently paused.
-		NetworkIsPaused,
+		NetworkIsInMaintenance,
 	}
 
 	#[pallet::pallet]
@@ -99,36 +99,36 @@ pub mod pallet {
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn network_state)]
-	/// Whether the network is paused
-	pub type CurrentNetworkState<T> = StorageValue<_, NetworkState, ValueQuery>;
+	#[pallet::getter(fn system_state)]
+	/// The current state the system is in (normal, maintenance).
+	pub type CurrentSystemState<T> = StorageValue<_, SystemState, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The network state has been chagned \[state\]
-		NetworkStateHasBeenChanged(NetworkState),
+		/// The system state has been chagned \[system_state\]
+		SystemStateHasBeenChanged(SystemState),
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Changes the current network state.
+		/// Changes the current system state.
 		///
 		/// ## Events
 		///
-		/// - [NetworkStateHasBeenChanged](Event::NetworkStateHasBeenChanged)
+		/// - [SystemkStateHasBeenChanged](Event::SystemkStateHasBeenChanged)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::set_network_state())]
-		pub fn set_network_state(
+		#[pallet::weight(T::WeightInfo::set_system_state())]
+		pub fn set_system_state(
 			origin: OriginFor<T>,
-			state: NetworkState,
+			state: SystemState,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			CurrentNetworkState::<T>::put(&state);
-			Self::deposit_event(Event::NetworkStateHasBeenChanged(state));
+			CurrentSystemState::<T>::put(&state);
+			Self::deposit_event(Event::SystemStateHasBeenChanged(state));
 			Ok(().into())
 		}
 	}
@@ -154,12 +154,12 @@ pub mod pallet {
 	}
 }
 
-pub struct NetworkStateAccess<T>(PhantomData<T>);
+pub struct SystemStateAccess<T>(PhantomData<T>);
 
-impl<T: Config> NetworkStateInfo for NetworkStateAccess<T> {
-	fn ensure_paused() -> frame_support::sp_runtime::DispatchResult {
-		if <pallet::CurrentNetworkState<T>>::get() == NetworkState::Paused {
-			return Err(Error::<T>::NetworkIsPaused.into())
+impl<T: Config> SystemStateInfo for SystemStateAccess<T> {
+	fn ensure_no_maintanace() -> frame_support::sp_runtime::DispatchResult {
+		if <pallet::CurrentSystemState<T>>::get() == SystemState::Maintenance {
+			return Err(Error::<T>::NetworkIsInMaintenance.into())
 		}
 		Ok(())
 	}

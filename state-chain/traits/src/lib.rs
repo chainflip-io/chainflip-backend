@@ -679,8 +679,8 @@ pub trait MissedAuthorshipSlots {
 	fn missed_slots() -> Vec<u64>;
 }
 
-/// Something that manages access to the network state.
-pub trait NetworkStateInfo {
-	/// Check if the network is currently paused.
-	fn ensure_paused() -> DispatchResult;
+/// Something that manages access to the system state.
+pub trait SystemStateInfo {
+	/// Ensure that the network is **not** in maintenance mode.
+	fn ensure_no_maintanace() -> DispatchResult;
 }
