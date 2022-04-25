@@ -6,9 +6,11 @@ use crate::{
 };
 
 use codec::{Decode, Encode};
-use ethabi::{Param, ParamType, StateMutability, Uint};
+use ethabi::{Param, ParamType, StateMutability};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
+
+use super::EthereumNonce;
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
@@ -21,14 +23,16 @@ pub struct SetAggKeyWithAggKey {
 }
 
 impl SetAggKeyWithAggKey {
-	pub fn new_unsigned<Nonce: Into<Uint>, Key: Into<AggKey>>(
-		key_manager_address: &[u8; 20],
-		chain_id: u64,
+	pub fn new_unsigned<Nonce: Into<EthereumNonce> + Copy, Key: Into<AggKey>>(
 		nonce: Nonce,
 		new_key: Key,
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(key_manager_address.into(), chain_id.into(), nonce.into()),
+			sig_data: SigData::new_empty(
+				nonce.into().key_manager_address.into(),
+				nonce.into().chain_id.into(),
+				nonce.into().counter.into(),
+			),
 			new_key: new_key.into(),
 		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
@@ -119,9 +123,11 @@ mod test_set_agg_key_with_agg_key {
 			.as_ref(),
 		);
 		let call = SetAggKeyWithAggKey::new_unsigned(
-			&hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
-			31337,
-			15,
+			EthereumNonce {
+				key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
+				chain_id: 31337,
+				counter: 15,
+			},
 			AggKey::from_pubkey_compressed(hex_literal::hex!(
 				"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
 			)),
@@ -150,9 +156,11 @@ mod test_set_agg_key_with_agg_key {
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
 		let set_agg_key_runtime = SetAggKeyWithAggKey::new_unsigned(
-			&FAKE_KEYMAN_ADDR,
-			CHAIN_ID,
-			NONCE,
+			EthereumNonce {
+				key_manager_address: FAKE_KEYMAN_ADDR,
+				chain_id: CHAIN_ID,
+				counter: NONCE,
+			},
 			AggKey { pub_key_x: FAKE_NEW_KEY_X, pub_key_y_parity: FAKE_NEW_KEY_Y },
 		);
 

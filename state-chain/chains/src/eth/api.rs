@@ -14,11 +14,18 @@ pub enum EthereumApi {
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Default)]
+pub struct EthereumNonce {
+	pub key_manager_address: [u8; 20],
+	pub chain_id: u64,
+	pub counter: u64,
+}
+
 impl ChainAbi for Ethereum {
 	type UnsignedTransaction = eth::UnsignedTransaction;
 	type SignedTransaction = eth::RawSignedTransaction;
 	type SignerCredential = eth::Address;
-	type Nonce = u64;
+	type Nonce = EthereumNonce;
 	type ValidationError = eth::TransactionVerificationError;
 
 	fn verify_signed_transaction(
@@ -31,25 +38,15 @@ impl ChainAbi for Ethereum {
 }
 
 impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
-	fn new_unsigned(
-		key_manager_address: &[u8; 20],
-		chain_id: u64,
-		nonce: u64,
-		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Self {
+	fn new_unsigned(nonce: EthereumNonce, new_key: <Ethereum as ChainCrypto>::AggKey) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
-			key_manager_address,
-			chain_id,
-			nonce,
-			new_key,
+			nonce, new_key,
 		))
 	}
 }
 
 impl RegisterClaim<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		key_manager_address: &[u8; 20],
-		chain_id: u64,
 		nonce: <Ethereum as ChainAbi>::Nonce,
 		node_id: &[u8; 32],
 		amount: u128,
@@ -57,13 +54,7 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 		expiry: u64,
 	) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
-			key_manager_address,
-			chain_id,
-			nonce,
-			node_id,
-			amount,
-			address,
-			expiry,
+			nonce, node_id, amount, address, expiry,
 		))
 	}
 
@@ -78,17 +69,17 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 impl UpdateFlipSupply<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		key_manager_address: &[u8; 20],
-		chain_id: u64,
 		nonce: <Ethereum as ChainAbi>::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
-			key_manager_address,
-			chain_id,
-			nonce,
+			EthereumNonce {
+				key_manager_address: nonce.key_manager_address,
+				chain_id: nonce.chain_id,
+				counter: nonce.counter,
+			},
 			new_total_supply,
 			block_number,
 			stake_manager_address,

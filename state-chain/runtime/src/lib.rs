@@ -188,6 +188,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type NonceProvider = chainflip::EthNonceProvider;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type EthEnvironmentProvider = Environment;
 }
@@ -373,7 +374,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type NonceProvider = EthereumVault;
+	type NonceProvider = chainflip::EthNonceProvider;
 	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
@@ -404,7 +405,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type BlocksPerDay = BlocksPerDay;
-	type NonceProvider = EthereumVault;
+	type NonceProvider = chainflip::EthNonceProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }

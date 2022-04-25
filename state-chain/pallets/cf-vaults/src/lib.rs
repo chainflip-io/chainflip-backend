@@ -17,7 +17,7 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
+use sp_runtime::traits::{BlockNumberProvider, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::{FromIterator, Iterator},
@@ -307,7 +307,7 @@ pub mod pallet {
 		/// Offences supported in this runtime.
 		type Offence: From<PalletOffence>;
 
-		/// The chain that managed by this vault must implement the api types.
+		/// The chain that is managed by this vault must implement the api types.
 		type Chain: ChainAbi;
 
 		/// The supported api calls for the chain.
@@ -327,6 +327,9 @@ pub mod pallet {
 
 		/// Something that can provide the key manager address and chain id.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
+
+		// Something that can give us the next nonce.
+		type NonceProvider: NonceProvider<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -666,24 +669,13 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
-	fn next_nonce() -> <T::Chain as ChainAbi>::Nonce {
-		ChainNonce::<T, I>::mutate(|nonce| {
-			*nonce += One::one();
-			*nonce
-		})
-	}
-}
-
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-				&T::EthEnvironmentProvider::key_manager_address(),
-				T::EthEnvironmentProvider::chain_id(),
-				<Self as NonceProvider<_>>::next_nonce(),
+				<T::NonceProvider>::next_nonce(),
 				new_public_key,
 			),
 		);

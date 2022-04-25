@@ -6,6 +6,8 @@ pub use cf_traits::EthEnvironmentProvider;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
+type KeyNonce = u64;
+
 pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
@@ -74,6 +76,11 @@ pub mod pallet {
 	/// The settings used by the CFE
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
+	#[pallet::storage]
+	// The global key nonce counter
+	// We don't need a getter for this, since we only ever use the next value
+	pub type GlobalKeyNonce<T> = StorageValue<_, KeyNonce, ValueQuery>;
+
 	#[pallet::event]
 	pub enum Event<T: Config> {}
 
@@ -118,5 +125,14 @@ pub mod pallet {
 		fn chain_id() -> u64 {
 			EthereumChainId::<T>::get()
 		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	pub fn next_global_key_nonce() -> KeyNonce {
+		GlobalKeyNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
 	}
 }

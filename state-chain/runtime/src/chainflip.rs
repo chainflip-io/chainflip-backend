@@ -14,12 +14,15 @@ use crate::{
 	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
 };
 use cf_chains::{
-	eth::{self, api::EthereumApi},
+	eth::{
+		self,
+		api::{EthereumApi, EthereumNonce},
+	},
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
 	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	RewardsDistribution, StakeHandler, StakeTransfer,
+	NonceProvider, RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -223,5 +226,23 @@ pub struct RuntimeUpgradeManager;
 impl RuntimeUpgrade for RuntimeUpgradeManager {
 	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
+	}
+}
+
+pub struct EthNonceProvider;
+
+impl<Abi: ChainAbi> NonceProvider<Abi> for EthNonceProvider
+where
+	<Abi as ChainAbi>::Nonce: From<EthereumNonce>,
+{
+	// Get the Environment values for key_manager_address and chain_id, then use
+	// the next global nonce
+	fn next_nonce() -> <Abi as ChainAbi>::Nonce {
+		EthereumNonce {
+			key_manager_address: Environment::key_manager_address(),
+			chain_id: Environment::ethereum_chain_id(),
+			counter: Environment::next_global_key_nonce(),
+		}
+		.into()
 	}
 }

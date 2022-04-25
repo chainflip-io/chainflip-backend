@@ -1,5 +1,8 @@
 use crate as pallet_cf_staking;
-use cf_chains::{eth, ChainAbi, ChainCrypto, Ethereum};
+use cf_chains::{
+	eth::{self, api::EthereumNonce},
+	ChainAbi, ChainCrypto, Ethereum,
+};
 use cf_traits::{impl_mock_waived_fees, AsyncResult, ThresholdSigner, WaivedFees};
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
@@ -107,11 +110,17 @@ cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call, u64)
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
-pub const NONCE: u64 = 42;
+pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
+pub const CHAIN_ID: u64 = 31337;
+pub const COUNTER: u64 = 42;
 
 impl NonceProvider<Ethereum> for Test {
 	fn next_nonce() -> <Ethereum as ChainAbi>::Nonce {
-		NONCE
+		EthereumNonce {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			counter: COUNTER,
+		}
 	}
 }
 

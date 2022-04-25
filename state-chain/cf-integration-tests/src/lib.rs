@@ -718,8 +718,6 @@ mod tests {
 
 				assert_eq!(Validator::ceremony_id_counter(), 0, "no key generation requests");
 
-				assert_eq!(EthereumVault::chain_nonce(), 0, "nonce not incremented");
-
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),
 					"expected governor"

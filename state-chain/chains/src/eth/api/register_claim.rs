@@ -10,6 +10,8 @@ use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
+use super::EthereumNonce;
+
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -27,9 +29,7 @@ pub struct RegisterClaim {
 }
 
 impl RegisterClaim {
-	pub fn new_unsigned<Nonce: Into<Uint>, Amount: Into<Uint>>(
-		key_manager_address: &[u8; 20],
-		chain_id: u64,
+	pub fn new_unsigned<Nonce: Into<EthereumNonce> + Copy, Amount: Into<Uint>>(
 		nonce: Nonce,
 		node_id: &[u8; 32],
 		amount: Amount,
@@ -37,7 +37,11 @@ impl RegisterClaim {
 		expiry: u64,
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(key_manager_address.into(), chain_id.into(), nonce.into()),
+			sig_data: SigData::new_empty(
+				nonce.into().key_manager_address.into(),
+				nonce.into().chain_id.into(),
+				nonce.into().counter.into(),
+			),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
@@ -146,9 +150,11 @@ mod test_register_claim {
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
 		let register_claim_runtime = RegisterClaim::new_unsigned(
-			&FAKE_KEYMAN_ADDR,
-			CHAIN_ID,
-			NONCE,
+			EthereumNonce {
+				key_manager_address: FAKE_KEYMAN_ADDR,
+				chain_id: CHAIN_ID,
+				counter: NONCE,
+			},
 			&TEST_ACCT,
 			AMOUNT,
 			&TEST_ADDR,

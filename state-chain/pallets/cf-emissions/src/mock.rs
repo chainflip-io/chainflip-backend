@@ -1,5 +1,7 @@
 use crate as pallet_cf_emissions;
-use cf_chains::{mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, UpdateFlipSupply};
+use cf_chains::{
+	eth::api::EthereumNonce, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, UpdateFlipSupply,
+};
 use codec::{Decode, Encode};
 use frame_support::{
 	parameter_types, storage,
@@ -119,11 +121,17 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-pub const NONCE: u32 = 42;
+pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
+pub const CHAIN_ID: u64 = 31337;
+pub const COUNTER: u64 = 42;
 
 impl NonceProvider<MockEthereum> for Test {
 	fn next_nonce() -> <MockEthereum as ChainAbi>::Nonce {
-		NONCE
+		EthereumNonce {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			counter: COUNTER,
+		}
 	}
 }
 
@@ -150,8 +158,6 @@ impl RewardsDistribution for MockRewardsDistribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockUpdateFlipSupply {
-	pub key_manager_address: [u8; 20],
-	pub chain_id: u64,
 	pub nonce: <MockEthereum as ChainAbi>::Nonce,
 	pub new_total_supply: u128,
 	pub block_number: u64,
@@ -160,16 +166,12 @@ pub struct MockUpdateFlipSupply {
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
-		key_manager_address: &[u8; 20],
-		chain_id: u64,
 		nonce: <MockEthereum as ChainAbi>::Nonce,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self {
-			key_manager_address: *key_manager_address,
-			chain_id,
 			nonce,
 			new_total_supply,
 			block_number,
