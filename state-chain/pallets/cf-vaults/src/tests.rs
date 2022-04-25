@@ -109,8 +109,14 @@ fn keygen_failure() {
 		);
 
 		// Too many bad validators, they have not been reported.
-		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![]);
-		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![]);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::ParticipateKeygenFailed,
+			BAD_CANDIDATES.into_iter().cloned(),
+		);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::SigningOffence,
+			BAD_CANDIDATES.into_iter().cloned(),
+		);
 	});
 }
 

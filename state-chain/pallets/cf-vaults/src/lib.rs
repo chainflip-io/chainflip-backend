@@ -356,6 +356,7 @@ pub mod pallet {
 				};
 
 				if resolve {
+					let candidate_count = response_status.candidate_count;
 					match response_status.resolve_keygen_outcome() {
 						KeygenOutcome::Success(new_public_key) => {
 							weight += T::WeightInfo::on_initialize_success();
@@ -363,6 +364,13 @@ pub mod pallet {
 						},
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
+							let offenders = if (offenders.len() as u32) <
+								utilities::success_threshold_from_share_count(candidate_count)
+							{
+								offenders
+							} else {
+								BTreeSet::default()
+							};
 							Self::on_keygen_failure(
 								keygen_ceremony_id,
 								&offenders.into_iter().collect::<Vec<_>>(),
@@ -684,36 +692,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	// Called once there's consensus between the authorities that the keygen was unsuccessful
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
-		match PendingVaultRotation::<T, I>::get().expect(
-			"In order for nodes to report a keygen failure, there must have been a keygen request",
-		) {
-			VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id, response_status } => {
-				if keygen_ceremony_id == ceremony_id {
-					if (offenders.len() as u32) <
-						utilities::success_threshold_from_share_count(
-							response_status.candidate_count,
-						) {
-						// TODO: We should combine this reporting to include both, so we only send a
-						// single: partipate keygen failure report, and the report handles both
-						// cases.
-						T::OffenceReporter::report_many(
-							PalletOffence::ParticipateKeygenFailed,
-							offenders,
-						);
-						T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
-					}
-					PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
-					Self::deposit_event(Event::KeygenFailure(ceremony_id));
-				} else {
-					panic!(
-						"Keygen failure for a different ceremony than the one we're waiting for"
-					);
-				}
-			},
-			_ => {
-				panic!("Keygen should fail only when awaiting keygen.");
-			},
-		}
+		// TODO: We should combine this reporting to include both, so we only send a
+		// single: partipate keygen failure report, and the report handles both
+		// cases.
+		T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
+		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 	}
 
 	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {
