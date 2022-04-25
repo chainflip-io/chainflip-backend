@@ -676,8 +676,6 @@ impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Called once there's consensus between the authorities that the keygen was successful
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
-		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
-
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 				<Self as NonceProvider<_>>::next_nonce(),
@@ -688,6 +686,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
+		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 	}
 
 	// Called once there's consensus between the authorities that the keygen was unsuccessful
