@@ -5,7 +5,7 @@ use crate::SystemStateInfo;
 pub struct MockSystemStateInfo;
 
 impl SystemStateInfo for MockSystemStateInfo {
-	fn ensure_no_maintanace() -> Result<(), DispatchError> {
+	fn ensure_no_maintenance() -> Result<(), DispatchError> {
 		Ok(())
 	}
 }

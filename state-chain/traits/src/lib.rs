@@ -682,5 +682,5 @@ pub trait MissedAuthorshipSlots {
 /// Something that manages access to the system state.
 pub trait SystemStateInfo {
 	/// Ensure that the network is **not** in maintenance mode.
-	fn ensure_no_maintanace() -> DispatchResult;
+	fn ensure_no_maintenance() -> DispatchResult;
 }

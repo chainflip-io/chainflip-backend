@@ -246,7 +246,7 @@ pub mod pallet {
 						let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 						let diff = block_number.saturating_sub(current_epoch_started_at);
 						if diff >= blocks_per_epoch &&
-							T::SystemState::ensure_no_maintanace().is_ok()
+							T::SystemState::ensure_no_maintenance().is_ok()
 						{
 							Self::set_rotation_status(RotationStatus::RunAuction);
 						}

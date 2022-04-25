@@ -157,7 +157,7 @@ pub mod pallet {
 pub struct SystemStateAccess<T>(PhantomData<T>);
 
 impl<T: Config> SystemStateInfo for SystemStateAccess<T> {
-	fn ensure_no_maintanace() -> frame_support::sp_runtime::DispatchResult {
+	fn ensure_no_maintenance() -> frame_support::sp_runtime::DispatchResult {
 		if <pallet::CurrentSystemState<T>>::get() == SystemState::Maintenance {
 			return Err(Error::<T>::NetworkIsInMaintenance.into())
 		}
