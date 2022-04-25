@@ -24,7 +24,6 @@ fi
 
 # ensure we have the poetry deps
 cd eth-contracts
-poetry run poetry update
 poetry run poetry install
 
 # run the brownie script to generate events for the cfe to read
