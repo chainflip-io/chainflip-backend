@@ -6,7 +6,7 @@ use crate::{
 use cf_chains::mocks::{MockApiCall, MockEthereum, MockTransactionBuilder};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, threshold_signer::MockThresholdSigner},
-	Chainflip,
+	Chainflip, EpochIndex,
 };
 use frame_support::parameter_types;
 use sp_core::H256;
@@ -84,7 +84,10 @@ impl SignerNomination for MockNominator {
 		NOMINATION.with(|cell| *cell.borrow())
 	}
 
-	fn threshold_nomination_with_seed<S>(_seed: S) -> Option<Vec<Self::SignerId>> {
+	fn threshold_nomination_with_seed<S>(
+		_seed: S,
+		_epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
 		Some(vec![RANDOM_NOMINEE])
 	}
 }

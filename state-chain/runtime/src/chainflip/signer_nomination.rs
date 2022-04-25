@@ -1,5 +1,5 @@
 use crate::{Runtime, Validator};
-use cf_traits::{Chainflip, EpochInfo};
+use cf_traits::{Chainflip, EpochIndex, EpochInfo};
 use frame_support::{traits::Get, Hashable};
 use nanorand::{Rng, WyRand};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
@@ -62,10 +62,13 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 		select_one(seed_from_hashable(seed), eligible_validators())
 	}
 
-	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>> {
+	fn threshold_nomination_with_seed<H: Hashable>(
+		seed: H,
+		epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
 		try_select_random_subset(
 			seed_from_hashable(seed),
-			<Validator as EpochInfo>::consensus_threshold() as usize,
+			<Validator as EpochInfo>::consensus_threshold(epoch_index) as usize,
 			eligible_validators(),
 		)
 	}

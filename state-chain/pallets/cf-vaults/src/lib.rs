@@ -135,48 +135,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
-	/// Returns `Some(key)` *iff any* key has at least `self.success_threshold()` number of votes,
-	/// otherwise returns `None`.
-	fn success_consensus(&self) -> Option<AggKeyFor<T, I>> {
-		for key in SuccessVoters::<T, I>::iter_keys() {
-			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
-				self.success_threshold() as usize
-			{
-				return Some(key)
-			}
-		}
-		None
-	}
-
-	/// Returns `Some(blamed_nodes)` *iff* at least `self.success_threshold()` number of nodes voted
-	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
-	/// votes.
-	///
-	/// If less than `self.success_threshold()` voted for failure, returns `None`.
-	fn failure_consensus(&self) -> Option<BTreeSet<T::ValidatorId>> {
-		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
-			self.success_threshold() as usize
-		{
-			return None
-		}
-
-		Some(
-			self.blame_votes
-				.iter()
-				.filter_map(
-					|(id, vote_count)| {
-						if *vote_count >= self.blame_threshold() {
-							Some(id)
-						} else {
-							None
-						}
-					},
-				)
-				.cloned()
-				.collect(),
-		)
-	}
-
 	/// Resolves the keygen outcome as follows:
 	///
 	/// If and only if *all* candidates agree on the same key, return Success.
@@ -226,16 +184,48 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	/// Determines the keygen outcome based on threshold consensus.
+	/// - If less than `self.success_threshold()` voted for failure or success returns `None`.
+	/// - Returns `Some(KeygenOutcomeSuccess(key))` *iff any* key has at least
+	///   `self.success_threshold()` number of
+	/// votes.
+	/// - Returns `Some(KeygenOutcomeFailur(blamed_nodes))` *iff* at least
+	///   `self.success_threshold()` number of nodes voted
+	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
+	/// votes.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
 		if self.response_count() < self.success_threshold() {
 			return None
 		}
 
-		self.success_consensus()
-			// If it's a success, return success.
-			.map(KeygenOutcome::Success)
-			// Otherwise check if we have consensus on failure.
-			.or_else(|| self.failure_consensus().map(KeygenOutcome::Failure))
+		for key in SuccessVoters::<T, I>::iter_keys() {
+			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
+				self.success_threshold() as usize
+			{
+				return Some(KeygenOutcome::Success(key))
+			}
+		}
+
+		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
+			self.success_threshold() as usize
+		{
+			return None
+		}
+
+		Some(KeygenOutcome::Failure(
+			self.blame_votes
+				.iter()
+				.filter_map(
+					|(id, vote_count)| {
+						if *vote_count >= self.blame_threshold() {
+							Some(id)
+						} else {
+							None
+						}
+					},
+				)
+				.cloned()
+				.collect(),
+		))
 	}
 }
 
@@ -694,7 +684,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 
-		if offenders.len() < T::EpochInfo::consensus_threshold() as usize {
+		if offenders.len() < T::EpochInfo::consensus_threshold(T::EpochInfo::epoch_index()) as usize
+		{
+			// TODO: We should combine this reporting to include both, so we only send a single:
+			// partipate keygen failure report, and the report handles both cases.
 			T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
 			T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 		}
