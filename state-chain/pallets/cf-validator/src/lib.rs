@@ -730,7 +730,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_validator_info_for_epoch(epoch_index: EpochIndex, new_validators: Vec<Self::ValidatorId>) {
+	fn add_validator_info_for_epoch(
+		epoch_index: EpochIndex,
+		new_validators: Vec<Self::ValidatorId>,
+	) {
 		EpochValidatorCount::<T>::insert(epoch_index, new_validators.len() as u32);
 		for (i, validator) in new_validators.iter().enumerate() {
 			ValidatorIndex::<T>::insert(epoch_index, validator, i as u16);
