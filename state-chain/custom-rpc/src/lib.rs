@@ -3,6 +3,8 @@ use sc_client_api::HeaderBackend;
 use state_chain_runtime::runtime_apis::CustomRuntimeApi;
 use std::{marker::PhantomData, sync::Arc};
 
+pub use self::gen_client::Client as CustomClient;
+
 #[rpc]
 /// The custom RPC endoints for the state chain node.
 pub trait CustomApi {
@@ -20,9 +22,7 @@ pub struct CustomRpc<C, B> {
 impl<C, B> CustomApi for CustomRpc<C, B>
 where
 	B: sp_runtime::traits::Block,
-	C: sp_api::ProvideRuntimeApi<B>,
-	C: Send + Sync + 'static,
-	C: HeaderBackend<B>,
+	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
 	fn is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error> {

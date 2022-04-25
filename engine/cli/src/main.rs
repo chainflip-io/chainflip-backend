@@ -6,7 +6,6 @@ use chainflip_engine::{
     },
 };
 use futures::StreamExt;
-use pallet_cf_validator::RotationStatus;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::ed25519::Public as EdPublic;
@@ -98,64 +97,13 @@ async fn request_claim(
     should_register_claim: bool,
     logger: &slog::Logger,
 ) -> Result<()> {
-    let (_, mut block_stream, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (.., state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
 
-    // Are we in a valid Auction phase
-    // TODO: Deduplicate this logic (and getting) by using an RPC directly to the is_auction_phase call in the validator pallet
-    // https://github.com/chainflip-io/chainflip-backend/issues/1462
-    {
-        // Check that we actually can claim atm.
-        let block = block_stream
-            .next()
-            .await
-            .unwrap_or_else(|| Err(anyhow::Error::msg("Unable to pull item from block stream")))?;
-
-        let block_hash = block.hash();
-        let current_block_number = block.number;
-        let current_epoch_started_at = state_chain_client
-            .get_storage_value::<pallet_cf_validator::CurrentEpochStartedAt::<
-                state_chain_runtime::Runtime,
-            >>(block_hash)
-            .await?;
-
-        let claim_period_as_percentage = state_chain_client
-            .get_storage_value::<pallet_cf_validator::ClaimPeriodAsPercentage::<
-                state_chain_runtime::Runtime,
-            >>(block_hash)
-            .await?;
-
-        let blocks_per_epoch = state_chain_client
-            .get_storage_value::<pallet_cf_validator::BlocksPerEpoch<state_chain_runtime::Runtime>>(
-                block_hash,
-            )
-            .await?;
-
-        let rotation_phase = state_chain_client
-            .get_storage_value::<pallet_cf_validator::RotationPhase<state_chain_runtime::Runtime>>(
-                block_hash,
-            )
-            .await?;
-
-        let is_auction_phase = {
-            if rotation_phase != RotationStatus::Idle {
-                true
-            } else {
-                // start + ((epoch_duration * percentage) / 100)
-                let last_block_for_claims = current_epoch_started_at.saturating_add(
-                    blocks_per_epoch
-                        .saturating_mul(claim_period_as_percentage.into())
-                        .checked_div(100u32)
-                        .unwrap_or_default(),
-                );
-
-                last_block_for_claims <= current_block_number
-            }
-        };
-
-        if is_auction_phase {
-            let next_auction_target = current_epoch_started_at + blocks_per_epoch;
-            return Err(anyhow::Error::msg(format!("You cannot claim during an auction. After the next auction, you can claim. The next auction is targetted to resolve at block number {}.", next_auction_target)));
-        }
+    // Are we in a current auction phase
+    if state_chain_client.is_auction_phase().await? {
+        return Err(anyhow::Error::msg(
+            "We are currently in an auction phase. Please wait until the auction phase is over.",
+        ));
     }
 
     // Sanitise data
