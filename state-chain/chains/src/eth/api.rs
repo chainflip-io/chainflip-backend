@@ -47,7 +47,7 @@ impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
 
 impl RegisterClaim<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		nonce: <Ethereum as ChainAbi>::Nonce,
+		nonce: EthereumNonce,
 		node_id: &[u8; 32],
 		amount: u128,
 		address: &[u8; 20],
@@ -69,17 +69,13 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 impl UpdateFlipSupply<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		nonce: <Ethereum as ChainAbi>::Nonce,
+		nonce: EthereumNonce,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
-			EthereumNonce {
-				key_manager_address: nonce.key_manager_address,
-				chain_id: nonce.chain_id,
-				counter: nonce.counter,
-			},
+			nonce,
 			new_total_supply,
 			block_number,
 			stake_manager_address,
