@@ -71,10 +71,14 @@ macro_rules! impl_mock_epoch_info {
 			pub fn next_epoch(validators: Vec<$account_id>) -> $epoch_index {
 				let new_epoch_index = EPOCH.with(|cell| *(cell.borrow_mut()) + 1);
 				MockEpochInfo::set_epoch(new_epoch_index);
-				MockEpochInfo::set_epoch_validator_count(new_epoch_index, validators.len() as u32);
-				MockEpochInfo::set_validators(validators.to_vec());
-				MockEpochInfo::set_validator_indices(new_epoch_index, validators);
+				MockEpochInfo::set_validators(validators.clone());
+				MockEpochInfo::inner_add_validators_for_epoch(new_epoch_index, validators);
 				new_epoch_index
+			}
+
+			pub fn inner_add_validators_for_epoch(epoch_index: $epoch_index, new_validators: Vec<$account_id>) {
+				MockEpochInfo::set_epoch_validator_count(epoch_index, new_validators.len() as u32);
+				MockEpochInfo::set_validator_indices(epoch_index, new_validators);
 			}
 		}
 
@@ -123,19 +127,8 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn set_validator_index(epoch_index: $epoch_index, account: &Self::ValidatorId, index: u16) {
-				VALIDATOR_INDEX.with(|cell| {
-					let mut map = cell.borrow_mut();
-					let validator_index = map.entry(epoch_index).or_insert(HashMap::new());
-					validator_index.insert(account.clone(), index);
-				})
-			}
-
-			#[cfg(feature = "runtime-benchmarks")]
-			fn set_validator_count_for_epoch(epoch: $epoch_index, count: u32) {
-				EPOCH_VALIDATOR_COUNT.with(|cell| {
-					cell.borrow_mut().insert(epoch, count);
-				})
+			fn add_validators_for_epoch(epoch_index: $epoch_index, new_validators: Vec<Self::ValidatorId>) {
+				MockEpochInfo::inner_add_validators_for_epoch(epoch_index, new_validators);
 			}
 		}
 	};
