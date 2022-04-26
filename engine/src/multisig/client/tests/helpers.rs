@@ -322,7 +322,8 @@ where
                     // TODO Consider member functions on OutgoingMultisigStageMessages for transforms
                     match expect_recv_with_timeout(&mut node.outgoing_p2p_message_receiver).await {
                         OutgoingMultisigStageMessages::Broadcast(receiver_ids, message) => {
-                            let next_data = message_to_next_stage_data(message);
+                            let next_data =
+                                message_to_next_stage_data(bincode::deserialize(&message).unwrap());
                             receiver_ids
                                 .into_iter()
                                 .map(move |receiver_id| (receiver_id, next_data.clone()))
@@ -331,7 +332,12 @@ where
                         OutgoingMultisigStageMessages::Private(messages) => messages
                             .into_iter()
                             .map(|(receiver_id, message)| {
-                                (receiver_id, message_to_next_stage_data(message))
+                                (
+                                    receiver_id,
+                                    message_to_next_stage_data(
+                                        bincode::deserialize(&message).unwrap(),
+                                    ),
+                                )
                             })
                             .collect(),
                     }

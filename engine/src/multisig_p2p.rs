@@ -30,7 +30,6 @@ use crate::{
         self, format_iterator, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error,
     },
     logging::COMPONENT_KEY,
-    multisig::MultisigMessage,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
@@ -44,8 +43,8 @@ pub enum AccountPeerMappingChange {
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for peering
 #[derive(Debug)]
 pub enum OutgoingMultisigStageMessages {
-    Broadcast(Vec<AccountId>, MultisigMessage),
-    Private(Vec<(AccountId, MultisigMessage)>),
+    Broadcast(Vec<AccountId>, Vec<u8>),
+    Private(Vec<(AccountId, Vec<u8>)>),
 }
 
 /*
@@ -212,7 +211,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     settings: &settings::Settings,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     latest_block_hash: H256,
-    incoming_p2p_message_sender: UnboundedSender<(AccountId, MultisigMessage)>,
+    incoming_p2p_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
     mut outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
     mut account_mapping_change_receiver: UnboundedReceiver<(
         AccountId,
@@ -329,7 +328,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     if let Some(account_id) = peer_to_account_mapping_on_chain.get(&peer_id) {
                         incoming_p2p_message_sender.send((
                             account_id.clone(),
-                            bincode::deserialize::<MultisigMessage>(&serialised_message[..]).with_context(|| format!("Failed to deserialise message from Validator {}.", account_id))?
+                            serialised_message
                         )).map_err(anyhow::Error::new).with_context(|| "Failed to send message via channel".to_string())?;
                         Ok(account_id)
                     } else {
@@ -345,9 +344,11 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     client: &P2PRpcClient,
                     account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
                     account_ids: AccountIds,
-                    message: MultisigMessage,
+                    message: Vec<u8>,
                     logger: &slog::Logger
                 ) {
+
+                    // If we can't get peer id for some accounts, should we still try to send messages to the rest?
                     match async {
                         account_ids.clone().into_iter().map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
                             Some((peer_id, _, _)) => Ok(peer_id.into()),
@@ -356,7 +357,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     }.and_then(|peer_ids| {
                         client.send_message(
                             peer_ids,
-                            bincode::serialize(&message).unwrap()
+                            message
                         ).map_err(rpc_error_into_anyhow_error)
                     }).await {
                         Ok(_) => slog::info!(logger, "Sent P2P message to: {}", format_iterator(account_ids)),
