@@ -29,15 +29,15 @@ pub struct RegisterClaim {
 }
 
 impl RegisterClaim {
-	pub fn new_unsigned<Nonce: Into<EthereumNonce> + Copy, Amount: Into<Uint>>(
-		nonce: Nonce,
+	pub fn new_unsigned<Amount: Into<Uint>>(
+		nonce: EthereumNonce,
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(nonce.into()),
+			sig_data: SigData::new_empty(nonce),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),

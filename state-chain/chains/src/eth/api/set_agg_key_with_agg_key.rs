@@ -23,12 +23,8 @@ pub struct SetAggKeyWithAggKey {
 }
 
 impl SetAggKeyWithAggKey {
-	pub fn new_unsigned<Nonce: Into<EthereumNonce> + Copy, Key: Into<AggKey>>(
-		nonce: Nonce,
-		new_key: Key,
-	) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(nonce.into()), new_key: new_key.into() };
+	pub fn new_unsigned<Key: Into<AggKey>>(nonce: EthereumNonce, new_key: Key) -> Self {
+		let mut calldata = Self { sig_data: SigData::new_empty(nonce), new_key: new_key.into() };
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata

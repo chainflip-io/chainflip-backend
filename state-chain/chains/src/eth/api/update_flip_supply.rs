@@ -21,18 +21,14 @@ pub struct UpdateFlipSupply {
 }
 
 impl UpdateFlipSupply {
-	pub fn new_unsigned<
-		Nonce: Into<EthereumNonce> + Copy,
-		TotalSupply: Into<Uint>,
-		BlockNumber: Into<Uint>,
-	>(
-		nonce: Nonce,
+	pub fn new_unsigned<TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
+		nonce: EthereumNonce,
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(nonce.into()),
+			sig_data: SigData::new_empty(nonce),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
 			stake_manager_address: stake_manager_address.into(),
