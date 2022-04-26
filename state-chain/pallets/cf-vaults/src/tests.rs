@@ -80,10 +80,10 @@ fn keygen_success() {
 
 		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
 
-		assert_matches!(
+		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
-		);
+		));
 	});
 }
 
@@ -265,10 +265,10 @@ fn keygen_report_success() {
 			AsyncResult::Pending
 		);
 
-		assert_matches!(
+		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
-		);
+		));
 
 		assert_last_event!(crate::Event::KeygenSuccess(..));
 

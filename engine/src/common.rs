@@ -139,7 +139,7 @@ mod tests_read_clean_and_decode_hex_str_file {
     fn with_file<C: FnOnce(PathBuf) + std::panic::UnwindSafe>(text: &[u8], closure: C) {
         let dir = TempDir::new("tests").unwrap();
         let file_path = dir.path().join("foo.txt");
-        let result = catch_unwind(|| { let _ = &text; 
+        let result = catch_unwind(|| {
             let mut f = File::create(&file_path).unwrap();
             f.write_all(text).unwrap();
             closure(file_path);
