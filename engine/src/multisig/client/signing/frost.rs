@@ -38,9 +38,9 @@ pub struct SecretNoncePair {
 impl SecretNoncePair {
     /// Generate a random pair of nonces (in a Box,
     /// to avoid them being copied on move)
-    pub fn sample_random(mut rng: &mut Rng) -> Box<Self> {
-        let d = Scalar::random(&mut rng);
-        let e = Scalar::random(&mut rng);
+    pub fn sample_random(rng: &mut Rng) -> Box<Self> {
+        let d = Scalar::random(rng);
+        let e = Scalar::random(rng);
 
         let d_pub = Point::from_scalar(&d);
         let e_pub = Point::from_scalar(&e);
