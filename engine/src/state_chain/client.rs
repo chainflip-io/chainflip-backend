@@ -901,8 +901,22 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
     }
 }
 
-#[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
+    state_chain_settings: &settings::StateChain,
+    wait_for_staking: bool,
+    logger: &slog::Logger,
+) -> Result<(
+    H256,
+    impl Stream<Item = Result<state_chain_runtime::Header>>,
+    Arc<StateChainClient<StateChainRpcClient>>,
+)> {
+    inner_connect_to_state_chain(state_chain_settings, wait_for_staking, logger)
+        .await
+        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, "Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.")))
+}
+
+#[allow(clippy::eval_order_dependence)]
+async fn inner_connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
     wait_for_staking: bool,
     logger: &slog::Logger,

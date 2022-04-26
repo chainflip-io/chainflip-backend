@@ -22,8 +22,6 @@ use utilities::clean_eth_address;
 
 mod settings;
 
-static STATE_CHAIN_CONNECT_ERROR: &str = "Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.";
-
 #[tokio::main]
 async fn main() {
     std::process::exit(match run_cli().await {
@@ -98,9 +96,7 @@ async fn request_claim(
     logger: &slog::Logger,
 ) -> Result<()> {
     let (_, block_stream, state_chain_client) =
-        connect_to_state_chain(&settings.state_chain, false, logger)
-            .await
-            .map_err(|_| anyhow::Error::msg(STATE_CHAIN_CONNECT_ERROR))?;
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
 
     // Are we in a current auction phase
     if state_chain_client.is_auction_phase().await? {
@@ -250,9 +246,8 @@ async fn register_claim(
 }
 
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger)
-        .await
-        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, STATE_CHAIN_CONNECT_ERROR)))?;
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
     let seed = state_chain_client
         .rotate_session_keys()
         .await
@@ -279,9 +274,8 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
 }
 
 async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger)
-        .await
-        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, STATE_CHAIN_CONNECT_ERROR)))?;
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(pallet_cf_staking::Call::retire_account(), logger)
         .await
@@ -291,9 +285,8 @@ async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result
 }
 
 async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger)
-        .await
-        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, STATE_CHAIN_CONNECT_ERROR)))?;
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account(), logger)
         .await
