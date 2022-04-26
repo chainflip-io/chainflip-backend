@@ -75,6 +75,11 @@
   "Ed25519Signature": "[u8;64]",
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
+  "EthereumReplayProtection": {
+    "key_manager_address": "EthereumAddress",
+    "chain_id": "Uint",
+    "nonce": "Uint"
+  },
   "EthTransactionHash": "[u8;32]",
   "BroadcastAttempt": {
     "broadcast_attempt_id": "BroadcastAttemptId",
@@ -123,7 +128,7 @@
     "online": "u32",
     "offline": "u32"
   },
-  "Nonce": "u64",
+  "ReplayProtection": "u64",
   "Offence": {
     "_enum": [
       "ParticipateSigningFailed",
@@ -197,6 +202,8 @@
   "SignatureFor": "SchnorrVerificationComponents",
   "SignerIdFor": "EthereumAddress",
   "SigData": {
+    "key_manager_address": "EthereumAddress",
+    "chain_id": "Uint",
     "msg_hash": "H256",
     "sig": "Uint",
     "nonce": "Uint",
