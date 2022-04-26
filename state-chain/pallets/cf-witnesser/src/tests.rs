@@ -2,21 +2,9 @@ use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	CallHash, Error, VoteMask, Votes,
 };
-use cf_test_utilities::last_event;
+use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo};
 use frame_support::{assert_noop, assert_ok};
-
-fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
-	let events = frame_system::Pallet::<T>::events()
-		.into_iter()
-		.rev()
-		.take(expected.len())
-		.rev()
-		.map(|e| e.event)
-		.collect::<Vec<_>>();
-
-	assert_eq!(events, expected)
-}
 
 #[test]
 fn call_on_threshold() {
@@ -52,14 +40,14 @@ fn call_on_threshold() {
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
 		assert_eq!(votes.count_ones(), 3);
 
-		assert_event_sequence::<Test>(vec![
-			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
-			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
-			crate::Event::ThresholdReached(call_hash, 2).into(),
-			dummy::Event::<Test>::ValueIncrementedTo(0u32).into(),
-			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
-			crate::Event::WitnessReceived(call_hash, CHARLEMAGNE, 3).into(),
-		]);
+		assert_event_sequence!(
+			Event::Witnesser(crate::Event::WitnessReceived(call_hash, ALISSA, 1)),
+			Event::Witnesser(crate::Event::WitnessReceived(call_hash, BOBSON, 2)),
+			Event::Witnesser(crate::Event::ThresholdReached(call_hash, 2)),
+			Event::Dummy(dummy::Event::<Test>::ValueIncrementedTo(0u32)),
+			Event::Witnesser(crate::Event::WitnessExecuted(call_hash, dispatch_result)),
+			Event::Witnesser(crate::Event::WitnessReceived(call_hash, CHARLEMAGNE, 3))
+		);
 	});
 }
 
@@ -95,15 +83,15 @@ fn no_double_call_on_epoch_boundary() {
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
-		assert_event_sequence::<Test>(vec![
-			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
-			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
-			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
-			crate::Event::ThresholdReached(call_hash, 2).into(),
-			dummy::Event::<Test>::ValueIncrementedTo(0u32).into(),
-			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
-			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
-		]);
+		assert_event_sequence!(
+			Event::Witnesser(crate::Event::WitnessReceived(call_hash, ALISSA, 1)),
+			Event::Witnesser(crate::Event::WitnessReceived(call_hash, ALISSA, 1)),
+			Event::Witnesser(crate::Event::WitnessReceived(call_hash, BOBSON, 2)),
+			Event::Witnesser(crate::Event::ThresholdReached(call_hash, 2)),
+			Event::Dummy(dummy::Event::<Test>::ValueIncrementedTo(0u32)),
+			Event::Witnesser(crate::Event::WitnessExecuted(call_hash, dispatch_result)),
+			Event::Witnesser(crate::Event::WitnessReceived(call_hash, BOBSON, 2))
+		);
 	});
 }
 

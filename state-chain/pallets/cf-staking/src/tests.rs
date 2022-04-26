@@ -4,6 +4,7 @@ use crate::{
 };
 use cf_chains::RegisterClaim;
 use cf_traits::mocks::{system_state_info::MockSystemStateInfo, time_source};
+use cf_test_utilities::assert_event_sequence;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use sp_runtime::DispatchError;
@@ -15,29 +16,6 @@ type FlipEvent = pallet_cf_flip::Event<Test>;
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
-
-/// Checks the deposited events, in reverse order (reverse order mainly because it makes the macro
-/// easier to write).
-macro_rules! assert_event_stack {
-	($($pat:pat $( => $test:block )? ),*) => {
-		let mut events = frame_system::Pallet::<Test>::events()
-		.into_iter()
-		.map(|e| e.event)
-			.collect::<Vec<_>>();
-
-		$(
-			let actual = events.pop().expect("Expected an event.");
-			#[allow(irrefutable_let_patterns)]
-			if let $pat = actual {
-				$(
-					$test
-				)?
-			} else {
-				assert!(false, "Expected event {:?}. Got {:?}", stringify!($pat), actual);
-			}
-		)*
-	};
-}
 
 #[test]
 fn genesis_nodes_are_activated_by_default() {
@@ -94,7 +72,7 @@ fn staked_amount_is_added_and_subtracted() {
 		// Two threshold signature requests should have been made.
 		assert_eq!(MockThresholdSigner::received_requests().len(), 2);
 
-		assert_event_stack!(
+		assert_event_sequence!(
 			_, // claim debited from BOB
 			_, // claim debited from ALICE
 			Event::Staking(crate::Event::Staked(BOB, staked, total)) => {
@@ -151,7 +129,7 @@ fn claiming_unclaimable_is_err() {
 		// Make sure storage hasn't been touched.
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE);
 
-		assert_event_stack!(Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)));
+		assert_event_sequence!(Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)));
 	});
 }
 
@@ -256,7 +234,7 @@ fn staked_and_claimed_events_must_match() {
 		// Threshold signature request should have been made.
 		assert_eq!(MockThresholdSigner::received_requests().len(), 1);
 
-		assert_event_stack!(
+		assert_event_sequence!(
 			Event::Staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
 				assert_eq!(claimed_amount, STAKE);
 			},
@@ -321,9 +299,9 @@ fn signature_is_inserted() {
 		// Threshold signature generated.
 		MockThresholdSigner::on_signature_ready(&ALICE).unwrap();
 
-		assert_event_stack!(
-			Event::Staking(crate::Event::ClaimSignatureIssued(ALICE, _)),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(_, ImbalanceSource::External, _, _))
+		assert_event_sequence!(
+			Event::Flip(pallet_cf_flip::Event::BalanceSettled(_, ImbalanceSource::External, _, _)),
+			Event::Staking(crate::Event::ClaimSignatureIssued(ALICE, _))
 		);
 
 		// Check storage for the signature.
@@ -410,7 +388,7 @@ fn test_retirement() {
 			<Error<Test>>::AlreadyActive
 		);
 
-		assert_event_stack!(Event::Staking(crate::Event::AccountActivated(_)));
+		assert_event_sequence!(Event::Staking(crate::Event::AccountActivated(_)));
 	});
 }
 
@@ -453,7 +431,7 @@ fn claim_expiry() {
 		// Alice should have expired but not Bob.
 		assert!(!PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
-		assert_event_stack!(
+		assert_event_sequence!(
 			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -469,7 +447,7 @@ fn claim_expiry() {
 
 		// Bob's (unsigned) claim should now be expired too.
 		assert!(!PendingClaims::<Test>::contains_key(BOB));
-		assert_event_stack!(
+		assert_event_sequence!(
 			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(BOB)),
@@ -514,7 +492,7 @@ fn test_claim_all() {
 		assert_ok!(Staking::claim_all(Origin::signed(ALICE), ETH_DUMMY_ADDR));
 
 		// We should have a claim for the full staked amount minus the bond.
-		assert_event_stack!(
+		assert_event_sequence!(
 			_, // claim debited from ALICE
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			_ // stake credited to ALICE
@@ -546,7 +524,7 @@ fn test_check_withdrawal_address() {
 		let stake_attempt = stake_attempts.get(0);
 		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
-		assert_event_stack!(Event::Staking(crate::Event::FailedStakeAttempt(..)));
+		assert_event_sequence!(Event::Staking(crate::Event::FailedStakeAttempt(..)));
 		// Case: User stakes again with the same address
 		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, STAKE).is_ok());
 	});
@@ -595,11 +573,11 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 		// Stake some FLIP with no withdrawal address
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 		// Expect an Staked event to be fired
-		assert_event_stack!(Event::Staking(crate::Event::Staked(..)));
+		assert_event_sequence!(Event::Staking(crate::Event::Staked(..)));
 		// Stake some FLIP again with an provided withdrawal address
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Expect an failed stake event to be fired but no stake event
-		assert_event_stack!(Event::Staking(crate::Event::FailedStakeAttempt(..)));
+		assert_event_sequence!(Event::Staking(crate::Event::FailedStakeAttempt(..)));
 	});
 }
 
