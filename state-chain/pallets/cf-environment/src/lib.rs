@@ -77,8 +77,6 @@ pub mod pallet {
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::storage]
-	// The global signature counter
-	// We don't need a getter for this, since we only ever use the next value
 	pub type GlobalSignatureCounter<T> = StorageValue<_, SignatureCounter, ValueQuery>;
 
 	#[pallet::event]
