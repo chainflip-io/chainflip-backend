@@ -427,12 +427,6 @@ pub mod pallet {
 	pub type FailureVoters<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
-	/// Threshold key nonces for this chain.
-	#[pallet::storage]
-	#[pallet::getter(fn chain_nonce)]
-	pub(super) type ChainReplayProtection<T, I = ()> =
-		StorageValue<_, <<T as Config<I>>::Chain as ChainAbi>::ReplayProtection, ValueQuery>;
-
 	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_resolution_pending_since)]
