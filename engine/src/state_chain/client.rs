@@ -912,7 +912,7 @@ pub async fn connect_to_state_chain(
 )> {
     inner_connect_to_state_chain(state_chain_settings, wait_for_staking, logger)
         .await
-        .map_err(|e| anyhow::Error::msg(format!("{:?} {}", e, "Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node.")))
+        .map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node. {}", e)))
 }
 
 #[allow(clippy::eval_order_dependence)]
