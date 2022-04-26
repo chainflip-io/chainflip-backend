@@ -537,7 +537,7 @@ fn test_missing_author_punishment() {
 }
 
 #[test]
-fn auction_during_maintenance() {
+fn no_auction_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
@@ -545,7 +545,7 @@ fn auction_during_maintenance() {
 		assert!(MockSystemStateInfo::ensure_no_maintenance().is_err());
 		// Try to start an auction
 		RotationPhase::<Test>::set(RotationStatusOf::<Test>::RunAuction);
-		// Move a few blocks forward to run the auction
+		// Move a few blocks forward to trigger the auction
 		move_forward_blocks(1);
 		// Expect the auction to not be started - we are stll in the auction mode and not moving
 		// from here
