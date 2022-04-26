@@ -11,6 +11,5 @@ pub const SOUNDCHECK: StateChainEnvironment = StateChainEnvironment {
 	genesis_stake_amount: 50_000 * 10u128.pow(18),
 	ethereum_deployment_block: 9819300,
 	eth_block_safety_margin: 4,
-	pending_sign_duration: 500,
 	max_ceremony_stage_duration: 300,
 };
