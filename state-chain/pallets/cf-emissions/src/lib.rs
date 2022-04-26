@@ -264,16 +264,10 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
+	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
 		pub validator_emission_inflation: BasisPoints,
 		pub backup_validator_emission_inflation: BasisPoints,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { validator_emission_inflation: 0, backup_validator_emission_inflation: 0 }
-		}
 	}
 
 	/// At genesis we need to set the inflation rates for active and passive validators.

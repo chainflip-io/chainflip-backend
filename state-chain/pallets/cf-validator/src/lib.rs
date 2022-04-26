@@ -676,9 +676,12 @@ pub mod pallet {
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
-			CurrentEpochStartedAt::<T>::set(Default::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-			let genesis_validators = pallet_session::Pallet::<T>::validators();
+			const GENESIS_EPOCH: u32 = 0;
+			CurrentEpoch::<T>::set(GENESIS_EPOCH);
+			let genesis_validators = <pallet_session::Pallet<T>>::validators();
+			EpochValidatorCount::<T>::insert(GENESIS_EPOCH, genesis_validators.len() as u32);
+			CurrentEpochStartedAt::<T>::set(Default::default());
 			Pallet::<T>::start_new_epoch(&genesis_validators, self.bond);
 		}
 	}
@@ -736,13 +739,16 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16) {
-		ValidatorIndex::<T>::insert(epoch_index, account, index);
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_validator_count_for_epoch(epoch_index: EpochIndex, count: u32) {
-		EpochValidatorCount::<T>::insert(epoch_index, count);
+	fn add_validator_info_for_epoch(
+		epoch_index: EpochIndex,
+		new_validators: Vec<Self::ValidatorId>,
+	) {
+		EpochValidatorCount::<T>::insert(epoch_index, new_validators.len() as u32);
+		for (i, validator) in new_validators.iter().enumerate() {
+			ValidatorIndex::<T>::insert(epoch_index, validator, i as u16);
+			HistoricalActiveEpochs::<T>::append(validator, epoch_index);
+		}
+		HistoricalValidators::<T>::insert(epoch_index, new_validators);
 	}
 }
 

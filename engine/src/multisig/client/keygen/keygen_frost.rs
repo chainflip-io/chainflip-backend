@@ -54,9 +54,9 @@ pub struct ShamirShare {
 
 #[cfg(test)]
 impl ShamirShare {
-    pub fn create_random(mut rng: &mut Rng) -> Self {
+    pub fn create_random(rng: &mut Rng) -> Self {
         ShamirShare {
-            value: Scalar::random(&mut rng),
+            value: Scalar::random(rng),
         }
     }
 }
@@ -105,12 +105,12 @@ fn generate_dkg_challenge(
 
 /// Generate ZKP (zero-knowledge proof) of `secret`
 fn generate_zkp_of_secret(
-    mut rng: &mut Rng,
+    rng: &mut Rng,
     secret: Scalar,
     context: &HashContext,
     index: usize,
 ) -> ZKPSignature {
-    let nonce = Scalar::random(&mut rng);
+    let nonce = Scalar::random(rng);
     let nonce_commitment = Point::from_scalar(&nonce);
 
     let secret_commitment = Point::from_scalar(&secret);
@@ -134,16 +134,16 @@ pub struct IncomingShares(pub BTreeMap<usize, ShamirShare>);
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
 pub fn generate_shares_and_commitment(
-    mut rng: &mut Rng,
+    rng: &mut Rng,
     context: &HashContext,
     index: usize,
     params: ThresholdParameters,
 ) -> (OutgoingShares, DKGUnverifiedCommitment) {
     let (secret, commitments, shares) =
-        generate_secret_and_shares(&mut rng, params.share_count, params.threshold);
+        generate_secret_and_shares(rng, params.share_count, params.threshold);
 
     // Zero-knowledge proof of `secret`
-    let zkp = generate_zkp_of_secret(&mut rng, secret, context, index);
+    let zkp = generate_zkp_of_secret(rng, secret, context, index);
 
     // Secret will be zeroized on drop here
 
@@ -155,25 +155,22 @@ pub fn generate_shares_and_commitment(
 
 // NOTE: shares should be sent after participants have exchanged commitments
 fn generate_secret_and_shares(
-    mut rng: &mut Rng,
+    rng: &mut Rng,
     n: usize,
     t: usize,
 ) -> (Scalar, CoefficientCommitments, BTreeMap<usize, ShamirShare>) {
     // Our secret contribution to the aggregate key
-    let secret = Scalar::random(&mut rng);
+    let secret = Scalar::random(rng);
 
     // Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing scheme
     // (Figure 1: Round 1, Step 1)
-    let coefficients: Vec<_> = (0..t)
-        .into_iter()
-        .map(|_| Scalar::random(&mut rng))
-        .collect();
+    let coefficients: Vec<_> = (0..t).into_iter().map(|_| Scalar::random(rng)).collect();
 
     // (Figure 1: Round 1, Step 3)
     let commitments: Vec<_> = [secret.clone()]
         .iter()
         .chain(&coefficients)
-        .map(|scalar| Point::from_scalar(scalar))
+        .map(Point::from_scalar)
         .collect();
 
     // Generate shares
@@ -343,13 +340,13 @@ pub fn check_high_degree_commitments(commitments: &BTreeMap<usize, DKGCommitment
 #[cfg(test)]
 impl DKGUnverifiedCommitment {
     /// Change the lowest degree coefficient so that it fails ZKP check
-    pub fn corrupt_primary_coefficient(&mut self, mut rng: &mut Rng) {
-        self.commitments.0[0] = Point::from_scalar(&Scalar::random(&mut rng));
+    pub fn corrupt_primary_coefficient(&mut self, rng: &mut Rng) {
+        self.commitments.0[0] = Point::from_scalar(&Scalar::random(rng));
     }
 
     /// Change a higher degree coefficient, so that it fails hash commitment check
-    pub fn corrupt_secondary_coefficient(&mut self, mut rng: &mut Rng) {
-        self.commitments.0[1] = Point::from_scalar(&Scalar::random(&mut rng));
+    pub fn corrupt_secondary_coefficient(&mut self, rng: &mut Rng) {
+        self.commitments.0[1] = Point::from_scalar(&Scalar::random(rng));
     }
 }
 

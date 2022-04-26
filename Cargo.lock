@@ -798,7 +798,7 @@ dependencies = [
  "serde 1.0.130",
  "sp-runtime",
  "sp-std",
- "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3/?rev=861cfcd)",
+ "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3?rev=861cfcd)",
 ]
 
 [[package]]
@@ -907,7 +907,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "utilities",
 ]
 
 [[package]]
@@ -990,6 +989,7 @@ dependencies = [
  "crossbeam-channel",
  "csv",
  "curv-kzen",
+ "custom-rpc",
  "dyn-clone",
  "env_logger 0.9.0",
  "ethbloom",
@@ -1068,6 +1068,7 @@ name = "chainflip-node"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "custom-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-try-runtime",
@@ -1584,6 +1585,21 @@ dependencies = [
  "rand_core 0.5.1",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "custom-rpc"
+version = "0.1.0"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "sc-client-api",
+ "sc-rpc",
+ "sc-rpc-api",
+ "sp-api",
+ "sp-runtime",
+ "state-chain-runtime",
 ]
 
 [[package]]
@@ -8810,6 +8826,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "utilities",
 ]
 
 [[package]]
@@ -10180,7 +10197,7 @@ dependencies = [
 [[package]]
 name = "web3"
 version = "0.17.0"
-source = "git+https://github.com/tomusdrw/rust-web3/?rev=861cfcd#861cfcda263d9901a9f5f023d557bd0d3ea728f6"
+source = "git+https://github.com/tomusdrw/rust-web3?rev=861cfcd#861cfcda263d9901a9f5f023d557bd0d3ea728f6"
 dependencies = [
  "arrayvec 0.7.2",
  "base64 0.13.0",

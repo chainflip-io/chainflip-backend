@@ -100,8 +100,8 @@ pub type Rng = rand_legacy::rngs::StdRng;
 
 #[cfg(test)]
 impl Point {
-    pub fn random(mut rng: &mut Rng) -> Self {
-        Point::from_scalar(&Scalar::random(&mut rng))
+    pub fn random(rng: &mut Rng) -> Self {
+        Point::from_scalar(&Scalar::random(rng))
     }
 }
 

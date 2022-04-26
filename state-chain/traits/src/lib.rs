@@ -99,7 +99,7 @@ pub trait EpochInfo {
 	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
 
 	/// Validator count at a particular epoch.
-	fn validator_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
+	fn validator_count_at_epoch(epoch_index: EpochIndex) -> Option<u32>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
 	/// current candidate validator set
@@ -111,27 +111,11 @@ pub trait EpochInfo {
 	/// Are we in the auction phase of the epoch?
 	fn is_auction_phase() -> bool;
 
-	/// The consensus threshold for the current epoch.
-	///
-	/// This is the number of parties required to conduct a *successful* threshold
-	/// signature ceremony based on the number of active validators.
-	fn consensus_threshold() -> u32 {
-		cf_utilities::success_threshold_from_share_count(Self::current_validator_count() as u32)
-	}
-
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId, index: u16);
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_validator_count_for_epoch(epoch: EpochIndex, count: u32);
-}
-
-pub struct CurrentThreshold<T>(PhantomData<T>);
-
-impl<T: Chainflip> Get<u32> for CurrentThreshold<T> {
-	fn get() -> u32 {
-		T::EpochInfo::consensus_threshold()
-	}
+	fn add_validator_info_for_epoch(
+		epoch_index: EpochIndex,
+		new_validators: Vec<Self::ValidatorId>,
+	);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
@@ -491,7 +475,10 @@ pub trait SignerNomination {
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
-	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>>;
+	fn threshold_nomination_with_seed<H: Hashable>(
+		seed: H,
+		epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.

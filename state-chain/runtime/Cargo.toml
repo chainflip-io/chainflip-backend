@@ -2,7 +2,7 @@
 name = 'state-chain-runtime'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false
@@ -27,6 +27,7 @@ serde = { version = "1.0.126", optional = true, features = ['derive'] }
 # Chainflip local dependencies
 cf-traits = { path = "../traits", default-features = false }
 cf-chains = { path = "../chains", default-features = false }
+cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 cf-runtime-benchmark-utilities = { path = "../runtime-benchmark-utilities", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
@@ -222,6 +223,7 @@ std = [
   'frame-try-runtime/std',
   'cf-traits/std',
   'cf-chains/std',
+  'cf-utilities/std',
   'cf-runtime-benchmark-utilities/std',
   'codec/std',
   'scale-info/std',

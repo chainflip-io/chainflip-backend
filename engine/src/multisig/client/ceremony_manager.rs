@@ -58,7 +58,7 @@ impl CeremonyManager {
             outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
-            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone()),
+            ceremony_id_tracker: CeremonyIdTracker::new(),
             allowing_high_pubkey: false,
             logger: logger.clone(),
         }
