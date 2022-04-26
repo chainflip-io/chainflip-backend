@@ -83,7 +83,7 @@ pub fn run() -> sc_cli::Result<()> {
 		},
 		Some(Subcommand::ImportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| { let _ = &cmd; 
+			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, import_queue, .. } =
 					service::new_partial(&config)?;
 				Ok((cmd.run(client, import_queue), task_manager))
@@ -95,7 +95,7 @@ pub fn run() -> sc_cli::Result<()> {
 		},
 		Some(Subcommand::Revert(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| { let _ = &cmd; 
+			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, .. } =
 					service::new_partial(&config)?;
 				Ok((cmd.run(client, backend), task_manager))
@@ -105,7 +105,7 @@ pub fn run() -> sc_cli::Result<()> {
 			if cfg!(feature = "runtime-benchmarks") {
 				let runner = cli.create_runner(cmd)?;
 
-				runner.sync_run(|config| { let _ = &cmd; cmd.run::<Block, service::ExecutorDispatch>(config) })
+				runner.sync_run(|config| { cmd.run::<Block, service::ExecutorDispatch>(config) })
 			} else {
 				Err("Benchmarking wasn't enabled when building the node. You can enable it with \
 					`--features runtime-benchmarks`."
