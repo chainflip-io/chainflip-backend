@@ -309,9 +309,9 @@ pub trait EmissionsTrigger {
 }
 
 /// Provides a unqiue nonce for some [Chain].
-pub trait NonceProvider<Abi: ChainAbi> {
+pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	/// Get the next nonce.
-	fn next_nonce() -> Abi::Nonce;
+	fn replay_protection() -> Abi::ReplayProtection;
 }
 
 /// Provides the environment data for ethereum-like chains.

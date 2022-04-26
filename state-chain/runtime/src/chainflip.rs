@@ -16,13 +16,13 @@ use crate::{
 use cf_chains::{
 	eth::{
 		self,
-		api::{EthereumApi, EthereumNonce},
+		api::{EthereumApi, EthereumReplayProtection},
 	},
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
 	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	NonceProvider, RewardsDistribution, StakeHandler, StakeTransfer,
+	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -229,16 +229,16 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 	}
 }
 
-pub struct EthNonceProvider;
+pub struct EthReplayProtectionProvider;
 
-impl NonceProvider<Ethereum> for EthNonceProvider {
+impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
 	// Get the Environment values for key_manager_address and chain_id, then use
-	// the next global signature counter
-	fn next_nonce() -> EthereumNonce {
-		EthereumNonce {
+	// the next global signature nonce
+	fn replay_protection() -> EthereumReplayProtection {
+		EthereumReplayProtection {
 			key_manager_address: Environment::key_manager_address(),
 			chain_id: Environment::ethereum_chain_id(),
-			counter: Environment::next_global_signature_counter(),
+			nonce: Environment::next_global_signature_nonce(),
 		}
 	}
 }

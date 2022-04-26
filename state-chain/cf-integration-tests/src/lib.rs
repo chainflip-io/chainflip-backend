@@ -638,7 +638,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_chains::eth::api::EthereumNonce;
+		use cf_chains::eth::api::EthereumReplayProtection;
 		use cf_traits::{
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, StakeTransfer,
 		};
@@ -721,7 +721,7 @@ mod tests {
 
 				assert_eq!(
 					EthereumVault::chain_nonce(),
-					EthereumNonce { key_manager_address: [0; 20], chain_id: 0, counter: 0 },
+					EthereumReplayProtection { key_manager_address: [0; 20], chain_id: 0, nonce: 0 },
 					"nonce not incremented"
 				);
 

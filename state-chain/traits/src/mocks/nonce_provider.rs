@@ -1,15 +1,15 @@
 use std::marker::PhantomData;
 
-use cf_chains::{eth::api::EthereumNonce, ChainAbi};
+use cf_chains::{eth::api::EthereumReplayProtection, ChainAbi};
 
-/// A mock that just returns some constants for the EthereumNonce.
-pub struct MockEthNonceProvider<T>(PhantomData<T>);
+/// A mock that just returns some constants for the EthereumReplayProtection.
+pub struct MockEthReplayProtectionProvider<T>(PhantomData<T>);
 
-impl<T: ChainAbi> crate::NonceProvider<T> for MockEthNonceProvider<T>
+impl<T: ChainAbi> crate::ReplayProtectionProvider<T> for MockEthReplayProtectionProvider<T>
 where
-	<T as ChainAbi>::Nonce: From<EthereumNonce>,
+	<T as ChainAbi>::ReplayProtection: From<EthereumReplayProtection>,
 {
-	fn next_nonce() -> <T as ChainAbi>::Nonce {
-		EthereumNonce { key_manager_address: [0xcf; 20], chain_id: 31337, counter: 42 }.into()
+	fn replay_protection() -> <T as ChainAbi>::ReplayProtection {
+		EthereumReplayProtection { key_manager_address: [0xcf; 20], chain_id: 31337, nonce: 42 }.into()
 	}
 }

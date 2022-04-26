@@ -17,7 +17,7 @@ use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
-		eth_environment_provider::MockEthEnvironmentProvider, nonce_provider::MockEthNonceProvider,
+		eth_environment_provider::MockEthEnvironmentProvider, nonce_provider::MockEthReplayProtectionProvider,
 	},
 	Chainflip,
 };
@@ -98,13 +98,13 @@ impl UnfilteredDispatchable for MockCallback {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockSetAggKeyWithAggKey {
-	nonce: <MockEthereum as ChainAbi>::Nonce,
+	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
 }
 
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::Nonce,
+		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Self {
 		Self { nonce, new_key }
@@ -166,7 +166,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type Broadcaster = MockBroadcaster;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
-	type NonceProvider = MockEthNonceProvider<MockEthereum>;
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

@@ -10,7 +10,7 @@ use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
-use super::EthereumNonce;
+use super::EthereumReplayProtection;
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
@@ -30,14 +30,14 @@ pub struct RegisterClaim {
 
 impl RegisterClaim {
 	pub fn new_unsigned<Amount: Into<Uint>>(
-		nonce: EthereumNonce,
+		replay_protection: EthereumReplayProtection,
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(nonce),
+			sig_data: SigData::new_empty(replay_protection),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
@@ -146,10 +146,10 @@ mod test_register_claim {
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
 		let register_claim_runtime = RegisterClaim::new_unsigned(
-			EthereumNonce {
+			EthereumReplayProtection {
 				key_manager_address: FAKE_KEYMAN_ADDR,
 				chain_id: CHAIN_ID,
-				counter: NONCE,
+				nonce: NONCE,
 			},
 			&TEST_ACCT,
 			AMOUNT,

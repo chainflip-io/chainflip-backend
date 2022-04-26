@@ -15,17 +15,17 @@ pub enum EthereumApi {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Default)]
-pub struct EthereumNonce {
+pub struct EthereumReplayProtection {
 	pub key_manager_address: [u8; 20],
 	pub chain_id: u64,
-	pub counter: u64,
+	pub nonce: u64,
 }
 
 impl ChainAbi for Ethereum {
 	type UnsignedTransaction = eth::UnsignedTransaction;
 	type SignedTransaction = eth::RawSignedTransaction;
 	type SignerCredential = eth::Address;
-	type Nonce = EthereumNonce;
+	type ReplayProtection = EthereumReplayProtection;
 	type ValidationError = eth::TransactionVerificationError;
 
 	fn verify_signed_transaction(
@@ -38,23 +38,23 @@ impl ChainAbi for Ethereum {
 }
 
 impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
-	fn new_unsigned(nonce: EthereumNonce, new_key: <Ethereum as ChainCrypto>::AggKey) -> Self {
+	fn new_unsigned(replay_protection: EthereumReplayProtection, new_key: <Ethereum as ChainCrypto>::AggKey) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
-			nonce, new_key,
+			replay_protection, new_key,
 		))
 	}
 }
 
 impl RegisterClaim<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		nonce: EthereumNonce,
+		replay_protection: EthereumReplayProtection,
 		node_id: &[u8; 32],
 		amount: u128,
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
-			nonce, node_id, amount, address, expiry,
+			replay_protection, node_id, amount, address, expiry,
 		))
 	}
 
@@ -69,13 +69,13 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 impl UpdateFlipSupply<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		nonce: EthereumNonce,
+		replay_protection: EthereumReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
-			nonce,
+			replay_protection,
 			new_total_supply,
 			block_number,
 			stake_manager_address,

@@ -23,7 +23,7 @@ use sp_std::{
 	str, vec,
 };
 
-use self::api::EthereumNonce;
+use self::api::EthereumReplayProtection;
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -62,11 +62,11 @@ pub struct SigData {
 
 impl SigData {
 	/// Initiate a new `SigData` with given nonce value
-	pub fn new_empty(nonce: EthereumNonce) -> Self {
+	pub fn new_empty(replay_protection: EthereumReplayProtection) -> Self {
 		Self {
-			key_manager_addr: nonce.key_manager_address.into(),
-			chain_id: nonce.chain_id.into(),
-			nonce: nonce.counter.into(),
+			key_manager_addr: replay_protection.key_manager_address.into(),
+			chain_id: replay_protection.chain_id.into(),
+			nonce: replay_protection.nonce.into(),
 			..Default::default()
 		}
 	}

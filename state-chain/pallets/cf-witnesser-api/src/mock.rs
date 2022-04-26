@@ -6,7 +6,7 @@ use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
-		key_provider::MockKeyProvider, nonce_provider::MockEthNonceProvider,
+		key_provider::MockKeyProvider, nonce_provider::MockEthReplayProtectionProvider,
 	},
 	Chainflip,
 };
@@ -118,7 +118,7 @@ impl pallet_cf_staking::Config for Test {
 	type Flip = MockStakeTransfer;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type StakerId = AccountIdU64;
-	type NonceProvider = MockEthNonceProvider<Ethereum>;
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<Ethereum>;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
@@ -223,7 +223,7 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type ApiCall = EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
-	type NonceProvider = MockEthNonceProvider<Ethereum>;
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<Ethereum>;
 }
 
 impl pallet_cf_witness_api::Config for Test {

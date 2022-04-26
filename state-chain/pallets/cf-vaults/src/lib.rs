@@ -9,7 +9,7 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
 	CurrentEpochIndex, EpochIndex, EpochInfo, EpochTransitionHandler, EthEnvironmentProvider,
-	KeyProvider, NonceProvider, SuccessOrFailure, VaultRotator,
+	KeyProvider, ReplayProtectionProvider, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -329,7 +329,7 @@ pub mod pallet {
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		// Something that can give us the next nonce.
-		type NonceProvider: NonceProvider<Self::Chain>;
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -433,8 +433,8 @@ pub mod pallet {
 	/// Threshold key nonces for this chain.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_nonce)]
-	pub(super) type ChainNonce<T, I = ()> =
-		StorageValue<_, <<T as Config<I>>::Chain as ChainAbi>::Nonce, ValueQuery>;
+	pub(super) type ChainReplayProtection<T, I = ()> =
+		StorageValue<_, <<T as Config<I>>::Chain as ChainAbi>::ReplayProtection, ValueQuery>;
 
 	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]
@@ -675,7 +675,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-				<T::NonceProvider>::next_nonce(),
+				<T::ReplayProtectionProvider>::replay_protection(),
 				new_public_key,
 			),
 		);

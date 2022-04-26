@@ -1,6 +1,6 @@
 use crate as pallet_cf_staking;
 use cf_chains::{
-	eth::{self, api::EthereumNonce},
+	eth::{self, api::EthereumReplayProtection},
 	ChainAbi, ChainCrypto, Ethereum,
 };
 use cf_traits::{impl_mock_waived_fees, AsyncResult, ThresholdSigner, WaivedFees};
@@ -22,7 +22,7 @@ use cf_traits::{
 		ensure_origin_mock::NeverFailingOriginCheck,
 		eth_environment_provider::MockEthEnvironmentProvider, time_source,
 	},
-	Chainflip, NonceProvider,
+	Chainflip, ReplayProtectionProvider,
 };
 
 // Configure a mock runtime to test the pallet.
@@ -114,12 +114,12 @@ pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
 pub const CHAIN_ID: u64 = 31337;
 pub const COUNTER: u64 = 42;
 
-impl NonceProvider<Ethereum> for Test {
-	fn next_nonce() -> <Ethereum as ChainAbi>::Nonce {
-		EthereumNonce {
+impl ReplayProtectionProvider<Ethereum> for Test {
+	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
+		EthereumReplayProtection {
 			key_manager_address: FAKE_KEYMAN_ADDR,
 			chain_id: CHAIN_ID,
-			counter: COUNTER,
+			nonce: COUNTER,
 		}
 	}
 }
@@ -172,7 +172,7 @@ impl pallet_cf_staking::Config for Test {
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
-	type NonceProvider = Self;
+	type ReplayProtectionProvider = Self;
 	type ThresholdSigner = MockThresholdSigner;
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;

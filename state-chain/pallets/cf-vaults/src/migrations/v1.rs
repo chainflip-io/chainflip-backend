@@ -52,13 +52,13 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 		}
 	}
 
-	// The Nonce value needs to be moved from a double map to simple map.
-	take_storage_item::<_, <T::Chain as ChainAbi>::Nonce, Blake2_128Concat>(
+	// The ReplayProtection value needs to be moved from a double map to simple map.
+	take_storage_item::<_, <T::Chain as ChainAbi>::ReplayProtection, Blake2_128Concat>(
 		PALLET_NAME_V1,
-		b"ChainNonces",
+		b"ChainReplayProtections",
 		ChainId::Ethereum,
 	)
-	.map(ChainNonce::<T, I>::put)
+	.map(ChainReplayProtection::<T, I>::put)
 	.unwrap_or_else(|| {
 		log::info!("🏯 No nonce value to migrate.");
 	});
@@ -111,7 +111,7 @@ pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static s
 	ensure!(
 		have_storage_value(
 			PALLET_NAME_V0,
-			b"ChainNonces",
+			b"ChainReplayProtections",
 			ChainId::Ethereum.blake2_128_concat().as_slice()
 		),
 		"🏯 Can't find Ethereum nonce."
