@@ -97,7 +97,10 @@ async fn request_claim(
     should_register_claim: bool,
     logger: &slog::Logger,
 ) -> Result<()> {
-    let (.., state_chain_client) = connect_to_state_chain(&settings.state_chain, false, logger).await.map_err(|_| anyhow::Error::msg("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node."))?;
+    let (_, block_stream, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger)
+            .await
+            .map_err(|_| anyhow::Error::msg(STATE_CHAIN_CONNECT_ERROR))?;
 
     // Are we in a current auction phase
     if state_chain_client.is_auction_phase().await? {
@@ -131,10 +134,6 @@ async fn request_claim(
         return Ok(());
     }
 
-    let (_, block_stream, state_chain_client) =
-        connect_to_state_chain(&settings.state_chain, false, logger)
-            .await
-            .map_err(|_| anyhow::Error::msg(STATE_CHAIN_CONNECT_ERROR))?;
     // Do the claim
 
     let tx_hash = state_chain_client
