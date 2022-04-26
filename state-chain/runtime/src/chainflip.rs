@@ -233,13 +233,12 @@ pub struct EthNonceProvider;
 
 impl NonceProvider<Ethereum> for EthNonceProvider {
 	// Get the Environment values for key_manager_address and chain_id, then use
-	// the next global nonce
-	fn next_nonce() -> <Abi as ChainAbi>::Nonce {
+	// the next global signature counter
+	fn next_nonce() -> EthereumNonce {
 		EthereumNonce {
 			key_manager_address: Environment::key_manager_address(),
 			chain_id: Environment::ethereum_chain_id(),
 			counter: Environment::next_global_signature_counter(),
 		}
-		.into()
 	}
 }
