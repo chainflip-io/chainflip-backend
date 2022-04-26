@@ -231,7 +231,7 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 
 pub struct EthNonceProvider;
 
-impl NonceProvider<Ethereum> for EthNonceProvider{
+impl NonceProvider<Ethereum> for EthNonceProvider {
 	// Get the Environment values for key_manager_address and chain_id, then use
 	// the next global nonce
 	fn next_nonce() -> <Abi as ChainAbi>::Nonce {
