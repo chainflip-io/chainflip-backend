@@ -101,7 +101,6 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const MinAuthorities: u32 = MIN_AUTHORITY_SIZE;
 	pub const BackupValidatorRatio: u32 = BACKUP_NODE_RATIO;
 	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
 }
@@ -144,7 +143,6 @@ impl Chainflip for Test {
 impl Config for Test {
 	type Event = Event;
 	type BidderProvider = MockBidderProvider;
-	type MinAuthorities = MinAuthorities;
 	type ChainflipAccount = MockChainflipAccount;
 	type AuthorityToBackupRatio = BackupValidatorRatio;
 	type KeygenExclusionSet = MockKeygenExclusion<Self>;

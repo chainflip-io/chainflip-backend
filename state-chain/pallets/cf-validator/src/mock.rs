@@ -196,7 +196,6 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
-	pub const MinValidatorSetSize: u32 = 2;
 	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
 		bottom: 67,
 		top: 80,

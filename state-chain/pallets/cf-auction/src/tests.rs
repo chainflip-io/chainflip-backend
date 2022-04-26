@@ -1,7 +1,7 @@
 use crate::{mock::*, *};
 use cf_test_utilities::last_event;
 use cf_traits::mocks::keygen_exclusion::MockKeygenExclusion;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::assert_ok;
 
 #[test]
 fn should_provide_winning_set() {
@@ -223,17 +223,6 @@ fn should_establish_a_highest_passive_node_bid() {
 #[test]
 fn changing_range() {
 	new_test_ext().execute_with(|| {
-		// Assert our minimum is set to 2
-		assert_eq!(<Test as Config>::MinAuthorities::get(), MIN_AUTHORITY_SIZE);
-		// Check we are throwing up an error when we send anything less than the minimum of 1
-		assert_noop!(
-			AuctionPallet::set_current_authority_set_size_range(Origin::root(), (0, 0)),
-			Error::<Test>::InvalidRange
-		);
-		assert_noop!(
-			AuctionPallet::set_current_authority_set_size_range(Origin::root(), (0, 1)),
-			Error::<Test>::InvalidRange
-		);
 		// This should now work
 		assert_ok!(AuctionPallet::set_current_authority_set_size_range(Origin::root(), (2, 100)));
 		// Confirm we have an event
