@@ -215,11 +215,9 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		// #[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T,
-		// Instance1>::signature_accepted(*payload) .get_dispatch_info()
-		// .weight))]
-		/// FIXME - weight
-		#[pallet::weight(10000)]
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::signature_accepted(*payload, *broadcaster, *block_number, *tx_hash)
+		.get_dispatch_info()
+		.weight))]
 		pub fn witness_signature_accepted(
 			origin: OriginFor<T>,
 			payload: ThresholdSignatureFor<T, Instance1>,
