@@ -8,7 +8,7 @@ use crate::{
         },
         PersistentKeyDB,
     },
-    testing::{assert_ok, with_file_path},
+    testing::{assert_ok, new_temp_dir},
 };
 
 use super::helpers::run_keygen;
@@ -28,21 +28,20 @@ async fn check_signing_db() {
 
     let logger = logging::test_utils::new_test_logger();
 
-    with_file_path(|_dir, db_file| {
-        let db = PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database");
+    let (_dir, db_file) = new_temp_dir();
+    let db = PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database");
 
-        let db_with_key = {
-            let mut key_store = KeyStore::new(db);
-            key_store.set_key(key_id.clone(), stored_keygen_result_info.clone());
-            key_store.extract_db()
-        };
+    let db_with_key = {
+        let mut key_store = KeyStore::new(db);
+        key_store.set_key(key_id.clone(), stored_keygen_result_info.clone());
+        key_store.extract_db()
+    };
 
-        // Reload DB
-        let key_store = KeyStore::new(db_with_key);
+    // Reload DB
+    let key_store = KeyStore::new(db_with_key);
 
-        let loaded_keygen_result_info = assert_ok!(key_store.get_key(&key_id));
+    let loaded_keygen_result_info = assert_ok!(key_store.get_key(&key_id));
 
-        // Check the loaded and stored keys match
-        assert_eq!(*loaded_keygen_result_info, stored_keygen_result_info);
-    });
+    // Check the loaded and stored keys match
+    assert_eq!(*loaded_keygen_result_info, stored_keygen_result_info);
 }

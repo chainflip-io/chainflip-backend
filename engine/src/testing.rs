@@ -6,7 +6,7 @@ use std::{
 };
 
 use futures::{Future, FutureExt};
-use tempfile;
+use tempfile::{self, TempDir};
 
 /// Simply unwraps the value. Advantage of this is to make it clear in tests
 /// what we are testing
@@ -33,13 +33,12 @@ pub fn with_file<C: FnOnce(&Path)>(text: &[u8], closure: C) {
     closure(tempfile.path());
 }
 
-pub fn with_file_path<C: FnOnce(&Path, PathBuf)>(closure: C) {
+/// Create a temp directory that will be deleted when `TempDir` is dropped
+pub fn new_temp_dir() -> (TempDir, PathBuf) {
     let tempdir = tempfile::TempDir::new().unwrap();
-    closure(tempdir.path(), {
-        let tempfile = tempdir.path().to_owned().join("file");
-        assert!(!tempfile.exists());
-        tempfile
-    });
+    let tempfile = tempdir.path().to_owned().join("file");
+    assert!(!tempfile.exists());
+    (tempdir, tempfile)
 }
 
 mod tests {
