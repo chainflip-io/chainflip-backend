@@ -6,15 +6,12 @@ use cf_traits::{
 	},
 	SystemStateInfo, VaultRotator,
 };
+use cf_test_utilities::last_event;
 use frame_support::{assert_noop, assert_ok};
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
 const GENESIS_EPOCH: u32 = 1;
-
-fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
 
 fn assert_next_epoch() {
 	assert_eq!(
@@ -39,7 +36,7 @@ fn changing_epoch_block_size() {
 		);
 		assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::EpochDurationChanged(
 				EPOCH_DURATION,
 				min_duration
@@ -271,7 +268,7 @@ fn send_cfe_version() {
 		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), version.clone(),));
 
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
 				validator,
 				SemVer::default(),
@@ -291,7 +288,7 @@ fn send_cfe_version() {
 		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), new_version.clone()));
 
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
 				validator,
 				version,
@@ -353,7 +350,7 @@ fn register_peer_id() {
 			alice_peer_keypair.sign(&ALICE.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				ALICE,
 				alice_peer_public_key,
@@ -391,7 +388,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		),);
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -430,7 +427,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -454,7 +451,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,

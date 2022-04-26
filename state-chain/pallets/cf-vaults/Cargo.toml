@@ -62,6 +62,7 @@ tag = 'merge-config-option'
 # Dev dependencies
 [dev-dependencies]
 hex = {version = "0.4", default-features = false}
+cf-test-utilities = { path = '../../test-utilities' }
 
 [dev-dependencies.sp-io]
 default-features = false

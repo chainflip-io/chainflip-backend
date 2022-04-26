@@ -2,6 +2,7 @@ use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	CallHash, Error, VoteMask, Votes,
 };
+use cf_test_utilities::last_event;
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo};
 use frame_support::{assert_noop, assert_ok};
 
@@ -17,10 +18,6 @@ fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
 	assert_eq!(events, expected)
 }
 
-fn get_last_event() -> Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Expected an event").event
-}
-
 #[test]
 fn call_on_threshold() {
 	new_test_ext().execute_with(|| {
@@ -34,7 +31,7 @@ fn call_on_threshold() {
 		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
 		let dispatch_result =
 			if let Event::Witnesser(crate::Event::WitnessExecuted(_, dispatch_result)) =
-				get_last_event()
+				last_event::<Test>()
 			{
 				assert_ok!(dispatch_result);
 				dispatch_result
@@ -83,7 +80,7 @@ fn no_double_call_on_epoch_boundary() {
 		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(BOBSON), call.clone(), 1));
 		let dispatch_result =
 			if let Event::Witnesser(crate::Event::WitnessExecuted(_, dispatch_result)) =
-				get_last_event()
+				last_event::<Test>()
 			{
 				assert_ok!(dispatch_result);
 				dispatch_result
