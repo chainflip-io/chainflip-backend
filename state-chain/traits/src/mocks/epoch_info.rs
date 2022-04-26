@@ -77,8 +77,8 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			pub fn inner_add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: Vec<$account_id>) {
-				MockEpochInfo::set_epoch_validator_count(epoch_index, new_authorities.len() as u32);
-				MockEpochInfo::set_validator_indices(epoch_index, new_authorities);
+				MockEpochInfo::set_epoch_authority_count(epoch_index, new_authorities.len() as u32);
+				MockEpochInfo::set_authority_indices(epoch_index, new_authorities);
 			}
 		}
 
