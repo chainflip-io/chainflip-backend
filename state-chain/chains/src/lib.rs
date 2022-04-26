@@ -40,7 +40,7 @@ pub trait ChainAbi: ChainCrypto {
 	type UnsignedTransaction: Member + Parameter + Default;
 	type SignedTransaction: Member + Parameter;
 	type SignerCredential: Member + Parameter;
-	type Nonce: Member + Parameter + Copy + Default;
+	type Nonce: Member + Parameter + Default;
 	type ValidationError;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated
