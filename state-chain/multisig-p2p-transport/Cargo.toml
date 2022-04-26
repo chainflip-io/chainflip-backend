@@ -1,5 +1,3 @@
-cargo-features = ['edition2021']
-
 [package]
 name = 'multisig-p2p-transport'
 version = '0.1.0'

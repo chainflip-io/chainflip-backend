@@ -1,5 +1,3 @@
-cargo-features = ['edition2021']
-
 [package]
 authors = ["Chainflip <https://chainflip.io>"]
 edition = '2021'

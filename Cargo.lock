@@ -798,7 +798,7 @@ dependencies = [
  "serde 1.0.130",
  "sp-runtime",
  "sp-std",
- "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3/?rev=861cfcd)",
+ "web3 0.17.0 (git+https://github.com/tomusdrw/rust-web3?rev=861cfcd)",
 ]
 
 [[package]]
@@ -10191,7 +10191,7 @@ dependencies = [
 [[package]]
 name = "web3"
 version = "0.17.0"
-source = "git+https://github.com/tomusdrw/rust-web3/?rev=861cfcd#861cfcda263d9901a9f5f023d557bd0d3ea728f6"
+source = "git+https://github.com/tomusdrw/rust-web3?rev=861cfcd#861cfcda263d9901a9f5f023d557bd0d3ea728f6"
 dependencies = [
  "arrayvec 0.7.2",
  "base64 0.13.0",
