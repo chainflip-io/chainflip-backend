@@ -1,6 +1,5 @@
 use std::{
 	collections::{BTreeMap, BTreeSet},
-	convert::TryFrom,
 	iter::{FromIterator, IntoIterator},
 };
 
@@ -10,20 +9,9 @@ use crate::{
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{AsyncResult, Chainflip};
-use frame_support::{
-	assert_noop, assert_ok,
-	instances::Instance1,
-	storage::bounded_btree_set::BoundedBTreeSet,
-	traits::{Get, Hooks},
-};
+use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::BlockNumberProvider;
-
-fn bounded_set_from_iter<T: Ord, S: Get<u32>>(
-	members: impl IntoIterator<Item = T>,
-) -> BoundedBTreeSet<T, S> {
-	BoundedBTreeSet::try_from(BTreeSet::from_iter(members)).unwrap()
-}
 
 fn get_ceremony_context(
 	ceremony_id: CeremonyId,
@@ -102,7 +90,7 @@ impl MockCfe {
 							MockEthereumThresholdSigner::report_signature_failed(
 								Origin::signed(self.id),
 								req_id * 2,
-								bounded_set_from_iter(bad.clone()),
+								BTreeSet::from_iter(bad.clone()),
 							),
 							Error::<Test, Instance1>::InvalidCeremonyId
 						);
@@ -112,7 +100,7 @@ impl MockCfe {
 							MockEthereumThresholdSigner::report_signature_failed(
 								Origin::signed(signers.iter().max().unwrap() + 1),
 								req_id,
-								bounded_set_from_iter(bad.clone()),
+								BTreeSet::from_iter(bad.clone()),
 							),
 							Error::<Test, Instance1>::InvalidRespondent
 						);
@@ -120,7 +108,7 @@ impl MockCfe {
 						assert_ok!(MockEthereumThresholdSigner::report_signature_failed(
 							Origin::signed(self.id),
 							req_id,
-							bounded_set_from_iter(bad.clone()),
+							BTreeSet::from_iter(bad.clone()),
 						));
 
 						// Can't respond twice.
@@ -128,7 +116,7 @@ impl MockCfe {
 							MockEthereumThresholdSigner::report_signature_failed(
 								Origin::signed(self.id),
 								req_id,
-								bounded_set_from_iter(bad.clone()),
+								BTreeSet::from_iter(bad.clone()),
 							),
 							Error::<Test, Instance1>::InvalidRespondent
 						);

@@ -25,7 +25,7 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 use crate::multisig::MessageHash;
 
 use super::ceremony_id_tracker::CeremonyIdTracker;
-use super::keygen::{HashCommitments1, HashContext, KeygenData, KeygenOptions};
+use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
 pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
@@ -43,6 +43,7 @@ pub struct CeremonyManager {
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
     ceremony_id_tracker: CeremonyIdTracker,
+    allowing_high_pubkey: bool,
     logger: slog::Logger,
 }
 
@@ -57,8 +58,9 @@ impl CeremonyManager {
             outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
+            ceremony_id_tracker: CeremonyIdTracker::new(),
+            allowing_high_pubkey: false,
             logger: logger.clone(),
-            ceremony_id_tracker: CeremonyIdTracker::new(logger.clone()),
         }
     }
 
@@ -196,7 +198,6 @@ impl CeremonyManager {
         &mut self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-        keygen_options: KeygenOptions,
         rng: Rng,
         result_sender: CeremonyResultSender<KeygenResultInfo>,
     ) {
@@ -241,7 +242,8 @@ impl CeremonyManager {
                 rng,
             };
 
-            let processor = HashCommitments1::new(common.clone(), keygen_options, context);
+            let processor =
+                HashCommitments1::new(common.clone(), self.allowing_high_pubkey, context);
 
             Box::new(BroadcastStage::new(processor, common))
         };
@@ -464,6 +466,14 @@ impl CeremonyManager {
 
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
+    }
+
+    /// This should not be used in production as it could
+    /// result in pubkeys incompatible with the KeyManager
+    /// contract, but it is useful in tests that need to be
+    /// deterministic and don't interact with the contract
+    pub fn allow_high_pubkey(&mut self) {
+        self.allowing_high_pubkey = true;
     }
 }
 

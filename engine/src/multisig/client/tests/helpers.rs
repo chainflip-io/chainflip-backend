@@ -25,7 +25,7 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
-            keygen::{HashComm1, HashContext, KeygenOptions, SecretShare3},
+            keygen::{HashComm1, HashContext, SecretShare3},
             signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
         crypto::Rng,
@@ -86,12 +86,17 @@ pub struct Node {
     pub tag_cache: TagCache,
 }
 
-pub fn new_node(account_id: AccountId) -> Node {
+pub fn new_node(account_id: AccountId, allow_high_pubkey: bool) -> Node {
     let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
     let logger = logger.new(slog::o!("account_id" => format!("{}",account_id)));
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
-    let ceremony_manager = CeremonyManager::new(account_id, outgoing_p2p_message_sender, &logger);
+
+    let mut ceremony_manager =
+        CeremonyManager::new(account_id, outgoing_p2p_message_sender, &logger);
+    if allow_high_pubkey {
+        ceremony_manager.allow_high_pubkey();
+    }
 
     Node {
         ceremony_manager,
@@ -113,7 +118,6 @@ pub struct KeygenCeremonyDetails {
     pub rng: Rng,
     pub ceremony_id: CeremonyId,
     pub signers: Vec<AccountId>,
-    pub keygen_options: KeygenOptions,
 }
 
 impl Node {
@@ -141,7 +145,6 @@ impl Node {
         self.ceremony_manager.on_keygen_request(
             keygen_ceremony_details.ceremony_id,
             keygen_ceremony_details.signers,
-            keygen_ceremony_details.keygen_options,
             keygen_ceremony_details.rng,
             result_sender,
         );
@@ -154,7 +157,16 @@ pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>>(
 ) -> HashMap<AccountId, Node> {
     account_ids
         .into_iter()
-        .map(|account_id| (account_id.clone(), new_node(account_id)))
+        .map(|account_id| (account_id.clone(), new_node(account_id, true)))
+        .collect()
+}
+
+pub fn new_nodes_allow_high_pubkey<AccountIds: IntoIterator<Item = AccountId>>(
+    account_ids: AccountIds,
+) -> HashMap<AccountId, Node> {
+    account_ids
+        .into_iter()
+        .map(|account_id| (account_id.clone(), new_node(account_id, false)))
         .collect()
 }
 
@@ -514,7 +526,7 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-pub type KeygenCeremonyRunner = CeremonyRunner<KeygenOptions>;
+pub type KeygenCeremonyRunner = CeremonyRunner<()>;
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     type CeremonyData = KeygenData;
     type Output = KeygenResultInfo;
@@ -563,13 +575,8 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     }
 }
 impl KeygenCeremonyRunner {
-    pub fn new(
-        nodes: HashMap<AccountId, Node>,
-        ceremony_id: CeremonyId,
-        keygen_options: KeygenOptions,
-        rng: Rng,
-    ) -> Self {
-        Self::inner_new(nodes, ceremony_id, keygen_options, rng)
+    pub fn new(nodes: HashMap<AccountId, Node>, ceremony_id: CeremonyId, rng: Rng) -> Self {
+        Self::inner_new(nodes, ceremony_id, (), rng)
     }
 
     pub fn keygen_ceremony_details(&mut self) -> KeygenCeremonyDetails {
@@ -579,7 +586,6 @@ impl KeygenCeremonyRunner {
             ceremony_id: self.ceremony_id,
             rng: Rng::from_seed(self.rng.gen()),
             signers: self.nodes.keys().cloned().collect(),
-            keygen_options: self.ceremony_runner_data,
         }
     }
 
@@ -588,7 +594,6 @@ impl KeygenCeremonyRunner {
         KeygenCeremonyRunner::new(
             new_nodes(ACCOUNT_IDS.clone()),
             DEFAULT_KEYGEN_CEREMONY_ID,
-            KeygenOptions::allowing_high_pubkey(),
             Rng::from_seed(DEFAULT_KEYGEN_SEED),
         )
     }
@@ -703,12 +708,8 @@ impl SigningCeremonyRunner {
 
 pub async fn new_signing_ceremony_with_keygen() -> (SigningCeremonyRunner, HashMap<AccountId, Node>)
 {
-    let (key_id, key_data, _messages, nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::allowing_high_pubkey(),
-    )
-    .await;
+    let (key_id, key_data, _messages, nodes) =
+        run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 
     SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         nodes,
@@ -923,19 +924,14 @@ pub async fn standard_keygen(
 pub async fn run_keygen(
     nodes: HashMap<AccountId, Node>,
     ceremony_id: CeremonyId,
-    keygen_options: KeygenOptions,
 ) -> (
     KeyId,
     HashMap<AccountId, KeygenResultInfo>,
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
-    let keygen_ceremony = KeygenCeremonyRunner::new(
-        nodes,
-        ceremony_id,
-        keygen_options,
-        Rng::from_seed(DEFAULT_KEYGEN_SEED),
-    );
+    let keygen_ceremony =
+        KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
     standard_keygen(keygen_ceremony).await
 }
 
@@ -950,9 +946,8 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
     (),
 > {
     let mut keygen_ceremony = KeygenCeremonyRunner::new(
-        new_nodes(account_ids),
+        new_nodes_allow_high_pubkey(account_ids),
         DEFAULT_KEYGEN_CEREMONY_ID,
-        KeygenOptions::default(),
         Rng::from_entropy(),
     );
     let (stage_1a_messages, mut result_receivers) = keygen_ceremony.request().await;
@@ -1076,10 +1071,10 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
 }
 
 /// Generate an invalid local sig for stage3
-pub fn gen_invalid_local_sig(mut rng: &mut Rng) -> LocalSig3 {
+pub fn gen_invalid_local_sig(rng: &mut Rng) -> LocalSig3 {
     use crate::multisig::crypto::Scalar;
     frost::LocalSig3 {
-        response: Scalar::random(&mut rng),
+        response: Scalar::random(rng),
     }
 }
 
@@ -1093,9 +1088,9 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
+pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
-        &mut rng,
+        rng,
         // The commitment is only invalid because of the invalid context
         &HashContext([0; 32]),
         0,
@@ -1107,10 +1102,10 @@ pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
     fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1(mut rng: &mut Rng) -> SigningCommitment {
+pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment {
     SigningCommitment {
-        d: Point::random(&mut rng),
-        e: Point::random(&mut rng),
+        d: Point::random(rng),
+        e: Point::random(rng),
     }
 }
 

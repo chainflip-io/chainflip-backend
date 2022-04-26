@@ -30,7 +30,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Pallet, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::<Instance1>::{Pallet, Call, Event<T>, Config},
+		Vaults: pallet_cf_vaults::<Instance1>::{Pallet, Call, Event<T>, Config<T>},
 		WitnessApi: pallet_cf_witness_api::{Pallet, Call},
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Event<T>, Storage, Origin<T>},
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Event<T>, Storage},

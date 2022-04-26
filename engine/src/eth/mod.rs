@@ -102,7 +102,7 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     contract_observer: ContractObserver,
     eth_ws_rpc: &EthWsRpcClient,
     eth_http_rpc: &EthHttpRpcClient,
-    mut window_receiver: UnboundedReceiver<BlockHeightWindow>,
+    mut window_receiver: UnboundedReceiver<BlockHeightWindow<cf_chains::Ethereum>>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) where
