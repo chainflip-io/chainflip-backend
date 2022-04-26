@@ -82,7 +82,10 @@ where
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(replay_protection: Abi::ReplayProtection, new_key: <Abi as ChainCrypto>::AggKey) -> Self;
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		new_key: <Abi as ChainCrypto>::AggKey,
+	) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.

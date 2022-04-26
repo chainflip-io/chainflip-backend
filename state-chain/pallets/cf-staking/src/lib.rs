@@ -17,8 +17,8 @@ mod tests;
 
 use cf_chains::{ApiCall, RegisterClaim};
 use cf_traits::{
-	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider, StakeTransfer,
-	ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
+	StakeTransfer, ThresholdSigner,
 };
 use core::time::Duration;
 use frame_support::{

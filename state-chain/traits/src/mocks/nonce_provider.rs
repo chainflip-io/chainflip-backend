@@ -10,6 +10,7 @@ where
 	<T as ChainAbi>::ReplayProtection: From<EthereumReplayProtection>,
 {
 	fn replay_protection() -> <T as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection { key_manager_address: [0xcf; 20], chain_id: 31337, nonce: 42 }.into()
+		EthereumReplayProtection { key_manager_address: [0xcf; 20], chain_id: 31337, nonce: 42 }
+			.into()
 	}
 }

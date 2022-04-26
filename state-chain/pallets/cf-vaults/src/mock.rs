@@ -17,7 +17,8 @@ use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
-		eth_environment_provider::MockEthEnvironmentProvider, nonce_provider::MockEthReplayProtectionProvider,
+		eth_environment_provider::MockEthEnvironmentProvider,
+		nonce_provider::MockEthReplayProtectionProvider,
 	},
 	Chainflip,
 };

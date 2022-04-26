@@ -38,9 +38,13 @@ impl ChainAbi for Ethereum {
 }
 
 impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
-	fn new_unsigned(replay_protection: EthereumReplayProtection, new_key: <Ethereum as ChainCrypto>::AggKey) -> Self {
+	fn new_unsigned(
+		replay_protection: EthereumReplayProtection,
+		new_key: <Ethereum as ChainCrypto>::AggKey,
+	) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
-			replay_protection, new_key,
+			replay_protection,
+			new_key,
 		))
 	}
 }
@@ -54,7 +58,11 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 		expiry: u64,
 	) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
-			replay_protection, node_id, amount, address, expiry,
+			replay_protection,
+			node_id,
+			amount,
+			address,
+			expiry,
 		))
 	}
 

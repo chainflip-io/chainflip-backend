@@ -721,7 +721,11 @@ mod tests {
 
 				assert_eq!(
 					EthereumVault::chain_nonce(),
-					EthereumReplayProtection { key_manager_address: [0; 20], chain_id: 0, nonce: 0 },
+					EthereumReplayProtection {
+						key_manager_address: [0; 20],
+						chain_id: 0,
+						nonce: 0
+					},
 					"nonce not incremented"
 				);
 

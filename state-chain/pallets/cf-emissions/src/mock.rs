@@ -1,6 +1,7 @@
 use crate as pallet_cf_emissions;
 use cf_chains::{
-	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, UpdateFlipSupply,
+	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
+	UpdateFlipSupply,
 };
 use codec::{Decode, Encode};
 use frame_support::{
