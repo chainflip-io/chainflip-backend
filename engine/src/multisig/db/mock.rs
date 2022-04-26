@@ -1,6 +1,4 @@
-use std::collections::{HashMap, HashSet};
-
-use pallet_cf_vaults::CeremonyId;
+use std::collections::HashMap;
 
 use crate::multisig::{client::KeygenResultInfo, KeyId};
 
@@ -10,8 +8,6 @@ use super::KeyDB;
 pub struct KeyDBMock {
     // Represents a key-value database
     kv_db: HashMap<KeyId, Vec<u8>>,
-    signing_tracking_data: HashSet<CeremonyId>,
-    keygen_tracking_data: HashSet<CeremonyId>,
 }
 
 impl KeyDB for KeyDBMock {

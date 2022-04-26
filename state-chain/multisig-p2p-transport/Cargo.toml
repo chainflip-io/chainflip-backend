@@ -2,7 +2,7 @@
 name = 'multisig-p2p-transport'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2018'
+edition = '2021'
 
 [dependencies]
 anyhow = '1.0'

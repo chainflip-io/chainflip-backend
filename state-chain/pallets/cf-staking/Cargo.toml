@@ -3,7 +3,7 @@ name = 'pallet-cf-staking'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet for managing stakers of FLIP.'
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false
@@ -94,4 +94,4 @@ runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime'] 
+try-runtime = ['frame-support/try-runtime']

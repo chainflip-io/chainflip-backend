@@ -11,12 +11,11 @@ const USED_CEREMONY_IDS_AGE_LIMIT: u64 = 1_000;
 pub struct CeremonyIdTracker {
     used_signing_ids: UsedCeremonyIds,
     used_keygen_ids: UsedCeremonyIds,
-    logger: slog::Logger,
 }
 
 impl CeremonyIdTracker {
     // Create a new `CeremonyIdTracker` with empty `UsedCeremonyIds`
-    pub fn new(logger: slog::Logger) -> Self {
+    pub fn new() -> Self {
         CeremonyIdTracker {
             used_signing_ids: UsedCeremonyIds {
                 ids: HashSet::new(),
@@ -24,7 +23,6 @@ impl CeremonyIdTracker {
             used_keygen_ids: UsedCeremonyIds {
                 ids: HashSet::new(),
             },
-            logger,
         }
     }
 
@@ -76,7 +74,7 @@ impl UsedCeremonyIds {
 // Test consuming an id marks it as used
 #[test]
 fn test_ceremony_id_consumption() {
-    let mut tracker = CeremonyIdTracker::new(crate::logging::test_utils::new_test_logger());
+    let mut tracker = CeremonyIdTracker::new();
 
     // Using a different id for signing & keygen, to confirm no cross contamination
     let signing_test_id = 1;

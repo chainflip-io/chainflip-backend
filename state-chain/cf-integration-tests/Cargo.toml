@@ -2,7 +2,7 @@
 name = 'cf-integration-tests'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false

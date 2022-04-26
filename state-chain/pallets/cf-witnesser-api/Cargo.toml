@@ -3,7 +3,7 @@ name = 'pallet-cf-witnesser-api'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet providing helper extrinsics for witnessing transactions.'
-edition = '2018'
+edition = '2021'
 homepage = 'https://substrate.dev'
 license = '<TODO>'
 publish = false
@@ -95,4 +95,4 @@ runtime-benchmarks = [
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime'] 
+try-runtime = ['frame-support/try-runtime']

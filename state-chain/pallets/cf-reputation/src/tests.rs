@@ -101,7 +101,7 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 	new_test_ext().execute_with(|| {
 		let offline_test = |offence: AllOffences, who: &[u64]| {
 			let penalty = ReputationPallet::resolve_penalty_for(offence);
-			let points_before = who.iter().map(|id| reputation_points(id)).collect::<Vec<_>>();
+			let points_before = who.iter().map(reputation_points).collect::<Vec<_>>();
 			<ReputationPallet as OffenceReporter>::report_many(offence, who);
 			for (id, points) in who.iter().zip(points_before) {
 				assert_eq!(reputation_points(id), points - penalty.reputation,);
