@@ -907,7 +907,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "utilities",
 ]
 
 [[package]]
@@ -8821,6 +8820,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "utilities",
 ]
 
 [[package]]

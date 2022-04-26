@@ -108,9 +108,14 @@ fn keygen_failure() {
 			AsyncResult::Ready(SuccessOrFailure::Failure)
 		);
 
-		// Too many bad validators, they have not been reported.
-		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![]);
-		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![]);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::ParticipateKeygenFailed,
+			BAD_CANDIDATES.iter().cloned(),
+		);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::SigningOffence,
+			BAD_CANDIDATES.iter().cloned(),
+		);
 	});
 }
 

@@ -68,7 +68,9 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	) -> Option<Vec<Self::SignerId>> {
 		try_select_random_subset(
 			seed_from_hashable(seed),
-			<Validator as EpochInfo>::consensus_threshold(epoch_index) as usize,
+			cf_utilities::success_threshold_from_share_count(
+				<Validator as EpochInfo>::validator_count_at_epoch(epoch_index).unwrap_or_default(),
+			) as usize,
 			eligible_validators(),
 		)
 	}
