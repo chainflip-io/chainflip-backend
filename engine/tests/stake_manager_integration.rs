@@ -174,7 +174,7 @@ pub async fn test_all_stake_manager_events() {
                     to,
                     &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
                 );
-                assert_eq!(amount, &276666666666666665967616);
+                assert_eq!(amount, &10276666666666666665967616);
                 true
             }
             _ => false,
