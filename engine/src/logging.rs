@@ -205,8 +205,8 @@ pub mod utils {
             record: &slog::Record,
             values: &slog::OwnedKVList,
         ) -> result::Result<Self::Ok, Self::Err> {
-            if !self.blacklist.iter().any(|s| *s == record.tag()) {
-                if self.whitelist.iter().any(|s| *s == record.tag()) || self.whitelist.is_empty() {
+            if !self.blacklist.iter().any(|s| { let _ = &record; *s == record.tag() }) {
+                if self.whitelist.iter().any(|s| { let _ = &record; *s == record.tag() }) || self.whitelist.is_empty() {
                     self.drain.log(record, values).map(Some).map_err(Some)
                 } else {
                     Ok(None)

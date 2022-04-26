@@ -1,9 +1,11 @@
+cargo-features = ['edition2021']
+
 [package]
 name = 'pallet-cf-environment'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet which manages general global environment items of the Chainflip protocol.'
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false

@@ -1,8 +1,10 @@
+cargo-features = ['edition2021']
+
 [package]
 name = 'custom-rpc'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2018'
+edition = '2021'
 
 # Chainflip Runtime
 [dependencies.state-chain-runtime]

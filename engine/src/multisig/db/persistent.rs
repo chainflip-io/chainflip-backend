@@ -72,7 +72,7 @@ impl PersistentKeyDB {
             // Add the column families found in the existing db, they might be needed for migration.
             DB::list_cf(&Options::default(), path)
                 .map_err(anyhow::Error::msg)
-                .with_context(|| {
+                .with_context(|| { let _ = &path; 
                     format!(
                         "Failed to read column families from existing database {}",
                         path.display()

@@ -1,9 +1,11 @@
+cargo-features = ['edition2021']
+
 [package]
 name = 'pallet-cf-emissions'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet for FLIP emissions.'
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false

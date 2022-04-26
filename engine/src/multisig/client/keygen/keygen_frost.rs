@@ -309,7 +309,7 @@ pub fn derive_local_pubkeys_for_parties(
         .map(|idx| {
             (1..=n)
                 .map(|j| {
-                    evaluate_polynomial((0..=t).map(|k| &commitments[&j].commitments.0[k]), idx)
+                    evaluate_polynomial((0..=t).map(|k| { let _ = &commitments; &commitments[&j].commitments.0[k] }), idx)
                 })
                 .sum()
         })

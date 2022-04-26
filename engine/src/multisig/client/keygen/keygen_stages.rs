@@ -679,7 +679,7 @@ impl VerifyBlameResponsesBroadcastStage7 {
                     return Err(sender_idx);
                 }
 
-                if !response.0.iter().all(|(dest_idx, share)| {
+                if !response.0.iter().all(|(dest_idx, share)| { let _ = &self; 
                     verify_share(share, &self.commitments[sender_idx], *dest_idx)
                 }) {
                     slog::warn!(

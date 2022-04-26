@@ -184,7 +184,7 @@ fn generate_bindings(
 ) -> BTreeMap<usize, Scalar> {
     all_idxs
         .iter()
-        .map(|idx| (*idx, gen_rho_i(*idx, msg, commitments, all_idxs)))
+        .map(|idx| { let _ = &msg; (*idx, gen_rho_i(*idx, msg, commitments, all_idxs)) })
         .collect()
 }
 

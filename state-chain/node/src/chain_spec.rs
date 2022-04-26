@@ -150,7 +150,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		"Develop",
 		"dev",
 		ChainType::Development,
-		move || {
+		move || { let _ = &wasm_binary; 
 			testnet_genesis(
 				wasm_binary,
 				// Initial PoA authorities
@@ -215,7 +215,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		"CF Develop",
 		"cf-dev",
 		ChainType::Development,
-		move || {
+		move || { let _ = &wasm_binary; 
 			testnet_genesis(
 				wasm_binary,
 				// Initial PoA authorities
@@ -312,7 +312,7 @@ fn chainflip_three_node_testnet_config_from_env(
 		name,
 		id,
 		chain_type,
-		move || {
+		move || { let _ = &wasm_binary; 
 			testnet_genesis(
 				wasm_binary,
 				// Initial PoA authorities
@@ -414,7 +414,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		"Internal testnet",
 		"test",
 		ChainType::Local,
-		move || {
+		move || { let _ = &wasm_binary; 
 			testnet_genesis(
 				wasm_binary,
 				// Initial PoA authorities

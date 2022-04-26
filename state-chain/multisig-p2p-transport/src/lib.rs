@@ -150,7 +150,7 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 
 	async fn try_send_notification(&self, target: PeerId, message: &[u8]) -> bool {
-		async move {
+		async move { let _ = &__self; 
 			self.notification_sender(target, CHAINFLIP_P2P_PROTOCOL_NAME)
 				.ok()?
 				.ready()

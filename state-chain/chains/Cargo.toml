@@ -1,8 +1,10 @@
+cargo-features = ['edition2021']
+
 [package]
 name = "cf-chains"
 version = "0.1.0"
 authors = ['Chainflip <https://chainflip.io>']
-edition = "2018"
+edition = '2021'
 description = "Shared Chain-specific functionality for use in the substrate runtime."
 
 [dependencies]

@@ -221,7 +221,7 @@ where
             RequestStatus::WaitForOneshot(result_receiver)
         };
 
-        async move {
+        async move { let _ = &self; 
             let result = match request_status {
                 RequestStatus::Ready(keygen_result_info) => Some(Ok(keygen_result_info)),
                 RequestStatus::WaitForOneshot(result_receiver) => result_receiver.await.ok(),
@@ -277,7 +277,7 @@ where
             .unwrap()
             .get_key(&key_id)
             .cloned()
-            .map(|keygen_result_info| {
+            .map(|keygen_result_info| { let _ = &self; 
                 if signers.len() == 1 {
                     RequestStatus::Ready(self.single_party_signing(data, keygen_result_info, rng))
                 } else {

@@ -1,7 +1,9 @@
+cargo-features = ['edition2021']
+
 [package]
 name = "cf-runtime-utilities"
 version = "0.1.0"
-edition = "2018"
+edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
 description = "Utilities for interacting with substrate runtimes."
 

@@ -486,7 +486,7 @@ where
             .cloned()
             .collect::<Vec<_>>()
             .into_iter()
-            .map(|id| {
+            .map(|id| { let _ = &self; 
                 let result_receiver = self.request_ceremony(&id);
                 (id, result_receiver)
             })
