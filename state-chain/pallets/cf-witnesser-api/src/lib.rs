@@ -215,20 +215,20 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::signature_accepted(*payload, *broadcaster, *block_number, *tx_hash)
+		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::signature_accepted(*payload, *tx_signer, *block_number, *tx_hash)
 		.get_dispatch_info()
 		.weight))]
 		pub fn witness_signature_accepted(
 			origin: OriginFor<T>,
 			payload: ThresholdSignatureFor<T, Instance1>,
-			broadcaster: SignerIdFor<T, Instance1>,
+			tx_signer: SignerIdFor<T, Instance1>,
 			block_number: u64,
 			tx_hash: <Ethereum as ChainCrypto>::TransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = BroadcastCall::<T, Instance1>::signature_accepted(
 				payload,
-				broadcaster,
+				tx_signer,
 				block_number,
 				tx_hash,
 			);
