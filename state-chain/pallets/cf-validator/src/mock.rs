@@ -103,6 +103,7 @@ pub struct MockAuctioneer;
 thread_local! {
 	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, &'static str>> = RefCell::new(Ok(Default::default()));
 	pub static AUCTION_WINNERS: RefCell<Option<Vec<ValidatorId>>> = RefCell::new(None);
+	pub static MAINTANACE: RefCell<bool>  = RefCell::new(false);
 }
 
 impl MockAuctioneer {

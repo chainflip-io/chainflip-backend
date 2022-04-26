@@ -307,8 +307,8 @@ impl<T: Config> Pallet<T> {
 	/// Updates the total supply on the ETH blockchain
 	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
 		// Emit a threshold signature request.
-		// TODO: See if we can replace an old request if there is one.
 		if T::SystemState::ensure_no_maintenance().is_ok() {
+			// TODO: See if we can replace an old request if there is one.
 			T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
 				T::NonceProvider::next_nonce(),
 				total_supply.unique_saturated_into(),

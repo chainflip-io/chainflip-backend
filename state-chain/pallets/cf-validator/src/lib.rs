@@ -245,32 +245,32 @@ pub mod pallet {
 					if blocks_per_epoch > Zero::zero() {
 						let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
 						let diff = block_number.saturating_sub(current_epoch_started_at);
-						if diff >= blocks_per_epoch &&
-							T::SystemState::ensure_no_maintenance().is_ok()
-						{
+						if diff >= blocks_per_epoch {
 							Self::set_rotation_status(RotationStatus::RunAuction);
 						}
 					}
 				},
-				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction() {
-					Ok(auction_result) => {
-						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
-						{
-							Ok(_) => Self::set_rotation_status(RotationStatus::AwaitingVaults(
-								auction_result,
-							)),
-							// We are assuming here that this is unlikely as the only reason it
-							// would fail is if we have no validators, which is already checked
-							// by the auction pallet, of if there is already a rotation in
-							// progress which isn't possible.
-							Err(e) => {
-								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
-							},
-						}
+				RotationStatus::RunAuction if T::SystemState::ensure_no_maintenance().is_ok() =>
+					match T::Auctioneer::resolve_auction() {
+						Ok(auction_result) => {
+							match T::VaultRotator::start_vault_rotation(
+								auction_result.winners.clone(),
+							) {
+								Ok(_) => Self::set_rotation_status(RotationStatus::AwaitingVaults(
+									auction_result,
+								)),
+								// We are assuming here that this is unlikely as the only reason it
+								// would fail is if we have no validators, which is already checked
+								// by the auction pallet, of if there is already a rotation in
+								// progress which isn't possible.
+								Err(e) => {
+									log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
+								},
+							}
+						},
+						Err(e) =>
+							log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
 					},
-					Err(e) =>
-						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
-				},
 				RotationStatus::AwaitingVaults(auction_result) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(SuccessOrFailure::Success) => {
@@ -294,6 +294,9 @@ pub mod pallet {
 				},
 				RotationStatus::SessionRotating(_) => {
 					Self::set_rotation_status(RotationStatus::Idle);
+				},
+				RotationStatus::RunAuction => {
+					log::debug!(target: "cf-validator", "no auctions during maintenance!");
 				},
 			}
 			0
