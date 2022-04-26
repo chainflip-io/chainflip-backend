@@ -164,10 +164,7 @@ fn generate_secret_and_shares(
 
     // Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing scheme
     // (Figure 1: Round 1, Step 1)
-    let coefficients: Vec<_> = (0..t)
-        .into_iter()
-        .map(|_| Scalar::random(rng))
-        .collect();
+    let coefficients: Vec<_> = (0..t).into_iter().map(|_| Scalar::random(rng)).collect();
 
     // (Figure 1: Round 1, Step 3)
     let commitments: Vec<_> = [secret.clone()]
