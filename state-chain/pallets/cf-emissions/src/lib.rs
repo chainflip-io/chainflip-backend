@@ -95,7 +95,7 @@ pub mod pallet {
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider<Self::HostChain>;
 
-		/// Something that can provide the key manager address and chain id.
+		/// Something that can provide the stake manager address.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Benchmark stuff
@@ -306,8 +306,6 @@ impl<T: Config> Pallet<T> {
 		// Emit a threshold signature request.
 		// TODO: See if we can replace an old request if there is one.
 		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
-			&T::EthEnvironmentProvider::key_manager_address(),
-			T::EthEnvironmentProvider::chain_id(),
 			T::NonceProvider::next_nonce(),
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),

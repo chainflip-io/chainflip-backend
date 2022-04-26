@@ -12,6 +12,7 @@ pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod key_provider;
 pub mod keygen_exclusion;
+pub mod nonce_provider;
 pub mod offence_reporting;
 pub mod online;
 pub mod signer_nomination;

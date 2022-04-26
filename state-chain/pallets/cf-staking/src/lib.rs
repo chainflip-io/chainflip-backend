@@ -635,8 +635,6 @@ impl<T: Config> Pallet<T> {
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(
-			&T::EthEnvironmentProvider::key_manager_address(),
-			T::EthEnvironmentProvider::chain_id(),
 			T::NonceProvider::next_nonce(),
 			<T as Config>::StakerId::from_ref(account_id).as_ref(),
 			amount.into(),

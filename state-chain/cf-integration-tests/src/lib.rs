@@ -638,6 +638,7 @@ mod tests {
 
 	mod genesis {
 		use super::*;
+		use cf_chains::eth::api::EthereumNonce;
 		use cf_traits::{
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, StakeTransfer,
 		};
@@ -718,7 +719,11 @@ mod tests {
 
 				assert_eq!(Validator::ceremony_id_counter(), 0, "no key generation requests");
 
-				assert_eq!(EthereumVault::chain_nonce(), 0, "nonce not incremented");
+				assert_eq!(
+					EthereumVault::chain_nonce(),
+					EthereumNonce { key_manager_address: [0; 20], chain_id: 0, counter: 0 },
+					"nonce not incremented"
+				);
 
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),

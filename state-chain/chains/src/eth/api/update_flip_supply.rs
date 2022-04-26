@@ -6,6 +6,8 @@ use sp_std::{vec, vec::Vec};
 
 use crate::eth::{SchnorrVerificationComponents, SigData};
 
+use super::EthereumNonce;
+
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UpdateFlipSupply {
 	/// The signature data for validation and replay protection.
@@ -19,16 +21,14 @@ pub struct UpdateFlipSupply {
 }
 
 impl UpdateFlipSupply {
-	pub fn new_unsigned<Nonce: Into<Uint>, TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
-		key_manager_address: &[u8; 20],
-		chain_id: u64,
-		nonce: Nonce,
+	pub fn new_unsigned<TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
+		nonce: EthereumNonce,
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(key_manager_address.into(), chain_id.into(), nonce.into()),
+			sig_data: SigData::new_empty(nonce),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
 			stake_manager_address: stake_manager_address.into(),
@@ -94,6 +94,8 @@ impl UpdateFlipSupply {
 
 #[cfg(test)]
 mod test_update_flip_supply {
+	use crate::eth::api::EthereumNonce;
+
 	use super::*;
 	use frame_support::assert_ok;
 
@@ -127,9 +129,11 @@ mod test_update_flip_supply {
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
 		let update_flip_supply_runtime = UpdateFlipSupply::new_unsigned(
-			&FAKE_KEYMAN_ADDR,
-			CHAIN_ID,
-			NONCE,
+			EthereumNonce {
+				key_manager_address: FAKE_KEYMAN_ADDR,
+				chain_id: CHAIN_ID,
+				counter: NONCE,
+			},
 			NEW_TOTAL_SUPPLY,
 			STATE_CHAIN_BLOCK_NUMBER,
 			&FAKE_STAKE_MANAGER_ADDRESS,
