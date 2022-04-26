@@ -5,8 +5,8 @@ use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
-use sp_core::H256;
-use sp_runtime::AccountId32;
+use sp_core::{Hasher, H256};
+use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
@@ -90,8 +90,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     )>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
-    sm_window_sender: UnboundedSender<BlockHeightWindow>,
-    km_window_sender: UnboundedSender<BlockHeightWindow>,
+    sm_window_sender: UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
+    km_window_sender: UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
     initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
@@ -133,8 +133,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         block_hash: H256,
-        sm_window_sender: &UnboundedSender<BlockHeightWindow>,
-        km_window_sender: &UnboundedSender<BlockHeightWindow>,
+        sm_window_sender: &UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
+        km_window_sender: &UnboundedSender<BlockHeightWindow<cf_chains::Ethereum>>,
     ) -> anyhow::Result<()> {
         // TODO: Use all the historical epochs: https://github.com/chainflip-io/chainflip-backend/issues/1218
         let last_active_epoch = *state_chain_client
@@ -327,6 +327,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         signed_tx,
                                                     ),
                                                 ) => {
+                                                    let expected_broadcast_tx_hash = Keccak256::hash(&signed_tx[..]);
                                                     let response_extrinsic = match eth_broadcaster
                                                         .send(signed_tx)
                                                         .await
@@ -338,6 +339,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                 attempt_id,
                                                                 tx_hash
                                                             );
+                                                            assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
                                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
                                                                 attempt_id, tx_hash
                                                             )
@@ -349,9 +351,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                 attempt_id,
                                                                 e
                                                             );
-                                                            // TODO: Fill in the transaction hash with the real one
+
                                                             pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                                attempt_id, TransmissionFailure::TransactionRejected, Default::default()
+                                                                attempt_id, TransmissionFailure::TransactionRejected, expected_broadcast_tx_hash
                                                             )
                                                         }
                                                     };

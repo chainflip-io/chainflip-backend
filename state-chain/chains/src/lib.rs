@@ -1,9 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(array_map)] // stable as of rust 1.55
 
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
+use codec::FullCodec;
 use eth::SchnorrVerificationComponents;
-use frame_support::{pallet_prelude::Member, Parameter};
+use frame_support::{
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	Parameter,
+};
+use sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	convert::{Into, TryFrom},
 	fmt::Debug,
@@ -17,7 +21,17 @@ pub mod benchmarking;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
-pub trait Chain: Member + Parameter {}
+pub trait Chain: Member + Parameter {
+	type ChainBlockNumber: FullCodec
+		+ Member
+		+ Parameter
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ Default
+		+ One
+		+ Saturating
+		+ From<u64>;
+}
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
@@ -112,7 +126,7 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 }
 
 macro_rules! impl_chains {
-	( $( $chain:ident ),+ $(,)? ) => {
+	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; }, ),+ $(,)? ) => {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
@@ -120,13 +134,15 @@ macro_rules! impl_chains {
 			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
 			pub struct $chain;
 
-			impl Chain for $chain {}
+			impl Chain for $chain {
+				type ChainBlockNumber = $chain_block_number;
+			}
 		)+
 	};
 }
 
 impl_chains! {
-	Ethereum,
+	Ethereum { type ChainBlockNumber = u64; },
 }
 
 impl ChainCrypto for Ethereum {
@@ -154,7 +170,9 @@ pub mod mocks {
 
 	// Chain implementation used for testing.
 	impl_chains! {
-		MockEthereum,
+		MockEthereum {
+			type ChainBlockNumber = u64;
+		},
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default)]

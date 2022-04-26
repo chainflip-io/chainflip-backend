@@ -158,12 +158,18 @@ pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static 
 mod v0_types {
 	use super::*;
 
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+	pub struct BlockHeightWindowV0 {
+		pub from: u64,
+		pub to: Option<u64>,
+	}
+
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 	pub struct VaultV0<T: Config<I>, I: 'static = ()> {
 		/// The vault's public key.
 		pub public_key: Vec<u8>,
 		/// The active window for this vault
-		pub active_window: BlockHeightWindow,
+		pub active_window: BlockHeightWindowV0,
 		/// Marker.
 		_phantom_data: PhantomData<(T, I)>,
 	}
@@ -177,7 +183,10 @@ mod v0_types {
 					.public_key
 					.try_into()
 					.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")?,
-				active_window: old.active_window,
+				active_window: BlockHeightWindow {
+					from: old.active_window.from.into(),
+					to: old.active_window.to.map(Into::into),
+				},
 			})
 		}
 	}

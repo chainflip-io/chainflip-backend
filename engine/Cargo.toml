@@ -1,6 +1,6 @@
 [package]
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
-edition = "2018"
+edition = '2021'
 name = "chainflip-engine"
 version = "0.3.0"
 
@@ -58,7 +58,7 @@ slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_tra
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
 thiserror = "1.0.26"
-tokio = {version = "1.5.0", features = ["full"]}
+tokio = {version = "1.13.1", features = ["full"]}
 tokio-stream = "0.1.5"
 url = "1.7.2"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
@@ -83,6 +83,7 @@ pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-sig
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser-api = {path = "../state-chain/pallets/cf-witnesser-api"}
+custom-rpc = {path = "../state-chain/custom-rpc"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 utilities = {path = "../utilities"}
 

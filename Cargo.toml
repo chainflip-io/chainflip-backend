@@ -31,4 +31,5 @@ members = [
   'engine/cli',
   'engine/insert-genesis-keyshare',
   'utilities',
+  'state-chain/custom-rpc',
 ]

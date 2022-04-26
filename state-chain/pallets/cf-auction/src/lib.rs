@@ -419,7 +419,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 					BackupOrPassive::Backup,
 					remaining_bidders,
 				);
-			}
+			},
 			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
 				if amount > HighestPassiveNodeBid::<T>::get() =>
 			{
@@ -428,7 +428,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 					remaining_bidders,
 					(validator_id.clone(), amount),
 				);
-			}
+			},
 			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
 				if amount != LowestBackupValidatorBid::<T>::get() =>
 			{
@@ -444,7 +444,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 						&mut RemainingBidders::<T>::get(),
 					);
 				}
-			}
+			},
 			_ => {},
 		}
 	}

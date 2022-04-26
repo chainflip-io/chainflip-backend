@@ -17,8 +17,8 @@ use codec::{Decode, Encode};
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, KeyProvider,
-	SignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
+	KeyProvider, SignerNomination,
 };
 use frame_support::{
 	ensure,
@@ -32,7 +32,6 @@ use sp_runtime::{
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	convert::TryInto,
 	iter::FromIterator,
 	marker::PhantomData,
 	prelude::*,
@@ -64,7 +63,6 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 		pallet_prelude::*,
-		storage::bounded_btree_set::BoundedBTreeSet,
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
 	};
@@ -265,8 +263,6 @@ pub mod pallet {
 		/// The reporting party is not one of the signatories for this ceremony, or has already
 		/// responded.
 		InvalidRespondent,
-		/// Too many parties were reported as having failed in the threshold ceremony.
-		ExcessOffenders,
 		/// The request Id is stale or not yet valid.
 		InvalidRequestId,
 	}
@@ -407,8 +403,7 @@ pub mod pallet {
 		/// Report that a threshold signature ceremony has failed and incriminate the guilty
 		/// participants.
 		///
-		/// The `offenders` argument takes a [BoundedBTreeSet] where the set size is limited
-		/// to the current size of the threshold group.
+		/// The `offenders` argument takes a [BTreeSet]
 		///
 		/// ## Events
 		///
@@ -422,10 +417,7 @@ pub mod pallet {
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
 			id: CeremonyId,
-			offenders: BoundedBTreeSet<
-				<T as Chainflip>::ValidatorId,
-				cf_traits::CurrentThreshold<T>,
-			>,
+			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let reporter_id = ensure_signed(origin)?.into();
 
@@ -475,11 +467,7 @@ pub mod pallet {
 			id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			Call::<T, I>::report_signature_failed(
-				id,
-				offenders.try_into().map_err(|_| Error::<T, I>::ExcessOffenders)?,
-			)
-			.dispatch_bypass_filter(origin)
+			Call::<T, I>::report_signature_failed(id, offenders).dispatch_bypass_filter(origin)
 		}
 	}
 }
@@ -520,9 +508,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let key_id = T::KeyProvider::current_key_id();
 
 		// Select nominees for threshold signature.
-		if let Some(nominees) =
-			T::SignerNomination::threshold_nomination_with_seed((ceremony_id, attempt))
-		{
+		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed(
+			(ceremony_id, attempt),
+			T::EpochInfo::epoch_index(),
+		) {
 			// Store the context.
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
