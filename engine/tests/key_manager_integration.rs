@@ -35,15 +35,18 @@ pub async fn test_all_key_manager_events() {
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
-    let km_events = key_manager
-        .event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger)
-        .await
-        .unwrap()
-        .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Vec<_>>();
+    let km_events = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        key_manager.event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
+    )
+    .await
+    .expect(common::EVENT_STREAM_TIMEOUT_MESSAGE)
+    .unwrap()
+    .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Vec<_>>();
 
     assert!(
         !km_events.is_empty(),
@@ -74,7 +77,7 @@ pub async fn test_all_key_manager_events() {
             KeyManagerEvent::AggKeySetByGovKey {
                 old_key, new_key
             } => {
-                if old_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap() 
+                if old_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap()
                 || old_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap(){
                     assert_eq!(new_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 }else{
@@ -112,7 +115,7 @@ pub async fn test_all_key_manager_events() {
             } => {
                 assert_eq!(
                     sig_data.key_man_addr,
-                    H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap()
+                    integration_test_settings.eth.key_manager_address
                 );
                 assert_eq!(sig_data.chain_id, U256::from_dec_str("31337").unwrap());
                 assert_eq!(sig_data.nonce, U256::from_dec_str("0").unwrap());

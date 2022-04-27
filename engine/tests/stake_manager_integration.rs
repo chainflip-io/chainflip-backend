@@ -41,15 +41,18 @@ pub async fn test_all_stake_manager_events() {
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
-    let sm_events = stake_manager
-        .event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger)
-        .await
-        .unwrap()
-        .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .collect::<Vec<_>>();
+    let sm_events = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        stake_manager.event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
+    )
+    .await
+    .expect(common::EVENT_STREAM_TIMEOUT_MESSAGE)
+    .unwrap()
+    .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Vec<_>>();
 
     assert!(
         !sm_events.is_empty(),
@@ -165,29 +168,6 @@ pub async fn test_all_stake_manager_events() {
             _ => false,
         })
         .expect("Didn't find the MinStakeChanged event");
-
-    sm_events
-        .iter()
-        .find(|event| match event.event_parameters {
-            StakeManagerEvent::FlipSupplyUpdated {
-                old_supply,
-                new_supply,
-                block_number,
-            } => {
-                assert_eq!(
-                    old_supply,
-                    U256::from_dec_str("90000000000000000000000000").unwrap()
-                );
-                assert_eq!(
-                    new_supply,
-                    U256::from_dec_str("100000000000000000000000000").unwrap()
-                );
-                assert!(block_number > U256::from_str("0").unwrap());
-                true
-            }
-            _ => false,
-        })
-        .expect("Didn't find the FlipSupplyUpdated event");
 
     sm_events
         .iter()

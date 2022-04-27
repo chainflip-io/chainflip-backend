@@ -136,42 +136,86 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "indexed": false,
         "internalType": "address",
-        "name": "to",
+        "name": "broadcaster",
         "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "currentBalance",
-        "type": "uint256"
       }
     ],
-    "name": "RefundFailed",
+    "name": "SignatureAccepted",
     "type": "event"
   },
   {
-    "anonymous": false,
     "inputs": [
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "addr",
+        "type": "address"
       }
     ],
-    "name": "Refunded",
-    "type": "event"
+    "name": "canConsumeKeyNonce",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "anonymous": false,
+    "inputs": [],
+    "name": "canConsumeKeyNonceSet",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "components": [
@@ -202,73 +246,23 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
-        "indexed": false,
         "internalType": "struct IShared.SigData",
         "name": "sigData",
         "type": "tuple"
       },
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "broadcaster",
-        "type": "address"
+        "internalType": "bytes32",
+        "name": "contractMsgHash",
+        "type": "bytes32"
       }
     ],
-    "name": "SignatureAccepted",
-    "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "aggKey",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "pubKeyX",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint8",
-        "name": "pubKeyYParity",
-        "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "addr",
-        "type": "address"
-      }
-    ],
-    "name": "canValidateSig",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "canValidateSigSet",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
+    "name": "consumeKeyNonce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -324,12 +318,12 @@
   },
   {
     "inputs": [],
-    "name": "govKey",
+    "name": "getNumberWhitelistedAddresses",
     "outputs": [
       {
-        "internalType": "address",
+        "internalType": "uint256",
         "name": "",
-        "type": "address"
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -385,81 +379,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
-            "type": "address"
-          }
-        ],
-        "internalType": "struct IShared.SigData",
-        "name": "sigData",
-        "type": "tuple"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "contractMsgHash",
-        "type": "bytes32"
-      }
-    ],
-    "name": "isUpdatedValidSig",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "refundEth",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "sig",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "nonce",
-            "type": "uint256"
-          },
-          {
-            "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
@@ -523,7 +443,7 @@
         "type": "address[]"
       }
     ],
-    "name": "setCanValidateSig",
+    "name": "setCanConsumeKeyNonce",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -539,6 +459,74 @@
     "name": "setGovKeyWithGovKey",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "address[]",
+        "name": "currentAddrs",
+        "type": "address[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "newAddrs",
+        "type": "address[]"
+      }
+    ],
+    "name": "updateCanConsumeKeyNonce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "signingPubKeyX",
+        "type": "uint256"
+      }
+    ],
+    "name": "verifySigningKeyX",
+    "outputs": [],
+    "stateMutability": "pure",
     "type": "function"
   },
   {

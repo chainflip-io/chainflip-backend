@@ -1,12 +1,13 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
-use crate::eth::SharedEvent;
+use crate::eth::EventParseError;
 use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
     state_chain::client::StateChainRpcApi,
 };
+use cf_chains::eth::SchnorrVerificationComponents;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -21,8 +22,8 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 
 use super::event_common::EventWithCommon;
+use super::DecodeLogClosure;
 use super::EthObserver;
-use super::{decode_shared_event_closure, DecodeLogClosure};
 
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
@@ -101,7 +102,7 @@ pub struct SigData {
     pub msg_hash: ethabi::Uint,
     pub sig: ethabi::Uint,
     pub nonce: ethabi::Uint,
-    pub k_times_g_addr: ethabi::Address,
+    pub k_times_g_address: ethabi::Address,
 }
 
 impl Tokenizable for SigData {
@@ -121,7 +122,7 @@ impl Tokenizable for SigData {
                     msg_hash: ethabi::Uint::from_token(members[2].clone())?,
                     sig: ethabi::Uint::from_token(members[3].clone())?,
                     nonce: ethabi::Uint::from_token(members[4].clone())?,
-                    k_times_g_addr: ethabi::Address::from_token(members[5].clone())?,
+                    k_times_g_address: ethabi::Address::from_token(members[5].clone())?,
                 })
             }
         } else {
@@ -139,7 +140,7 @@ impl Tokenizable for SigData {
             Token::Uint(self.msg_hash),
             Token::Uint(self.sig),
             Token::Uint(self.nonce),
-            Token::Address(self.k_times_g_addr),
+            Token::Address(self.k_times_g_address),
         ])
     }
 }
@@ -178,9 +179,6 @@ pub enum KeyManagerEvent {
         /// Address of the origin of the broadcast.
         broadcaster: ethabi::Address,
     },
-
-    /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
-    Shared(SharedEvent),
 }
 
 #[async_trait]
@@ -214,6 +212,25 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
+            KeyManagerEvent::SignatureAccepted {
+                sig_data,
+                broadcaster,
+            } => {
+                let _result = state_chain_client
+                    .submit_signed_extrinsic(
+                        pallet_cf_witnesser_api::Call::witness_signature_accepted(
+                            SchnorrVerificationComponents {
+                                s: sig_data.sig.into(),
+                                k_times_g_address: sig_data.k_times_g_address.into(),
+                            },
+                            broadcaster,
+                            event.block_number,
+                            event.tx_hash,
+                        ),
+                        logger,
+                    )
+                    .await;
+            }
             _ => {
                 slog::trace!(logger, "Ignoring unused event: {}", event);
             }
@@ -225,8 +242,6 @@ impl EthObserver for KeyManager {
         let ak_set_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
         let gk_set_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
         let sig_accepted = SignatureAndEvent::new(&self.contract, "SignatureAccepted")?;
-
-        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
 
         Ok(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
@@ -255,7 +270,7 @@ impl EthObserver for KeyManager {
                         broadcaster: utils::decode_log_param(&log, "broadcaster")?,
                     }
                 } else {
-                    KeyManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
                 })
             },
         ))
@@ -405,7 +420,7 @@ mod tests {
                     msg_hash: U256::from_dec_str("83721402217372471513450062042778477963861354613529233808466400078111064259428").unwrap(),
                     sig: U256::from_dec_str("107365663807311708634605056423336732647043554150507905924516852373709157469808").unwrap(),
                     nonce: U256::from_dec_str("3").unwrap(),
-                    k_times_g_addr: H160::from_str("0x7ceb2425ec324348ba69bd50205b11e29770fd96").unwrap(),
+                    k_times_g_address: H160::from_str("0x7ceb2425ec324348ba69bd50205b11e29770fd96").unwrap(),
                 });
                 assert_eq!(broadcaster, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
             }
@@ -435,34 +450,6 @@ mod tests {
                 }
             });
         assert!(res.is_err());
-    }
-
-    #[test]
-    fn refunded_log_parsing() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
-        let decode_log = key_manager.decode_log_closure().unwrap();
-
-        let refunded_event_signature =
-            H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
-                .unwrap();
-
-        match decode_log(
-            refunded_event_signature,
-            RawLog {
-                topics: vec![refunded_event_signature],
-                data: hex::decode(
-                    "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
-                )
-                .unwrap(),
-            },
-        )
-        .unwrap()
-        {
-            KeyManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
-                assert_eq!(11126819398980, amount);
-            }
-            _ => panic!("Expected KeyManager::Refunded, got a different variant"),
-        }
     }
 
     #[test]

@@ -8,6 +8,8 @@ Event stream was empty.
 - Are you pointing to the correct contract address? (tests/config.toml)
 "#;
 
+pub const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct IntegrationTestSettings {
     pub eth: Eth,

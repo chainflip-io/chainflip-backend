@@ -9,6 +9,8 @@ pub mod chainflip_account;
 pub mod ensure_origin_mock;
 pub mod ensure_witnessed;
 pub mod epoch_info;
+pub mod eth_environment_provider;
+pub mod eth_replay_protection_provider;
 pub mod key_provider;
 pub mod keygen_exclusion;
 pub mod offence_reporting;
