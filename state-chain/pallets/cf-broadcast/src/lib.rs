@@ -421,50 +421,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that the transaction has reached finality on the target chain.
-		///
-		/// ## Events
-		///
-		/// - [BroadcastComplete](Event::BroadcastComplete)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
-		#[pallet::weight(T::WeightInfo::transmission_success())]
-		pub fn transmission_success(
-			origin: OriginFor<T>,
-			broadcast_attempt_id: BroadcastAttemptId,
-			_tx_hash: TransactionHashFor<T, I>,
-		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// == Clean up storage items ==
-
-			let attempt_numbers =
-				BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_attempt_id.broadcast_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			Self::clean_up_on_transmission_success(
-				broadcast_attempt_id.broadcast_id,
-				&attempt_numbers,
-			);
-
-			if let Some(payload) =
-				SignatureToBroadcastIdLookup::<T, I>::iter().find_map(|(payload, id)| {
-					if id == broadcast_attempt_id.broadcast_id {
-						Some(payload)
-					} else {
-						None
-					}
-				}) {
-				SignatureToBroadcastIdLookup::<T, I>::remove(payload);
-			}
-			// ====
-
-			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_attempt_id));
-
-			Ok(().into())
-		}
-
 		/// Nodes have witnessed that something went wrong during transmission. See
 		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be
 		/// reported.
@@ -590,7 +546,7 @@ pub mod pallet {
 			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
 				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-				Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
+				Self::clean_up_on_signature_accepted(broadcast_id, &attempt_numbers);
 				if let Some(attempt_count) = attempt_numbers.last() {
 					let last_broadcast_attempt_id =
 						BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -607,7 +563,7 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Clean up attempts and attempt mapping on success
-	pub fn clean_up_on_transmission_success(
+	pub fn clean_up_on_signature_accepted(
 		broadcast_id: BroadcastId,
 		attempt_numbers: &[AttemptCount],
 	) {

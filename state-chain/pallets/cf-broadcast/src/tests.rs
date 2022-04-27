@@ -17,7 +17,6 @@ enum Scenario {
 	BadSigner,
 	TransmissionFailure(TransmissionFailure),
 	Timeout,
-	SignatureAccepted,
 }
 
 thread_local! {
@@ -117,8 +116,6 @@ impl MockCfe {
 	// Simulate different outcomes.
 	fn handle_broadcast_request(broadcast_attempt_id: BroadcastAttemptId, scenario: Scenario) {
 		assert_ok!(match scenario {
-			Scenario::HappyPath =>
-				MockBroadcast::transmission_success(Origin::root(), broadcast_attempt_id, [0xcf; 4]),
 			Scenario::TransmissionFailure(failure) => {
 				MockBroadcast::transmission_failure(
 					Origin::root(),
@@ -127,7 +124,7 @@ impl MockCfe {
 					[0xcf; 4],
 				)
 			},
-			Scenario::SignatureAccepted => {
+			Scenario::HappyPath => {
 				MockBroadcast::signature_accepted(
 					Origin::root(),
 					MockThresholdSignature::default(),
@@ -344,14 +341,6 @@ fn test_invalid_id_is_noop() {
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
-			MockBroadcast::transmission_success(
-				Origin::root(),
-				BroadcastAttemptId::default(),
-				[0u8; 4]
-			),
-			Error::<Test, Instance1>::InvalidBroadcastId
-		);
-		assert_noop!(
 			MockBroadcast::transmission_failure(
 				Origin::root(),
 				BroadcastAttemptId::default(),
@@ -483,10 +472,12 @@ fn cfe_responds_success_already_expired_transaction_sig_broadcast_attempt_id_is_
 
 		// we now submit the transmission success for 0
 
-		assert_ok!(MockBroadcast::transmission_success(
-			RawOrigin::Signed(tx_sig_request.nominee).into(),
-			tx_sig_request.broadcast_attempt.broadcast_attempt_id,
-			Default::default(),
+		assert_ok!(MockBroadcast::signature_accepted(
+			Origin::root(),
+			MockThresholdSignature::default(),
+			Validity::Valid,
+			10,
+			[0xcf; 4]
 		));
 
 		// Attempt numbers, signature requests and transmission should be cleaned up
@@ -584,11 +575,13 @@ fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attemp
 			vec![0, 1]
 		);
 
-		// submit the transmission success for the old broadcast attempt
-		assert_ok!(MockBroadcast::transmission_success(
-			RawOrigin::Signed(tx_sig_request.nominee).into(),
-			broadcast_attempt_id,
-			Default::default(),
+		// submit the signature accepted for the old broadcast attempt
+		assert_ok!(MockBroadcast::signature_accepted(
+			Origin::root(),
+			MockThresholdSignature::default(),
+			Validity::Valid,
+			10,
+			[0xcf; 4]
 		));
 
 		// Success should clear these out
@@ -800,7 +793,7 @@ fn missing_transaction_transmission() {
 
 		// Finalize the broadcast by witnessing the external SignatureAccepted event from the
 		// target chain
-		MockCfe::respond(Scenario::SignatureAccepted);
+		MockCfe::respond(Scenario::HappyPath);
 		// Check if the event was emitted
 		assert_eq!(
 			System::events().pop().expect("an event").event,
