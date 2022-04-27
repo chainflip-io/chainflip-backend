@@ -128,7 +128,7 @@
     "online": "u32",
     "offline": "u32"
   },
-  "ReplayProtection": "u64",
+  "SignatureNonce": "u64",
   "Offence": {
     "_enum": [
       "ParticipateSigningFailed",
