@@ -7,7 +7,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating};
+use sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	convert::{Into, TryFrom},
 	fmt::Debug,
@@ -54,7 +54,7 @@ pub trait ChainAbi: ChainCrypto {
 	type UnsignedTransaction: Member + Parameter + Default;
 	type SignedTransaction: Member + Parameter;
 	type SignerCredential: Member + Parameter;
-	type Nonce: Member + Parameter + AtLeast32BitUnsigned + Copy + Default;
+	type ReplayProtection: Member + Parameter + Default;
 	type ValidationError;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated
@@ -96,18 +96,26 @@ where
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(nonce: Abi::Nonce, new_key: <Abi as ChainCrypto>::AggKey) -> Self;
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		new_key: <Abi as ChainCrypto>::AggKey,
+	) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(nonce: Abi::Nonce, new_total_supply: u128, block_number: u64) -> Self;
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		new_total_supply: u128,
+		block_number: u64,
+		stake_manager_address: &[u8; 20],
+	) -> Self;
 }
 
 /// Constructs the `RegisterClaim` api call.
 pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		nonce: Abi::Nonce,
+		replay_protection: Abi::ReplayProtection,
 		node_id: &[u8; 32],
 		amount: u128,
 		address: &[u8; 20],
@@ -158,7 +166,7 @@ impl ChainCrypto for Ethereum {
 pub mod mocks {
 	use sp_std::marker::PhantomData;
 
-	use crate::*;
+	use crate::{eth::api::EthereumReplayProtection, *};
 
 	// Chain implementation used for testing.
 	impl_chains! {
@@ -226,7 +234,7 @@ pub mod mocks {
 		type UnsignedTransaction = MockUnsignedTransaction;
 		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
 		type SignerCredential = Validity;
-		type Nonce = u32;
+		type ReplayProtection = EthereumReplayProtection;
 		type ValidationError = &'static str;
 
 		fn verify_signed_transaction(

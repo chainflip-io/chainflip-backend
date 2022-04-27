@@ -10,6 +10,8 @@ use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
+use super::EthereumReplayProtection;
+
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -27,15 +29,15 @@ pub struct RegisterClaim {
 }
 
 impl RegisterClaim {
-	pub fn new_unsigned<Nonce: Into<Uint>, Amount: Into<Uint>>(
-		nonce: Nonce,
+	pub fn new_unsigned<Amount: Into<Uint>>(
+		replay_protection: EthereumReplayProtection,
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Self {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(nonce.into()),
+			sig_data: SigData::new_empty(replay_protection),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
@@ -82,6 +84,10 @@ impl RegisterClaim {
 				Param::new(
 					"sigData",
 					ParamType::Tuple(vec![
+						// keyManagerAddress
+						ParamType::Address,
+						// chainId
+						ParamType::Uint(256),
 						// msgHash
 						ParamType::Uint(256),
 						// sig
@@ -122,6 +128,8 @@ mod test_register_claim {
 	fn test_claim_payload() {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
+		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
+		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 6;
 		const EXPIRY_SECS: u64 = 10;
 		const AMOUNT: u128 = 1234567890;
@@ -137,8 +145,17 @@ mod test_register_claim {
 
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
-		let register_claim_runtime =
-			RegisterClaim::new_unsigned(NONCE, &TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS);
+		let register_claim_runtime = RegisterClaim::new_unsigned(
+			EthereumReplayProtection {
+				key_manager_address: FAKE_KEYMAN_ADDR,
+				chain_id: CHAIN_ID,
+				nonce: NONCE,
+			},
+			&TEST_ACCT,
+			AMOUNT,
+			&TEST_ADDR,
+			EXPIRY_SECS,
+		);
 
 		let expected_msg_hash = register_claim_runtime.sig_data.msg_hash;
 
@@ -147,7 +164,7 @@ mod test_register_claim {
 			.clone()
 			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
-				k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
+				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
 			.abi_encoded(); // Ensure signing payload isn't modified by signature.
 
@@ -156,11 +173,13 @@ mod test_register_claim {
 		assert_eq!(
 			// Our encoding:
 			runtime_payload,
-			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
+			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			register_claim_reference
 				.encode_input(&[
-					// sigData: SigData(uint, uint, uint, address)
+					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
+						Token::Address(FAKE_KEYMAN_ADDR.into()),
+						Token::Uint(CHAIN_ID.into()),
 						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),

@@ -173,6 +173,7 @@ impl pallet_cf_validator::Config for Runtime {
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type EthEnvironmentProvider = Environment;
 }
 
 parameter_types! {
@@ -190,7 +191,9 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
+	type EthEnvironmentProvider = Environment;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -374,7 +377,8 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type NonceProvider = EthereumVault;
+	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
+	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
@@ -404,7 +408,8 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type BlocksPerDay = BlocksPerDay;
-	type NonceProvider = EthereumVault;
+	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
+	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
@@ -562,6 +567,8 @@ pub type Executive = frame_executive::Executive<
 			migrations::DeleteRewardsPallet,
 			migrations::UnifyCeremonyIds,
 			migrations::refactor_offences::Migration,
+			migrations::add_flip_contract_address::Migration,
+			migrations::migrate_claims::Migration,
 		),
 		112,
 	>,
