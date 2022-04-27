@@ -293,7 +293,6 @@ pub trait EmissionsTrigger {
 
 /// Provides a unqiue nonce for some [Chain].
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	/// Get the next nonce.
 	fn replay_protection() -> Abi::ReplayProtection;
 }
 
