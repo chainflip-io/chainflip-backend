@@ -6,7 +6,8 @@ use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
-		key_provider::MockKeyProvider, nonce_provider::MockEthReplayProtectionProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		key_provider::MockKeyProvider,
 	},
 	Chainflip,
 };

@@ -18,7 +18,7 @@ use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
 		eth_environment_provider::MockEthEnvironmentProvider,
-		nonce_provider::MockEthReplayProtectionProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 	},
 	Chainflip,
 };
