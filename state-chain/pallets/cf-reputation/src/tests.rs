@@ -130,7 +130,7 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 				AllOffences::ForgettingYourYubiKey,
 				AllOffences::NotLockingYourComputer
 			]),
-			[ALICE, BOB].iter().cloned().collect(),
+			[ALICE, BOB].into_iter().collect(),
 		);
 	});
 }
@@ -141,7 +141,7 @@ fn suspensions() {
 		ReputationPallet::suspend_all(&[1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
 		assert_eq!(
 			ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,]),
-			[1, 2, 3].iter().cloned().collect(),
+			[1, 2, 3].into_iter().collect(),
 		);
 	});
 }
@@ -162,22 +162,16 @@ fn forgiveness() {
 		ReputationPallet::suspend_all(&[1], &AllOffences::MissedHeartbeat, 15);
 		assert_eq!(
 			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[1, 2, 3].iter().cloned().collect(),
+			[1, 2, 3].into_iter().collect(),
 		);
 		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::ForgettingYourYubiKey);
 		assert_eq!(
 			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[1, 2].iter().cloned().collect(),
+			[1, 2].into_iter().collect(),
 		);
 		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::NotLockingYourComputer);
-		assert_eq!(
-			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[1].iter().cloned().collect(),
-		);
+		assert_eq!(GetValidatorsExcludedFor::<Test, AllOffences>::get(), [1].into_iter().collect(),);
 		<ReputationPallet as OffenceReporter>::forgive_all(PalletOffence::MissedHeartbeat);
-		assert_eq!(
-			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[].iter().cloned().collect(),
-		);
+		assert_eq!(GetValidatorsExcludedFor::<Test, AllOffences>::get(), [].into_iter().collect(),);
 	});
 }

@@ -961,7 +961,7 @@ async fn only_encodes_and_signs_when_current_authority_and_specified() {
     // === FAKE BLOCKHEADERS ===
 
     let block_header = test_header(21);
-    let sc_block_stream = tokio_stream::iter(vec![Ok(block_header.clone())]);
+    let sc_block_stream = tokio_stream::iter([Ok(block_header.clone())]);
 
     let mut eth_rpc_mock = MockEthRpcApi::new();
 

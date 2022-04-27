@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::SystemStateInfo;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -29,6 +30,8 @@ impl Default for SystemState {
 		SystemState::Normal
 	}
 }
+type SignatureNonce = u64;
+
 pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
@@ -67,6 +70,8 @@ pub mod pallet {
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 		/// Weight information
 		type WeightInfo: WeightInfo;
+		/// Eth Environment provider
+		type EthEnvironmentProvider: EthEnvironmentProvider;
 	}
 
 	#[pallet::error]
@@ -77,6 +82,11 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::storage]
+	#[pallet::getter(fn flip_token_address)]
+	/// The address of the ETH Flip token contract
+	pub type FlipTokenAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
@@ -102,6 +112,9 @@ pub mod pallet {
 	#[pallet::getter(fn system_state)]
 	/// The current state the system is in (normal, maintenance).
 	pub type CurrentSystemState<T> = StorageValue<_, SystemState, ValueQuery>;
+
+	#[pallet::storage]
+	pub type GlobalSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -136,6 +149,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
+		pub flip_token_address: EthereumAddress,
 		pub stake_manager_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
@@ -146,6 +160,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
+			FlipTokenAddress::<T>::set(self.flip_token_address);
 			StakeManagerAddress::<T>::set(self.stake_manager_address);
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
@@ -163,5 +178,29 @@ impl<T: Config> SystemStateInfo for SystemStateAccess<T> {
 			return Err(Error::<T>::NetworkIsInMaintenance.into())
 		}
 		Ok(())
+	}
+}
+
+impl<T: Config> EthEnvironmentProvider for Pallet<T> {
+	fn flip_token_address() -> [u8; 20] {
+		FlipTokenAddress::<T>::get()
+	}
+	fn key_manager_address() -> [u8; 20] {
+		KeyManagerAddress::<T>::get()
+	}
+	fn stake_manager_address() -> [u8; 20] {
+		StakeManagerAddress::<T>::get()
+	}
+	fn chain_id() -> u64 {
+		EthereumChainId::<T>::get()
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	pub fn next_global_signature_nonce() -> SignatureNonce {
+		GlobalSignatureNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
 	}
 }

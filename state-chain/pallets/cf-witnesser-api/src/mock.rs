@@ -1,14 +1,15 @@
 use crate as pallet_cf_witness_api;
 
-use cf_chains::{eth::api::EthereumApi, mocks::MockTransactionBuilder, ChainAbi, Ethereum};
+use cf_chains::{eth::api::EthereumApi, mocks::MockTransactionBuilder, Ethereum};
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types,
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, key_provider::MockKeyProvider,
-		system_state_info::MockSystemStateInfo,
+		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		key_provider::MockKeyProvider, system_state_info::MockSystemStateInfo,
 	},
-	Chainflip, NonceProvider,
+	Chainflip,
 };
 use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types, traits::IsType};
@@ -73,12 +74,6 @@ impl system::Config for Test {
 
 impl_mock_stake_transfer!(u64, u128);
 
-impl NonceProvider<Ethereum> for Test {
-	fn next_nonce() -> <Ethereum as ChainAbi>::Nonce {
-		42
-	}
-}
-
 pub struct AccountIdU64(u64);
 
 impl AsRef<[u8; 32]> for AccountIdU64 {
@@ -124,12 +119,13 @@ impl pallet_cf_staking::Config for Test {
 	type Flip = MockStakeTransfer;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type StakerId = AccountIdU64;
-	type NonceProvider = Self;
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<Ethereum>;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = EthereumApi;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 type Amount = u128;
@@ -228,6 +224,8 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type ApiCall = EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<Ethereum>;
 }
 
 impl pallet_cf_witness_api::Config for Test {

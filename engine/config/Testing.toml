@@ -9,7 +9,7 @@ ws_endpoint = "ws://localhost:9944"
 
 [eth]
 ws_node_endpoint = "ws://localhost:8545"
-http_node_endpoint = "http://localhost:8546"
+http_node_endpoint = "http://localhost:8545"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"
 

@@ -1,5 +1,8 @@
 use crate::{self as pallet_cf_environment, cfe};
-use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
+use cf_traits::mocks::{
+	ensure_origin_mock::NeverFailingOriginCheck,
+	eth_environment_provider::MockEthEnvironmentProvider,
+};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -60,6 +63,7 @@ impl pallet_cf_environment::Config for Test {
 	type Event = Event;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
@@ -78,6 +82,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			key_manager_address: KEY_MANAGER_ADDRESS,
 			ethereum_chain_id: ETH_CHAIN_ID,
 			cfe_settings: CFE_SETTINGS,
+			flip_token_address: [0u8; 20],
 		},
 	};
 

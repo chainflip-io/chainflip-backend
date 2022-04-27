@@ -294,9 +294,16 @@ pub trait EmissionsTrigger {
 }
 
 /// Provides a unqiue nonce for some [Chain].
-pub trait NonceProvider<Abi: ChainAbi> {
-	/// Get the next nonce.
-	fn next_nonce() -> Abi::Nonce;
+pub trait ReplayProtectionProvider<Abi: ChainAbi> {
+	fn replay_protection() -> Abi::ReplayProtection;
+}
+
+/// Provides the environment data for ethereum-like chains.
+pub trait EthEnvironmentProvider {
+	fn flip_token_address() -> [u8; 20];
+	fn key_manager_address() -> [u8; 20];
+	fn stake_manager_address() -> [u8; 20];
+	fn chain_id() -> u64;
 }
 
 pub trait IsOnline {
