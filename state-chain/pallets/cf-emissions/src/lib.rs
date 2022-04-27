@@ -31,8 +31,6 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 
-use cf_traits::SystemStateInfo;
-
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -186,10 +184,16 @@ pub mod pallet {
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
-
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
-				Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
+				if T::SystemState::ensure_no_maintenance().is_ok() {
+					Self::broadcast_update_total_supply(
+						T::Issuance::total_issuance(),
+						current_block,
+					);
+				} else {
+					log::info!("System maintenance: skipping supply update broadcast.");
+				}
 				T::WeightInfo::rewards_minted()
 			} else {
 				T::WeightInfo::no_rewards_minted()
@@ -301,14 +305,12 @@ impl<T: Config> Pallet<T> {
 	/// Updates the total supply on the ETH blockchain
 	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
 		// Emit a threshold signature request.
-		if T::SystemState::ensure_no_maintenance().is_ok() {
-			// TODO: See if we can replace an old request if there is one.
-			T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
-				T::NonceProvider::next_nonce(),
-				total_supply.unique_saturated_into(),
-				block_number.saturated_into(),
-			));
-		}
+		// TODO: See if we can replace an old request if there is one.
+		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
+			T::NonceProvider::next_nonce(),
+			total_supply.unique_saturated_into(),
+			block_number.saturated_into(),
+		));
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to
