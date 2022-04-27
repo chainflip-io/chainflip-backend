@@ -638,7 +638,6 @@ mod tests {
 
 	mod genesis {
 		use super::*;
-		use cf_chains::eth::api::EthereumReplayProtection;
 		use cf_traits::{
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, StakeTransfer,
 		};
