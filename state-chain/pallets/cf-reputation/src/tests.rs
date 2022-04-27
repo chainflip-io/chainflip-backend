@@ -101,7 +101,7 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 	new_test_ext().execute_with(|| {
 		let offline_test = |offence: AllOffences, who: &[u64]| {
 			let penalty = ReputationPallet::resolve_penalty_for(offence);
-			let points_before = who.iter().map(|id| reputation_points(id)).collect::<Vec<_>>();
+			let points_before = who.iter().map(reputation_points).collect::<Vec<_>>();
 			<ReputationPallet as OffenceReporter>::report_many(offence, who);
 			for (id, points) in who.iter().zip(points_before) {
 				assert_eq!(reputation_points(id), points - penalty.reputation,);
@@ -130,7 +130,7 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 				AllOffences::ForgettingYourYubiKey,
 				AllOffences::NotLockingYourComputer
 			]),
-			[ALICE, BOB].iter().cloned().collect(),
+			[ALICE, BOB].into_iter().collect(),
 		);
 	});
 }
@@ -141,7 +141,7 @@ fn suspensions() {
 		ReputationPallet::suspend_all(&[1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
 		assert_eq!(
 			ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,]),
-			[1, 2, 3].iter().cloned().collect(),
+			[1, 2, 3].into_iter().collect(),
 		);
 	});
 }
@@ -162,22 +162,16 @@ fn forgiveness() {
 		ReputationPallet::suspend_all(&[1], &AllOffences::MissedHeartbeat, 15);
 		assert_eq!(
 			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[1, 2, 3].iter().cloned().collect(),
+			[1, 2, 3].into_iter().collect(),
 		);
 		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::ForgettingYourYubiKey);
 		assert_eq!(
 			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[1, 2].iter().cloned().collect(),
+			[1, 2].into_iter().collect(),
 		);
 		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::NotLockingYourComputer);
-		assert_eq!(
-			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[1].iter().cloned().collect(),
-		);
+		assert_eq!(GetValidatorsExcludedFor::<Test, AllOffences>::get(), [1].into_iter().collect(),);
 		<ReputationPallet as OffenceReporter>::forgive_all(PalletOffence::MissedHeartbeat);
-		assert_eq!(
-			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
-			[].iter().cloned().collect(),
-		);
+		assert_eq!(GetValidatorsExcludedFor::<Test, AllOffences>::get(), [].into_iter().collect(),);
 	});
 }

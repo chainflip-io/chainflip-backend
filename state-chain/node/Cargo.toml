@@ -2,7 +2,7 @@
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 build = 'build.rs'
 description = 'The Chainflip State Chain node, based on substrate-node-template'
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 name = 'chainflip-node'
@@ -25,7 +25,7 @@ tag = 'merge-config-option'
 path = '../runtime'
 
 [dependencies]
-# Chainflip-specific dependencies  
+# Chainflip-specific dependencies
 multisig-p2p-transport = {path = '../multisig-p2p-transport'}
 futures = {version = '0.3.4'}
 hex = '0.4'

@@ -3,7 +3,7 @@ name = 'pallet-cf-threshold-signature'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet template for requesting threshold signatures.'
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false
@@ -99,4 +99,4 @@ runtime-benchmarks = [
 	'pallet-cf-validator',
 	'pallet-cf-online',
 ]
-try-runtime = ['frame-support/try-runtime'] 
+try-runtime = ['frame-support/try-runtime']

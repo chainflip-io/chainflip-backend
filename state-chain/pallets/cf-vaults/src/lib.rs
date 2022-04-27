@@ -1,6 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(assert_matches)]
-#![feature(array_map)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -8,7 +6,7 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochIndex, EpochInfo, EpochTransitionHandler, KeyProvider, NonceProvider,
+	CurrentEpochIndex, EpochIndex, EpochTransitionHandler, KeyProvider, NonceProvider,
 	SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
@@ -356,6 +354,7 @@ pub mod pallet {
 				};
 
 				if resolve {
+					let candidate_count = response_status.candidate_count;
 					match response_status.resolve_keygen_outcome() {
 						KeygenOutcome::Success(new_public_key) => {
 							weight += T::WeightInfo::on_initialize_success();
@@ -363,6 +362,13 @@ pub mod pallet {
 						},
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
+							let offenders = if (offenders.len() as u32) <
+								utilities::success_threshold_from_share_count(candidate_count)
+							{
+								offenders
+							} else {
+								BTreeSet::default()
+							};
 							Self::on_keygen_failure(
 								keygen_ceremony_id,
 								&offenders.into_iter().collect::<Vec<_>>(),
@@ -666,9 +672,8 @@ impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	// Called once there's consensus between the authorities that the keygen was successful
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
-		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
-
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 				<Self as NonceProvider<_>>::next_nonce(),
@@ -679,20 +684,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
+		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 	}
 
+	// Called once there's consensus between the authorities that the keygen was unsuccessful
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
-		Self::deposit_event(Event::KeygenFailure(ceremony_id));
-
-		if offenders.len() < T::EpochInfo::consensus_threshold(T::EpochInfo::epoch_index()) as usize
-		{
-			// TODO: We should combine this reporting to include both, so we only send a single:
-			// partipate keygen failure report, and the report handles both cases.
-			T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
-			T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
-		}
-
+		// TODO: We should combine this reporting to include both, so we only send a
+		// single: partipate keygen failure report, and the report handles both
+		// cases.
+		T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
+		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 	}
 
 	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {

@@ -1077,10 +1077,10 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
 }
 
 /// Generate an invalid local sig for stage3
-pub fn gen_invalid_local_sig(mut rng: &mut Rng) -> LocalSig3 {
+pub fn gen_invalid_local_sig(rng: &mut Rng) -> LocalSig3 {
     use crate::multisig::crypto::Scalar;
     frost::LocalSig3 {
-        response: Scalar::random(&mut rng),
+        response: Scalar::random(rng),
     }
 }
 
@@ -1094,9 +1094,9 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
+pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
     let (_, fake_comm1) = generate_shares_and_commitment(
-        &mut rng,
+        rng,
         // The commitment is only invalid because of the invalid context
         &HashContext([0; 32]),
         0,
@@ -1108,10 +1108,10 @@ pub fn gen_invalid_keygen_comm1(mut rng: &mut Rng) -> DKGUnverifiedCommitment {
     fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1(mut rng: &mut Rng) -> SigningCommitment {
+pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment {
     SigningCommitment {
-        d: Point::random(&mut rng),
-        e: Point::random(&mut rng),
+        d: Point::random(rng),
+        e: Point::random(rng),
     }
 }
 
