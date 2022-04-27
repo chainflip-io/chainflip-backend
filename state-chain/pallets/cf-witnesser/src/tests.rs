@@ -60,7 +60,7 @@ fn no_double_call_on_epoch_boundary() {
 		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 		MockEpochInfo::next_epoch([ALISSA, BOBSON, CHARLEMAGNE].to_vec());
-		// // Vote for the same call, this time in another epoch.
+		// Vote for the same call, this time in another epoch.
 		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
@@ -77,15 +77,12 @@ fn no_double_call_on_epoch_boundary() {
 			};
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
-		// // Vote for the same call, this time in another epoch. Threshold for the same call should
-		// be // reached but call shouldn't be dispatched again.
+		// Vote for the same call, this time in another epoch. Threshold for the same call should be
+		// reached but call shouldn't be dispatched again.
 		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(BOBSON), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
-		// for e in System::events().into_iter().map(|e| e.event) {
-		// 	println!("Event: {:?}", e);
-		// }
 
 		assert_event_sequence!(
 			Event::Witnesser(crate::Event::WitnessReceived(call_hash, ALISSA, 1)),
