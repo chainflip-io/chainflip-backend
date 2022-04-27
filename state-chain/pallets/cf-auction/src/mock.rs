@@ -26,10 +26,8 @@ pub type ValidatorId = u64;
 
 pub const MIN_AUTHORITY_SIZE: u32 = 1;
 pub const MAX_AUTHORITY_SIZE: u32 = 3;
-pub const BACKUP_NODE_RATIO: u32 = 3;
-pub const NUMBER_OF_BIDDERS: u32 = 9;
-pub const BIDDER_GROUP_A: u32 = 1;
-pub const BIDDER_GROUP_B: u32 = 2;
+pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 2;
+pub const MAX_AUTHORITY_SET_CONTRACTION: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
@@ -100,11 +98,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-parameter_types! {
-	pub const BackupValidatorRatio: u32 = BACKUP_NODE_RATIO;
-	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
-}
-
 pub struct MockEmergencyRotation;
 
 impl EmergencyRotation for MockEmergencyRotation {
@@ -144,11 +137,9 @@ impl Config for Test {
 	type Event = Event;
 	type BidderProvider = MockBidderProvider;
 	type ChainflipAccount = MockChainflipAccount;
-	type AuthorityToBackupRatio = BackupValidatorRatio;
 	type KeygenExclusionSet = MockKeygenExclusion<Self>;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
-	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
 	type AuctionQualification = MockQualifyValidator;
 }
 
@@ -160,6 +151,16 @@ impl ValidatorRegistration<ValidatorId> for Test {
 
 pub struct MockBidderProvider;
 
+impl MockBidderProvider {
+	// Create a set of descending bids, including an invalid bid of amount 0
+	// offset the ids to create unique bidder groups.  By default all bidders are online.
+	pub fn set_bids(bids: &[(ValidatorId, Amount)]) {
+		BIDDER_SET.with(|cell| {
+			*cell.borrow_mut() = bids.to_vec();
+		});
+	}
+}
+
 impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
@@ -170,13 +171,13 @@ impl BidderProvider for MockBidderProvider {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
-
 	let config = GenesisConfig {
 		system: Default::default(),
 		auction_pallet: AuctionPalletConfig {
 			min_size: MIN_AUTHORITY_SIZE,
 			max_size: MAX_AUTHORITY_SIZE,
+			max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+			max_contraction: MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	};
 
