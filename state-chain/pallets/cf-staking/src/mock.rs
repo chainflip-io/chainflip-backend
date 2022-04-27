@@ -163,7 +163,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 // The dummy signature can't be Default - this would be interpreted as no signature.
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
-	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_addr: [0xcf; 20] };
+	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;

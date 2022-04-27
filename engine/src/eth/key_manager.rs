@@ -102,7 +102,7 @@ pub struct SigData {
     pub msg_hash: ethabi::Uint,
     pub sig: ethabi::Uint,
     pub nonce: ethabi::Uint,
-    pub k_times_g_addr: ethabi::Address,
+    pub k_times_g_address: ethabi::Address,
 }
 
 impl Tokenizable for SigData {
@@ -122,7 +122,7 @@ impl Tokenizable for SigData {
                     msg_hash: ethabi::Uint::from_token(members[2].clone())?,
                     sig: ethabi::Uint::from_token(members[3].clone())?,
                     nonce: ethabi::Uint::from_token(members[4].clone())?,
-                    k_times_g_addr: ethabi::Address::from_token(members[5].clone())?,
+                    k_times_g_address: ethabi::Address::from_token(members[5].clone())?,
                 })
             }
         } else {
@@ -140,7 +140,7 @@ impl Tokenizable for SigData {
             Token::Uint(self.msg_hash),
             Token::Uint(self.sig),
             Token::Uint(self.nonce),
-            Token::Address(self.k_times_g_addr),
+            Token::Address(self.k_times_g_address),
         ])
     }
 }
@@ -221,7 +221,7 @@ impl EthObserver for KeyManager {
                         pallet_cf_witnesser_api::Call::witness_signature_accepted(
                             SchnorrVerificationComponents {
                                 s: sig_data.sig.into(),
-                                k_times_g_addr: sig_data.k_times_g_addr.into(),
+                                k_times_g_address: sig_data.k_times_g_address.into(),
                             },
                             broadcaster,
                             event.block_number,
@@ -420,7 +420,7 @@ mod tests {
                     msg_hash: U256::from_dec_str("83721402217372471513450062042778477963861354613529233808466400078111064259428").unwrap(),
                     sig: U256::from_dec_str("107365663807311708634605056423336732647043554150507905924516852373709157469808").unwrap(),
                     nonce: U256::from_dec_str("3").unwrap(),
-                    k_times_g_addr: H160::from_str("0x7ceb2425ec324348ba69bd50205b11e29770fd96").unwrap(),
+                    k_times_g_address: H160::from_str("0x7ceb2425ec324348ba69bd50205b11e29770fd96").unwrap(),
                 });
                 assert_eq!(broadcaster, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
             }

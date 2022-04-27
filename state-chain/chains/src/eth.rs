@@ -41,7 +41,7 @@ pub trait Tokenizable {
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SigData {
 	/// The address of the Key Manager contract, to prevent replay attacks
-	key_manager_addr: Address,
+	key_manager_address: Address,
 	/// The ID of the chain we're broadcasting to, to prevent x-chain replays
 	chain_id: Uint,
 	/// The message hash aka. payload to be signed over.
@@ -57,14 +57,14 @@ pub struct SigData {
 	/// Note this is unrelated to the `nonce` above. The nonce in the context of
 	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
 	/// the Schnorr signature) to prevent certain classes of cryptographic attacks.
-	k_times_g_addr: Address,
+	k_times_g_address: Address,
 }
 
 impl SigData {
 	/// Initiate a new `SigData` with given nonce value
 	pub fn new_empty(replay_protection: EthereumReplayProtection) -> Self {
 		Self {
-			key_manager_addr: replay_protection.key_manager_address.into(),
+			key_manager_address: replay_protection.key_manager_address.into(),
 			chain_id: replay_protection.chain_id.into(),
 			nonce: replay_protection.nonce.into(),
 			..Default::default()
@@ -79,14 +79,14 @@ impl SigData {
 	/// Add the actual signature. This method does no verification.
 	pub fn insert_signature(&mut self, schnorr: &SchnorrVerificationComponents) {
 		self.sig = schnorr.s.into();
-		self.k_times_g_addr = schnorr.k_times_g_addr.into();
+		self.k_times_g_address = schnorr.k_times_g_address.into();
 	}
 
 	/// Get the inner signature components as a `SchnorrVerificationComponents`.
 	pub fn get_signature(&self) -> SchnorrVerificationComponents {
 		SchnorrVerificationComponents {
 			s: self.sig.into(),
-			k_times_g_addr: self.k_times_g_addr.into(),
+			k_times_g_address: self.k_times_g_address.into(),
 		}
 	}
 }
@@ -94,12 +94,12 @@ impl SigData {
 impl Tokenizable for SigData {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
-			Token::Address(self.key_manager_addr),
+			Token::Address(self.key_manager_address),
 			Token::Uint(self.chain_id),
 			Token::Uint(self.msg_hash.0.into()),
 			Token::Uint(self.sig),
 			Token::Uint(self.nonce),
-			Token::Address(self.k_times_g_addr),
+			Token::Address(self.k_times_g_address),
 		])
 	}
 }
@@ -110,7 +110,7 @@ pub enum AggKeyVerificationError {
 	InvalidSignature,
 	/// The agg_key is not a valid public key.
 	InvalidPubkey,
-	/// The recovered `k_times_g_address` does not match the expected value.
+	/// The recovered `k_times_g_addressess` does not match the expected value.
 	NoMatch,
 }
 
@@ -224,14 +224,14 @@ impl AggKey {
 	///     msgHash, nonceTimesGeneratorAddress))
 	/// );
 	/// ```
-	pub fn message_challenge(&self, msg_hash: &[u8; 32], k_times_g_addr: &[u8; 20]) -> [u8; 32] {
+	pub fn message_challenge(&self, msg_hash: &[u8; 32], k_times_g_address: &[u8; 20]) -> [u8; 32] {
 		// Note the contract expects a packed u8 of 0 (even) or 1 (odd).
 		let parity_bit_uint_packed = match self.pub_key_y_parity {
 			ParityBit::Odd => 1u8,
 			ParityBit::Even => 0u8,
 		};
 		Keccak256::hash(
-			[&self.pub_key_x[..], &[parity_bit_uint_packed], &msg_hash[..], &k_times_g_addr[..]]
+			[&self.pub_key_x[..], &[parity_bit_uint_packed], &msg_hash[..], &k_times_g_address[..]]
 				.concat()
 				.as_ref(),
 		)
@@ -240,9 +240,9 @@ impl AggKey {
 
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
-		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(nonce));
 		let e = {
-			let challenge = self.message_challenge(msg_hash, &k_times_g_addr);
+			let challenge = self.message_challenge(msg_hash, &k_times_g_address);
 			let mut s = Scalar::default();
 			let mut bytes = [0u8; 32];
 			bytes.copy_from_slice(&challenge);
@@ -268,10 +268,11 @@ impl AggKey {
 		//----
 		// Verification:
 		//     msgChallenge * signingPubKey + signature * generator == nonce * generator
-		// We don't have nonce, we have k_times_g_addr so will instead verify like this:
+		// We don't have nonce, we have k_times_g_address so will instead verify like this:
 		//     encode_addr(msgChallenge * signingPubKey + signature * generator) ==
 		// encode_addr(nonce * generator) Simplified:
-		//     encode_addr(msgChallenge * signingPubKey + signature * generator) == k_times_g_addr
+		//     encode_addr(msgChallenge * signingPubKey + signature * generator) ==
+		// k_times_g_address
 		//----
 
 		// signature * generator
@@ -297,7 +298,7 @@ impl AggKey {
 
 			// Convert the message challenge to a Scalar value so it can be multiplied with the
 			// point.
-			let msg_challenge = self.message_challenge(msg_hash, &sig.k_times_g_addr);
+			let msg_challenge = self.message_challenge(msg_hash, &sig.k_times_g_address);
 			let msg_challenge_scalar = {
 				let mut e = Scalar::default();
 				let mut bytes = [0u8; 32];
@@ -324,15 +325,15 @@ impl AggKey {
 		k_times_g_recovered.x.normalize();
 		k_times_g_recovered.y.normalize();
 
-		// We now have the recovered value for k_times_g, however we only have a k_times_g_address
-		// to compare against. So we need to convert our recovered k_times_g to an Ethereum address
-		// to compare against our expected value.
+		// We now have the recovered value for k_times_g, however we only have a
+		// k_times_g_addressess to compare against. So we need to convert our recovered k_times_g to
+		// an Ethereum address to compare against our expected value.
 		let k_times_g_hash_recovered = Keccak256::hash(
 			[k_times_g_recovered.x.b32(), k_times_g_recovered.y.b32()].concat().as_ref(),
 		);
 
 		// The signature is valid if the recovered value matches the provided one.
-		if k_times_g_hash_recovered[12..] == sig.k_times_g_addr {
+		if k_times_g_hash_recovered[12..] == sig.k_times_g_address {
 			Ok(())
 		} else {
 			Err(AggKeyVerificationError::NoMatch)
@@ -410,7 +411,7 @@ pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],
 	/// The challenge, expressed as a truncated keccak hash of a pair of coordinates.
-	pub k_times_g_addr: [u8; 20],
+	pub k_times_g_address: [u8; 20],
 }
 
 /// Errors that can occur when verifying an Ethereum transaction.
@@ -720,7 +721,7 @@ mod verification_tests {
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
 
-		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
 
 		// Public agg key
 		let agg_key = AggKey::from_private_key_bytes(agg_key_priv);
@@ -729,7 +730,7 @@ mod verification_tests {
 		let signature = agg_key.sign(&msg, &agg_key_secret_key, &sig_nonce);
 
 		// Construct components for verification
-		let sig = SchnorrVerificationComponents { s: signature, k_times_g_addr };
+		let sig = SchnorrVerificationComponents { s: signature, k_times_g_address };
 
 		// Verify signature
 		assert_ok!(agg_key.verify(&msg, &sig));
@@ -758,8 +759,8 @@ mod verification_tests {
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&k));
-		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_addr };
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
+		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address };
 
 		// This should pass.
 		assert_ok!(agg_key.verify(&MSG_HASH, &sig));
@@ -779,7 +780,7 @@ mod verification_tests {
 		assert!(agg_key
 			.verify(
 				&MSG_HASH,
-				&SchnorrVerificationComponents { s: SIG.map(|i| i + 1), k_times_g_addr }
+				&SchnorrVerificationComponents { s: SIG.map(|i| i + 1), k_times_g_address }
 			)
 			.is_err(),);
 
@@ -789,7 +790,7 @@ mod verification_tests {
 				&MSG_HASH,
 				&SchnorrVerificationComponents {
 					s: SIG,
-					k_times_g_addr: k_times_g_addr.map(|i| i + 1),
+					k_times_g_address: k_times_g_address.map(|i| i + 1),
 				}
 			),
 			AggKeyVerificationError::NoMatch

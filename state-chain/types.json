@@ -191,7 +191,7 @@
   "RuntimeReputationTracker": "ReputationTracker",
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
-    "k_times_g_addr": "[u8; 20]"
+    "k_times_g_address": "[u8; 20]"
   },
   "SemVer": {
     "major": "u8",
@@ -207,7 +207,7 @@
     "msg_hash": "H256",
     "sig": "Uint",
     "nonce": "Uint",
-    "k_times_g_addr": "EthereumAddress"
+    "k_times_g_address": "EthereumAddress"
   },
   "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",

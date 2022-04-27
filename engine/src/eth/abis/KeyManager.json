@@ -164,7 +164,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
@@ -246,7 +246,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
@@ -379,7 +379,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
@@ -492,7 +492,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
