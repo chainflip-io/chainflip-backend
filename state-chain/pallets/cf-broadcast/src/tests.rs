@@ -353,6 +353,22 @@ fn test_invalid_id_is_noop() {
 }
 
 #[test]
+fn test_invalid_sigdata_is_noop() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			MockBroadcast::signature_accepted(
+				RawOrigin::Signed(0).into(),
+				MockThresholdSignature::default(),
+				Validity::Valid,
+				10,
+				[0u8; 4],
+			),
+			Error::<Test, Instance1>::InvalidPayload
+		);
+	})
+}
+
+#[test]
 fn cfe_responds_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };

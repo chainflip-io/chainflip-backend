@@ -259,7 +259,9 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The provided broadcast id is invalid
+		/// The provided payload is invalid.
+		InvalidPayload,
+		/// The provided broadcast id is invalid.
 		InvalidBroadcastId,
 		/// The provided broadcast attempt id is invalid.
 		InvalidBroadcastAttemptId,
@@ -554,6 +556,8 @@ pub mod pallet {
 						last_broadcast_attempt_id,
 					));
 				}
+			} else {
+				ensure!(false, Error::<T, I>::InvalidPayload);
 			}
 
 			Ok(().into())
