@@ -71,6 +71,11 @@ impl SigData {
 		}
 	}
 
+	/// Used for migrating from the old `SigData` struct.
+	pub fn from_legacy(msg_hash: H256, sig: Uint, nonce: Uint, k_times_g_address: Address) -> Self {
+		Self { msg_hash, sig, nonce, k_times_g_address, ..Default::default() }
+	}
+
 	/// Inserts the `msg_hash` value derived from the provided calldata.
 	pub fn insert_msg_hash_from(&mut self, calldata: &[u8]) {
 		self.msg_hash = H256(Keccak256::hash(calldata).0);
