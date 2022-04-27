@@ -12,6 +12,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
@@ -261,15 +262,6 @@ pub struct Vault<T: ChainAbi> {
 	pub active_window: BlockHeightWindow<T>,
 }
 
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - Makes the pallet instantiable.
-	pub const V1: StorageVersion = StorageVersion::new(1);
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum PalletOffence {
 	/// Failing a keygen ceremony carries its own consequences.
@@ -278,13 +270,15 @@ pub enum PalletOffence {
 	SigningOffence,
 }
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -388,18 +382,18 @@ pub mod pallet {
 			weight
 		}
 
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migrations::migrate_storage::<T, I>()
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::pre_migration_checks::<T, I>()
+			migrations::PalletMigration::<T, I>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::post_migration_checks::<T, I>()
+			migrations::PalletMigration::<T, I>::post_upgrade()
 		}
 	}
 
@@ -426,12 +420,6 @@ pub mod pallet {
 	#[pallet::getter(fn failure_voters)]
 	pub type FailureVoters<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
-
-	/// Threshold key nonces for this chain.
-	#[pallet::storage]
-	#[pallet::getter(fn chain_nonce)]
-	pub(super) type ChainReplayProtection<T, I = ()> =
-		StorageValue<_, <<T as Config<I>>::Chain as ChainAbi>::ReplayProtection, ValueQuery>;
 
 	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]

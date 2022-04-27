@@ -7,6 +7,8 @@ mod delete_rewards;
 pub use delete_rewards::DeleteRewardsPallet;
 mod unify_ceremony_ids;
 pub use unify_ceremony_ids::UnifyCeremonyIds;
+pub mod add_flip_contract_address;
+pub mod migrate_claims;
 pub mod refactor_offences;
 
 /// A runtime storage migration that will only be applied if the `SPEC_VERSION` matches the
