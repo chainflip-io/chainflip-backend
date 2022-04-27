@@ -17,6 +17,13 @@ macro_rules! assert_ok {
 }
 pub(crate) use assert_ok;
 
+macro_rules! assert_err {
+    ($result:expr) => {
+        $result.unwrap_err()
+    };
+}
+pub(crate) use assert_err;
+
 /// Checks that a given future yields without producing a result (yet) / is blocked by something
 pub fn assert_future_awaits(f: impl Future) {
     assert!(f.now_or_never().is_none());

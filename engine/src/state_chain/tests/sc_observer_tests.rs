@@ -60,22 +60,24 @@ fn mock_historical_epochs_key() -> StorageKey {
 }
 
 /// ETH Window for epoch three after epoch starts, so we know the end
-const WINDOW_EPOCH_TWO_END: BlockHeightWindow = BlockHeightWindow {
+const WINDOW_EPOCH_TWO_END: BlockHeightWindow<cf_chains::Ethereum> = BlockHeightWindow {
     from: 20,
     to: Some(29),
 };
 
 /// ETH Window for epoch three initially. No end known
-const WINDOW_EPOCH_THREE_INITIAL: BlockHeightWindow = BlockHeightWindow { from: 30, to: None };
+const WINDOW_EPOCH_THREE_INITIAL: BlockHeightWindow<cf_chains::Ethereum> =
+    BlockHeightWindow { from: 30, to: None };
 
 /// ETH Window for epoch three after epoch starts, so we know the end
-const WINDOW_EPOCH_THREE_END: BlockHeightWindow = BlockHeightWindow {
+const WINDOW_EPOCH_THREE_END: BlockHeightWindow<cf_chains::Ethereum> = BlockHeightWindow {
     from: 30,
     to: Some(39),
 };
 
 /// ETH Window for epoch three initially. No end known
-const WINDOW_EPOCH_FOUR_INITIAL: BlockHeightWindow = BlockHeightWindow { from: 40, to: None };
+const WINDOW_EPOCH_FOUR_INITIAL: BlockHeightWindow<cf_chains::Ethereum> =
+    BlockHeightWindow { from: 40, to: None };
 
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_on_startup() {
@@ -143,10 +145,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -246,10 +246,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
         state_chain_client,
@@ -325,10 +323,8 @@ async fn sends_initial_extrinsics_when_backup_but_not_historic_on_startup() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
         state_chain_client,
@@ -361,10 +357,8 @@ async fn backup_checks_account_data_every_block() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -449,10 +443,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -633,10 +625,8 @@ async fn backup_not_historical_to_authority_on_new_epoch() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     // Submits only one extrinsic when no events, the heartbeat
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
@@ -924,10 +914,8 @@ async fn current_authority_to_historical_passive_on_new_epoch_event() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
         state_chain_client,
@@ -973,7 +961,7 @@ async fn only_encodes_and_signs_when_current_authority_and_specified() {
     // === FAKE BLOCKHEADERS ===
 
     let block_header = test_header(21);
-    let sc_block_stream = tokio_stream::iter(vec![Ok(block_header.clone())]);
+    let sc_block_stream = tokio_stream::iter([Ok(block_header.clone())]);
 
     let mut eth_rpc_mock = MockEthRpcApi::new();
 
@@ -1099,10 +1087,8 @@ async fn only_encodes_and_signs_when_current_authority_and_specified() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_window_sender, mut sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, mut km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, mut sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, mut km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
         state_chain_client,
@@ -1151,10 +1137,8 @@ async fn run_the_sc_observer() {
 
     let multisig_client = Arc::new(MockMultisigClientApi::new());
 
-    let (sm_window_sender, _sm_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
-    let (km_window_sender, _km_window_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<BlockHeightWindow>();
+    let (sm_window_sender, _sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_window_sender, _km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
         state_chain_client,

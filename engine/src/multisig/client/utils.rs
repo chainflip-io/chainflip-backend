@@ -36,7 +36,7 @@ impl PartyIdxMapping {
 
     /// Convert all indexes to Account Ids. Precondition: the indexes must be
     /// valid for the ceremony
-    pub fn get_ids(&self, idxs: Vec<usize>) -> Vec<AccountId> {
+    pub fn get_ids(&self, idxs: BTreeSet<usize>) -> BTreeSet<AccountId> {
         idxs.iter()
             .map(|idx| {
                 self.get_id(*idx)

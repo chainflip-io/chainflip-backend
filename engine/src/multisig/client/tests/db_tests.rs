@@ -3,7 +3,6 @@ use crate::{
     multisig::{
         client::{
             key_store::KeyStore,
-            keygen::KeygenOptions,
             tests::{new_nodes, ACCOUNT_IDS},
         },
         PersistentKeyDB,
@@ -17,12 +16,7 @@ use super::helpers::run_keygen;
 async fn check_signing_db() {
     // Generate a key to use in this test
     let (key_id, stored_keygen_result_info) = {
-        let (key_id, key_data, _, _) = run_keygen(
-            new_nodes(ACCOUNT_IDS.clone()),
-            1,
-            KeygenOptions::allowing_high_pubkey(),
-        )
-        .await;
+        let (key_id, key_data, _, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), 1).await;
         (key_id, key_data.into_iter().next().unwrap().1)
     };
 

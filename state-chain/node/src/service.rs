@@ -1,5 +1,6 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
+use custom_rpc::{CustomApi, CustomRpc};
 use jsonrpc_core::MetaIoHandler;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
@@ -11,7 +12,7 @@ use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_consensus::SlotData;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
-use std::{sync::Arc, time::Duration};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 // Our native executor instance.
 pub struct ExecutorDispatch;
@@ -237,6 +238,13 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 					deny_unsafe,
 				),
 			));
+
+			// Implement custom RPC extensions
+			io.extend_with(CustomApi::to_delegate(CustomRpc {
+				client: client.clone(),
+				_phantom: PhantomData::default(),
+			}));
+
 			Ok(io)
 		})
 	};

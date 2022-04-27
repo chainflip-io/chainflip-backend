@@ -91,6 +91,10 @@ pub mod pallet {
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
 
+	/// A flag indicating that the CallHash has been executed.
+	#[pallet::storage]
+	pub type CallHashExecuted<T: Config> = StorageMap<_, Identity, CallHash, ()>;
+
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
@@ -179,10 +183,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 			epoch_index: EpochIndex,
-			block_number: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::do_witness_at_epoch(who, *call, epoch_index, block_number)
+			Self::do_witness_at_epoch(who, *call, epoch_index)
 		}
 	}
 
@@ -220,7 +223,6 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 		epoch_index: EpochIndex,
-		_block_number: T::BlockNumber,
 	) -> DispatchResultWithPostInfo {
 		// Ensure the epoch has not yet expired
 		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
@@ -279,13 +281,16 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == success_threshold_from_share_count(num_validators) as usize {
+		if num_votes == success_threshold_from_share_count(num_validators) as usize &&
+			CallHashExecuted::<T>::get(&call_hash).is_none()
+		{
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
+			CallHashExecuted::<T>::insert(&call_hash, ());
 		}
 
 		Ok(().into())
@@ -295,7 +300,7 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index(), Default::default())
+		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index())
 	}
 }
 
@@ -312,9 +317,8 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 		who: Self::AccountId,
 		call: Self::Call,
 		epoch: EpochIndex,
-		block_number: Self::BlockNumber,
 	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who.into(), call, epoch, block_number)
+		Self::do_witness_at_epoch(who.into(), call, epoch)
 	}
 }
 

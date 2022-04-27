@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::ChainAbi;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode};
+use custom_rpc::CustomClient;
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
 use frame_support::storage::types::QueryKindTrait;
@@ -173,6 +174,7 @@ pub struct StateChainRpcClient {
     state_rpc_client: StateRpcClient,
     chain_rpc_client: ChainRpcClient,
     system_rpc_client: SystemRpcClient,
+    custom_rpc_client: CustomClient,
 }
 
 /// Wraps the substrate client library methods
@@ -217,6 +219,8 @@ pub trait StateChainRpcApi {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<RuntimeVersion>;
+
+    async fn is_auction_phase(&self) -> Result<bool>;
 }
 
 #[async_trait]
@@ -313,6 +317,14 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("fetch_runtime_version RPC API failed")
+    }
+
+    async fn is_auction_phase(&self) -> Result<bool> {
+        self.custom_rpc_client
+            .is_auction_phase()
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .context("is_auction_phase RPC API failed")
     }
 }
 
@@ -575,15 +587,16 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
+        let unsigned_tx = substrate_subxt::extrinsic::create_unsigned::<
+            RuntimeImplForSigningExtrinsics,
+        >(substrate_subxt::Encoded(
+            state_chain_runtime::Call::from(extrinsic.clone()).encode(),
+        ));
+        let expected_hash = BlakeTwo256::hash_of(&unsigned_tx);
         match self
             .state_chain_rpc_client
-            .submit_extrinsic_rpc(substrate_subxt::extrinsic::create_unsigned::<
-                RuntimeImplForSigningExtrinsics,
-            >(substrate_subxt::Encoded(
-                state_chain_runtime::Call::from(extrinsic.clone()).encode(),
-            )))
+            .submit_extrinsic_rpc(unsigned_tx)
             .await
-            .map_err(rpc_error_into_anyhow_error)
         {
             Ok(tx_hash) => {
                 slog::info!(
@@ -592,11 +605,36 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     extrinsic,
                     tx_hash
                 );
+                assert_eq!(
+                    tx_hash, expected_hash,
+                    "tx_hash returned from RPC does not match expected hash"
+                );
                 Ok(tx_hash)
             }
-            Err(err) => {
-                slog::error!(logger, "Failed to submit unsigned extrinsic: {:?}", err);
-                Err(err)
+            Err(rpc_err) => {
+                match rpc_err {
+                    RpcError::JsonRpcError(ref e)
+                        // POOL_ALREADY_IMPORTED error occurs when the transaction is already in the pool
+                        // More than one node can submit the same unsigned extrinsic. E.g. in the case of
+                        // a threshold signature success. Thus, if we get a "Transaction already in pool" "error"
+                        // we know that this particular extrinsic has already been submitted. And so we can
+                        // ignore the error and return the transaction hash
+                        if e.code == ErrorCode::ServerError(1013) =>
+                    {
+                        slog::trace!(logger, "Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.", extrinsic, expected_hash);
+                        Ok(expected_hash)
+                    }
+                    _ => {
+                        let anyhow_error = rpc_error_into_anyhow_error(rpc_err);
+                        slog::error!(
+                            logger,
+                            "Unsigned extrinsic failed with error: {}. Extrinsic: {:?}",
+                            anyhow_error,
+                            extrinsic
+                        );
+                        Err(anyhow_error)
+                    }
+                }
             }
         }
     }
@@ -774,7 +812,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         epoch_index: EpochIndex,
     ) -> Result<Vault<C>>
     where
-        C: Chain + ChainCrypto + Debug + Clone + 'static + PalletInstanceAlias,
+        C: ChainAbi + Debug + Clone + 'static + PalletInstanceAlias,
         state_chain_runtime::Runtime:
             pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
     {
@@ -850,6 +888,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
     }
+
+    pub async fn is_auction_phase(&self) -> Result<bool> {
+        self.state_chain_rpc_client.is_auction_phase().await
+    }
 }
 
 fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) -> Result<T, E> {
@@ -859,8 +901,22 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
     }
 }
 
-#[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
+    state_chain_settings: &settings::StateChain,
+    wait_for_staking: bool,
+    logger: &slog::Logger,
+) -> Result<(
+    H256,
+    impl Stream<Item = Result<state_chain_runtime::Header>>,
+    Arc<StateChainClient<StateChainRpcClient>>,
+)> {
+    inner_connect_to_state_chain(state_chain_settings, wait_for_staking, logger)
+        .await
+        .map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node. {}", e)))
+}
+
+#[allow(clippy::eval_order_dependence)]
+async fn inner_connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
     wait_for_staking: bool,
     logger: &slog::Logger,
@@ -1068,13 +1124,15 @@ pub async fn connect_to_state_chain_without_signer(
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
     let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.into();
+    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
+    let custom_rpc_client: CustomClient = rpc_client.into();
 
     Ok(StateChainRpcClient {
         system_rpc_client,
         author_rpc_client,
         state_rpc_client,
         chain_rpc_client,
+        custom_rpc_client,
     })
 }
 

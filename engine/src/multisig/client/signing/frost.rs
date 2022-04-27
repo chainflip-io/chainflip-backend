@@ -4,7 +4,7 @@
 //! centralised signature aggregator and don't have a preprocessing stage.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     convert::TryInto,
     fmt::Display,
 };
@@ -38,9 +38,9 @@ pub struct SecretNoncePair {
 impl SecretNoncePair {
     /// Generate a random pair of nonces (in a Box,
     /// to avoid them being copied on move)
-    pub fn sample_random(mut rng: &mut Rng) -> Box<Self> {
-        let d = Scalar::random(&mut rng);
-        let e = Scalar::random(&mut rng);
+    pub fn sample_random(rng: &mut Rng) -> Box<Self> {
+        let d = Scalar::random(rng);
+        let e = Scalar::random(rng);
 
         let d_pub = Point::from_scalar(&d);
         let e_pub = Point::from_scalar(&e);
@@ -105,8 +105,8 @@ impl Display for SigningData {
 /// Combine individual commitments into group (schnorr) commitment.
 /// See "Signing Protocol" in Section 5.2 (page 14).
 fn gen_group_commitment(
-    signing_commitments: &HashMap<usize, SigningCommitment>,
-    bindings: &HashMap<usize, Scalar>,
+    signing_commitments: &BTreeMap<usize, SigningCommitment>,
+    bindings: &BTreeMap<usize, Scalar>,
 ) -> Point {
     signing_commitments
         .iter()
@@ -150,7 +150,7 @@ pub fn get_lagrange_coeff(
 fn gen_rho_i(
     index: usize,
     msg: &[u8],
-    signing_commitments: &HashMap<usize, SigningCommitment>,
+    signing_commitments: &BTreeMap<usize, SigningCommitment>,
     all_idxs: &BTreeSet<usize>,
 ) -> Scalar {
     let mut hasher = Sha256::new();
@@ -179,9 +179,9 @@ type SigningResponse = LocalSig3;
 /// Generate binding values for each party given their previously broadcast commitments
 fn generate_bindings(
     msg: &[u8],
-    commitments: &HashMap<usize, SigningCommitment>,
+    commitments: &BTreeMap<usize, SigningCommitment>,
     all_idxs: &BTreeSet<usize>,
-) -> HashMap<usize, Scalar> {
+) -> BTreeMap<usize, Scalar> {
     all_idxs
         .iter()
         .map(|idx| (*idx, gen_rho_i(*idx, msg, commitments, all_idxs)))
@@ -193,7 +193,7 @@ pub fn generate_local_sig(
     msg: &[u8],
     key: &KeyShare,
     nonces: &SecretNoncePair,
-    commitments: &HashMap<usize, SigningCommitment>,
+    commitments: &BTreeMap<usize, SigningCommitment>,
     own_idx: usize,
     all_idxs: &BTreeSet<usize>,
 ) -> SigningResponse {
@@ -254,10 +254,10 @@ pub fn aggregate_signature(
     msg: &[u8],
     signer_idxs: &BTreeSet<usize>,
     agg_pubkey: Point,
-    pubkeys: &HashMap<usize, Point>,
-    commitments: &HashMap<usize, SigningCommitment>,
-    responses: &HashMap<usize, SigningResponse>,
-) -> Result<SchnorrSignature, Vec<usize>> {
+    pubkeys: &BTreeMap<usize, Point>,
+    commitments: &BTreeMap<usize, SigningCommitment>,
+    responses: &BTreeMap<usize, SigningResponse>,
+) -> Result<SchnorrSignature, BTreeSet<usize>> {
     let bindings = generate_bindings(msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -268,29 +268,29 @@ pub fn aggregate_signature(
         msg,
     );
 
-    let mut invalid_idxs = vec![];
+    let invalid_idxs: BTreeSet<usize> = signer_idxs
+        .iter()
+        .copied()
+        .filter(|signer_idx| {
+            let rho_i = &bindings[signer_idx];
+            let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
-    for signer_idx in signer_idxs {
-        let rho_i = &bindings[signer_idx];
-        let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
+            let commitment = &commitments[signer_idx];
+            let commitment_i = commitment.d + (commitment.e * rho_i);
 
-        let commitment = &commitments[signer_idx];
-        let commitment_i = commitment.d + (commitment.e * rho_i);
+            let y_i = pubkeys[signer_idx];
 
-        let y_i = pubkeys[signer_idx];
+            let response = &responses[signer_idx];
 
-        let response = &responses[signer_idx];
-
-        if !is_party_response_valid(
-            &y_i,
-            &lambda_i,
-            &commitment_i,
-            &challenge,
-            &response.response,
-        ) {
-            invalid_idxs.push(*signer_idx);
-        }
-    }
+            !is_party_response_valid(
+                &y_i,
+                &lambda_i,
+                &commitment_i,
+                &challenge,
+                &response.response,
+            )
+        })
+        .collect();
 
     if invalid_idxs.is_empty() {
         // Response shares/shards are additive, so we simply need to
