@@ -238,27 +238,27 @@ impl EthObserver for KeyManager {
     }
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
-        let ak_set_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
-        let ak_set_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
-        let gk_set_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
+        let ak_set_by_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
+        let ak_set_by_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
+        let gk_set_by_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
         let sig_accepted = SignatureAndEvent::new(&self.contract, "SignatureAccepted")?;
 
         Ok(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
-                Ok(if signature == ak_set_ak.signature {
-                    let log = ak_set_ak.event.parse_log(raw_log)?;
+                Ok(if signature == ak_set_by_ak.signature {
+                    let log = ak_set_by_ak.event.parse_log(raw_log)?;
                     KeyManagerEvent::AggKeySetByAggKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
                     }
-                } else if signature == ak_set_gk.signature {
-                    let log = ak_set_gk.event.parse_log(raw_log)?;
+                } else if signature == ak_set_by_gk.signature {
+                    let log = ak_set_by_gk.event.parse_log(raw_log)?;
                     KeyManagerEvent::AggKeySetByGovKey {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
                     }
-                } else if signature == gk_set_gk.signature {
-                    let log = gk_set_gk.event.parse_log(raw_log)?;
+                } else if signature == gk_set_by_gk.signature {
+                    let log = gk_set_by_gk.event.parse_log(raw_log)?;
                     KeyManagerEvent::GovKeySetByGovKey {
                         old_key: utils::decode_log_param(&log, "oldKey")?,
                         new_key: utils::decode_log_param(&log, "newKey")?,
@@ -309,7 +309,7 @@ mod tests {
 
     // 🔑 Aggregate Key sets the new Aggregate Key 🔑
     #[test]
-    fn test_ak_set_ak_parsing() {
+    fn test_ak_set_by_ak_parsing() {
         let key_manager = KeyManager::new(H160::default()).unwrap();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
@@ -364,7 +364,7 @@ mod tests {
 
     // 🔑 Governance Key sets the new Governance Key 🔑
     #[test]
-    fn test_gk_set_gk_parsing() {
+    fn test_gk_set_by_gk_parsing() {
         let key_manager = KeyManager::new(H160::default()).unwrap();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
