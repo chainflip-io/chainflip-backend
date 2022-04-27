@@ -53,6 +53,8 @@ pub trait Chainflip: frame_system::Config {
 	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+	/// Access to information about the current system state
+	type SystemState: SystemStateInfo;
 }
 
 /// A trait abstracting the functionality of the witnesser

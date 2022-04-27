@@ -130,7 +130,6 @@ impl pallet_cf_staking::Config for Test {
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = EthereumApi;
-	type SystemState = MockSystemStateInfo;
 }
 
 type Amount = u128;
@@ -143,6 +142,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type Call = Call;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 cf_traits::impl_mock_signer_nomination!(u64);

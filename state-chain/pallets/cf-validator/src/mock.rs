@@ -103,7 +103,6 @@ pub struct MockAuctioneer;
 thread_local! {
 	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, &'static str>> = RefCell::new(Ok(Default::default()));
 	pub static AUCTION_WINNERS: RefCell<Option<Vec<ValidatorId>>> = RefCell::new(None);
-	pub static MAINTANACE: RefCell<bool>  = RefCell::new(false);
 }
 
 impl MockAuctioneer {
@@ -210,6 +209,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockBonder;
@@ -240,7 +240,6 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
-	type SystemState = MockSystemStateInfo;
 }
 
 /// Session pallet requires a set of validators at genesis.

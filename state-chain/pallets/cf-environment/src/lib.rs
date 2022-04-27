@@ -106,7 +106,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The system state has been chagned \[system_state\]
+		/// The system state has been changed \[system_state\]
 		SystemStateHasBeenChanged(SystemState),
 	}
 
@@ -150,6 +150,7 @@ pub mod pallet {
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
+			CurrentSystemState::<T>::set(SystemState::Normal);
 		}
 	}
 }

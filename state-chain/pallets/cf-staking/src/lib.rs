@@ -102,9 +102,6 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
-
-		/// Access to information about the current system state
-		type SystemState: SystemStateInfo;
 	}
 
 	#[pallet::pallet]

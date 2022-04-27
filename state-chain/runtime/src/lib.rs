@@ -168,7 +168,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type OffenceReporter = Reputation;
-	type SystemState = pallet_cf_environment::SystemStateAccess<Runtime>;
 }
 
 impl pallet_cf_environment::Config for Runtime {
@@ -383,7 +382,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type RegisterClaim = eth::api::EthereumApi;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
-	type SystemState = pallet_cf_environment::SystemStateAccess<Runtime>;
 }
 
 impl pallet_cf_governance::Config for Runtime {
@@ -409,7 +407,6 @@ impl pallet_cf_emissions::Config for Runtime {
 	type BlocksPerDay = BlocksPerDay;
 	type NonceProvider = EthereumVault;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
-	type SystemState = pallet_cf_environment::SystemStateAccess<Runtime>;
 }
 
 parameter_types! {

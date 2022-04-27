@@ -15,7 +15,10 @@ use crate as pallet_cf_vaults;
 use super::*;
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo},
+	mocks::{
+		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
+		system_state_info::MockSystemStateInfo,
+	},
 	Chainflip,
 };
 
@@ -78,6 +81,7 @@ impl Chainflip for MockRuntime {
 	type Call = Call;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockCallback;

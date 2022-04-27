@@ -9,8 +9,8 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_traits::{
-	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochIndex,
-	ThresholdSigner,
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, system_state_info::MockSystemStateInfo},
+	AsyncResult, Chainflip, EpochIndex, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -80,6 +80,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 // Mock SignerNomination

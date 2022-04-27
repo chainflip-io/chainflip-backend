@@ -5,6 +5,7 @@ use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
+		system_state_info::MockSystemStateInfo,
 	},
 	Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
@@ -141,6 +142,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 impl Config for Test {

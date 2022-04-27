@@ -73,6 +73,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 parameter_types! {
@@ -169,7 +170,6 @@ impl pallet_cf_staking::Config for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = eth::api::EthereumApi;
-	type SystemState = MockSystemStateInfo;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);

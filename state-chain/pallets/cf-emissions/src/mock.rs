@@ -80,6 +80,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockCallback;
@@ -213,7 +214,6 @@ impl pallet_cf_emissions::Config for Test {
 	type NonceProvider = Self;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
-	type SystemState = MockSystemStateInfo;
 }
 
 // Build genesis storage according to the mock runtime.

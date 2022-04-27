@@ -165,9 +165,6 @@ pub mod pallet {
 
 		/// Updates the bond of a validator
 		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
-
-		/// Access to information about the current system state
-		type SystemState: SystemStateInfo;
 	}
 
 	#[pallet::event]
@@ -251,7 +248,6 @@ pub mod pallet {
 					}
 				},
 				RotationStatus::RunAuction => {
-					// Check if we are currently not in maintanence mode
 					if T::SystemState::ensure_no_maintenance().is_ok() {
 						match T::Auctioneer::resolve_auction() {
 							Ok(auction_result) => {

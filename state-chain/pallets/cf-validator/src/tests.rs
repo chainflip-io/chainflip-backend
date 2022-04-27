@@ -555,8 +555,14 @@ fn no_auction_during_maintenance() {
 		// Expect the maintenance mode to be deactivated
 		assert!(MockSystemStateInfo::ensure_no_maintenance().is_ok());
 		// Move a couple of blocks forward to run the auction
-		move_forward_blocks(5);
+		move_forward_blocks(2);
 		// Expect the auction to be to be completed
-		assert_eq!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::Idle);
+		assert_eq!(
+			RotationPhase::<Test>::get(),
+			RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
+				winners: vec![],
+				minimum_active_bid: 0
+			})
+		);
 	});
 }

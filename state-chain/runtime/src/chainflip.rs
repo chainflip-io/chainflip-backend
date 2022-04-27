@@ -43,6 +43,7 @@ impl Chainflip for Runtime {
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = Validator;
+	type SystemState = pallet_cf_environment::SystemStateAccess<Runtime>;
 }
 
 pub struct ChainflipStakeHandler;
