@@ -604,11 +604,15 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 }
 
 #[test]
-fn staking_not_possible_during_maintenance() {
+fn maintenance_mode() {
 	new_test_ext().execute_with(|| {
 		MockSystemStateInfo::set_maintenance(true);
 		assert_noop!(
 			Staking::staked(Origin::root(), ALICE, 20, ETH_DUMMY_ADDR, TX_HASH),
+			DispatchError::Other("We are in maintenance!")
+		);
+		assert_noop!(
+			Staking::claimed(Origin::root(), ALICE, 20, TX_HASH),
 			DispatchError::Other("We are in maintenance!")
 		);
 		MockSystemStateInfo::set_maintenance(false);

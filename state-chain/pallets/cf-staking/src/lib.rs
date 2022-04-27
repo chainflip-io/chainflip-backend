@@ -339,6 +339,7 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 
 			let claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
