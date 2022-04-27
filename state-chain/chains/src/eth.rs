@@ -115,7 +115,7 @@ pub enum AggKeyVerificationError {
 	InvalidSignature,
 	/// The agg_key is not a valid public key.
 	InvalidPubkey,
-	/// The recovered `k_times_g_addressess` does not match the expected value.
+	/// The recovered `k_times_g_address` does not match the expected value.
 	NoMatch,
 }
 
