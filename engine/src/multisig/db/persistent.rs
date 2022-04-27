@@ -404,7 +404,7 @@ mod tests {
     use crate::{
         logging::test_utils::new_test_logger,
         multisig::db::PersistentKeyDB,
-        testing::{assert_ok, new_temp_dir},
+        testing::{assert_ok, new_temp_directory_with_nonexistent_file},
     };
 
     const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn can_create_new_database() {
         let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         assert_ok!(PersistentKeyDB::new(&db_path, &logger));
         assert!(db_path.exists());
     }
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn new_db_is_created_with_latest_schema_version() {
         let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a fresh db. This will also write the schema version
         assert_ok!(PersistentKeyDB::new(&db_path, &logger));
 
@@ -468,14 +468,14 @@ mod tests {
 
     #[test]
     fn new_db_returns_db_when_db_data_version_is_latest() {
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION);
         assert_ok!(PersistentKeyDB::new(&db_path, &new_test_logger()));
     }
 
     #[test]
     fn can_migrate_to_latests() {
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let bashful_secret = KEYGEN_RESULT_INFO_HEX.to_string();
         let bashful_secret_bin = hex::decode(bashful_secret).unwrap();
         assert_ok!(bincode::deserialize::<KeygenResultInfo>(
@@ -519,7 +519,7 @@ mod tests {
 
     #[test]
     fn should_not_migrate_backwards() {
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a db with schema version + 1
         open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION + 1);
 
@@ -543,7 +543,7 @@ mod tests {
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         {
             let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
             let db = p_db.db;
@@ -565,7 +565,7 @@ mod tests {
     #[test]
     fn can_update_key() {
         let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
 
         let mut p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
@@ -587,7 +587,7 @@ mod tests {
     #[test]
     fn backup_is_created_when_migrating() {
         let logger = new_test_logger();
-        let (directory, db_path) = new_temp_dir();
+        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a db that has no schema version, so it will use DEFAULT_DB_SCHEMA_VERSION
         {
             let mut opts = Options::default();
@@ -642,7 +642,7 @@ mod tests {
     #[test]
     fn backup_should_fail_if_already_exists() {
         let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
         assert_ok!(PersistentKeyDB::new(&db_path, &logger));
 
@@ -661,7 +661,7 @@ mod tests {
     #[test]
     fn backup_should_fail_if_cant_copy_files() {
         let logger = new_test_logger();
-        let (directory, db_path) = new_temp_dir();
+        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
         assert_ok!(PersistentKeyDB::new(&db_path, &logger));
 
@@ -684,7 +684,7 @@ mod tests {
     fn should_error_if_kvdb_fails_to_load_key() {
         let logger = new_test_logger();
 
-        let (_dir, db_path) = new_temp_dir();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a db that is schema version 0 using kvdb.
         {
             let db =

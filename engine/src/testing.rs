@@ -40,8 +40,9 @@ pub fn with_file<C: FnOnce(&Path)>(text: &[u8], closure: C) {
     closure(tempfile.path());
 }
 
-/// Create a temp directory that will be deleted when `TempDir` is dropped
-pub fn new_temp_dir() -> (TempDir, PathBuf) {
+/// Create a temp directory that will be deleted when `TempDir` is dropped.
+/// Also returns the path to a non-existent file in the directory.
+pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
     let tempdir = tempfile::TempDir::new().unwrap();
     let tempfile = tempdir.path().to_owned().join("file");
     assert!(!tempfile.exists());
