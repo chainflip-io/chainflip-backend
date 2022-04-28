@@ -109,10 +109,7 @@ pub async fn test_all_key_manager_events() {
     km_events
         .iter()
         .find(|event| match &event.event_parameters {
-            KeyManagerEvent::SignatureAccepted {
-                sig_data,
-                broadcaster,
-            } => {
+            KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
                 assert_eq!(
                     sig_data.key_man_addr,
                     integration_test_settings.eth.key_manager_address
@@ -120,7 +117,7 @@ pub async fn test_all_key_manager_events() {
                 assert_eq!(sig_data.chain_id, U256::from_dec_str("31337").unwrap());
                 assert_eq!(sig_data.nonce, U256::from_dec_str("0").unwrap());
                 assert_eq!(
-                    broadcaster,
+                    signer,
                     &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
                 );
                 true

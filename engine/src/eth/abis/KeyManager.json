@@ -176,7 +176,7 @@
       {
         "indexed": false,
         "internalType": "address",
-        "name": "broadcaster",
+        "name": "signer",
         "type": "address"
       }
     ],
