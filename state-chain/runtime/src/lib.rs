@@ -116,11 +116,6 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-parameter_types! {
-	pub const AuthorityToBackupRatio: u32 = 3;
-	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
-}
-
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
@@ -134,9 +129,7 @@ impl pallet_cf_auction::Config for Runtime {
 			pallet_session::Pallet<Self>,
 		>,
 	);
-	type AuthorityToBackupRatio = AuthorityToBackupRatio;
 	type EmergencyRotation = Validator;
-	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
 	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
 }
 

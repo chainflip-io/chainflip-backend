@@ -61,9 +61,9 @@ pub struct PercentageRange {
 pub enum RotationStatus<T: Config> {
 	Idle,
 	RunAuction,
-	AwaitingVaults(AuctionOutcome<T>),
-	VaultsRotated(AuctionOutcome<T>),
-	SessionRotating(AuctionOutcome<T>),
+	AwaitingVaults(AuctionOutcome<<T as Chainflip>::ValidatorId, T::Amount>),
+	VaultsRotated(AuctionOutcome<<T as Chainflip>::ValidatorId, T::Amount>),
+	SessionRotating(AuctionOutcome<<T as Chainflip>::ValidatorId, T::Amount>),
 }
 
 impl<T: Config> sp_std::fmt::Debug for RotationStatus<T> {
@@ -785,7 +785,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(auction_outcome: AuctionOutcome<T>) {
+	fn start_new_epoch(auction_outcome: AuctionOutcome<<T as Chainflip>::ValidatorId, T::Amount>) {
 		let epoch_authorities = auction_outcome.winners;
 		let new_bond = auction_outcome.bond;
 		let backup_candidates = auction_outcome.losers;

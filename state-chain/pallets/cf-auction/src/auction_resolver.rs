@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use core::cmp::{max, min};
 
 use sp_runtime::traits::AtLeast32BitUnsigned;
 
