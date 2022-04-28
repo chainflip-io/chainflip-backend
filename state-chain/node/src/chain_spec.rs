@@ -17,6 +17,7 @@ mod network_env;
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
+const FLIP_TOKEN_ADDRESS_DEFAULT: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
 const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
 const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_RINKEBY;
@@ -49,6 +50,7 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 }
 
 pub struct StateChainEnvironment {
+	flip_token_address: [u8; 20],
 	stake_manager_address: [u8; 20],
 	key_manager_address: [u8; 20],
 	ethereum_chain_id: u64,
@@ -61,6 +63,11 @@ pub struct StateChainEnvironment {
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
+	let flip_token_address: [u8; 20] = clean_eth_address(
+		&env::var("FLIP_TOKEN_ADDRESS")
+			.unwrap_or_else(|_| String::from(FLIP_TOKEN_ADDRESS_DEFAULT)),
+	)
+	.unwrap();
 	let stake_manager_address: [u8; 20] = clean_eth_address(
 		&env::var("STAKE_MANAGER_ADDRESS")
 			.unwrap_or_else(|_| String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
@@ -102,6 +109,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
 
 	StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -137,6 +145,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary =
 		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -166,6 +175,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
@@ -202,6 +212,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -237,6 +248,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
@@ -299,6 +311,7 @@ fn chainflip_three_node_testnet_config_from_env(
 	let snow_white =
 		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -358,6 +371,7 @@ fn chainflip_three_node_testnet_config_from_env(
 				],
 				2,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
@@ -401,6 +415,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	let snow_white =
 		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -482,6 +497,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				],
 				3,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,

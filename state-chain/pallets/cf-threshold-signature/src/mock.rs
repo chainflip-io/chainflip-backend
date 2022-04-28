@@ -9,7 +9,8 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_traits::{
-	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, ThresholdSigner,
+	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochIndex,
+	ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -106,7 +107,10 @@ impl cf_traits::SignerNomination for MockNominator {
 		unimplemented!("Single signer nomination not needed for these tests.")
 	}
 
-	fn threshold_nomination_with_seed<H>(_seed: H) -> Option<Vec<Self::SignerId>> {
+	fn threshold_nomination_with_seed<H>(
+		_seed: H,
+		_epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
 		Self::get_nominees()
 	}
 }

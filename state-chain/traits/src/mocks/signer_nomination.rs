@@ -5,6 +5,8 @@ macro_rules! impl_mock_signer_nomination {
 			pub static CANDIDATES: std::cell::RefCell<Vec<$account_id>> = Default::default();
 		}
 
+		use cf_traits::EpochIndex;
+
 		pub struct MockSignerNomination;
 
 		impl MockSignerNomination {
@@ -24,6 +26,7 @@ macro_rules! impl_mock_signer_nomination {
 
 			fn threshold_nomination_with_seed<H: frame_support::Hashable>(
 				_seed: H,
+				_epoch_index: EpochIndex,
 			) -> Option<Vec<Self::SignerId>> {
 				Some(CANDIDATES.with(|cell| cell.borrow().clone())).and_then(|v| {
 					if v.is_empty() {

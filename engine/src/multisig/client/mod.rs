@@ -80,7 +80,7 @@ impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
     fn from(cfe_sig: SchnorrSignature) -> Self {
         Self {
             s: cfe_sig.s,
-            k_times_g_addr: pubkey_to_eth_addr(cfe_sig.r),
+            k_times_g_address: pubkey_to_eth_addr(cfe_sig.r),
         }
     }
 }

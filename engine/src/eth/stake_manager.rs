@@ -22,10 +22,7 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 
-use super::{
-    decode_shared_event_closure, event_common::EventWithCommon, DecodeLogClosure, EthObserver,
-    SharedEvent,
-};
+use super::{event_common::EventWithCommon, DecodeLogClosure, EthObserver, EventParseError};
 
 /// A wrapper for the StakeManager Ethereum contract.
 pub struct StakeManager {
@@ -70,16 +67,6 @@ pub enum StakeManagerEvent {
         amount: u128,
     },
 
-    /// `FlipSupplyUpdated(oldSupply, newTotalSupply, stateChainBlockNumber)` event
-    FlipSupplyUpdated {
-        /// Old emission per block
-        old_supply: ethabi::Uint,
-        /// New emission per block
-        new_supply: ethabi::Uint,
-        /// State Chain block number for the new total supply
-        block_number: ethabi::Uint,
-    },
-
     /// `MinStakeChanged(oldMinStake, newMinStake)`
     MinStakeChanged {
         /// Old minimum stake
@@ -88,9 +75,13 @@ pub enum StakeManagerEvent {
         new_min_stake: ethabi::Uint,
     },
 
-    // TODO: Should be able to remove shared from here
-    /// Events that both the Key and Stake Manager contracts can output (Shared.sol)
-    Shared(SharedEvent),
+    /// `GovernanceWithdrawal(to, amount)`
+    GovernanceWithdrawal {
+        /// Withdrawal address
+        to: ethabi::Address,
+        /// Withdrawal amount
+        amount: u128,
+    },
 }
 
 #[async_trait]
@@ -155,10 +146,8 @@ impl EthObserver for StakeManager {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
-        let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
-
-        let decode_shared_event_closure = decode_shared_event_closure(&self.contract)?;
+        let gov_withdrawal = SignatureAndEvent::new(&self.contract, "GovernanceWithdrawal")?;
 
         Ok(Box::new(
             move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
@@ -199,21 +188,20 @@ impl EthObserver for StakeManager {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     }
-                } else if signature == flip_supply_updated.signature {
-                    let log = flip_supply_updated.event.parse_log(raw_log)?;
-                    StakeManagerEvent::FlipSupplyUpdated {
-                        old_supply: utils::decode_log_param(&log, "oldSupply")?,
-                        new_supply: utils::decode_log_param(&log, "newSupply")?,
-                        block_number: utils::decode_log_param(&log, "stateChainBlockNumber")?,
-                    }
                 } else if signature == min_stake_changed.signature {
                     let log = min_stake_changed.event.parse_log(raw_log)?;
                     StakeManagerEvent::MinStakeChanged {
                         old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
                         new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
                     }
+                } else if signature == gov_withdrawal.signature {
+                    let log = gov_withdrawal.event.parse_log(raw_log)?;
+                    StakeManagerEvent::GovernanceWithdrawal {
+                        to: utils::decode_log_param(&log, "to")?,
+                        amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    }
                 } else {
-                    StakeManagerEvent::Shared(decode_shared_event_closure(signature, raw_log)?)
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
                 })
             },
         ))
@@ -237,8 +225,17 @@ mod tests {
 
     use super::*;
     use hex;
+    use lazy_static::lazy_static;
     use std::str::FromStr;
     use web3::types::{H256, U256};
+
+    lazy_static! {
+        static ref ALICE: H160 =
+            web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap();
+        static ref NODE_ID: H256 =
+            H256::from_str("0x000000000000000000000000000000000000000000000000000000000000a455")
+                .unwrap();
+    }
 
     #[test]
     fn test_load_contract() {
@@ -259,9 +256,10 @@ mod tests {
             RawLog {
                 topics : vec![
                     staked_event_signature,
-                    H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
+                    *NODE_ID,
+                    H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 ],
-                data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap()
             }
         ).unwrap() {
             StakeManagerEvent::Staked {
@@ -270,15 +268,9 @@ mod tests {
                 staker,
                 return_addr,
             } => {
-                let expected_account_id =
-                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
-                        .unwrap();
-                assert_eq!(account_id, expected_account_id);
+                assert_eq!(account_id, AccountId32::from_str("000000000000000000000000000000000000000000000000000000000000a455").unwrap());
                 assert_eq!(amount, 40000000000000000000000u128);
-                assert_eq!(staker,
-                    web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
-                    .unwrap()
-                );
+                assert_eq!(staker,ALICE.clone());
                 assert_eq!(
                     return_addr,
                     web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
@@ -302,9 +294,10 @@ mod tests {
             RawLog {
                 topics : vec![
                     claimed_register_event_signature,
-                    H256::from_str("0x0000000000000000000000000000000000000000000000000000000000003039").unwrap()
+                    *NODE_ID,
+                    H256::from_str("0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap()
                 ],
-                data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a39860000000000000000000000000000073d669c173d88ccb01f6daab3a3304af7a1b22c10000000000000000000000000000000000000000000000000000000060d4910f0000000000000000000000000000000000000000000000000000000060d73402").unwrap()
+                data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a3986000000000000000000000000000000000000000000000000000000000000061a6fd4e0000000000000000000000000000000000000000000000000000000061a9a04b").unwrap()
             }
         ).unwrap() {
             StakeManagerEvent::ClaimRegistered {
@@ -316,7 +309,7 @@ mod tests {
             } => {
                 assert_eq!(
                     account_id,
-                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                    AccountId32::from_str("000000000000000000000000000000000000000000000000000000000000a455")
                         .unwrap()
                 );
                 assert_eq!(
@@ -324,17 +317,14 @@ mod tests {
                     web3::types::U256::from_dec_str("13333333333333334032384").unwrap()
                 );
                 assert_eq!(
-                    staker,
-                    web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1")
-                        .unwrap()
-                );
+                    staker, ALICE.clone());
                 assert_eq!(
                     start_time,
-                    web3::types::U256::from_dec_str("1624543503").unwrap()
+                    web3::types::U256::from_dec_str("1638333774").unwrap()
                 );
                 assert_eq!(
                     expiry_time,
-                    web3::types::U256::from_dec_str("1624716290").unwrap()
+                    web3::types::U256::from_dec_str("1638506571").unwrap()
                 );
             }
             _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
@@ -355,7 +345,7 @@ mod tests {
                 topics: vec![
                     claimed_executed_event_signature,
                     H256::from_str(
-                        "0x0000000000000000000000000000000000000000000000000000000000003039",
+                        "0x000000000000000000000000000000000000000000000000000000000000a455",
                     )
                     .unwrap(),
                 ],
@@ -368,47 +358,16 @@ mod tests {
         .unwrap()
         {
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                let expected_node_id =
-                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
-                        .unwrap();
-                assert_eq!(account_id, expected_node_id);
+                assert_eq!(
+                    account_id,
+                    AccountId32::from_str(
+                        "000000000000000000000000000000000000000000000000000000000000a455",
+                    )
+                    .unwrap()
+                );
                 assert_eq!(amount, 13333333333333334032384);
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
-        }
-    }
-
-    #[test]
-    fn flip_supply_updated_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
-        let decode_log = stake_manager.decode_log_closure().unwrap();
-
-        let flip_supply_updated_event_signature =
-            H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
-                .unwrap();
-        match decode_log(
-            flip_supply_updated_event_signature,
-            RawLog {
-                topics : vec![flip_supply_updated_event_signature],
-                data : hex::decode("0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064").unwrap()
-            }
-        ).unwrap() {
-            StakeManagerEvent::FlipSupplyUpdated {
-                old_supply,
-                new_supply,
-                block_number,
-            } => {
-                assert_eq!(
-                    old_supply,
-                    U256::from_dec_str("90000000000000000000000000").unwrap()
-                );
-                assert_eq!(
-                    new_supply,
-                    U256::from_dec_str("100000000000000000000000000").unwrap()
-                );
-                assert_eq!(block_number, U256::from_dec_str("100").unwrap());
-            }
-            _ => panic!("Expected Staking::FlipSupplyUpdated, got a different variant"),
         }
     }
 
@@ -445,30 +404,40 @@ mod tests {
     }
 
     #[test]
-    fn refunded_log_parsing() {
+    fn gov_withdrawal_log_parsing() {
         let stake_manager = StakeManager::new(H160::default()).unwrap();
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
-        let refunded_event_signature =
-            H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
+        let event_signature =
+            H256::from_str("0xfb698a1f0614fe8250cab73f9e958d9eb3aa668918f243f3638dba6da247643d")
                 .unwrap();
 
         match decode_log(
-            refunded_event_signature,
+            event_signature,
             RawLog {
-                topics: vec![refunded_event_signature],
+                topics: vec![event_signature],
                 data: hex::decode(
-                    "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
+                    "000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb9226600000000000000000000000000000000000000000008802b375f23cae2e00000",
                 )
                 .unwrap(),
             },
         )
         .unwrap()
         {
-            StakeManagerEvent::Shared(SharedEvent::Refunded { amount }) => {
-                assert_eq!(11126819398980, amount);
+            StakeManagerEvent::GovernanceWithdrawal {
+                to,
+                amount,
+            } => {
+                assert_eq!(
+                    to,
+                    H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+                );
+                assert_eq!(
+                    amount,
+                    10276666666666666665967616
+                );
             }
-            _ => panic!("Expected StakeManagerEvent::Refunded, got a different variant"),
+            _ => panic!("Expected Staking::GovernanceWithdrawal, got a different variant"),
         }
     }
 }

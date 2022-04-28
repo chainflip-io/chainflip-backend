@@ -2,6 +2,7 @@ use super::*;
 
 /// Environment variables for SOUNDCHECK public testnet.
 pub const SOUNDCHECK: StateChainEnvironment = StateChainEnvironment {
+	flip_token_address: hex_literal::hex!("bFf4044285738049949512Bd46B42056Ce5dD59b"),
 	stake_manager_address: hex_literal::hex!("3A96a2D552356E17F97e98FF55f69fDFb3545892"),
 	key_manager_address: hex_literal::hex!("70d15CD89a551Bcf90fFC72bc006E633c2e4F828"),
 	ethereum_chain_id: 4, // RINKEBY

@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::UpdateFlipSupply;
-use cf_traits::{Broadcaster, NonceProvider};
+use cf_traits::{Broadcaster, EthEnvironmentProvider, ReplayProtectionProvider};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -93,7 +93,10 @@ pub mod pallet {
 		type BlocksPerDay: Get<Self::BlockNumber>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider<Self::HostChain>;
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::HostChain>;
+
+		/// Something that can provide the stake manager address.
+		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -258,16 +261,10 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
+	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
 		pub validator_emission_inflation: BasisPoints,
 		pub backup_validator_emission_inflation: BasisPoints,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { validator_emission_inflation: 0, backup_validator_emission_inflation: 0 }
-		}
 	}
 
 	/// At genesis we need to set the inflation rates for active and passive validators.
@@ -303,9 +300,10 @@ impl<T: Config> Pallet<T> {
 		// Emit a threshold signature request.
 		// TODO: See if we can replace an old request if there is one.
 		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
-			T::NonceProvider::next_nonce(),
+			T::ReplayProtectionProvider::replay_protection(),
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
+			&T::EthEnvironmentProvider::stake_manager_address(),
 		));
 	}
 

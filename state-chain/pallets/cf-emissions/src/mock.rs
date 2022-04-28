@@ -1,5 +1,8 @@
 use crate as pallet_cf_emissions;
-use cf_chains::{mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, UpdateFlipSupply};
+use cf_chains::{
+	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
+	UpdateFlipSupply,
+};
 use codec::{Decode, Encode};
 use frame_support::{
 	parameter_types, storage,
@@ -14,7 +17,9 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::{Broadcaster, WaivedFees};
+use cf_traits::{
+	mocks::eth_environment_provider::MockEthEnvironmentProvider, Broadcaster, WaivedFees,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -22,7 +27,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
-	Chainflip, NonceProvider, RewardsDistribution,
+	Chainflip, ReplayProtectionProvider, RewardsDistribution,
 };
 
 pub type AccountId = u64;
@@ -117,11 +122,17 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-pub const NONCE: u32 = 42;
+pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
+pub const CHAIN_ID: u64 = 31337;
+pub const COUNTER: u64 = 42;
 
-impl NonceProvider<MockEthereum> for Test {
-	fn next_nonce() -> <MockEthereum as ChainAbi>::Nonce {
-		NONCE
+impl ReplayProtectionProvider<MockEthereum> for Test {
+	fn replay_protection() -> <MockEthereum as ChainAbi>::ReplayProtection {
+		EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: COUNTER,
+		}
 	}
 }
 
@@ -148,18 +159,25 @@ impl RewardsDistribution for MockRewardsDistribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockUpdateFlipSupply {
-	pub nonce: <MockEthereum as ChainAbi>::Nonce,
+	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_total_supply: u128,
 	pub block_number: u64,
+	pub stake_manager_address: [u8; 20],
 }
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::Nonce,
+		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
+		stake_manager_address: &[u8; 20],
 	) -> Self {
-		Self { nonce, new_total_supply, block_number }
+		Self {
+			nonce,
+			new_total_supply,
+			block_number,
+			stake_manager_address: *stake_manager_address,
+		}
 	}
 }
 
@@ -210,7 +228,8 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type BlocksPerDay = BlocksPerDay;
-	type NonceProvider = Self;
+	type ReplayProtectionProvider = Self;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 }
