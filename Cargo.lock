@@ -2146,9 +2146,8 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ac3ff5224ef91f3c97e03eb1de2db82743427e91aaa5ac635f454f0b164f5a"
+version = "0.14.1"
+source = "git+https://github.com/chainflip-io/finality-grandpa.git?tag=chainflip-v0.14.1#f594febef91a8ae2771ac1b72f87984d203467c3"
 dependencies = [
  "either",
  "futures 0.3.17",
@@ -2157,7 +2156,6 @@ dependencies = [
  "num-traits 0.2.14",
  "parity-scale-codec",
  "parking_lot 0.11.2",
- "scale-info",
 ]
 
 [[package]]
@@ -8974,7 +8972,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt.git?branch=chore/chainflip-monthly-2021-09+1#230ccc3ca8fb8fa6c3176bfa2dce4d24cc344f56"
+source = "git+https://github.com/chainflip-io/substrate-subxt.git?tag=chainflip-monthly-2021-09#6b72146270bbf6bb25a8747442501eaadac76b3e"
 dependencies = [
  "async-trait",
  "dyn-clone",
@@ -9007,7 +9005,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
-source = "git+https://github.com/chainflip-io/substrate-subxt.git?branch=chore/chainflip-monthly-2021-09+1#230ccc3ca8fb8fa6c3176bfa2dce4d24cc344f56"
+source = "git+https://github.com/chainflip-io/substrate-subxt.git?tag=chainflip-monthly-2021-09#6b72146270bbf6bb25a8747442501eaadac76b3e"
 dependencies = [
  "async-trait",
  "heck",
