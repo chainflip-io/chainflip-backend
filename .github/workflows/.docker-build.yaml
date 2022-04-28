@@ -1,4 +1,5 @@
 on:
+  push:
   workflow_dispatch:
     inputs:
       nightly_version:
@@ -10,7 +11,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: "${{ github.repository }}/rust-base"
-  TAG: $IMAGE_NAME:${{ github.event.inputs.nightly_version }}
+#  TAG: $IMAGE_NAME:${{ github.event.inputs.nightly_version }}
+  TAG: nightly-2021-07-05
 
 jobs:
   build:
@@ -48,7 +50,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           file: rust-base.Dockerfile
