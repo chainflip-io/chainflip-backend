@@ -1,3 +1,4 @@
+name: Build rust-base Docker image
 on:
   workflow_dispatch:
     inputs:
