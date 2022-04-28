@@ -207,6 +207,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type TransmissionTimeout = TransmissionTimeout;
 	type MaximumAttempts = MaximumAttempts;
 	type WeightInfo = ();
+	type KeyProvider = MockKeyProvider<Ethereum, <Self as Chainflip>::KeyId>;
 }
 
 parameter_types! {

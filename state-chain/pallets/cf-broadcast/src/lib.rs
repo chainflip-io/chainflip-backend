@@ -244,8 +244,13 @@ pub mod pallet {
 
 	/// A mapping from Signature to Payload.
 	#[pallet::storage]
-	pub type SignatureToPayloadLookup<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ThresholdSignatureFor<T, I>, PayloadFor<T, I>, OptionQuery>;
+	pub type ApiCallLookup<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BroadcastId,
+		(<T as Config<I>>::ApiCall, ThresholdSignatureFor<T, I>),
+		OptionQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -529,28 +534,26 @@ pub mod pallet {
 			} else {
 				match failure {
 					TransmissionFailure::TransactionRejected => {
-						// let signature = broadcast_attempt.unsigned_tx.clone();
-						// let payload = SignatureToBroadcastIdLookup::<T,
-						// I>::get(signature).unwrap();
-						Self::report_and_schedule_retry(
-							&signer,
-							broadcast_attempt,
-							PalletOffence::TransactionFailedOnTransmission,
-						);
-						// if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
-						// 	&T::KeyProvider::current_key(),
-						// 	&payload,
-						// 	signature,
-						// ) {
-						// 	Self::report_and_schedule_retry(
-						// 		&signer,
-						// 		broadcast_attempt,
-						// 		PalletOffence::TransactionFailedOnTransmission,
-						// 	);
-						// } else {
-						// 	// if the signature is invalid, we have to re-request the signature
-						// 	// TODO: report this to the chain
-						// }
+						let (api_call, signature) = ApiCallLookup::<T, I>::take(
+							broadcast_attempt.broadcast_attempt_id.broadcast_id,
+						)
+						.unwrap();
+						let payload = api_call.threshold_signature_payload();
+						if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
+							&T::KeyProvider::current_key(),
+							&payload,
+							&signature,
+						) {
+							Self::report_and_schedule_retry(
+								&signer,
+								broadcast_attempt,
+								PalletOffence::TransactionFailedOnTransmission,
+							);
+						} else {
+							// if the signature is invalid, we have to re-request the signature
+							// TODO: clean up storage items
+							Self::threshold_sign_and_broadcast(api_call);
+						}
 					},
 					TransmissionFailure::TransactionFailed => {
 						Self::deposit_event(Event::<T, I>::BroadcastFailed(
@@ -592,13 +595,13 @@ pub mod pallet {
 					Error::<T, I>::ThresholdSignatureUnavailable
 				})?;
 
-			// Save the payload in case we need to re-request the signature.
-			SignatureToPayloadLookup::<T, I>::insert(&sig, api_call.threshold_signature_payload());
+			let tranaction =
+				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&sig));
 
-			Self::start_broadcast(
-				&sig,
-				T::TransactionBuilder::build_transaction(&api_call.signed(&sig)),
-			);
+			let broadcast_id = Self::start_broadcast(&sig, tranaction);
+
+			// Save the payload and the coresponinding signature to the lookup table
+			ApiCallLookup::<T, I>::insert(broadcast_id, (api_call, sig));
 
 			Ok(().into())
 		}
@@ -673,7 +676,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_broadcast(
 		signature: &ThresholdSignatureFor<T, I>,
 		unsigned_tx: UnsignedTransactionFor<T, I>,
-	) {
+	) -> BroadcastId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
@@ -686,6 +689,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
 			unsigned_tx,
 		});
+
+		broadcast_id
 	}
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {

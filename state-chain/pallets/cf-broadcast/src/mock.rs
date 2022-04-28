@@ -3,7 +3,10 @@ use std::cell::RefCell;
 use crate::{
 	self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence, SignerNomination,
 };
-use cf_chains::mocks::{MockApiCall, MockEthereum, MockTransactionBuilder};
+use cf_chains::{
+	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
+	ChainCrypto,
+};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, threshold_signer::MockThresholdSigner},
 	Chainflip, EpochIndex,
@@ -105,6 +108,24 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
+// Mock KeyProvider
+pub const MOCK_KEY_ID: &[u8] = b"K-ID";
+pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
+
+pub struct MockKeyProvider;
+
+impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
+	type KeyId = Vec<u8>;
+
+	fn current_key_id() -> Self::KeyId {
+		MOCK_KEY_ID.to_vec()
+	}
+
+	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
+		MOCK_AGG_KEY
+	}
+}
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
@@ -120,6 +141,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();
 	type MaximumAttempts = MaximumAttempts;
+	type KeyProvider = MockKeyProvider;
 }
 
 // Build genesis storage according to the mock runtime.
