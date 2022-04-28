@@ -369,7 +369,7 @@ fn test_invalid_sigdata_is_noop() {
 }
 
 #[test]
-fn cfe_responds_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
+fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 
@@ -486,8 +486,7 @@ fn cfe_responds_success_already_expired_transaction_sig_broadcast_attempt_id_is_
 			vec![1, 2]
 		);
 
-		// we now submit the transmission success for 0
-
+		// We submit that the signature was accepted
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
