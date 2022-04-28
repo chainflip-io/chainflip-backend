@@ -129,31 +129,16 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 
 #[cfg(test)]
 mod tests_read_clean_and_decode_hex_str_file {
-    use std::{fs::File, io::Write, panic::catch_unwind, path::PathBuf};
-
-    use crate::testing::assert_ok;
+    use crate::testing::{assert_ok, with_file};
 
     use super::*;
-    use tempdir::TempDir;
-
-    fn with_file<C: FnOnce(PathBuf) + std::panic::UnwindSafe>(text: &[u8], closure: C) {
-        let dir = TempDir::new("tests").unwrap();
-        let file_path = dir.path().join("foo.txt");
-        let result = catch_unwind(|| {
-            let mut f = File::create(&file_path).unwrap();
-            f.write_all(text).unwrap();
-            closure(file_path);
-        });
-        dir.close().unwrap();
-        result.unwrap();
-    }
 
     #[test]
     fn load_hex_file() {
         with_file(b"   \"\'\'\"0xhex\"\'  ", |file_path| {
             assert_eq!(
                 assert_ok!(read_clean_and_decode_hex_str_file(
-                    &file_path,
+                    file_path,
                     "TEST",
                     |str| Ok(str.to_string())
                 )),
@@ -167,7 +152,7 @@ mod tests_read_clean_and_decode_hex_str_file {
         with_file(b"   h\" \'ex  ", |file_path| {
             assert_eq!(
                 assert_ok!(read_clean_and_decode_hex_str_file(
-                    &file_path,
+                    file_path,
                     "TEST",
                     |str| Ok(str.to_string())
                 )),
