@@ -9,6 +9,7 @@ use crate::{
     state_chain::client::StateChainRpcApi,
 };
 
+use cf_traits::EpochIndex;
 use sp_runtime::AccountId32;
 
 use web3::{
@@ -94,6 +95,7 @@ impl EthObserver for StakeManager {
 
     async fn handle_event<RpcClient>(
         &self,
+        _epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,

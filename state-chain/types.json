@@ -36,10 +36,6 @@
   "BasisPoints": "u32",
   "Balance": "FlipBalance",
   "Bid": "(ValidatorId, Amount)",
-  "BlockHeightWindow": {
-    "from": "u64",
-    "to": "Option<u64>"
-  },
   "BlockNumber": "u32",
   "BroadcastAttempt": {
     "broadcast_attempt_id": "BroadcastAttemptId",
@@ -252,7 +248,7 @@
   "ValidatorId": "AccountId",
   "Vault": {
     "public_key": "AggKeyFor",
-    "active_window": "BlockHeightWindow"
+    "active_from_block": "u64"
   },
   "ValidatorSize": "u32",
   "AwaitingKeygen": {
