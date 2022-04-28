@@ -176,7 +176,7 @@ pub enum KeyManagerEvent {
     SignatureAccepted {
         /// Contains a signature and the msgHash that the signature is over. Kept as a single struct.
         sig_data: SigData,
-        /// Address of the origin of the broadcast.
+        /// Address of the signer of the broadcast.
         signer: ethabi::Address,
     },
 }
