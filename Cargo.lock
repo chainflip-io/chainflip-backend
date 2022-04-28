@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "cf-chains",
  "frame-benchmarking",

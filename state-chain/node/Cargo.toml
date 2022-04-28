@@ -8,7 +8,7 @@ license = '<TODO>'
 name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.2.4'
+version = '0.2.5'
 
 [[bin]]
 name = 'chainflip-node'
@@ -25,7 +25,7 @@ tag = 'chainflip-monthly-2021-09+1'
 path = '../runtime'
 
 [dependencies]
-# Chainflip-specific dependencies  
+# Chainflip-specific dependencies
 multisig-p2p-transport = {path = '../multisig-p2p-transport'}
 futures = {version = '0.3.4'}
 hex = '0.4'
