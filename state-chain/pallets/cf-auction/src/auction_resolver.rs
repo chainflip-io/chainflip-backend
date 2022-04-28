@@ -211,6 +211,16 @@ mod test_auction_resolution {
 		};
 	}
 
+	fn gen_bid_profile(inflection_point: u64, falloff_slope: u128) -> impl Fn(u64) -> u128 {
+		move |i| {
+			if i < inflection_point {
+				100u128
+			} else {
+				100u128.saturating_sub(i as u128 * falloff_slope)
+			}
+		}
+	}
+
 	#[test]
 	fn set_size_expands_to_limit() {
 		const CURRENT_SIZE: u32 = 50;
@@ -225,7 +235,8 @@ mod test_auction_resolution {
 			DynamicSetSizeAuctionResolver::try_new(CURRENT_SIZE, AUCTION_PARAMETERS).unwrap();
 
 		// All candidates bid the same amount.
-		let candidates = (0u64..100).map(|i| (i, 100u128)).collect::<Vec<_>>();
+		let bid_profile = gen_bid_profile(100, 0);
+		let candidates = (0u64..100).map(|i| (i, bid_profile(i))).collect::<Vec<_>>();
 
 		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
 
@@ -249,9 +260,8 @@ mod test_auction_resolution {
 
 		// Constant bids up to the inflection point, zero thereafter.
 		// This creates a tcl profile with a local peak at the inflection point.
-		let candidates = (0u64..100)
-			.map(|i| (i, if i < INFLECTION_POINT { 100u128 } else { 0u128 }))
-			.collect::<Vec<_>>();
+		let bid_profile = gen_bid_profile(INFLECTION_POINT, 100);
+		let candidates = (0u64..100).map(|i| (i, bid_profile(i))).collect::<Vec<_>>();
 
 		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
 
@@ -279,7 +289,6 @@ mod test_auction_resolution {
 	fn set_size_contracts_to_limit() {
 		const CURRENT_SIZE: u32 = 50;
 		const MAX_CONTRACTION: u32 = 10;
-		const INFLECTION_POINT: u64 = 30;
 		const AUCTION_PARAMETERS: DynamicSetSizeParameters = DynamicSetSizeParameters {
 			min_size: 5,
 			max_size: 100,
@@ -290,26 +299,16 @@ mod test_auction_resolution {
 			DynamicSetSizeAuctionResolver::try_new(CURRENT_SIZE, AUCTION_PARAMETERS).unwrap();
 
 		// Constant bids up to the inflection point, rapidly decreasing thereafter.
-		// This creates a tcl profile with a global peak at the inflection point.
 		// However this time, the peak is lower than the max_contraction limit.
-		let candidates = (1u64..=100)
-			.map(|i| {
-				(
-					i,
-					if i < INFLECTION_POINT {
-						100u128
-					} else {
-						100u128.saturating_sub(i as u128 * 2)
-					},
-				)
-			})
-			.collect::<Vec<_>>();
+		let bid_profile = gen_bid_profile(30, 2);
+
+		let candidates = (1u64..=100).map(|i| (i, bid_profile(i))).collect::<Vec<_>>();
 
 		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
 
 		assert_eq!(
 			outcome.bond,
-			(100u128 - (CURRENT_SIZE - MAX_CONTRACTION) as u128 * 2),
+			bid_profile((CURRENT_SIZE - MAX_CONTRACTION) as u64),
 			"\nCandidate bids were: {:?}. \nOutcome was: {:?}. \nTcl: {:?}.",
 			candidates,
 			outcome,
