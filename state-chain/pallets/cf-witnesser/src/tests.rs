@@ -41,6 +41,7 @@ fn call_on_threshold() {
 		assert_eq!(votes.count_ones(), 3);
 
 		assert_event_sequence!(
+			Test,
 			Event::Witnesser(crate::Event::WitnessReceived(call_hash, ALISSA, 1)),
 			Event::Witnesser(crate::Event::WitnessReceived(call_hash, BOBSON, 2)),
 			Event::Witnesser(crate::Event::ThresholdReached(call_hash, 2)),
@@ -85,6 +86,7 @@ fn no_double_call_on_epoch_boundary() {
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
 
 		assert_event_sequence!(
+			Test,
 			Event::Witnesser(crate::Event::WitnessReceived(call_hash, ALISSA, 1)),
 			Event::Witnesser(crate::Event::WitnessReceived(call_hash, ALISSA, 1)),
 			Event::Witnesser(crate::Event::WitnessReceived(call_hash, BOBSON, 2)),

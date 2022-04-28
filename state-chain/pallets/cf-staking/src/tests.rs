@@ -5,6 +5,8 @@ use crate::{
 use cf_chains::RegisterClaim;
 use cf_traits::mocks::{system_state_info::MockSystemStateInfo, time_source};
 use cf_test_utilities::assert_event_sequence;
+
+use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use sp_runtime::DispatchError;
@@ -73,6 +75,7 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(MockThresholdSigner::received_requests().len(), 2);
 
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
@@ -146,6 +149,7 @@ fn claiming_unclaimable_is_err() {
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE);
 
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
@@ -260,6 +264,7 @@ fn staked_and_claimed_events_must_match() {
 		assert_eq!(MockThresholdSigner::received_requests().len(), 1);
 
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
@@ -330,6 +335,7 @@ fn signature_is_inserted() {
 		MockThresholdSigner::on_signature_ready(&ALICE).unwrap();
 
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
@@ -347,19 +353,23 @@ fn signature_is_inserted() {
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
 				vec![
-					85, 85, 48, 82, 0, 100, 180, 13, 71, 180, 77, 36, 55, 105, 94, 97, 107, 146,
-					164, 132, 234, 14, 168, 15, 168, 24, 167, 137, 235, 138, 16, 107, 155, 242, 61,
-					18, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
-					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
+					26, 207, 82, 35, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207, 207, 207, 207, 207,
+					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 0,
 					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 42, 42, 42, 42, 42,
-					42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20
+					0, 0, 0, 122, 105, 249, 102, 238, 241, 89, 232, 39, 185, 33, 125, 210, 208,
+					147, 185, 206, 123, 93, 154, 198, 139, 192, 212, 144, 47, 233, 178, 176, 182,
+					4, 171, 175, 231, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
+					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
+					207, 207, 207, 207, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207,
+					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
+					207, 207, 207, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
+					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
+					161, 161, 161, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 42,
+					42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 20
 				]
 			))
 		);
@@ -450,6 +460,7 @@ fn test_retirement() {
 		);
 
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
@@ -511,6 +522,7 @@ fn claim_expiry() {
 		assert!(!PendingClaims::<Test>::contains_key(BOB));
 
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
@@ -542,19 +554,23 @@ fn claim_expiry() {
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
 				vec![
-					85, 85, 48, 82, 0, 100, 180, 13, 71, 180, 77, 36, 55, 105, 94, 97, 107, 146,
-					164, 132, 234, 14, 168, 15, 168, 24, 167, 137, 235, 138, 16, 107, 155, 242, 61,
-					18, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
-					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
+					26, 207, 82, 35, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207, 207, 207, 207, 207,
+					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 0,
 					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 42, 42, 42, 42, 42,
-					42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20
+					0, 0, 0, 122, 105, 249, 102, 238, 241, 89, 232, 39, 185, 33, 125, 210, 208,
+					147, 185, 206, 123, 93, 154, 198, 139, 192, 212, 144, 47, 233, 178, 176, 182,
+					4, 171, 175, 231, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
+					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
+					207, 207, 207, 207, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207,
+					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
+					207, 207, 207, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
+					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
+					161, 161, 161, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 42,
+					42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 0, 0,
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					0, 0, 0, 20
 				]
 			)),
 			Event::Staking(crate::Event::ClaimExpired(ALICE, STAKE)),
@@ -609,6 +625,7 @@ fn test_claim_all() {
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
@@ -655,6 +672,7 @@ fn test_check_withdrawal_address() {
 			println!("{:?}", e);
 		}
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
@@ -716,6 +734,7 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Expect an failed stake event to be fired but no stake event
 		assert_event_sequence!(
+			Test,
 			Event::System(frame_system::Event::NewAccount(ALICE)),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,

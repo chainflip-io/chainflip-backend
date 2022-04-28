@@ -7,8 +7,8 @@ pub fn last_event<Runtime: Config>() -> <Runtime as Config>::Event {
 /// Checks the deposited events in the order they occur
 #[macro_export]
 macro_rules! assert_event_sequence {
-	($($evt:expr $( => $test:block )? ),*) => {
-		let mut events = frame_system::Pallet::<Test>::events()
+	($runtime:ty, $($evt:expr $( => $test:block )? ),*) => {
+		let mut events = frame_system::Pallet::<$runtime>::events()
 		.into_iter()
 		// We want to be able to input the events into this macro in the order they occurred.
 		.rev()
