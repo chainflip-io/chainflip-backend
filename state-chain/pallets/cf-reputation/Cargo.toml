@@ -27,12 +27,12 @@ version = '2.3.1'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.scale-info]
 default-features = false
@@ -43,17 +43,17 @@ version = '1.0'
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 # Dev dependencies
 [dev-dependencies]
@@ -62,12 +62,12 @@ serde = { version = '1.0.126', default-features = false, features = ['derive'] }
 [dev-dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 
 [features]
