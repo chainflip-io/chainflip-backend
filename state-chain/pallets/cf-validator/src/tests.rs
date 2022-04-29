@@ -73,6 +73,20 @@ fn should_request_emergency_rotation() {
 			!ValidatorPallet::emergency_rotation_in_progress(),
 			"we should not be in an emergency rotation"
 		);
+
+		// Once we've passed the Idle phase, requesting an emergency rotation should have no
+		// effect on the rotation status.
+		for status in [
+			RotationStatusOf::<Test>::RunAuction,
+			RotationStatusOf::<Test>::AwaitingVaults(Default::default()),
+			RotationStatusOf::<Test>::VaultsRotated(Default::default()),
+			RotationStatusOf::<Test>::SessionRotating(Default::default()),
+		] {
+			RotationPhase::<Test>::put(&status);
+			ValidatorPallet::request_emergency_rotation();
+			assert_eq!(RotationPhase::<Test>::get(), status,);
+			ValidatorPallet::emergency_rotation_completed();
+		}
 	});
 }
 
