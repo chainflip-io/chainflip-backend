@@ -239,7 +239,7 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
-	type ResetReputation = MockReputationResetter<Self>;
+	type ReputationResetter = MockReputationResetter<Self>;
 }
 
 /// Session pallet requires a set of validators at genesis.

@@ -9,7 +9,9 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
-use cf_traits::{offence_reporting::*, Chainflip, Heartbeat, NetworkState, Slashing};
+use cf_traits::{
+	offence_reporting::*, Chainflip, Heartbeat, NetworkState, ReputationResetter, Slashing,
+};
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -424,10 +426,14 @@ impl<T: Config> Pallet<T> {
 			Default::default()
 		})
 	}
+}
+
+impl<T: Config> ReputationResetter for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
 
 	/// Reset both the online credits and the reputation points of a validator to zero.
-	pub fn reset_reputation(validator_id: &T::ValidatorId) {
-		Reputations::<T>::mutate(validator_id, |rep| {
+	fn reset_reputation(validator: &Self::ValidatorId) {
+		Reputations::<T>::mutate(validator, |rep| {
 			rep.reset_reputation();
 			rep.reset_online_credits();
 		});

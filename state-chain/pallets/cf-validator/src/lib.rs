@@ -166,7 +166,7 @@ pub mod pallet {
 		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
 
 		/// This is used to reset the validator's reputation
-		type ResetReputation: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
+		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
 	}
 
 	#[pallet::event]
@@ -834,7 +834,7 @@ impl<T: Config> Pallet<T> {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_validator(validator) == 0 {
 				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(validator);
-				T::ResetReputation::reset_reputation(validator);
+				T::ReputationResetter::reset_reputation(validator);
 			}
 			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}

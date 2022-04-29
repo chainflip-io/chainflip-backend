@@ -51,7 +51,7 @@ pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	KeygenOffences, ResetReputation,
+	KeygenOffences,
 };
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
@@ -168,7 +168,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type OffenceReporter = Reputation;
-	type ResetReputation = ResetReputation;
+	type ReputationResetter = Reputation;
 }
 
 impl pallet_cf_environment::Config for Runtime {
