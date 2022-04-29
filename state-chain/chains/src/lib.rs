@@ -74,8 +74,12 @@ pub trait ChainAbi: ChainCrypto {
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
 pub trait ApiCall<Abi: ChainAbi>: Parameter {
-	/// Get the payload over which the threshold signature should be generated.
-	fn threshold_signature_payload(&self) -> <Abi as ChainCrypto>::Payload;
+	/// Get the payload over which the threshold signature should be generated,
+	/// with a given set of replay_protection fields.
+	fn threshold_signature_payload(
+		&self,
+		replay_protection: Abi::ReplayProtection,
+	) -> <Abi as ChainCrypto>::Payload;
 
 	/// Add the threshold signature to the api call.
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
@@ -96,16 +100,12 @@ where
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
-		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Self;
+	fn new_unsigned(new_key: <Abi as ChainCrypto>::AggKey) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
@@ -114,13 +114,7 @@ pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 
 /// Constructs the `RegisterClaim` api call.
 pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
-		node_id: &[u8; 32],
-		amount: u128,
-		address: &[u8; 20],
-		expiry: u64,
-	) -> Self;
+	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self;
 
 	fn amount(&self) -> u128;
 }
@@ -257,7 +251,10 @@ pub mod mocks {
 	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
 
 	impl<C: ChainAbi> ApiCall<C> for MockApiCall<C> {
-		fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload {
+		fn threshold_signature_payload(
+			&self,
+			_replay_protection: C::ReplayProtection,
+		) -> <C as ChainCrypto>::Payload {
 			self.0.clone()
 		}
 

@@ -634,7 +634,6 @@ impl<T: Config> Pallet<T> {
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(
-			T::ReplayProtectionProvider::replay_protection(),
 			<T as Config>::StakerId::from_ref(account_id).as_ref(),
 			amount.into(),
 			&address,
@@ -643,7 +642,7 @@ impl<T: Config> Pallet<T> {
 
 		// Emit a threshold signature request.
 		T::ThresholdSigner::request_signature_with_callback(
-			call.threshold_signature_payload(),
+			call.threshold_signature_payload(T::ReplayProtectionProvider::replay_protection()),
 			|id| Call::<T>::post_claim_signature(account_id.clone(), id).into(),
 		);
 

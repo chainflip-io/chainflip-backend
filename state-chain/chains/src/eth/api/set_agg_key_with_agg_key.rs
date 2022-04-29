@@ -14,7 +14,7 @@ use super::EthereumReplayProtection;
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
 pub struct SetAggKeyWithAggKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -23,15 +23,8 @@ pub struct SetAggKeyWithAggKey {
 }
 
 impl SetAggKeyWithAggKey {
-	pub fn new_unsigned<Key: Into<AggKey>>(
-		replay_protection: EthereumReplayProtection,
-		new_key: Key,
-	) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(replay_protection), new_key: new_key.into() };
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-
-		calldata
+	pub fn new_unsigned<Key: Into<AggKey>>(new_key: Key) -> Self {
+		Self { sig_data: SigData::new_empty(), new_key: new_key.into() }
 	}
 
 	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
@@ -39,7 +32,13 @@ impl SetAggKeyWithAggKey {
 		self
 	}
 
-	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+	pub fn insert_replay_protection(mut self, replay_protection: EthereumReplayProtection) -> Self {
+		self.sig_data.insert_replay_protection(replay_protection);
+		self.sig_data.insert_msg_hash_from(self.abi_encoded().as_slice());
+		self
+	}
+
+	pub fn signing_payload(self) -> <Ethereum as ChainCrypto>::Payload {
 		self.sig_data.msg_hash
 	}
 
@@ -116,18 +115,21 @@ mod test_set_agg_key_with_agg_key {
 			)
 			.as_ref(),
 		);
-		let call = SetAggKeyWithAggKey::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
-				chain_id: 31337,
-				nonce: 15,
-			},
-			AggKey::from_pubkey_compressed(hex_literal::hex!(
+		let call =
+			SetAggKeyWithAggKey::new_unsigned(AggKey::from_pubkey_compressed(hex_literal::hex!(
 				"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
-			)),
-		);
+			)));
 
-		assert_eq!(call.signing_payload(), expected_payload);
+		let replay_protection = EthereumReplayProtection {
+			key_manager_address: hex_literal::hex!("5fbdb2315678afecb367f032d93f642f64180aa3"),
+			chain_id: 0x7a69,
+			nonce: 0xf,
+		};
+
+		assert_eq!(
+			call.insert_replay_protection(replay_protection).signing_payload(),
+			expected_payload
+		);
 	}
 
 	#[test]
@@ -149,26 +151,31 @@ mod test_set_agg_key_with_agg_key {
 
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
-		let set_agg_key_runtime = SetAggKeyWithAggKey::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
-			AggKey { pub_key_x: FAKE_NEW_KEY_X, pub_key_y_parity: FAKE_NEW_KEY_Y },
-		);
+		let mut set_agg_key_runtime = SetAggKeyWithAggKey::new_unsigned(AggKey {
+			pub_key_x: FAKE_NEW_KEY_X,
+			pub_key_y_parity: FAKE_NEW_KEY_Y,
+		});
+
+		let replay_protection = EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: NONCE,
+		};
+
+		set_agg_key_runtime = set_agg_key_runtime.insert_replay_protection(replay_protection);
 
 		let expected_msg_hash = set_agg_key_runtime.sig_data.msg_hash;
 
 		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
 		let runtime_payload = set_agg_key_runtime
-			.clone()
 			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
 			.abi_encoded();
 		// Ensure signing payload isn't modified by signature.
+		// We have to insert the replay protection again here because we didn't make
+		// the reference to the call mutable.
 		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
 
 		assert_eq!(

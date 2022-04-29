@@ -159,7 +159,6 @@ impl RewardsDistribution for MockRewardsDistribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockUpdateFlipSupply {
-	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_total_supply: u128,
 	pub block_number: u64,
 	pub stake_manager_address: [u8; 20],
@@ -167,22 +166,19 @@ pub struct MockUpdateFlipSupply {
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
-		Self {
-			nonce,
-			new_total_supply,
-			block_number,
-			stake_manager_address: *stake_manager_address,
-		}
+		Self { new_total_supply, block_number, stake_manager_address: *stake_manager_address }
 	}
 }
 
 impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
-	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+	fn threshold_signature_payload(
+		&self,
+		_replay_protection: EthereumReplayProtection,
+	) -> <MockEthereum as ChainCrypto>::Payload {
 		[0xcf; 4]
 	}
 
@@ -228,7 +224,6 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type BlocksPerDay = BlocksPerDay;
-	type ReplayProtectionProvider = Self;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();

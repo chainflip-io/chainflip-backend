@@ -13,12 +13,11 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
+use cf_chains::{eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
 		eth_environment_provider::MockEthEnvironmentProvider,
-		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 	},
 	Chainflip,
 };
@@ -99,21 +98,20 @@ impl UnfilteredDispatchable for MockCallback {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockSetAggKeyWithAggKey {
-	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
 }
 
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
-	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Self {
-		Self { nonce, new_key }
+	fn new_unsigned(new_key: <MockEthereum as ChainCrypto>::AggKey) -> Self {
+		Self { new_key }
 	}
 }
 
 impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
-	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+	fn threshold_signature_payload(
+		&self,
+		_replay_protection: EthereumReplayProtection,
+	) -> <MockEthereum as ChainCrypto>::Payload {
 		unimplemented!()
 	}
 
@@ -167,7 +165,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type Broadcaster = MockBroadcaster;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
-	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

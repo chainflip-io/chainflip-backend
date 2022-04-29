@@ -38,31 +38,17 @@ impl ChainAbi for Ethereum {
 }
 
 impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Self {
+	fn new_unsigned(new_key: <Ethereum as ChainCrypto>::AggKey) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
-			replay_protection,
 			new_key,
 		))
 	}
 }
 
 impl RegisterClaim<Ethereum> for EthereumApi {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		node_id: &[u8; 32],
-		amount: u128,
-		address: &[u8; 20],
-		expiry: u64,
-	) -> Self {
+	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
-			replay_protection,
-			node_id,
-			amount,
-			address,
-			expiry,
+			node_id, amount, address, expiry,
 		))
 	}
 
@@ -77,13 +63,11 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 impl UpdateFlipSupply<Ethereum> for EthereumApi {
 	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
-			replay_protection,
 			new_total_supply,
 			block_number,
 			stake_manager_address,
@@ -110,11 +94,17 @@ impl From<update_flip_supply::UpdateFlipSupply> for EthereumApi {
 }
 
 impl ApiCall<Ethereum> for EthereumApi {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+	fn threshold_signature_payload(
+		&self,
+		replay_protection: EthereumReplayProtection,
+	) -> <Ethereum as ChainCrypto>::Payload {
 		match self {
-			EthereumApi::SetAggKeyWithAggKey(tx) => tx.signing_payload(),
-			EthereumApi::RegisterClaim(tx) => tx.signing_payload(),
-			EthereumApi::UpdateFlipSupply(tx) => tx.signing_payload(),
+			EthereumApi::SetAggKeyWithAggKey(tx) =>
+				tx.insert_replay_protection(replay_protection).signing_payload(),
+			EthereumApi::RegisterClaim(tx) =>
+				tx.insert_replay_protection(replay_protection).signing_payload(),
+			EthereumApi::UpdateFlipSupply(tx) =>
+				tx.insert_replay_protection(replay_protection).signing_payload(),
 		}
 	}
 
@@ -139,8 +129,8 @@ macro_rules! impl_api_calls {
 	( $( $implementation:ty ),+ $(,)? ) => {
         $(
             impl ApiCall<Ethereum> for $implementation {
-                fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-                    self.signing_payload()
+                fn threshold_signature_payload(&self, replay_protection: EthereumReplayProtection) -> <Ethereum as ChainCrypto>::Payload {
+                    self.insert_replay_protection(replay_protection).signing_payload()
                 }
 
                 fn signed(self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {

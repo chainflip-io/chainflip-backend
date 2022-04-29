@@ -207,6 +207,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type TransmissionTimeout = TransmissionTimeout;
 	type MaximumAttempts = MaximumAttempts;
 	type WeightInfo = ();
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<Ethereum>;
 }
 
 parameter_types! {
@@ -224,7 +225,6 @@ impl pallet_cf_vaults::Config<Instance1> for Test {
 	type ApiCall = EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
-	type ReplayProtectionProvider = MockEthReplayProtectionProvider<Ethereum>;
 }
 
 impl pallet_cf_witness_api::Config for Test {

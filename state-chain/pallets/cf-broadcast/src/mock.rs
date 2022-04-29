@@ -5,7 +5,11 @@ use crate::{
 };
 use cf_chains::mocks::{MockApiCall, MockEthereum, MockTransactionBuilder};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, threshold_signer::MockThresholdSigner},
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		threshold_signer::MockThresholdSigner,
+	},
 	Chainflip, EpochIndex,
 };
 use frame_support::parameter_types;
@@ -120,6 +124,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();
 	type MaximumAttempts = MaximumAttempts;
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<Self::TargetChain>;
 }
 
 // Build genesis storage according to the mock runtime.

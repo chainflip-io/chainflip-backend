@@ -7,7 +7,7 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
 	CurrentEpochIndex, EpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
-	ReplayProtectionProvider, SuccessOrFailure, VaultRotator,
+	SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -310,9 +310,6 @@ pub mod pallet {
 
 		/// Something that can provide the key manager address and chain id.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
-
-		// Something that can give us the next nonce.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -660,10 +657,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Called once there's consensus between the authorities that the keygen was successful
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		T::Broadcaster::threshold_sign_and_broadcast(
-			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-				<T::ReplayProtectionProvider>::replay_protection(),
-				new_public_key,
-			),
+			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(new_public_key),
 		);
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {

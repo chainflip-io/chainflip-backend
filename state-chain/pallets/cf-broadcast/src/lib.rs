@@ -16,7 +16,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, Broadcaster, Chainflip, SignerNomination, ThresholdSigner,
+	offence_reporting::OffenceReporter, Broadcaster, Chainflip, ReplayProtectionProvider,
+	SignerNomination, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -159,6 +160,9 @@ pub mod pallet {
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
+
+		/// Replay protection provider for the target chain.
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::TargetChain>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<
@@ -580,7 +584,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(
-			api_call.threshold_signature_payload(),
+			api_call.threshold_signature_payload(T::ReplayProtectionProvider::replay_protection()),
 			|id| Call::on_signature_ready(id, api_call).into(),
 		);
 	}

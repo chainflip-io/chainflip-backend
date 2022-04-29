@@ -14,7 +14,7 @@ use super::EthereumReplayProtection;
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
-#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq, Copy)]
 pub struct RegisterClaim {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -30,22 +30,18 @@ pub struct RegisterClaim {
 
 impl RegisterClaim {
 	pub fn new_unsigned<Amount: Into<Uint>>(
-		replay_protection: EthereumReplayProtection,
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(replay_protection),
+		Self {
+			sig_data: SigData::new_empty(),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
-		};
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-
-		calldata
+		}
 	}
 
 	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
@@ -53,7 +49,13 @@ impl RegisterClaim {
 		self
 	}
 
-	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+	pub fn insert_replay_protection(mut self, replay_protection: EthereumReplayProtection) -> Self {
+		self.sig_data.insert_replay_protection(replay_protection);
+		self.sig_data.insert_msg_hash_from(self.abi_encoded().as_slice());
+		self
+	}
+
+	pub fn signing_payload(&mut self) -> <Ethereum as ChainCrypto>::Payload {
 		self.sig_data.msg_hash
 	}
 
@@ -145,23 +147,21 @@ mod test_register_claim {
 
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
-		let register_claim_runtime = RegisterClaim::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
-			&TEST_ACCT,
-			AMOUNT,
-			&TEST_ADDR,
-			EXPIRY_SECS,
-		);
+		let mut register_claim_runtime =
+			RegisterClaim::new_unsigned(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS);
+
+		let replay_protection = EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: NONCE,
+		};
+
+		register_claim_runtime = register_claim_runtime.insert_replay_protection(replay_protection);
 
 		let expected_msg_hash = register_claim_runtime.sig_data.msg_hash;
 
 		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
 		let runtime_payload = register_claim_runtime
-			.clone()
 			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,

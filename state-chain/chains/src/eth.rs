@@ -62,18 +62,19 @@ pub struct SigData {
 
 impl SigData {
 	/// Initiate a new `SigData` with given nonce value
-	pub fn new_empty(replay_protection: EthereumReplayProtection) -> Self {
-		Self {
-			key_manager_address: replay_protection.key_manager_address.into(),
-			chain_id: replay_protection.chain_id.into(),
-			nonce: replay_protection.nonce.into(),
-			..Default::default()
-		}
+	pub fn new_empty() -> Self {
+		Self { ..Default::default() }
 	}
 
 	/// Used for migrating from the old `SigData` struct.
 	pub fn from_legacy(msg_hash: H256, sig: Uint, nonce: Uint, k_times_g_address: Address) -> Self {
 		Self { msg_hash, sig, nonce, k_times_g_address, ..Default::default() }
+	}
+
+	pub fn insert_replay_protection(&mut self, replay_protection: EthereumReplayProtection) {
+		self.key_manager_address = replay_protection.key_manager_address.into();
+		self.chain_id = replay_protection.chain_id.into();
+		self.nonce = replay_protection.nonce.into();
 	}
 
 	/// Inserts the `msg_hash` value derived from the provided calldata.

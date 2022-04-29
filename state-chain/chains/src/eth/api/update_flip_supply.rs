@@ -8,7 +8,7 @@ use crate::eth::{SchnorrVerificationComponents, SigData};
 
 use super::EthereumReplayProtection;
 
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
 pub struct UpdateFlipSupply {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -22,20 +22,16 @@ pub struct UpdateFlipSupply {
 
 impl UpdateFlipSupply {
 	pub fn new_unsigned<TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
-		replay_protection: EthereumReplayProtection,
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(replay_protection),
+		Self {
+			sig_data: SigData::new_empty(),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
 			stake_manager_address: stake_manager_address.into(),
-		};
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-
-		calldata
+		}
 	}
 
 	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
@@ -43,7 +39,13 @@ impl UpdateFlipSupply {
 		self
 	}
 
-	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+	pub fn insert_replay_protection(mut self, replay_protection: EthereumReplayProtection) -> Self {
+		self.sig_data.insert_replay_protection(replay_protection);
+		self.sig_data.insert_msg_hash_from(self.abi_encoded().as_slice());
+		self
+	}
+
+	pub fn signing_payload(&mut self) -> <Ethereum as ChainCrypto>::Payload {
 		self.sig_data.msg_hash
 	}
 
@@ -128,23 +130,26 @@ mod test_update_flip_supply {
 
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
-		let update_flip_supply_runtime = UpdateFlipSupply::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
+		let mut update_flip_supply_runtime = UpdateFlipSupply::new_unsigned(
 			NEW_TOTAL_SUPPLY,
 			STATE_CHAIN_BLOCK_NUMBER,
 			&FAKE_STAKE_MANAGER_ADDRESS,
 		);
+
+		let replay_protection = EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: NONCE,
+		};
+
+		update_flip_supply_runtime =
+			update_flip_supply_runtime.insert_replay_protection(replay_protection);
 
 		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
 
 		assert_eq!(update_flip_supply_runtime.signing_payload(), expected_msg_hash);
 
 		let runtime_payload = update_flip_supply_runtime
-			.clone()
 			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
