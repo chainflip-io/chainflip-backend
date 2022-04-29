@@ -376,6 +376,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type Balance = FlipBalance;
 	type Flip = Flip;
+	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
@@ -383,7 +384,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type RegisterClaim = eth::api::EthereumApi;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
-	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 }
 
 impl pallet_cf_governance::Config for Runtime {
