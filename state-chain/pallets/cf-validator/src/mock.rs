@@ -8,10 +8,10 @@ use frame_support::{
 use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
+		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
+		vault_rotation::MockVaultRotator,
 	},
 	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
-	ReputationResetter,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -162,16 +162,6 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	}
 }
 
-pub struct TestResetReputation;
-
-impl ReputationResetter for TestResetReputation {
-	type ValidatorId = ValidatorId;
-
-	fn reset_reputation(_validator_id: &Self::ValidatorId) {
-		// no op
-	}
-}
-
 pub struct MockQualifyValidator;
 impl QualifyValidator for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
@@ -249,7 +239,7 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
-	type ResetReputation = TestResetReputation;
+	type ResetReputation = MockReputationResetter<Self>;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -274,6 +264,13 @@ impl TestExternalitiesWithCheck {
 			let r = execute();
 			Self::check_invariants();
 			r
+		})
+	}
+
+	pub fn execute_with_unchecked_invariants<R>(&mut self, execute: impl FnOnce() -> R) -> R {
+		self.ext.execute_with(|| {
+			System::set_block_number(1);
+			execute()
 		})
 	}
 }
