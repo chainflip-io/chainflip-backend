@@ -1,9 +1,4 @@
-use frame_support::{
-	assert_err,
-	migration::{get_storage_value, move_prefix},
-	storage::storage_prefix,
-	traits::OnRuntimeUpgrade,
-};
+use frame_support::{migration::get_storage_value, traits::OnRuntimeUpgrade};
 use sp_std::marker::PhantomData;
 
 use crate::*;
@@ -50,8 +45,12 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
-		let validator_set_size_range =
-			get_storage_value::<(u32, u32)>(AUCTION_PALLET_NAME, ACTIVE_VALIDATOR_SIZE_RANGE, b"");
+		assert!(get_storage_value::<(u32, u32)>(
+			AUCTION_PALLET_NAME,
+			ACTIVE_VALIDATOR_SIZE_RANGE,
+			b""
+		)
+		.is_some());
 
 		assert!(get_storage_value::<()>(AUCTION_PALLET_NAME, LOWEST_BACKUP_VALIDATOR_BID, b"")
 			.is_some());
@@ -71,7 +70,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
-		use frame_support::assert_ok;
+		use frame_support::{assert_err, assert_ok};
 
 		assert_ok!(CurrentAuthoritySetSizeRange::<T>::try_get());
 
