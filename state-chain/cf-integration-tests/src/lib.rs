@@ -52,7 +52,7 @@ mod tests {
 		// Events from ethereum contract
 		#[derive(Debug, Clone)]
 		pub enum ContractEvent {
-			Staked { node_id: NodeId, amount: FlipBalance, total: FlipBalance },
+			Staked { node_id: NodeId, amount: FlipBalance, total: FlipBalance, epoch: EpochIndex },
 		}
 
 		// A staking contract
@@ -66,12 +66,12 @@ mod tests {
 
 		impl StakingContract {
 			// Stake for validator
-			pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance) {
+			pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
 				let current_amount = self.stakes.get(&node_id).unwrap_or(&0);
 				let total = current_amount + amount;
 				self.stakes.insert(node_id.clone(), total);
 
-				self.events.push(ContractEvent::Staked { node_id, amount, total });
+				self.events.push(ContractEvent::Staked { node_id, amount, total, epoch });
 			}
 			// Get events for this contract
 			fn events(&self) -> Vec<ContractEvent> {
@@ -204,13 +204,14 @@ mod tests {
 			fn on_contract_event(&self, event: &ContractEvent) {
 				if self.state() == ChainflipAccountState::CurrentAuthority && self.active {
 					match event {
-						ContractEvent::Staked { node_id: validator_id, amount, .. } => {
+						ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
 							// Witness event -> send transaction to state chain
 							state_chain_runtime::WitnesserApi::witness_staked(
 								Origin::signed(self.node_id.clone()),
 								validator_id.clone(),
 								*amount,
 								ETH_ZERO_ADDRESS,
+								*epoch,
 								TX_HASH,
 							)
 							.expect("should be able to witness stake for node");
@@ -803,9 +804,11 @@ mod tests {
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
 					for node in &nodes {
-						testnet
-							.stake_manager_contract
-							.stake(node.clone(), genesis::GENESIS_BALANCE + 1);
+						testnet.stake_manager_contract.stake(
+							node.clone(),
+							genesis::GENESIS_BALANCE + 1,
+							GENESIS_EPOCH,
+						);
 					}
 
 					// Set the first 4 nodes offline
@@ -882,14 +885,22 @@ mod tests {
 					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
 					for node in &nodes {
-						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
+						testnet.stake_manager_contract.stake(
+							node.clone(),
+							stake_amount,
+							GENESIS_EPOCH,
+						);
 					}
 
 					// Add two nodes which don't have session keys
 					let keyless_nodes = vec![testnet.create_engine(), testnet.create_engine()];
 					// Our keyless nodes also stake
 					for keyless_node in &keyless_nodes {
-						testnet.stake_manager_contract.stake(keyless_node.clone(), stake_amount);
+						testnet.stake_manager_contract.stake(
+							keyless_node.clone(),
+							stake_amount,
+							GENESIS_EPOCH,
+						);
 					}
 
 					// A late staker which we will use after the auction.  They are yet to stake
@@ -960,7 +971,11 @@ mod tests {
 
 					// A late staker comes along, they should become a backup validator as they have
 					// everything in place
-					testnet.stake_manager_contract.stake(late_staker.clone(), stake_amount);
+					testnet.stake_manager_contract.stake(
+						late_staker.clone(),
+						stake_amount,
+						GENESIS_EPOCH + 1,
+					);
 					testnet.move_forward_blocks(1);
 					assert_eq!(
 						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
@@ -1010,7 +1025,11 @@ mod tests {
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
 					for node in &nodes {
-						testnet.stake_manager_contract.stake(node.clone(), stake_amount);
+						testnet.stake_manager_contract.stake(
+							node.clone(),
+							stake_amount,
+							GENESIS_EPOCH,
+						);
 					}
 
 					// Move forward one block to process events
@@ -1155,7 +1174,11 @@ mod tests {
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
 					// Stake these passive nodes so that they are included in the next epoch
 					for node in &init_passive_nodes {
-						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
+						testnet.stake_manager_contract.stake(
+							node.clone(),
+							INITIAL_STAKE,
+							GENESIS_EPOCH,
+						);
 						network::Cli::activate_account(node.clone());
 					}
 
@@ -1273,7 +1296,11 @@ mod tests {
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
 					for node in &nodes {
-						testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE);
+						testnet.stake_manager_contract.stake(
+							node.clone(),
+							INITIAL_STAKE,
+							GENESIS_EPOCH,
+						);
 					}
 
 					assert_eq!(
@@ -1417,11 +1444,19 @@ mod tests {
 					network::Cli::activate_account(init_passive_node_2.clone());
 
 					// Stake the nodes
-					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 99);
-					testnet.stake_manager_contract.stake(genesis_node_2.clone(), 50);
-					testnet.stake_manager_contract.stake(genesis_node_3.clone(), 30);
-					testnet.stake_manager_contract.stake(init_passive_node_1.clone(), 20);
-					testnet.stake_manager_contract.stake(init_passive_node_2.clone(), 10);
+					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 99, GENESIS_EPOCH);
+					testnet.stake_manager_contract.stake(genesis_node_2.clone(), 50, GENESIS_EPOCH);
+					testnet.stake_manager_contract.stake(genesis_node_3.clone(), 30, GENESIS_EPOCH);
+					testnet.stake_manager_contract.stake(
+						init_passive_node_1.clone(),
+						20,
+						GENESIS_EPOCH,
+					);
+					testnet.stake_manager_contract.stake(
+						init_passive_node_2.clone(),
+						10,
+						GENESIS_EPOCH,
+					);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					// TODO: Should we? we don't seem to be given we start in epoch 1
@@ -1442,8 +1477,16 @@ mod tests {
 					assert_eq!(current_validators.len(), 3);
 
 					// Stake the passive nodes
-					testnet.stake_manager_contract.stake(init_passive_node_1.clone(), 100);
-					testnet.stake_manager_contract.stake(init_passive_node_2.clone(), 100);
+					testnet.stake_manager_contract.stake(
+						init_passive_node_1.clone(),
+						100,
+						GENESIS_EPOCH + 1,
+					);
+					testnet.stake_manager_contract.stake(
+						init_passive_node_2.clone(),
+						100,
+						GENESIS_EPOCH + 1,
+					);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
@@ -1495,7 +1538,11 @@ mod tests {
 				.max_validators(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
+					assert_eq!(
+						GENESIS_EPOCH,
+						Validator::epoch_index(),
+						"We should be in the first epoch"
+					);
 					let current_validators = &Validator::current_validators();
 					let (mut testnet, passive_nodes) =
 						network::Network::create(2, current_validators);
@@ -1514,9 +1561,17 @@ mod tests {
 					// Stake a genesis node, and the passive nodes.
 					// They should have the highest stake now
 					// they are just sorted nodes from the network output function
-					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 30);
-					testnet.stake_manager_contract.stake(init_passive_node_1.clone(), 50);
-					testnet.stake_manager_contract.stake(init_passive_node_2.clone(), 100);
+					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 30, GENESIS_EPOCH);
+					testnet.stake_manager_contract.stake(
+						init_passive_node_1.clone(),
+						50,
+						GENESIS_EPOCH,
+					);
+					testnet.stake_manager_contract.stake(
+						init_passive_node_2.clone(),
+						100,
+						GENESIS_EPOCH,
+					);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 
@@ -1531,7 +1586,11 @@ mod tests {
 					assert_eq!(1, Validator::bond());
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
+					assert_eq!(
+						GENESIS_EPOCH + 1,
+						Validator::epoch_index(),
+						"We should be in the next epoch"
+					);
 
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
@@ -1547,8 +1606,16 @@ mod tests {
 					);
 
 					// give the genesis nodes some extra stake (bringing their stake to 6
-					testnet.stake_manager_contract.stake(genesis_node_2.clone(), 5);
-					testnet.stake_manager_contract.stake(genesis_node_3.clone(), 5);
+					testnet.stake_manager_contract.stake(
+						genesis_node_2.clone(),
+						5,
+						GENESIS_EPOCH + 1,
+					);
+					testnet.stake_manager_contract.stake(
+						genesis_node_3.clone(),
+						5,
+						GENESIS_EPOCH + 1,
+					);
 
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
