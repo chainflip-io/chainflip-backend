@@ -1,20 +1,40 @@
 use crate::*;
-use frame_support::storage::migration::*;
+use frame_support::storage::{migration::*, storage_prefix};
+use sp_runtime::AccountId32;
 use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config>(PhantomData<T>);
 
-const WITNESSER_NAME: &[u8] = b"Witnesser";
-const VALIDATOR_NAME: &[u8] = b"Validator";
+const WITNESSER_PALLET_NAME: &[u8] = b"Witnesser";
+const VALIDATOR_PALLET_NAME: &[u8] = b"Validator";
+const VALIDATORS_NAME: &[u8] = b"Validators";
+const CURRENT_AUTHORITIES_NAME: &[u8] = b"CurrentAuthorities";
 const VALIDATOR_INDEX_NAME: &[u8] = b"ValidatorIndex";
+const AUTHORITY_INDEX_NAME: &[u8] = b"AuthorityIndex";
 const VALIDATOR_LOOKUP_NAME: &[u8] = b"ValidatorLookup";
 const NUM_VALIDATORS_NAME: &[u8] = b"NumValidators";
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		move_storage_from_pallet(VALIDATOR_INDEX_NAME, WITNESSER_NAME, VALIDATOR_NAME);
-		remove_storage_prefix(VALIDATOR_NAME, VALIDATOR_LOOKUP_NAME, b"");
-		remove_storage_prefix(WITNESSER_NAME, NUM_VALIDATORS_NAME, b"");
+		// These are no longer used
+		remove_storage_prefix(VALIDATOR_PALLET_NAME, VALIDATOR_LOOKUP_NAME, b"");
+		remove_storage_prefix(WITNESSER_PALLET_NAME, NUM_VALIDATORS_NAME, b"");
+
+		let validators_prefix = storage_prefix(VALIDATOR_PALLET_NAME, VALIDATORS_NAME);
+		let current_authorities_prefix =
+			storage_prefix(VALIDATOR_PALLET_NAME, CURRENT_AUTHORITIES_NAME);
+		move_prefix(&validators_prefix, &current_authorities_prefix);
+
+		// move it from witnesser pallet to validator pallet *and* rename it from ValidatorIndex to
+		// AuthorityIndex
+		let validator_index_prefix = storage_prefix(WITNESSER_PALLET_NAME, VALIDATOR_INDEX_NAME);
+		let authority_index_prefix = storage_prefix(VALIDATOR_PALLET_NAME, AUTHORITY_INDEX_NAME);
+		move_prefix(&validator_index_prefix, &authority_index_prefix);
+
+		let validator_cfe_version_prefix =
+			storage_prefix(VALIDATOR_PALLET_NAME, b"ValidatorCFEVersion");
+		let node_cfe_version = storage_prefix(VALIDATOR_PALLET_NAME, b"NodeCFEVersion");
+		move_prefix(&validator_cfe_version_prefix, &node_cfe_version);
 
 		// Get the current state of the storage.
 		let current_epoch = T::EpochInfo::epoch_index();
@@ -40,16 +60,20 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
+		assert!(get_storage_value::<Vec<AccountId32>>(VALIDATOR_PALLET_NAME, VALIDATORS_NAME, b"")
+			.is_some());
 		assert!(
-			storage_iter::<()>(WITNESSER_NAME, VALIDATOR_INDEX_NAME).next().is_some(),
+			storage_iter::<()>(WITNESSER_PALLET_NAME, VALIDATOR_INDEX_NAME).next().is_some(),
 			"ValidatorIndex not found in Witnesser"
 		);
 		assert!(
-			get_storage_value::<u32>(WITNESSER_NAME, NUM_VALIDATORS_NAME, b"").is_some(),
+			get_storage_value::<u32>(WITNESSER_PALLET_NAME, NUM_VALIDATORS_NAME, b"").is_some(),
 			"NumValidators not found in Witnesser"
 		);
 		assert!(
-			storage_iter::<()>(VALIDATOR_NAME, VALIDATOR_LOOKUP_NAME).next().is_some(),
+			storage_iter::<()>(VALIDATOR_PALLET_NAME, VALIDATOR_LOOKUP_NAME)
+				.next()
+				.is_some(),
 			"ValidatorLookup not found in Validator"
 		);
 		Ok(())
@@ -57,28 +81,24 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
-		assert!(
-			storage_iter::<()>(VALIDATOR_NAME, VALIDATOR_INDEX_NAME).next().is_some(),
-			"ValidatorIndex not found in Validator"
-		);
-		assert!(
-			storage_iter::<()>(VALIDATOR_NAME, b"EpochValidatorCount").next().is_some(),
-			"EpochValidatorCount not found in Validator"
-		);
+		let epoch_index = T::EpochInfo::epoch_index();
+		assert!(EpochAuthorityCount::<T>::get(&epoch_index).is_some());
 		assert_eq!(
 			HistoricalAuthorities::<T>::get(T::EpochInfo::epoch_index()),
 			CurrentAuthorities::<T>::get(),
-			"HistoricalValidators for this Epoch and Current Validators are not equal"
+			"HistoricalAuthorities for this Epoch and CurrentAuthorities are not equal"
 		);
 		assert_eq!(
 			HistoricalBonds::<T>::get(T::EpochInfo::epoch_index()),
 			Bond::<T>::get(),
 			"HistoricalBonds and Bond are not equal"
 		);
+
 		for validator in CurrentAuthorities::<T>::get() {
+			assert!(AuthorityIndex::<T>::get(epoch_index, &validator).is_some());
 			assert_eq!(
 				HistoricalActiveEpochs::<T>::get(validator),
-				vec![T::EpochInfo::epoch_index()],
+				vec![epoch_index],
 				"HistoricalActiveEpochs and known current active epochs are not equal"
 			);
 		}
