@@ -13,7 +13,7 @@ use cf_traits::EpochIndex;
 use regex::Regex;
 
 use crate::{
-    common::{read_clean_and_decode_hex_str_file, Mutex},
+    common::read_clean_and_decode_hex_str_file,
     constants::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_FALLING_BEHIND_MARGIN_BLOCKS,
         ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
@@ -41,7 +41,7 @@ use std::{
     fmt::{self, Debug},
     pin::Pin,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
@@ -135,7 +135,7 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
                     .take()
                     .expect("Received two 'end' events in a row. This should not occur.");
                 // We already have a thread, we want to tell it when to stop and await on it
-                *end_at_block.lock().await = Some(to_block);
+                *end_at_block.lock().unwrap() = Some(to_block);
                 handle.await.unwrap();
             }
             ObserveInstruction::Start(from_block, epoch) => {
@@ -163,7 +163,7 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
 
                             // TOOD: Handle None on stream, and result event being an error
                             while let Some(event) = event_stream.next().await {
-                                if let Some(end_at_block) = *task_end_at_block.lock().await {
+                                if let Some(end_at_block) = *task_end_at_block.lock().unwrap() {
                                     // TODO: Have the stream end when the safe head gets to the block number,
                                     // not just when we receive an event (which could be arbitrarily far in the future)
                                     // past our window_to
