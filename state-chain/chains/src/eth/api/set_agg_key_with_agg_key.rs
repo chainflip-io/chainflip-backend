@@ -174,8 +174,6 @@ mod test_set_agg_key_with_agg_key {
 			})
 			.abi_encoded();
 		// Ensure signing payload isn't modified by signature.
-		// We have to insert the replay protection again here because we didn't make
-		// the reference to the call mutable.
 		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
 
 		assert_eq!(
