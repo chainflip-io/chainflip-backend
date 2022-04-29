@@ -172,7 +172,7 @@ try-runtime = [
 [package.metadata.deb]
 depends = "$auto"
 extended-description = """\
-Chainflip Authority Node Package"""
+Chainflip Node Package"""
 maintainer = "Chainflip UG <dev@chainflip.io>"
 name = "chainflip-node"
 priority = "required"
