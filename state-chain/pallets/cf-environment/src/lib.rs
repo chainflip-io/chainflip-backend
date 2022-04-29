@@ -140,7 +140,7 @@ pub mod pallet {
 			state: SystemState,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			if &CurrentSystemState::<T>::get() != &state {
+			if CurrentSystemState::<T>::get() != state {
 				CurrentSystemState::<T>::put(&state);
 				Self::deposit_event(Event::SystemStateHasBeenChanged(state));
 			}
