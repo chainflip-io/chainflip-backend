@@ -424,4 +424,12 @@ impl<T: Config> Pallet<T> {
 			Default::default()
 		})
 	}
+
+	/// Reset both the online credits and the reputation points of a validator to zero.
+	pub fn reset_reputation(validator_id: &T::ValidatorId) {
+		Reputations::<T>::mutate(validator_id, |rep| {
+			rep.reset_reputation();
+			rep.reset_online_credits();
+		});
+	}
 }

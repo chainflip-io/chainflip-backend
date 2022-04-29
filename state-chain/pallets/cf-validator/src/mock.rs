@@ -11,6 +11,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
 	},
 	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
+	ReputationResetter,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -161,6 +162,16 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	}
 }
 
+pub struct TestResetReputation;
+
+impl ReputationResetter for TestResetReputation {
+	type ValidatorId = ValidatorId;
+
+	fn reset_reputation(_validator_id: &Self::ValidatorId) {
+		// no op
+	}
+}
+
 pub struct MockQualifyValidator;
 impl QualifyValidator for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
@@ -238,6 +249,7 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
+	type ResetReputation = TestResetReputation;
 }
 
 /// Session pallet requires a set of validators at genesis.

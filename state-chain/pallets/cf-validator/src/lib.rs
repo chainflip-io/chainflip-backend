@@ -19,7 +19,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
 	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyValidator, SuccessOrFailure, VaultRotator,
+	QualifyValidator, ReputationResetter, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -164,6 +164,9 @@ pub mod pallet {
 
 		/// Updates the bond of a validator
 		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
+
+		/// This is used to reset the validator's reputation
+		type ResetReputation: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
 	}
 
 	#[pallet::event]
@@ -814,6 +817,7 @@ impl<T: Config> Pallet<T> {
 
 		old_validators.iter().for_each(|validator| {
 			ChainflipAccountStore::<T>::set_historical_validator(validator);
+			T::ResetReputation::reset_reputation(validator);
 		});
 
 		// We've got new validators, which means the backups and passives may have changed

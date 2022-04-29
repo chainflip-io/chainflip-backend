@@ -22,7 +22,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
+	ReplayProtectionProvider, ReputationResetter, RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -137,6 +137,16 @@ impl RewardDistribution for BackupValidatorEmissions {
 		}
 
 		0
+	}
+}
+
+pub struct ResetReputation;
+
+impl ReputationResetter for ResetReputation {
+	type ValidatorId = AccountId;
+
+	fn reset_reputation(validator: &Self::ValidatorId) {
+		Reputation::reset_reputation(validator);
 	}
 }
 
