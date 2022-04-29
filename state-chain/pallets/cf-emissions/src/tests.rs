@@ -140,7 +140,7 @@ fn no_update_of_update_total_supply_during_maintanance() {
 		MockSystemStateInfo::set_maintenance(true);
 		// Try send a broadcast to update the total supply
 		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL);
-		// Expect nothing to be sendet
+		// Expect nothing to be sent
 		assert!(MockBroadcast::get_called().is_none());
 		// Deactivate maintenance mode
 		MockSystemStateInfo::set_maintenance(false);

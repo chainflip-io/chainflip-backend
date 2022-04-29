@@ -129,7 +129,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SystemkStateHasBeenChanged](Event::SystemkStateHasBeenChanged)
+		/// - [SystemStateHasBeenChanged](Event::SystemStateHasBeenChanged)
 		///
 		/// ## Errors
 		///
@@ -140,8 +140,10 @@ pub mod pallet {
 			state: SystemState,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			CurrentSystemState::<T>::put(&state);
-			Self::deposit_event(Event::SystemStateHasBeenChanged(state));
+			if &CurrentSystemState::<T>::get() != &state {
+				CurrentSystemState::<T>::put(&state);
+				Self::deposit_event(Event::SystemStateHasBeenChanged(state));
+			}
 			Ok(().into())
 		}
 	}
@@ -170,9 +172,9 @@ pub mod pallet {
 	}
 }
 
-pub struct SystemStateAccess<T>(PhantomData<T>);
+pub struct SystemStateProvider<T>(PhantomData<T>);
 
-impl<T: Config> SystemStateInfo for SystemStateAccess<T> {
+impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
 	fn ensure_no_maintenance() -> frame_support::sp_runtime::DispatchResult {
 		if <pallet::CurrentSystemState<T>>::get() == SystemState::Maintenance {
 			return Err(Error::<T>::NetworkIsInMaintenance.into())
