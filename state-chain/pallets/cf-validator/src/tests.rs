@@ -1,5 +1,8 @@
 use crate::{mock::*, Error, *};
-use cf_traits::{mocks::vault_rotation::MockVaultRotator, VaultRotator};
+use cf_traits::{
+	mocks::{reputation_resetter::MockReputationResetter, vault_rotation::MockVaultRotator},
+	VaultRotator,
+};
 use frame_support::{assert_noop, assert_ok};
 
 const ALICE: u64 = 100;
@@ -544,5 +547,47 @@ fn test_missing_author_punishment() {
 			PalletOffence::MissedAuthorshipSlot,
 			ValidatorPallet::validators().get(1..=2).unwrap().to_vec(),
 		)
+	})
+}
+
+#[test]
+fn test_reputation_reset() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Simulate an epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+			winners: vec![1, 2, 3],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_validators() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		let first_epoch = ValidatorPallet::current_epoch();
+
+		// Simulate another epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+			winners: vec![4, 5, 6],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_validators() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		for id in &[1, 2, 3, 4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
+
+		ValidatorPallet::expire_epoch(first_epoch);
+
+		for id in &[1, 2, 3] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 0);
+		}
+		for id in &[4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
 	})
 }

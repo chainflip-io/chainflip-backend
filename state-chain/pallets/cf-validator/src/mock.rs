@@ -8,7 +8,8 @@ use frame_support::{
 use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, vault_rotation::MockVaultRotator,
+		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
+		vault_rotation::MockVaultRotator,
 	},
 	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
 };
@@ -238,6 +239,7 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
+	type ReputationResetter = MockReputationResetter<Self>;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -262,6 +264,13 @@ impl TestExternalitiesWithCheck {
 			let r = execute();
 			Self::check_invariants();
 			r
+		})
+	}
+
+	pub fn execute_with_unchecked_invariants<R>(&mut self, execute: impl FnOnce() -> R) -> R {
+		self.ext.execute_with(|| {
+			System::set_block_number(1);
+			execute()
 		})
 	}
 }
