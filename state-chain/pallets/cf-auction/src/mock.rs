@@ -141,6 +141,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type AuctionQualification = MockQualifyValidator;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

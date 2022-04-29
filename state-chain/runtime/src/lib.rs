@@ -131,6 +131,7 @@ impl pallet_cf_auction::Config for Runtime {
 	);
 	type EmergencyRotation = Validator;
 	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 // FIXME: These would be changed

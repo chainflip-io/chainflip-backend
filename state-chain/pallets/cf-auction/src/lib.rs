@@ -56,6 +56,8 @@ pub mod pallet {
 		type AuctionQualification: QualifyNode<ValidatorId = Self::ValidatorId>;
 		/// Key generation exclusion set
 		type KeygenExclusionSet: Get<BTreeSet<Self::ValidatorId>>;
+		/// For governance checks.
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 	}
 
 	/// Pallet implements \[Hooks\] trait
@@ -105,7 +107,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Sets the auction parameters.
 		///
-		/// The dispatch origin of this function must be root.
+		/// The dispatch origin of this function must be Governance.
 		///
 		/// ## Events
 		///
@@ -119,7 +121,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			parameters: DynamicSetSizeParameters,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			let old = Self::try_update_auction_parameters(parameters)?;
 			Self::deposit_event(Event::AuctionParametersChanged(old, parameters));
 			Ok(().into())
