@@ -640,7 +640,8 @@ mod tests {
 	mod genesis {
 		use super::*;
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, StakeTransfer,
+			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
+			StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -692,7 +693,7 @@ mod tests {
 				}
 
 				assert_eq!(Validator::bond(), GENESIS_BALANCE);
-				let mut authorities = Validator::authorities();
+				let mut authorities = Validator::current_authorities();
 				authorities.sort();
 				assert_eq!(authorities, accounts, "the authorities are those expected at genesis");
 
@@ -929,7 +930,7 @@ mod tests {
 						"minimum active bid should be that of the new stake"
 					);
 
-					let mut winners = Validator::authorities();
+					let mut winners = Validator::current_authorities();
 					winners.sort();
 					nodes.sort();
 					assert_eq!(

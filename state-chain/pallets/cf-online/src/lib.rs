@@ -24,9 +24,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState, QualifyAuthorityCandidate,
-	};
+	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState, QualifyNode};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::Saturating;
@@ -142,7 +140,7 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> QualifyAuthorityCandidate for Pallet<T> {
+	impl<T: Config> QualifyNode for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
 		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {

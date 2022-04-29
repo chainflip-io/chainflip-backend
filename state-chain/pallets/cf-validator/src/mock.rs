@@ -11,8 +11,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline,
-	QualifyAuthorityCandidate,
+	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyNode,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -164,7 +163,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 }
 
 pub struct MockQualifyValidator;
-impl QualifyAuthorityCandidate for MockQualifyValidator {
+impl QualifyNode for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
@@ -219,8 +218,7 @@ impl Bonding for MockBonder {
 
 	type Amount = Amount;
 
-	// Bond updates are tested in the integration tests
-	fn update_authority_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+	fn update_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
 pub type MockOffenceReporter =
@@ -255,7 +253,7 @@ pub(crate) struct TestExternalitiesWithCheck {
 
 impl TestExternalitiesWithCheck {
 	fn check_invariants() {
-		assert_eq!(Authorities::<Test>::get(), Session::validators(),);
+		assert_eq!(CurrentAuthorities::<Test>::get(), Session::validators(),);
 	}
 
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {

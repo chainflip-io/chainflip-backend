@@ -114,9 +114,10 @@ pub mod pallet {
 	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn validator_emission_per_block)]
+	#[pallet::getter(fn current_authority_emission_per_block)]
 	/// The amount of Flip we mint to validators per block.
-	pub type ValidatorEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
+	pub type CurrentAuthorityEmissionPerBlock<T: Config> =
+		StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_node_emission_per_block)]
@@ -324,7 +325,8 @@ impl<T: Config> Pallet<T> {
 
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
 
-		let reward_amount = ValidatorEmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed);
+		let reward_amount =
+			CurrentAuthorityEmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed);
 
 		let reward_amount = reward_amount.unwrap_or_else(|| {
 			log::error!("Overflow while trying to mint rewards at block {:?}.", block_number);
@@ -350,7 +352,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	type Balance = T::FlipBalance;
 
 	fn update_authority_block_emission(emission: Self::Balance) {
-		ValidatorEmissionPerBlock::<T>::put(emission);
+		CurrentAuthorityEmissionPerBlock::<T>::put(emission);
 	}
 
 	fn update_backup_node_block_emission(emission: Self::Balance) {

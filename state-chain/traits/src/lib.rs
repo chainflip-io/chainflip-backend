@@ -190,10 +190,8 @@ pub trait VaultRotator {
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
+
 	/// A new epoch has started
-	///
-	/// The `previous_epoch_authorities` now let `epoch_authorities` take control
-	/// There can be an overlap between these two sets of validators
 	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]);
 }
 
@@ -316,7 +314,7 @@ pub struct NetworkState<ValidatorId: Default> {
 }
 
 impl<ValidatorId: Default> NetworkState<ValidatorId> {
-	//// Returns the total number of nodes in the network.
+	/// Returns the total number of nodes in the network.
 	pub fn number_of_nodes(&self) -> u32 {
 		(self.online.len() + self.offline.len()) as u32
 	}
@@ -565,7 +563,7 @@ pub trait WaivedFees {
 }
 
 /// Qualify what is considered as a potential authority for the network
-pub trait QualifyAuthorityCandidate {
+pub trait QualifyNode {
 	type ValidatorId;
 	/// Is the node qualified to be an authority and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
@@ -574,7 +572,7 @@ pub trait QualifyAuthorityCandidate {
 /// Qualify if the node has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
-impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyAuthorityCandidate
+impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyNode
 	for SessionKeysRegistered<T, R>
 {
 	type ValidatorId = T;
@@ -583,11 +581,11 @@ impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyAuthorityCand
 	}
 }
 
-impl<A, B, C> QualifyAuthorityCandidate for (A, B, C)
+impl<A, B, C> QualifyNode for (A, B, C)
 where
-	A: QualifyAuthorityCandidate<ValidatorId = B::ValidatorId>,
-	B: QualifyAuthorityCandidate,
-	C: QualifyAuthorityCandidate<ValidatorId = B::ValidatorId>,
+	A: QualifyNode<ValidatorId = B::ValidatorId>,
+	B: QualifyNode,
+	C: QualifyNode<ValidatorId = B::ValidatorId>,
 {
 	type ValidatorId = A::ValidatorId;
 
@@ -641,7 +639,7 @@ pub trait Bonding {
 	type ValidatorId;
 	type Amount;
 	/// Update the bond of an authority
-	fn update_authority_bond(authority: &Self::ValidatorId, bond: Self::Amount);
+	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
 pub trait CeremonyIdProvider {
 	type CeremonyId;

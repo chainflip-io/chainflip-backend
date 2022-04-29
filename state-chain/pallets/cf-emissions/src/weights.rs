@@ -61,7 +61,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: Emissions MintInterval (r:1 w:0)
 	// Storage: Emissions LastMintBlock (r:1 w:1)
-	// Storage: Emissions ValidatorEmissionPerBlock (r:1 w:0)
+	// Storage: Emissions CurrentAuthorityEmissionPerBlock (r:1 w:0)
 	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Flip Reserve (r:1 w:1)
 	// Storage: Rewards RewardsEntitlement (r:1 w:1)
@@ -124,7 +124,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Emissions MintInterval (r:1 w:0)
 	// Storage: Emissions LastMintBlock (r:1 w:1)
-	// Storage: Emissions ValidatorEmissionPerBlock (r:1 w:0)
+	// Storage: Emissions CurrentAuthorityEmissionPerBlock (r:1 w:0)
 	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Flip Reserve (r:1 w:1)
 	// Storage: Rewards RewardsEntitlement (r:1 w:1)

@@ -1,9 +1,10 @@
 use std::mem;
 
 use crate::{
-	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
+	mock::*, Account as FlipAccount, Bonder, Config, Error, FlipIssuance, OffchainFunds,
+	TotalIssuance,
 };
-use cf_traits::{Issuance, StakeTransfer};
+use cf_traits::{Bonding, Issuance, StakeTransfer};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
@@ -182,7 +183,7 @@ fn stake_transfers() {
 		check_balance_integrity();
 
 		// Bond all of it
-		Flip::set_authority_bond(&ALICE, 200);
+		Bonder::<Test>::update_bond(&ALICE, 200);
 		assert_eq!(<Flip as StakeTransfer>::stakeable_balance(&ALICE), 200);
 		assert_eq!(<Flip as StakeTransfer>::claimable_balance(&ALICE), 0);
 
@@ -193,7 +194,7 @@ fn stake_transfers() {
 		);
 
 		// Reduce the bond
-		Flip::set_authority_bond(&ALICE, 100);
+		Bonder::<Test>::update_bond(&ALICE, 100);
 		assert_eq!(<Flip as StakeTransfer>::claimable_balance(&ALICE), 100);
 		assert_ok!(<Flip as StakeTransfer>::try_claim(&ALICE, 1));
 		assert!(MockStakeHandler::has_stake_updated(&ALICE));
@@ -472,9 +473,9 @@ mod test_tx_payments {
 }
 
 mod test_slashing {
-	use cf_traits::Slashing;
+	use cf_traits::{Bonding, Slashing};
 
-	use crate::{FlipSlasher, SlashingRate};
+	use crate::{Bonder, FlipSlasher, SlashingRate};
 
 	use super::*;
 	#[test]
@@ -494,7 +495,7 @@ mod test_slashing {
 			// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
 			Flip::settle(&ALICE, Flip::mint(MINT).into());
 			let initial_balance: u128 = Flip::total_balance_of(&ALICE);
-			Flip::set_authority_bond(&ALICE, BOND);
+			Bonder::<Test>::update_bond(&ALICE, BOND);
 			// Set the slashing rate to 5%
 			SlashingRate::<Test>::set(SLASHING_RATE);
 			FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE);

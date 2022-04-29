@@ -91,7 +91,7 @@ fn test_duplicate_emission_should_be_noop() {
 fn should_calculate_block_emissions() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		// Block emissions are calculated at genesis.
-		assert!(Emissions::validator_emission_per_block() > 0);
+		assert!(Emissions::current_authority_emission_per_block() > 0);
 		assert!(Emissions::backup_node_emission_per_block() > 0);
 	});
 }

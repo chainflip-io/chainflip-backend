@@ -94,7 +94,7 @@ impl RewardDistribution for BackupNodeEmissions {
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// Emissions for this heartbeat interval for the active set
-		let authority_rewards = Emissions::validator_emission_per_block() *
+		let authority_rewards = Emissions::current_authority_emission_per_block() *
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// The average authority emission

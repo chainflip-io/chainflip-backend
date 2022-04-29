@@ -424,7 +424,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Signals a authority's intent to withdraw their stake after the next auction and desist
+		/// Signals a node's intent to withdraw their stake after the next auction and desist
 		/// from future auctions. Should only be called by accounts that are not already retired.
 		///
 		/// ## Events
@@ -442,8 +442,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Signals a retired authority's intent to re-activate their stake and participate in the
-		/// next authority auction. Should only be called if the account is in a retired state.
+		/// Signals a retired node's intent to re-activate their stake and participate in the
+		/// next auction. Should only be called if the account is in a retired state.
 		///
 		/// ## Events
 		///
@@ -605,7 +605,7 @@ impl<T: Config> Pallet<T> {
 		// No new claim requests can be processed if we're currently in an auction phase.
 		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-		// If a claim already exists, return an error. The authority must either redeem their claim
+		// If a claim already exists, return an error. The staker must either redeem their claim
 		// voucher or wait until expiry before creating a new claim.
 		ensure!(!PendingClaims::<T>::contains_key(account_id), Error::<T>::PendingClaim);
 
@@ -629,7 +629,7 @@ impl<T: Config> Pallet<T> {
 			DispatchError::from(Error::<T>::BelowMinimumStake)
 		);
 
-		// Throw an error if the authority tries to claim too much. Otherwise decrement the stake by
+		// Throw an error if the staker tries to claim too much. Otherwise decrement the stake by
 		// the amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
 
@@ -658,7 +658,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no
-	/// longer wishes to participate in authority auctions.
+	/// longer wishes to participate in auctions.
 	///
 	/// Returns an error if the account has already been retired, or if the account has no stake
 	/// associated.
@@ -698,7 +698,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// Checks if an account has signalled their intention to retire as a authority. If the account
+	/// Checks if an account has signalled their intention to retire. If the account
 	/// has never staked any tokens, returns [Error::UnknownAccount].
 	pub fn is_retired(account: &AccountId<T>) -> Result<bool, Error<T>> {
 		AccountRetired::<T>::try_get(account).map_err(|_| Error::UnknownAccount)

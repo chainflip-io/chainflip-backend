@@ -18,7 +18,7 @@ pub enum Offence {
 	TransactionFailedOnTransmission,
 	/// An authority missed their authorship slot.
 	MissedAuthorshipSlot,
-	/// An authority has missed a heartbeat submission.
+	/// A node has missed a heartbeat submission.
 	MissedHeartbeat,
 }
 

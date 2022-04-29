@@ -263,7 +263,7 @@ impl<
 	}
 }
 
-pub fn new_p2p_authority_network_node<
+pub fn new_p2p_network_node<
 	MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
 	PN: PeerNetwork + Send + Sync + 'static,
 >(
@@ -597,7 +597,7 @@ mod tests {
 		}
 	}
 
-	async fn new_p2p_authority_network_node_with_test_probes() -> (
+	async fn new_p2p_network_node_with_test_probes() -> (
 		tokio::sync::mpsc::UnboundedSender<Event>,
 		P2PRpcClient,
 		Arc<RwLock<P2PValidatorNetworkNodeState>>,
@@ -618,7 +618,7 @@ mod tests {
 		let task_manager = sc_service::TaskManager::new(task_executor, None).unwrap();
 		let message_sender_spawn_handle = task_manager.spawn_handle();
 
-		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_authority_network_node(
+		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_network_node(
 			network_expectations.clone(),
 			message_sender_spawn_handle,
 			sc_rpc::testing::TaskExecutor,
@@ -710,7 +710,7 @@ mod tests {
 	#[tokio::test]
 	async fn add_and_remove_peers() {
 		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
-			new_p2p_authority_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
@@ -862,7 +862,7 @@ mod tests {
 	#[tokio::test]
 	async fn set_peers() {
 		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
-			new_p2p_authority_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
@@ -958,7 +958,7 @@ mod tests {
 	#[tokio::test]
 	async fn send_message() {
 		let (_event_sender, client, _internal_state, network_expectations, _task_manager) =
-			new_p2p_authority_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerId::random();
 		let peer_1 = PeerId::random();
@@ -1078,7 +1078,7 @@ mod tests {
 	#[tokio::test]
 	async fn rpc_subscribe() {
 		let (event_sender, client, _internal_state, _expectations, _task_manager) =
-			new_p2p_authority_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerId::random();
 		let peer_0_transferable = PeerIdTransferable::from(&peer_0);

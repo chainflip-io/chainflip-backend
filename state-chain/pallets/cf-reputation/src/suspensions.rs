@@ -45,7 +45,7 @@ where
 	Block: AtLeast32BitUnsigned + Copy,
 	Id: Ord + Clone,
 {
-	/// Suspend an authority for a number of blocks.
+	/// Suspend a node for a number of blocks.
 	pub fn suspend(&mut self, ids: impl IntoIterator<Item = Id>, duration: Block) {
 		let current_block = self.current_block;
 		self.all

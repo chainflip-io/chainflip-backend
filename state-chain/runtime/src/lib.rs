@@ -129,7 +129,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type AuthorityQualification = (
+	type AuctionQualification = (
 		Online,
 		pallet_cf_validator::PeerMapping<Self>,
 		SessionKeysRegistered<

@@ -66,7 +66,7 @@ pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
 	success_votes: BTreeMap<AggKeyFor<T, I>, u32>,
-	/// A map of the number of blame votes that each authority has received.
+	/// A map of the number of blame votes that keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, u32>,
 }
 
@@ -292,7 +292,7 @@ pub mod pallet {
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
-		/// For reporting misbehaving authorities.
+		/// For reporting misbehaviour
 		type OffenceReporter: OffenceReporter<
 			ValidatorId = Self::ValidatorId,
 			Offence = Self::Offence,
@@ -433,9 +433,9 @@ pub mod pallet {
 		VaultsRotated,
 		/// The new public key witnessed externally was not the expected one \[key\]
 		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
-		/// A authority has reported that keygen was successful \[validator_id\]
+		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
-		/// A authority has reported that keygen has failed \[validator_id\]
+		/// A keygen participant has reported that keygen has failed \[validator_id\]
 		KeygenFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
 		KeygenSuccess(CeremonyId),

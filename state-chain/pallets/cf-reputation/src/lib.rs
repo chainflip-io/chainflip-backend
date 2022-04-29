@@ -160,7 +160,7 @@ pub mod pallet {
 	pub type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
 
-	/// Reputation trackers for each authority.
+	/// Reputation trackers for each node
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
 	pub type Reputations<T: Config> =

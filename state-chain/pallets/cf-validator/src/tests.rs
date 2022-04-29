@@ -200,7 +200,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		}));
 
 		assert_eq!(
-			Authorities::<Test>::get(),
+			CurrentAuthorities::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
 			"the current authorities should be the genesis authorities"
 		);
@@ -240,7 +240,7 @@ fn genesis() {
 	new_test_ext().execute_with(|| {
 		// We should have a set of validators on genesis with a minimum bid set
 		assert_eq!(
-			Authorities::<Test>::get(),
+			CurrentAuthorities::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
 			"We should have a set of validators at genesis"
 		);
@@ -361,7 +361,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&alice_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&ALICE),
+			ValidatorPallet::node_peer_id(&ALICE),
 			Some((ALICE, alice_peer_public_key, 40044, 10))
 		);
 
@@ -399,7 +399,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&BOB),
+			ValidatorPallet::node_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 11))
 		);
 
@@ -438,7 +438,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&BOB),
+			ValidatorPallet::node_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 11))
 		);
 
@@ -462,7 +462,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&BOB),
+			ValidatorPallet::node_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 12))
 		);
 	});
@@ -545,7 +545,7 @@ fn test_missing_author_punishment() {
 		move_forward_blocks(1);
 		MockOffenceReporter::assert_reported(
 			PalletOffence::MissedAuthorshipSlot,
-			ValidatorPallet::authorities().get(1..=2).unwrap().to_vec(),
+			ValidatorPallet::current_authorities().get(1..=2).unwrap().to_vec(),
 		)
 	})
 }

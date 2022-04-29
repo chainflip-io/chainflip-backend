@@ -18,7 +18,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// Get the current state of the storage.
 		let current_epoch = T::EpochInfo::epoch_index();
-		let current_validators = Authorities::<T>::get();
+		let current_validators = CurrentAuthorities::<T>::get();
 		let current_bond = Bond::<T>::get();
 		let number_of_current_validators = current_validators.len() as u32;
 
@@ -67,7 +67,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		);
 		assert_eq!(
 			HistoricalAuthorities::<T>::get(T::EpochInfo::epoch_index()),
-			Authorities::<T>::get(),
+			CurrentAuthorities::<T>::get(),
 			"HistoricalValidators for this Epoch and Current Validators are not equal"
 		);
 		assert_eq!(
@@ -75,7 +75,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			Bond::<T>::get(),
 			"HistoricalBonds and Bond are not equal"
 		);
-		for validator in Authorities::<T>::get() {
+		for validator in CurrentAuthorities::<T>::get() {
 			assert_eq!(
 				HistoricalActiveEpochs::<T>::get(validator),
 				vec![T::EpochInfo::epoch_index()],

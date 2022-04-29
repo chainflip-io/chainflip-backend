@@ -19,7 +19,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
 	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyAuthorityCandidate, SuccessOrFailure, ReputationResetter, VaultRotator,
+	QualifyNode, SuccessOrFailure, VaultRotator, ReputationResetter,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -191,7 +191,7 @@ pub mod pallet {
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 		/// Ratio of claim period updated \[percentage\]
 		ClaimPeriodUpdated(Percentage),
-		/// Vanity Name for a authority has been set \[validator_id, vanity_name\]
+		/// Vanity Name for a node has been set \[validator_id, vanity_name\]
 		VanityNameSet(ValidatorIdOf<T>, VanityName),
 	}
 
@@ -587,8 +587,7 @@ pub mod pallet {
 
 	/// A list of the current authorites
 	#[pallet::storage]
-	#[pallet::getter(fn authorities)]
-	pub type Authorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
+	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// Vanity names of the validators stored as a Map with the current validator IDs as key
 	#[pallet::storage]
@@ -603,7 +602,7 @@ pub mod pallet {
 
 	/// Account to Peer Mapping
 	#[pallet::storage]
-	#[pallet::getter(fn validator_peer_id)]
+	#[pallet::getter(fn node_peer_id)]
 	pub type AccountPeerMapping<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -641,7 +640,7 @@ pub mod pallet {
 	pub type HistoricalBonds<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, T::Amount, ValueQuery>;
 
-	/// A map between an authority and a set of all the epochs it has been an authority in
+	/// A map between an authority and a set of all the active epochs a node was an authority in
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
@@ -696,11 +695,11 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn current_authorities() -> Vec<Self::ValidatorId> {
-		Authorities::<T>::get()
+		CurrentAuthorities::<T>::get()
 	}
 
 	fn current_authority_count() -> u32 {
-		Authorities::<T>::decode_len().unwrap_or_default() as u32
+		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as u32
 	}
 
 	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
@@ -778,9 +777,9 @@ impl<T: Config> Pallet<T> {
 			(*epoch - 1, *epoch)
 		});
 
-		let mut old_authorities = Authorities::<T>::get();
+		let mut old_authorities = CurrentAuthorities::<T>::get();
 		// Update state of current validators
-		Authorities::<T>::set(epoch_authorities.to_vec());
+		CurrentAuthorities::<T>::set(epoch_authorities.to_vec());
 
 		epoch_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as u16);
@@ -813,7 +812,7 @@ impl<T: Config> Pallet<T> {
 			EpochHistory::<T>::activate_epoch(authority, new_epoch);
 			// Bond the authoritys
 			let bond = EpochHistory::<T>::active_bond(authority);
-			T::Bonder::update_authority_bond(authority, bond);
+			T::Bonder::update_bond(authority, bond);
 
 			ChainflipAccountStore::<T>::set_current_authority(authority);
 		}
@@ -842,7 +841,7 @@ impl<T: Config> Pallet<T> {
 				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(authority);
 				T::ReputationResetter::reset_reputation(authority);
 			}
-			T::Bonder::update_authority_bond(authority, EpochHistory::<T>::active_bond(authority));
+			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
 	}
 
@@ -1000,7 +999,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 
 pub struct PeerMapping<T>(PhantomData<T>);
 
-impl<T: Config> QualifyAuthorityCandidate for PeerMapping<T> {
+impl<T: Config> QualifyNode for PeerMapping<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {

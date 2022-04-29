@@ -122,7 +122,7 @@ impl EmergencyRotation for MockEmergencyRotation {
 impl_mock_online!(ValidatorId);
 
 pub struct MockQualifyValidator;
-impl QualifyAuthorityCandidate for MockQualifyValidator {
+impl QualifyNode for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
@@ -149,7 +149,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
-	type AuthorityQualification = MockQualifyValidator;
+	type AuctionQualification = MockQualifyValidator;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
