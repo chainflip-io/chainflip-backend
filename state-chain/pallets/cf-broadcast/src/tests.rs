@@ -1,11 +1,11 @@
 use crate::{
-	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
-	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
+	mock::*, ApiCallLookup, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId,
+	BroadcastId, BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
 	TransmissionFailure,
 };
 use cf_chains::{
-	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
+	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
 	ChainAbi,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -748,6 +748,10 @@ fn missing_transaction_transmission() {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), MockThresholdSignature::default()),
+		);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_some()
 		);

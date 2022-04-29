@@ -534,10 +534,10 @@ pub mod pallet {
 			} else {
 				match failure {
 					TransmissionFailure::TransactionRejected => {
-						let (api_call, signature) = ApiCallLookup::<T, I>::take(
+						let (api_call, signature) = ApiCallLookup::<T, I>::get(
 							broadcast_attempt.broadcast_attempt_id.broadcast_id,
 						)
-						.unwrap();
+						.expect("no api call lookup entry for this broadcast id");
 						let payload = api_call.threshold_signature_payload();
 						if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 							&T::KeyProvider::current_key(),
@@ -550,8 +550,10 @@ pub mod pallet {
 								PalletOffence::TransactionFailedOnTransmission,
 							);
 						} else {
-							// if the signature is invalid, we have to re-request the signature
-							// TODO: clean up storage items
+							Self::clean_up_storage(signature)?;
+							ApiCallLookup::<T, I>::remove(
+								broadcast_attempt.broadcast_attempt_id.broadcast_id,
+							);
 							Self::threshold_sign_and_broadcast(api_call);
 						}
 					},
@@ -620,27 +622,27 @@ pub mod pallet {
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// Here we need to be able to get the accurate broadcast id from the payload
-			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
-				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-				Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
-				if let Some(attempt_count) = attempt_numbers.last() {
-					let last_broadcast_attempt_id =
-						BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-					Self::deposit_event(Event::<T, I>::BroadcastComplete(
-						last_broadcast_attempt_id,
-					));
-				}
-			}
-
+			Self::clean_up_storage(payload)?;
 			Ok(().into())
 		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn clean_up_storage(payload: ThresholdSignatureFor<T, I>) -> DispatchResultWithPostInfo {
+		if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
+			let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+			Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
+			if let Some(attempt_count) = attempt_numbers.last() {
+				let last_broadcast_attempt_id =
+					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
+				Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
+			}
+		}
+		Ok(().into())
+	}
+
 	// Clean up attempts and attempt mapping on success
 	pub fn clean_up_on_transmission_success(
 		broadcast_id: BroadcastId,
