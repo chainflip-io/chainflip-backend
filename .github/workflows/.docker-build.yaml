@@ -1,3 +1,4 @@
+name: Build rust-base Docker image
 on:
   workflow_dispatch:
     inputs:
@@ -10,7 +11,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: "${{ github.repository }}/rust-base"
-  TAG: $IMAGE_NAME:${{ github.event.inputs.nightly_version }}
+  TAG: ${{ github.event.inputs.nightly_version }}
 
 jobs:
   build:
@@ -48,7 +49,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.TAG }}
+          tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           file: rust-base.Dockerfile
