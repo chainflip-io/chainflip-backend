@@ -1,7 +1,6 @@
 use cf_chains::Ethereum;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
-use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
@@ -342,16 +341,12 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
                                                         }
                                                         Err(e) => {
-                                                            slog::error!(
+                                                            slog::info!(
                                                                 logger,
                                                                 "TransmissionRequest attempt_id {} failed: {:?}",
                                                                 attempt_id,
                                                                 e
                                                             );
-                                                            let _result = state_chain_client
-                                                            .submit_signed_extrinsic(pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                                attempt_id, TransmissionFailure::TransactionRejected, expected_broadcast_tx_hash
-                                                            ), &logger).await;
                                                         }
                                                     };
                                                 }
