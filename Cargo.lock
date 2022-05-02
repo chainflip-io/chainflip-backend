@@ -893,6 +893,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-test-utilities"
+version = "0.1.0"
+dependencies = [
+ "frame-system",
+]
+
+[[package]]
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
@@ -5091,6 +5098,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5183,6 +5191,7 @@ dependencies = [
 name = "pallet-cf-governance"
 version = "0.1.0"
 dependencies = [
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5237,6 +5246,7 @@ name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5280,6 +5290,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5301,6 +5312,7 @@ dependencies = [
  "cf-chains",
  "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5321,6 +5333,7 @@ name = "pallet-cf-witnesser"
 version = "0.1.0"
 dependencies = [
  "bitvec 0.20.4",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",

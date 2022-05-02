@@ -52,10 +52,6 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 	});
 }
 
-pub fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
-
 // The set we would expect
 pub fn expected_winning_set() -> (Vec<ValidatorId>, Amount) {
 	let mut bidders = MockBidderProvider::get_bidders();

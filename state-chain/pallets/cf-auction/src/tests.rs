@@ -1,4 +1,5 @@
 use crate::{mock::*, *};
+use cf_test_utilities::last_event;
 use cf_traits::mocks::keygen_exclusion::MockKeygenExclusion;
 use frame_support::{assert_noop, assert_ok};
 
@@ -16,7 +17,7 @@ fn should_provide_winning_set() {
 		);
 
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(expected_winning_set().0)),
 		);
 
@@ -241,7 +242,7 @@ fn changing_range() {
 		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
 		// Confirm we have an event
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::AuctionPallet(crate::Event::ActiveValidatorRangeChanged(
 				(MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 				(2, 100)
