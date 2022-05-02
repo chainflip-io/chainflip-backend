@@ -24,8 +24,8 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
-pub const MIN_AUTHORITY_SIZE: u32 = 1;
-pub const MAX_AUTHORITY_SIZE: u32 = 3;
+pub const MIN_AUTHORITY_SIZE: u16 = 1;
+pub const MAX_AUTHORITY_SIZE: u16 = 3;
 pub const BACKUP_NODE_RATIO: u32 = 3;
 pub const NUMBER_OF_BIDDERS: u32 = 9;
 pub const BIDDER_GROUP_A: u32 = 1;

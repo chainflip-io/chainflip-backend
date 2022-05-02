@@ -141,7 +141,7 @@ pub struct AuctionResult<ValidatorId, Amount> {
 }
 
 /// A min and max number of authorities for an authority set
-pub type AuthoritySetSizeRange = (u32, u32);
+pub type AuthoritySetSizeRange = (u16, u16);
 
 /// Auctioneer
 ///

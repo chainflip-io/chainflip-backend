@@ -496,8 +496,8 @@ mod tests {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
-		max_authorities: u32,
-		min_authorities: u32,
+		max_authorities: u16,
+		min_authorities: u16,
 	}
 
 	impl Default for ExtBuilder {
@@ -528,12 +528,12 @@ mod tests {
 			self
 		}
 
-		fn min_authorities(mut self, min_authorities: u32) -> Self {
+		fn min_authorities(mut self, min_authorities: u16) -> Self {
 			self.min_authorities = min_authorities;
 			self
 		}
 
-		fn max_authorities(mut self, max_authorities: u32) -> Self {
+		fn max_authorities(mut self, max_authorities: u16) -> Self {
 			self.max_authorities = max_authorities;
 			self
 		}
@@ -859,7 +859,7 @@ mod tests {
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
-			const MAX_SET_SIZE: u32 = 5;
+			const MAX_SET_SIZE: u16 = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.min_authorities(MAX_SET_SIZE)
@@ -869,7 +869,7 @@ mod tests {
 					let mut nodes = Validator::current_authorities();
 
 					let number_of_passive_nodes = MAX_SET_SIZE
-						.checked_sub(nodes.len() as u32)
+						.checked_sub(nodes.len() as u16)
 						.expect("Max set size must be at least the number of genesis authorities");
 
 					let (mut testnet, mut passive_nodes) =
@@ -881,7 +881,7 @@ mod tests {
 					}
 
 					nodes.append(&mut passive_nodes);
-					assert_eq!(nodes.len() as u32, MAX_SET_SIZE);
+					assert_eq!(nodes.len() as u16, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
@@ -1003,7 +1003,7 @@ mod tests {
 		// not claim when out of the period
 		fn cannot_claim_stake_out_of_claim_period() {
 			const EPOCH_BLOCKS: u32 = 100;
-			const MAX_AUTHORITIES: u32 = 3;
+			const MAX_AUTHORITIES: u16 = 3;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_authorities(MAX_AUTHORITIES)
@@ -1152,7 +1152,7 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
-			const MAX_AUTHORITIES: u32 = 10;
+			const MAX_AUTHORITIES: u16 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_authorities(MAX_AUTHORITIES)
@@ -1272,7 +1272,7 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
-			const MAX_AUTHORITIES: u32 = 10;
+			const MAX_AUTHORITIES: u16 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_authorities(MAX_AUTHORITIES)
@@ -1318,7 +1318,8 @@ mod tests {
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
 					let percentage_top_offline = 100 - top as u32;
-					let number_offline = (MAX_AUTHORITIES * percentage_top_offline / 100) as usize;
+					let number_offline =
+						(MAX_AUTHORITIES as u32 * percentage_top_offline / 100) as usize;
 
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
@@ -1409,7 +1410,7 @@ mod tests {
 		#[test]
 		fn ensure_right_bond_during_epoch_tranisition() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
-			const ACTIVE_SET_SIZE: u32 = 3;
+			const ACTIVE_SET_SIZE: u16 = 3;
 			const GENESIS_BALANCE: FlipBalance = 1;
 			const BOND_EPOCH_2: u128 = 31;
 			const BOND_EPOCH_3: u128 = 100;
@@ -1519,7 +1520,7 @@ mod tests {
 		#[test]
 		fn decreasing_mab_scenario() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
-			const ACTIVE_SET_SIZE: u32 = 3;
+			const ACTIVE_SET_SIZE: u16 = 3;
 			const GENESIS_BALANCE: FlipBalance = 1;
 			const BOND_EPOCH_2: u128 = 31;
 			const BOND_EPOCH_3: u128 = 6;
