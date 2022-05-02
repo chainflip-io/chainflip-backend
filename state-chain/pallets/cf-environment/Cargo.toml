@@ -32,17 +32,17 @@ version = '1.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-runtime]
 default-features = false
