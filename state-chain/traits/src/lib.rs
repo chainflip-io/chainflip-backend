@@ -214,6 +214,14 @@ pub trait EpochTransitionHandler {
 	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]);
 }
 
+/// Resetter for Reputation Points and Online Credits of a Validator
+pub trait ReputationResetter {
+	type ValidatorId;
+
+	/// Reset the reputation of a validator
+	fn reset_reputation(validator: &Self::ValidatorId);
+}
+
 /// Providing bidders for an auction
 pub trait BidderProvider {
 	type ValidatorId;

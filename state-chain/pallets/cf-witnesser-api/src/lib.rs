@@ -63,32 +63,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		//*** Broadcast pallet witness calls ***//
 
-		/// Witness the successful completion of an outgoing broadcast.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*broadcast_attempt_id, *tx_hash)
-		.get_dispatch_info()
-		.weight))]
-		pub fn witness_eth_transmission_success(
-			origin: OriginFor<T>,
-			broadcast_attempt_id: pallet_cf_broadcast::BroadcastAttemptId,
-			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call =
-				BroadcastCall::<T, Instance1>::transmission_success(broadcast_attempt_id, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
-		}
-
 		/// Witness the failure of an outgoing broadcast.
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.

@@ -259,7 +259,9 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The provided broadcast id is invalid
+		/// The provided payload is invalid.
+		InvalidPayload,
+		/// The provided broadcast id is invalid.
 		InvalidBroadcastId,
 		/// The provided broadcast attempt id is invalid.
 		InvalidBroadcastAttemptId,
@@ -421,50 +423,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that the transaction has reached finality on the target chain.
-		///
-		/// ## Events
-		///
-		/// - [BroadcastComplete](Event::BroadcastComplete)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
-		#[pallet::weight(T::WeightInfo::transmission_success())]
-		pub fn transmission_success(
-			origin: OriginFor<T>,
-			broadcast_attempt_id: BroadcastAttemptId,
-			_tx_hash: TransactionHashFor<T, I>,
-		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// == Clean up storage items ==
-
-			let attempt_numbers =
-				BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_attempt_id.broadcast_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			Self::clean_up_on_transmission_success(
-				broadcast_attempt_id.broadcast_id,
-				&attempt_numbers,
-			);
-
-			if let Some(payload) =
-				SignatureToBroadcastIdLookup::<T, I>::iter().find_map(|(payload, id)| {
-					if id == broadcast_attempt_id.broadcast_id {
-						Some(payload)
-					} else {
-						None
-					}
-				}) {
-				SignatureToBroadcastIdLookup::<T, I>::remove(payload);
-			}
-			// ====
-
-			Self::deposit_event(Event::<T, I>::BroadcastComplete(broadcast_attempt_id));
-
-			Ok(().into())
-		}
-
 		/// Nodes have witnessed that something went wrong during transmission. See
 		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be
 		/// reported.
@@ -576,6 +534,10 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [BroadcastComplete](Event::BroadcastComplete)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidPayload](Event::InvalidPayload)
 		#[pallet::weight(T::WeightInfo::signature_accepted())]
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
@@ -585,19 +547,28 @@ pub mod pallet {
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
+				.ok_or(Error::<T, I>::InvalidPayload)?;
 
 			// Here we need to be able to get the accurate broadcast id from the payload
-			if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
-				let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-				Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
-				if let Some(attempt_count) = attempt_numbers.last() {
-					let last_broadcast_attempt_id =
-						BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-					Self::deposit_event(Event::<T, I>::BroadcastComplete(
-						last_broadcast_attempt_id,
-					));
+			let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+			for attempt_count in &attempt_numbers {
+				let broadcast_attempt_id =
+					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
+
+				// A particular attempt is either alive because at the signing stage
+				// OR it's at the transmission stage
+				if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
+					AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
+				{
+					log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 				}
+			}
+			if let Some(attempt_count) = attempt_numbers.last() {
+				let last_broadcast_attempt_id =
+					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
+				Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
 			}
 
 			Ok(().into())
@@ -606,25 +577,6 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	// Clean up attempts and attempt mapping on success
-	pub fn clean_up_on_transmission_success(
-		broadcast_id: BroadcastId,
-		attempt_numbers: &[AttemptCount],
-	) {
-		for attempt_count in attempt_numbers {
-			let broadcast_attempt_id =
-				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-
-			// A particular attempt is either alive because at the signing stage
-			// OR it's at the transmission stage
-			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
-				AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
-			{
-				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
-			}
-		}
-	}
-
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(

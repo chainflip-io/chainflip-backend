@@ -19,7 +19,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
 	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyValidator, SuccessOrFailure, VaultRotator,
+	QualifyValidator, ReputationResetter, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -165,6 +165,9 @@ pub mod pallet {
 
 		/// Updates the bond of a validator
 		type Bonder: Bonding<ValidatorId = Self::AccountId, Amount = Self::Amount>;
+
+		/// This is used to reset the validator's reputation
+		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
 	}
 
 	#[pallet::event]
@@ -837,6 +840,7 @@ impl<T: Config> Pallet<T> {
 			EpochHistory::<T>::deactivate_epoch(validator, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_validator(validator) == 0 {
 				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(validator);
+				T::ReputationResetter::reset_reputation(validator);
 			}
 			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}
@@ -964,7 +968,9 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			Self::set_rotation_status(RotationStatus::RunAuction);
+			if RotationPhase::<T>::get() == RotationStatusOf::<T>::Idle {
+				Self::set_rotation_status(RotationStatus::RunAuction);
+			}
 		}
 	}
 

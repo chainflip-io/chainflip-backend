@@ -168,6 +168,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type OffenceReporter = Reputation;
+	type ReputationResetter = Reputation;
 }
 
 impl pallet_cf_environment::Config for Runtime {

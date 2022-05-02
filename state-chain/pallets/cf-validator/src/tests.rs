@@ -1,6 +1,9 @@
 use crate::{mock::*, Error, *};
 use cf_traits::{
-	mocks::{system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator},
+	mocks::{
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
+	},
 	SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
@@ -76,6 +79,20 @@ fn should_request_emergency_rotation() {
 			!ValidatorPallet::emergency_rotation_in_progress(),
 			"we should not be in an emergency rotation"
 		);
+
+		// Once we've passed the Idle phase, requesting an emergency rotation should have no
+		// effect on the rotation status.
+		for status in [
+			RotationStatusOf::<Test>::RunAuction,
+			RotationStatusOf::<Test>::AwaitingVaults(Default::default()),
+			RotationStatusOf::<Test>::VaultsRotated(Default::default()),
+			RotationStatusOf::<Test>::SessionRotating(Default::default()),
+		] {
+			RotationPhase::<Test>::put(&status);
+			ValidatorPallet::request_emergency_rotation();
+			assert_eq!(RotationPhase::<Test>::get(), status,);
+			ValidatorPallet::emergency_rotation_completed();
+		}
 	});
 }
 
@@ -565,4 +582,46 @@ fn no_auction_during_maintenance() {
 			})
 		);
 	});
+}
+
+#[test]
+fn test_reputation_reset() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Simulate an epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+			winners: vec![1, 2, 3],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_validators() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		let first_epoch = ValidatorPallet::current_epoch();
+
+		// Simulate another epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+			winners: vec![4, 5, 6],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_validators() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		for id in &[1, 2, 3, 4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
+
+		ValidatorPallet::expire_epoch(first_epoch);
+
+		for id in &[1, 2, 3] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 0);
+		}
+		for id in &[4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
+	})
 }
