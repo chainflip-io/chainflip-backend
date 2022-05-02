@@ -73,16 +73,16 @@ async fn should_save_key_after_keygen() {
         let keygen_request_fut =
             client.initiate_keygen(DEFAULT_KEYGEN_CEREMONY_ID, ACCOUNT_IDS.to_vec());
 
-        let keygen_request_receiver_fut = async move {
-            // Get the oneshot channel that is liked to the keygen request
-            let result_sender = match keygen_request_receiver.recv().await {
-                Some((_, _, _, result_sender)) => result_sender,
-                _ => panic!(""),
-            };
-
-            // Send a successful keygen result
-            result_sender.send(Ok(keygen_result_info)).unwrap();
-            println!("Sent keygen result info")
+        let keygen_request_receiver_fut = async {
+            // Get the oneshot channel that is linked to the keygen request
+            // and send a successful keygen result
+            keygen_request_receiver
+                .recv()
+                .await
+                .unwrap()
+                .3
+                .send(Ok(keygen_result_info))
+                .unwrap();
         };
 
         let _ = tokio::join!(keygen_request_fut, keygen_request_receiver_fut);
