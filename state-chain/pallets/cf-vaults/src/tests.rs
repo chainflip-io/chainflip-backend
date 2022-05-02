@@ -1,7 +1,7 @@
 use crate::{
-	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, FailureVoters,
-	KeygenOutcome, KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation,
-	SuccessVoters, Vault, VaultRotationStatus, Vaults,
+	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenOutcome,
+	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
+	VaultRotationStatus, Vaults,
 };
 use cf_test_utilities::last_event;
 use cf_traits::{
@@ -484,34 +484,28 @@ fn vault_key_rotated() {
 		// We have yet to move to the new epoch
 		let current_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index();
 
-		let Vault { public_key, active_window } =
+		let Vault { public_key, active_from_block } =
 			Vaults::<MockRuntime, _>::get(current_epoch).expect("Ethereum Vault should exist");
-
 		assert_eq!(
 			public_key, GENESIS_AGG_PUB_KEY,
 			"we should have the old agg key in the genesis vault"
 		);
-
 		assert_eq!(
-			active_window,
-			BlockHeightWindow { from: 0, to: Some(ROTATION_BLOCK_NUMBER) },
-			"we should have the block height set for the genesis or current epoch"
+			active_from_block, 0,
+			"we should have set the from block for the genesis or current epoch"
 		);
 
 		// The next epoch
 		let next_epoch = current_epoch + 1;
-
-		let Vault { public_key, active_window } = Vaults::<MockRuntime, _>::get(next_epoch)
+		let Vault { public_key, active_from_block } = Vaults::<MockRuntime, _>::get(next_epoch)
 			.expect("Ethereum Vault should exist in the next epoch");
-
 		assert_eq!(
 			public_key, NEW_AGG_PUB_KEY,
 			"we should have the new public key in the new vault for the next epoch"
 		);
-
 		assert_eq!(
-			active_window,
-			BlockHeightWindow { from: ROTATION_BLOCK_NUMBER.saturating_add(1), to: None },
+			active_from_block,
+			ROTATION_BLOCK_NUMBER.saturating_add(1),
 			"we should have set the starting point for the new vault's active window as the next
 			after the reported block number"
 		);

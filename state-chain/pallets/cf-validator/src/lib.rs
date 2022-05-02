@@ -567,7 +567,7 @@ pub mod pallet {
 	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn validator_index)]
-	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
+	pub type ValidatorIndex<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		EpochIndex,

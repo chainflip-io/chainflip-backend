@@ -199,10 +199,7 @@ mod v0_types {
 					.public_key
 					.try_into()
 					.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")?,
-				active_window: BlockHeightWindow {
-					from: old.active_window.from.into(),
-					to: old.active_window.to.map(Into::into),
-				},
+				active_from_block: old.active_window.from.into(),
 			})
 		}
 	}

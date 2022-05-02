@@ -12,7 +12,7 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::{Chain, ChainCrypto, Ethereum};
-	use cf_traits::Witnesser;
+	use cf_traits::{EpochIndex, Witnesser};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
 	};
@@ -114,11 +114,12 @@ pub mod pallet {
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
 			withdrawal_address: EthereumAddress,
+			epoch: EpochIndex,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::staked(staker_account_id, amount, withdrawal_address, tx_hash);
-			T::Witnesser::witness(who, call.into())
+			T::Witnesser::witness_at_epoch(who, call.into(), epoch)
 		}
 
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
@@ -139,11 +140,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			claimed_amount: FlipBalance<T>,
+			epoch: EpochIndex,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::claimed(account_id, claimed_amount, tx_hash);
-			T::Witnesser::witness(who, call.into())
+			T::Witnesser::witness_at_epoch(who, call.into(), epoch)
 		}
 
 		/// Witness an on-chain vault key rotation

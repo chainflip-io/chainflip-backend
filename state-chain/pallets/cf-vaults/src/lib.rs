@@ -246,20 +246,13 @@ impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
 	}
 }
 
-/// The bounds within which a public key for a vault should be used for witnessing.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct BlockHeightWindow<T: Chain> {
-	pub from: T::ChainBlockNumber,
-	pub to: Option<T::ChainBlockNumber>,
-}
-
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Vault<T: ChainAbi> {
 	/// The vault's public key.
 	pub public_key: T::AggKey,
-	/// The active window for this vault
-	pub active_window: BlockHeightWindow<T>,
+	/// The first active block for this vault
+	pub active_from_block: T::ChainBlockNumber,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -462,8 +455,6 @@ pub mod pallet {
 		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
 		NoActiveRotation,
-		/// The specified chain is not supported.
-		UnsupportedChain,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
 		/// The generated key is not a valid public key.
@@ -550,7 +541,6 @@ pub mod pallet {
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [UnsupportedChain](Error::UnsupportedChain)
 		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
@@ -585,16 +575,6 @@ pub mod pallet {
 				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
 			}
 
-			// We update the current epoch with an active window for the outgoers
-			Vaults::<T, I>::try_mutate_exists(CurrentEpochIndex::<T>::get(), |maybe_vault| {
-				if let Some(vault) = maybe_vault.as_mut() {
-					vault.active_window.to = Some(block_number);
-					Ok(())
-				} else {
-					Err(Error::<T, I>::UnsupportedChain)
-				}
-			})?;
-
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
 			// For the new epoch we create a new vault with the new public key and its active
@@ -603,12 +583,8 @@ pub mod pallet {
 				CurrentEpochIndex::<T>::get().saturating_add(1),
 				Vault {
 					public_key: new_public_key,
-					active_window: BlockHeightWindow {
-						from: block_number.saturating_add(
-							<<T as Config<I>>::Chain as Chain>::ChainBlockNumber::one(),
-						),
-						to: None,
-					},
+					active_from_block: block_number
+						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 				},
 			);
 
@@ -647,10 +623,7 @@ pub mod pallet {
 
 			Vaults::<T, I>::insert(
 				CurrentEpochIndex::<T>::get(),
-				Vault {
-					public_key,
-					active_window: BlockHeightWindow { from: self.deployment_block, to: None },
-				},
+				Vault { public_key, active_from_block: self.deployment_block },
 			);
 		}
 	}
