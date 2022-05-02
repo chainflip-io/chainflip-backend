@@ -1,4 +1,5 @@
 use crate::{mock::*, Error, *};
+use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
@@ -6,7 +7,6 @@ use cf_traits::{
 	},
 	SystemStateInfo, VaultRotator,
 };
-use cf_test_utilities::last_event;
 use frame_support::{assert_noop, assert_ok};
 
 const ALICE: u64 = 100;
