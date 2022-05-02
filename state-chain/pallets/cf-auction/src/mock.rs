@@ -36,27 +36,6 @@ thread_local! {
 	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
-// Create a set of descending bids, including an invalid bid of amount 0
-// offset the ids to create unique bidder groups.  By default all bidders are online.
-pub fn generate_bids(number_of_bids: u32, group: u32) {
-	BIDDER_SET.with(|cell| {
-		let mut cell = cell.borrow_mut();
-		(*cell).clear();
-		for bid_number in (1..=number_of_bids as u64).rev() {
-			let validator_id = bid_number * group as u64;
-			MockOnline::set_online(&validator_id, true);
-			(*cell).push((validator_id, (bid_number * 100).into()));
-		}
-	});
-}
-
-// The set we would expect
-pub fn expected_winning_set() -> (Vec<ValidatorId>, Amount) {
-	let mut bidders = MockBidderProvider::get_bidders();
-	bidders.truncate(MAX_AUTHORITY_SIZE as usize);
-	(bidders.iter().map(|(validator_id, _)| *validator_id).collect(), bidders.last().unwrap().1)
-}
-
 construct_runtime!(
 	pub enum Test where
 		Block = Block,

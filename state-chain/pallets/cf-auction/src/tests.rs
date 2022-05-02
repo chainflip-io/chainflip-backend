@@ -16,10 +16,7 @@ fn should_provide_winning_set() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(
-				expected_winning_set().0,
-				expected_winning_set().1
-			)),
+			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(winners, bond)),
 		);
 
 		MockBidderProvider::set_bids(&(11..=20).map(|id| (id, 80)).collect::<Vec<_>>());

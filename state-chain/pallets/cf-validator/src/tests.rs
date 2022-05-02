@@ -5,7 +5,7 @@ use cf_traits::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
 		vault_rotation::MockVaultRotator,
 	},
-	SystemStateInfo, VaultRotator,
+	AuctionOutcome, SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -568,10 +568,7 @@ fn no_auction_during_maintenance() {
 		// Expect the auction to be to be completed
 		assert_eq!(
 			RotationPhase::<Test>::get(),
-			RotationStatus::<Test>::VaultsRotated(AuctionOutcome {
-				winners: vec![],
-				..Default::default()
-			})
+			RotationStatus::<Test>::VaultsRotated(Default::default())
 		);
 	});
 }
@@ -640,14 +637,14 @@ mod bond_expiry {
 			});
 			assert_eq!(ValidatorPallet::bond(), 101);
 
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_validator(&1), [initial_epoch + 1]);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
 			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
 			assert_eq!(
-				EpochHistory::<Test>::active_epochs_for_validator(&2),
+				EpochHistory::<Test>::active_epochs_for_authority(&2),
 				[initial_epoch + 1, initial_epoch + 2]
 			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&2), 101);
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_validator(&3), [initial_epoch + 2]);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
 			assert_eq!(EpochHistory::<Test>::active_bond(&3), 101);
 		});
 	}
@@ -670,14 +667,14 @@ mod bond_expiry {
 			});
 			assert_eq!(ValidatorPallet::bond(), 99);
 
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_validator(&1), [initial_epoch + 1]);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
 			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
 			assert_eq!(
-				EpochHistory::<Test>::active_epochs_for_validator(&2),
+				EpochHistory::<Test>::active_epochs_for_authority(&2),
 				[initial_epoch + 1, initial_epoch + 2]
 			);
 			assert_eq!(EpochHistory::<Test>::active_bond(&2), 100);
-			assert_eq!(EpochHistory::<Test>::active_epochs_for_validator(&3), [initial_epoch + 2]);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
 			assert_eq!(EpochHistory::<Test>::active_bond(&3), 99);
 		});
 	}
