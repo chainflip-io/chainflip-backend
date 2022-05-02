@@ -242,7 +242,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 }
 
 #[tokio::test]
-async fn sends_initial_extrinsics_when_backup_but_not_historic_on_startup() {
+async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     // Current epoch is set to 3. Our last_active_epoch is set to 1.
     // So we should be backup, but not outgoing. Hence, we should not send any messages
     // down the witness channels
@@ -441,7 +441,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 }
 
 #[tokio::test]
-async fn backup_not_historical_to_authority_on_new_epoch() {
+async fn not_historical_to_authority_on_new_epoch() {
     let logger = new_test_logger();
 
     let eth_rpc_mock = MockEthRpcApi::new();
@@ -572,7 +572,7 @@ async fn backup_not_historical_to_authority_on_new_epoch() {
 }
 
 #[tokio::test]
-async fn current_authority_to_historical_passive_on_new_epoch_event() {
+async fn current_authority_to_historical_on_new_epoch_event() {
     // === FAKE BLOCKHEADERS ===
     let empty_block_header = test_header(20);
     let new_epoch_block_header = test_header(21);
@@ -716,7 +716,7 @@ async fn current_authority_to_historical_passive_on_new_epoch_event() {
 // TODO: We should test that this works for historical epochs too. We should be able to sign for historical epochs we
 // were a part of
 #[tokio::test]
-async fn only_encodes_and_signs_when_current_authority_and_specified() {
+async fn only_encodes_and_signs_when_specified() {
     // === FAKE BLOCKHEADERS ===
 
     let block_header = test_header(21);
