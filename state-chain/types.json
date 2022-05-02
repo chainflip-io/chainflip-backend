@@ -41,6 +41,10 @@
     "to": "Option<u64>"
   },
   "BlockNumber": "u32",
+  "BroadcastAttempt": {
+    "broadcast_attempt_id": "BroadcastAttemptId",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
   "BroadcastAttemptId": {
     "broadcast_id": "BroadcastId",
     "attempt_count": "AttemptCount"
@@ -81,10 +85,6 @@
     "nonce": "Uint"
   },
   "EthTransactionHash": "[u8;32]",
-  "BroadcastAttempt": {
-    "broadcast_attempt_id": "BroadcastAttemptId",
-    "unsigned_tx": "UnsignedTransactionFor"
-  },
   "FlipAccount": {
     "stake": "Amount",
     "validator_bond": "Amount"
@@ -222,6 +222,15 @@
   "Timestamp": "u64",
   "TransactionHash": "H256",
   "TransactionHashFor": "TransactionHash",
+  "TransactionSigningAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
+  "TransmissionAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "signer": "ValidatorId",
+    "signed_tx": "SignedTransactionFor"
+  },
   "TransmissionFailure": {
     "_enum": [
       "TransactionRejected",
