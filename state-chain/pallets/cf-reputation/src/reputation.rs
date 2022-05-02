@@ -4,7 +4,7 @@ use sp_std::fmt::Debug;
 
 pub type ReputationPoints = i32;
 
-/// Reputation of a validator
+/// Reputation of a node
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct ReputationTracker<P: ReputationParameters> {
 	online_credits: P::OnlineCredits,

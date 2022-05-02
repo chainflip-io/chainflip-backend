@@ -65,7 +65,7 @@ mod tests {
 		}
 
 		impl StakingContract {
-			// Stake for validator
+			// Stake for NODE
 			pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
 				let current_amount = self.stakes.get(&node_id).unwrap_or(&0);
 				let total = current_amount + amount;
@@ -87,7 +87,7 @@ mod tests {
 		pub struct Cli;
 
 		impl Cli {
-			// Activates an account to become a validator in the next epoch
+			// Activates an account to become an authority in the next epoch
 			pub fn activate_account(account: NodeId) {
 				AccountRetired::<Runtime>::insert(account, false);
 			}
@@ -225,7 +225,7 @@ mod tests {
 			fn handle_state_chain_events(&mut self, events: &[Event]) {
 				// If active handle events
 				if self.active {
-					// Being a validator we would respond to certain events
+					// Being a CurrentAuthority we would respond to certain events
 					if self.state() == ChainflipAccountState::CurrentAuthority {
 						on_events!(
 							events,
@@ -280,8 +280,8 @@ mod tests {
 						events,
 						Event::EthereumVault(
 							// A keygen request has been made
-							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, validators)) => {
-								if validators.contains(&self.node_id) {
+							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, authorities)) => {
+								if authorities.contains(&self.node_id) {
 									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
@@ -359,7 +359,7 @@ mod tests {
 				[self.node_counter as u8; 32].into()
 			}
 
-			// Create a network which includes the validators in genesis of number of nodes
+			// Create a network which includes the authorities in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(
 				number_of_passive_nodes: u8,
@@ -496,8 +496,8 @@ mod tests {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
-		max_validators: u32,
-		min_validators: u32,
+		max_authorities: u32,
+		min_authorities: u32,
 	}
 
 	impl Default for ExtBuilder {
@@ -506,8 +506,8 @@ mod tests {
 				accounts: vec![],
 				root: AccountId::default(),
 				blocks_per_epoch: Zero::zero(),
-				max_validators: MAX_VALIDATORS,
-				min_validators: 1,
+				max_authorities: MAX_AUTHORITIES,
+				min_authorities: 1,
 			}
 		}
 	}
@@ -528,13 +528,13 @@ mod tests {
 			self
 		}
 
-		fn max_validators(mut self, max_validators: u32) -> Self {
-			self.max_validators = max_validators;
+		fn min_authorities(mut self, min_authorities: u32) -> Self {
+			self.min_authorities = min_authorities;
 			self
 		}
 
-		fn min_validators(mut self, min_validators: u32) -> Self {
-			self.min_validators = min_validators;
+		fn max_authorities(mut self, max_authorities: u32) -> Self {
+			self.max_authorities = max_authorities;
 			self
 		}
 
@@ -572,7 +572,7 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_auction::GenesisConfig {
-					validator_size_range: (self.min_validators, self.max_validators),
+					authority_set_size_range: (self.min_authorities, self.max_authorities),
 				},
 				storage,
 			)
@@ -580,8 +580,8 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_emissions::GenesisConfig {
-					validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
-					backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
+					current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+					backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 				},
 				storage,
 			)
@@ -640,7 +640,8 @@ mod tests {
 	mod genesis {
 		use super::*;
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, StakeTransfer,
+			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
+			StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -657,20 +658,20 @@ mod tests {
 		#[test]
 		// The following state is to be expected at genesis
 		// - Total issuance
-		// - The genesis validators are all staked equally
-		// - The minimum active bid is set at the stake for a genesis validator
-		// - The genesis validators are available via validator_lookup()
-		// - The genesis validators are in the session
-		// - The genesis validators are considered offline for this heartbeat interval
+		// - The genesis authorities are all staked equally
+		// - The minimum active bid is set at the stake for a genesis authority
+		// - The genesis authorities are available via authority_lookup()
+		// - The genesis authorities are in the session
+		// - The genesis authorities are considered offline for this heartbeat interval
 		// - No emissions have been made
 		// - No rewards have been distributed
 		// - No vault rotation has occurred
 		// - Relevant nonce are at 0
 		// - Governance has its member
 		// - There have been no proposals
-		// - Emission inflation for both validators and backup validators are set
+		// - Emission inflation for both authorities and backup authorities are set
 		// - No one has reputation
-		// - The genesis validators have last active epoch set
+		// - The genesis authorities have last active epoch set
 		fn state_of_genesis_is_as_expected() {
 			default().build().execute_with(|| {
 				// Confirmation that we have our assumed state at block 1
@@ -692,9 +693,9 @@ mod tests {
 				}
 
 				assert_eq!(Validator::bond(), GENESIS_BALANCE);
-				let mut validators = Validator::validators();
-				validators.sort();
-				assert_eq!(validators, accounts, "the validators are those expected at genesis");
+				let mut authorities = Validator::current_authorities();
+				authorities.sort();
+				assert_eq!(authorities, accounts, "the authorities are those expected at genesis");
 
 				assert_eq!(
 					Validator::epoch_number_of_blocks(),
@@ -706,8 +707,8 @@ mod tests {
 
 				for account in accounts.iter() {
 					assert!(
-						Validator::validator_index(current_epoch, account).is_some(),
-						"validator is present in lookup"
+						Validator::authority_index(current_epoch, account).is_some(),
+						"authority is present in lookup"
 					);
 				}
 
@@ -732,22 +733,22 @@ mod tests {
 				assert_eq!(Governance::proposal_id_counter(), 0, "no proposal for governance");
 
 				assert_eq!(
-					Emissions::validator_emission_inflation(),
-					VALIDATOR_EMISSION_INFLATION_BPS,
-					"invalid emission inflation for validators"
+					Emissions::current_authority_emission_inflation(),
+					CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+					"invalid emission inflation for authorities"
 				);
 
 				assert_eq!(
-					Emissions::backup_validator_emission_inflation(),
-					BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
-					"invalid emission inflation for backup validators"
+					Emissions::backup_node_emission_inflation(),
+					BACKUP_NODE_EMISSION_INFLATION_BPS,
+					"invalid emission inflation for backup authorities"
 				);
 
 				for account in accounts.iter() {
 					assert_eq!(
 						Reputation::reputation(account),
 						pallet_cf_reputation::ReputationTracker::<Runtime>::default(),
-						"validator shouldn't have reputation points"
+						"authority shouldn't have reputation points"
 					);
 				}
 
@@ -785,7 +786,7 @@ mod tests {
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				// As we run a rotation at genesis we will need accounts to support
-				// having 5 validators as the default is 3 (Alice, Bob and Charlie)
+				// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
 				.accounts(vec![
 					(AccountId::from(ALICE), GENESIS_BALANCE),
 					(AccountId::from(BOB), GENESIS_BALANCE),
@@ -793,10 +794,10 @@ mod tests {
 					(AccountId::from([0xfc; 32]), GENESIS_BALANCE),
 					(AccountId::from([0xfb; 32]), GENESIS_BALANCE),
 				])
-				.min_validators(5)
+				.min_authorities(5)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_validators();
+					let mut nodes = Validator::current_authorities();
 					let (mut testnet, mut passive_nodes) = network::Network::create(3, &nodes);
 
 					nodes.append(&mut passive_nodes);
@@ -854,22 +855,22 @@ mod tests {
 		// - When the epoch is reached an auction is started and completed
 		// - All nodes stake above the MAB
 		// - We have two nodes that haven't registered their session keys
-		// - New validators have the state of Validator with the last active epoch stored
+		// - New authorities have the state of Validator with the last active epoch stored
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			const MAX_SET_SIZE: u32 = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_SET_SIZE)
+				.min_authorities(MAX_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					// Genesis nodes
-					let mut nodes = Validator::current_validators();
+					let mut nodes = Validator::current_authorities();
 
 					let number_of_passive_nodes = MAX_SET_SIZE
 						.checked_sub(nodes.len() as u32)
-						.expect("Max set size must be at least the number of genesis validators");
+						.expect("Max set size must be at least the number of genesis authorities");
 
 					let (mut testnet, mut passive_nodes) =
 						network::Network::create(number_of_passive_nodes as u8, &nodes);
@@ -904,7 +905,7 @@ mod tests {
 					}
 
 					// A late staker which we will use after the auction.  They are yet to stake
-					// and will do after the auction with the intention of being a backup validator
+					// and will do after the auction with the intention of being a backup node
 					let late_staker = testnet.create_engine();
 					testnet.set_active(&late_staker, true);
 					let seed = late_staker.to_string();
@@ -915,9 +916,6 @@ mod tests {
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
-					// For each subsequent block the state chain will check if the vault has rotated
-					// until then we stay in the `ValidatorsSelected`
-					// Run things to a successful vault rotation
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 					assert_eq!(
@@ -932,23 +930,23 @@ mod tests {
 						"minimum active bid should be that of the new stake"
 					);
 
-					let mut winners = Validator::validators();
+					let mut winners = Validator::current_authorities();
 					winners.sort();
 					nodes.sort();
 					assert_eq!(
 						winners,
 						nodes,
-						"the new winners should be those genesis validators and the passive nodes that have keys"
+						"the new winners should be those genesis authorities and the passive nodes that have keys"
 					);
 
-					let mut new_validators = Validator::current_validators();
-					new_validators.sort();
+					let mut new_authorities = Validator::current_authorities();
+					new_authorities.sort();
 
-					// This new set of winners should also be the validators of the network
+					// This new set of winners should also be the authorities of the network
 					assert_eq!(
-						new_validators,
+						new_authorities,
 						nodes,
-						"the new validators should be those genesis validators and the new nodes created in test"
+						"the new authorities should be those genesis authorities and the new nodes created in test"
 					);
 
 					for account in keyless_nodes.iter() {
@@ -960,16 +958,16 @@ mod tests {
 						);
 					}
 
-					for account in new_validators.iter() {
+					for account in new_authorities.iter() {
 						// TODO: Check historical epochs
 						assert_eq!(
 							ChainflipAccountState::CurrentAuthority,
 							ChainflipAccountStore::<Runtime>::get(account).state,
-							"should be validator"
+							"should be CurrentAuthority"
 						);
 					}
 
-					// A late staker comes along, they should become a backup validator as they have
+					// A late staker comes along, they should become a backup node as they have
 					// everything in place
 					testnet.stake_manager_contract.stake(
 						late_staker.clone(),
@@ -980,7 +978,7 @@ mod tests {
 					assert_eq!(
 						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
-						"late staker should be a backup validator"
+						"late staker should be a backup node"
 					);
 
 					// Run to the next epoch to start the auction
@@ -1005,17 +1003,15 @@ mod tests {
 		// not claim when out of the period
 		fn cannot_claim_stake_out_of_claim_period() {
 			const EPOCH_BLOCKS: u32 = 100;
-			const MAX_VALIDATORS: u32 = 3;
+			const MAX_AUTHORITIES: u32 = 3;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_VALIDATORS)
+				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_validators();
-					// Create the test network with some fresh nodes and the genesis validators
+					let mut nodes = Validator::current_authorities();
 					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
 
-					// Activate passive nodes
 					for passive_node in passive_nodes.clone() {
 						network::Cli::activate_account(passive_node);
 					}
@@ -1136,7 +1132,7 @@ mod tests {
 		}
 	}
 
-	mod validators {
+	mod authorities {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{
 			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
@@ -1156,18 +1152,18 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
-			const MAX_VALIDATORS: u32 = 10;
+			const MAX_AUTHORITIES: u32 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_VALIDATORS)
+				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					// Create MAX_VALIDATORS passive nodes and stake them above our genesis
-					// validators The result will be our newly created nodes will be validators and
-					// the genesis validators will become backup validators
-					let mut genesis_validators = Validator::current_validators();
+					// Create MAX_AUTHORITIES passive nodes and stake them above our genesis
+					// authorities The result will be our newly created nodes will be authorities
+					// and the genesis authorities will become backup nodes
+					let mut genesis_authorities = Validator::current_authorities();
 					let (mut testnet, mut init_passive_nodes) =
-						network::Network::create(MAX_VALIDATORS as u8, &genesis_validators);
+						network::Network::create(MAX_AUTHORITIES as u8, &genesis_authorities);
 
 					// An initial stake which is greater than the genesis stakes
 					// We intend for these initially passive nodes to win the auction
@@ -1199,18 +1195,18 @@ mod tests {
 						"We should be in a new epoch"
 					);
 
-					// assert list of validators as being the new nodes
-					let mut current_validators: Vec<NodeId> = Validator::current_validators();
+					// assert list of authorities as being the new nodes
+					let mut current_authorities: Vec<NodeId> = Validator::current_authorities();
 
-					current_validators.sort();
+					current_authorities.sort();
 					init_passive_nodes.sort();
 
 					assert_eq!(
-						init_passive_nodes, current_validators,
-						"our new initial passive nodes should be the new validators"
+						init_passive_nodes, current_authorities,
+						"our new initial passive nodes should be the new authorities"
 					);
 
-					current_validators.iter().for_each(|account_id| {
+					current_authorities.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						assert_eq!(account_data.state, ChainflipAccountState::CurrentAuthority);
 						// we were active in teh first epoch
@@ -1218,22 +1214,22 @@ mod tests {
 						// TODO: Check historical epochs
 					});
 
-					// assert list of backup validators as being the genesis validators
-					let mut current_backup_validators: Vec<NodeId> = Auction::remaining_bidders()
+					// assert list of backup nodes as being the genesis authorities
+					let mut current_backup_nodes: Vec<NodeId> = Auction::remaining_bidders()
 						.iter()
 						.take(Auction::backup_group_size() as usize)
 						.map(|(validator_id, _)| validator_id.clone())
 						.collect();
 
-					current_backup_validators.sort();
-					genesis_validators.sort();
+					current_backup_nodes.sort();
+					genesis_authorities.sort();
 
 					assert_eq!(
-						genesis_validators, current_backup_validators,
-						"we should have new backup validators"
+						genesis_authorities, current_backup_nodes,
+						"the genesis authorities should now be the backup nodes"
 					);
 
-					current_backup_validators.iter().for_each(|account_id| {
+					current_backup_nodes.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						assert_eq!(
 							account_data.state,
@@ -1243,33 +1239,32 @@ mod tests {
 						// TODO: Check historical epochs
 					});
 
-					let backup_validator_balances: HashMap<NodeId, FlipBalance> =
-						current_backup_validators
-							.iter()
-							.map(|validator_id| {
-								(validator_id.clone(), Flip::stakeable_balance(validator_id))
-							})
-							.collect::<Vec<(NodeId, FlipBalance)>>()
-							.into_iter()
-							.collect();
+					let backup_node_balances: HashMap<NodeId, FlipBalance> = current_backup_nodes
+						.iter()
+						.map(|validator_id| {
+							(validator_id.clone(), Flip::stakeable_balance(validator_id))
+						})
+						.collect::<Vec<(NodeId, FlipBalance)>>()
+						.into_iter()
+						.collect();
 
-					// Move forward a heartbeat, emissions should be shared to backup validators
+					// Move forward a heartbeat, emissions should be shared to backup nodes
 					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
 
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
-					for (backup_validator, pre_balance) in backup_validator_balances {
-						assert!(pre_balance < Flip::stakeable_balance(&backup_validator));
+					for (backup_node, pre_balance) in backup_node_balances {
+						assert!(pre_balance < Flip::stakeable_balance(&backup_node));
 					}
 				});
 		}
 
 		#[test]
-		// A network is created with a set of validators and backup validators.
-		// EmergencyRotationPercentageTrigger(80%) of the validators continue to submit heartbeats
-		// with 20% going offline and forcing an emergency rotation in which a new set of validators
-		// start to validate the network which includes live validators and previous backup
-		// validators
+		// A network is created with a set of authorities and backup nodes.
+		// EmergencyRotationPercentageTrigger(80%) of the authorities continue to submit heartbeats
+		// with 20% going offline and forcing an emergency rotation in which a new set of
+		// authorities start to validate the network which includes live authorities and previous
+		// backup nodes
 		fn emergency_rotations() {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 1 heartbeat interval
@@ -1277,15 +1272,15 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
-			const MAX_VALIDATORS: u32 = 10;
+			const MAX_AUTHORITIES: u32 = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_validators(MAX_VALIDATORS)
+				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_validators();
+					let mut nodes = Validator::current_authorities();
 					let (mut testnet, mut passive_nodes) =
-						network::Network::create(MAX_VALIDATORS as u8, &nodes);
+						network::Network::create(MAX_AUTHORITIES as u8, &nodes);
 
 					for passive_node in passive_nodes.clone() {
 						network::Cli::activate_account(passive_node);
@@ -1323,7 +1318,7 @@ mod tests {
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
 					let percentage_top_offline = 100 - top as u32;
-					let number_offline = (MAX_VALIDATORS * percentage_top_offline / 100) as usize;
+					let number_offline = (MAX_AUTHORITIES * percentage_top_offline / 100) as usize;
 
 					let offline_nodes: Vec<_> =
 						nodes.iter().take(number_offline).cloned().collect();
@@ -1397,13 +1392,13 @@ mod tests {
 		use state_chain_runtime::Validator;
 
 		// TODO: Rename
-		// Helper function that checks the epochs of a validator against a list of expected
+		// Helper function that checks the epochs of an authority against a list of expected
 		// epochs
 		fn ensure_epoch_activity(account: &AccountId, epochs: Vec<EpochIndex>) {
 			assert_eq!(
-				EpochHistory::<Runtime>::active_epochs_for_validator(account),
+				EpochHistory::<Runtime>::active_epochs_for_authority(account),
 				epochs,
-				"The active epochs for the validator should be {:?}",
+				"The active epochs for the authority should be {:?}",
 				epochs
 			);
 		}
@@ -1425,17 +1420,17 @@ mod tests {
 					(AccountId::from(BOB), GENESIS_BALANCE),
 					(AccountId::from(CHARLIE), GENESIS_BALANCE),
 				])
-				.max_validators(ACTIVE_SET_SIZE)
+				.max_authorities(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
-					let current_validators = Validator::current_validators();
+					let current_authorities = Validator::current_authorities();
 					let (mut testnet, passive_nodes) =
-						network::Network::create(2, &current_validators);
+						network::Network::create(2, &current_authorities);
 					// Define 5 nodes
-					let genesis_node_1 = current_validators.get(0).unwrap();
-					let genesis_node_2 = current_validators.get(1).unwrap();
-					let genesis_node_3 = current_validators.get(2).unwrap();
+					let genesis_node_1 = current_authorities.get(0).unwrap();
+					let genesis_node_2 = current_authorities.get(1).unwrap();
+					let genesis_node_3 = current_authorities.get(2).unwrap();
 					let init_passive_node_1 = passive_nodes.get(0).unwrap();
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
@@ -1469,12 +1464,12 @@ mod tests {
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
 
-					let current_validators = Validator::current_validators();
+					let current_authorities = Validator::current_authorities();
 					// Expect the genesis nodes in the active set, and only them
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(genesis_node_2));
-					assert!(current_validators.contains(genesis_node_3));
-					assert_eq!(current_validators.len(), 3);
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(genesis_node_2));
+					assert!(current_authorities.contains(genesis_node_3));
+					assert_eq!(current_authorities.len(), 3);
 
 					// Stake the passive nodes
 					testnet.stake_manager_contract.stake(
@@ -1495,11 +1490,11 @@ mod tests {
 					// 110 the 3rd highest genesis node has a stake of 100 (99 + 1)
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
 
-					let current_validators = Validator::current_validators();
+					let current_authorities = Validator::current_authorities();
 					// Expect 1, 4 and 5 in the active set
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(init_passive_node_1));
-					assert!(current_validators.contains(init_passive_node_2));
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(init_passive_node_1));
+					assert!(current_authorities.contains(init_passive_node_2));
 
 					// Check activity in epochs
 					ensure_epoch_activity(genesis_node_1, vec![2, 3]);
@@ -1518,7 +1513,7 @@ mod tests {
 		}
 
 		// In this scenario, we test the case when the MAB drops from one epoch to another. We
-		// expect the validators to be bonded for the epoch with the highest bond in which they are
+		// expect the authorities to be bonded for the epoch with the highest bond in which they are
 		// currently active. To simulate this scenario we have to extend the set size during the
 		// test to simulate a drop in the MAB.
 		#[test]
@@ -1535,7 +1530,7 @@ mod tests {
 					(AccountId::from(BOB), GENESIS_BALANCE),
 					(AccountId::from(CHARLIE), GENESIS_BALANCE),
 				])
-				.max_validators(ACTIVE_SET_SIZE)
+				.max_authorities(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
 					assert_eq!(
@@ -1543,14 +1538,14 @@ mod tests {
 						Validator::epoch_index(),
 						"We should be in the first epoch"
 					);
-					let current_validators = &Validator::current_validators();
+					let current_authorities = &Validator::current_authorities();
 					let (mut testnet, passive_nodes) =
-						network::Network::create(2, current_validators);
+						network::Network::create(2, current_authorities);
 
 					// Define 5 nodes
-					let genesis_node_1 = current_validators.get(0).unwrap();
-					let genesis_node_2 = current_validators.get(1).unwrap();
-					let genesis_node_3 = current_validators.get(2).unwrap();
+					let genesis_node_1 = current_authorities.get(0).unwrap();
+					let genesis_node_2 = current_authorities.get(1).unwrap();
+					let genesis_node_3 = current_authorities.get(2).unwrap();
 					let init_passive_node_1 = passive_nodes.get(0).unwrap();
 					let init_passive_node_2 = passive_nodes.get(1).unwrap();
 
@@ -1594,16 +1589,17 @@ mod tests {
 
 					// Current epoch bond is 31
 					assert_eq!(BOND_EPOCH_2, Validator::bond());
-					let current_validators = Validator::current_validators();
+					let current_authorities = Validator::current_authorities();
 					// Expect the staked nodes to be in the active set
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(init_passive_node_1));
-					assert!(current_validators.contains(init_passive_node_2));
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(init_passive_node_1));
+					assert!(current_authorities.contains(init_passive_node_2));
 
 					// Increase the active set size to simulate an decrease of the MAB
-					assert_ok!(
-						Auction::set_active_validator_range(RawOrigin::Root.into(), (4, 5),)
-					);
+					assert_ok!(Auction::set_current_authority_set_size_range(
+						RawOrigin::Root.into(),
+						(4, 5),
+					));
 
 					// give the genesis nodes some extra stake (bringing their stake to 6
 					testnet.stake_manager_contract.stake(
@@ -1622,13 +1618,13 @@ mod tests {
 					// Bond has decreased from 31 to 6
 					assert_eq!(BOND_EPOCH_3, Validator::bond());
 
-					let current_validators = Validator::current_validators();
+					let current_authorities = Validator::current_authorities();
 					// Expect all nodes to be in the active set
-					assert!(current_validators.contains(genesis_node_1));
-					assert!(current_validators.contains(genesis_node_2));
-					assert!(current_validators.contains(genesis_node_3));
-					assert!(current_validators.contains(init_passive_node_1));
-					assert!(current_validators.contains(init_passive_node_2));
+					assert!(current_authorities.contains(genesis_node_1));
+					assert!(current_authorities.contains(genesis_node_2));
+					assert!(current_authorities.contains(genesis_node_3));
+					assert!(current_authorities.contains(init_passive_node_1));
+					assert!(current_authorities.contains(init_passive_node_2));
 
 					// Expect Node 1, 2 and 3 to be active in 2 epochs
 					ensure_epoch_activity(genesis_node_1, vec![2, 3]);

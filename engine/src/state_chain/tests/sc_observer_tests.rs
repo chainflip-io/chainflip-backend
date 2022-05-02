@@ -336,7 +336,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         .with(
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
-                pallet_cf_validator::ValidatorIndex::<Runtime>::hashed_key_for(
+                pallet_cf_validator::AuthorityIndex::<Runtime>::hashed_key_for(
                     &4,
                     &AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                 ),
@@ -491,7 +491,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         .with(
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
-                pallet_cf_validator::ValidatorIndex::<Runtime>::hashed_key_for(
+                pallet_cf_validator::AuthorityIndex::<Runtime>::hashed_key_for(
                     &4,
                     &AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                 ),
@@ -607,7 +607,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         .with(
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
-                pallet_cf_validator::ValidatorIndex::<Runtime>::hashed_key_for(
+                pallet_cf_validator::AuthorityIndex::<Runtime>::hashed_key_for(
                     &4,
                     &AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                 ),

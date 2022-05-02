@@ -218,7 +218,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         assert!(try_end_previous_epoch_observation!(state_chain_client, current_block_hash, new_epoch));
                                                     }
 
-                                                    active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::ValidatorIndex<state_chain_runtime::Runtime>>(
+                                                    active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
                                                         current_block_hash,
                                                         &new_epoch,
                                                         &state_chain_client.our_account_id

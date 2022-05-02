@@ -73,7 +73,7 @@ pub mod pallet {
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
-		/// The number of blame votes (accusations) each validator has received.
+		/// The number of blame votes (accusations) each authority has received.
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
@@ -95,10 +95,10 @@ pub mod pallet {
 		/// **TODO:** See if there is a better / more scientific basis for the abovementioned
 		/// assumptions and thresholds. Also consider emergency rotations - we may not want this to
 		/// immediately trigger an ER. For instance, imagine a failed tx: if we retry we most likely
-		/// want to retry with the current validator set - however if we rotate, then the next
-		/// validator set will no longer be in control of the vault.
+		/// want to retry with the current authority set - however if we rotate, then the next
+		/// authority set will no longer be in control of the vault.
 		/// Similarly for vault rotations - we can't abort a rotation at the setAggKey stage: we
-		/// have to keep retrying with the current set of validators.
+		/// have to keep retrying with the current set of authorities.
 		pub fn offenders(&self) -> Vec<T::ValidatorId> {
 			// A threshold for number of blame 'accusations' that are required for someone to be
 			// punished.

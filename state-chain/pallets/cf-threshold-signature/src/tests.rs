@@ -134,9 +134,9 @@ impl MockCfe {
 #[test]
 fn happy_path_no_callback() {
 	const NOMINEES: [u64; 2] = [1, 2];
-	const VALIDATORS: [u64; 3] = [1, 2, 3];
+	const AUTHORITIES: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
-		.with_validators(VALIDATORS)
+		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
 		.build()
@@ -164,9 +164,9 @@ fn happy_path_no_callback() {
 #[test]
 fn happy_path_with_callback() {
 	const NOMINEES: [u64; 2] = [1, 2];
-	const VALIDATORS: [u64; 3] = [1, 2, 3];
+	const AUTHORITIES: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
-		.with_validators(VALIDATORS)
+		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request_and_callback(b"OHAI", MockCallback::new)
 		.build()
@@ -195,9 +195,9 @@ fn happy_path_with_callback() {
 #[test]
 fn fail_path_with_timeout() {
 	const NOMINEES: [u64; 2] = [1, 2];
-	const VALIDATORS: [u64; 3] = [1, 2, 3];
+	const AUTHORITIES: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
-		.with_validators(VALIDATORS)
+		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
 		.build()
@@ -251,9 +251,9 @@ fn fail_path_with_timeout() {
 #[test]
 fn fail_path_no_timeout() {
 	const NOMINEES: [u64; 5] = [1, 2, 3, 4, 5];
-	const VALIDATORS: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+	const AUTHORITIES: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 	ExtBuilder::new()
-		.with_validators(VALIDATORS)
+		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
 		.build()
@@ -318,9 +318,9 @@ fn fail_path_no_timeout() {
 #[test]
 fn test_not_enough_signers_for_threshold() {
 	const NOMINEES: [u64; 0] = [];
-	const VALIDATORS: [u64; 5] = [1, 2, 3, 4, 5];
+	const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
 	ExtBuilder::new()
-		.with_validators(VALIDATORS)
+		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
 		.build()
@@ -407,7 +407,7 @@ mod failure_reporting {
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
 	) -> CeremonyContext<Test, Instance1> {
-		MockEpochInfo::set_validators(Vec::from_iter(validator_set));
+		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
 		CeremonyContext::<Test, Instance1> {
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
@@ -441,7 +441,7 @@ mod failure_reporting {
 		report(&mut ctx, 4, vec![1]);
 
 		// Status: 4 responses in, votes: [1:3, 2:1]
-		// Vote threshold has not been met for validator `1`, and `5` has not responded.
+		// Vote threshold has not been met for authority `1`, and `5` has not responded.
 		// As things stand, [5] would be reported.
 		assert_eq!(ctx.offenders(), vec![5], "Context was {:?}.", ctx);
 

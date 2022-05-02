@@ -33,7 +33,7 @@ fn no_candidates_is_noop_and_error() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]),
-			Error::<MockRuntime, _>::EmptyValidatorSet
+			Error::<MockRuntime, _>::EmptyAuthoritySet
 		);
 	});
 }

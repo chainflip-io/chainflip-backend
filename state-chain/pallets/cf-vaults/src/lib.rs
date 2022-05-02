@@ -66,7 +66,7 @@ pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
 	success_votes: BTreeMap<AggKeyFor<T, I>, u32>,
-	/// A map of the number of blame votes that each validator has received.
+	/// A map of the number of blame votes that keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, u32>,
 }
 
@@ -292,7 +292,7 @@ pub mod pallet {
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
-		/// For reporting misbehaving validators.
+		/// For reporting misbehaviour
 		type OffenceReporter: OffenceReporter<
 			ValidatorId = Self::ValidatorId,
 			Offence = Self::Offence,
@@ -433,9 +433,9 @@ pub mod pallet {
 		VaultsRotated,
 		/// The new public key witnessed externally was not the expected one \[key\]
 		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
-		/// A validator has reported that keygen was successful \[validator_id\]
+		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
-		/// A validator has reported that keygen has failed \[validator_id\]
+		/// A keygen participant has reported that keygen has failed \[validator_id\]
 		KeygenFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
 		KeygenSuccess(CeremonyId),
@@ -449,8 +449,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid ceremony id
 		InvalidCeremonyId,
-		/// We have an empty validator set
-		EmptyValidatorSet,
+		/// We have an empty authority set
+		EmptyAuthoritySet,
 		/// The rotation has not been confirmed
 		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
@@ -461,7 +461,7 @@ pub mod pallet {
 		InvalidPublicKey,
 		/// A rotation for the requested ChainId is already underway.
 		DuplicateRotationRequest,
-		/// A validator sent a response for a ceremony in which they weren't involved, or to which
+		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
 	}
@@ -669,7 +669,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
 		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
+		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyAuthoritySet);
 		ensure!(
 			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
 			Error::<T, I>::DuplicateRotationRequest
@@ -724,7 +724,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 	type ValidatorId = <T as Chainflip>::ValidatorId;
 
-	fn on_new_epoch(_epoch_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
 		T::OffenceReporter::forgive_all(PalletOffence::ParticipateKeygenFailed);
 	}

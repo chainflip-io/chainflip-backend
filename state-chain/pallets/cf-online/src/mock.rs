@@ -125,7 +125,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
-	MockEpochInfo::add_validator(ALICE);
+	MockEpochInfo::add_authorities(ALICE);
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
