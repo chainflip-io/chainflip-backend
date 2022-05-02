@@ -4,7 +4,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-use frame_support::traits::{OnInitialize, OnRuntimeUpgrade};
+use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
 
 const MINT_INTERVAL: u32 = 100;
@@ -41,13 +41,6 @@ benchmarks! {
 	verify {
 		 let mint_interval = Pallet::<T>::mint_interval();
 		 assert_eq!(mint_interval, (50 as u32).into());
-	}
-	on_runtime_upgrade {
-		StorageVersion::new(0).put::<Pallet<T>>();
-	} : {
-		Pallet::<T>::on_runtime_upgrade();
-	} verify {
-		assert_eq!(MintInterval::<T>::get(), 100u32.into());
 	}
 }
 

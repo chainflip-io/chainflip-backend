@@ -54,7 +54,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		log::info!(target: "runtime::cf_emissions", "backup_node_emission_per_block: {:?}", backup_node_emission_per_block);
 		BackupNodeEmissionPerBlock::<T>::put(backup_node_emission_per_block);
 
-		RuntimeDbWeight::default().reads_writes(0, 1)
+		RuntimeDbWeight::default().reads_writes(4, 4)
 	}
 
 	#[cfg(feature = "try-runtime")]
