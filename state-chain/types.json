@@ -112,8 +112,8 @@
   "KeygenResponseStatus": {
     "CandidateCount": "u32",
     "RemainingCandidates": "BTreeSet<ValidatorId>",
-    "SuccessVotes": "BTreeMap<AggKeyFor, u32>",
-    "BlameVotes": "BTreeMap<ValidatorId, u32>"
+    "SuccessVotes": "BTreeMap<AggKeyFor, u16>",
+    "BlameVotes": "BTreeMap<ValidatorId, u16>"
   },
   "KeyId": "Vec<u8>",
   "Keys": {
