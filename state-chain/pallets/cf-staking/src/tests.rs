@@ -6,7 +6,6 @@ use cf_chains::RegisterClaim;
 use cf_traits::mocks::{system_state_info::MockSystemStateInfo, time_source};
 use cf_test_utilities::assert_event_sequence;
 
-use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use sp_runtime::DispatchError;
