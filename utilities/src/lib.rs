@@ -8,7 +8,7 @@
 ///
 /// For the *success* threshold, use [success_threshold_from_share_count].
 
-pub fn threshold_from_share_count(share_count: u32) -> u32 {
+pub fn threshold_from_share_count(share_count: u16) -> u16 {
     if 0 == share_count {
         0
     } else {
@@ -19,7 +19,7 @@ pub fn threshold_from_share_count(share_count: u32) -> u32 {
 /// Returns the number of parties required for a threshold signature
 /// ceremony to *succeed*.
 
-pub fn success_threshold_from_share_count(share_count: u32) -> u32 {
+pub fn success_threshold_from_share_count(share_count: u16) -> u16 {
     threshold_from_share_count(share_count)
         .checked_add(1)
         .unwrap()

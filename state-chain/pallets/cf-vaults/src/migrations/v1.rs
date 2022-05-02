@@ -227,7 +227,7 @@ mod v0_types {
 
 		fn try_from(old: KeygenResponseStatusV0<T, I>) -> Result<Self, Self::Error> {
 			Ok(Self {
-				candidate_count: old.candidate_count,
+				candidate_count: old.candidate_count as u16,
 				remaining_candidates: old.remaining_candidates,
 				success_votes: old
 					.success_votes
@@ -235,10 +235,14 @@ mod v0_types {
 					.map(|(key, votes)| {
 						key.try_into()
 							.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")
-							.map(|key| (key, votes))
+							.map(|key| (key, votes as u16))
 					})
 					.collect::<Result<_, _>>()?,
-				blame_votes: old.blame_votes,
+				blame_votes: old
+					.blame_votes
+					.into_iter()
+					.map(|(key, votes)| (key, votes as u16))
+					.collect(),
 			})
 		}
 	}

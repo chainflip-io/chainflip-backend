@@ -61,19 +61,19 @@ pub type ThresholdSignatureFor<T, I = ()> =
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
-	candidate_count: u32,
+	candidate_count: u16,
 	/// The candidates that have yet to reply.
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
-	success_votes: BTreeMap<AggKeyFor<T, I>, u32>,
+	success_votes: BTreeMap<AggKeyFor<T, I>, u16>,
 	/// A map of the number of blame votes that keygen participant has received.
-	blame_votes: BTreeMap<T::ValidatorId, u32>,
+	blame_votes: BTreeMap<T::ValidatorId, u16>,
 }
 
 impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
-			candidate_count: candidates.len() as u32,
+			candidate_count: candidates.len() as u16,
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
@@ -83,13 +83,13 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	/// The success threshold is the smallest number of respondents able to reach consensus.
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
-	fn success_threshold(&self) -> u32 {
-		utilities::success_threshold_from_share_count(self.candidate_count)
+	fn success_threshold(&self) -> u16 {
+		utilities::success_threshold_from_share_count(self.candidate_count as u16)
 	}
 
 	/// The blame threshold is the number of blame votes that result in punishment.
-	fn blame_threshold(&self) -> u32 {
-		self.success_threshold()
+	fn blame_threshold(&self) -> u16 {
+		self.success_threshold() as u16
 	}
 
 	/// Accumulate a success vote into the keygen status.
@@ -125,12 +125,12 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	/// How many candidates are we still awaiting a response from?
-	fn remaining_candidate_count(&self) -> u32 {
-		self.remaining_candidates.len() as u32
+	fn remaining_candidate_count(&self) -> u16 {
+		self.remaining_candidates.len() as u16
 	}
 
 	/// How many responses have we received so far?
-	fn response_count(&self) -> u32 {
+	fn response_count(&self) -> u16 {
 		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
@@ -355,7 +355,7 @@ pub mod pallet {
 						},
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-							let offenders = if (offenders.len() as u32) <
+							let offenders = if (offenders.len() as u16) <
 								utilities::success_threshold_from_share_count(candidate_count)
 							{
 								offenders

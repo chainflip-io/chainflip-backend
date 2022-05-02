@@ -17,7 +17,7 @@ macro_rules! impl_mock_epoch_info {
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
 			pub static LAST_EXPIRED_EPOCH: RefCell<$epoch_index> = RefCell::new(Default::default());
 			pub static AUCTION_PHASE: RefCell<bool> = RefCell::new(false);
-			pub static EPOCH_AUTHORITY_COUNT: RefCell<HashMap<$epoch_index, u32>> = RefCell::new(Default::default());
+			pub static EPOCH_AUTHORITY_COUNT: RefCell<HashMap<$epoch_index, u16>> = RefCell::new(Default::default());
 		}
 
 		impl MockEpochInfo {
@@ -52,7 +52,7 @@ macro_rules! impl_mock_epoch_info {
 				LAST_EXPIRED_EPOCH.with(|cell| *(cell.borrow_mut()) = epoch_index);
 			}
 
-			pub fn set_epoch_authority_count(epoch_index: $epoch_index, count: u32) {
+			pub fn set_epoch_authority_count(epoch_index: $epoch_index, count: u16) {
 				EPOCH_AUTHORITY_COUNT.with(|cell| {
 					cell.borrow_mut().insert(epoch_index, count);
 				})
@@ -77,7 +77,7 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			pub fn inner_add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: Vec<$account_id>) {
-				MockEpochInfo::set_epoch_authority_count(epoch_index, new_authorities.len() as u32);
+				MockEpochInfo::set_epoch_authority_count(epoch_index, new_authorities.len() as u16);
 				MockEpochInfo::set_authority_indices(epoch_index, new_authorities);
 			}
 		}
@@ -108,7 +108,7 @@ macro_rules! impl_mock_epoch_info {
 				})
 			}
 
-			fn authority_count_at_epoch(epoch: $epoch_index) -> Option<u32> {
+			fn authority_count_at_epoch(epoch: $epoch_index) -> Option<u16> {
 				EPOCH_AUTHORITY_COUNT.with(|cell| {
 					cell.borrow().get(&epoch).cloned()
 				})

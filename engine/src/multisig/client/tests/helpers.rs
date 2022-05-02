@@ -690,7 +690,7 @@ impl SigningCeremonyRunner {
             nodes
                 .into_iter()
                 .sorted_by_key(|(account_id, _)| account_id.clone()),
-            success_threshold_from_share_count(nodes_len as u32) as usize,
+            success_threshold_from_share_count(nodes_len as u16) as usize,
         );
 
         (

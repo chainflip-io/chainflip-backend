@@ -89,7 +89,7 @@ where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
 {
     let num_parties = verification_messages.len();
-    let threshold = threshold_from_share_count(num_parties as u32) as usize;
+    let threshold = threshold_from_share_count(num_parties as u16) as usize;
 
     // We know these indexes to be correct, as this data structure is constructed
     // locally based on ceremony parameters

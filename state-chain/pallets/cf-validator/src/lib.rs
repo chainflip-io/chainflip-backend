@@ -578,7 +578,7 @@ pub mod pallet {
 	/// Track epochs and their associated authority count
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_authority_count)]
-	pub type EpochAuthorityCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
+	pub type EpochAuthorityCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u16>;
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
@@ -680,7 +680,7 @@ pub mod pallet {
 			CurrentEpochStartedAt::<T>::set(Default::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			let genesis_authorities = pallet_session::Pallet::<T>::validators();
-			EpochAuthorityCount::<T>::insert(GENESIS_EPOCH, genesis_authorities.len() as u32);
+			EpochAuthorityCount::<T>::insert(GENESIS_EPOCH, genesis_authorities.len() as u16);
 			Pallet::<T>::start_new_epoch(&genesis_authorities, self.bond);
 		}
 	}
@@ -733,7 +733,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		last_block_for_claims <= current_block_number
 	}
 
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u16> {
 		EpochAuthorityCount::<T>::get(epoch)
 	}
 
@@ -742,7 +742,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		epoch_index: EpochIndex,
 		new_authorities: Vec<Self::ValidatorId>,
 	) {
-		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as u32);
+		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as u16);
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as u16);
 			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
@@ -785,7 +785,7 @@ impl<T: Config> Pallet<T> {
 			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as u16);
 		});
 
-		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as u32);
+		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as u16);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);

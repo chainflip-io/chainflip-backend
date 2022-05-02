@@ -101,7 +101,7 @@ pub trait EpochInfo {
 	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
 
 	/// Authority count at a particular epoch.
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u16>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
 	/// current candidate authority set

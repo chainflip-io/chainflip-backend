@@ -188,7 +188,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	};
 
 	let authorities = vec![ALICE, BOB, CHARLIE];
-	MockEpochInfo::set_epoch_authority_count(0, authorities.len() as u32);
+	MockEpochInfo::set_epoch_authority_count(0, authorities.len() as u16);
 	MockEpochInfo::set_authorities(authorities);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

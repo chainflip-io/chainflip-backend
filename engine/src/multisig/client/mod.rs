@@ -71,7 +71,7 @@ impl ThresholdParameters {
     pub fn from_share_count(share_count: usize) -> Self {
         ThresholdParameters {
             share_count,
-            threshold: threshold_from_share_count(share_count as u32) as usize,
+            threshold: threshold_from_share_count(share_count as u16) as usize,
         }
     }
 }
