@@ -571,6 +571,7 @@ pub type Executive = frame_executive::Executive<
 			migrations::refactor_offences::Migration,
 			migrations::add_flip_contract_address::Migration,
 			migrations::migrate_claims::Migration,
+			migrations::set_maintenance_mode::Migration,
 		),
 		112,
 	>,
