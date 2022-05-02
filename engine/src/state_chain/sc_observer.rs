@@ -341,7 +341,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
                                                         }
                                                         Err(e) => {
-                                                            slog::error!(
+                                                            slog::info!(
                                                                 logger,
                                                                 "TransmissionRequest attempt_id {} failed: {:?}",
                                                                 attempt_id,
