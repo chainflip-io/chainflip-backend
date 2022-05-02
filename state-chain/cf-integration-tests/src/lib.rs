@@ -122,11 +122,11 @@ mod tests {
 				// A nonce, k
 				let (k, k_times_g) = Self::generate_keypair(self.key_seed * 2);
 				// k.G
-				let k_times_g_addr = to_ethereum_address(k_times_g);
+				let k_times_g_address = to_ethereum_address(k_times_g);
 				// If this message has been signed before return from cache else sign and cache
 				return match self.signatures.get(message) {
 					Some(signature) =>
-						SchnorrVerificationComponents { s: *signature, k_times_g_addr },
+						SchnorrVerificationComponents { s: *signature, k_times_g_address },
 					None => {
 						let agg_key =
 							AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
@@ -134,7 +134,7 @@ mod tests {
 
 						self.signatures.insert(*message, signature);
 
-						SchnorrVerificationComponents { s: signature, k_times_g_addr }
+						SchnorrVerificationComponents { s: signature, k_times_g_address }
 					},
 				}
 			}
@@ -719,7 +719,11 @@ mod tests {
 
 				assert_eq!(Validator::ceremony_id_counter(), 0, "no key generation requests");
 
-				assert_eq!(EthereumVault::chain_nonce(), 0, "nonce not incremented");
+				assert_eq!(
+					pallet_cf_environment::GlobalSignatureNonce::<Runtime>::get(),
+					0,
+					"Global signature nonce should be 0"
+				);
 
 				assert!(
 					Governance::members().contains(&AccountId::from(ERIN)),

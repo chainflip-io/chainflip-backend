@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::UpdateFlipSupply;
-use cf_traits::{Broadcaster, NonceProvider};
+use cf_traits::{Broadcaster, EthEnvironmentProvider, ReplayProtectionProvider};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -41,6 +41,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
+	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
@@ -93,7 +94,10 @@ pub mod pallet {
 		type BlocksPerDay: Get<Self::BlockNumber>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider<Self::HostChain>;
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::HostChain>;
+
+		/// Something that can provide the stake manager address.
+		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -180,10 +184,16 @@ pub mod pallet {
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
-
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
-				Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
+				if T::SystemState::ensure_no_maintenance().is_ok() {
+					Self::broadcast_update_total_supply(
+						T::Issuance::total_issuance(),
+						current_block,
+					);
+				} else {
+					log::info!("System maintenance: skipping supply update broadcast.");
+				}
 				T::WeightInfo::rewards_minted()
 			} else {
 				T::WeightInfo::no_rewards_minted()
@@ -297,9 +307,10 @@ impl<T: Config> Pallet<T> {
 		// Emit a threshold signature request.
 		// TODO: See if we can replace an old request if there is one.
 		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
-			T::NonceProvider::next_nonce(),
+			T::ReplayProtectionProvider::replay_protection(),
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
+			&T::EthEnvironmentProvider::stake_manager_address(),
 		));
 	}
 

@@ -9,10 +9,12 @@ license = '<TODO>'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 
+
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+cf-traits = { path = '../../traits', default-features = false }
 serde = {optional = true, version = "1.0.126", features = ['derive']}
 
 # Parity deps
@@ -42,13 +44,44 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'merge-config-option'
 
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
+[dependencies.frame-benchmarking]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+optional = true
+tag = 'merge-config-option'
+
+# Dev dependencies
+[dev-dependencies.sp-io]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
+[dev-dependencies.sp-core]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'merge-config-option'
+
 [features]
 default = ['std']
 std = [
+	'cf-traits/std',
 	'codec/std',
 	'scale-info/std',
 	'frame-support/std',
 	'frame-system/std',
 	'serde',
 	'sp-std/std',
+	'sp-runtime/std',
 ]
+runtime-benchmarks = [
+    'cf-traits/runtime-benchmarks',
+    'frame-benchmarking',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+]
+try-runtime = ['frame-support/try-runtime']

@@ -15,7 +15,12 @@ use crate as pallet_cf_vaults;
 use super::*;
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo},
+	mocks::{
+		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
+		eth_environment_provider::MockEthEnvironmentProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		system_state_info::MockSystemStateInfo,
+	},
 	Chainflip,
 };
 
@@ -78,6 +83,7 @@ impl Chainflip for MockRuntime {
 	type Call = Call;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockCallback;
@@ -95,13 +101,13 @@ impl UnfilteredDispatchable for MockCallback {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct MockSetAggKeyWithAggKey {
-	nonce: <MockEthereum as ChainAbi>::Nonce,
+	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
 }
 
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::Nonce,
+		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Self {
 		Self { nonce, new_key }
@@ -162,6 +168,8 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type WeightInfo = ();
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type Broadcaster = MockBroadcaster;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
+	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

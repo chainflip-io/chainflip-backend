@@ -69,6 +69,7 @@ tag = 'merge-config-option'
 # Dev dependencies
 [dev-dependencies]
 assert_matches = { version = "1.5.0" }
+cf-test-utilities = { path = '../../test-utilities' }
 
 [dev-dependencies.sp-io]
 default-features = false
@@ -93,7 +94,6 @@ std = [
     'sp-core/std',
     'sp-runtime/std',
     'pallet-session/std',
-#    'pallet-cf-auction/std',
     'log/std',
 ]
 runtime-benchmarks = [

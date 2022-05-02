@@ -1,14 +1,17 @@
 use crate::{mock::*, Error, *};
-use cf_traits::{mocks::vault_rotation::MockVaultRotator, VaultRotator};
+use cf_test_utilities::last_event;
+use cf_traits::{
+	mocks::{
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
+	},
+	SystemStateInfo, VaultRotator,
+};
 use frame_support::{assert_noop, assert_ok};
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
 const GENESIS_EPOCH: u32 = 1;
-
-fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
 
 fn assert_next_epoch() {
 	assert_eq!(
@@ -33,7 +36,7 @@ fn changing_epoch_block_size() {
 		);
 		assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::EpochDurationChanged(
 				EPOCH_DURATION,
 				min_duration
@@ -73,6 +76,20 @@ fn should_request_emergency_rotation() {
 			!ValidatorPallet::emergency_rotation_in_progress(),
 			"we should not be in an emergency rotation"
 		);
+
+		// Once we've passed the Idle phase, requesting an emergency rotation should have no
+		// effect on the rotation status.
+		for status in [
+			RotationStatusOf::<Test>::RunAuction,
+			RotationStatusOf::<Test>::AwaitingVaults(Default::default()),
+			RotationStatusOf::<Test>::VaultsRotated(Default::default()),
+			RotationStatusOf::<Test>::SessionRotating(Default::default()),
+		] {
+			RotationPhase::<Test>::put(&status);
+			ValidatorPallet::request_emergency_rotation();
+			assert_eq!(RotationPhase::<Test>::get(), status,);
+			ValidatorPallet::emergency_rotation_completed();
+		}
 	});
 }
 
@@ -246,7 +263,7 @@ fn send_cfe_version() {
 		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), version.clone(),));
 
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
 				validator,
 				SemVer::default(),
@@ -266,7 +283,7 @@ fn send_cfe_version() {
 		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), new_version.clone()));
 
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
 				validator,
 				version,
@@ -328,7 +345,7 @@ fn register_peer_id() {
 			alice_peer_keypair.sign(&ALICE.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				ALICE,
 				alice_peer_public_key,
@@ -366,7 +383,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		),);
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -405,7 +422,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -429,7 +446,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -525,5 +542,78 @@ fn test_missing_author_punishment() {
 			PalletOffence::MissedAuthorshipSlot,
 			ValidatorPallet::validators().get(1..=2).unwrap().to_vec(),
 		)
+	})
+}
+
+#[test]
+fn no_auction_during_maintenance() {
+	new_test_ext().execute_with(|| {
+		// Activate maintenance mode
+		MockSystemStateInfo::set_maintenance(true);
+		// Assert that we are in maintenance mode
+		assert!(MockSystemStateInfo::ensure_no_maintenance().is_err());
+		// Try to start an auction
+		RotationPhase::<Test>::set(RotationStatusOf::<Test>::RunAuction);
+		// Move a few blocks forward to trigger the auction
+		move_forward_blocks(1);
+		// Expect the auction to not be started - we are stll in the auction mode and not moving
+		// from here
+		assert_eq!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction);
+		// Deactivate maintenance mode
+		MockSystemStateInfo::set_maintenance(false);
+		// Expect the maintenance mode to be deactivated
+		assert!(MockSystemStateInfo::ensure_no_maintenance().is_ok());
+		// Move a couple of blocks forward to run the auction
+		move_forward_blocks(2);
+		// Expect the auction to be to be completed
+		assert_eq!(
+			RotationPhase::<Test>::get(),
+			RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
+				winners: vec![],
+				minimum_active_bid: 0
+			})
+		);
+	});
+}
+
+#[test]
+fn test_reputation_reset() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Simulate an epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+			winners: vec![1, 2, 3],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_validators() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		let first_epoch = ValidatorPallet::current_epoch();
+
+		// Simulate another epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+			winners: vec![4, 5, 6],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_validators() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		for id in &[1, 2, 3, 4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
+
+		ValidatorPallet::expire_epoch(first_epoch);
+
+		for id in &[1, 2, 3] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 0);
+		}
+		for id in &[4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
 	})
 }

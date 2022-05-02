@@ -24,6 +24,7 @@ members = [
   'state-chain/runtime-benchmark-utilities',
   'state-chain/runtime-upgrade-utilities',
   'state-chain/runtime-utilities',
+  'state-chain/test-utilities',
   'state-chain/runtime-utilities/macros',
   'state-chain/runtime',
   'state-chain/traits',

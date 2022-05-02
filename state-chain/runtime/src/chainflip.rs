@@ -14,12 +14,15 @@ use crate::{
 	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
 };
 use cf_chains::{
-	eth::{self, api::EthereumApi},
+	eth::{
+		self,
+		api::{EthereumApi, EthereumReplayProtection},
+	},
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
 	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	RewardsDistribution, StakeTransfer,
+	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -41,6 +44,7 @@ impl Chainflip for Runtime {
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = Validator;
+	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
 trait RewardDistribution {
@@ -211,5 +215,19 @@ pub struct RuntimeUpgradeManager;
 impl RuntimeUpgrade for RuntimeUpgradeManager {
 	fn do_upgrade(code: Vec<u8>) -> Result<PostDispatchInfo, DispatchErrorWithPostInfo> {
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
+	}
+}
+
+pub struct EthReplayProtectionProvider;
+
+impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
+	// Get the Environment values for key_manager_address and chain_id, then use
+	// the next global signature nonce
+	fn replay_protection() -> EthereumReplayProtection {
+		EthereumReplayProtection {
+			key_manager_address: Environment::key_manager_address(),
+			chain_id: Environment::ethereum_chain_id(),
+			nonce: Environment::next_global_signature_nonce(),
+		}
 	}
 }

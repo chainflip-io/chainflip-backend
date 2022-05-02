@@ -10,8 +10,8 @@ impl BenchmarkDefault for SchnorrVerificationComponents {
 		const SIG_NONCE: [u8; 32] =
 			hex_literal::hex!("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285");
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let k_times_g_addr = to_ethereum_address(PublicKey::from_secret_key(&k));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
 
-		Self { s: SIG, k_times_g_addr }
+		Self { s: SIG, k_times_g_address }
 	}
 }

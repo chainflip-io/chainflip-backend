@@ -6,12 +6,13 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochIndex, EpochTransitionHandler, KeyProvider, NonceProvider,
-	SuccessOrFailure, VaultRotator,
+	CurrentEpochIndex, EpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
+	ReplayProtectionProvider, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
@@ -261,15 +262,6 @@ pub struct Vault<T: ChainAbi> {
 	pub active_window: BlockHeightWindow<T>,
 }
 
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - Makes the pallet instantiable.
-	pub const V1: StorageVersion = StorageVersion::new(1);
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum PalletOffence {
 	/// Failing a keygen ceremony carries its own consequences.
@@ -278,13 +270,15 @@ pub enum PalletOffence {
 	SigningOffence,
 }
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -296,7 +290,7 @@ pub mod pallet {
 		/// Offences supported in this runtime.
 		type Offence: From<PalletOffence>;
 
-		/// The chain that managed by this vault must implement the api types.
+		/// The chain that is managed by this vault must implement the api types.
 		type Chain: ChainAbi;
 
 		/// The supported api calls for the chain.
@@ -313,6 +307,12 @@ pub mod pallet {
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+
+		/// Something that can provide the key manager address and chain id.
+		type EthEnvironmentProvider: EthEnvironmentProvider;
+
+		// Something that can give us the next nonce.
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -382,18 +382,18 @@ pub mod pallet {
 			weight
 		}
 
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migrations::migrate_storage::<T, I>()
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::pre_migration_checks::<T, I>()
+			migrations::PalletMigration::<T, I>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::post_migration_checks::<T, I>()
+			migrations::PalletMigration::<T, I>::post_upgrade()
 		}
 	}
 
@@ -420,12 +420,6 @@ pub mod pallet {
 	#[pallet::getter(fn failure_voters)]
 	pub type FailureVoters<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
-
-	/// Threshold key nonces for this chain.
-	#[pallet::storage]
-	#[pallet::getter(fn chain_nonce)]
-	pub(super) type ChainNonce<T, I = ()> =
-		StorageValue<_, <<T as Config<I>>::Chain as ChainAbi>::Nonce, ValueQuery>;
 
 	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]
@@ -662,21 +656,12 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
-	fn next_nonce() -> <T::Chain as ChainAbi>::Nonce {
-		ChainNonce::<T, I>::mutate(|nonce| {
-			*nonce += One::one();
-			*nonce
-		})
-	}
-}
-
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Called once there's consensus between the authorities that the keygen was successful
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-				<Self as NonceProvider<_>>::next_nonce(),
+				<T::ReplayProtectionProvider>::replay_protection(),
 				new_public_key,
 			),
 		);

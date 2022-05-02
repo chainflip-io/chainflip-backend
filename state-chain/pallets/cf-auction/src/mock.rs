@@ -5,6 +5,7 @@ use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
+		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
@@ -49,10 +50,6 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 			(*cell).push((validator_id, (bid_number * 100).into()));
 		}
 	});
-}
-
-pub fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
 // The set we would expect
@@ -141,6 +138,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 impl Config for Test {

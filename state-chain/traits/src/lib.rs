@@ -17,7 +17,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, RuntimeDebug,
+	DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -56,6 +56,8 @@ pub trait Chainflip: frame_system::Config {
 	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+	/// Access to information about the current system state
+	type SystemState: SystemStateInfo;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -192,6 +194,14 @@ pub trait EpochTransitionHandler {
 	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]);
 }
 
+/// Resetter for Reputation Points and Online Credits of a Validator
+pub trait ReputationResetter {
+	type ValidatorId;
+
+	/// Reset the reputation of a validator
+	fn reset_reputation(validator: &Self::ValidatorId);
+}
+
 /// Providing bidders for an auction
 pub trait BidderProvider {
 	type ValidatorId;
@@ -272,9 +282,16 @@ pub trait EmissionsTrigger {
 }
 
 /// Provides a unqiue nonce for some [Chain].
-pub trait NonceProvider<Abi: ChainAbi> {
-	/// Get the next nonce.
-	fn next_nonce() -> Abi::Nonce;
+pub trait ReplayProtectionProvider<Abi: ChainAbi> {
+	fn replay_protection() -> Abi::ReplayProtection;
+}
+
+/// Provides the environment data for ethereum-like chains.
+pub trait EthEnvironmentProvider {
+	fn flip_token_address() -> [u8; 20];
+	fn key_manager_address() -> [u8; 20];
+	fn stake_manager_address() -> [u8; 20];
+	fn chain_id() -> u64;
 }
 
 pub trait IsOnline {
@@ -644,4 +661,10 @@ pub trait CeremonyIdProvider {
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
 	fn missed_slots() -> Vec<u64>;
+}
+
+/// Something that manages access to the system state.
+pub trait SystemStateInfo {
+	/// Ensure that the network is **not** in maintenance mode.
+	fn ensure_no_maintenance() -> DispatchResult;
 }

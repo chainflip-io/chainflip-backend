@@ -1,7 +1,6 @@
 use cf_chains::Ethereum;
 use cf_traits::{ChainflipAccountData, ChainflipAccountState};
 use futures::{Stream, StreamExt};
-use pallet_cf_broadcast::TransmissionFailure;
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::BlockHeightWindow;
 use slog::o;
@@ -328,7 +327,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                     ),
                                                 ) => {
                                                     let expected_broadcast_tx_hash = Keccak256::hash(&signed_tx[..]);
-                                                    let response_extrinsic = match eth_broadcaster
+                                                    match eth_broadcaster
                                                         .send(signed_tx)
                                                         .await
                                                     {
@@ -340,26 +339,16 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                 tx_hash
                                                             );
                                                             assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
-                                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
-                                                                attempt_id, tx_hash
-                                                            )
                                                         }
                                                         Err(e) => {
-                                                            slog::error!(
+                                                            slog::info!(
                                                                 logger,
                                                                 "TransmissionRequest attempt_id {} failed: {:?}",
                                                                 attempt_id,
                                                                 e
                                                             );
-
-                                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                                attempt_id, TransmissionFailure::TransactionRejected, expected_broadcast_tx_hash
-                                                            )
                                                         }
                                                     };
-                                                    let _result = state_chain_client
-                                                        .submit_signed_extrinsic(response_extrinsic, &logger)
-                                                        .await;
                                                 }
                                                 ignored_event => {
                                                     // ignore events we don't care about

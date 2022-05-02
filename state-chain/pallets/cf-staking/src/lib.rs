@@ -15,7 +15,10 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{ApiCall, RegisterClaim};
-use cf_traits::{BidderProvider, EpochInfo, NonceProvider, StakeTransfer, ThresholdSigner};
+use cf_traits::{
+	BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider, StakeTransfer,
+	ThresholdSigner,
+};
 use core::time::Duration;
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -26,6 +29,8 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
+
+use cf_traits::SystemStateInfo;
 
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
@@ -84,7 +89,10 @@ pub mod pallet {
 		>;
 
 		/// Something that can provide a nonce for the threshold signature.
-		type NonceProvider: NonceProvider<Ethereum>;
+		type ReplayProtectionProvider: ReplayProtectionProvider<Ethereum>;
+
+		/// Something that can provide the key manager address and chain id.
+		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
@@ -240,6 +248,7 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				Self::stake_account(&account_id, amount);
 			}
@@ -330,6 +339,7 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 
 			let claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
@@ -628,7 +638,7 @@ impl<T: Config> Pallet<T> {
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(
-			T::NonceProvider::next_nonce(),
+			T::ReplayProtectionProvider::replay_protection(),
 			<T as Config>::StakerId::from_ref(account_id).as_ref(),
 			amount.into(),
 			&address,

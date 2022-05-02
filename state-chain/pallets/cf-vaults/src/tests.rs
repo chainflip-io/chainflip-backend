@@ -3,6 +3,7 @@ use crate::{
 	KeygenOutcome, KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation,
 	SuccessVoters, Vault, VaultRotationStatus, Vaults,
 };
+use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
 	SuccessOrFailure, VaultRotator,
@@ -10,17 +11,14 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
-fn last_event() -> Event {
-	frame_system::Pallet::<MockRuntime>::events()
-		.pop()
-		.expect("Event expected")
-		.event
-}
-
 macro_rules! assert_last_event {
 	($pat:pat) => {
-		let event = last_event();
-		assert!(matches!(last_event(), Event::VaultsPallet($pat)), "Unexpected event {:?}", event);
+		let event = last_event::<MockRuntime>();
+		assert!(
+			matches!(last_event::<MockRuntime>(), Event::VaultsPallet($pat)),
+			"Unexpected event {:?}",
+			event
+		);
 	};
 }
 
@@ -51,7 +49,7 @@ fn keygen_request_emitted() {
 		);
 		// Check the event emitted
 		assert_eq!(
-			last_event(),
+			last_event::<MockRuntime>(),
 			PalletEvent::<MockRuntime, _>::KeygenRequest(
 				current_ceremony_id(),
 				ALL_CANDIDATES.to_vec(),
@@ -100,7 +98,7 @@ fn keygen_failure() {
 		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES);
 
 		// KeygenAborted event emitted.
-		assert_eq!(last_event(), PalletEvent::KeygenFailure(ceremony_id).into());
+		assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
 		// Outcome is ready.
 		assert_eq!(

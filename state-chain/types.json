@@ -40,6 +40,10 @@
     "to": "Option<u64>"
   },
   "BlockNumber": "u32",
+  "BroadcastAttempt": {
+    "broadcast_attempt_id": "BroadcastAttemptId",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
   "BroadcastAttemptId": {
     "broadcast_id": "BroadcastId",
     "attempt_count": "AttemptCount"
@@ -53,6 +57,7 @@
   },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
+  "ChainBlockNumber": "u64",
   "ChainflipAccountData": {
     "state": "ChainflipAccountState",
     "last_active_epoch": "Option<EpochIndex>"
@@ -74,11 +79,12 @@
   "Ed25519Signature": "[u8;64]",
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
-  "EthTransactionHash": "[u8;32]",
-  "BroadcastAttempt": {
-    "broadcast_attempt_id": "BroadcastAttemptId",
-    "unsigned_tx": "UnsignedTransactionFor"
+  "EthereumReplayProtection": {
+    "key_manager_address": "EthereumAddress",
+    "chain_id": "Uint",
+    "nonce": "Uint"
   },
+  "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
     "stake": "Amount",
     "validator_bond": "Amount"
@@ -122,7 +128,7 @@
     "online": "u32",
     "offline": "u32"
   },
-  "Nonce": "u64",
+  "SignatureNonce": "u64",
   "Offence": {
     "_enum": [
       "ParticipateSigningFailed",
@@ -183,7 +189,7 @@
   "RuntimeReputationTracker": "ReputationTracker",
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
-    "k_times_g_addr": "[u8; 20]"
+    "k_times_g_address": "[u8; 20]"
   },
   "SemVer": {
     "major": "u8",
@@ -194,10 +200,12 @@
   "SignatureFor": "SchnorrVerificationComponents",
   "SignerIdFor": "EthereumAddress",
   "SigData": {
+    "key_manager_address": "EthereumAddress",
+    "chain_id": "Uint",
     "msg_hash": "H256",
     "sig": "Uint",
     "nonce": "Uint",
-    "k_times_g_addr": "EthereumAddress"
+    "k_times_g_address": "EthereumAddress"
   },
   "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
@@ -212,6 +220,15 @@
   "Timestamp": "u64",
   "TransactionHash": "H256",
   "TransactionHashFor": "TransactionHash",
+  "TransactionSigningAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
+  "TransmissionAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "signer": "ValidatorId",
+    "signed_tx": "SignedTransactionFor"
+  },
   "TransmissionFailure": {
     "_enum": [
       "TransactionRejected",

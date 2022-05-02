@@ -22,7 +22,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Auctioneer, Chainflip,
 	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
 	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyValidator, StakeHandler, SuccessOrFailure, VaultRotator,
+	QualifyValidator, ReputationResetter, StakeHandler, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -117,6 +117,7 @@ pub type Percentage = u8;
 pub mod pallet {
 
 	use super::*;
+	use cf_traits::SystemStateInfo;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -175,6 +176,9 @@ pub mod pallet {
 
 		/// Updates the bond of a validator
 		type Bonder: Bonding<ValidatorId = ValidatorIdOf<Self>, Amount = Self::Amount>;
+
+		/// This is used to reset the validator's reputation
+		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
 	}
 
 	#[pallet::event]
@@ -257,30 +261,35 @@ pub mod pallet {
 						}
 					}
 				},
-				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction() {
-					Ok(auction_outcome) => {
-						match T::VaultRotator::start_vault_rotation(auction_outcome.winners.clone())
-						{
-							Ok(_) => Self::set_rotation_status(RotationStatus::AwaitingVaults(
-								auction_outcome,
-							)),
-							// We are assuming here that this is unlikely as the only reason it
-							// would fail is if we have no validators, which is already checked by
-							// the auction pallet, of if there is already a rotation in progress
-							// which isn't possible.
-							Err(e) => {
-								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
+				RotationStatus::RunAuction => {
+					if T::SystemState::ensure_no_maintenance().is_ok() {
+						match T::Auctioneer::resolve_auction() {
+							Ok(auction_outcome) => {
+								match T::VaultRotator::start_vault_rotation(
+									auction_outcome.winners.clone(),
+								) {
+									Ok(_) => Self::set_rotation_status(
+										RotationStatus::AwaitingVaults(auction_outcome),
+									),
+									// We are assuming here that this is unlikely as the only reason
+									// it would fail is if we have no validators, which is already
+									// checked by the auction pallet, of if there is already a
+									// rotation in progress which isn't possible.
+									Err(e) => {
+										log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
+									},
+								}
 							},
+							Err(e) =>
+								log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
 						}
-					},
-					Err(e) =>
-						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
+					}
 				},
-				RotationStatus::AwaitingVaults(auction_result) =>
+				RotationStatus::AwaitingVaults(auction_outcome) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(SuccessOrFailure::Success) => {
 							Self::set_rotation_status(RotationStatus::VaultsRotated(
-								auction_result,
+								auction_outcome,
 							));
 						},
 						AsyncResult::Ready(SuccessOrFailure::Failure) => {
@@ -294,8 +303,8 @@ pub mod pallet {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
 						},
 					},
-				RotationStatus::VaultsRotated(auction_result) => {
-					Self::set_rotation_status(RotationStatus::SessionRotating(auction_result));
+				RotationStatus::VaultsRotated(auction_outcome) => {
+					Self::set_rotation_status(RotationStatus::SessionRotating(auction_outcome));
 				},
 				RotationStatus::SessionRotating(_) => {
 					Self::set_rotation_status(RotationStatus::Idle);
@@ -855,6 +864,10 @@ impl<T: Config> Pallet<T> {
 				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(
 					validator.into_ref(),
 				);
+				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(
+					validator.into_ref(),
+				);
+				T::ReputationResetter::reset_reputation(validator);
 			}
 			T::Bonder::update_validator_bond(validator, EpochHistory::<T>::active_bond(validator));
 		}
@@ -979,7 +992,9 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if !EmergencyRotationRequested::<T>::get() {
 			EmergencyRotationRequested::<T>::set(true);
 			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			Self::set_rotation_status(RotationStatus::RunAuction);
+			if RotationPhase::<T>::get() == RotationStatus::<T>::Idle {
+				Self::set_rotation_status(RotationStatus::RunAuction);
+			}
 		}
 	}
 

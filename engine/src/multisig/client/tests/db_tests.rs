@@ -7,7 +7,7 @@ use crate::{
         },
         PersistentKeyDB,
     },
-    testing::assert_ok,
+    testing::{assert_ok, new_temp_directory_with_nonexistent_file},
 };
 
 use super::helpers::run_keygen;
@@ -22,9 +22,7 @@ async fn check_signing_db() {
 
     let logger = logging::test_utils::new_test_logger();
 
-    use tempdir::TempDir;
-    let db_dir = TempDir::new("db_tests").unwrap();
-    let db_file = db_dir.path().join("db_file");
+    let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
     let db = PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database");
 
     let db_with_key = {
