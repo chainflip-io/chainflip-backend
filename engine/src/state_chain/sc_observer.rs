@@ -1,4 +1,4 @@
-use futures::{Stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
 use slog::o;
 use sp_core::{Hasher, H256};
@@ -111,32 +111,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    let current_epoch_at_initial_block_hash = state_chain_client
-        .get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-            initial_block_hash,
-        )
-        .await
-        .unwrap();
-
-    let (mut active_in_current_epoch, past_active_epochs) = {
-        let historical_active_epochs = state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
-            initial_block_hash,
-            &state_chain_client.our_account_id
-        ).await.unwrap();
-        assert!(historical_active_epochs
-            .iter()
-            .chain(std::iter::once(&current_epoch_at_initial_block_hash))
-            .is_sorted());
-
-        if historical_active_epochs.last() == Some(&current_epoch_at_initial_block_hash) {
-            let mut historical_active_epochs = historical_active_epochs.into_iter();
-            historical_active_epochs.next_back();
-            (true, historical_active_epochs)
-        } else {
-            (false, historical_active_epochs.into_iter())
-        }
-    };
-
     let send_instruction = |observe_instruction: ObserveInstruction| {
         km_instruction_sender
             .send(observe_instruction.clone())
@@ -145,12 +119,12 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     };
 
     macro_rules! start_epoch_observation {
-        ($block_hash:expr, $epoch:expr) => {
+        ($state_chain_client:ident, $block_hash:expr, $epoch:expr) => {
             let block_hash = $block_hash;
             let epoch = $epoch;
 
             send_instruction(ObserveInstruction::Start(
-                state_chain_client
+                $state_chain_client
                     .get_storage_map::<pallet_cf_vaults::Vaults<
                         state_chain_runtime::Runtime,
                         state_chain_runtime::EthereumInstance,
@@ -164,34 +138,52 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         };
     }
 
-    macro_rules! end_previous_epoch_observation {
-        ($block_hash:expr, $epoch:expr) => {
+    macro_rules! try_end_previous_epoch_observation {
+        ($state_chain_client:ident, $block_hash:expr, $epoch:expr) => {{
             let block_hash = $block_hash;
             let epoch = $epoch;
 
-            send_instruction(ObserveInstruction::End(
-                state_chain_client
-                    .get_storage_map::<pallet_cf_vaults::Vaults<
-                        state_chain_runtime::Runtime,
-                        state_chain_runtime::EthereumInstance,
-                    >>(block_hash, &epoch)
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .active_from_block,
-            ));
-        };
+            if let Some(vault) = $state_chain_client
+                .get_storage_map::<pallet_cf_vaults::Vaults<
+                    state_chain_runtime::Runtime,
+                    state_chain_runtime::EthereumInstance,
+                >>(block_hash, &epoch)
+                .await
+                .unwrap()
+            {
+                send_instruction(ObserveInstruction::End(vault.active_from_block));
+                true
+            } else {
+                false
+            }
+        }};
     }
 
-    for past_active_epoch in past_active_epochs {
-        assert!(0 < past_active_epoch);
-        start_epoch_observation!(initial_block_hash, past_active_epoch);
-        end_previous_epoch_observation!(initial_block_hash, past_active_epoch + 1);
-    }
+    let historical_active_epochs = state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+        initial_block_hash,
+        &state_chain_client.our_account_id
+    ).await.unwrap();
 
-    if active_in_current_epoch {
-        start_epoch_observation!(initial_block_hash, current_epoch_at_initial_block_hash);
-    }
+    assert!(historical_active_epochs.iter().is_sorted());
+
+    let mut active_in_current_epoch = stream::iter(historical_active_epochs.into_iter())
+        .fold(false, |acc, epoch| {
+            let state_chain_client = state_chain_client.clone();
+            async move {
+                start_epoch_observation!(state_chain_client, initial_block_hash, epoch);
+                if try_end_previous_epoch_observation!(
+                    state_chain_client,
+                    initial_block_hash,
+                    epoch + 1
+                ) {
+                    acc
+                } else {
+                    assert!(!acc);
+                    true
+                }
+            }
+        })
+        .await;
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     loop {
@@ -223,7 +215,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                     let current_block_hash = current_block_header.hash();
 
                                                     if active_in_current_epoch {
-                                                        end_previous_epoch_observation!(current_block_hash, new_epoch);
+                                                        assert!(try_end_previous_epoch_observation!(state_chain_client, current_block_hash, new_epoch));
                                                     }
 
                                                     active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::ValidatorIndex<state_chain_runtime::Runtime>>(
@@ -233,7 +225,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                     ).await.unwrap().is_some();
 
                                                     if active_in_current_epoch {
-                                                        start_epoch_observation!(current_block_hash, new_epoch);
+                                                        start_epoch_observation!(state_chain_client, current_block_hash, new_epoch);
                                                     }
                                                 }
                                                 state_chain_runtime::Event::Validator(

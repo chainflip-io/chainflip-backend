@@ -51,23 +51,10 @@ const EPOCH_FOUR_START: ObserveInstruction = ObserveInstruction::Start(EPOCH_FOU
 
 fn expect_sc_observer_start(
     mock_state_chain_rpc_client: &mut MockStateChainRpcApi,
-    current_epoch: u32,
-    active_epochs: &[u32],
-    epochs_active_from_block: &[(u32, u64)],
+    historical_active_epochs: &[u32],
+    epochs_active_from_block: &[(u32, Option<u64>)],
 ) -> H256 {
     let initial_block_hash = H256::default();
-
-    mock_state_chain_rpc_client
-        .expect_storage()
-        .with(
-            eq(initial_block_hash),
-            eq(StorageKey(
-                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
-                    .to_vec(),
-            )),
-        )
-        .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(current_epoch.encode()))));
 
     mock_state_chain_rpc_client
         .expect_storage()
@@ -81,11 +68,11 @@ fn expect_sc_observer_start(
         )
         .times(1)
         .returning({
-            let active_epochs = Vec::from(active_epochs);
-            move |_, _| Ok(Some(StorageData(active_epochs.encode())))
+            let historical_active_epochs = Vec::from(historical_active_epochs);
+            move |_, _| Ok(Some(StorageData(historical_active_epochs.encode())))
         });
 
-    for &(epoch, active_from_block) in epochs_active_from_block {
+    for &(epoch, option_active_from_block) in epochs_active_from_block {
         mock_state_chain_rpc_client
             .expect_storage()
             .with(
@@ -96,13 +83,15 @@ fn expect_sc_observer_start(
             )
             .times(1)
             .returning(move |_, _| {
-                Ok(Some(StorageData(
-                    Vault::<Ethereum> {
-                        public_key: AggKey::from_pubkey_compressed([0; 33]),
-                        active_from_block,
-                    }
-                    .encode(),
-                )))
+                Ok(option_active_from_block.map(|active_from_block| {
+                    StorageData(
+                        Vault::<Ethereum> {
+                            public_key: AggKey::from_pubkey_compressed([0; 33]),
+                            active_from_block,
+                        }
+                        .encode(),
+                    )
+                }))
             });
     }
 
@@ -119,9 +108,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
         &mut mock_state_chain_rpc_client,
-        3,
         &[3],
-        &[(3, EPOCH_THREE_FROM)],
+        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
     );
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
@@ -178,9 +166,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
         &mut mock_state_chain_rpc_client,
-        4,
         &[3],
-        &[(3, EPOCH_THREE_FROM), (4, EPOCH_FOUR_FROM)],
+        &[(3, Some(EPOCH_THREE_FROM)), (4, Some(EPOCH_FOUR_FROM))],
     );
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
@@ -248,8 +235,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     // down the witness channels
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash =
-        expect_sc_observer_start(&mut mock_state_chain_rpc_client, 3, &[], &[]);
+    let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
@@ -322,9 +308,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
         &mut mock_state_chain_rpc_client,
-        3,
         &[3],
-        &[(3, EPOCH_THREE_FROM)],
+        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
     );
 
     let vault_key_after_new_epoch =
@@ -470,8 +455,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         tokio::sync::mpsc::unbounded_channel();
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash =
-        expect_sc_observer_start(&mut mock_state_chain_rpc_client, 3, &[], &[]);
+    let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
 
     // Heartbeat on block number 20
     mock_state_chain_rpc_client
@@ -589,9 +573,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
         &mut mock_state_chain_rpc_client,
-        3,
         &[3],
-        &[(3, EPOCH_THREE_FROM)],
+        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
     );
 
     // Heartbeat on block number 20
@@ -749,9 +732,8 @@ async fn only_encodes_and_signs_when_specified() {
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
         &mut mock_state_chain_rpc_client,
-        3,
         &[3],
-        &[(3, EPOCH_THREE_FROM)],
+        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
     );
 
     // Submitting `transaction_ready_for_broadcast()`
