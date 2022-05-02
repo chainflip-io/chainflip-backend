@@ -142,6 +142,12 @@ impl MockCfe {
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
+
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
@@ -268,6 +274,11 @@ fn test_broadcast_failed() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
+
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
@@ -307,6 +318,11 @@ fn test_broadcast_failed() {
 fn test_bad_signature() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
 
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
@@ -381,6 +397,11 @@ fn test_invalid_sigdata_is_noop() {
 fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
 
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
@@ -525,6 +546,11 @@ fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attemp
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
+
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		let tx_sig_request =
@@ -626,6 +652,11 @@ fn test_signature_request_expiry() {
 		let broadcast_attempt_id =
 			BroadcastAttemptId { broadcast_id: BROADCAST_ID, attempt_count: 0 };
 
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
+
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
@@ -692,6 +723,11 @@ fn test_transmission_request_expiry() {
 		const BROADCAST_ID: BroadcastId = 1;
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
+
 		// Initiate broadcast and pass the signing stage;
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		MockCfe::respond(Scenario::HappyPath);
@@ -747,6 +783,10 @@ fn test_transmission_request_expiry() {
 #[test]
 fn no_validators_available() {
 	new_test_ext().execute_with(|| {
+		ApiCallLookup::<Test, Instance1>::insert(
+			1,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
 		// Simulate that no validator is currently online
 		NOMINATION.with(|cell| *cell.borrow_mut() = None);
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
@@ -763,6 +803,11 @@ fn no_validators_available() {
 fn missing_transaction_transmission() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		ApiCallLookup::<Test, Instance1>::insert(

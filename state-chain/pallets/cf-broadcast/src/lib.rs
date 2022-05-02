@@ -24,6 +24,9 @@ use frame_support::{
 	traits::{Get, OnRuntimeUpgrade, StorageVersion},
 	Twox64Concat,
 };
+
+use cf_traits::KeyProvider;
+
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{marker::PhantomData, prelude::*};
@@ -492,28 +495,11 @@ pub mod pallet {
 			} else {
 				match failure {
 					TransmissionFailure::TransactionRejected => {
-						let (api_call, signature) = ApiCallLookup::<T, I>::get(
-							broadcast_attempt.broadcast_attempt_id.broadcast_id,
-						)
-						.expect("no api call lookup entry for this broadcast id");
-						let payload = api_call.threshold_signature_payload();
-						if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
-							&T::KeyProvider::current_key(),
-							&payload,
-							&signature,
-						) {
-							Self::report_and_schedule_retry(
-								&signer,
-								broadcast_attempt,
-								PalletOffence::TransactionFailedOnTransmission,
-							);
-						} else {
-							Self::clean_up_storage(signature)?;
-							ApiCallLookup::<T, I>::remove(
-								broadcast_attempt.broadcast_attempt_id.broadcast_id,
-							);
-							Self::threshold_sign_and_broadcast(api_call);
-						}
+						Self::report_and_schedule_retry(
+							&signer,
+							broadcast_attempt,
+							PalletOffence::TransactionFailedOnTransmission,
+						);
 					},
 					TransmissionFailure::TransactionFailed => {
 						Self::deposit_event(Event::<T, I>::BroadcastFailed(
@@ -618,7 +604,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
 			let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
+			// Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
+
+			for attempt_count in attempt_numbers.clone() {
+				let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count };
+
+				// A particular attempt is either alive because at the signing stage
+				// OR it's at the transmission stage
+				if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
+					AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
+				{
+					log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
+				}
+			}
+
 			if let Some(attempt_count) = attempt_numbers.last() {
 				let last_broadcast_attempt_id =
 					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -626,25 +625,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 		Ok(().into())
-	}
-
-	// Clean up attempts and attempt mapping on success
-	pub fn clean_up_on_transmission_success(
-		broadcast_id: BroadcastId,
-		attempt_numbers: &[AttemptCount],
-	) {
-		for attempt_count in attempt_numbers {
-			let broadcast_attempt_id =
-				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-
-			// A particular attempt is either alive because at the signing stage
-			// OR it's at the transmission stage
-			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
-				AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
-			{
-				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
-			}
-		}
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
@@ -694,11 +674,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
+	fn signature_still_valid(broadcast_id: BroadcastId) -> bool {
+		let (api_call, signature) = ApiCallLookup::<T, I>::get(broadcast_id)
+			.expect("no api call lookup entry for this broadcast id");
+
+		let payload = api_call.threshold_signature_payload();
+
+		if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+			&T::KeyProvider::current_key(),
+			&payload,
+			&signature,
+		) {
+			let _ = Self::clean_up_storage(signature);
+			ApiCallLookup::<T, I>::remove(broadcast_id);
+			Self::threshold_sign_and_broadcast(api_call);
+			return false
+		} else {
+			return true
+		}
+	}
+
 	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
+		if !Self::signature_still_valid(broadcast_attempt.broadcast_attempt_id.broadcast_id) {
+			log::warn!(
+				"Signature is no longer valid. Aborting current broadcast attempt and rescedule threshold signature."
+			);
+			return
+		}
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
-
 		// Check if there is an nominated signer
 		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed) {
 			// write, or overwrite the old entry if it exists (on a retry)
