@@ -591,7 +591,7 @@ fn test_reputation_reset() {
 		}));
 		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
 
-		for id in &ValidatorPallet::current_validators() {
+		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
 		}
 
@@ -604,7 +604,7 @@ fn test_reputation_reset() {
 		}));
 		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
 
-		for id in &ValidatorPallet::current_validators() {
+		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
 		}
 
