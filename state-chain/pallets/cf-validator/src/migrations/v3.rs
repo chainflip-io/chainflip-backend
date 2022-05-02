@@ -1,6 +1,5 @@
 use crate::*;
 use frame_support::storage::{migration::*, storage_prefix};
-use sp_runtime::AccountId32;
 use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config>(PhantomData<T>);
@@ -60,6 +59,8 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
+		use sp_runtime::AccountId32;
+
 		assert!(get_storage_value::<Vec<AccountId32>>(VALIDATOR_PALLET_NAME, VALIDATORS_NAME, b"")
 			.is_some());
 		assert!(
