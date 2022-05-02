@@ -28,7 +28,7 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
