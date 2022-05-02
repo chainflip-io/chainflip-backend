@@ -183,11 +183,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
-	/// A counter to generate fresh ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn signing_ceremony_id_counter)]
-	pub type SigningCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
-
 	/// A counter to generate fresh request ids.
 	#[pallet::storage]
 	#[pallet::getter(fn threshold_signature_request_id_counter)]
