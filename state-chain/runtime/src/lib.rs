@@ -553,16 +553,19 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	AllPallets,
 	// Note: the following run *before* all pallet migrations.
-	migrations::VersionedMigration<
-		(
-			migrations::DeleteRewardsPallet,
-			migrations::UnifyCeremonyIds,
-			migrations::refactor_offences::Migration,
-			migrations::add_flip_contract_address::Migration,
-			migrations::migrate_claims::Migration,
-		),
-		112,
-	>,
+	(
+		migrations::VersionedMigration<
+			(
+				migrations::DeleteRewardsPallet,
+				migrations::UnifyCeremonyIds,
+				migrations::refactor_offences::Migration,
+				migrations::add_flip_contract_address::Migration,
+				migrations::migrate_claims::Migration,
+			),
+			112,
+		>,
+		migrations::VersionedMigration<(migrations::migrate_backup_triage::Migration,), 113>,
+	),
 >;
 
 impl_runtime_apis! {
