@@ -567,6 +567,7 @@ pub type Executive = frame_executive::Executive<
 			migrations::DeleteRewardsPallet,
 			migrations::UnifyCeremonyIds,
 			migrations::refactor_offences::Migration,
+			migrations::migrate_contract_addresses::Migration,
 			migrations::add_flip_contract_address::Migration,
 			migrations::migrate_claims::Migration,
 		),
