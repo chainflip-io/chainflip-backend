@@ -19,6 +19,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
 		eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip,
 };
@@ -82,6 +83,7 @@ impl Chainflip for MockRuntime {
 	type Call = Call;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockCallback;

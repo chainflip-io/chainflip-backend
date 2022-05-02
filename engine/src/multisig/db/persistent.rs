@@ -402,10 +402,10 @@ mod tests {
     use super::*;
 
     use crate::{
-        logging::test_utils::new_test_logger, multisig::db::PersistentKeyDB, testing::assert_ok,
+        logging::test_utils::new_test_logger,
+        multisig::db::PersistentKeyDB,
+        testing::{assert_ok, new_temp_directory_with_nonexistent_file},
     };
-
-    use tempdir::TempDir;
 
     const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
@@ -424,12 +424,6 @@ mod tests {
         .expect("Should write DB_SCHEMA_VERSION");
     }
 
-    // Creates a TempDir unique directory that will be deleted when dropped
-    fn get_temp_db_path() -> std::path::PathBuf {
-        let temp_dir = TempDir::new("unit_test").unwrap();
-        temp_dir.path().to_owned().join("db")
-    }
-
     // Just a random key
     const TEST_KEY: [u8; 33] = [
         3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132, 93,
@@ -442,24 +436,17 @@ mod tests {
     #[test]
     fn can_create_new_database() {
         let logger = new_test_logger();
-        let db_path = get_temp_db_path();
-
-        {
-            assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
-            assert!(db_path.exists());
-        }
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+        assert_ok!(PersistentKeyDB::new(&db_path, &logger));
+        assert!(db_path.exists());
     }
 
     #[test]
     fn new_db_is_created_with_latest_schema_version() {
         let logger = new_test_logger();
-        let db_path = get_temp_db_path();
-
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a fresh db. This will also write the schema version
-        assert!(!db_path.exists());
-        {
-            assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
-        }
+        assert_ok!(PersistentKeyDB::new(&db_path, &logger));
 
         assert!(db_path.exists());
         {
@@ -481,18 +468,14 @@ mod tests {
 
     #[test]
     fn new_db_returns_db_when_db_data_version_is_latest() {
-        let db_path = get_temp_db_path();
-
-        {
-            open_db_and_write_version_data(db_path.as_path(), DB_SCHEMA_VERSION);
-            assert_ok!(PersistentKeyDB::new(db_path.as_path(), &new_test_logger()));
-        }
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+        open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION);
+        assert_ok!(PersistentKeyDB::new(&db_path, &new_test_logger()));
     }
 
     #[test]
     fn can_migrate_to_latests() {
-        let db_path = get_temp_db_path();
-
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let bashful_secret = KEYGEN_RESULT_INFO_HEX.to_string();
         let bashful_secret_bin = hex::decode(bashful_secret).unwrap();
         assert_ok!(bincode::deserialize::<KeygenResultInfo>(
@@ -517,7 +500,7 @@ mod tests {
 
         // Load the old db and see if the keygen data is migrated and schema version is updated
         {
-            let p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
+            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             assert_eq!(key.params.threshold, 1);
@@ -536,16 +519,15 @@ mod tests {
 
     #[test]
     fn should_not_migrate_backwards() {
-        let db_path = get_temp_db_path();
-
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a db with schema version + 1
-        open_db_and_write_version_data(db_path.as_path(), DB_SCHEMA_VERSION + 1);
+        open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION + 1);
 
         // Open the db and make sure the `migrate_db_to_latest` errors
         {
-            let mut db = DB::open_cf(&Options::default(), &db_path.as_path(), COLUMN_FAMILIES)
+            let mut db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest(&mut db, &new_test_logger(), db_path.as_path()).is_err());
+            assert!(migrate_db_to_latest(&mut db, &new_test_logger(), &db_path).is_err());
         }
     }
 
@@ -561,10 +543,9 @@ mod tests {
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
-        let db_path = get_temp_db_path();
-
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         {
-            let p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
+            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
             let db = p_db.db;
 
             let key = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
@@ -574,7 +555,7 @@ mod tests {
         }
 
         {
-            let p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
+            let p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             assert_eq!(key.params.threshold, 1);
@@ -584,42 +565,29 @@ mod tests {
     #[test]
     fn can_update_key() {
         let logger = new_test_logger();
-        let db_path = get_temp_db_path();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
 
-        {
-            let mut p_db = PersistentKeyDB::new(db_path.as_path(), &logger).unwrap();
+        let mut p_db = PersistentKeyDB::new(&db_path, &logger).unwrap();
 
-            let keys_before = p_db.load_keys();
-            // there should be no key [0; 33] yet
-            assert!(keys_before.get(&key_id).is_none());
+        let keys_before = p_db.load_keys();
+        // there should be no key [0; 33] yet
+        assert!(keys_before.get(&key_id).is_none());
 
-            let keygen_result_info = hex::decode(KEYGEN_RESULT_INFO_HEX)
-                .expect("Should decode hex to valid KeygenResultInfo binary");
-            let keygen_result_info = bincode::deserialize::<KeygenResultInfo>(&keygen_result_info)
-                .expect("Should deserialize binary into KeygenResultInfo");
-            p_db.update_key(&key_id, &keygen_result_info);
+        let keygen_result_info = hex::decode(KEYGEN_RESULT_INFO_HEX)
+            .expect("Should decode hex to valid KeygenResultInfo binary");
+        let keygen_result_info = bincode::deserialize::<KeygenResultInfo>(&keygen_result_info)
+            .expect("Should deserialize binary into KeygenResultInfo");
+        p_db.update_key(&key_id, &keygen_result_info);
 
-            let keys_before = p_db.load_keys();
-            assert!(keys_before.get(&key_id).is_some());
-        }
+        let keys_before = p_db.load_keys();
+        assert!(keys_before.get(&key_id).is_some());
     }
 
     #[test]
     fn backup_is_created_when_migrating() {
         let logger = new_test_logger();
-
-        // Fresh folder
-        let temp_dir = TempDir::new("backup_is_created_when_migrating").unwrap();
-        let path = temp_dir.path();
-
-        assert!(
-            path.read_dir().unwrap().next().is_none(),
-            "Folder should be empty"
-        );
-
-        let db_path = path.join("my_db");
-
+        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a db that has no schema version, so it will use DEFAULT_DB_SCHEMA_VERSION
         {
             let mut opts = Options::default();
@@ -637,7 +605,7 @@ mod tests {
         // Try and open the backup to make sure it still works
         {
             // Find the backup db
-            let backups_path = path.join(BACKUPS_DIRECTORY);
+            let backups_path = directory.path().join(BACKUPS_DIRECTORY);
             let backups: Vec<std::path::PathBuf> = fs::read_dir(&backups_path)
                 .unwrap()
                 .filter_map(|entry| {
@@ -674,35 +642,31 @@ mod tests {
     #[test]
     fn backup_should_fail_if_already_exists() {
         let logger = new_test_logger();
-        let db_path = get_temp_db_path();
-
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
-        assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
+        assert_ok!(PersistentKeyDB::new(&db_path, &logger));
 
         // Backup up the db to a specified directory.
         // We cannot use the normal backup directory because it has a timestamp in it.
         let backup_dir_name = "test".to_string();
         assert_ok!(create_backup_with_directory_name(
-            db_path.as_path(),
+            &db_path,
             backup_dir_name.clone()
         ));
 
         // Try and back it up again to the same directory and it should fail
-        assert!(create_backup_with_directory_name(db_path.as_path(), backup_dir_name).is_err());
+        assert!(create_backup_with_directory_name(&db_path, backup_dir_name).is_err());
     }
 
     #[test]
     fn backup_should_fail_if_cant_copy_files() {
         let logger = new_test_logger();
-        let temp_dir = TempDir::new("backup_should_fail_if_cant_copy_files").unwrap();
-        let parent_path = temp_dir.path();
-        let db_path = parent_path.join("db");
-
+        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
-        assert_ok!(PersistentKeyDB::new(db_path.as_path(), &logger));
+        assert_ok!(PersistentKeyDB::new(&db_path, &logger));
 
         // Change the backups folder to readonly
-        let backups_path = parent_path.join(BACKUPS_DIRECTORY);
+        let backups_path = directory.path().join(BACKUPS_DIRECTORY);
         assert!(backups_path.exists());
         let mut permissions = backups_path.metadata().unwrap().permissions();
         permissions.set_readonly(true);
@@ -713,14 +677,14 @@ mod tests {
         );
 
         // Try and backup the db, it should fail with permissions denied due to readonly
-        assert!(create_backup(db_path.as_path(), DB_SCHEMA_VERSION).is_err());
+        assert!(create_backup(&db_path, DB_SCHEMA_VERSION).is_err());
     }
 
     #[test]
     fn should_error_if_kvdb_fails_to_load_key() {
         let logger = new_test_logger();
-        let db_path = get_temp_db_path();
 
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a db that is schema version 0 using kvdb.
         {
             let db =
@@ -736,12 +700,12 @@ mod tests {
 
         // Load the bad db and make sure it errors
         {
-            assert!(PersistentKeyDB::new(db_path.as_path(), &logger).is_err());
+            assert!(PersistentKeyDB::new(&db_path, &logger).is_err());
         }
 
         // Confirm that the db was not migrated, by checking that the metadata column doesn't exist.
         {
-            assert!(!DB::list_cf(&Options::default(), db_path.as_path())
+            assert!(!DB::list_cf(&Options::default(), &db_path)
                 .expect("Should get column families")
                 .contains(&METADATA_COLUMN.to_string()))
         }

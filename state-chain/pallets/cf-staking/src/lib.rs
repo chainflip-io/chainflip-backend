@@ -30,6 +30,8 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 
+use cf_traits::SystemStateInfo;
+
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
 	DispatchError,
@@ -246,6 +248,7 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				Self::stake_account(&account_id, amount);
 			}
@@ -336,6 +339,7 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 
 			let claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;

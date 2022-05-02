@@ -41,6 +41,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
+	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{ensure_root, pallet_prelude::OriginFor};
 
@@ -183,10 +184,16 @@ pub mod pallet {
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let should_mint = Self::should_mint_at(current_block);
-
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
-				Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
+				if T::SystemState::ensure_no_maintenance().is_ok() {
+					Self::broadcast_update_total_supply(
+						T::Issuance::total_issuance(),
+						current_block,
+					);
+				} else {
+					log::info!("System maintenance: skipping supply update broadcast.");
+				}
 				T::WeightInfo::rewards_minted()
 			} else {
 				T::WeightInfo::no_rewards_minted()

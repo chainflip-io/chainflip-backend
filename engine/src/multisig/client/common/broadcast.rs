@@ -112,10 +112,11 @@ where
                             .filter(|idx| **idx != common.own_idx)
                             .map(idx_to_id)
                             .collect(),
-                        MultisigMessage {
+                        bincode::serialize(&MultisigMessage {
                             ceremony_id: common.ceremony_id,
                             data: ceremony_data.into(),
-                        },
+                        })
+                        .unwrap(),
                     ),
                 )
             }
@@ -130,10 +131,11 @@ where
                             let ceremony_data: D = stage_data.into();
                             (
                                 idx_to_id(&idx),
-                                MultisigMessage {
+                                bincode::serialize(&MultisigMessage {
                                     ceremony_id: common.ceremony_id,
                                     data: ceremony_data.into(),
-                                },
+                                })
+                                .unwrap(),
                             )
                         })
                         .collect(),

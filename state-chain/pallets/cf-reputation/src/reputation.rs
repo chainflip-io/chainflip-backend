@@ -62,6 +62,11 @@ impl<P: ReputationParameters> ReputationTracker<P> {
 	pub fn reset_online_credits(&mut self) {
 		self.online_credits = Zero::zero();
 	}
+
+	/// Reset Reputation to zero.
+	pub fn reset_reputation(&mut self) {
+		self.reputation_points = Zero::zero();
+	}
 }
 
 #[cfg(test)]

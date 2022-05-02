@@ -8,7 +8,10 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, threshold_signer::MockThresholdSigner},
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
+		threshold_signer::MockThresholdSigner,
+	},
 	Chainflip, EpochIndex,
 };
 use frame_support::parameter_types;
@@ -75,6 +78,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockNominator;

@@ -1,9 +1,9 @@
 use crate as pallet_cf_staking;
-use cf_chains::{
-	eth::{self, api::EthereumReplayProtection},
-	ChainAbi, ChainCrypto, Ethereum,
+use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
+	ThresholdSigner, WaivedFees,
 };
-use cf_traits::{impl_mock_waived_fees, AsyncResult, ThresholdSigner, WaivedFees};
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
@@ -76,6 +76,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 parameter_types! {

@@ -7,7 +7,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		key_provider::MockKeyProvider,
+		key_provider::MockKeyProvider, system_state_info::MockSystemStateInfo,
 	},
 	Chainflip,
 };
@@ -138,6 +138,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type Call = Call;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 cf_traits::impl_mock_signer_nomination!(u64);
