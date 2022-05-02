@@ -1,5 +1,5 @@
 use crate::{mock::*, BlockEmissions, LastMintBlock, Pallet};
-use cf_traits::{Issuance, RewardsDistribution};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Issuance, RewardsDistribution};
 use frame_support::traits::{Imbalance, OnInitialize};
 use pallet_cf_flip::{FlipIssuance, Pallet as Flip};
 
@@ -126,6 +126,27 @@ fn should_mint_and_initiate_broadcast() {
 		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL);
 		let after = Flip::<Test>::total_issuance();
 		assert!(after > before, "Expected {:?} > {:?}", after, before);
+		assert_eq!(
+			MockBroadcast::get_called().unwrap().new_total_supply,
+			Flip::<Test>::total_issuance()
+		);
+	});
+}
+
+#[test]
+fn no_update_of_update_total_supply_during_maintanance() {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
+		// Activate maintenance mode
+		MockSystemStateInfo::set_maintenance(true);
+		// Try send a broadcast to update the total supply
+		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL);
+		// Expect nothing to be sent
+		assert!(MockBroadcast::get_called().is_none());
+		// Deactivate maintenance mode
+		MockSystemStateInfo::set_maintenance(false);
+		// Try send a broadcast to update the total supply
+		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL * 2);
+		// Expect the broadcast to be sendt
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()

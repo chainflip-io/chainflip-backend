@@ -15,7 +15,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
 	Hashable, Parameter,
 };
-use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, RuntimeDebug};
+use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, DispatchResult, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -53,6 +53,8 @@ pub trait Chainflip: frame_system::Config {
 	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+	/// Access to information about the current system state
+	type SystemState: SystemStateInfo;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -679,4 +681,10 @@ pub trait CeremonyIdProvider {
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
 	fn missed_slots() -> Vec<u64>;
+}
+
+/// Something that manages access to the system state.
+pub trait SystemStateInfo {
+	/// Ensure that the network is **not** in maintenance mode.
+	fn ensure_no_maintenance() -> DispatchResult;
 }

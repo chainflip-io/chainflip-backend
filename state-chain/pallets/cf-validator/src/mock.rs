@@ -9,7 +9,7 @@ use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
-		vault_rotation::MockVaultRotator,
+		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
 	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
 };
@@ -209,6 +209,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockBonder;

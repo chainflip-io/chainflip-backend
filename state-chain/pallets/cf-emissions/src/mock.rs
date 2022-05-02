@@ -18,7 +18,11 @@ use sp_runtime::{
 };
 
 use cf_traits::{
-	mocks::eth_environment_provider::MockEthEnvironmentProvider, Broadcaster, WaivedFees,
+	mocks::{
+		eth_environment_provider::MockEthEnvironmentProvider,
+		system_state_info::MockSystemStateInfo,
+	},
+	Broadcaster, WaivedFees,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -85,6 +89,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockCallback;

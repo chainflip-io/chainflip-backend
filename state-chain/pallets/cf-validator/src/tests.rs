@@ -1,7 +1,10 @@
 use crate::{mock::*, Error, *};
 use cf_traits::{
-	mocks::{reputation_resetter::MockReputationResetter, vault_rotation::MockVaultRotator},
-	VaultRotator,
+	mocks::{
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
+	},
+	SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -548,6 +551,37 @@ fn test_missing_author_punishment() {
 			ValidatorPallet::validators().get(1..=2).unwrap().to_vec(),
 		)
 	})
+}
+
+#[test]
+fn no_auction_during_maintenance() {
+	new_test_ext().execute_with(|| {
+		// Activate maintenance mode
+		MockSystemStateInfo::set_maintenance(true);
+		// Assert that we are in maintenance mode
+		assert!(MockSystemStateInfo::ensure_no_maintenance().is_err());
+		// Try to start an auction
+		RotationPhase::<Test>::set(RotationStatusOf::<Test>::RunAuction);
+		// Move a few blocks forward to trigger the auction
+		move_forward_blocks(1);
+		// Expect the auction to not be started - we are stll in the auction mode and not moving
+		// from here
+		assert_eq!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction);
+		// Deactivate maintenance mode
+		MockSystemStateInfo::set_maintenance(false);
+		// Expect the maintenance mode to be deactivated
+		assert!(MockSystemStateInfo::ensure_no_maintenance().is_ok());
+		// Move a couple of blocks forward to run the auction
+		move_forward_blocks(2);
+		// Expect the auction to be to be completed
+		assert_eq!(
+			RotationPhase::<Test>::get(),
+			RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
+				winners: vec![],
+				minimum_active_bid: 0
+			})
+		);
+	});
 }
 
 #[test]

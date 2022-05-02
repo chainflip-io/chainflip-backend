@@ -3,9 +3,10 @@ use crate::{
 	Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::RegisterClaim;
-use cf_traits::mocks::time_source;
+use cf_traits::mocks::{system_state_info::MockSystemStateInfo, time_source};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
+use sp_runtime::DispatchError;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
@@ -599,5 +600,21 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Expect an failed stake event to be fired but no stake event
 		assert_event_stack!(Event::Staking(crate::Event::FailedStakeAttempt(..)));
+	});
+}
+
+#[test]
+fn maintenance_mode() {
+	new_test_ext().execute_with(|| {
+		MockSystemStateInfo::set_maintenance(true);
+		assert_noop!(
+			Staking::staked(Origin::root(), ALICE, 20, ETH_DUMMY_ADDR, TX_HASH),
+			DispatchError::Other("We are in maintenance!")
+		);
+		assert_noop!(
+			Staking::claimed(Origin::root(), ALICE, 20, TX_HASH),
+			DispatchError::Other("We are in maintenance!")
+		);
+		MockSystemStateInfo::set_maintenance(false);
 	});
 }

@@ -3,9 +3,33 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 pub use cf_traits::EthEnvironmentProvider;
+use cf_traits::SystemStateInfo;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
+pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+
+pub mod weights;
+pub use weights::WeightInfo;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum SystemState {
+	Normal,
+	Maintenance,
+}
+
+impl Default for SystemState {
+	fn default() -> Self {
+		SystemState::Normal
+	}
+}
 type SignatureNonce = u64;
 
 pub mod cfe {
@@ -28,7 +52,6 @@ pub mod cfe {
 	}
 }
 
-pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -45,9 +68,18 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Governance origin to secure extrinsic
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		/// Weight information
+		type WeightInfo: WeightInfo;
 		/// Eth Environment provider
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// The network is currently paused.
+		NetworkIsInMaintenance,
+	}
+
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -77,16 +109,44 @@ pub mod pallet {
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn system_state)]
+	/// The current state the system is in (normal, maintenance).
+	pub type CurrentSystemState<T> = StorageValue<_, SystemState, ValueQuery>;
+
+	#[pallet::storage]
 	pub type GlobalSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
 	#[pallet::event]
-	pub enum Event<T: Config> {}
-
-	#[pallet::error]
-	pub enum Error<T> {}
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// The system state has been changed \[system_state\]
+		SystemStateHasBeenChanged(SystemState),
+	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
+	impl<T: Config> Pallet<T> {
+		/// Changes the current system state.
+		///
+		/// ## Events
+		///
+		/// - [SystemStateHasBeenChanged](Event::SystemStateHasBeenChanged)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::set_system_state())]
+		pub fn set_system_state(
+			origin: OriginFor<T>,
+			state: SystemState,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			if CurrentSystemState::<T>::get() != state {
+				CurrentSystemState::<T>::put(&state);
+				Self::deposit_event(Event::SystemStateHasBeenChanged(state));
+			}
+			Ok(().into())
+		}
+	}
 
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -107,22 +167,34 @@ pub mod pallet {
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
+			CurrentSystemState::<T>::set(SystemState::Normal);
 		}
 	}
+}
 
-	impl<T: Config> EthEnvironmentProvider for Pallet<T> {
-		fn flip_token_address() -> [u8; 20] {
-			FlipTokenAddress::<T>::get()
+pub struct SystemStateProvider<T>(PhantomData<T>);
+
+impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
+	fn ensure_no_maintenance() -> frame_support::sp_runtime::DispatchResult {
+		if <pallet::CurrentSystemState<T>>::get() == SystemState::Maintenance {
+			return Err(Error::<T>::NetworkIsInMaintenance.into())
 		}
-		fn key_manager_address() -> [u8; 20] {
-			KeyManagerAddress::<T>::get()
-		}
-		fn stake_manager_address() -> [u8; 20] {
-			StakeManagerAddress::<T>::get()
-		}
-		fn chain_id() -> u64 {
-			EthereumChainId::<T>::get()
-		}
+		Ok(())
+	}
+}
+
+impl<T: Config> EthEnvironmentProvider for Pallet<T> {
+	fn flip_token_address() -> [u8; 20] {
+		FlipTokenAddress::<T>::get()
+	}
+	fn key_manager_address() -> [u8; 20] {
+		KeyManagerAddress::<T>::get()
+	}
+	fn stake_manager_address() -> [u8; 20] {
+		StakeManagerAddress::<T>::get()
+	}
+	fn chain_id() -> u64 {
+		EthereumChainId::<T>::get()
 	}
 }
 

@@ -5150,11 +5150,15 @@ name = "pallet-cf-environment"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
  "scale-info",
  "serde 1.0.130",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 

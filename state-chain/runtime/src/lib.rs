@@ -174,6 +174,7 @@ impl pallet_cf_validator::Config for Runtime {
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 	type EthEnvironmentProvider = Environment;
 }
 
@@ -743,6 +744,7 @@ impl_runtime_apis! {
 			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
 			list_benchmark!(list, extra, pallet_cf_threshold_signature, EthereumThresholdSigner);
 			list_benchmark!(list, extra, pallet_cf_broadcast, EthereumBroadcaster);
+			list_benchmark!(list, extra, pallet_cf_environment, Environment);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
@@ -787,6 +789,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
 			add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
 			add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
+			add_benchmark!(params, batches, pallet_cf_environment, Environment);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

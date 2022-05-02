@@ -106,6 +106,7 @@ pub type Percentage = u8;
 pub mod pallet {
 
 	use super::*;
+	use cf_traits::SystemStateInfo;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -249,24 +250,29 @@ pub mod pallet {
 						}
 					}
 				},
-				RotationStatus::RunAuction => match T::Auctioneer::resolve_auction() {
-					Ok(auction_result) => {
-						match T::VaultRotator::start_vault_rotation(auction_result.winners.clone())
-						{
-							Ok(_) => Self::set_rotation_status(RotationStatus::AwaitingVaults(
-								auction_result,
-							)),
-							// We are assuming here that this is unlikely as the only reason it
-							// would fail is if we have no validators, which is already checked by
-							// the auction pallet, of if there is already a rotation in progress
-							// which isn't possible.
-							Err(e) => {
-								log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
+				RotationStatus::RunAuction => {
+					if T::SystemState::ensure_no_maintenance().is_ok() {
+						match T::Auctioneer::resolve_auction() {
+							Ok(auction_result) => {
+								match T::VaultRotator::start_vault_rotation(
+									auction_result.winners.clone(),
+								) {
+									Ok(_) => Self::set_rotation_status(
+										RotationStatus::AwaitingVaults(auction_result),
+									),
+									// We are assuming here that this is unlikely as the only reason
+									// it would fail is if we have no validators, which is already
+									// checked by the auction pallet, of if there is already a
+									// rotation in progress which isn't possible.
+									Err(e) => {
+										log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
+									},
+								}
 							},
+							Err(e) =>
+								log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
 						}
-					},
-					Err(e) =>
-						log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
+					}
 				},
 				RotationStatus::AwaitingVaults(auction_result) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
