@@ -1,5 +1,4 @@
 use crate::Runtime;
-use cf_traits::SystemStateInfo;
 use frame_support::{traits::OnRuntimeUpgrade, weights::RuntimeDbWeight};
 use pallet_cf_environment::{CurrentSystemState, SystemState};
 
