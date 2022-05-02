@@ -11,7 +11,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionOutcome, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyValidator,
+	AuctionOutcome, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyNode,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -149,15 +149,15 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
-	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]) {
-		for validator in epoch_validators {
-			MockChainflipAccount::set_current_authority(validator);
+	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]) {
+		for authority in epoch_authorities {
+			MockChainflipAccount::set_current_authority(authority);
 		}
 	}
 }
 
 pub struct MockQualifyValidator;
-impl QualifyValidator for MockQualifyValidator {
+impl QualifyNode for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
@@ -189,7 +189,6 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
-	pub const MinValidatorSetSize: u32 = 2;
 	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
 		bottom: 67,
 		top: 80,
@@ -213,8 +212,7 @@ impl Bonding for MockBonder {
 
 	type Amount = Amount;
 
-	// Bond updates are tested in the integration tests
-	fn update_validator_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+	fn update_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 }
 
 pub type MockOffenceReporter =
@@ -249,7 +247,7 @@ pub(crate) struct TestExternalitiesWithCheck {
 
 impl TestExternalitiesWithCheck {
 	fn check_invariants() {
-		assert_eq!(Validators::<Test>::get(), Session::validators(),);
+		assert_eq!(CurrentAuthorities::<Test>::get(), Session::validators(),);
 	}
 
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
@@ -292,14 +290,14 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 }
 
 pub fn run_to_block(n: u64) {
-	assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), Session::validators());
+	assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
 	while System::block_number() < n {
 		Session::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		Session::on_initialize(System::block_number());
 		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
 		MockVaultRotator::on_initialise();
-		assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), Session::validators());
+		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
 	}
 }
 

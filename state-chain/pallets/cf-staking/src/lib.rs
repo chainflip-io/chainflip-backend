@@ -151,11 +151,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A validator has staked some FLIP on the Ethereum chain. \[account_id, stake_added,
+		/// A node has staked some FLIP on the Ethereum chain. \[account_id, stake_added,
 		/// total_stake\]
 		Staked(AccountId<T>, FlipBalance<T>, FlipBalance<T>),
 
-		/// A validator has claimed their FLIP on the Ethereum chain. \[account_id,
+		/// A node has claimed their FLIP on the Ethereum chain. \[account_id,
 		/// claimed_amount\]
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
@@ -255,10 +255,10 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Get FLIP that is held for me by the system, signed by my validator key.
+		/// Get FLIP that is held for me by the system, signed by my authority key.
 		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached
-		/// claim request needs to be signed by a threshold of validators in order to produce valid
+		/// claim request needs to be signed by a threshold of authorities in order to produce valid
 		/// data that can be submitted to the StakeManager Smart Contract.
 		///
 		/// An account can only have one pending claim at a time, and until this claim has been
@@ -290,7 +290,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Get *all* FLIP that is held for me by the system, signed by my validator key.
+		/// Get *all* FLIP that is held for me by the system, signed by my authority key.
 		///
 		/// Same as [claim](Self::claim) except first calculates the maximum claimable amount.
 		///
@@ -317,7 +317,7 @@ pub mod pallet {
 		/// Previously staked funds have been reclaimed.
 		///
 		/// Note that calling this doesn't initiate any protocol changes - the `claim` has already
-		/// been authorised by validator multisig. This merely signals that the claimant has in fact
+		/// been authorised by authority multisig. This merely signals that the claimant has in fact
 		/// redeemed their funds via the StakeManager Smart Contract and allows us to finalise any
 		/// on-chain cleanup.
 		///
@@ -424,7 +424,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Signals a validator's intent to withdraw their stake after the next auction and desist
+		/// Signals a node's intent to withdraw their stake after the next auction and desist
 		/// from future auctions. Should only be called by accounts that are not already retired.
 		///
 		/// ## Events
@@ -442,8 +442,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Signals a retired validator's intent to re-activate their stake and participate in the
-		/// next validator auction. Should only be called if the account is in a retired state.
+		/// Signals a retired node's intent to re-activate their stake and participate in the
+		/// next auction. Should only be called if the account is in a retired state.
 		///
 		/// ## Events
 		///
@@ -605,7 +605,7 @@ impl<T: Config> Pallet<T> {
 		// No new claim requests can be processed if we're currently in an auction phase.
 		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-		// If a claim already exists, return an error. The validator must either redeem their claim
+		// If a claim already exists, return an error. The staker must either redeem their claim
 		// voucher or wait until expiry before creating a new claim.
 		ensure!(!PendingClaims::<T>::contains_key(account_id), Error::<T>::PendingClaim);
 
@@ -629,7 +629,7 @@ impl<T: Config> Pallet<T> {
 			DispatchError::from(Error::<T>::BelowMinimumStake)
 		);
 
-		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by
+		// Throw an error if the staker tries to claim too much. Otherwise decrement the stake by
 		// the amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
 
@@ -658,7 +658,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no
-	/// longer wishes to participate in validator auctions.
+	/// longer wishes to participate in auctions.
 	///
 	/// Returns an error if the account has already been retired, or if the account has no stake
 	/// associated.
@@ -698,7 +698,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// Checks if an account has signalled their intention to retire as a validator. If the account
+	/// Checks if an account has signalled their intention to retire. If the account
 	/// has never staked any tokens, returns [Error::UnknownAccount].
 	pub fn is_retired(account: &AccountId<T>) -> Result<bool, Error<T>> {
 		AccountRetired::<T>::try_get(account).map_err(|_| Error::UnknownAccount)

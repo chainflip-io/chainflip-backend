@@ -16,9 +16,9 @@ pub enum Offence {
 	InvalidTransactionAuthored,
 	/// A transaction failed on transmission
 	TransactionFailedOnTransmission,
-	/// A validator missed their authorship slot.
+	/// An authority missed their authorship slot.
 	MissedAuthorshipSlot,
-	/// A validator has missed a heartbeat submission.
+	/// A node has missed a heartbeat submission.
 	MissedHeartbeat,
 }
 

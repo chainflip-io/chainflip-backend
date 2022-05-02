@@ -77,7 +77,7 @@ pub mod pallet {
 		}
 	}
 
-	/// Convenience alias for a collection of bits representing the votes of each validator.
+	/// Convenience alias for a collection of bits representing the votes of each authority.
 	pub(super) type VoteMask = BitSlice<Msb0, u8>;
 
 	/// The type used for tallying votes.
@@ -86,7 +86,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator.
+	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each authority.
 	#[pallet::storage]
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
@@ -115,13 +115,13 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// CRITICAL: The validator index is out of bounds. This should never happen.
-		ValidatorIndexOutOfBounds,
+		/// CRITICAL: The authority index is out of bounds. This should never happen.
+		AuthorityIndexOutOfBounds,
 
-		/// Witness is not a validator.
+		/// Witness is not an authority.
 		UnauthorisedWitness,
 
-		/// A witness vote was cast twice by the same validator.
+		/// A witness vote was cast twice by the same authority.
 		DuplicateWitness,
 
 		/// The epoch has expired
@@ -148,7 +148,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
-		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
+		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness(
@@ -176,7 +176,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
-		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
+		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness_at_epoch(
@@ -207,13 +207,13 @@ impl<T: Config> Pallet<T> {
 	/// high level:
 	///
 	/// 1. Ensure we are not submitting a witness for an expired epoch
-	/// 2. Look up the account id in the list of validators.
+	/// 2. Look up the account id in the list of authorities.
 	/// 3. Get the list of votes for the epoch and call, or an empty list if this is the first vote.
 	/// 4. Add the account's vote to the list.
 	/// 5. Check the number of votes against the required threshold.
 	/// 6. If the threshold is exceeded, execute the voted-on `call`.
 	///
-	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator
+	/// This implementation uses a bitmask whereby each index to the bitmask represents an authority
 	/// account ID in the current Epoch.
 	///
 	/// **Note:**
@@ -227,13 +227,13 @@ impl<T: Config> Pallet<T> {
 		// Ensure the epoch has not yet expired
 		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
-		// The number of validators for the epoch
-		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
-		// validator count.
-		let num_validators =
-			T::EpochInfo::validator_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
+		// The number of authorities for the epoch
+		// This value is updated alongside ValidatorIndex, so if we have a authority, we have an
+		// authority count.
+		let num_authorities =
+			T::EpochInfo::authority_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
 
-		let index = T::EpochInfo::validator_index(epoch_index, &who.clone().into())
+		let index = T::EpochInfo::authority_index(epoch_index, &who.clone().into())
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
@@ -244,7 +244,7 @@ impl<T: Config> Pallet<T> {
 			|buffer| {
 				// If there is no storage item, create an empty one.
 				if buffer.is_none() {
-					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators as usize);
+					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_authorities as usize);
 					*buffer = Some(empty_mask.into_vec())
 				}
 
@@ -254,12 +254,12 @@ impl<T: Config> Pallet<T> {
 
 				// Convert to an addressable bitmask
 				let bits = VoteMask::from_slice_mut(bytes)
-				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
+				.expect("Only panics if the slice size exceeds the max; The number of authorities should never exceed this;");
 
 				let mut vote_count = bits.count_ones();
 
 				// Get a reference to the existing vote.
-				let mut vote = bits.get_mut(index).ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+				let mut vote = bits.get_mut(index).ok_or(Error::<T>::AuthorityIndexOutOfBounds)?;
 
 				// Return an error if already voted, otherwise set the indexed bit to `true` to
 				// indicate a vote.
@@ -281,7 +281,7 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == success_threshold_from_share_count(num_validators) as usize &&
+		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
 			CallHashExecuted::<T>::get(&call_hash).is_none()
 		{
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));

@@ -116,7 +116,7 @@ fn cannot_double_witness() {
 }
 
 #[test]
-fn only_validators_can_witness() {
+fn only_authorities_can_witness() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
@@ -139,16 +139,16 @@ fn can_continue_to_witness_for_old_epochs() {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
 
 		// These are ALISSA, BOBSON, CHARLEMAGNE
-		let mut current_validators = MockEpochInfo::current_validators();
-		// same validators for each epoch - we should change this though
-		MockEpochInfo::next_epoch(current_validators.clone());
-		MockEpochInfo::next_epoch(current_validators.clone());
+		let mut current_authorities = MockEpochInfo::current_authorities();
+		// same authorities for each epoch - we should change this though
+		MockEpochInfo::next_epoch(current_authorities.clone());
+		MockEpochInfo::next_epoch(current_authorities.clone());
 
 		// remove CHARLEMAGNE and add DEIRDRE
-		current_validators.pop();
-		current_validators.push(DEIRDRE);
-		assert_eq!(current_validators, vec![ALISSA, BOBSON, DEIRDRE]);
-		MockEpochInfo::next_epoch(current_validators);
+		current_authorities.pop();
+		current_authorities.push(DEIRDRE);
+		assert_eq!(current_authorities, vec![ALISSA, BOBSON, DEIRDRE]);
+		MockEpochInfo::next_epoch(current_authorities);
 
 		let current_epoch = MockEpochInfo::epoch_index();
 		assert_eq!(current_epoch, 4);

@@ -21,8 +21,8 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
+	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	ReplayProtectionProvider, RewardsDistribution, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
@@ -57,12 +57,12 @@ trait RewardDistribution {
 	type Issuance: Issuance;
 
 	/// Distribute rewards
-	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight;
+	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight;
 }
 
-struct BackupValidatorEmissions;
+struct BackupNodeEmissions;
 
-impl RewardDistribution for BackupValidatorEmissions {
+impl RewardDistribution for BackupNodeEmissions {
 	type EpochInfo = Validator;
 	type StakeTransfer = Flip;
 	type ValidatorId = AccountId;
@@ -71,37 +71,37 @@ impl RewardDistribution for BackupValidatorEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight {
-		if backup_validators.is_empty() {
+	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight {
+		if backup_nodes.is_empty() {
 			return 0
 		}
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
 		// Our emission cap for this heartbeat interval
-		let emissions_cap = Emissions::backup_validator_emission_per_block() *
+		let emissions_cap = Emissions::backup_node_emission_per_block() *
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
 		// Emissions for this heartbeat interval for the active set
-		let validator_rewards = Emissions::validator_emission_per_block() *
+		let authority_rewards = Emissions::current_authority_emission_per_block() *
 			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
 
-		// The average validator emission
-		let average_validator_reward: Self::FlipBalance = validator_rewards /
-			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
+		// The average authority emission
+		let average_authority_reward: Self::FlipBalance = authority_rewards /
+			Self::FlipBalance::unique_saturated_from(
+				Self::EpochInfo::current_authorities().len(),
+			);
 
 		let mut total_rewards = 0;
 
-		// Calculate rewards for each backup validator and total rewards for capping
-		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_validators
+		// Calculate rewards for each backup node and total rewards for capping
+		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_nodes
 			.iter()
-			.map(|backup_validator| {
-				let backup_validator_stake =
-					Self::StakeTransfer::stakeable_balance(backup_validator);
-				let reward_scaling_factor =
-					min(1, (backup_validator_stake / minimum_active_bid) ^ 2);
-				let reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
+			.map(|backup_node| {
+				let backup_node_stake = Self::StakeTransfer::stakeable_balance(backup_node);
+				let reward_scaling_factor = min(1, (backup_node_stake / minimum_active_bid) ^ 2);
+				let reward = (reward_scaling_factor * average_authority_reward * 8) / 10;
 				total_rewards += reward;
-				(backup_validator.clone(), reward)
+				(backup_node.clone(), reward)
 			})
 			.collect();
 
@@ -143,8 +143,8 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		let backup_validators = <Validator as BackupValidators>::backup_validators();
-		BackupValidatorEmissions::distribute_rewards(&backup_validators);
+		let backup_nodes = <Validator as BackupNodes>::backup_nodes();
+		BackupNodeEmissions::distribute_rewards(&backup_nodes);
 
 		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request

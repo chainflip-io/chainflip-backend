@@ -6,7 +6,7 @@
     "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
-  "ActiveValidatorRange": "(u32,u32)",
+  "AuthoritySetSizeRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
   "AggKey": {
@@ -87,7 +87,7 @@
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
     "stake": "Amount",
-    "validator_bond": "Amount"
+    "authority_bond": "Amount"
   },
   "FlipBalance": "u128",
   "H256": "[u8; 32]",
@@ -249,9 +249,8 @@
   "ValidatorId": "AccountId",
   "Vault": {
     "public_key": "AggKeyFor",
-    "active_window": "BlockHeightWindow"
+    "active_from_block": "u64"
   },
-  "ValidatorSize": "u32",
   "AwaitingKeygen": {
     "ceremony_id": "CeremonyId",
     "response_status": "KeygenResponseStatus"

@@ -8,7 +8,7 @@ use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account}
 use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use frame_system::RawOrigin;
 use pallet_cf_online::Call as OnlineCall;
-use pallet_cf_validator::Validators;
+use pallet_cf_validator::CurrentAuthorities;
 use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
@@ -20,7 +20,7 @@ where
 	T: frame_system::Config + pallet_cf_validator::Config + pallet_cf_online::Config,
 	I: Clone + Iterator<Item = <T as Chainflip>::ValidatorId>,
 {
-	Validators::<T>::put(validators.clone().collect::<Vec<_>>());
+	CurrentAuthorities::<T>::put(validators.clone().collect::<Vec<_>>());
 	for validator_id in validators {
 		let account_id = validator_id.into_ref();
 		whitelist_account!(account_id);

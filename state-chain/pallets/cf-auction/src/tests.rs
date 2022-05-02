@@ -36,35 +36,33 @@ fn should_provide_winning_set() {
 #[test]
 fn changing_range() {
 	new_test_ext().execute_with(|| {
-		// Assert our minimum is set to 2
-		assert_eq!(<Test as Config>::MinValidators::get(), MIN_VALIDATOR_SIZE);
 		// Check we are throwing up an error when we send anything less than the minimum of 1
 		assert_noop!(
-			AuctionPallet::set_active_validator_range(Origin::root(), (0, 0)),
+			AuctionPallet::set_current_authority_set_size_range(Origin::root(), (0, 0)),
 			Error::<Test>::InvalidAuctionParameters
 		);
 		assert_noop!(
-			AuctionPallet::set_active_validator_range(Origin::root(), (0, 1)),
+			AuctionPallet::set_current_authority_set_size_range(Origin::root(), (0, 1)),
 			Error::<Test>::InvalidAuctionParameters
 		);
 		// This should now work
-		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
+		assert_ok!(AuctionPallet::set_current_authority_set_size_range(Origin::root(), (2, 100)));
 		// Confirm we have an event
 		assert!(matches!(
 			last_event::<Test>(),
 			mock::Event::AuctionPallet(crate::Event::AuctionParametersChanged(..)),
 		));
-		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)));
-		assert_ok!(AuctionPallet::set_active_validator_range(Origin::root(), (3, 3)));
+		assert_ok!(AuctionPallet::set_current_authority_set_size_range(Origin::root(), (2, 100)));
+		assert_ok!(AuctionPallet::set_current_authority_set_size_range(Origin::root(), (3, 3)));
 	});
 }
 
-// An auction has failed with a set of bad validators being reported to the pallet
-// The subsequent auction will not include these validators
+// An auction has failed with a set of bad authorities being reported to the pallet
+// The subsequent auction will not include these authorities
 #[test]
-fn should_exclude_bad_validators_in_next_auction() {
+fn should_exclude_bad_authorities_in_next_auction() {
 	new_test_ext().execute_with(|| {
-		// Generate bids with half of these being reported as bad validators
+		// Generate bids with half of these being reported as bad authorities
 		let number_of_bidders = 10;
 		generate_bids(number_of_bidders, BIDDER_GROUP_A);
 
@@ -87,7 +85,7 @@ fn should_exclude_bad_validators_in_next_auction() {
 				.winners,
 			good_bidders
 				.iter()
-				.take(MAX_VALIDATOR_SIZE as usize)
+				.take(MAX_AUTHORITY_SIZE as usize)
 				.cloned()
 				.collect::<Vec<_>>(),
 		);
@@ -117,7 +115,7 @@ fn should_exclude_excluded_from_keygen_set() {
 				.winners,
 			good_bidders
 				.iter()
-				.take(MAX_VALIDATOR_SIZE as usize)
+				.take(MAX_AUTHORITY_SIZE as usize)
 				.cloned()
 				.collect::<Vec<_>>(),
 		);

@@ -18,7 +18,7 @@ pub use weights::WeightInfo;
 pub use auction_resolver::*;
 use cf_traits::{
 	AuctionOutcome, Auctioneer, BidderProvider, Chainflip, ChainflipAccount, EmergencyRotation,
-	EpochInfo, QualifyValidator,
+	EpochInfo, QualifyNode,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -52,19 +52,16 @@ pub mod pallet {
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
-		/// Qualify a validator
-		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
+		/// Qualify an authority
+		type AuctionQualification: QualifyNode<ValidatorId = Self::ValidatorId>;
 		/// Key generation exclusion set
 		type KeygenExclusionSet: Get<BTreeSet<Self::ValidatorId>>;
-		/// Minimum amount of validators
+		/// Ratio of current authorities to backups
 		#[pallet::constant]
-		type MinValidators: Get<u32>;
-		/// Ratio of backup validators
+		type AuthorityToBackupRatio: Get<u32>;
+		/// Percentage of backup nodes in authority set in a emergency rotation
 		#[pallet::constant]
-		type ActiveToBackupValidatorRatio: Get<u32>;
-		/// Percentage of backup validators in validating set in a emergency rotation
-		#[pallet::constant]
-		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
+		type PercentageOfBackupNodesInEmergency: Get<u32>;
 	}
 
 	/// Pallet implements \[Hooks\] trait
@@ -124,18 +121,18 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidAuctionParameters](Error::InvalidAuctionParameters)
-		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
-		pub fn set_active_validator_range(
+		#[pallet::weight(T::WeightInfo::set_current_authority_set_size_range())]
+		pub fn set_current_authority_set_size_range(
 			origin: OriginFor<T>,
-			active_validator_range: (u32, u32),
+			authority_set_size_range: (u32, u32),
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let new = AuctionParametersV1 {
-				min_size: active_validator_range.0,
-				max_size: active_validator_range.1,
-				active_to_backup_validator_ratio: T::ActiveToBackupValidatorRatio::get(),
-				percentage_of_backup_validators_in_emergency:
-					T::PercentageOfBackupValidatorsInEmergency::get(),
+				min_size: authority_set_size_range.0,
+				max_size: authority_set_size_range.1,
+				authority_to_backup_ratio: T::AuthorityToBackupRatio::get(),
+				percentage_of_backup_nodes_in_emergency: T::PercentageOfBackupNodesInEmergency::get(
+				),
 			};
 			let old = Self::set_auction_parameters(new)?;
 			Self::deposit_event(Event::AuctionParametersChanged(old, new));
@@ -163,9 +160,9 @@ pub mod pallet {
 			Pallet::<T>::set_auction_parameters(AuctionParametersV1 {
 				min_size: self.min_size,
 				max_size: self.max_size,
-				active_to_backup_validator_ratio: T::ActiveToBackupValidatorRatio::get(),
-				percentage_of_backup_validators_in_emergency:
-					T::PercentageOfBackupValidatorsInEmergency::get(),
+				authority_to_backup_ratio: T::AuthorityToBackupRatio::get(),
+				percentage_of_backup_nodes_in_emergency: T::PercentageOfBackupNodesInEmergency::get(
+				),
 			})
 			.expect("we should provide valid auction parameters at genesis");
 		}
@@ -177,8 +174,8 @@ impl<T: Config> Auctioneer<T> for Pallet<T> {
 
 	fn resolve_auction() -> Result<AuctionOutcome<T>, Error<T>> {
 		let mut bids = T::BidderProvider::get_bidders();
-		// Determine if this validator is qualified for bidding
-		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
+		// Determine if this node is qualified for bidding
+		bids.retain(|(validator_id, _)| T::AuctionQualification::is_qualified(validator_id));
 		let excluded = T::KeygenExclusionSet::get();
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 
@@ -202,10 +199,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<AuctionParametersV1, Error<T>> {
 		let (low, high) = (auction_parameters.min_size, auction_parameters.max_size);
 		ensure!(low <= high, Error::<T>::InvalidAuctionParameters);
-		ensure!(
-			high >= low && low >= T::MinValidators::get(),
-			Error::<T>::InvalidAuctionParameters
-		);
+		ensure!(high >= low, Error::<T>::InvalidAuctionParameters);
 		let old = AuctionParameters::<T>::get();
 		if old != auction_parameters {
 			AuctionParameters::<T>::put(auction_parameters);

@@ -1,5 +1,5 @@
 use crate::*;
-use cf_traits::{BackupOrPassive, BackupValidators};
+use cf_traits::{BackupNodes, BackupOrPassive};
 use sp_runtime::traits::Bounded;
 use sp_std::cmp::Reverse;
 
@@ -22,13 +22,13 @@ pub type RuntimeBackupTriage<T> =
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord)]
 pub struct Bid<Id, Amount> {
-	pub validator_id: Id,
+	pub bidder_id: Id,
 	pub amount: Amount,
 }
 
 impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 	fn from(bid: (Id, Amount)) -> Self {
-		Self { validator_id: bid.0, amount: bid.1 }
+		Self { bidder_id: bid.0, amount: bid.1 }
 	}
 }
 
@@ -67,22 +67,22 @@ where
 		// It's not this simple. For example, there might be old backup validators who are no longer
 		// in either of these sets because they were banned from the auction.
 
-		for validator_id in triage_result.backup_validators() {
+		for validator_id in triage_result.backup_nodes() {
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Backup);
 		}
-		for validator_id in triage_result.passive_validators() {
+		for validator_id in triage_result.passive_nodes() {
 			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Passive);
 		}
 
 		triage_result
 	}
 
-	pub fn backup_validators(&self) -> impl Iterator<Item = &Id> {
-		self.backup.iter().map(|bid| &bid.validator_id)
+	pub fn backup_nodes(&self) -> impl Iterator<Item = &Id> {
+		self.backup.iter().map(|bid| &bid.bidder_id)
 	}
 
-	pub fn passive_validators(&self) -> impl Iterator<Item = &Id> {
-		self.passive.iter().map(|bid| &bid.validator_id)
+	pub fn passive_nodes(&self) -> impl Iterator<Item = &Id> {
+		self.passive.iter().map(|bid| &bid.bidder_id)
 	}
 
 	fn lowest_backup_bid(&self) -> Amount {
@@ -96,9 +96,9 @@ where
 		self.passive.iter().map(|bid| bid.amount).max().unwrap_or_default()
 	}
 
-	pub fn adjust_validator<AccountState: ChainflipAccount>(
+	pub fn adjust_bid<AccountState: ChainflipAccount>(
 		&mut self,
-		validator_id: Id,
+		bidder_id: Id,
 		new_bid_amount: Amount,
 	) where
 		Id: IsType<AccountState::AccountId>,
@@ -106,26 +106,24 @@ where
 		if new_bid_amount.is_zero() {
 			let _ = self
 				.passive
-				.binary_search_by(|bid| bid.validator_id.cmp(&validator_id))
+				.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id))
 				.map(|i| {
 					self.passive.remove(i);
 				})
 				.or_else(|_| {
-					self.backup.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)).map(
-						|i| {
-							self.backup.remove(i);
-						},
-					)
+					self.backup.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)).map(|i| {
+						self.backup.remove(i);
+					})
 				});
-			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Passive);
+			AccountState::set_backup_or_passive(bidder_id.into_ref(), BackupOrPassive::Passive);
 		} else {
 			// Cache these here before we start mutating the sets.
 			let (lowest_backup_bid, highest_passive_bid) =
 				(self.lowest_backup_bid(), self.highest_passive_bid());
 
 			match (
-				self.passive.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)),
-				self.backup.binary_search_by(|bid| bid.validator_id.cmp(&validator_id)),
+				self.passive.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)),
+				self.backup.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)),
 			) {
 				// The validator is in the passive set.
 				(Ok(p), Err(b)) =>
@@ -133,7 +131,7 @@ where
 						// Promote the bidder to the backup set.
 						let mut promoted = self.passive.remove(p);
 						AccountState::set_backup_or_passive(
-							promoted.validator_id.into_ref(),
+							promoted.bidder_id.into_ref(),
 							BackupOrPassive::Backup,
 						);
 						promoted.amount = new_bid_amount;
@@ -148,7 +146,7 @@ where
 						// Demote the bidder to the passive set.
 						let mut demoted = self.backup.remove(b);
 						AccountState::set_backup_or_passive(
-							demoted.validator_id.into_ref(),
+							demoted.bidder_id.into_ref(),
 							BackupOrPassive::Passive,
 						);
 						demoted.amount = new_bid_amount;
@@ -160,16 +158,16 @@ where
 				(Err(p), Err(b)) =>
 					if new_bid_amount > lowest_backup_bid {
 						AccountState::set_backup_or_passive(
-							validator_id.into_ref(),
+							bidder_id.into_ref(),
 							BackupOrPassive::Backup,
 						);
-						self.backup.insert(b, Bid::from((validator_id, new_bid_amount)));
+						self.backup.insert(b, Bid::from((bidder_id, new_bid_amount)));
 					} else {
 						AccountState::set_backup_or_passive(
-							validator_id.into_ref(),
+							bidder_id.into_ref(),
 							BackupOrPassive::Passive,
 						);
-						self.passive.insert(p, Bid::from((validator_id, new_bid_amount)));
+						self.passive.insert(p, Bid::from((bidder_id, new_bid_amount)));
 					},
 				(Ok(_), Ok(_)) => unreachable!("Validator cannot be in both backup and passive"),
 			}
@@ -186,7 +184,7 @@ where
 			while self.backup.len() > self.backup_group_size_target as usize {
 				let demoted = self.backup.pop().expect("backup set is not empty");
 				AccountState::set_backup_or_passive(
-					demoted.validator_id.into_ref(),
+					demoted.bidder_id.into_ref(),
 					BackupOrPassive::Passive,
 				);
 				self.passive.push(demoted);
@@ -198,7 +196,7 @@ where
 			{
 				let promoted = self.passive.pop().expect("passive set is not empty");
 				AccountState::set_backup_or_passive(
-					promoted.validator_id.into_ref(),
+					promoted.bidder_id.into_ref(),
 					BackupOrPassive::Backup,
 				);
 				self.backup.push(promoted);
@@ -210,18 +208,17 @@ where
 	}
 
 	fn sort_all_by_validator_id(&mut self) {
-		self.backup
-			.sort_unstable_by(|left, right| left.validator_id.cmp(&right.validator_id));
+		self.backup.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id));
 		self.passive
-			.sort_unstable_by(|left, right| left.validator_id.cmp(&right.validator_id));
+			.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id));
 	}
 }
 
-impl<T: Config> BackupValidators for Pallet<T> {
+impl<T: Config> BackupNodes for Pallet<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 
-	fn backup_validators() -> Vec<Self::ValidatorId> {
-		BackupValidatorTriage::<T>::get().backup_validators().cloned().collect()
+	fn backup_nodes() -> Vec<Self::ValidatorId> {
+		BackupValidatorTriage::<T>::get().backup_nodes().cloned().collect()
 	}
 }
 
@@ -261,7 +258,7 @@ mod test_backup_triage {
 					bid.amount >= highest_passive_bid,
 					"backup bids should be >= highest passive bid"
 				);
-				assert!(MockChainflipAccount::is_backup(bid.validator_id.into_ref()));
+				assert!(MockChainflipAccount::is_backup(bid.bidder_id.into_ref()));
 			});
 			passive_set.iter().for_each(|bid| {
 				assert!(
@@ -272,7 +269,7 @@ mod test_backup_triage {
 					bid.amount <= highest_passive_bid,
 					"passive bids should be <= highest passive bid"
 				);
-				assert!(MockChainflipAccount::is_passive(bid.validator_id.into_ref()));
+				assert!(MockChainflipAccount::is_passive(bid.bidder_id.into_ref()));
 			});
 		};
 	}
@@ -322,28 +319,25 @@ mod test_backup_triage {
 		assert_eq!(triage.highest_passive_bid(), 2, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Promote validator 2
-		triage.adjust_validator::<MockChainflipAccount>(2, 6);
+		// Promote node 2
+		triage.adjust_bid::<MockChainflipAccount>(2, 6);
 		assert_eq!(triage.lowest_backup_bid(), 4, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 3, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Validator 3 staked up to lowest backup bid, no promotion
-		triage.adjust_validator::<MockChainflipAccount>(3, 4);
+		// Node 3 staked up to lowest backup bid, no promotion
+		triage.adjust_bid::<MockChainflipAccount>(3, 4);
 		assert_eq!(triage.lowest_backup_bid(), 4, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 4, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Validator 3 staked up to promotion
-		triage.adjust_validator::<MockChainflipAccount>(3, 5);
+		// Node 3 staked up to promotion
+		triage.adjust_bid::<MockChainflipAccount>(3, 5);
 		assert_eq!(triage.lowest_backup_bid(), 5, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 4, "{:?}", triage);
 		check_invariants!(triage);
 
-		assert_eq!(
-			BTreeSet::from_iter(triage.backup_validators()),
-			BTreeSet::from_iter(&[2, 3, 5])
-		);
+		assert_eq!(BTreeSet::from_iter(triage.backup_nodes()), BTreeSet::from_iter(&[2, 3, 5]));
 	}
 
 	#[test]
@@ -357,14 +351,14 @@ mod test_backup_triage {
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Promote validator 4
-		triage.adjust_validator::<MockChainflipAccount>(4, 4);
+		// Promote node 4
+		triage.adjust_bid::<MockChainflipAccount>(4, 4);
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 1, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Add validator 2 to passives
-		triage.adjust_validator::<MockChainflipAccount>(2, 2);
+		// Add node 2 to passives
+		triage.adjust_bid::<MockChainflipAccount>(2, 2);
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 2, "{:?}", triage);
 		check_invariants!(triage);
@@ -382,37 +376,37 @@ mod test_backup_triage {
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Promote validator 4: [5, 4, 3] / [1]
-		triage.adjust_validator::<MockChainflipAccount>(4, 4);
+		// Promote node 4: [5, 4, 3] / [1]
+		triage.adjust_bid::<MockChainflipAccount>(4, 4);
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 1, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Add validator 2 to passives: [5, 4, 3] / [2, 1]
-		triage.adjust_validator::<MockChainflipAccount>(2, 2);
+		// Add node 2 to passives: [5, 4, 3] / [2, 1]
+		triage.adjust_bid::<MockChainflipAccount>(2, 2);
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 2, "{:?}", triage);
 		check_invariants!(triage);
 
-		// Validator 5 unstakes entirely: [4, 3, 2] / [1]
-		triage.adjust_validator::<MockChainflipAccount>(5, 0);
+		// Node 5 unstakes entirely: [4, 3, 2] / [1]
+		triage.adjust_bid::<MockChainflipAccount>(5, 0);
 		assert_eq!(triage.lowest_backup_bid(), 2, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 1, "{:?}", triage);
 		check_invariants!(triage);
-		assert!(triage.backup_validators().count() + triage.passive_validators().count() == 4);
+		assert!(triage.backup_nodes().count() + triage.passive_nodes().count() == 4);
 
-		// Validator 1 unstakes entirely: [4, 3, 2] / []
-		triage.adjust_validator::<MockChainflipAccount>(1, 0);
+		// Node 1 unstakes entirely: [4, 3, 2] / []
+		triage.adjust_bid::<MockChainflipAccount>(1, 0);
 		assert_eq!(triage.lowest_backup_bid(), 2, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
-		assert!(triage.backup_validators().count() + triage.passive_validators().count() == 3);
+		assert!(triage.backup_nodes().count() + triage.passive_nodes().count() == 3);
 
-		// Validator 2 unstakes entirely: [4, 3] / []
-		triage.adjust_validator::<MockChainflipAccount>(2, 0);
+		// Node 2 unstakes entirely: [4, 3] / []
+		triage.adjust_bid::<MockChainflipAccount>(2, 0);
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
-		assert!(triage.backup_validators().count() + triage.passive_validators().count() == 2);
+		assert!(triage.backup_nodes().count() + triage.passive_nodes().count() == 2);
 	}
 }

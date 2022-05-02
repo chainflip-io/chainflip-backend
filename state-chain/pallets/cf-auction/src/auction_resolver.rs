@@ -21,8 +21,8 @@ pub struct ResolverV1<T: Config>(PhantomData<T>);
 pub struct AuctionParametersV1 {
 	pub min_size: u32,
 	pub max_size: u32,
-	pub active_to_backup_validator_ratio: u32,
-	pub percentage_of_backup_validators_in_emergency: u32,
+	pub authority_to_backup_ratio: u32,
+	pub percentage_of_backup_nodes_in_emergency: u32,
 }
 
 pub struct AuctionContextV1 {
@@ -39,25 +39,25 @@ impl<T: Config> AuctionResolver<T> for ResolverV1<T> {
 		auction_context: Self::AuctionContext,
 		mut auction_candidates: Vec<(T::ValidatorId, T::Amount)>,
 	) -> Result<AuctionOutcome<T>, Self::Error> {
-		let (min_number_of_validators, max_number_of_validators) =
+		let (min_number_of_authorities, max_number_of_authorities) =
 			(auction_parameters.min_size, auction_parameters.max_size);
 		let number_of_bidders = auction_candidates.len() as u32;
 
-		ensure!(number_of_bidders >= min_number_of_validators, {
+		ensure!(number_of_bidders >= min_number_of_authorities, {
 			log::error!(
 				"[cf-auction] insufficient bidders to proceed. {} < {}",
 				number_of_bidders,
-				min_number_of_validators
+				min_number_of_authorities
 			);
 			Error::<T>::NotEnoughBidders
 		});
 
 		auction_candidates.sort_unstable_by_key(|&(_, amount)| Reverse(amount));
 
-		let mut target_validator_group_size =
-			min(max_number_of_validators, number_of_bidders) as usize;
-		let mut next_validator_group: Vec<_> =
-			auction_candidates.iter().take(target_validator_group_size as usize).collect();
+		let mut target_authority_set_size =
+			min(max_number_of_authorities, number_of_bidders) as usize;
+		let mut next_authority_set: Vec<_> =
+			auction_candidates.iter().take(target_authority_set_size as usize).collect();
 
 		if auction_context.is_emergency {
 			// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
@@ -72,44 +72,43 @@ impl<T: Config> AuctionResolver<T> for ResolverV1<T> {
 			// and will soon be superceded by a new method aka dynamic set sizes.
 
 			// NOTE DAN: This is the size of the group if we cut off at the previous bond.
-			if let Some(new_target_validator_group_size) = next_validator_group
-				.iter()
-				.position(|(_, amount)| amount < &T::EpochInfo::bond())
+			if let Some(new_target_authority_set_size) =
+				next_authority_set.iter().position(|(_, amount)| amount < &T::EpochInfo::bond())
 			{
-				// NOTE DAN: This is wrong since (a) the new_target_validator_group_size already
+				// NOTE DAN: This is wrong since (a) the new_target_authority_set_size already
 				// might contain some of the previous backup validators if their stake was above the
 				// previous bond. Also (b) there are likely some backup validators that are not
-				// included in the next_validator_group and therefore unaccounted-for in this
+				// included in the next_authority_set and therefore unaccounted-for in this
 				// calculation.
-				let number_of_existing_backup_validators = (target_validator_group_size -
-					new_target_validator_group_size) as u32 *
-					(auction_parameters.active_to_backup_validator_ratio - 1) /
-					auction_parameters.active_to_backup_validator_ratio;
+				let number_of_existing_backup_nodes = (target_authority_set_size -
+					new_target_authority_set_size) as u32 *
+					(auction_parameters.authority_to_backup_ratio - 1) /
+					auction_parameters.authority_to_backup_ratio;
 
-				let number_of_backup_validators_to_be_included =
-					(number_of_existing_backup_validators as u32).saturating_mul(
-						auction_parameters.percentage_of_backup_validators_in_emergency,
-					) / 100;
+				let number_of_backup_nodes_to_be_included = (number_of_existing_backup_nodes
+					as u32)
+					.saturating_mul(auction_parameters.percentage_of_backup_nodes_in_emergency) /
+					100;
 
-				target_validator_group_size = new_target_validator_group_size +
-					number_of_backup_validators_to_be_included as usize;
+				target_authority_set_size =
+					new_target_authority_set_size + number_of_backup_nodes_to_be_included as usize;
 
-				next_validator_group.truncate(target_validator_group_size);
+				next_authority_set.truncate(target_authority_set_size);
 			}
 		}
 
-		let winners: Vec<_> = next_validator_group
+		let winners: Vec<_> = next_authority_set
 			.iter()
 			.map(|(validator_id, _)| validator_id.clone())
 			.collect();
 
 		let losers: Vec<_> = auction_candidates
 			.iter()
-			.skip(target_validator_group_size as usize)
+			.skip(target_authority_set_size as usize)
 			.cloned()
 			.collect();
 
-		let bond = next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
+		let bond = next_authority_set.last().map(|(_, bid)| *bid).unwrap_or_default();
 
 		Ok(AuctionOutcome { winners, losers, bond })
 	}

@@ -160,7 +160,7 @@ pub mod pallet {
 	pub type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
 
-	/// Reputation trackers for each validator.
+	/// Reputation trackers for each node
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
 	pub type Reputations<T: Config> =
@@ -365,7 +365,7 @@ impl<T: Config> Heartbeat for Pallet<T> {
 			});
 
 			if reputation_points < 0 {
-				// At this point we slash the validator by the amount of blocks offline
+				// At this point we slash the node by the amount of blocks offline
 				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
 		}
