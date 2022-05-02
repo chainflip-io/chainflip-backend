@@ -182,6 +182,11 @@ fn test_broadcast_rejected() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 
+		ApiCallLookup::<Test, Instance1>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
+
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		assert!(
@@ -232,6 +237,10 @@ fn test_broadcast_rejected() {
 #[test]
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
+		ApiCallLookup::<Test, Instance1>::insert(
+			1,
+			(MockApiCall::default(), &MockThresholdSignature::default()),
+		);
 		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue

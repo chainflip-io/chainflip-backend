@@ -113,8 +113,8 @@ pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
 // Mock KeyProvider
-pub const MOCK_KEY_ID: &[u8] = b"K-ID";
-pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
+pub const MOCK_KEY_ID: &[u8] = &[0, 0, 0, 0];
+pub const MOCK_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
 
 pub struct MockKeyProvider;
 
