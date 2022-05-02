@@ -292,69 +292,6 @@ async fn sends_initial_extrinsics_when_backup_but_not_historic_on_startup() {
 }
 
 #[tokio::test]
-async fn backup_checks_account_data_every_block() {
-    let logger = new_test_logger();
-
-    let eth_rpc_mock = MockEthRpcApi::new();
-
-    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
-
-    let multisig_client = Arc::new(MockMultisigClientApi::new());
-
-    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-
-    let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash =
-        expect_sc_observer_start(&mut mock_state_chain_rpc_client, 3, &[], &[]);
-
-    // Heartbeat on block number 20
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
-
-    // Get events from the block
-    // We will match on every block hash, but only the events key, as we want to return no events
-    // on every block
-    mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(predicate::always(), eq(mock_events_key()))
-        .times(2)
-        .returning(|_, _| Ok(vec![]));
-
-    let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
-        mock_state_chain_rpc_client,
-    ));
-
-    // two empty blocks in the stream (empty because all queries for the events of a block will
-    // return no events, see above)
-    let sc_block_stream = tokio_stream::iter(vec![Ok(test_header(20)), Ok(test_header(21))]);
-
-    sc_observer::start(
-        state_chain_client,
-        sc_block_stream,
-        eth_broadcaster,
-        multisig_client,
-        account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
-        initial_block_hash,
-        &logger,
-    )
-    .await;
-
-    // ensure we did NOT kick off the witness processes at any point - as we are *only* backup, not outgoing
-    assert!(km_instruction_receiver.recv().await.is_none());
-    assert!(sm_instruction_receiver.recv().await.is_none());
-}
-
-#[tokio::test]
 async fn current_authority_to_current_authority_on_new_epoch_event() {
     let logger = new_test_logger();
 
