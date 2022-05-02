@@ -251,7 +251,7 @@ impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
 pub struct Vault<T: ChainAbi> {
 	/// The vault's public key.
 	pub public_key: T::AggKey,
-	/// The active window for this vault
+	/// The first active block for this vault
 	pub active_from_block: T::ChainBlockNumber,
 }
 
