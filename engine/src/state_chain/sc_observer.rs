@@ -111,7 +111,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    let initial_epoch = state_chain_client
+    let current_epoch_at_initial_block_hash = state_chain_client
         .get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
             initial_block_hash,
         )
@@ -125,10 +125,10 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         ).await.unwrap();
         assert!(historical_active_epochs
             .iter()
-            .chain(std::iter::once(&initial_epoch))
+            .chain(std::iter::once(&current_epoch_at_initial_block_hash))
             .is_sorted());
 
-        if historical_active_epochs.last() == Some(&initial_epoch) {
+        if historical_active_epochs.last() == Some(&current_epoch_at_initial_block_hash) {
             let mut historical_active_epochs = historical_active_epochs.into_iter();
             historical_active_epochs.next_back();
             (true, historical_active_epochs)
@@ -190,7 +190,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     }
 
     if active_in_current_epoch {
-        start_epoch_observation!(initial_block_hash, initial_epoch);
+        start_epoch_observation!(initial_block_hash, current_epoch_at_initial_block_hash);
     }
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
