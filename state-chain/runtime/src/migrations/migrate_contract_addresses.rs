@@ -15,16 +15,16 @@ impl OnRuntimeUpgrade for Migration {
 		pallet_cf_environment::StakeManagerAddress::<Runtime>::put(STAKE_MANAGER_ADDRESS);
 		pallet_cf_environment::KeyManagerAddress::<Runtime>::put(KEY_MANAGER_ADDRESS);
 
-		RuntimeDbWeight::default().reads_writes(0, 3)
+		RuntimeDbWeight::default().reads_writes(0, 2)
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		if pallet_cf_environment::StakeManagerAddress::<Runtime>::get() == NULL_ADDRESS {
-			Err("StakeManagerAddress not set.")
+			return Err("StakeManagerAddress not set.")
 		}
 		if pallet_cf_environment::KeyManagerAddress::<Runtime>::get() == NULL_ADDRESS {
-			Err("KeyManagerAddress not set.")
+			return Err("KeyManagerAddress not set.")
 		}
 		Ok(())
 	}
