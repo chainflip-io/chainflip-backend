@@ -58,6 +58,7 @@
   },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
+  "ChainBlockNumber": "u64",
   "ChainflipAccountData": {
     "state": "ChainflipAccountState",
     "last_active_epoch": "Option<EpochIndex>"
