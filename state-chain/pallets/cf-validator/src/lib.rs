@@ -19,7 +19,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
 	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyNode, SuccessOrFailure, VaultRotator, ReputationResetter,
+	QualifyNode, ReputationResetter, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
