@@ -1533,7 +1533,11 @@ mod tests {
 				.max_authorities(ACTIVE_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					assert_eq!(GENESIS_EPOCH, Validator::epoch_index(), "We should be in the first epoch");
+					assert_eq!(
+						GENESIS_EPOCH,
+						Validator::epoch_index(),
+						"We should be in the first epoch"
+					);
 					let current_authorities = &Validator::current_authorities();
 					let (mut testnet, passive_nodes) =
 						network::Network::create(2, current_authorities);
