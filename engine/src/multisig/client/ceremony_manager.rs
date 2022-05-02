@@ -24,7 +24,6 @@ use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo
 
 use crate::multisig::MessageHash;
 
-use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
@@ -42,7 +41,6 @@ pub struct CeremonyManager {
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     signing_states: HashMap<CeremonyId, SigningStateRunner>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
-    ceremony_id_tracker: CeremonyIdTracker,
     allowing_high_pubkey: bool,
     logger: slog::Logger,
 }
@@ -58,7 +56,6 @@ impl CeremonyManager {
             outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
-            ceremony_id_tracker: CeremonyIdTracker::new(),
             allowing_high_pubkey: false,
             logger: logger.clone(),
         }
@@ -154,7 +151,6 @@ impl CeremonyManager {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        self.ceremony_id_tracker.consume_signing_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
             slog::warn!(
                 self.logger,
@@ -179,7 +175,6 @@ impl CeremonyManager {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
             slog::warn!(
                 self.logger,
@@ -215,14 +210,6 @@ impl CeremonyManager {
                 return;
             }
         };
-
-        if self
-            .ceremony_id_tracker
-            .is_keygen_ceremony_id_used(&ceremony_id)
-        {
-            slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
-            return;
-        }
 
         let logger_no_ceremony_id = &self.logger;
         let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
@@ -294,14 +281,6 @@ impl CeremonyManager {
                 return;
             }
         };
-
-        if self
-            .ceremony_id_tracker
-            .is_signing_ceremony_id_used(&ceremony_id)
-        {
-            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
-            return;
-        }
 
         // We have the key and have received a request to sign
         let logger_no_ceremony_id = &self.logger;
@@ -380,18 +359,6 @@ impl CeremonyManager {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
 
-        if self
-            .ceremony_id_tracker
-            .is_signing_ceremony_id_used(&ceremony_id)
-        {
-            slog::debug!(
-                self.logger,
-                "Ignoring signing data from old ceremony id {}",
-                ceremony_id
-            );
-            return;
-        }
-
         slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = &self.logger;
@@ -412,18 +379,6 @@ impl CeremonyManager {
         ceremony_id: CeremonyId,
         data: KeygenData,
     ) {
-        if self
-            .ceremony_id_tracker
-            .is_keygen_ceremony_id_used(&ceremony_id)
-        {
-            slog::debug!(
-                self.logger,
-                "Ignoring keygen data from old ceremony id {}",
-                ceremony_id
-            );
-            return;
-        }
-
         let logger = &self.logger;
         let state = self
             .keygen_states
