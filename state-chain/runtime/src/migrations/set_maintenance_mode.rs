@@ -13,6 +13,7 @@ impl OnRuntimeUpgrade for Migration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
+		use cf_traits::SystemStateInfo;
 		use frame_support::ensure;
 		use pallet_cf_environment::SystemStateProvider;
 
