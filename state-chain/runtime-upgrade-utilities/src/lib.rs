@@ -6,6 +6,9 @@ use frame_support::{
 };
 use sp_std::marker::PhantomData;
 
+mod helper_functions;
+pub use helper_functions::*;
+
 /// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to verion `TO`.
 ///
 /// In order for the runtime upgrade `U` to proceed, two conditions should be satisfied:
