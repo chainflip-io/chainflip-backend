@@ -1101,8 +1101,8 @@ pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
-            share_count: ACCOUNT_IDS.len(),
-            threshold: ACCOUNT_IDS.len(),
+            share_count: ACCOUNT_IDS.len() as u16,
+            threshold: ACCOUNT_IDS.len() as u16,
         },
     );
     fake_comm1

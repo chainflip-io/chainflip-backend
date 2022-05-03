@@ -332,7 +332,8 @@ async fn should_report_on_incomplete_blame_response() {
 
     // stage 7 - bad_node_id_1 sends an empty BlameResponse
     for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
-        *message = keygen::BlameResponse6(std::collections::BTreeMap::default())
+        let blame_response_6 = keygen::BlameResponse6(std::collections::BTreeMap::default());
+        *message = blame_response_6;
     }
 
     let messages = ceremony
@@ -361,7 +362,7 @@ async fn should_abort_on_blames_at_invalid_indexes() {
 
     let bad_node_id = &ACCOUNT_IDS[1];
     for message in messages.get_mut(bad_node_id).unwrap().values_mut() {
-        *message = keygen::Complaints4([1, usize::MAX].into_iter().collect());
+        *message = keygen::Complaints4([1, u16::MAX].into_iter().collect());
     }
 
     let messages = keygen_ceremony
@@ -629,8 +630,9 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
         .values_mut()
         .enumerate()
     {
+        let counter = counter as u16;
         *message = Complaints4(BTreeSet::from_iter(
-            counter % 2..((counter % 2) + ACCOUNT_IDS.len()),
+            counter % 2..((counter % 2) + ACCOUNT_IDS.len() as u16),
         ));
     }
 
@@ -768,7 +770,7 @@ async fn should_report_on_invalid_complaints4() {
     let [bad_account_id] = ceremony.select_account_ids();
 
     // This complaint is invalid because it has an invalid index
-    let invalid_complaint = keygen::Complaints4([1, usize::MAX].into_iter().collect());
+    let invalid_complaint: Complaints4 = keygen::Complaints4([1, u16::MAX].into_iter().collect());
 
     for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
         *message = invalid_complaint.clone();

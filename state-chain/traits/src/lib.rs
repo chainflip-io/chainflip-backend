@@ -95,7 +95,7 @@ pub trait EpochInfo {
 	fn current_authorities() -> Vec<Self::ValidatorId>;
 
 	/// Get the current number of authorities
-	fn current_authority_count() -> u32;
+	fn current_authority_count() -> u16;
 
 	/// Gets authority index of a particular authority for a given epoch
 	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;

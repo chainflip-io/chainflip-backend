@@ -474,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn can_migrate_to_latests() {
+    fn can_migrate_to_latest() {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let bashful_secret = KEYGEN_RESULT_INFO_HEX.to_string();
         let bashful_secret_bin = hex::decode(bashful_secret).unwrap();

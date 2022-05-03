@@ -47,6 +47,7 @@ type Version = SemVer;
 type Ed25519PublicKey = ed25519::Public;
 type Ed25519Signature = ed25519::Signature;
 pub type Ipv6Addr = u128;
+pub type AuthorityCount = u16;
 
 /// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -572,13 +573,14 @@ pub mod pallet {
 		EpochIndex,
 		Blake2_128Concat,
 		<T as frame_system::Config>::AccountId,
-		u16,
+		AuthorityCount,
 	>;
 
 	/// Track epochs and their associated authority count
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_authority_count)]
-	pub type EpochAuthorityCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u16>;
+	pub type EpochAuthorityCount<T: Config> =
+		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
@@ -698,11 +700,14 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentAuthorities::<T>::get()
 	}
 
-	fn current_authority_count() -> u32 {
-		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as u32
+	fn current_authority_count() -> AuthorityCount {
+		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as AuthorityCount
 	}
 
-	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
+	fn authority_index(
+		epoch_index: EpochIndex,
+		account: &Self::ValidatorId,
+	) -> Option<AuthorityCount> {
 		AuthorityIndex::<T>::get(epoch_index, account)
 	}
 
@@ -733,7 +738,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		last_block_for_claims <= current_block_number
 	}
 
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u16> {
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount> {
 		EpochAuthorityCount::<T>::get(epoch)
 	}
 
@@ -742,9 +747,9 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		epoch_index: EpochIndex,
 		new_authorities: Vec<Self::ValidatorId>,
 	) {
-		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as u16);
+		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as AuthorityCount);
 		for (i, authority) in new_authorities.iter().enumerate() {
-			AuthorityIndex::<T>::insert(epoch_index, authority, i as u16);
+			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
 			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
 		}
 		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);

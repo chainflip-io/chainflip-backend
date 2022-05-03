@@ -94,8 +94,8 @@ macro_rules! impl_mock_epoch_info {
 				CURRENT_AUTHORITIES.with(|cell| cell.borrow().clone())
 			}
 
-			fn current_authority_count() -> u32 {
-				CURRENT_AUTHORITIES.with(|cell| cell.borrow().len() as u32)
+			fn current_authority_count() -> u16 {
+				CURRENT_AUTHORITIES.with(|cell| cell.borrow().len() as u16)
 			}
 
 			fn authority_index(

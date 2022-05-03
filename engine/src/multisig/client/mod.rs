@@ -26,6 +26,7 @@ use crate::{
 
 use async_trait::async_trait;
 use futures::Future;
+use pallet_cf_validator::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
@@ -62,16 +63,16 @@ pub struct SchnorrSignature {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThresholdParameters {
     /// Total number of key shares (equals the total number of parties in keygen)
-    pub share_count: usize,
+    pub share_count: AuthorityCount,
     /// Max number of parties that can *NOT* generate signature
-    pub threshold: usize,
+    pub threshold: AuthorityCount,
 }
 
 impl ThresholdParameters {
-    pub fn from_share_count(share_count: usize) -> Self {
+    pub fn from_share_count(share_count: AuthorityCount) -> Self {
         ThresholdParameters {
             share_count,
-            threshold: threshold_from_share_count(share_count as u16) as usize,
+            threshold: threshold_from_share_count(share_count),
         }
     }
 }
