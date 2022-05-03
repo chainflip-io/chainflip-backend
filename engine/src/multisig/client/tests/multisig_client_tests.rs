@@ -5,7 +5,9 @@ use crate::{
         client::{self, key_store::KeyStore},
         KeyId, MessageHash, PersistentKeyDB,
     },
-    testing::{assert_err, assert_future_can_complete, new_temp_directory_with_nonexistent_file},
+    testing::{
+        assert_err, assert_future_can_complete, assert_ok, new_temp_directory_with_nonexistent_file,
+    },
 };
 
 use client::MultisigClient;
@@ -73,19 +75,18 @@ async fn should_save_key_after_keygen() {
         let keygen_request_fut =
             client.initiate_keygen(DEFAULT_KEYGEN_CEREMONY_ID, ACCOUNT_IDS.to_vec());
 
-        let keygen_request_receiver_fut = async {
-            // Get the oneshot channel that is linked to the keygen request
-            // and send a successful keygen result
-            keygen_request_receiver
-                .recv()
-                .await
-                .unwrap()
-                .3
-                .send(Ok(keygen_result_info))
-                .unwrap();
-        };
+        // Get the oneshot channel that is linked to the keygen request
+        // and send a successful keygen result
+        keygen_request_receiver
+            .recv()
+            .await
+            .unwrap()
+            .3
+            .send(Ok(keygen_result_info))
+            .unwrap();
 
-        let _ = tokio::join!(keygen_request_fut, keygen_request_receiver_fut);
+        // Complete the keygen request
+        assert_ok!(keygen_request_fut.await);
     }
 
     // Check that the key was saved by Loading it from the same db file
