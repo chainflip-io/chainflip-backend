@@ -41,7 +41,6 @@ mod tests {
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
-		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
 		use pallet_cf_vaults::KeygenOutcome;
 		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
@@ -87,7 +86,7 @@ mod tests {
 
 		impl Cli {
 			pub fn activate_account(account: &NodeId) {
-				let _ = Staking::activate_account(Origin::signed(account.clone()));
+				assert_ok!(Staking::activate_account(Origin::signed(account.clone())));
 			}
 		}
 
@@ -177,7 +176,7 @@ mod tests {
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
-			pub active: bool,
+			pub live: bool,
 			// conveniently creates a threshold "signature" (not really)
 			// all engines have the same one, so they create the same sig
 			pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
@@ -188,7 +187,7 @@ mod tests {
 			fn new(node_id: NodeId, signer: Rc<RefCell<ThresholdSigner>>) -> Self {
 				Engine {
 					node_id,
-					active: true,
+					live: true,
 					threshold_signer: signer,
 					engine_state: EngineState::None,
 				}
@@ -200,7 +199,7 @@ mod tests {
 
 			// Handle events from contract
 			fn on_contract_event(&self, event: &ContractEvent) {
-				if self.state() == ChainflipAccountState::CurrentAuthority && self.active {
+				if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
 					match event {
 						ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
 							// Witness event -> send transaction to state chain
@@ -222,7 +221,7 @@ mod tests {
 			// TODO have this abstracted out
 			fn handle_state_chain_events(&mut self, events: &[Event]) {
 				// If active handle events
-				if self.active {
+				if self.live {
 					// Being a CurrentAuthority we would respond to certain events
 					if self.state() == ChainflipAccountState::CurrentAuthority {
 						on_events!(
@@ -294,7 +293,7 @@ mod tests {
 
 			// On block handler
 			fn on_block(&self, block_number: BlockNumber) {
-				if self.active {
+				if self.live {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
 						// Online pallet
@@ -306,15 +305,15 @@ mod tests {
 			}
 		}
 
-		pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId, seed: &str) {
-			setup_account(node_id, seed);
-			setup_peer_mapping(node_id, seed);
+		/// Do this after staking.
+		pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId) {
+			setup_account(node_id);
+			setup_peer_mapping(node_id);
 		}
 
 		// Create an account, generate and register the session keys
-		pub(crate) fn setup_account(node_id: &NodeId, seed: &str) {
-			assert_ok!(frame_system::Provider::<Runtime>::created(node_id));
-
+		pub(crate) fn setup_account(node_id: &NodeId) {
+			let seed = &node_id.clone().to_string();
 			let key = SessionKeys {
 				aura: get_from_seed::<AuraId>(seed),
 				grandpa: get_from_seed::<GrandpaId>(seed),
@@ -327,7 +326,8 @@ mod tests {
 			));
 		}
 
-		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &str) {
+		pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
+			let seed = &node_id.clone().to_string();
 			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
 			use sp_core::Encode;
@@ -357,6 +357,21 @@ mod tests {
 				[self.node_counter as u8; 32].into()
 			}
 
+			pub fn live_nodes(&self) -> Vec<NodeId> {
+				self.engines
+					.iter()
+					.filter_map(
+						|(node_id, engine)| {
+							if engine.live {
+								Some(node_id.clone())
+							} else {
+								None
+							}
+						},
+					)
+					.collect()
+			}
+
 			// Create a network which includes the authorities in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(
@@ -370,7 +385,7 @@ mod tests {
 					network.add_engine(node);
 					// Only need to setup peer mapping as the AccountInfo is already set up if they
 					// are genesis nodes
-					setup_peer_mapping(node, &node.clone().to_string());
+					setup_peer_mapping(node);
 				}
 
 				// Create the passive nodes
@@ -378,8 +393,6 @@ mod tests {
 				for _ in 0..number_of_passive_nodes {
 					let node_id = network.next_node_id();
 					passive_nodes.push(node_id.clone());
-					let seed = node_id.clone().to_string();
-					setup_account_and_peer_mapping(&node_id, &seed);
 					network.engines.insert(
 						node_id.clone(),
 						Engine::new(node_id, network.threshold_signer.clone()),
@@ -390,7 +403,7 @@ mod tests {
 			}
 
 			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
-				self.engines.get_mut(node_id).expect("valid node_id").active = active;
+				self.engines.get_mut(node_id).expect("valid node_id").live = active;
 			}
 
 			pub fn create_engine(&mut self) -> NodeId {
@@ -572,8 +585,8 @@ mod tests {
 				&pallet_cf_auction::GenesisConfig {
 					min_size: self.min_authorities,
 					max_size: self.max_authorities,
-					max_expansion: 10,
-					max_contraction: 10,
+					max_expansion: self.max_authorities,
+					max_contraction: self.max_authorities,
 				},
 				storage,
 			)
@@ -639,7 +652,7 @@ mod tests {
 	}
 
 	mod genesis {
-		use std::collections::BTreeSet;
+		use sp_std::collections::btree_set::BTreeSet;
 
 		use super::*;
 		use cf_traits::{
@@ -770,11 +783,13 @@ mod tests {
 	const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
 
 	mod epoch {
+		use std::collections::BTreeSet;
+
 		use super::{genesis::GENESIS_BALANCE, *};
 		use crate::tests::network::setup_account_and_peer_mapping;
 		use cf_traits::{
-			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
-			EpochInfo,
+			BackupOrPassive, BidderProvider, ChainflipAccount, ChainflipAccountState,
+			ChainflipAccountStore, EpochInfo,
 		};
 		use pallet_cf_validator::RotationStatus;
 		use state_chain_runtime::{HeartbeatBlockInterval, Validator};
@@ -871,26 +886,20 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// Genesis nodes
-					let mut nodes = Validator::current_authorities();
+					let genesis_nodes = Validator::current_authorities();
 
 					let number_of_passive_nodes = MAX_SET_SIZE
-						.checked_sub(nodes.len() as u32)
+						.checked_sub(genesis_nodes.len() as u32)
 						.expect("Max set size must be at least the number of genesis authorities");
 
-					let (mut testnet, mut passive_nodes) =
-						network::Network::create(number_of_passive_nodes as u8, &nodes);
+					let (mut testnet, passive_nodes) =
+						network::Network::create(number_of_passive_nodes as u8, &genesis_nodes);
 
-					// Activate the passiv nodes
-					for node in &passive_nodes {
-						network::Cli::activate_account(node);
-					}
-
-					nodes.append(&mut passive_nodes);
-					assert_eq!(nodes.len() as u32, MAX_SET_SIZE);
+					assert_eq!(testnet.live_nodes().len() as u32, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
-					for node in &nodes {
+					for node in &testnet.live_nodes() {
 						testnet.stake_manager_contract.stake(
 							node.clone(),
 							stake_amount,
@@ -913,11 +922,21 @@ mod tests {
 					// and will do after the auction with the intention of being a backup node
 					let late_staker = testnet.create_engine();
 					testnet.set_active(&late_staker, true);
-					let seed = late_staker.to_string();
-					setup_account_and_peer_mapping(&late_staker, &seed);
+
+					// Move forward one block to register the stakes on-chain.
+					testnet.move_forward_blocks(1);
+
+					for node in &passive_nodes {
+						network::setup_account_and_peer_mapping(node);
+						network::Cli::activate_account(node);
+					}
+					for node in &keyless_nodes {
+						network::setup_peer_mapping(node);
+						network::Cli::activate_account(node);
+					}
 
 					// Run to the next epoch to start the auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
 					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
 
@@ -926,7 +945,8 @@ mod tests {
 					assert_eq!(
 						GENESIS_EPOCH + 1,
 						Validator::epoch_index(),
-						"We should be in the next epoch"
+						"We should be in the next epoch. {:?}",
+						Staking::get_bidders()
 					);
 
 					assert_eq!(
@@ -935,23 +955,10 @@ mod tests {
 						"minimum active bid should be that of the new stake"
 					);
 
-					let mut winners = Validator::current_authorities();
-					winners.sort();
-					nodes.sort();
 					assert_eq!(
-						winners,
-						nodes,
+						Validator::current_authorities().iter().collect::<BTreeSet<_>>(),
+						[genesis_nodes, passive_nodes].concat().iter().collect::<BTreeSet<_>>(),
 						"the new winners should be those genesis authorities and the passive nodes that have keys"
-					);
-
-					let mut new_authorities = Validator::current_authorities();
-					new_authorities.sort();
-
-					// This new set of winners should also be the authorities of the network
-					assert_eq!(
-						new_authorities,
-						nodes,
-						"the new authorities should be those genesis authorities and the new nodes created in test"
 					);
 
 					for account in keyless_nodes.iter() {
@@ -963,7 +970,7 @@ mod tests {
 						);
 					}
 
-					for account in new_authorities.iter() {
+					for account in &Validator::current_authorities() {
 						// TODO: Check historical epochs
 						assert_eq!(
 							ChainflipAccountState::CurrentAuthority,
@@ -979,7 +986,15 @@ mod tests {
 						stake_amount,
 						GENESIS_EPOCH + 1,
 					);
+
+					// Register the stake.
 					testnet.move_forward_blocks(1);
+
+					setup_account_and_peer_mapping(&late_staker);
+					network::Cli::activate_account(&late_staker);
+
+					testnet.move_forward_blocks(1);
+
 					assert_eq!(
 						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
