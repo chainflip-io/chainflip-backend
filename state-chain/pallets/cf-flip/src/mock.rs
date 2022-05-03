@@ -135,3 +135,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext
 }
+#[derive(Clone)]
+pub enum FlipEvent {
+	Stake(AccountId, FlipBalance),
+	BurnFromAccount(AccountId, FlipBalance),
+	MintToAccount(AccountId, FlipBalance),
+	Claim(AccountId, FlipBalance),
+}
+#[derive(Clone)]
+pub struct FlipEvents {
+	//count: u8,
+	pub events: Vec<FlipEvent>,
+}

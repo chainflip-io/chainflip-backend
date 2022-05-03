@@ -1,4 +1,7 @@
 use std::mem;
+extern crate quickcheck;
+extern crate quickcheck_macros;
+//use quickcheck::{quickcheck, Arbitrary, Gen};
 
 use crate::{
 	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
@@ -8,7 +11,77 @@ use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
 };
+use quickcheck::{quickcheck, Arbitrary, Gen, TestResult};
 
+impl FlipEvent {
+	pub fn execute(&self) {
+		match self {
+			FlipEvent::Stake(account_id, amount) => {
+				<Flip as StakeTransfer>::credit_stake(account_id, *amount);
+			},
+			FlipEvent::BurnFromAccount(account_id, amount) => {
+				Flip::settle(account_id, Flip::burn(*amount).into());
+			},
+			FlipEvent::MintToAccount(account_id, amount) => {
+				Flip::settle(account_id, Flip::mint(*amount).into());
+			},
+			FlipEvent::Claim(account_id, amount) => {
+				<Flip as StakeTransfer>::try_claim(account_id, *amount).unwrap_or_default();
+			},
+		}
+	}
+}
+
+impl sp_std::fmt::Debug for FlipEvents {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "FlipEvents -> Not Important")
+	}
+}
+
+impl Arbitrary for FlipEvent {
+	fn arbitrary(g: &mut Gen) -> FlipEvent {
+		let random_account = match u8::arbitrary(&mut Gen::new(1)) % 3 {
+			0 => ALICE,
+			1 => BOB,
+			2 => CHARLIE,
+			_ => unreachable!(),
+		};
+		match u8::arbitrary(&mut Gen::new(1)) % 4 {
+			0 => FlipEvent::Stake(random_account, u128::arbitrary(g)),
+			1 => FlipEvent::BurnFromAccount(random_account, u128::arbitrary(g)),
+			2 => FlipEvent::MintToAccount(random_account, u128::arbitrary(g)),
+			3 => FlipEvent::Claim(random_account, u128::arbitrary(g)),
+			_ => unreachable!(),
+		}
+	}
+}
+impl Arbitrary for FlipEvents {
+	fn arbitrary(g: &mut Gen) -> FlipEvents {
+		let mut vec = vec![];
+		for _ in 0..u8::arbitrary(g) {
+			vec.push(FlipEvent::arbitrary(&mut Gen::new(16)));
+		}
+		FlipEvents { events: vec }
+	}
+}
+//#[quickcheck]
+fn balance_has_itegrity(events: FlipEvents) -> TestResult {
+	for e in events.events.iter() {
+		e.execute();
+		check_balance_integrity();
+	}
+	TestResult::passed()
+}
+
+#[cfg(test)]
+#[test]
+fn quickcheck_balance_itegrity() {
+	new_test_ext().execute_with(|| {
+		quickcheck(balance_has_itegrity as fn(FlipEvents) -> TestResult);
+	});
+}
+
+#[cfg(test)]
 #[test]
 fn account_to_account() {
 	new_test_ext().execute_with(|| {
