@@ -87,7 +87,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade() -> Result<(), &'static str> {
 		let epoch_index = T::EpochInfo::epoch_index();
 		assert!(EpochAuthorityCount::<T>::get(&epoch_index).is_some());
-		assert!(CurrentAuthorities::<T>::get().is_some());
+		assert!(!CurrentAuthorities::<T>::get().is_empty());
 		assert_eq!(
 			HistoricalAuthorities::<T>::get(T::EpochInfo::epoch_index()),
 			CurrentAuthorities::<T>::get(),
