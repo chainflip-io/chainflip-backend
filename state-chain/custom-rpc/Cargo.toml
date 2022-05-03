@@ -15,20 +15,20 @@ jsonrpc-core-client = '18.0.0'
 
 [dependencies.sp-runtime]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-api]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sc-client-api]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sc-rpc]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sc-rpc-api]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'

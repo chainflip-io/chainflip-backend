@@ -47,7 +47,7 @@ impl std::fmt::Display for KeyId {
 pub fn start_client<S>(
     my_account_id: AccountId,
     db: S,
-    mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, MultisigMessage)>,
+    mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     logger: &slog::Logger,
 ) -> (Arc<MultisigClient<S>>, impl futures::Future)
@@ -89,8 +89,19 @@ where
                     Some((ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender)) = signing_request_receiver.recv() => {
                         ceremony_manager.on_request_to_sign(ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender);
                     }
-                    Some((sender_id, message)) = incoming_p2p_message_receiver.recv() => {
-                        ceremony_manager.process_p2p_message(sender_id, message);
+                    Some((sender_id, data)) = incoming_p2p_message_receiver.recv() => {
+
+                        // For now we assume that every message we receive via p2p is a
+                        // secp256k1 MultisigMessage (same as before). We will add
+                        // demultiplexing once we add support for other types of messages.
+
+                        match bincode::deserialize(&data) {
+                            Ok(message) => ceremony_manager.process_p2p_message(sender_id, message),
+                            Err(_) => {
+                                slog::warn!(logger, "Failed to deserialize message from: {}", sender_id);
+                            },
+                        }
+
                     }
                     _ = check_timeouts_tick.tick() => {
                         slog::trace!(logger, "Checking for expired multisig states");

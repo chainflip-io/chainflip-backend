@@ -15,9 +15,9 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	ActiveValidatorRange, AuctionResult, Auctioneer, BackupOrPassive, BackupValidators,
-	BidderProvider, Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation,
-	EpochInfo, QualifyValidator, RemainingBid, StakeHandler,
+	AuctionResult, Auctioneer, AuthoritySetSizeRange, BackupNodes, BackupOrPassive, BidderProvider,
+	Chainflip, ChainflipAccount, ChainflipAccountState, EmergencyRotation, EpochInfo, QualifyNode,
+	RemainingBid, StakeHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -52,19 +52,16 @@ pub mod pallet {
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 		/// Emergency Rotations
 		type EmergencyRotation: EmergencyRotation;
-		/// Qualify a validator
-		type ValidatorQualification: QualifyValidator<ValidatorId = Self::ValidatorId>;
+		/// Qualify an authority
+		type AuctionQualification: QualifyNode<ValidatorId = Self::ValidatorId>;
 		/// Key generation exclusion set
 		type KeygenExclusionSet: Get<BTreeSet<Self::ValidatorId>>;
-		/// Minimum amount of validators
+		/// Ratio of current authorities to backups
 		#[pallet::constant]
-		type MinValidators: Get<u32>;
-		/// Ratio of backup validators
+		type AuthorityToBackupRatio: Get<u32>;
+		/// Percentage of backup nodes in authority set in a emergency rotation
 		#[pallet::constant]
-		type ActiveToBackupValidatorRatio: Get<u32>;
-		/// Percentage of backup validators in validating set in a emergency rotation
-		#[pallet::constant]
-		type PercentageOfBackupValidatorsInEmergency: Get<u32>;
+		type PercentageOfBackupNodesInEmergency: Get<u32>;
 	}
 
 	/// Pallet implements \[Hooks\] trait
@@ -85,11 +82,11 @@ pub mod pallet {
 		}
 	}
 
-	/// Size range for number of validators we want in our validating set
+	/// Size range for number of authorities we want in our authority set
 	#[pallet::storage]
-	#[pallet::getter(fn active_validator_size_range)]
-	pub(super) type ActiveValidatorSizeRange<T: Config> =
-		StorageValue<_, ActiveValidatorRange, ValueQuery>;
+	#[pallet::getter(fn current_authority_set_size_range)]
+	pub(super) type CurrentAuthoritySetSizeRange<T: Config> =
+		StorageValue<_, AuthoritySetSizeRange, ValueQuery>;
 
 	/// List of bidders that were not winners of the last auction, sorted from
 	/// highest to lowest bid.
@@ -98,17 +95,17 @@ pub mod pallet {
 	pub(super) type RemainingBidders<T: Config> =
 		StorageValue<_, Vec<RemainingBid<T::ValidatorId, T::Amount>>, ValueQuery>;
 
-	/// A size calculated for our backup validator group
+	/// A size calculated for our backup node group
 	#[pallet::storage]
 	#[pallet::getter(fn backup_group_size)]
 	pub(super) type BackupGroupSize<T: Config> = StorageValue<_, u32, ValueQuery>;
 
-	/// The lowest backup validator bid
+	/// The lowest backup node bid
 	#[pallet::storage]
-	#[pallet::getter(fn lowest_backup_validator_bid)]
-	pub(super) type LowestBackupValidatorBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+	#[pallet::getter(fn lowest_backup_node_bid)]
+	pub(super) type LowestBackupNodeBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
-	/// The highest passive validator bid
+	/// The highest passive node bid
 	#[pallet::storage]
 	#[pallet::getter(fn highest_passive_node_bid)]
 	pub(super) type HighestPassiveNodeBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
@@ -116,15 +113,15 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An auction has a set of winners \[auction_index, winners\]
+		/// An auction has a set of winners \[winners\]
 		AuctionCompleted(Vec<T::ValidatorId>),
-		/// The active validator range upper limit has changed \[before, after\]
-		ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange),
+		/// The authority set size range has changed \[before, after\]
+		AuthoritySetSizeRangeChanged(AuthoritySetSizeRange, AuthoritySetSizeRange),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Invalid range used for the active validator range.
+		/// Invalid range used for the authority set size
 		InvalidRange,
 		/// Not enough bidders were available to resolve the auction.
 		NotEnoughBidders,
@@ -138,26 +135,26 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ActiveValidatorRangeChanged](Event::ActiveValidatorRangeChanged)
+		/// - [AuthoritySetSizeRangeChanged](Event::AuthoritySetSizeRangeChanged)
 		///
 		/// ## Errors
 		///
 		/// - [InvalidRange](Error::InvalidRange)
-		#[pallet::weight(T::WeightInfo::set_active_validator_range())]
-		pub fn set_active_validator_range(
+		#[pallet::weight(T::WeightInfo::set_current_authority_set_size_range())]
+		pub fn set_current_authority_set_size_range(
 			origin: OriginFor<T>,
-			range: ActiveValidatorRange,
+			range: AuthoritySetSizeRange,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			let old = Self::set_active_range(range)?;
-			Self::deposit_event(Event::ActiveValidatorRangeChanged(old, range));
+			Self::deposit_event(Event::AuthoritySetSizeRangeChanged(old, range));
 			Ok(().into())
 		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub validator_size_range: ActiveValidatorRange,
+		pub authority_set_size_range: AuthoritySetSizeRange,
 	}
 
 	#[cfg(feature = "std")]
@@ -165,7 +162,7 @@ pub mod pallet {
 		fn default() -> Self {
 			use sp_runtime::traits::Zero;
 
-			Self { validator_size_range: (Zero::zero(), Zero::zero()) }
+			Self { authority_set_size_range: (Zero::zero(), Zero::zero()) }
 		}
 	}
 
@@ -173,19 +170,19 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			Pallet::<T>::set_active_range(self.validator_size_range)
+			Pallet::<T>::set_active_range(self.authority_set_size_range)
 				.expect("we should be able to set the range of the active set");
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, Error<T>> {
+	fn set_active_range(range: AuthoritySetSizeRange) -> Result<AuthoritySetSizeRange, Error<T>> {
 		let (low, high) = range;
-		ensure!(high >= low && low >= T::MinValidators::get(), Error::<T>::InvalidRange);
-		let old = ActiveValidatorSizeRange::<T>::get();
+		ensure!(low <= high, Error::<T>::InvalidRange);
+		let old = CurrentAuthoritySetSizeRange::<T>::get();
 		if old != range {
-			ActiveValidatorSizeRange::<T>::put(range);
+			CurrentAuthoritySetSizeRange::<T>::put(range);
 		}
 		Ok(old)
 	}
@@ -198,23 +195,23 @@ impl<T: Config> Auctioneer for Pallet<T> {
 
 	// Resolve an auction.  Bids are taken and are qualified. In doing so a `AuctionResult` is
 	// returned with the winners of the auction and the MAB.  Unsuccessful bids are grouped for
-	// potential backup validator candidates.  If we are in an emergency rotation then the strategy
+	// potential backup node candidates.  If we are in an emergency rotation then the strategy
 	// of grouping is modified to avoid a superminority of low collateralised nodes.
 	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Error<T>> {
 		let mut bids = T::BidderProvider::get_bidders();
-		// Determine if this validator is qualified for bidding
-		bids.retain(|(validator_id, _)| T::ValidatorQualification::is_qualified(validator_id));
+		// Determine if this node is qualified for bidding
+		bids.retain(|(validator_id, _)| T::AuctionQualification::is_qualified(validator_id));
 		let excluded = T::KeygenExclusionSet::get();
 		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 		let number_of_bidders = bids.len() as u32;
-		let (min_number_of_validators, max_number_of_validators) =
-			ActiveValidatorSizeRange::<T>::get();
+		let (min_number_of_authorities, max_number_of_authorities) =
+			CurrentAuthoritySetSizeRange::<T>::get();
 		// Final rule - Confirm we have our set size
-		ensure!(number_of_bidders >= min_number_of_validators, {
+		ensure!(number_of_bidders >= min_number_of_authorities, {
 			log::error!(
 				"[cf-auction] insufficient bidders to proceed. {} < {}",
 				number_of_bidders,
-				min_number_of_validators
+				min_number_of_authorities
 			);
 			Error::<T>::NotEnoughBidders
 		});
@@ -222,56 +219,53 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		bids.sort_unstable_by_key(|k| k.1);
 		bids.reverse();
 
-		let mut target_validator_group_size =
-			min(max_number_of_validators, number_of_bidders) as usize;
-		let mut next_validator_group: Vec<_> =
-			bids.iter().take(target_validator_group_size as usize).collect();
+		let mut target_authority_set_size =
+			min(max_number_of_authorities, number_of_bidders) as usize;
+		let mut next_authority_set: Vec<_> =
+			bids.iter().take(target_authority_set_size as usize).collect();
 
 		if T::EmergencyRotation::emergency_rotation_in_progress() {
-			// We are interested in only have `PercentageOfBackupValidatorsInEmergency`
+			// We are interested in only have `PercentageOfBackupNodesInEmergency`
 			// of existing BVs in the validating set.  We ensure this by using the last
 			// MAB to understand who were BVs and ensure we only maintain the required
 			// amount under this level to avoid a superminority of low collateralised
 			// nodes.
-			if let Some(new_target_validator_group_size) = next_validator_group
-				.iter()
-				.position(|(_, amount)| amount < &T::EpochInfo::bond())
+			if let Some(new_target_authority_set_size) =
+				next_authority_set.iter().position(|(_, amount)| amount < &T::EpochInfo::bond())
 			{
-				let number_of_existing_backup_validators = (target_validator_group_size -
-					new_target_validator_group_size) as u32 *
-					(T::ActiveToBackupValidatorRatio::get() - 1) /
-					T::ActiveToBackupValidatorRatio::get();
+				let number_of_existing_backup_nodes = (target_authority_set_size -
+					new_target_authority_set_size) as u32 *
+					(T::AuthorityToBackupRatio::get() - 1) /
+					T::AuthorityToBackupRatio::get();
 
-				let number_of_backup_validators_to_be_included =
-					(number_of_existing_backup_validators as u32)
-						.saturating_mul(T::PercentageOfBackupValidatorsInEmergency::get()) /
-						100;
+				let number_of_backup_nodes_to_be_included = (number_of_existing_backup_nodes
+					as u32)
+					.saturating_mul(T::PercentageOfBackupNodesInEmergency::get()) /
+					100;
 
-				target_validator_group_size = new_target_validator_group_size +
-					number_of_backup_validators_to_be_included as usize;
+				target_authority_set_size =
+					new_target_authority_set_size + number_of_backup_nodes_to_be_included as usize;
 
-				next_validator_group.truncate(target_validator_group_size);
+				next_authority_set.truncate(target_authority_set_size);
 			}
 		}
 
-		let winners: Vec<_> = next_validator_group
+		let winners: Vec<_> = next_authority_set
 			.iter()
 			.map(|(validator_id, _)| (*validator_id).clone())
 			.collect();
 
-		let backup_group_size =
-			target_validator_group_size as u32 / T::ActiveToBackupValidatorRatio::get();
+		let backup_group_size = target_authority_set_size as u32 / T::AuthorityToBackupRatio::get();
 
 		let remaining_bidders: Vec<_> =
-			bids.iter().skip(target_validator_group_size as usize).collect();
+			bids.iter().skip(target_authority_set_size as usize).collect();
 
 		RemainingBidders::<T>::put(remaining_bidders);
 		BackupGroupSize::<T>::put(backup_group_size);
 
 		Self::deposit_event(Event::AuctionCompleted(winners.clone()));
 
-		let minimum_active_bid =
-			next_validator_group.last().map(|(_, bid)| *bid).unwrap_or_default();
+		let minimum_active_bid = next_authority_set.last().map(|(_, bid)| *bid).unwrap_or_default();
 
 		Ok(AuctionResult { winners, minimum_active_bid })
 	}
@@ -279,16 +273,16 @@ impl<T: Config> Auctioneer for Pallet<T> {
 	// Update the state for backup and passive, as this can change every block
 	fn update_backup_and_passive_states() {
 		let remaining_bidders = RemainingBidders::<T>::get();
-		let backup_validators = Self::current_backup_validators(&remaining_bidders);
+		let backup_nodes = Self::current_backup_nodes(&remaining_bidders);
 		let passive_nodes = Self::current_passive_nodes(&remaining_bidders);
-		let lowest_backup_validator_bid = Self::lowest_bid(&backup_validators);
+		let lowest_backup_node_bid = Self::lowest_bid(&backup_nodes);
 		let highest_passive_node_bid = Self::highest_bid(&passive_nodes);
 
 		// TODO: Look into removing these, we should only need to set this in one place
-		LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
+		LowestBackupNodeBid::<T>::put(lowest_backup_node_bid);
 		HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
 
-		for (validator_id, _amount) in backup_validators {
+		for (validator_id, _amount) in backup_nodes {
 			T::ChainflipAccount::set_backup_or_passive(
 				&validator_id.into(),
 				BackupOrPassive::Backup,
@@ -305,7 +299,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn current_backup_validators(
+	fn current_backup_nodes(
 		remaining_bidders: &[RemainingBid<T::ValidatorId, T::Amount>],
 	) -> Vec<RemainingBid<T::ValidatorId, T::Amount>> {
 		remaining_bidders
@@ -344,13 +338,13 @@ impl<T: Config> Pallet<T> {
 			remaining_bidders.sort_unstable_by_key(|k| k.1);
 			remaining_bidders.reverse();
 
-			let lowest_backup_validator_bid =
-				Self::lowest_bid(&Self::current_backup_validators(remaining_bidders));
+			let lowest_backup_node_bid =
+				Self::lowest_bid(&Self::current_backup_nodes(remaining_bidders));
 
 			let highest_passive_node_bid =
 				Self::highest_bid(&Self::current_passive_nodes(remaining_bidders));
 
-			LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
+			LowestBackupNodeBid::<T>::put(lowest_backup_node_bid);
 			HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);
 			RemainingBidders::<T>::put(remaining_bidders);
 		}
@@ -395,7 +389,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
 		// We validate that the staker is qualified and can be considered to be a BV if the stake
 		// meets the requirements
-		if !T::ValidatorQualification::is_qualified(validator_id) {
+		if !T::AuctionQualification::is_qualified(validator_id) {
 			return
 		}
 
@@ -406,7 +400,7 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 
 		match T::ChainflipAccount::get(&(validator_id.clone().into())).state {
 			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
-				if amount > LowestBackupValidatorBid::<T>::get() =>
+				if amount > LowestBackupNodeBid::<T>::get() =>
 			{
 				let remaining_bidders = &mut RemainingBidders::<T>::get();
 				// Update bid for bidder and state
@@ -430,14 +424,14 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 				);
 			},
 			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
-				if amount != LowestBackupValidatorBid::<T>::get() =>
+				if amount != LowestBackupNodeBid::<T>::get() =>
 			{
 				let remaining_bidders = &mut RemainingBidders::<T>::get();
 				Pallet::<T>::update_stake_for_bidder(
 					remaining_bidders,
 					(validator_id.clone(), amount),
 				);
-				if amount < LowestBackupValidatorBid::<T>::get() {
+				if amount < LowestBackupNodeBid::<T>::get() {
 					Pallet::<T>::set_validator_state_and_adjust_at_boundary(
 						validator_id,
 						BackupOrPassive::Backup,
@@ -450,10 +444,10 @@ impl<T: Config> StakeHandler for HandleStakes<T> {
 	}
 }
 
-impl<T: Config> BackupValidators for Pallet<T> {
+impl<T: Config> BackupNodes for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
-	fn backup_validators() -> Vec<Self::ValidatorId> {
+	fn backup_nodes() -> Vec<Self::ValidatorId> {
 		RemainingBidders::<T>::get()
 			.iter()
 			.take(BackupGroupSize::<T>::get() as usize)

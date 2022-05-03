@@ -15,6 +15,7 @@ pub mod key_provider;
 pub mod keygen_exclusion;
 pub mod offence_reporting;
 pub mod online;
+pub mod reputation_resetter;
 pub mod signer_nomination;
 pub mod stake_transfer;
 pub mod threshold_signer;
@@ -22,6 +23,8 @@ pub mod time_source;
 pub mod vault_rotation;
 pub mod waived_fees_mock;
 pub mod witnesser;
+
+pub mod system_state_info;
 
 trait MockPallet {
 	const PREFIX: &'static [u8];

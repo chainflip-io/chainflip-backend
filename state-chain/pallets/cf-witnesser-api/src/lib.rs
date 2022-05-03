@@ -12,7 +12,7 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::{Chain, ChainCrypto, Ethereum};
-	use cf_traits::Witnesser;
+	use cf_traits::{EpochIndex, Witnesser};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance1, pallet_prelude::*,
 	};
@@ -62,32 +62,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		//*** Broadcast pallet witness calls ***//
-
-		/// Witness the successful completion of an outgoing broadcast.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - None
-		#[pallet::weight(T::WeightInfoWitnesser::witness().saturating_add(BroadcastCall::<T, Instance1>::transmission_success(*broadcast_attempt_id, *tx_hash)
-		.get_dispatch_info()
-		.weight))]
-		pub fn witness_eth_transmission_success(
-			origin: OriginFor<T>,
-			broadcast_attempt_id: pallet_cf_broadcast::BroadcastAttemptId,
-			tx_hash: pallet_cf_broadcast::TransactionHashFor<T, Instance1>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call =
-				BroadcastCall::<T, Instance1>::transmission_success(broadcast_attempt_id, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
-		}
 
 		/// Witness the failure of an outgoing broadcast.
 		///
@@ -140,11 +114,12 @@ pub mod pallet {
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
 			withdrawal_address: EthereumAddress,
+			epoch: EpochIndex,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::staked(staker_account_id, amount, withdrawal_address, tx_hash);
-			T::Witnesser::witness(who, call.into())
+			T::Witnesser::witness_at_epoch(who, call.into(), epoch)
 		}
 
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
@@ -165,11 +140,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			claimed_amount: FlipBalance<T>,
+			epoch: EpochIndex,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::claimed(account_id, claimed_amount, tx_hash);
-			T::Witnesser::witness(who, call.into())
+			T::Witnesser::witness_at_epoch(who, call.into(), epoch)
 		}
 
 		/// Witness an on-chain vault key rotation

@@ -4,7 +4,7 @@ use sp_std::fmt::Debug;
 
 pub type ReputationPoints = i32;
 
-/// Reputation of a validator
+/// Reputation of a node
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 pub struct ReputationTracker<P: ReputationParameters> {
 	online_credits: P::OnlineCredits,
@@ -61,6 +61,11 @@ impl<P: ReputationParameters> ReputationTracker<P> {
 	/// Reset online credits to zero.
 	pub fn reset_online_credits(&mut self) {
 		self.online_credits = Zero::zero();
+	}
+
+	/// Reset Reputation to zero.
+	pub fn reset_reputation(&mut self) {
+		self.reputation_points = Zero::zero();
 	}
 }
 

@@ -11,7 +11,10 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::{impl_mock_stake_transfer, BlockNumber, Chainflip, Heartbeat, NetworkState};
+use cf_traits::{
+	impl_mock_stake_transfer, mocks::system_state_info::MockSystemStateInfo, BlockNumber,
+	Chainflip, Heartbeat, NetworkState,
+};
 
 type ValidatorId = u64;
 
@@ -108,6 +111,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 impl Config for Test {
@@ -121,7 +125,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
-	MockEpochInfo::add_validator(ALICE);
+	MockEpochInfo::add_authorities(ALICE);
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

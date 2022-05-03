@@ -32,7 +32,7 @@ macro_rules! impl_mock_witnesser_for_account_and_call_types {
 				call: Self::Call,
 				_epoch: cf_traits::EpochIndex,
 			) -> frame_support::dispatch::DispatchResultWithPostInfo {
-				unimplemented!("")
+				Self::witness(who, call)
 			}
 
 			fn witness(

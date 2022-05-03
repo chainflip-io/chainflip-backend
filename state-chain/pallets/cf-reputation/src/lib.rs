@@ -9,7 +9,9 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
-use cf_traits::{offence_reporting::*, Chainflip, Heartbeat, NetworkState, Slashing};
+use cf_traits::{
+	offence_reporting::*, Chainflip, Heartbeat, NetworkState, ReputationResetter, Slashing,
+};
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -158,7 +160,7 @@ pub mod pallet {
 	pub type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
 
-	/// Reputation trackers for each validator.
+	/// Reputation trackers for each node
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
 	pub type Reputations<T: Config> =
@@ -363,7 +365,7 @@ impl<T: Config> Heartbeat for Pallet<T> {
 			});
 
 			if reputation_points < 0 {
-				// At this point we slash the validator by the amount of blocks offline
+				// At this point we slash the node by the amount of blocks offline
 				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
 		}
@@ -423,5 +425,17 @@ impl<T: Config> Pallet<T> {
 			log::warn!("No penalty defined for offence {:?}, using default.", offence);
 			Default::default()
 		})
+	}
+}
+
+impl<T: Config> ReputationResetter for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	/// Reset both the online credits and the reputation points of a validator to zero.
+	fn reset_reputation(validator: &Self::ValidatorId) {
+		Reputations::<T>::mutate(validator, |rep| {
+			rep.reset_reputation();
+			rep.reset_online_credits();
+		});
 	}
 }

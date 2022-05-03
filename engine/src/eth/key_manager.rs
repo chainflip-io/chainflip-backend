@@ -8,6 +8,7 @@ use crate::{
     state_chain::client::StateChainRpcApi,
 };
 use cf_chains::eth::SchnorrVerificationComponents;
+use cf_traits::EpochIndex;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -172,12 +173,12 @@ pub enum KeyManagerEvent {
         new_key: ethabi::Address,
     },
 
-    /// `SignatureAccepted(sigData, broadcaster);`
+    /// `SignatureAccepted(sigData, signer);`
     SignatureAccepted {
         /// Contains a signature and the msgHash that the signature is over. Kept as a single struct.
         sig_data: SigData,
-        /// Address of the origin of the broadcast.
-        broadcaster: ethabi::Address,
+        /// Address of the signer of the broadcast.
+        signer: ethabi::Address,
     },
 }
 
@@ -191,6 +192,7 @@ impl EthObserver for KeyManager {
 
     async fn handle_event<RpcClient>(
         &self,
+        _epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
@@ -212,10 +214,7 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
-            KeyManagerEvent::SignatureAccepted {
-                sig_data,
-                broadcaster,
-            } => {
+            KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_witnesser_api::Call::witness_signature_accepted(
@@ -223,7 +222,7 @@ impl EthObserver for KeyManager {
                                 s: sig_data.sig.into(),
                                 k_times_g_address: sig_data.k_times_g_address.into(),
                             },
-                            broadcaster,
+                            signer,
                             event.block_number,
                             event.tx_hash,
                         ),
@@ -267,7 +266,7 @@ impl EthObserver for KeyManager {
                     let log = sig_accepted.event.parse_log(raw_log)?;
                     KeyManagerEvent::SignatureAccepted {
                         sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
-                        broadcaster: utils::decode_log_param(&log, "broadcaster")?,
+                        signer: utils::decode_log_param(&log, "signer")?,
                     }
                 } else {
                     return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
@@ -412,7 +411,7 @@ mod tests {
         {
             KeyManagerEvent::SignatureAccepted {
                 sig_data,
-                broadcaster,
+                signer,
             } => {
                 assert_eq!(sig_data, SigData{
                     key_man_addr: H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
@@ -422,7 +421,7 @@ mod tests {
                     nonce: U256::from_dec_str("3").unwrap(),
                     k_times_g_address: H160::from_str("0x7ceb2425ec324348ba69bd50205b11e29770fd96").unwrap(),
                 });
-                assert_eq!(broadcaster, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
+                assert_eq!(signer, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
             }
             _ => panic!("Expected KeyManagerEvent::SignatureAccepted, got different variant"),
         }

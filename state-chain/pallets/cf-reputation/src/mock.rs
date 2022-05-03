@@ -14,7 +14,10 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo},
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
+		system_state_info::MockSystemStateInfo,
+	},
 	Chainflip, Slashing,
 };
 
@@ -109,6 +112,7 @@ impl Chainflip for Test {
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

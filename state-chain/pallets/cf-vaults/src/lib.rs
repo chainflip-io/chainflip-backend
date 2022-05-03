@@ -66,7 +66,7 @@ pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
 	success_votes: BTreeMap<AggKeyFor<T, I>, u32>,
-	/// A map of the number of blame votes that each validator has received.
+	/// A map of the number of blame votes that keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, u32>,
 }
 
@@ -246,20 +246,13 @@ impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
 	}
 }
 
-/// The bounds within which a public key for a vault should be used for witnessing.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct BlockHeightWindow<T: Chain> {
-	pub from: T::ChainBlockNumber,
-	pub to: Option<T::ChainBlockNumber>,
-}
-
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Vault<T: ChainAbi> {
 	/// The vault's public key.
 	pub public_key: T::AggKey,
-	/// The active window for this vault
-	pub active_window: BlockHeightWindow<T>,
+	/// The first active block for this vault
+	pub active_from_block: T::ChainBlockNumber,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -299,7 +292,7 @@ pub mod pallet {
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
-		/// For reporting misbehaving validators.
+		/// For reporting misbehaviour
 		type OffenceReporter: OffenceReporter<
 			ValidatorId = Self::ValidatorId,
 			Offence = Self::Offence,
@@ -440,9 +433,9 @@ pub mod pallet {
 		VaultsRotated,
 		/// The new public key witnessed externally was not the expected one \[key\]
 		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
-		/// A validator has reported that keygen was successful \[validator_id\]
+		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
-		/// A validator has reported that keygen has failed \[validator_id\]
+		/// A keygen participant has reported that keygen has failed \[validator_id\]
 		KeygenFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
 		KeygenSuccess(CeremonyId),
@@ -456,21 +449,19 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid ceremony id
 		InvalidCeremonyId,
-		/// We have an empty validator set
-		EmptyValidatorSet,
+		/// We have an empty authority set
+		EmptyAuthoritySet,
 		/// The rotation has not been confirmed
 		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
 		NoActiveRotation,
-		/// The specified chain is not supported.
-		UnsupportedChain,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
 		/// The generated key is not a valid public key.
 		InvalidPublicKey,
 		/// A rotation for the requested ChainId is already underway.
 		DuplicateRotationRequest,
-		/// A validator sent a response for a ceremony in which they weren't involved, or to which
+		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
 	}
@@ -550,7 +541,6 @@ pub mod pallet {
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [UnsupportedChain](Error::UnsupportedChain)
 		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
@@ -585,16 +575,6 @@ pub mod pallet {
 				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
 			}
 
-			// We update the current epoch with an active window for the outgoers
-			Vaults::<T, I>::try_mutate_exists(CurrentEpochIndex::<T>::get(), |maybe_vault| {
-				if let Some(vault) = maybe_vault.as_mut() {
-					vault.active_window.to = Some(block_number);
-					Ok(())
-				} else {
-					Err(Error::<T, I>::UnsupportedChain)
-				}
-			})?;
-
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
 			// For the new epoch we create a new vault with the new public key and its active
@@ -603,12 +583,8 @@ pub mod pallet {
 				CurrentEpochIndex::<T>::get().saturating_add(1),
 				Vault {
 					public_key: new_public_key,
-					active_window: BlockHeightWindow {
-						from: block_number.saturating_add(
-							<<T as Config<I>>::Chain as Chain>::ChainBlockNumber::one(),
-						),
-						to: None,
-					},
+					active_from_block: block_number
+						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 				},
 			);
 
@@ -647,10 +623,7 @@ pub mod pallet {
 
 			Vaults::<T, I>::insert(
 				CurrentEpochIndex::<T>::get(),
-				Vault {
-					public_key,
-					active_window: BlockHeightWindow { from: self.deployment_block, to: None },
-				},
+				Vault { public_key, active_from_block: self.deployment_block },
 			);
 		}
 	}
@@ -696,7 +669,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
 		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
+		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyAuthoritySet);
 		ensure!(
 			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
 			Error::<T, I>::DuplicateRotationRequest
@@ -751,7 +724,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 	type ValidatorId = <T as Chainflip>::ValidatorId;
 
-	fn on_new_epoch(_epoch_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
 		T::OffenceReporter::forgive_all(PalletOffence::ParticipateKeygenFailed);
 	}

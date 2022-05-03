@@ -7,11 +7,11 @@ use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_system::RawOrigin;
 
 benchmarks! {
-	set_active_validator_range {
+	set_current_authority_set_size_range {
 		let range = (2, 100);
 	}: _(RawOrigin::Root, range.into())
 	verify {
-		assert_eq!(Pallet::<T>::active_validator_size_range(), range.into())
+		assert_eq!(Pallet::<T>::current_authority_set_size_range(), range.into())
 	}
 }
 

@@ -19,6 +19,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
 		eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip,
 };
@@ -82,6 +83,7 @@ impl Chainflip for MockRuntime {
 	type Call = Call;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockCallback;
@@ -185,9 +187,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		},
 	};
 
-	let validators = vec![ALICE, BOB, CHARLIE];
-	MockEpochInfo::set_epoch_validator_count(0, validators.len() as u32);
-	MockEpochInfo::set_validators(validators);
+	let authorities = vec![ALICE, BOB, CHARLIE];
+	MockEpochInfo::set_epoch_authority_count(0, authorities.len() as u32);
+	MockEpochInfo::set_authorities(authorities);
+
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
