@@ -1,8 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use rocksdb::{WriteBatch, DB};
 
+use anyhow::Result;
+
 use crate::multisig::{
+    client::{KeygenResult, KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
     db::persistent::{
         add_schema_version_to_batch_write, get_data_column_handle, update_key, KEYGEN_DATA_PREFIX,
         LEGACY_DATA_COLUMN_NAME, PREFIX_SIZE,
@@ -20,8 +23,8 @@ mod old_types {
 
     #[derive(Deserialize, Debug)]
     pub struct ThresholdParameters {
-        pub threshold: usize,
         pub share_count: usize,
+        pub threshold: usize,
     }
 
     #[derive(Deserialize, Debug)]
@@ -44,38 +47,87 @@ mod old_types {
     }
 }
 
-mod new_types {
-    use std::{collections::HashMap, sync::Arc};
+// We require the keys to be loaded using the kvdb library if the database was initially created with it
 
-    use state_chain_runtime::AccountId;
+// Load the keys using kvdb for a special migration (not included in `migrate_db_to_latest`).
+// NB: If the database is on this version, then it necessarily also has the old key version data
+// This is necessary to load the keys using the kvdb library
+// We then insert using the rocks db library
+// We can't do this all with rocks db because the compression algo used by default by rust_rocksdb collides with system libs, so we use an alternate algo (lz4)
+pub fn load_keys_using_kvdb_to_latest_key_type(
+    path: &Path,
+    logger: &slog::Logger,
+) -> Result<HashMap<KeyId, KeygenResultInfo>> {
+    slog::info!(logger, "Loading keys using kvdb");
 
-    use crate::multisig::crypto::{KeyShare, Point};
-    use serde::Serialize;
+    let config = kvdb_rocksdb::DatabaseConfig::default();
+    let old_db = kvdb_rocksdb::Database::open(&config, path)
+        .map_err(|e| anyhow::Error::msg(format!("could not open kvdb database: {}", e)))?;
 
-    #[derive(Serialize, Debug)]
-    pub struct ThresholdParameters {
-        pub threshold: u16,
-        pub share_count: u16,
-    }
+    // Load the keys from column 0 (aka "col0")
+    let old_keys: HashMap<KeyId, old_types::KeygenResultInfo> = old_db
+        .iter(0)
+        .map(|(key_id, key_info)| {
+            let key_id: KeyId = KeyId(key_id.into());
+            match bincode::deserialize::<old_types::KeygenResultInfo>(&*key_info) {
+                Ok(keygen_result_info) => {
+                    slog::debug!(
+                        logger,
+                        "Loaded key_info (key_id: {}) from kvdb database",
+                        key_id
+                    );
+                    Ok((key_id, keygen_result_info))
+                }
+                Err(err) => Err(anyhow::Error::msg(format!(
+                    "Could not deserialize key_info (key_id: {}) from kvdb database: {}",
+                    key_id, err,
+                ))),
+            }
+        })
+        .collect::<Result<HashMap<_, _>>>()?;
 
-    #[derive(Serialize, Debug)]
-    pub struct KeygenResult {
-        pub key_share: KeyShare,
-        pub party_public_keys: Vec<Point>,
-    }
+    Ok(old_to_new_keygen_result_info(old_keys))
+}
 
-    #[derive(Serialize, Debug)]
-    pub struct PartyIdxMapping {
-        pub id_to_idx: HashMap<AccountId, u16>,
-        pub account_ids: Vec<AccountId>,
-    }
+fn old_to_new_keygen_result_info(
+    old_keys: HashMap<KeyId, old_types::KeygenResultInfo>,
+) -> HashMap<KeyId, KeygenResultInfo> {
+    old_keys
+        .into_iter()
+        .map(|(key_id, old_keygen_result_info)| {
+            // convert to new type:
+            // let old_key_share = mem::take(&mut old_keygen_result_info.key.key_share);
+            // let old_party_public_keys = mem::take(&mut old_keygen_result_info.key.key_share);
+            let old_key =
+                std::sync::Arc::<old_types::KeygenResult>::try_unwrap(old_keygen_result_info.key)
+                    .unwrap();
 
-    #[derive(Serialize, Debug)]
-    pub struct KeygenResultInfo {
-        pub key: Arc<KeygenResult>,
-        pub validator_map: Arc<PartyIdxMapping>,
-        pub params: ThresholdParameters,
-    }
+            (
+                key_id,
+                KeygenResultInfo {
+                    key: Arc::new(KeygenResult {
+                        key_share: old_key.key_share,
+                        party_public_keys: old_key.party_public_keys,
+                    }),
+                    validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(
+                        &old_keygen_result_info.validator_map.account_ids,
+                    )),
+                    params: ThresholdParameters {
+                        share_count: old_keygen_result_info
+                            .params
+                            .share_count
+                            .try_into()
+                            .expect("Should fit into u16"),
+                        threshold: old_keygen_result_info
+                            .params
+                            .threshold
+                            .try_into()
+                            .expect("Should fit into u16"),
+                    },
+                },
+            )
+        })
+        .collect()
 }
 
 // Just adding schema version to the metadata column and delete col0 if it exists
@@ -97,7 +149,7 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     }
 
     // Read in old key types and add the new
-    let items: HashMap<KeyId, old_types::KeygenResultInfo> = db
+    let old_keys: HashMap<KeyId, old_types::KeygenResultInfo> = db
         .prefix_iterator_cf(get_data_column_handle(&db), KEYGEN_DATA_PREFIX)
         .map(|(key_id, key_info)| {
             // Strip the prefix off the key_id
@@ -120,47 +172,11 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
         .collect();
 
     // only write if all the keys were successfully deserialized
-    items
+    old_to_new_keygen_result_info(old_keys)
         .into_iter()
-        .for_each(|(key_id, old_keygen_result_info)| {
-            // convert to new type:
-            // let old_key_share = mem::take(&mut old_keygen_result_info.key.key_share);
-            // let old_party_public_keys = mem::take(&mut old_keygen_result_info.key.key_share);
-            let old_key =
-                std::sync::Arc::<old_types::KeygenResult>::try_unwrap(old_keygen_result_info.key)
-                    .unwrap();
-
-            let new_keygen_result_info = new_types::KeygenResultInfo {
-                key: Arc::new(new_types::KeygenResult {
-                    key_share: old_key.key_share,
-                    party_public_keys: old_key.party_public_keys,
-                }),
-                validator_map: Arc::new(new_types::PartyIdxMapping {
-                    id_to_idx: old_keygen_result_info
-                        .validator_map
-                        .id_to_idx
-                        .clone()
-                        .into_iter()
-                        .map(|(key, value)| (key, value.try_into().expect("should fit into u16")))
-                        .collect(),
-                    account_ids: old_keygen_result_info.validator_map.account_ids.clone(),
-                }),
-                params: new_types::ThresholdParameters {
-                    share_count: old_keygen_result_info
-                        .params
-                        .share_count
-                        .try_into()
-                        .expect("Should fit into u16"),
-                    threshold: old_keygen_result_info
-                        .params
-                        .threshold
-                        .try_into()
-                        .expect("Should fit into u16"),
-                },
-            };
-            let new_keygen_result_info_bytes = bincode::serialize(&new_keygen_result_info).unwrap();
-
-            update_key(db, &key_id, new_keygen_result_info_bytes).expect("Failed to update key");
+        .for_each(|(key_id, keygen_result_info)| {
+            let keygen_result_info_bin = bincode::serialize(&keygen_result_info).unwrap();
+            update_key(db, &key_id, keygen_result_info_bin).expect("Should update key in database");
         });
 
     Ok(())

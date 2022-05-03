@@ -319,43 +319,10 @@ where
         })
     }
 
-    fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo {
+    fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo {
         slog::info!(self.logger, "Performing solo keygen");
 
-        use crate::multisig::crypto::{KeyShare, Point, Scalar};
-
-        let params = ThresholdParameters::from_share_count(1);
-
-        // By default this will have a 50/50 chance of generating
-        // a contract incompatible signature to match the behavior
-        // of multi-party ceremonies. Toggle this off to always
-        // generate a contract compatible signature.
-        const ALLOWING_HIGH_PUBKEY: bool = true;
-
-        let (secret_key, public_key) = loop {
-            let secret_key = Scalar::random(&mut rng);
-
-            let public_key = Point::from_scalar(&secret_key);
-
-            if keygen::is_contract_compatible(&public_key.get_element()) || ALLOWING_HIGH_PUBKEY {
-                break (secret_key, public_key);
-            }
-        };
-
-        KeygenResultInfo {
-            key: Arc::new(KeygenResult {
-                key_share: KeyShare {
-                    y: public_key,
-                    x_i: secret_key,
-                },
-                // This is not going to be used in solo ceremonies
-                party_public_keys: vec![public_key],
-            }),
-            validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(&[self
-                .my_account_id
-                .clone()])),
-            params,
-        }
+        single_party_keygen(self.my_account_id.clone(), rng)
     }
 
     fn single_party_signing(
@@ -386,6 +353,41 @@ where
             s: *sigma.as_bytes(),
             r: r.get_element(),
         }
+    }
+}
+
+pub fn single_party_keygen(my_account_id: AccountId, mut rng: Rng) -> KeygenResultInfo {
+    use crate::multisig::crypto::{KeyShare, Point, Scalar};
+
+    let params = ThresholdParameters::from_share_count(1);
+
+    // By default this will have a 50/50 chance of generating
+    // a contract incompatible signature to match the behavior
+    // of multi-party ceremonies. Toggle this off to always
+    // generate a contract compatible signature.
+    const ALLOWING_HIGH_PUBKEY: bool = true;
+
+    let (secret_key, public_key) = loop {
+        let secret_key = Scalar::random(&mut rng);
+
+        let public_key = Point::from_scalar(&secret_key);
+
+        if keygen::is_contract_compatible(&public_key.get_element()) || ALLOWING_HIGH_PUBKEY {
+            break (secret_key, public_key);
+        }
+    };
+
+    KeygenResultInfo {
+        key: Arc::new(KeygenResult {
+            key_share: KeyShare {
+                y: public_key,
+                x_i: secret_key,
+            },
+            // This is not going to be used in solo ceremonies
+            party_public_keys: vec![public_key],
+        }),
+        validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(&[my_account_id])),
+        params,
     }
 }
 
