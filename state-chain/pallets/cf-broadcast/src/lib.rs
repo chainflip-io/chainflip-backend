@@ -544,10 +544,7 @@ pub mod pallet {
 			let tranaction =
 				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&sig));
 
-			let broadcast_id = Self::start_broadcast(&sig, tranaction);
-
-			// Save the payload and the coresponinding signature to the lookup table
-			ApiCallLookup::<T, I>::insert(broadcast_id, (api_call, sig));
+			Self::start_broadcast(&sig, tranaction, api_call);
 
 			Ok(().into())
 		}
@@ -643,7 +640,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_broadcast(
 		signature: &ThresholdSignatureFor<T, I>,
 		unsigned_tx: UnsignedTransactionFor<T, I>,
-	) -> BroadcastId {
+		api_call: <T as Config<I>>::ApiCall,
+	) {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
@@ -652,12 +650,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
 		BroadcastIdToAttemptNumbers::<T, I>::insert(broadcast_id, vec![0]);
 
+		// Save the payload and the coresponinding signature to the lookup table
+		ApiCallLookup::<T, I>::insert(broadcast_id, (api_call, signature));
+
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 			broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
 			unsigned_tx,
 		});
-
-		broadcast_id
 	}
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
