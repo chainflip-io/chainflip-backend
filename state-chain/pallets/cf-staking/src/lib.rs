@@ -527,8 +527,11 @@ impl<T: Config> Pallet<T> {
 	/// implementation of [EnsureOrigin].
 	fn ensure_witnessed(
 		origin: OriginFor<T>,
-	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
-		T::EnsureWitnessed::ensure_origin(origin)
+	) -> Result<
+		<T::EnsureWitnessedByHistoricalActiveEpoch as EnsureOrigin<OriginFor<T>>>::Success,
+		BadOrigin,
+	> {
+		T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)
 	}
 
 	/// Logs an failed stake attempt

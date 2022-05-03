@@ -37,7 +37,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 
 		let call = Call::<T>::staked(caller.clone(), balance, eth_addr, tx_hash);
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin();
 
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -52,7 +52,7 @@ benchmarks! {
 		let eth_addr: EthereumAddress = [42u8; 20];
 
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin();
 
 		// Stake some funds to claim
 		let stake_call = Call::<T>::staked(caller.clone(), balance_to_stake, eth_addr, tx_hash);
@@ -71,7 +71,7 @@ benchmarks! {
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin();
 
 		// Stake some funds to claim
 		let stake_call = Call::<T>::staked(caller.clone(), balance_to_stake, eth_addr, tx_hash);
@@ -88,7 +88,7 @@ benchmarks! {
 		let eth_addr: EthereumAddress = [42u8; 20];
 
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin();
 
 		// Stake some funds to claim
 		let stake_call = Call::<T>::staked(caller.clone(), balance_to_stake, eth_addr, tx_hash);
@@ -111,7 +111,7 @@ benchmarks! {
 		let balance_to_stake: T::Balance = T::Balance::from(MIN_STAKE);
 
 		let caller: T::AccountId = whitelisted_caller();
-		let witness_origin = T::EnsureWitnessed::successful_origin();
+		let witness_origin = T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin();
 		let threshold_origin = T::EnsureThresholdSigned::successful_origin();
 
 		// Stake some funds to claim
@@ -169,7 +169,7 @@ benchmarks! {
 			let staker = &accounts[i as usize];
 			let eth_addr = eth_base_addr.map(|x| x + i as u8);
 			let stake_call = Call::<T>::staked(staker.clone(), MIN_STAKE.into(), eth_addr, [0; 32]);
-			stake_call.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
+			stake_call.dispatch_bypass_filter(T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin())?;
 			// Submit a claim
 			let claimable = T::Flip::claimable_balance(staker);
 			Pallet::<T>::do_claim(staker, claimable, eth_addr)?;

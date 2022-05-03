@@ -73,7 +73,7 @@ impl Chainflip for Test {
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedByHistoricalActiveEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }

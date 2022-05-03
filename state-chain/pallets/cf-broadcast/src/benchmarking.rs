@@ -19,7 +19,7 @@ benchmarks_instance_pallet! {
 	// 		..Default::default()
 	// 	};
 	// 	let call = Call::<T, I>::start_broadcast(unsigned.into());
-	// 	let origin = T::EnsureWitnessed::successful_origin();
+	// 	let origin = T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin();
 	// } : { call.dispatch_bypass_filter(origin)? }
 	transaction_ready_for_transmission {} : {}
 	transmission_failure {} : {}

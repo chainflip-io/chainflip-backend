@@ -58,7 +58,7 @@ Provide dedicated extrinsics to abstract away the use of the Witnesser pallet.
     }
     ```
 
-*Don't forget to constrain the calling account of target extrinsics using `EnsureWitnessed`.*
+*Don't forget to constrain the calling account of target extrinsics using `EnsureWitnessedByHistoricalActiveEpoch`.*
 
 ## Dependencies
 

@@ -196,7 +196,7 @@ pub mod pallet {
 	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 	pub enum RawOrigin {
-		WitnessThreshold,
+		HistoricalActiveEpochWitnessThreshold,
 	}
 }
 
@@ -285,7 +285,8 @@ impl<T: Config> Pallet<T> {
 			CallHashExecuted::<T>::get(&call_hash).is_none()
 		{
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
-			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
+			let result = call
+				.dispatch_bypass_filter((RawOrigin::HistoricalActiveEpochWitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
@@ -327,13 +328,13 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 /// # Example:
 ///
 /// ```ignore
-/// if let Ok(()) = EnsureWitnessed::ensure_origin(origin) {
+/// if let Ok(()) = EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin) {
 ///     log::debug!("This extrinsic was called as a result of witness threshold consensus.");
 /// }
 /// ```
-pub struct EnsureWitnessed;
+pub struct EnsureWitnessedByHistoricalActiveEpoch;
 
-impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessed
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessedByHistoricalActiveEpoch
 where
 	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
 {
@@ -341,8 +342,8 @@ where
 
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		match o.into() {
-			Ok(o) => match o {
-				RawOrigin::WitnessThreshold => Ok(()),
+			Ok(raw_origin) => match raw_origin {
+				RawOrigin::HistoricalActiveEpochWitnessThreshold => Ok(()),
 			},
 			Err(o) => Err(o),
 		}
@@ -350,6 +351,6 @@ where
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
-		RawOrigin::WitnessThreshold.into()
+		RawOrigin::HistoricalActiveEpochWitnessThreshold.into()
 	}
 }

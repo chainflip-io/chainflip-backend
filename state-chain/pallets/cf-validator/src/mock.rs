@@ -206,7 +206,7 @@ impl Chainflip for Test {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 	type Call = Call;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedByHistoricalActiveEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
