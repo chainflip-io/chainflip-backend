@@ -21,7 +21,7 @@ use crate::{
     common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::CEREMONY_ID_KEY,
-    multisig::{client::utils::PartyIdxMapping, crypto::Rng, KeyDB, KeyId},
+    multisig::{crypto::Rng, KeyDB, KeyId},
 };
 
 use async_trait::async_trait;
@@ -40,7 +40,8 @@ use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
 
-pub use common::KeygenResultInfo;
+pub use common::{KeygenResult, KeygenResultInfo};
+pub use utils::PartyIdxMapping;
 
 #[cfg(test)]
 pub use utils::ensure_unsorted;
@@ -322,7 +323,6 @@ where
         slog::info!(self.logger, "Performing solo keygen");
 
         use crate::multisig::crypto::{KeyShare, Point, Scalar};
-        use common::KeygenResult;
 
         let params = ThresholdParameters::from_share_count(1);
 

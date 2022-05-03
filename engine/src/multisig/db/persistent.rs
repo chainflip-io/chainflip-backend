@@ -23,8 +23,8 @@ const DEFAULT_DB_SCHEMA_VERSION: u32 = 0;
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
 
 /// Prefixes for the `DATA_COLUMN`
-const PREFIX_SIZE: usize = 4;
-const KEYGEN_DATA_PREFIX: &[u8; PREFIX_SIZE] = b"key_";
+pub const PREFIX_SIZE: usize = 4;
+pub const KEYGEN_DATA_PREFIX: &[u8; PREFIX_SIZE] = b"key_";
 
 /// Column family names
 // All data is stored in `DATA_COLUMN` with a prefix for key spaces
@@ -249,7 +249,7 @@ fn get_metadata_column_handle(db: &DB) -> &ColumnFamily {
     get_column_handle(db, METADATA_COLUMN)
 }
 
-fn get_data_column_handle(db: &DB) -> &ColumnFamily {
+pub fn get_data_column_handle(db: &DB) -> &ColumnFamily {
     get_column_handle(db, DATA_COLUMN)
 }
 
@@ -452,6 +452,7 @@ mod tests {
         assert_ok!(PersistentKeyDB::new(&db_path, &new_test_logger()));
     }
 
+    // Refactoring
     #[test]
     fn can_migrate_to_latest() {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
