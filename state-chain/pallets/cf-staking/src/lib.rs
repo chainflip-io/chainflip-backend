@@ -23,7 +23,6 @@ use core::time::Duration;
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	error::BadOrigin,
 	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
@@ -247,7 +246,7 @@ pub mod pallet {
 			// Required to ensure this call is unique per staking event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
-			Self::ensure_witnessed_by_historical_active_epoch(origin)?;
+			T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				Self::stake_account(&account_id, amount);
@@ -338,7 +337,7 @@ pub mod pallet {
 			// Required to ensure this call is unique per claim event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
-			Self::ensure_witnessed_by_historical_active_epoch(origin)?;
+			T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 
 			let claim_details =
@@ -523,17 +522,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Checks that the call orginates from the witnesser by delegating to the configured
-	/// implementation of [EnsureOrigin].
-	fn ensure_witnessed_by_historical_active_epoch(
-		origin: OriginFor<T>,
-	) -> Result<
-		<T::EnsureWitnessedByHistoricalActiveEpoch as EnsureOrigin<OriginFor<T>>>::Success,
-		BadOrigin,
-	> {
-		T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)
-	}
-
 	/// Logs an failed stake attempt
 	fn log_failed_stake_attempt(
 		account_id: &AccountId<T>,
