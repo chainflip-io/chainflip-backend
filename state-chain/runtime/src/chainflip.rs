@@ -203,7 +203,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 			},
 			EthereumApi::UpdateFlipSupply(_) => eth::UnsignedTransaction {
 				chain_id: Environment::ethereum_chain_id(),
-				contract: Environment::stake_manager_address().into(),
+				contract: Environment::flip_token_address().into(),
 				data,
 				..Default::default()
 			},
