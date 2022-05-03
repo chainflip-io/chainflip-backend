@@ -75,6 +75,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessedByHistoricalActiveEpoch = MockEnsureWitnessed;
+	type EnsureWitnessedByCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }

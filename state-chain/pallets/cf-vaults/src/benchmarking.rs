@@ -126,7 +126,7 @@ benchmarks_instance_pallet! {
 			new_public_key, 5u64.into(),
 			Decode::decode(&mut &TX_HASH[..]).unwrap()
 		);
-		let origin = T::EnsureWitnessedByHistoricalActiveEpoch::successful_origin();
+		let origin = T::EnsureWitnessedByCurrentEpoch::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index()));

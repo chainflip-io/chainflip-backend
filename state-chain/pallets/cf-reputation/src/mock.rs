@@ -111,6 +111,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessedByHistoricalActiveEpoch = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedByCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }

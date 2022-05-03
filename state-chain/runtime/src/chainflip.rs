@@ -46,6 +46,7 @@ impl Chainflip for Runtime {
 	type KeyId = Vec<u8>;
 	type EnsureWitnessedByHistoricalActiveEpoch =
 		pallet_cf_witnesser::EnsureWitnessedByHistoricalActiveEpoch;
+	type EnsureWitnessedByCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedByCurrentEpoch;
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
 }

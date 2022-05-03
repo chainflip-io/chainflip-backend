@@ -83,6 +83,8 @@ impl Chainflip for MockRuntime {
 	type Call = Call;
 	type EnsureWitnessedByHistoricalActiveEpoch =
 		cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedByCurrentEpoch =
+		cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
