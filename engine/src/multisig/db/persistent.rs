@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path};
 
-use super::KeyDB;
+use super::{migrations::v0_to_v1::migration_0_to_1, KeyDB};
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
 
@@ -32,9 +32,9 @@ pub const DATA_COLUMN: &str = "data";
 // This column is just for schema version info. No prefix is used.
 pub const METADATA_COLUMN: &str = "metadata";
 // The default column that rust_rocksdb uses (we ignore)
-const DEFAULT_COLUMN_NAME: &str = "default";
+pub const DEFAULT_COLUMN_NAME: &str = "default";
 // KVDB_rocksdb (legacy) naming for the data column. Used for migration
-const LEGACY_DATA_COLUMN_NAME: &str = "col0";
+pub const LEGACY_DATA_COLUMN_NAME: &str = "col0";
 
 /// Name of the directory that the backups will go into (only created before migrations)
 const BACKUPS_DIRECTORY: &str = "backups";
@@ -259,7 +259,7 @@ fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
 }
 
 /// Used is every migration to update the db data version in the same batch write as the migration operation
-fn add_schema_version_to_batch_write(db: &DB, db_schema_version: u32, batch: &mut WriteBatch) {
+pub fn add_schema_version_to_batch_write(db: &DB, db_schema_version: u32, batch: &mut WriteBatch) {
     batch.put_cf(
         get_metadata_column_handle(db),
         DB_SCHEMA_VERSION_KEY,
@@ -339,27 +339,6 @@ fn migrate_db_to_latest(
             }
         }
     }
-    Ok(())
-}
-
-// Just adding schema version to the metadata column and delete col0 if it exists
-fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
-    // Update version data
-    let mut batch = WriteBatch::default();
-    add_schema_version_to_batch_write(db, 1, &mut batch);
-
-    // Write the batch
-    db.write(batch).map_err(|e| {
-        anyhow::Error::msg(format!("Failed to write to db during migration: {}", e))
-    })?;
-
-    // Delete the old column family
-    let old_cf_name = LEGACY_DATA_COLUMN_NAME;
-    if db.cf_handle(LEGACY_DATA_COLUMN_NAME).is_some() {
-        db.drop_cf(old_cf_name)
-            .unwrap_or_else(|_| panic!("Should drop old column family {}", old_cf_name));
-    }
-
     Ok(())
 }
 
