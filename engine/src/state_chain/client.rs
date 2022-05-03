@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use cf_chains::ChainAbi;
 use cf_traits::{ChainflipAccountData, EpochIndex};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomClient;
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
@@ -382,11 +382,55 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 mod storage_traits {
     use codec::FullCodec;
     use frame_support::{
-        storage::types::{QueryKindTrait, StorageMap, StorageValue},
+        storage::types::{QueryKindTrait, StorageDoubleMap, StorageMap, StorageValue},
         traits::{Get, StorageInstance},
         StorageHasher,
     };
     use sp_core::storage::StorageKey;
+
+    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
+    pub trait StorageDoubleMapAssociatedTypes {
+        type Key1;
+        type Key2;
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
+
+        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey;
+    }
+    impl<
+            Prefix: StorageInstance,
+            Hasher1: StorageHasher,
+            Key1: FullCodec,
+            Hasher2: StorageHasher,
+            Key2: FullCodec,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+            MaxValues: Get<Option<u32>>,
+        > StorageDoubleMapAssociatedTypes
+        for StorageDoubleMap<
+            Prefix,
+            Hasher1,
+            Key1,
+            Hasher2,
+            Key2,
+            Value,
+            QueryKind,
+            OnEmpty,
+            MaxValues,
+        >
+    {
+        type Key1 = Key1;
+        type Key2 = Key2;
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
+
+        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey {
+            StorageKey(Self::hashed_key_for(key1, key2))
+        }
+    }
 
     // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
     pub trait StorageMapAssociatedTypes {
@@ -683,21 +727,33 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
-    pub async fn get_storage_value<StorageValue: storage_traits::StorageValueAssociatedTypes>(
+    async fn get_storage_item<
+        Value: FullCodec,
+        OnEmpty,
+        QueryKind: QueryKindTrait<Value, OnEmpty>,
+    >(
         &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
-        let storage_key = StorageValue::_hashed_key();
+        storage_key: StorageKey,
+        block_hash: H256,
+        log_str: &str,
+    ) -> Result<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
         self.state_chain_rpc_client
             .storage(block_hash, storage_key.clone())
             .await
             .context(format!(
-                "Failed to get storage value with key: {:?} at block hash {:#x}",
-                storage_key, block_hash
+                "Failed to get storage {} with key: {:?} at block hash {:#x}",
+                log_str, storage_key, block_hash
             ))?
-            .map(|data| StorageValue::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
+            .map(|data| Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
             .map_or(Ok(None), |v| v.map(Some))
-            .map(StorageValue::QueryKind::from_optional_value_to_query)
+            .map(QueryKind::from_optional_value_to_query)
+    }
+
+    pub async fn get_storage_value<StorageValue: storage_traits::StorageValueAssociatedTypes>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
+        self.get_storage_item::<StorageValue::Value, StorageValue::OnEmpty, StorageValue::QueryKind>(StorageValue::_hashed_key(), block_hash, "value").await
     }
 
     pub async fn get_storage_map<StorageMap: storage_traits::StorageMapAssociatedTypes>(
@@ -707,17 +763,28 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     ) -> Result<
         <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
     > {
-        let storage_key = StorageMap::_hashed_key_for(key);
-        self.state_chain_rpc_client
-            .storage(block_hash, storage_key.clone())
-            .await
-            .context(format!(
-                "Failed to get storage map entry with key: {:?} at block hash {:#x}",
-                storage_key, block_hash
-            ))?
-            .map(|data| StorageMap::Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
-            .map_or(Ok(None), |v| v.map(Some))
-            .map(StorageMap::QueryKind::from_optional_value_to_query)
+        self.get_storage_item::<StorageMap::Value, StorageMap::OnEmpty, StorageMap::QueryKind>(
+            StorageMap::_hashed_key_for(key),
+            block_hash,
+            "map",
+        )
+        .await
+    }
+
+    pub async fn get_storage_double_map<
+        StorageDoubleMap: storage_traits::StorageDoubleMapAssociatedTypes,
+    >(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        key1: &StorageDoubleMap::Key1,
+        key2: &StorageDoubleMap::Key2,
+    ) -> Result<
+        <StorageDoubleMap::QueryKind as QueryKindTrait<
+            StorageDoubleMap::Value,
+            StorageDoubleMap::OnEmpty,
+        >>::Query,
+    > {
+        self.get_storage_item::<StorageDoubleMap::Value, StorageDoubleMap::OnEmpty, StorageDoubleMap::QueryKind>(StorageDoubleMap::_hashed_key_for(key1, key2), block_hash, "double map").await
     }
 
     async fn get_from_storage_with_key<StorageType: Decode + Debug>(

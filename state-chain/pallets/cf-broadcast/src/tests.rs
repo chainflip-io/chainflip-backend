@@ -766,9 +766,9 @@ fn test_transmission_request_expiry() {
 }
 
 #[test]
-fn no_validators_available() {
+fn no_authorities_available() {
 	new_test_ext().execute_with(|| {
-		// Simulate that no validator is currently online
+		// Simulate that no authority is currently online
 		NOMINATION.with(|cell| *cell.borrow_mut() = None);
 		MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),

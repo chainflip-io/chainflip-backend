@@ -258,7 +258,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A request to a specific validator to sign a transaction. \[broadcast_attempt_id,
+		/// A request to a specific authority to sign a transaction. \[broadcast_attempt_id,
 		/// validator_id, unsigned_tx\]
 		TransactionSigningRequest(BroadcastAttemptId, T::ValidatorId, UnsignedTransactionFor<T, I>),
 		/// A request to transmit a signed transaction to the target chain. \[broadcast_attempt_id,

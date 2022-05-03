@@ -9,6 +9,7 @@ use crate::{
     state_chain::client::StateChainRpcApi,
 };
 
+use cf_traits::EpochIndex;
 use sp_runtime::AccountId32;
 
 use web3::{
@@ -94,6 +95,7 @@ impl EthObserver for StakeManager {
 
     async fn handle_event<RpcClient>(
         &self,
+        epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
@@ -114,6 +116,7 @@ impl EthObserver for StakeManager {
                             account_id,
                             amount,
                             return_addr.0,
+                            epoch,
                             event.tx_hash.into(),
                         ),
                         logger,
@@ -126,6 +129,7 @@ impl EthObserver for StakeManager {
                         pallet_cf_witnesser_api::Call::witness_claimed(
                             account_id,
                             amount,
+                            epoch,
                             event.tx_hash.to_fixed_bytes(),
                         ),
                         logger,

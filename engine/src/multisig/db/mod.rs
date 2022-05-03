@@ -1,11 +1,7 @@
-#[cfg(test)]
-mod mock;
 pub mod persistent;
 
 use std::collections::HashMap;
 
-#[cfg(test)]
-pub use mock::KeyDBMock;
 pub use persistent::PersistentKeyDB;
 
 use super::{client::KeygenResultInfo, KeyId};

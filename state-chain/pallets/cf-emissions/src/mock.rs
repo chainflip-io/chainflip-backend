@@ -247,14 +247,14 @@ pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::Test
 		flip: FlipConfig { total_issuance },
 		emissions: {
 			EmissionsConfig {
-				validator_emission_inflation: 1000,       // 10%
-				backup_validator_emission_inflation: 100, // 1%
+				current_authority_emission_inflation: 1000, // 10%
+				backup_node_emission_inflation: 100,        // 1%
 			}
 		},
 	};
 
 	for v in validators {
-		epoch_info::Mock::add_validator(v);
+		epoch_info::Mock::add_authorities(v);
 	}
 
 	config.build_storage().unwrap().into()

@@ -1,6 +1,7 @@
 use crate::{
 	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalIdCounter,
 };
+use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_err, assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
@@ -18,10 +19,6 @@ fn mock_extrinsic() -> Box<Call> {
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 	<Governance as OnInitialize<u64>>::on_initialize(System::block_number());
-}
-
-fn last_event() -> crate::mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
 #[test]
@@ -75,13 +72,13 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			mock_extrinsic()
 		));
 		// Assert the proposed event was fired
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
 		// Do the two needed approvals to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
 		next_block();
 		// Expect the Executed event was fired
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
 		// Check the new governance set
 		let genesis_members = Members::<Test>::get();
 		assert!(genesis_members.contains(&EVE));
@@ -101,7 +98,7 @@ fn already_executed() {
 			mock_extrinsic()
 		));
 		// Assert the proposed event was fired
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
 		// Do the two needed approvals to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
@@ -142,7 +139,7 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		time_source::Mock::reset_to(END_TIME);
 		next_block();
 		// Expect the Expired event to be fired
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Expired(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Expired(1)),);
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
 	});
 }
@@ -169,9 +166,9 @@ fn several_open_proposals() {
 			Origin::signed(ALICE),
 			mock_extrinsic()
 		));
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
 		assert_ok!(Governance::propose_governance_extrinsic(Origin::signed(BOB), mock_extrinsic()));
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(2)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(2)),);
 		assert_eq!(ProposalIdCounter::<Test>::get(), 2);
 	});
 }
@@ -192,13 +189,13 @@ fn sudo_extrinsic() {
 			Origin::signed(ALICE),
 			governance_extrinsic
 		));
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
 		// Do the two necessary approvals
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
 		next_block();
 		// Expect the sudo extrinsic to be executed successfully
-		assert_eq!(last_event(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
 	});
 }
 
@@ -210,7 +207,7 @@ fn upgrade_runtime_successfully() {
 			DUMMY_WASM_BLOB
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
 		);
 	});
@@ -244,7 +241,7 @@ fn error_during_runtime_upgrade() {
 		assert!(result.is_err());
 		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
 		);
 	});

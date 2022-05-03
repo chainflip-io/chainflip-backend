@@ -3,12 +3,15 @@ use frame_support::{assert_noop, assert_ok};
 
 #[cfg(test)]
 mod staking_witness_tests {
+	use cf_traits::EpochIndex;
+
 	use super::*;
 	const ETH_TX_HASH: [u8; 32] = [0; 32];
 	const RETURN_ADDRESS: [u8; 20] = [0xff; 20];
 	const STAKE: u128 = 100;
 	const STAKER: u64 = 12345;
 	const WITNESS: u64 = 67890;
+	const EPOCH: EpochIndex = 1;
 
 	#[test]
 	fn test_staked() {
@@ -25,6 +28,7 @@ mod staking_witness_tests {
 				STAKER,
 				STAKE,
 				RETURN_ADDRESS,
+				EPOCH,
 				ETH_TX_HASH
 			));
 
@@ -36,6 +40,7 @@ mod staking_witness_tests {
 				STAKER,
 				STAKE,
 				RETURN_ADDRESS,
+				EPOCH,
 				ETH_TX_HASH
 			));
 
@@ -59,6 +64,7 @@ mod staking_witness_tests {
 				Origin::signed(WITNESS),
 				STAKER,
 				STAKE,
+				EPOCH,
 				ETH_TX_HASH
 			));
 
@@ -66,7 +72,13 @@ mod staking_witness_tests {
 
 			// Another. Should fail since we haven't registered any claims.
 			assert_noop!(
-				WitnessApi::witness_claimed(Origin::signed(WITNESS), STAKER, STAKE, ETH_TX_HASH),
+				WitnessApi::witness_claimed(
+					Origin::signed(WITNESS),
+					STAKER,
+					STAKE,
+					EPOCH,
+					ETH_TX_HASH
+				),
 				pallet_cf_staking::Error::<Test>::NoPendingClaim
 			);
 

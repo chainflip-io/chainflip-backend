@@ -120,18 +120,16 @@ pub fn native_version() -> NativeVersion {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = 1;
-	pub const ActiveToBackupValidatorRatio: u32 = 3;
-	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
+	pub const AuthorityToBackupRatio: u32 = 3;
+	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
 }
 
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type MinValidators = MinValidators;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
-	type ValidatorQualification = (
+	type AuctionQualification = (
 		Online,
 		pallet_cf_validator::PeerMapping<Self>,
 		SessionKeysRegistered<
@@ -139,9 +137,9 @@ impl pallet_cf_auction::Config for Runtime {
 			pallet_session::Pallet<Self>,
 		>,
 	);
-	type ActiveToBackupValidatorRatio = ActiveToBackupValidatorRatio;
+	type AuthorityToBackupRatio = AuthorityToBackupRatio;
 	type EmergencyRotation = Validator;
-	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
+	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
 	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
 }
 
@@ -512,7 +510,7 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
+		Environment: pallet_cf_environment::{Pallet, Call, Storage, Event<T>, Config},
 		Flip: pallet_cf_flip::{Pallet, Call, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
 		Staking: pallet_cf_staking::{Pallet, Call, Storage, Event<T>, Config<T>},
@@ -570,6 +568,7 @@ pub type Executive = frame_executive::Executive<
 			migrations::DeleteRewardsPallet,
 			migrations::UnifyCeremonyIds,
 			migrations::refactor_offences::Migration,
+			migrations::migrate_contract_addresses::Migration,
 			migrations::add_flip_contract_address::Migration,
 			migrations::migrate_claims::Migration,
 		),

@@ -1,4 +1,5 @@
 use crate::{mock::*, Error, *};
+use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
@@ -11,10 +12,6 @@ use frame_support::{assert_noop, assert_ok};
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
 const GENESIS_EPOCH: u32 = 1;
-
-fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
 
 fn assert_next_epoch() {
 	assert_eq!(
@@ -39,7 +36,7 @@ fn changing_epoch_block_size() {
 		);
 		assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::EpochDurationChanged(
 				EPOCH_DURATION,
 				min_duration
@@ -192,27 +189,27 @@ fn should_rotate_when_forced() {
 }
 
 #[test]
-fn auction_winners_should_be_the_new_validators_on_new_epoch() {
+fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext().execute_with(|| {
 		let new_bond = 10;
-		let new_validators = vec![1, 2];
+		let new_authorities = vec![1, 2];
 
 		MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
-			winners: new_validators.clone(),
+			winners: new_authorities.clone(),
 			minimum_active_bid: new_bond,
 		}));
 
 		assert_eq!(
-			Validators::<Test>::get(),
+			CurrentAuthorities::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
-			"the current validators should be the genesis validators"
+			"the current authorities should be the genesis authorities"
 		);
 		// Run to the epoch boundary.
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_validators(),
+			<ValidatorPallet as EpochInfo>::current_authorities(),
 			DUMMY_GENESIS_VALIDATORS,
-			"we should still be validating with the genesis validators"
+			"we should still be validating with the genesis authorities"
 		);
 		assert!(matches!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction));
 		move_forward_blocks(1);
@@ -223,9 +220,9 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
 		assert_next_epoch();
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_validators(),
-			new_validators,
-			"the new validators are now validating"
+			<ValidatorPallet as EpochInfo>::current_authorities(),
+			new_authorities,
+			"the new authorities are now validating"
 		);
 		assert_eq!(Bond::<Test>::get(), new_bond, "bond should be updated");
 
@@ -233,8 +230,8 @@ fn auction_winners_should_be_the_new_validators_on_new_epoch() {
 			.with(|cell| (*cell.borrow()).clone())
 			.expect("no value for auction winners is provided!");
 
-		// Expect new_validators to be auction winners as well
-		assert_eq!(new_validators, auction_winners);
+		// Expect new_authorities to be auction winners as well
+		assert_eq!(new_authorities, auction_winners);
 	});
 }
 
@@ -243,7 +240,7 @@ fn genesis() {
 	new_test_ext().execute_with(|| {
 		// We should have a set of validators on genesis with a minimum bid set
 		assert_eq!(
-			Validators::<Test>::get(),
+			CurrentAuthorities::<Test>::get(),
 			DUMMY_GENESIS_VALIDATORS,
 			"We should have a set of validators at genesis"
 		);
@@ -265,15 +262,15 @@ fn genesis() {
 fn send_cfe_version() {
 	new_test_ext().execute_with(|| {
 		// We initially submit version
-		let validator = DUMMY_GENESIS_VALIDATORS[0];
+		let authority = DUMMY_GENESIS_VALIDATORS[0];
 
 		let version = SemVer { major: 4, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), version.clone(),));
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), version.clone(),));
 
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				validator,
+				authority,
 				SemVer::default(),
 				version.clone()
 			)),
@@ -282,18 +279,18 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			version,
-			ValidatorPallet::validator_cfe_version(validator),
+			ValidatorPallet::node_cfe_version(authority),
 			"version should be stored"
 		);
 
 		// We submit a new version
 		let new_version = SemVer { major: 5, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), new_version.clone()));
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
 
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				validator,
+				authority,
 				version,
 				new_version.clone()
 			)),
@@ -302,13 +299,13 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			new_version,
-			ValidatorPallet::validator_cfe_version(validator),
+			ValidatorPallet::node_cfe_version(authority),
 			"new version should be stored"
 		);
 
 		// When we submit the same version we should see no `CFEVersionUpdated` event
 		frame_system::Pallet::<Test>::reset_events();
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(validator), new_version.clone()));
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
 
 		assert_eq!(
 			0,
@@ -318,7 +315,7 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			new_version,
-			ValidatorPallet::validator_cfe_version(validator),
+			ValidatorPallet::node_cfe_version(authority),
 			"we should be still on the same new version"
 		);
 	});
@@ -353,7 +350,7 @@ fn register_peer_id() {
 			alice_peer_keypair.sign(&ALICE.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				ALICE,
 				alice_peer_public_key,
@@ -364,7 +361,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&alice_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&ALICE),
+			ValidatorPallet::node_peer_id(&ALICE),
 			Some((ALICE, alice_peer_public_key, 40044, 10))
 		);
 
@@ -380,7 +377,7 @@ fn register_peer_id() {
 			Error::<Test>::AccountPeerMappingOverlap
 		);
 
-		// New validator mapping works
+		// New authority mapping works
 		let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob", None);
 		let bob_peer_public_key = bob_peer_keypair.public();
 		assert_ok!(ValidatorPallet::register_peer_id(
@@ -391,7 +388,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		),);
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -402,7 +399,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&BOB),
+			ValidatorPallet::node_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 11))
 		);
 
@@ -430,7 +427,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -441,7 +438,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&BOB),
+			ValidatorPallet::node_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 11))
 		);
 
@@ -454,7 +451,7 @@ fn register_peer_id() {
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
 		assert_eq!(
-			last_event(),
+			last_event::<Test>(),
 			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
@@ -465,7 +462,7 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(
-			ValidatorPallet::validator_peer_id(&BOB),
+			ValidatorPallet::node_peer_id(&BOB),
 			Some((BOB, bob_peer_public_key, 40043, 12))
 		);
 	});
@@ -498,15 +495,15 @@ fn highest_bond() {
 	new_test_ext().execute_with(|| {
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
-		HistoricalValidators::<Test>::insert(1, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(1, vec![ALICE]);
 		HistoricalBonds::<Test>::insert(1, 10);
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
-		HistoricalValidators::<Test>::insert(2, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(2, vec![ALICE]);
 		HistoricalBonds::<Test>::insert(2, 30);
 		// Epoch 3
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
-		HistoricalValidators::<Test>::insert(3, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(3, vec![ALICE]);
 		HistoricalBonds::<Test>::insert(3, 20);
 		// Expect the bond of epoch 2
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
@@ -514,7 +511,7 @@ fn highest_bond() {
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 1);
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 2);
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 3);
-		// Expect the bond to be zero if there is no epoch the validator is active in
+		// Expect the bond to be zero if there is no epoch the node is active in
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 0);
 	});
 }
@@ -548,7 +545,7 @@ fn test_missing_author_punishment() {
 		move_forward_blocks(1);
 		MockOffenceReporter::assert_reported(
 			PalletOffence::MissedAuthorshipSlot,
-			ValidatorPallet::validators().get(1..=2).unwrap().to_vec(),
+			ValidatorPallet::current_authorities().get(1..=2).unwrap().to_vec(),
 		)
 	})
 }
@@ -594,7 +591,7 @@ fn test_reputation_reset() {
 		}));
 		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
 
-		for id in &ValidatorPallet::current_validators() {
+		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
 		}
 
@@ -607,7 +604,7 @@ fn test_reputation_reset() {
 		}));
 		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
 
-		for id in &ValidatorPallet::current_validators() {
+		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
 		}
 

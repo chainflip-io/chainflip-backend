@@ -82,8 +82,8 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel();
 
     // TODO: multi consumer, single producer?
-    let (sm_window_sender, sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (km_window_sender, km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sm_instruction_sender, sm_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_instruction_sender, km_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     {
         // ensure configured eth node is pointing to the correct chain id
@@ -178,8 +178,8 @@ async fn main() {
             multisig_client,
             account_peer_mapping_change_sender,
             // send messages to these channels to start witnessing
-            sm_window_sender,
-            km_window_sender,
+            sm_instruction_sender,
+            km_instruction_sender,
             latest_block_hash,
             &root_logger
         ),
@@ -188,7 +188,7 @@ async fn main() {
             stake_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            sm_window_receiver,
+            sm_instruction_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
@@ -196,7 +196,7 @@ async fn main() {
             key_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            km_window_receiver,
+            km_instruction_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),

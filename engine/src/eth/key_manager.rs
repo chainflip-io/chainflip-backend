@@ -8,6 +8,7 @@ use crate::{
     state_chain::client::StateChainRpcApi,
 };
 use cf_chains::eth::SchnorrVerificationComponents;
+use cf_traits::EpochIndex;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -191,6 +192,7 @@ impl EthObserver for KeyManager {
 
     async fn handle_event<RpcClient>(
         &self,
+        _epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,

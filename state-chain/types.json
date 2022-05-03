@@ -6,7 +6,7 @@
     "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
-  "ActiveValidatorRange": "(u32,u32)",
+  "AuthoritySetSizeRange": "(u32,u32)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
   "AggKey": {
@@ -36,11 +36,11 @@
   "BasisPoints": "u32",
   "Balance": "FlipBalance",
   "Bid": "(ValidatorId, Amount)",
-  "BlockHeightWindow": {
-    "from": "u64",
-    "to": "Option<u64>"
-  },
   "BlockNumber": "u32",
+  "BroadcastAttempt": {
+    "broadcast_attempt_id": "BroadcastAttemptId",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
   "BroadcastAttemptId": {
     "broadcast_id": "BroadcastId",
     "attempt_count": "AttemptCount"
@@ -54,6 +54,7 @@
   },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
+  "ChainBlockNumber": "u64",
   "ChainflipAccountData": {
     "state": "ChainflipAccountState",
     "last_active_epoch": "Option<EpochIndex>"
@@ -81,13 +82,9 @@
     "nonce": "Uint"
   },
   "EthTransactionHash": "[u8;32]",
-  "BroadcastAttempt": {
-    "broadcast_attempt_id": "BroadcastAttemptId",
-    "unsigned_tx": "UnsignedTransactionFor"
-  },
   "FlipAccount": {
     "stake": "Amount",
-    "validator_bond": "Amount"
+    "authority_bond": "Amount"
   },
   "FlipBalance": "u128",
   "H256": "[u8; 32]",
@@ -217,11 +214,26 @@
       "Failure"
     ]
   },
+  "SystemState": {
+    "_enum": [
+      "Normal",
+      "Maintenance"
+    ]
+  },
   "ThresholdSignature": "ThresholdSignatureFor",
   "ThresholdSignatureFor": "SchnorrVerificationComponents",
   "Timestamp": "u64",
   "TransactionHash": "H256",
   "TransactionHashFor": "TransactionHash",
+  "TransactionSigningAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
+  "TransmissionAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "signer": "ValidatorId",
+    "signed_tx": "SignedTransactionFor"
+  },
   "TransmissionFailure": {
     "_enum": [
       "TransactionRejected",
@@ -242,9 +254,8 @@
   "ValidatorId": "AccountId",
   "Vault": {
     "public_key": "AggKeyFor",
-    "active_window": "BlockHeightWindow"
+    "active_from_block": "u64"
   },
-  "ValidatorSize": "u32",
   "AwaitingKeygen": {
     "ceremony_id": "CeremonyId",
     "response_status": "KeygenResponseStatus"
