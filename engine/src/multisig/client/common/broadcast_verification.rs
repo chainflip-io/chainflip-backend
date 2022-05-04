@@ -233,10 +233,7 @@ mod tests {
         // even though some parties disagree on some values
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), Some(1), Some(1), Some(1)]),
-            ),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), None, Some(1), Some(1)])),
             (3, Some(vec![Some(2), Some(1), None, Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(2)])),
@@ -253,10 +250,7 @@ mod tests {
         // is due to them sending messages inconsistently
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), None, Some(1), Some(2)]),
-            ),
+            (1_u32, Some(vec![Some(1), None, Some(1), Some(2)])),
             (2, Some(vec![Some(1), Some(2), Some(1), Some(1)])),
             (3, Some(vec![Some(2), Some(2), Some(2), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(2)])),
@@ -277,10 +271,7 @@ mod tests {
         // because 4 is missing all messages and 3 is missing one message from 2
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), Some(1), Some(1), Some(1)]),
-            ),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), None, Some(1), Some(1)])),
             (4, None),
@@ -300,10 +291,7 @@ mod tests {
         // We are missing broadcast verification messages from 3 and 4.
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), Some(1), Some(1), Some(1)]),
-            ),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (3, None),
             (4, None),
@@ -327,10 +315,7 @@ mod tests {
 
         // Note that party 3's message is missing
         let all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), Some(1), Some(1), Some(1)]),
-            ),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (3, None),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
@@ -345,10 +330,7 @@ mod tests {
         // Note that party 2's message is missing an "inner" message
         // for party 4.
         let all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), Some(1), Some(1), Some(1)]),
-            ),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
@@ -363,10 +345,7 @@ mod tests {
         // Note that party 2's message contains an extra message
         // for non-existent party 5.
         let all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), Some(1), Some(1), Some(1)]),
-            ),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
@@ -381,10 +360,7 @@ mod tests {
         // Note that party 2's message is missing an "inner" message
         // for party 4. It will be "replaced" by a non-existent index below
         let mut all_messages = to_broadcast_verification_messages(vec![
-            (
-                1 as AuthorityCount,
-                Some(vec![Some(1), Some(1), Some(1), Some(1)]),
-            ),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),

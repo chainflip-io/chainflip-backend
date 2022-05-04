@@ -132,7 +132,7 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
 
     // Read in old key types and add the new
     let old_keys: HashMap<KeyId, old_types::KeygenResultInfo> = db
-        .prefix_iterator_cf(get_data_column_handle(&db), KEYGEN_DATA_PREFIX)
+        .prefix_iterator_cf(get_data_column_handle(db), KEYGEN_DATA_PREFIX)
         .map(|(key_id, key_info)| {
             // Strip the prefix off the key_id
             let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
