@@ -65,20 +65,21 @@ impl Arbitrary for FlipEvents {
 	}
 }
 //#[quickcheck]
-fn balance_has_itegrity(events: FlipEvents) -> TestResult {
-	for e in events.events.iter() {
-		e.execute();
-		check_balance_integrity();
-	}
-	TestResult::passed()
+fn balance_has_integrity(events: FlipEvents) -> TestResult {
+	new_test_ext().execute_with(|| -> TestResult {
+		let mut result = TestResult::passed();
+		for e in events.events.iter() {
+			e.execute();
+			result = TestResult::from_bool(check_balance_integrity());
+		}
+		result
+	})
 }
 
 #[cfg(test)]
 #[test]
 fn quickcheck_balance_itegrity() {
-	new_test_ext().execute_with(|| {
-		quickcheck(balance_has_itegrity as fn(FlipEvents) -> TestResult);
-	});
+	quickcheck(balance_has_integrity as fn(FlipEvents) -> TestResult);
 }
 
 #[cfg(test)]
@@ -89,12 +90,12 @@ fn account_to_account() {
 		Flip::settle(&ALICE, Flip::debit(&BOB, 1).into());
 		assert_eq!(Flip::total_balance_of(&ALICE), 101);
 		assert_eq!(Flip::total_balance_of(&BOB), 49);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 
 		Flip::settle(&ALICE, Flip::credit(&BOB, 1).into());
 		assert_eq!(Flip::total_balance_of(&ALICE), 100);
 		assert_eq!(Flip::total_balance_of(&BOB), 50);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -127,13 +128,13 @@ fn account_to_external() {
 		Flip::settle(&ALICE, Flip::bridge_out(10).into());
 		assert_eq!(Flip::total_balance_of(&ALICE), 90);
 		assert_eq!(OffchainFunds::<Test>::get(), 860);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 
 		// External to account
 		Flip::settle(&ALICE, Flip::bridge_in(10).into());
 		assert_eq!(Flip::total_balance_of(&ALICE), 100);
 		assert_eq!(OffchainFunds::<Test>::get(), 850);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -143,11 +144,11 @@ fn mint_external() {
 		// Mint to external
 		mem::drop(Flip::mint(50).offset(Flip::bridge_out(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 1050);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 
 		mem::drop(Flip::bridge_out(50).offset(Flip::mint(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 1100);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -157,11 +158,11 @@ fn burn_external() {
 		// Burn from external
 		mem::drop(Flip::burn(50).offset(Flip::bridge_in(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 950);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 
 		mem::drop(Flip::bridge_in(50).offset(Flip::burn(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 900);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -172,7 +173,7 @@ fn burn_from_account() {
 		Flip::settle(&ALICE, Flip::burn(10).into());
 		assert_eq!(Flip::total_balance_of(&ALICE), 90);
 		assert_eq!(TotalIssuance::<Test>::get(), 990);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -183,7 +184,7 @@ fn mint_to_account() {
 		Flip::settle(&ALICE, Flip::mint(10).into());
 		assert_eq!(Flip::total_balance_of(&ALICE), 110);
 		assert_eq!(TotalIssuance::<Test>::get(), 1_010);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -192,7 +193,7 @@ fn burn_reverts() {
 	new_test_ext().execute_with(|| {
 		mem::drop(Flip::burn(10));
 		assert_eq!(TotalIssuance::<Test>::get(), 1000);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -201,7 +202,7 @@ fn mint_reverts() {
 	new_test_ext().execute_with(|| {
 		mem::drop(Flip::mint(10));
 		assert_eq!(TotalIssuance::<Test>::get(), 1000);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -210,7 +211,7 @@ fn credit_reverts() {
 	new_test_ext().execute_with(|| {
 		mem::drop(Flip::credit(&CHARLIE, 1));
 		assert_eq!(Flip::total_balance_of(&CHARLIE), 0);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -219,11 +220,11 @@ fn debit_reverts() {
 	new_test_ext().execute_with(|| {
 		mem::drop(Flip::debit(&ALICE, 1));
 		assert_eq!(Flip::total_balance_of(&ALICE), 100);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 
 		mem::drop(Flip::debit(&ALICE, 1000));
 		assert_eq!(Flip::total_balance_of(&ALICE), 100);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -232,7 +233,7 @@ fn bridge_in_reverts() {
 	new_test_ext().execute_with(|| {
 		mem::drop(Flip::bridge_in(100));
 		assert_eq!(OffchainFunds::<Test>::get(), 850);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -241,7 +242,7 @@ fn bridge_out_reverts() {
 	new_test_ext().execute_with(|| {
 		mem::drop(Flip::bridge_out(100));
 		assert_eq!(OffchainFunds::<Test>::get(), 850);
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -252,7 +253,7 @@ fn stake_transfers() {
 		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
 		assert_eq!(<Flip as StakeTransfer>::stakeable_balance(&ALICE), 200);
 		assert!(MockStakeHandler::has_stake_updated(&ALICE));
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 
 		// Bond all of it
 		Flip::set_validator_bond(&ALICE, 200);
@@ -271,7 +272,7 @@ fn stake_transfers() {
 		assert_ok!(<Flip as StakeTransfer>::try_claim(&ALICE, 1));
 		assert!(MockStakeHandler::has_stake_updated(&ALICE));
 
-		check_balance_integrity();
+		assert!(check_balance_integrity());
 	});
 }
 
@@ -307,7 +308,7 @@ mod test_issuance {
 			burn_from_account(&ALICE, 50);
 			assert_eq!(Flip::total_balance_of(&ALICE), 50);
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 950);
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 		});
 	}
 
@@ -318,7 +319,7 @@ mod test_issuance {
 			mint_to_account(&CHARLIE, 50);
 			assert_eq!(Flip::total_balance_of(&CHARLIE), 50);
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1050);
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 		});
 	}
 
@@ -335,7 +336,7 @@ mod test_issuance {
 			mint_to_reserve(TEST_RESERVE, DEPOSIT);
 			assert_eq!(Flip::reserved_balance(TEST_RESERVE), INIT_RESERVE_BALANCE + DEPOSIT);
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), INIT_TOTAL_ISSUANCE + DEPOSIT);
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 
 			// Burn some.
 			burn_from_reserve(TEST_RESERVE, WITHDRAWAL);
@@ -375,7 +376,7 @@ mod test_issuance {
 
 			assert_eq!(Flip::total_balance_of(&ALICE), 0);
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 900);
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 		});
 	}
 
@@ -385,7 +386,7 @@ mod test_issuance {
 			frame_system::Provider::<Test>::killed(&BOB).unwrap();
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 950);
 			assert_eq!(Flip::total_balance_of(&BOB), 0);
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 		});
 	}
 }
@@ -473,7 +474,7 @@ mod test_tx_payments {
 			)
 			.expect("Fee correction never fails.");
 
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 			// Alice paid the fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 99);
 			// Fee was burned.
@@ -496,7 +497,7 @@ mod test_tx_payments {
 			)
 			.expect_err("Alice can't afford the fee.");
 
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 			// Alice paid no fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100);
 			// Nothing was burned.
@@ -535,7 +536,7 @@ mod test_tx_payments {
 			)
 			.expect("Fee correction never fails.");
 
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 			// Alice paid the adjusted fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
 			// The fee was bured.
@@ -574,7 +575,7 @@ mod test_slashing {
 			let balance_after = Flip::total_balance_of(&ALICE);
 			// Check if the diff between the balances is the expected slash
 			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 			assert_eq!(
 				System::events()
 					.into_iter()
@@ -596,7 +597,7 @@ mod test_slashing {
 			FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE);
 			let balance_after = Flip::total_balance_of(&ALICE);
 			assert_eq!(initial_balance - balance_after, 0);
-			check_balance_integrity();
+			assert!(check_balance_integrity());
 			assert_eq!(
 				System::events()
 					.into_iter()
