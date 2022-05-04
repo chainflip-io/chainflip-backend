@@ -28,6 +28,7 @@ impl PartyIdxMapping {
     }
 
     /// Map all signer ids to their corresponding signer idx
+    #[allow(clippy::result_unit_err)]
     pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<BTreeSet<AuthorityCount>, ()> {
         signer_ids
             .iter()
