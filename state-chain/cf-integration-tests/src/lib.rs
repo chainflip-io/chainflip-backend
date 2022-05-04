@@ -169,6 +169,15 @@ mod tests {
 					self.proposed_seed = None;
 				}
 			}
+
+			pub fn is_valid_sig(
+				&mut self,
+				payload: eth::H256,
+				sig: &SchnorrVerificationComponents,
+			) -> bool {
+				let agg_key = AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
+				agg_key.verify(payload.as_fixed_bytes(), sig).is_ok()
+			}
 		}
 
 		pub enum EngineState {
@@ -980,7 +989,6 @@ mod tests {
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
 						"late staker should be a backup node"
 					);
-
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS);
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
@@ -1386,6 +1394,7 @@ mod tests {
 
 	mod bond {
 		use super::*;
+		use cf_chains::eth;
 		use cf_traits::{EpochInfo, HistoricalEpoch, StakeTransfer};
 		use frame_system::RawOrigin;
 		use pallet_cf_validator::EpochHistory;
@@ -1644,6 +1653,18 @@ mod tests {
 					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_2));
 					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_3));
 				});
+		}
+
+		#[test]
+		fn test_threshold_signer() {
+			let mut threshold_signer = network::ThresholdSigner::default();
+			let some_payload: eth::H256 = eth::H256::from_slice(&[2_u8; 32]);
+			let some_signature = threshold_signer.sign(&some_payload);
+			assert!(threshold_signer.is_valid_sig(some_payload, &some_signature));
+			threshold_signer.propose_new_public_key();
+			threshold_signer.rotate_keys();
+			let re_sign = threshold_signer.sign(&some_payload);
+			assert!(threshold_signer.is_valid_sig(some_payload, &re_sign));
 		}
 	}
 }
