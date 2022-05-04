@@ -134,7 +134,7 @@ type ValidatorId = u64;
 impl Chainflip for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type EnsureWitnessedByHistoricalActiveEpoch = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedByCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type KeyId = Vec<u8>;
 	type Call = Call;

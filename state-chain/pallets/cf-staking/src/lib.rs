@@ -246,7 +246,7 @@ pub mod pallet {
 			// Required to ensure this call is unique per staking event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)?;
+			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				Self::stake_account(&account_id, amount);
@@ -337,7 +337,7 @@ pub mod pallet {
 			// Required to ensure this call is unique per claim event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)?;
+			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 
 			let claim_details =

@@ -26,7 +26,7 @@ This template pallet does not have any genesis configuration.
 
 ## Usage
 
-This pallet implements the `Witnesser` trait as defined [here](../../traits). It also defines `EnsureWitnessedByHistoricalActiveEpoch`, a type that
+This pallet implements the `Witnesser` trait as defined [here](../../traits). It also defines `EnsureWitnessed`, a type that
 can be used to restrict an extrinsic such that it can only be called from this pallet. In order to do so follow these
 steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
 
@@ -40,14 +40,14 @@ steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
     )
     ```
 
-2. Reference both the `Witnesser` trait and `EnsureWitnessedByHistoricalActiveEpoch` in the `Config` for the pallet where you want to define the witnessable
+2. Reference both the `Witnesser` trait and `EnsureWitnessed` in the `Config` for the pallet where you want to define the witnessable
     extrinsic:
 
     ```rust
     #[pallet::config]
     pub trait Config: frame_system::Config
     {
-        type EnsureWitnessedByHistoricalActiveEpoch: EnsureOrigin<Self::Origin>;
+        type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
         type Witnesser: cf_traits::Witnesser<
             Call=<Self as Config>::Call,
@@ -59,7 +59,7 @@ steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
 
     ```rust
     impl my_witnessable_pallet::Config for Runtime {
-        type EnsureWitnessedByHistoricalActiveEpoch = pallet_cf_witness::EnsureWitnessedByHistoricalActiveEpoch;
+        type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
         type Witnesser = pallet_cf_witness::Pallet<Runtime>;
     }
     ```
@@ -70,7 +70,7 @@ steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
     #[pallet::weight(10_000)]
     pub fn my_extrinsic(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
         // Make sure this call was witnessed by a threshold number of validators.
-        T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)?;
+        T::EnsureWitnessed::ensure_origin(origin)?;
         // Do something awesome.
     }
     ```

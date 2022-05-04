@@ -135,7 +135,7 @@ impl Chainflip for Test {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 	type Call = Call;
-	type EnsureWitnessedByHistoricalActiveEpoch = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedByCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;

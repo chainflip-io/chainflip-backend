@@ -19,7 +19,7 @@ pub mod pallet {
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 
-		type EnsureWitnessedByHistoricalActiveEpoch: EnsureOrigin<Self::Origin>;
+		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		type Witnesser: cf_traits::Witnesser<
 			Call = <Self as Config>::Call,
@@ -57,7 +57,7 @@ pub mod pallet {
 		/// increments value, starting from 0
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn increment_value(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let _who = T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)?;
+			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Update storage.
 			let new_val = match <Something<T>>::get() {

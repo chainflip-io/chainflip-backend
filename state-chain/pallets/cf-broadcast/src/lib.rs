@@ -443,7 +443,7 @@ pub mod pallet {
 			failure: TransmissionFailure,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin)?;
+			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let TransmissionAttempt { broadcast_attempt, signer, .. } =
 				AwaitingTransmission::<T, I>::take(broadcast_attempt_id)

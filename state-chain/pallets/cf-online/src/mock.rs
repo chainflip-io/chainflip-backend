@@ -109,7 +109,7 @@ impl Chainflip for Test {
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
-	type EnsureWitnessedByHistoricalActiveEpoch = MockEnsureWitnessed;
+	type EnsureWitnessed = MockEnsureWitnessed;
 	type EnsureWitnessedByCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;

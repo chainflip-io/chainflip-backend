@@ -50,7 +50,7 @@ pub trait Chainflip: frame_system::Config {
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
-	type EnsureWitnessedByHistoricalActiveEpoch: EnsureOrigin<Self::Origin>;
+	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
 	type EnsureWitnessedByCurrentEpoch: EnsureOrigin<Self::Origin>;

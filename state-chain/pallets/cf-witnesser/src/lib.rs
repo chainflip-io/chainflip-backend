@@ -335,13 +335,13 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 /// # Example:
 ///
 /// ```ignore
-/// if let Ok(()) = EnsureWitnessedByHistoricalActiveEpoch::ensure_origin(origin) {
+/// if let Ok(()) = EnsureWitnessed::ensure_origin(origin) {
 ///     log::debug!("This extrinsic was called as a result of witness threshold consensus.");
 /// }
 /// ```
-pub struct EnsureWitnessedByHistoricalActiveEpoch;
+pub struct EnsureWitnessed;
 
-impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessedByHistoricalActiveEpoch
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessed
 where
 	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
 {
