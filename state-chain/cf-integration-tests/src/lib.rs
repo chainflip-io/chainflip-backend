@@ -1195,11 +1195,19 @@ mod tests {
 							INITIAL_STAKE,
 							GENESIS_EPOCH,
 						);
+					}
+
+					// Allow the stakes to be registered, then initialise the account keys and peer
+					// ids.
+					testnet.move_forward_blocks(1);
+
+					for node in &init_passive_nodes {
+						network::setup_account_and_peer_mapping(node);
 						network::Cli::activate_account(node);
 					}
 
 					// Start an auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
 					assert_eq!(
 						GENESIS_EPOCH,
