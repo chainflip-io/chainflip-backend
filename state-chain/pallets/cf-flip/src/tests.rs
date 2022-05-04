@@ -40,13 +40,13 @@ impl sp_std::fmt::Debug for FlipEvents {
 
 impl Arbitrary for FlipEvent {
 	fn arbitrary(g: &mut Gen) -> FlipEvent {
-		let random_account = match u8::arbitrary(&mut Gen::new(1)) % 3 {
+		let random_account = match u8::arbitrary(g) % 3 {
 			0 => ALICE,
 			1 => BOB,
 			2 => CHARLIE,
 			_ => unreachable!(),
 		};
-		match u8::arbitrary(&mut Gen::new(1)) % 4 {
+		match u8::arbitrary(g) % 4 {
 			0 => FlipEvent::Stake(random_account, u128::arbitrary(g)),
 			1 => FlipEvent::BurnFromAccount(random_account, u128::arbitrary(g)),
 			2 => FlipEvent::MintToAccount(random_account, u128::arbitrary(g)),
@@ -59,7 +59,7 @@ impl Arbitrary for FlipEvents {
 	fn arbitrary(g: &mut Gen) -> FlipEvents {
 		let mut vec = vec![];
 		for _ in 0..u8::arbitrary(g) {
-			vec.push(FlipEvent::arbitrary(&mut Gen::new(16)));
+			vec.push(FlipEvent::arbitrary(g));
 		}
 		FlipEvents { events: vec }
 	}
