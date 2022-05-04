@@ -1,7 +1,6 @@
 pub mod common {
-	use cf_traits::{BlockNumber, FlipBalance};
+	use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
 	use pallet_cf_broadcast::AttemptCount;
-	use pallet_cf_validator::AuthorityCount;
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;

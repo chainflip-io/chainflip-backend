@@ -16,9 +16,9 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
-	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, AuthorityCount,
+	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
 	QualifyNode, ReputationResetter, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
@@ -47,7 +47,6 @@ type Version = SemVer;
 type Ed25519PublicKey = ed25519::Public;
 type Ed25519Signature = ed25519::Signature;
 pub type Ipv6Addr = u128;
-pub type AuthorityCount = u16;
 
 /// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -682,7 +681,10 @@ pub mod pallet {
 			CurrentEpochStartedAt::<T>::set(Default::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			let genesis_authorities = pallet_session::Pallet::<T>::validators();
-			EpochAuthorityCount::<T>::insert(GENESIS_EPOCH, genesis_authorities.len() as u16);
+			EpochAuthorityCount::<T>::insert(
+				GENESIS_EPOCH,
+				genesis_authorities.len() as AuthorityCount,
+			);
 			Pallet::<T>::start_new_epoch(&genesis_authorities, self.bond);
 		}
 	}
@@ -787,10 +789,10 @@ impl<T: Config> Pallet<T> {
 		CurrentAuthorities::<T>::set(epoch_authorities.to_vec());
 
 		epoch_authorities.iter().enumerate().for_each(|(index, account_id)| {
-			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as u16);
+			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as AuthorityCount);
 		});
 
-		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as u16);
+		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as AuthorityCount);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);

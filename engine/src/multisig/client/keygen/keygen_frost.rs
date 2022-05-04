@@ -3,7 +3,7 @@ use std::{
     convert::TryInto,
 };
 
-use pallet_cf_validator::AuthorityCount;
+use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use zeroize::Zeroize;

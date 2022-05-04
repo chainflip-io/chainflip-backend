@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::multisig::client::{self, KeygenResultInfo};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
+use cf_traits::AuthorityCount;
 use client::{
     common::{
         broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
@@ -12,7 +13,6 @@ use client::{
     keygen, ThresholdParameters,
 };
 use itertools::Itertools;
-use pallet_cf_validator::AuthorityCount;
 use sp_core::H256;
 
 use crate::multisig::crypto::{BigInt, BigIntConverter, KeyShare};

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use pallet_cf_validator::AuthorityCount;
+use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
 use crate::multisig::client::common::BroadcastVerificationMessage;

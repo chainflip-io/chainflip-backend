@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use cf_traits::AuthorityCount;
 use itertools::Itertools;
-use pallet_cf_validator::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
 

@@ -12,13 +12,13 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
-	impl_mock_stake_transfer, mocks::system_state_info::MockSystemStateInfo, BlockNumber,
-	Chainflip, Heartbeat, NetworkState,
+	impl_mock_stake_transfer, mocks::system_state_info::MockSystemStateInfo, AuthorityCount,
+	BlockNumber, Chainflip, Heartbeat, NetworkState,
 };
 
 type ValidatorId = u64;
 
-cf_traits::impl_mock_epoch_info!(ValidatorId, u128, u32);
+cf_traits::impl_mock_epoch_info!(ValidatorId, u128, u32, AuthorityCount);
 impl_mock_stake_transfer!(ValidatorId, u128);
 
 thread_local! {

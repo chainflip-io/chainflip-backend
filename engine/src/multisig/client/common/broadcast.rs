@@ -4,7 +4,7 @@ use std::{
     fmt::Display,
 };
 
-use pallet_cf_validator::AuthorityCount;
+use cf_traits::AuthorityCount;
 
 use crate::{
     multisig::client::{MultisigData, MultisigMessage},

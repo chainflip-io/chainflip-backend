@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use pallet_cf_validator::AuthorityCount;
+use cf_traits::AuthorityCount;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 

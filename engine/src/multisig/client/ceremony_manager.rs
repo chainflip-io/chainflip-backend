@@ -5,7 +5,7 @@ use crate::common::format_iterator;
 use crate::multisig::client;
 use crate::multisig::crypto::Rng;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
-use pallet_cf_validator::AuthorityCount;
+use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use client::{

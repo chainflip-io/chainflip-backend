@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use pallet_cf_validator::AuthorityCount;
+use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};

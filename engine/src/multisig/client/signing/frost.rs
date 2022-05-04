@@ -9,7 +9,7 @@ use std::{
     fmt::Display,
 };
 
-use pallet_cf_validator::AuthorityCount;
+use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
 use cf_chains::eth::AggKey;

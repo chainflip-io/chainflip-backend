@@ -5,7 +5,6 @@ mod tests {
 		sp_io::TestExternalities,
 		traits::{GenesisBuild, OnInitialize},
 	};
-	use pallet_cf_validator::AuthorityCount;
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -16,7 +15,7 @@ mod tests {
 		Staking, System, Timestamp, Validator,
 	};
 
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
+	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance, IsOnline};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use rand::{prelude::*, SeedableRng};
@@ -1136,10 +1135,10 @@ mod tests {
 	mod authorities {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{
-			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
-			EpochInfo, FlipBalance, IsOnline, StakeTransfer,
+			AuthorityCount, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
+			ChainflipAccountStore, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
-		use pallet_cf_validator::{AuthorityCount, PercentageRange};
+		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
 			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
 			Runtime, Validator,

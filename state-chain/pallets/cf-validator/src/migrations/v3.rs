@@ -42,7 +42,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		let current_epoch = T::EpochInfo::epoch_index();
 		let current_validators = CurrentAuthorities::<T>::get();
 		let current_bond = Bond::<T>::get();
-		let number_of_current_validators = current_validators.len() as u16;
+		let number_of_current_validators = current_validators.len() as AuthorityCount;
 
 		EpochAuthorityCount::<T>::insert(current_epoch, number_of_current_validators);
 

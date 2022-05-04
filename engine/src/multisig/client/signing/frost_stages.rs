@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 
 use crate::multisig::client::{self, signing};
 
+use cf_traits::AuthorityCount;
 use client::common::{
     broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
     {CeremonyCommon, StageResult},
 };
 use client::SchnorrSignature;
-use pallet_cf_validator::AuthorityCount;
 use signing::frost::{
     self, Comm1, LocalSig3, SecretNoncePair, SigningData, VerifyComm2, VerifyLocalSig4,
 };

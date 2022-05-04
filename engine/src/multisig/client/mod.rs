@@ -25,8 +25,8 @@ use crate::{
 };
 
 use async_trait::async_trait;
+use cf_traits::AuthorityCount;
 use futures::Future;
-use pallet_cf_validator::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
