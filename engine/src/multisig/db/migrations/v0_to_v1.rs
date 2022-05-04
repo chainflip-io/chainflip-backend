@@ -5,7 +5,7 @@ use rocksdb::{WriteBatch, DB};
 use anyhow::Result;
 
 use crate::multisig::{
-    client::{KeygenResult, KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
+    client::{KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
     db::persistent::{
         add_schema_version_to_batch_write, get_data_column_handle, update_key, KEYGEN_DATA_PREFIX,
         LEGACY_DATA_COLUMN_NAME, PREFIX_SIZE,
@@ -19,18 +19,12 @@ mod old_types {
     use frame_support::Deserialize;
     use state_chain_runtime::AccountId;
 
-    use crate::multisig::crypto::{KeyShare, Point};
+    use crate::multisig::client::KeygenResult;
 
     #[derive(Deserialize, Debug)]
     pub struct ThresholdParameters {
         pub share_count: usize,
         pub threshold: usize,
-    }
-
-    #[derive(Deserialize, Debug)]
-    pub struct KeygenResult {
-        pub key_share: KeyShare,
-        pub party_public_keys: Vec<Point>,
     }
 
     #[derive(Deserialize, Debug)]
@@ -95,20 +89,10 @@ fn old_to_new_keygen_result_info(
     old_keys
         .into_iter()
         .map(|(key_id, old_keygen_result_info)| {
-            // convert to new type:
-            // let old_key_share = mem::take(&mut old_keygen_result_info.key.key_share);
-            // let old_party_public_keys = mem::take(&mut old_keygen_result_info.key.key_share);
-            let old_key =
-                std::sync::Arc::<old_types::KeygenResult>::try_unwrap(old_keygen_result_info.key)
-                    .unwrap();
-
             (
                 key_id,
                 KeygenResultInfo {
-                    key: Arc::new(KeygenResult {
-                        key_share: old_key.key_share,
-                        party_public_keys: old_key.party_public_keys,
-                    }),
+                    key: old_keygen_result_info.key,
                     validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(
                         &old_keygen_result_info.validator_map.account_ids,
                     )),
