@@ -332,8 +332,7 @@ async fn should_report_on_incomplete_blame_response() {
 
     // stage 7 - bad_node_id_1 sends an empty BlameResponse
     for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
-        let blame_response_6 = keygen::BlameResponse6(std::collections::BTreeMap::default());
-        *message = blame_response_6;
+        *message = keygen::BlameResponse6(std::collections::BTreeMap::default());
     }
 
     let messages = ceremony
