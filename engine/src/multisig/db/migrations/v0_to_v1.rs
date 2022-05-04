@@ -80,38 +80,36 @@ pub fn load_keys_using_kvdb_to_latest_key_type(
         })
         .collect::<Result<HashMap<_, _>>>()?;
 
-    Ok(old_to_new_keygen_result_info(old_keys))
+    Ok(old_keys
+        .into_iter()
+        .map(old_to_new_keygen_result_info)
+        .collect())
 }
 
 fn old_to_new_keygen_result_info(
-    old_keys: HashMap<KeyId, old_types::KeygenResultInfo>,
-) -> HashMap<KeyId, KeygenResultInfo> {
-    old_keys
-        .into_iter()
-        .map(|(key_id, old_keygen_result_info)| {
-            (
-                key_id,
-                KeygenResultInfo {
-                    key: old_keygen_result_info.key,
-                    validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(
-                        &old_keygen_result_info.validator_map.account_ids,
-                    )),
-                    params: ThresholdParameters {
-                        share_count: old_keygen_result_info
-                            .params
-                            .share_count
-                            .try_into()
-                            .expect("Should fit into u16"),
-                        threshold: old_keygen_result_info
-                            .params
-                            .threshold
-                            .try_into()
-                            .expect("Should fit into u16"),
-                    },
-                },
-            )
-        })
-        .collect()
+    (old_key_id, old_keygen_result_info): (KeyId, old_types::KeygenResultInfo),
+) -> (KeyId, KeygenResultInfo) {
+    (
+        old_key_id,
+        KeygenResultInfo {
+            key: old_keygen_result_info.key,
+            validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(
+                &old_keygen_result_info.validator_map.account_ids,
+            )),
+            params: ThresholdParameters {
+                share_count: old_keygen_result_info
+                    .params
+                    .share_count
+                    .try_into()
+                    .expect("Should fit into u16"),
+                threshold: old_keygen_result_info
+                    .params
+                    .threshold
+                    .try_into()
+                    .expect("Should fit into u16"),
+            },
+        },
+    )
 }
 
 // Just adding schema version to the metadata column and delete col0 if it exists
@@ -156,8 +154,9 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
         .collect();
 
     // only write if all the keys were successfully deserialized
-    old_to_new_keygen_result_info(old_keys)
+    old_keys
         .into_iter()
+        .map(old_to_new_keygen_result_info)
         .for_each(|(key_id, keygen_result_info)| {
             let keygen_result_info_bin = bincode::serialize(&keygen_result_info).unwrap();
             update_key(db, &key_id, keygen_result_info_bin).expect("Should update key in database");
