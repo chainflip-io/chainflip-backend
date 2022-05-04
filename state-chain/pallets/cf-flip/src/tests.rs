@@ -1,7 +1,6 @@
 use std::mem;
 extern crate quickcheck;
 extern crate quickcheck_macros;
-//use quickcheck::{quickcheck, Arbitrary, Gen};
 
 use crate::{
 	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
@@ -55,6 +54,7 @@ impl Arbitrary for FlipEvent {
 		}
 	}
 }
+
 impl Arbitrary for FlipEvents {
 	fn arbitrary(g: &mut Gen) -> FlipEvents {
 		let mut vec = vec![];
@@ -64,13 +64,16 @@ impl Arbitrary for FlipEvents {
 		FlipEvents { events: vec }
 	}
 }
-//#[quickcheck]
+
 fn balance_has_integrity(events: FlipEvents) -> TestResult {
 	new_test_ext().execute_with(|| -> TestResult {
 		let mut result = TestResult::passed();
 		for e in events.events.iter() {
 			e.execute();
-			result = TestResult::from_bool(check_balance_integrity());
+			if !check_balance_integrity() {
+				result = TestResult::from_bool(false);
+				break
+			}
 		}
 		result
 	})
