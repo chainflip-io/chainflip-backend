@@ -1324,9 +1324,9 @@ mod tests {
 					testnet.move_forward_blocks(1);
 
 					// Register the passive nodes.
-					for node in passive_nodes.clone() {
-						network::setup_account_and_peer_mapping(&node);
-						network::Cli::activate_account(&node);
+					for node in &passive_nodes {
+						network::setup_account_and_peer_mapping(node);
+						network::Cli::activate_account(node);
 					}
 
 					// Start an auction and wait for rotation
