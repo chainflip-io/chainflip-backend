@@ -53,7 +53,7 @@ pub trait Chainflip: frame_system::Config {
 	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
-	type EnsureWitnessedByCurrentEpoch: EnsureOrigin<Self::Origin>;
+	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::Origin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state

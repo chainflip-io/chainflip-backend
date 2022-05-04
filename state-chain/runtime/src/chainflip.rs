@@ -45,7 +45,7 @@ impl Chainflip for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
-	type EnsureWitnessedByCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedByCurrentEpoch;
+	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
 }

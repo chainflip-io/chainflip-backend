@@ -368,13 +368,13 @@ where
 /// # Example:
 ///
 /// ```ignore
-/// if let Ok(()) = EnsureWitnessedByCurrentEpoch::ensure_origin(origin) {
+/// if let Ok(()) = EnsureWitnessedAtCurrentEpoch::ensure_origin(origin) {
 ///     log::debug!("This extrinsic was called as a result of witness threshold consensus.");
 /// }
 /// ```
-pub struct EnsureWitnessedByCurrentEpoch;
+pub struct EnsureWitnessedAtCurrentEpoch;
 
-impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessedByCurrentEpoch
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessedAtCurrentEpoch
 where
 	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
 {
