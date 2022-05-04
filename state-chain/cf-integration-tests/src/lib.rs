@@ -172,7 +172,7 @@ mod tests {
 
 			pub fn is_valid_sig(
 				&mut self,
-				payload: eth::H256,
+				payload: cf_chains::eth::H256,
 				sig: &SchnorrVerificationComponents,
 			) -> bool {
 				let agg_key = AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
