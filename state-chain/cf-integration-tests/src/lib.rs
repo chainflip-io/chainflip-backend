@@ -372,6 +372,10 @@ mod tests {
 					.collect()
 			}
 
+			pub fn all_nodes(&self) -> Vec<NodeId> {
+				self.engines.iter().map(|(node_id, _)| node_id.clone()).collect()
+			}
+
 			// Create a network which includes the authorities in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(
@@ -1303,34 +1307,30 @@ mod tests {
 				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_authorities();
-					let (mut testnet, mut passive_nodes) =
-						network::Network::create(MAX_AUTHORITIES as u8, &nodes);
+					let genesis_nodes = Validator::current_authorities();
+					let (mut testnet, passive_nodes) =
+						network::Network::create(MAX_AUTHORITIES as u8, &genesis_nodes);
 
-					for passive_node in passive_nodes.clone() {
-						network::Cli::activate_account(&passive_node);
-					}
-
-					nodes.append(&mut passive_nodes);
-					// An initial stake which is superior to the genesis stakes
-					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
-					for node in &nodes {
+					for node in &passive_nodes {
 						testnet.stake_manager_contract.stake(
 							node.clone(),
-							INITIAL_STAKE,
+							genesis::GENESIS_BALANCE,
 							GENESIS_EPOCH,
 						);
 					}
 
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should still be in the first epoch"
-					);
+					// Allow the stakes to be registered.
+					testnet.move_forward_blocks(1);
+
+					// Register the passive nodes.
+					for node in passive_nodes.clone() {
+						network::setup_account_and_peer_mapping(&node);
+						network::Cli::activate_account(&node);
+					}
 
 					// Start an auction and wait for rotation
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -1339,14 +1339,17 @@ mod tests {
 						Validator::epoch_index(),
 						"We should be in the next epoch"
 					);
+					assert_eq!(Validator::current_authority_count(), MAX_AUTHORITIES);
 
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
 					let percentage_top_offline = 100 - top as u32;
-					let number_offline = (MAX_AUTHORITIES * percentage_top_offline / 100) as usize;
+					let number_offline = 1 +
+						(Validator::current_authority_count() * percentage_top_offline / 100)
+							as usize;
 
 					let offline_nodes: Vec<_> =
-						nodes.iter().take(number_offline).cloned().collect();
+						testnet.all_nodes().iter().take(number_offline).cloned().collect();
 
 					for node in &offline_nodes {
 						testnet.set_active(node, false);
@@ -1390,14 +1393,14 @@ mod tests {
 						"we should have had the state of emergency reset"
 					);
 
-					for node in &nodes {
+					for node in &testnet.all_nodes() {
 						testnet.set_active(node, false);
 					}
 
 					testnet.move_to_next_heartbeat_interval();
 
 					// We should have a set of nodes offline
-					for node in &nodes {
+					for node in &testnet.all_nodes() {
 						assert!(!Online::is_online(node), "the node should be offline");
 					}
 
