@@ -424,12 +424,6 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
-impl pallet_cf_witnesser_api::Config for Runtime {
-	type Call = Call;
-	type Witnesser = Witnesser;
-	type WeightInfoWitnesser = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
-}
-
 parameter_types! {
 	pub const HeartbeatBlockInterval: BlockNumber = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
@@ -517,7 +511,6 @@ construct_runtime!(
 		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
 		Historical: session_historical::{Pallet},
 		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
-		WitnesserApi: pallet_cf_witnesser_api::{Pallet, Call},
 		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Pallet, Config<T>},
