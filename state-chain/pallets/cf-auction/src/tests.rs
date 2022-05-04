@@ -1,6 +1,6 @@
 use crate::{mock::*, *};
 use cf_test_utilities::last_event;
-use cf_traits::mocks::keygen_exclusion::MockKeygenExclusion;
+use cf_traits::{mocks::keygen_exclusion::MockKeygenExclusion, AuthorityCount};
 use frame_support::assert_ok;
 
 #[test]
@@ -33,15 +33,15 @@ fn should_provide_winning_set() {
 	});
 }
 
-fn expected_group_sizes(number_of_bidders: u32) -> (u16, u32, u32) {
-	let expected_number_of_authorities = min(MAX_AUTHORITY_SIZE, number_of_bidders as u16);
+fn expected_group_sizes(number_of_bidders: u32) -> (AuthorityCount, u32, u32) {
+	let expected_number_of_authorities = min(MAX_AUTHORITY_SIZE, number_of_bidders);
 	let expected_number_of_backup_nodes = min(
-		expected_number_of_authorities as u32 / BACKUP_NODE_RATIO,
-		number_of_bidders.saturating_sub(expected_number_of_authorities as u32),
+		expected_number_of_authorities / BACKUP_NODE_RATIO,
+		number_of_bidders.saturating_sub(expected_number_of_authorities),
 	);
 	let expected_number_of_passive_nodes = number_of_bidders
 		.saturating_sub(expected_number_of_backup_nodes)
-		.saturating_sub(expected_number_of_authorities as u32);
+		.saturating_sub(expected_number_of_authorities);
 	(
 		expected_number_of_authorities,
 		expected_number_of_backup_nodes,
@@ -60,7 +60,7 @@ fn should_create_correct_size_of_groups() {
 			let (authority_set_size, backup_nodes_size, passive_nodes_size) =
 				expected_group_sizes(number_of_bidders);
 
-			assert_eq!(authority_set_size, result.winners.len() as u16);
+			assert_eq!(authority_set_size, result.winners.len() as AuthorityCount);
 
 			assert_eq!(backup_nodes_size, AuctionPallet::backup_group_size());
 

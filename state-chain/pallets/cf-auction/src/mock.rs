@@ -7,7 +7,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
 		system_state_info::MockSystemStateInfo,
 	},
-	Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
+	AuthorityCount, Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
@@ -24,8 +24,8 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
-pub const MIN_AUTHORITY_SIZE: u16 = 1;
-pub const MAX_AUTHORITY_SIZE: u16 = 3;
+pub const MIN_AUTHORITY_SIZE: AuthorityCount = 1;
+pub const MAX_AUTHORITY_SIZE: AuthorityCount = 3;
 pub const BACKUP_NODE_RATIO: u32 = 3;
 pub const NUMBER_OF_BIDDERS: u32 = 9;
 pub const BIDDER_GROUP_A: u32 = 1;

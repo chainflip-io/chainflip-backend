@@ -532,7 +532,7 @@ fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	genesis_stakers: Vec<AccountId>,
-	min_authorities: u16,
+	min_authorities: u32,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,

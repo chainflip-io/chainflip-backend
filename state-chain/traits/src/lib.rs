@@ -23,7 +23,7 @@ pub type FlipBalance = u128;
 /// The type used as an epoch index.
 pub type EpochIndex = u32;
 
-pub type AuthorityCount = u16;
+pub type AuthorityCount = u32;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {

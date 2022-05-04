@@ -55,7 +55,7 @@ impl PartyIdxMapping {
 
         for (i, account_id) in signers.iter().enumerate() {
             // indexes start with 1 for signing
-            id_to_idx.insert(account_id.clone(), i as u16 + 1);
+            id_to_idx.insert(account_id.clone(), i as AuthorityCount + 1);
         }
 
         PartyIdxMapping {
