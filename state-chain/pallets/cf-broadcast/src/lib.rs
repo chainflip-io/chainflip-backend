@@ -567,30 +567,7 @@ pub mod pallet {
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
-			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
-				.ok_or(Error::<T, I>::InvalidPayload)?;
-
-			// Here we need to be able to get the accurate broadcast id from the payload
-			let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
-				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			for attempt_count in &attempt_numbers {
-				let broadcast_attempt_id =
-					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-
-				// A particular attempt is either alive because at the signing stage
-				// OR it's at the transmission stage
-				if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
-					AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
-				{
-					log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
-				}
-			}
-			if let Some(attempt_count) = attempt_numbers.last() {
-				let last_broadcast_attempt_id =
-					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-				Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
-			}
-
+			Self::clean_up_storage(payload)?;
 			Ok(().into())
 		}
 	}
@@ -598,28 +575,27 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_storage(payload: ThresholdSignatureFor<T, I>) -> DispatchResultWithPostInfo {
-		if let Some(broadcast_id) = SignatureToBroadcastIdLookup::<T, I>::take(payload) {
-			let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
-				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-			// Self::clean_up_on_transmission_success(broadcast_id, &attempt_numbers);
+		let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
+			.ok_or(Error::<T, I>::InvalidPayload)?;
+		let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
+			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
-			for attempt_count in attempt_numbers.clone() {
-				let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count };
+		for attempt_count in attempt_numbers.clone() {
+			let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count };
 
-				// A particular attempt is either alive because at the signing stage
-				// OR it's at the transmission stage
-				if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
-					AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
-				{
-					log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
-				}
+			// A particular attempt is either alive because at the signing stage
+			// OR it's at the transmission stage
+			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
+				AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
+			{
+				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 			}
+		}
 
-			if let Some(attempt_count) = attempt_numbers.last() {
-				let last_broadcast_attempt_id =
-					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-				Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
-			}
+		if let Some(attempt_count) = attempt_numbers.last() {
+			let last_broadcast_attempt_id =
+				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
+			Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
 		}
 		Ok(().into())
 	}
@@ -673,31 +649,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	fn signature_still_valid(broadcast_id: BroadcastId) -> bool {
-		let (api_call, signature) = ApiCallLookup::<T, I>::get(broadcast_id)
-			.expect("no api call lookup entry for this broadcast id");
-
+	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
+		let (api_call, signature) =
+			ApiCallLookup::<T, I>::get(broadcast_attempt.broadcast_attempt_id.broadcast_id)
+				.expect("no api call lookup entry for this broadcast id");
 		let payload = api_call.threshold_signature_payload();
-
+		// Check if the signature is still valid
 		if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
 			&T::KeyProvider::current_key(),
 			&payload,
 			&signature,
 		) {
+			// Clean up the storage, re-request the signature and return if the signature is invalid
 			let _ = Self::clean_up_storage(signature);
-			ApiCallLookup::<T, I>::remove(broadcast_id);
+			ApiCallLookup::<T, I>::remove(broadcast_attempt.broadcast_attempt_id.broadcast_id);
 			Self::threshold_sign_and_broadcast(api_call);
-			return false
-		} else {
-			return true
-		}
-	}
-
-	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		if !Self::signature_still_valid(broadcast_attempt.broadcast_attempt_id.broadcast_id) {
-			log::warn!(
-				"Signature is no longer valid. Aborting current broadcast attempt and rescedule threshold signature."
-			);
 			return
 		}
 		// Seed based on the input data of the extrinsic

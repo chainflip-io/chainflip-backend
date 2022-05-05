@@ -5,7 +5,7 @@ use crate::{
 };
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
-	ChainCrypto,
+	ChainCrypto, Ethereum,
 };
 use cf_traits::{
 	mocks::{
@@ -43,6 +43,7 @@ parameter_types! {
 
 thread_local! {
 	pub static NOMINATION: std::cell::RefCell<Option<u64>>  = RefCell::new(Some(RANDOM_NOMINEE));
+	pub static VALIDKEY: std::cell::RefCell<bool> = RefCell::new(true);
 }
 
 impl frame_system::Config for Test {
@@ -113,8 +114,15 @@ pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
 // Mock KeyProvider
-pub const MOCK_KEY_ID: &[u8] = &[0, 0, 0, 0];
-pub const MOCK_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
+pub const VALID_KEY_ID: &[u8] = &[0, 0, 0, 0];
+pub const VALID_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
+
+pub const INVALID_KEY_ID: &[u8] = &[1, 1, 1, 1];
+pub const INVALID_AGG_KEY: [u8; 4] = [1, 1, 1, 1];
+
+thread_local! {
+	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+}
 
 pub struct MockKeyProvider;
 
@@ -122,11 +130,25 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	type KeyId = Vec<u8>;
 
 	fn current_key_id() -> Self::KeyId {
-		MOCK_KEY_ID.to_vec()
+		if VALIDKEY.with(|cell| *cell.borrow()) {
+			VALID_KEY_ID.to_vec()
+		} else {
+			INVALID_KEY_ID.to_vec()
+		}
 	}
 
 	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
-		MOCK_AGG_KEY
+		if VALIDKEY.with(|cell| *cell.borrow()) {
+			VALID_AGG_KEY
+		} else {
+			INVALID_AGG_KEY
+		}
+	}
+}
+
+impl MockKeyProvider {
+	pub fn set_valid(valid: bool) {
+		VALIDKEY.with(|cell| *cell.borrow_mut() = valid);
 	}
 }
 

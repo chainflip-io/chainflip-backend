@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, ApiCallLookup, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId,
-	BroadcastId, BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
+	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
+	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
 	TransmissionFailure,
 };
@@ -868,5 +868,34 @@ fn missing_transaction_transmission() {
 			next_broadcast_attempt_id.broadcast_id
 		)
 		.is_none());
+	});
+}
+
+#[test]
+fn re_request_threshold_signature() {
+	new_test_ext().execute_with(|| {
+		// Simualte a key rotation to invalidate the signature
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+		// Initiate broadcast
+		MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
+		assert!(
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_some()
+		);
+		assert_eq!(
+			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+				.unwrap(),
+			vec![0]
+		);
+		// Simualte a key rotation to invalidate the signature
+		MockKeyProvider::set_valid(false);
+		MockBroadcast::on_initialize(3_u64);
+		// Expect the broadcast to be deleted
+		assert!(
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
+		);
 	});
 }
