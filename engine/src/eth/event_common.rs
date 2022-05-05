@@ -1,17 +1,21 @@
 use anyhow::Result;
 use sp_core::U256;
 
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 use web3::{
     ethabi::RawLog,
-    types::{Log, H256},
+    types::{Log, Transaction, H256},
 };
+
+use super::EthRpcApi;
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq)]
 pub struct EventWithCommon<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: H256,
+    /// The transaction fee in Wei
+    pub tx_fee: U256,
     /// The index number of this particular log, in the list of logs emitted by the tx_hash
     pub log_index: U256,
     /// The block number at which the event occurred
@@ -42,9 +46,7 @@ impl<EventParameters: Debug> EventWithCommon<EventParameters> {
         LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>,
     {
         Ok(Self {
-            tx_hash: log
-                .transaction_hash
-                .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?,
+            tx_hash,
             log_index: log.log_index.expect("Should have log index"),
             base_fee_per_gas,
             block_number: log
