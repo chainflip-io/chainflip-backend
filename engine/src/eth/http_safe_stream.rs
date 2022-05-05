@@ -125,6 +125,7 @@ pub mod tests {
     use futures::StreamExt;
     use mockall::{predicate::eq, Sequence};
     use sp_core::H256;
+    use sp_core::U256;
     use web3::types::Block;
     use web3::types::H2048;
 
@@ -144,6 +145,7 @@ pub mod tests {
             hash: Some(H256([(block_number % 256) as u8; 32])),
             number: Some(U64::from(block_number)),
             logs_bloom: Some(H2048::default()),
+            base_fee_per_gas: Some(U256::from(1)),
             ..Default::default()
         })
     }

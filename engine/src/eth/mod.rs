@@ -30,7 +30,7 @@ use crate::{
 use ethbloom::{Bloom, Input};
 use futures::{
     stream::{self},
-    StreamExt, TryFutureExt,
+    StreamExt, TryFutureExt, TryStreamExt,
 };
 use secp256k1::SecretKey;
 use slog::o;
@@ -51,7 +51,8 @@ use web3::{
     signing::{Key, SecretKeyRef},
     types::{
         Block, BlockHeader, BlockNumber, Bytes, CallRequest, Filter, FilterBuilder, Log,
-        SignedTransaction, SyncState, TransactionParameters, H2048, H256, U64,
+        SignedTransaction, SyncState, Transaction, TransactionId, TransactionParameters, H2048,
+        H256, U64,
     },
     Web3,
 };
@@ -66,6 +67,7 @@ use async_trait::async_trait;
 pub struct EthNumberBloom {
     pub block_number: U64,
     pub logs_bloom: H2048,
+    pub base_fee_per_gas: U256,
 }
 
 #[cfg(test)]
@@ -230,6 +232,8 @@ pub trait EthRpcApi {
 
     async fn chain_id(&self) -> Result<U256>;
 
+    async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
+
     /// Gets block, returning error when either:
     /// - Request fails
     /// - Request succeeds, but doesn't return a block
@@ -304,6 +308,26 @@ where
         ))
     }
 
+    async fn transaction(&self, tx_hash: H256) -> Result<Transaction> {
+        self.web3
+            .eth()
+            .transaction(TransactionId::Hash(tx_hash))
+            .await
+            .context(format!(
+                "{} client: Failed to fetch ETH transaction",
+                T::transport_protocol()
+            ))
+            .and_then(|opt_block| {
+                opt_block.ok_or_else(|| {
+                    anyhow::Error::msg(format!(
+                        "{} client: Getting ETH transaction with tx_hash {} returned None",
+                        T::transport_protocol(),
+                        tx_hash
+                    ))
+                })
+            })
+    }
+
     async fn block(&self, block_number: U64) -> Result<Block<H256>> {
         self.web3
             .eth()
@@ -329,14 +353,16 @@ impl TryFrom<Block<H256>> for EthNumberBloom {
     type Error = anyhow::Error;
 
     fn try_from(block: Block<H256>) -> Result<Self, Self::Error> {
-        if block.number.is_none() || block.logs_bloom.is_none() {
+        if block.number.is_none() || block.logs_bloom.is_none() || block.base_fee_per_gas.is_none()
+        {
             Err(anyhow::Error::msg(
-                "Block<H256> did not contain necessary block number and/or logs bloom",
+                "Block<H256> did not contain necessary block number and/or logs bloom and/or base fee per gas",
             ))
         } else {
             Ok(EthNumberBloom {
                 block_number: block.number.unwrap(),
                 logs_bloom: block.logs_bloom.unwrap(),
+                base_fee_per_gas: block.base_fee_per_gas.unwrap(),
             })
         }
     }
@@ -472,6 +498,8 @@ mod mocks {
             async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
             async fn chain_id(&self) -> Result<U256>;
+
+            async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>>;
         }
@@ -693,7 +721,7 @@ pub trait EthObserver {
                 .fuse();
                 let eth_rpc_c = eth_rpc.clone();
 
-                let decode_log_fn = self.decode_log_closure()?;
+                let decode_log_fn = Arc::new(self.decode_log_closure()?);
 
                 // convert from heads to events
                 let events = past_and_fut_heads
@@ -722,27 +750,30 @@ pub trait EthObserver {
                                 Ok(vec![])
                             };
 
-                            (block_number.as_u64(), result_logs)
+                            (block_number.as_u64(), header.base_fee_per_gas, result_logs, eth_rpc)
                         }
                     })
-                    .map(move |(block_number, result_logs)| BlockEvents {
-                        block_number,
-                        events: result_logs.and_then(|logs| {
-                            logs.into_iter()
-                                .map(
-                                    |unparsed_log| -> Result<
-                                        EventWithCommon<Self::EventParameters>,
-                                        anyhow::Error,
-                                    > {
-                                        EventWithCommon::<Self::EventParameters>::decode(
-                                            &decode_log_fn,
-                                            unparsed_log,
-                                        )
+                    .then(
+                        move |(block_number, base_fee_per_gas, result_logs, eth_rpc)| {
+                            let decode_log_fn = decode_log_fn.clone();
+                            async move {
+                                BlockEvents {
+                                    block_number,
+                                    events: match result_logs {
+                                        Ok(result_logs) => stream::iter(result_logs).then(|unparsed_log| {
+                                            EventWithCommon::<Self::EventParameters>::new_with_decoded_logs(
+                                                decode_log_fn.clone(),
+                                                unparsed_log,
+                                                &eth_rpc,
+                                                base_fee_per_gas,
+                                            )
+                                        }).try_collect::<Vec<_>>().await,
+                                        Err(err) => Err(err),
                                     },
-                                )
-                                .collect::<Result<Vec<_>>>()
-                        }),
-                    });
+                                }
+                            }
+                        },
+                    );
 
                 return Ok(Box::pin(events));
             }
@@ -1163,6 +1194,7 @@ mod merged_stream_tests {
         EventWithCommon::<KeyManagerEvent> {
             tx_hash: Default::default(),
             log_index: U256::from(log_index),
+            tx_fee: U256::from(0),
             block_number,
             event_parameters: KeyManagerEvent::AggKeySetByAggKey {
                 old_key: ChainflipKey::default(),

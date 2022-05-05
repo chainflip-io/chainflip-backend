@@ -229,6 +229,7 @@ impl EthObserver for KeyManager {
                                 signer,
                                 event.block_number,
                                 event.tx_hash,
+                                event.tx_fee.try_into().unwrap(),
                             )
                             .into(),
                         )),

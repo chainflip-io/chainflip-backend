@@ -552,9 +552,11 @@ pub mod pallet {
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
 			payload: ThresholdSignatureFor<T, I>,
-			_tx_signer: SignerIdFor<T, I>,
+			tx_signer: SignerIdFor<T, I>,
 			_block_number: u64,
 			_tx_hash: TransactionHashFor<T, I>,
+			// TODO: Amount type
+			tx_fee: u128,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
@@ -563,6 +565,7 @@ pub mod pallet {
 			// Here we need to be able to get the accurate broadcast id from the payload
 			let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+
 			for attempt_count in &attempt_numbers {
 				let broadcast_attempt_id =
 					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -575,6 +578,13 @@ pub mod pallet {
 					log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 				}
 			}
+			// Add fee deficits only when we know everything else is ok
+			SignerTransactionFeeDeficit::<T, I>::mutate_exists(tx_signer, |fee_deficit| {
+				if let Some(fee_deficit) = fee_deficit.as_mut() {
+					*fee_deficit = fee_deficit.saturating_add(tx_fee);
+				}
+			});
+
 			if let Some(attempt_count) = attempt_numbers.last() {
 				let last_broadcast_attempt_id =
 					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };

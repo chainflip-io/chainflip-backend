@@ -131,6 +131,7 @@ impl MockCfe {
 					Validity::Valid,
 					10,
 					[0xcf; 4],
+					0,
 				)
 			},
 			_ => unimplemented!(),
@@ -362,6 +363,7 @@ fn test_invalid_sigdata_is_noop() {
 				Validity::Valid,
 				10,
 				[0u8; 4],
+				0
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
@@ -492,7 +494,8 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			MockThresholdSignature::default(),
 			Validity::Valid,
 			10,
-			[0xcf; 4]
+			[0xcf; 4],
+			0
 		));
 
 		// Attempt numbers, signature requests and transmission should be cleaned up
@@ -596,7 +599,8 @@ fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attemp
 			MockThresholdSignature::default(),
 			Validity::Valid,
 			10,
-			[0xcf; 4]
+			[0xcf; 4],
+			0
 		));
 
 		// Success should clear these out
