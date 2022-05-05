@@ -681,6 +681,11 @@ pub mod pallet {
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			let genesis_authorities = pallet_session::Pallet::<T>::validators();
 			EpochAuthorityCount::<T>::insert(GENESIS_EPOCH, genesis_authorities.len() as u32);
+			HistoricalBonds::<T>::insert(GENESIS_EPOCH, self.bond);
+			for validator in &genesis_authorities {
+				HistoricalActiveEpochs::<T>::insert(validator, vec![GENESIS_EPOCH]);
+			}
+			HistoricalAuthorities::<T>::insert(GENESIS_EPOCH, &genesis_authorities);
 			Pallet::<T>::start_new_epoch(&genesis_authorities, self.bond);
 		}
 	}
