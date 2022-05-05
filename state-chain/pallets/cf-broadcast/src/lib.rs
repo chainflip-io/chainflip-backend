@@ -235,6 +235,11 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	// TODO: Amount type
+	#[pallet::storage]
+	pub type SignerTransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, u128, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -389,6 +394,11 @@ pub mod pallet {
 			)
 			.is_ok()
 			{
+				// Whitelist the signer_id so it can receive fee refunds
+				if !SignerTransactionFeeDeficit::<T, I>::contains_key(signer_id.clone()) {
+					SignerTransactionFeeDeficit::<T, I>::insert(signer_id.clone(), 0);
+				}
+
 				AwaitingTransmission::<T, I>::insert(
 					broadcast_attempt_id,
 					TransmissionAttempt {
