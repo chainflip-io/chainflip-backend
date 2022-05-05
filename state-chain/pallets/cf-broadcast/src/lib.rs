@@ -240,6 +240,14 @@ pub mod pallet {
 	pub type SignerTransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, u128, ValueQuery>;
 
+	/// A mapping of signer id to the the account id of the authority that registered the signer.
+	/// through a transaction_ready_for_transmission extrinsic.
+	// (Currently not used for anything, but it's nice to have information that will be hard to
+	// create later down the line)
+	#[pallet::storage]
+	pub type SignerIdToAccountId<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -382,7 +390,7 @@ pub mod pallet {
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
-			ensure!(signing_attempt.nominee == signer.into(), Error::<T, I>::InvalidSigner);
+			ensure!(signing_attempt.nominee == signer.clone().into(), Error::<T, I>::InvalidSigner);
 
 			// it's no longer being signed, it's being broadcast
 			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
@@ -397,6 +405,7 @@ pub mod pallet {
 				// Whitelist the signer_id so it can receive fee refunds
 				if !SignerTransactionFeeDeficit::<T, I>::contains_key(signer_id.clone()) {
 					SignerTransactionFeeDeficit::<T, I>::insert(signer_id.clone(), 0);
+					SignerIdToAccountId::<T, I>::insert(signer_id, signer);
 				}
 
 				AwaitingTransmission::<T, I>::insert(
