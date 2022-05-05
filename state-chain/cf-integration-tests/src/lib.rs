@@ -206,13 +206,18 @@ mod tests {
 					match event {
 						ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
 							// Witness event -> send transaction to state chain
-							state_chain_runtime::WitnesserApi::witness_staked(
+							state_chain_runtime::Witnesser::witness_at_epoch(
 								Origin::signed(self.node_id.clone()),
-								validator_id.clone(),
-								*amount,
-								ETH_ZERO_ADDRESS,
+								Box::new(
+									pallet_cf_staking::Call::staked(
+										validator_id.clone(),
+										*amount,
+										ETH_ZERO_ADDRESS,
+										TX_HASH,
+									)
+									.into(),
+								),
 								*epoch,
-								TX_HASH,
 							)
 							.expect("should be able to witness stake for node");
 						},
@@ -258,11 +263,13 @@ mod tests {
 								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 									if let EngineState::Rotation = self.engine_state {
 										// If we rotating let's witness the keys being rotated on the contract
-										state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
+										state_chain_runtime::Witnesser::witness(
 											Origin::signed(self.node_id.clone()),
-											(&*self.threshold_signer).borrow_mut().proposed_public_key(),
-											100,
-											[1u8; 32].into(),
+											Box::new(pallet_cf_vaults::Call::vault_key_rotated(
+												(&*self.threshold_signer).borrow_mut().proposed_public_key(),
+												100,
+												[1u8; 32].into(),
+											).into()),
 										).expect("should be able to vault key rotation for node");
 									}
 							},
