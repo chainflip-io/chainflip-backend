@@ -2,7 +2,11 @@ use super::*;
 use crate::{
     logging::{self},
     multisig::{
-        client::{self, key_store::KeyStore},
+        client::{
+            self,
+            common::{CeremonyFailureReason, SigningFailureReason, SigningRequestIgnoredReason},
+            key_store::KeyStore,
+        },
         KeyId, MessageHash, PersistentKeyDB,
     },
     testing::{
@@ -41,9 +45,13 @@ async fn should_ignore_rts_for_unknown_key() {
     );
 
     // Check sign request fails immediately with "unknown key" error
-    let error = assert_err!(assert_future_can_complete(signing_request_fut));
-    // TODO: [SC-3352] Check the reason for failure in multisig tests #1552
-    assert_eq!(&error.1.to_string(), "Signing request ignored: unknown key");
+    let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
+    assert_eq!(
+        failure_reason,
+        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+            SigningRequestIgnoredReason::UnknownKey
+        ))
+    );
 }
 
 #[tokio::test]

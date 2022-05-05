@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::multisig::client::{self, signing};
+use crate::multisig::client::{
+    self,
+    common::{BroadcastStageName, CeremonyFailureReason, SigningFailureReason},
+    signing,
+};
 
 use client::common::{
     broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
@@ -106,14 +110,21 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
     fn process(self, messages: BTreeMap<usize, Option<Self::Message>>) -> SigningStageResult {
         let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("initial commitments");
+            Err((reported_parties, abort_reason)) => {
+                return SigningStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::InitialCommitments,
+                    )),
+                );
             }
         };
 
         slog::debug!(
             self.common.logger,
-            "Initial commitments have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::InitialCommitments
         );
 
         let processor = LocalSigStage3 {
@@ -215,14 +226,21 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     fn process(self, messages: BTreeMap<usize, Option<Self::Message>>) -> SigningStageResult {
         let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("local signatures");
+            Err((reported_parties, abort_reason)) => {
+                return SigningStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::LocalSignatures,
+                    )),
+                );
             }
         };
 
         slog::debug!(
             self.common.logger,
-            "Local signatures have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::LocalSignatures
         );
 
         let all_idxs = &self.common.all_idxs;
@@ -243,7 +261,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             Ok(sig) => StageResult::Done(sig),
             Err(failed_idxs) => StageResult::Error(
                 failed_idxs,
-                anyhow::Error::msg("Failed to aggregate signature"),
+                CeremonyFailureReason::SigningFailure(SigningFailureReason::InvalidSigShare),
             ),
         }
     }

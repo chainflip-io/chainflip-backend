@@ -21,7 +21,14 @@ use crate::{
     common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::CEREMONY_ID_KEY,
-    multisig::{client::utils::PartyIdxMapping, crypto::Rng, KeyDB, KeyId},
+    multisig::{
+        client::{
+            common::{SigningFailureReason, SigningRequestIgnoredReason},
+            utils::PartyIdxMapping,
+        },
+        crypto::Rng,
+        KeyDB, KeyId,
+    },
 };
 
 use async_trait::async_trait;
@@ -46,6 +53,7 @@ pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
+    common::CeremonyFailureReason,
     signing::frost::SigningData,
 };
 
@@ -123,14 +131,14 @@ pub trait MultisigClientApi {
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)>;
+    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, CeremonyFailureReason)>;
     async fn sign(
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>;
+    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, CeremonyFailureReason)>;
 }
 
 type KeygenRequestSender = UnboundedSender<(
@@ -196,14 +204,16 @@ where
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> impl '_ + Future<Output = Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)>>
-    {
+    ) -> impl '_
+           + Future<
+        Output = Result<secp256k1::PublicKey, (BTreeSet<AccountId>, CeremonyFailureReason)>,
+    > {
         assert!(participants.contains(&self.my_account_id));
 
         slog::info!(
             self.logger,
-            "Received a keygen request, participants: {}",
-            format_iterator(&participants);
+            "Received a keygen request";
+            "participants" => format!("{}",format_iterator(&participants)),
             CEREMONY_ID_KEY => ceremony_id
         );
 
@@ -239,10 +249,7 @@ where
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
                 Some(Err(error)) => Err(error),
-                None => Err((
-                    BTreeSet::new(),
-                    anyhow::Error::msg("Keygen request ignored"),
-                )),
+                None => panic!("Keygen result oneshot channel dropped before receiving a result"),
             }
         }
     }
@@ -257,14 +264,15 @@ where
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> impl '_ + Future<Output = Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>>
+    ) -> impl '_ + Future<Output = Result<SchnorrSignature, (BTreeSet<AccountId>, CeremonyFailureReason)>>
     {
         assert!(signers.contains(&self.my_account_id));
 
         slog::debug!(
             self.logger,
-            "Received a request to sign, message_hash: {}, signers: {}",
-            data, format_iterator(&signers);
+            "Received a request to sign";
+            "message_hash" => format!("{}",data),
+            "signers" => format!("{}",format_iterator(&signers)),
             CEREMONY_ID_KEY => ceremony_id
         );
 
@@ -303,15 +311,14 @@ where
                     if let Ok(result) = result_receiver.await {
                         result
                     } else {
-                        Err((
-                            BTreeSet::new(),
-                            anyhow::Error::msg("Signing request ignored"),
-                        ))
+                        panic!("Signing result oneshot channel dropped before receiving a result");
                     }
                 }
                 None => Err((
-                    Default::default(),
-                    anyhow::Error::msg("Signing request ignored: unknown key"),
+                    BTreeSet::new(),
+                    CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+                        SigningRequestIgnoredReason::UnknownKey,
+                    )),
                 )),
             }
         })
@@ -394,7 +401,7 @@ impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyD
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)> {
+    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, CeremonyFailureReason)> {
         self.initiate_keygen(ceremony_id, participants).await
     }
 
@@ -404,7 +411,7 @@ impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyD
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)> {
+    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, CeremonyFailureReason)> {
         self.initiate_signing(ceremony_id, key_id, signers, data)
             .await
     }

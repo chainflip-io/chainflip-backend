@@ -8,12 +8,14 @@ use crate::{
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
+use super::CeremonyFailureReason;
+
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result> {
     /// Ceremony proceeds to the next stage
     NextStage(Box<dyn CeremonyStage<Message = M, Result = Result>>),
     /// Ceremony aborted (contains parties to report)
-    Error(BTreeSet<usize>, anyhow::Error),
+    Error(BTreeSet<usize>, CeremonyFailureReason),
     /// Ceremony finished and successful
     Done(Result),
 }

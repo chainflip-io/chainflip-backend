@@ -2,6 +2,10 @@ use crate::{
     logging::{REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED},
     multisig::{
         client::{
+            common::{
+                BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
+                SigningFailureReason, SigningRequestIgnoredReason,
+            },
             signing::frost,
             tests::helpers::{
                 for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
@@ -122,7 +126,11 @@ async fn should_report_on_invalid_local_sig3() {
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id], result_receivers)
+        .complete_with_error(
+            &[bad_account_id],
+            result_receivers,
+            CeremonyFailureReason::SigningFailure(SigningFailureReason::InvalidSigShare),
+        )
         .await;
     assert!(signing_ceremony
         .nodes
@@ -147,7 +155,14 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id], result_receivers)
+        .complete_with_error(
+            &[bad_account_id],
+            result_receivers,
+            CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                BroadcastFailureReason::Inconsistency,
+                BroadcastStageName::InitialCommitments,
+            )),
+        )
         .await;
     assert!(signing_ceremony
         .nodes
@@ -179,7 +194,14 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id], result_receivers)
+        .complete_with_error(
+            &[bad_account_id],
+            result_receivers,
+            CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                BroadcastFailureReason::Inconsistency,
+                BroadcastStageName::LocalSignatures,
+            )),
+        )
         .await;
     assert!(signing_ceremony
         .nodes
@@ -194,20 +216,29 @@ async fn should_ignore_duplicate_rts() {
 
     let (messages, _result_receivers) = signing_ceremony.request().await;
 
+    // Run the singing ceremony to half way
     run_stages!(signing_ceremony, messages, frost::VerifyComm2,);
 
     assert_ok!(signing_ceremony.nodes[&test_id]
         .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
 
-    // Send another request to sign with the same ceremony_id and key_id
-    signing_ceremony.request_without_gather();
+    // Send another request to sign with the same ceremony_id and key_id to a node
+    let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&test_id);
+    let node = &mut signing_ceremony.nodes.get_mut(&test_id).unwrap();
+    let mut result_receiver = node.request_signing(signing_ceremony_details);
 
     // The request should have been rejected and the existing ceremony is unchanged
-    assert_ok!(signing_ceremony.nodes[&test_id]
-        .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
-    assert!(signing_ceremony.nodes[&test_id]
-        .tag_cache
-        .contains_tag(REQUEST_TO_SIGN_IGNORED));
+    assert_ok!(node.ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
+
+    // Check that the failure reason is correct
+    assert!(node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+    assert_eq!(
+        result_receiver
+            .try_recv()
+            .expect("Failed to receive ceremony result")
+            .map_err(|(_, reason)| reason),
+        Err(CeremonyFailureReason::DuplicateCeremonyId)
+    );
 }
 
 #[tokio::test]
@@ -228,14 +259,25 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     );
 
     let test_node = signing_ceremony.nodes.get_mut(&test_node_id).unwrap();
-    test_node.request_signing(signing_ceremony_details);
+    let mut result_receiver = test_node.request_signing(signing_ceremony_details);
 
     // The request to sign should not have triggered a ceremony
     assert_ok!(test_node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
+
+    // Check that the failure reason is correct
     assert!(test_node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+    assert_eq!(
+        result_receiver
+            .try_recv()
+            .expect("Failed to receive ceremony result")
+            .map_err(|(_, reason)| reason),
+        Err(CeremonyFailureReason::SigningFailure(
+            SigningFailureReason::RequestIgnored(SigningRequestIgnoredReason::InvalidParticipants)
+        ),)
+    );
 }
 
 #[tokio::test]
@@ -273,14 +315,25 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(test_node_id);
     signing_ceremony_details.signers.pop();
     let node_0 = signing_ceremony.nodes.get_mut(test_node_id).unwrap();
-    node_0.request_signing(signing_ceremony_details);
+    let mut result_receiver = node_0.request_signing(signing_ceremony_details);
 
     // The request to sign should not have started a ceremony
     assert_ok!(node_0.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
+
+    // Check that the failure reason is correct
     assert!(node_0.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+    assert_eq!(
+        result_receiver
+            .try_recv()
+            .expect("Failed to receive ceremony result")
+            .map_err(|(_, reason)| reason),
+        Err(CeremonyFailureReason::SigningFailure(
+            SigningFailureReason::RequestIgnored(SigningRequestIgnoredReason::NotEnoughSigners)
+        ),)
+    );
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -407,18 +460,25 @@ async fn should_ignore_rts_with_duplicate_signer() {
     );
 
     let node = &mut signing_ceremony.nodes.get_mut(&node_0_id).unwrap();
-    node.request_signing(signing_ceremony_details);
+    let mut result_receiver = node.request_signing(signing_ceremony_details);
 
-    // The rts should not have started a ceremony and we should see an error tag
+    // The rts should not have started a ceremony
     assert_ok!(node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
 
-    assert!(signing_ceremony
-        .get_mut_node(&node_0_id)
-        .tag_cache
-        .contains_tag(REQUEST_TO_SIGN_IGNORED));
+    // Check that the failure reason is correct
+    assert!(node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+    assert_eq!(
+        result_receiver
+            .try_recv()
+            .expect("Failed to receive ceremony result")
+            .map_err(|(_, reason)| reason),
+        Err(CeremonyFailureReason::SigningFailure(
+            SigningFailureReason::RequestIgnored(SigningRequestIgnoredReason::InvalidParticipants)
+        ),)
+    );
 }
 
 #[tokio::test]
@@ -442,14 +502,27 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     // Send an rts with the same ceremony id (the default signing ceremony id for tests)
     let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&account_id);
     let node = signing_ceremony.nodes.get_mut(&account_id).unwrap();
-    node.request_signing(signing_ceremony_details);
+    let mut result_receiver = node.request_signing(signing_ceremony_details);
 
     // The rts should have been ignored
     assert_ok!(node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
+
+    // Check that the failure reason is correct
     assert!(node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+    assert_eq!(
+        result_receiver
+            .try_recv()
+            .expect("Failed to receive ceremony result")
+            .map_err(|(_, reason)| reason),
+        Err(CeremonyFailureReason::SigningFailure(
+            SigningFailureReason::RequestIgnored(
+                SigningRequestIgnoredReason::CeremonyIdAlreadyUsed
+            )
+        ),)
+    );
 }
 
 #[tokio::test]
@@ -785,7 +858,14 @@ mod timeout {
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id_1], result_receivers)
+                .complete_with_error(
+                    &[non_sending_party_id_1],
+                    result_receivers,
+                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                        BroadcastFailureReason::InsufficientMessages,
+                        BroadcastStageName::InitialCommitments,
+                    )),
+                )
                 .await
         }
 
@@ -819,7 +899,14 @@ mod timeout {
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id_1], result_receivers)
+                .complete_with_error(
+                    &[non_sending_party_id_1],
+                    result_receivers,
+                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                        BroadcastFailureReason::InsufficientMessages,
+                        BroadcastStageName::LocalSignatures,
+                    )),
+                )
                 .await
         }
 

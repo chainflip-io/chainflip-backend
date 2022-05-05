@@ -8,7 +8,7 @@ use sp_core::H256;
 use zeroize::Zeroize;
 
 use crate::multisig::{
-    client::ThresholdParameters,
+    client::{common::KeygenFailureReason, ThresholdParameters},
     crypto::{Point, Rng, Scalar},
 };
 
@@ -242,7 +242,8 @@ pub fn validate_commitments(
     public_coefficients: BTreeMap<usize, DKGUnverifiedCommitment>,
     hash_commitments: BTreeMap<usize, HashComm1>,
     context: &HashContext,
-) -> Result<BTreeMap<usize, DKGCommitment>, BTreeSet<usize>> {
+    logger: &slog::Logger,
+) -> Result<BTreeMap<usize, DKGCommitment>, (BTreeSet<usize>, KeygenFailureReason)> {
     let invalid_idxs: BTreeSet<_> = public_coefficients
         .iter()
         .filter_map(|(idx, c)| {
@@ -252,10 +253,11 @@ pub fn validate_commitments(
                 .get(idx)
                 .expect("message must be present due to ceremony runner invariants");
 
-            let invalid_zkp = !is_valid_zkp(challenge, &c.zkp, &c.commitments);
-            let invalid_hash_commitment = !is_valid_hash_commitment(c, &hash_commitment.0);
-
-            if invalid_zkp || invalid_hash_commitment {
+            if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
+                slog::warn!(logger, "Invalid ZKP commitment from party: {}", idx);
+                Some(*idx)
+            } else if !is_valid_hash_commitment(c, &hash_commitment.0) {
+                slog::warn!(logger, "Invalid hash commitment for party: {}", idx);
                 Some(*idx)
             } else {
                 None
@@ -276,7 +278,7 @@ pub fn validate_commitments(
             })
             .collect())
     } else {
-        Err(invalid_idxs)
+        Err((invalid_idxs, KeygenFailureReason::InvalidCommitment))
     }
 }
 
@@ -353,7 +355,7 @@ impl DKGUnverifiedCommitment {
 #[cfg(test)]
 mod tests {
 
-    use crate::testing::assert_ok;
+    use crate::{logging::test_utils::new_test_logger, testing::assert_ok};
 
     use super::*;
 
@@ -406,7 +408,8 @@ mod tests {
         let coeff_commitments = assert_ok!(validate_commitments(
             commitments,
             hash_commitments,
-            &context
+            &context,
+            &new_test_logger()
         ));
 
         // Now it is okay to distribute the shares

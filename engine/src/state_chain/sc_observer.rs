@@ -55,12 +55,12 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                         cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
                     ),
                     // Report keygen failure if we failed to sign
-                    Err((bad_account_ids, _error)) => {
+                    Err((bad_account_ids, _reason)) => {
                         KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
                     }
                 }
             }
-            Err((bad_account_ids, _error)) => {
+            Err((bad_account_ids, _reason)) => {
                 KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
             }
         };
@@ -290,7 +290,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                     )
                                                                     .await;
                                                             }
-                                                            Err((bad_account_ids, _error)) => {
+                                                            Err((bad_account_ids, _reason)) => {
                                                                 let _result = state_chain_client
                                                                     .submit_signed_extrinsic(
                                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(

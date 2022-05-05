@@ -25,6 +25,7 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
+            common::{CeremonyFailureReason, KeygenFailureReason},
             keygen::{HashComm1, HashContext, SecretShare3},
             signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
@@ -378,7 +379,12 @@ where
             AccountId,
             CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
         >,
-    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, BTreeSet<AccountId>>> {
+    ) -> Option<
+        Result<
+            <Self as CeremonyRunnerStrategy>::CheckedOutput,
+            (BTreeSet<AccountId>, CeremonyFailureReason),
+        >,
+    > {
         let results = self
             .nodes
             .iter_mut()
@@ -402,7 +408,7 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (BTreeSet<AccountId>, anyhow::Error),
+                        (BTreeSet<AccountId>, CeremonyFailureReason),
                     >,
                 )>,
             >>()
@@ -412,16 +418,19 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (BTreeSet<AccountId>, anyhow::Error),
+                        (BTreeSet<AccountId>, CeremonyFailureReason),
                     >,
                 >,
             >>()?;
 
-        let (ok_results, all_reported_parties): (HashMap<_, _>, BTreeSet<_>) = results
+        let (ok_results, (all_reported_parties, failure_reasons)): (
+            HashMap<_, _>,
+            (BTreeSet<_>, BTreeSet<_>),
+        ) = results
             .into_iter()
             .partition_map(|(account_id, result)| match result {
                 Ok(output) => Either::Left((account_id, output)),
-                Err((reported_parties, _error)) => Either::Right(reported_parties),
+                Err((reported_parties, reason)) => Either::Right((reported_parties, reason)),
             });
 
         if !ok_results.is_empty() && all_reported_parties.is_empty() {
@@ -432,7 +441,16 @@ where
                 1,
                 "Reported parties weren't the same for all nodes"
             );
-            Some(Err(all_reported_parties.into_iter().next().unwrap()))
+            assert_eq!(
+                failure_reasons.len(),
+                1,
+                "The ceremony failure reason was not the same for all nodes: {:?}",
+                failure_reasons
+            );
+            Some(Err((
+                all_reported_parties.into_iter().next().unwrap(),
+                failure_reasons.into_iter().next().unwrap(),
+            )))
         } else {
             panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
         }
@@ -458,8 +476,9 @@ where
             AccountId,
             CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
         >,
+        expected_failure_reason: CeremonyFailureReason,
     ) -> Option<()> {
-        let reported = self
+        let (reported, reason) = self
             .try_gather_outcomes(result_receivers)
             .await?
             .unwrap_err();
@@ -467,9 +486,12 @@ where
             BTreeSet::from_iter(bad_account_ids.iter()),
             reported.iter().collect()
         );
+        assert_eq!(expected_failure_reason, reason);
         Some(())
     }
 
+    /// Gathers the ceremony outcomes from all nodes,
+    /// making sure they are identical and match the expected failure reason.
     pub async fn complete_with_error(
         &mut self,
         bad_account_ids: &[AccountId],
@@ -477,10 +499,15 @@ where
             AccountId,
             CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
         >,
+        expected_failure_reason: CeremonyFailureReason,
     ) {
-        self.try_complete_with_error(bad_account_ids, &mut result_receivers)
-            .await
-            .expect("Failed to get all ceremony outcomes");
+        self.try_complete_with_error(
+            bad_account_ids,
+            &mut result_receivers,
+            expected_failure_reason,
+        )
+        .await
+        .expect("Failed to get all ceremony outcomes");
     }
 
     pub fn request_without_gather(
@@ -966,7 +993,11 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
     );
     keygen_ceremony.distribute_messages(stage_2_messages);
     match keygen_ceremony
-        .try_complete_with_error(&[], &mut result_receivers)
+        .try_complete_with_error(
+            &[],
+            &mut result_receivers,
+            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::NotContractCompatible),
+        )
         .await
     {
         Some(_) => {

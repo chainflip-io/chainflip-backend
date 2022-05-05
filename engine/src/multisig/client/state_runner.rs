@@ -17,7 +17,9 @@ use crate::{
 use state_chain_runtime::AccountId;
 
 use super::{
-    ceremony_manager::CeremonyResultSender, common::CeremonyStage, utils::PartyIdxMapping,
+    ceremony_manager::CeremonyResultSender,
+    common::{CeremonyFailureReason, CeremonyStage},
+    utils::PartyIdxMapping,
 };
 
 pub struct StateAuthorised<CeremonyData, CeremonyResult> {
@@ -59,9 +61,16 @@ where
         mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: CeremonyResultSender<CeremonyResult>,
-    ) -> Result<Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>>> {
+    ) -> Result<
+        Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>>,
+        CeremonyFailureReason,
+    > {
         if self.inner.is_some() {
-            return Err(anyhow::Error::msg("Duplicate ceremony_id"));
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::DuplicateCeremonyId,
+            )));
+            return Err(CeremonyFailureReason::DuplicateCeremonyId);
         }
 
         stage.init();
@@ -83,7 +92,7 @@ where
 
     fn finalize_current_stage(
         &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -134,7 +143,7 @@ where
         &mut self,
         sender_id: AccountId,
         data: CeremonyData,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
         slog::trace!(
             self.logger,
             "Received message {} from party [{}] ",
@@ -182,7 +191,7 @@ where
     /// Process previously delayed messages (which arrived one stage too early)
     pub fn process_delayed(
         &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
         let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
@@ -240,7 +249,7 @@ where
     /// protocol rules for the stage
     pub fn try_expiring(
         &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {
                 None => {
@@ -259,7 +268,7 @@ where
 
                     Some(Err((
                         reported_ids,
-                        anyhow::Error::msg("ceremony expired before being authorized"),
+                        CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
                     )))
                 }
                 Some(_authorised_state) => {

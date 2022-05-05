@@ -3,6 +3,10 @@ use std::sync::Arc;
 
 use crate::common::format_iterator;
 use crate::multisig::client;
+use crate::multisig::client::common::{
+    KeygenFailureReason, KeygenRequestIgnoredReason, SigningFailureReason,
+    SigningRequestIgnoredReason,
+};
 use crate::multisig::crypto::Rng;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use state_chain_runtime::AccountId;
@@ -20,7 +24,9 @@ use crate::logging::{
     SIGNING_CEREMONY_FAILED,
 };
 
-use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
+use client::common::{
+    broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
+};
 
 use crate::multisig::MessageHash;
 
@@ -28,9 +34,10 @@ use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
-pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
+pub type CeremonyResultSender<T> =
+    oneshot::Sender<Result<T, (BTreeSet<AccountId>, CeremonyFailureReason)>>;
 pub type CeremonyResultReceiver<T> =
-    oneshot::Receiver<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
+    oneshot::Receiver<Result<T, (BTreeSet<AccountId>, CeremonyFailureReason)>>;
 
 type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
 type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
@@ -146,7 +153,7 @@ impl CeremonyManager {
     fn process_signing_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>,
+        result: Result<SchnorrSignature, (BTreeSet<AccountId>, CeremonyFailureReason)>,
     ) {
         let result_sender = self
             .signing_states
@@ -159,7 +166,7 @@ impl CeremonyManager {
             slog::warn!(
                 self.logger,
                 #SIGNING_CEREMONY_FAILED,
-                "Signing ceremony failed: {}",
+                "{}",
                 reason; "reported parties" =>
                 format_iterator(blamed_parties).to_string(),
                 CEREMONY_ID_KEY => ceremony_id,
@@ -171,7 +178,7 @@ impl CeremonyManager {
     fn process_keygen_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<KeygenResultInfo, (BTreeSet<AccountId>, anyhow::Error)>,
+        result: Result<KeygenResultInfo, (BTreeSet<AccountId>, CeremonyFailureReason)>,
     ) {
         let result_sender = self
             .keygen_states
@@ -184,7 +191,7 @@ impl CeremonyManager {
             slog::warn!(
                 self.logger,
                 #KEYGEN_CEREMONY_FAILED,
-                "Keygen ceremony failed: {}",
+                "{}",
                 reason; "reported parties" =>
                 format_iterator(blamed_parties).to_string(),
                 CEREMONY_ID_KEY => ceremony_id,
@@ -212,6 +219,12 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+                let _result = result_sender.send(Err((
+                    BTreeSet::new(),
+                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::RequestIgnored(
+                        KeygenRequestIgnoredReason::InvalidParticipants,
+                    )),
+                )));
                 return;
             }
         };
@@ -221,6 +234,12 @@ impl CeremonyManager {
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::KeygenFailure(KeygenFailureReason::RequestIgnored(
+                    KeygenRequestIgnoredReason::CeremonyIdAlreadyUsed,
+                )),
+            )));
             return;
         }
 
@@ -282,6 +301,12 @@ impl CeremonyManager {
                 "Request to sign ignored: not enough signers {}/{}",
                 signers.len(), minimum_signers_needed
             );
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+                    SigningRequestIgnoredReason::NotEnoughSigners,
+                )),
+            )));
             return;
         }
 
@@ -291,6 +316,12 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+                let _result = result_sender.send(Err((
+                    BTreeSet::new(),
+                    CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+                        SigningRequestIgnoredReason::InvalidParticipants,
+                    )),
+                )));
                 return;
             }
         };
@@ -300,6 +331,12 @@ impl CeremonyManager {
             .is_signing_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+                    SigningRequestIgnoredReason::CeremonyIdAlreadyUsed,
+                )),
+            )));
             return;
         }
 

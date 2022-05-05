@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use crate::multisig::client::common::{
+    BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
+};
 use crate::multisig::client::{self, KeygenResultInfo};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
@@ -128,14 +131,21 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyHashCommitm
     ) -> StageResult<KeygenData, KeygenResultInfo> {
         let hash_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(hash_commitments) => hash_commitments,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("hash commitments");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::HashCommitments,
+                    )),
+                );
             }
         };
 
         slog::debug!(
             self.common.logger,
-            "Hash commitments have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::HashCommitments
         );
 
         // Just saving hash commitments for now. We will use them
@@ -240,25 +250,36 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
     fn process(self, messages: BTreeMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("initial commitments");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::InitialCommitments,
+                    )),
+                );
             }
         };
 
-        let commitments =
-            match validate_commitments(commitments, self.hash_commitments, &self.context) {
-                Ok(comms) => comms,
-                Err(blamed_parties) => {
-                    return StageResult::Error(
-                        blamed_parties,
-                        anyhow::Error::msg("Invalid initial commitments"),
-                    )
-                }
-            };
+        let commitments = match validate_commitments(
+            commitments,
+            self.hash_commitments,
+            &self.context,
+            &self.common.logger,
+        ) {
+            Ok(comms) => comms,
+            Err((blamed_parties, reason)) => {
+                return StageResult::Error(
+                    blamed_parties,
+                    CeremonyFailureReason::KeygenFailure(reason),
+                );
+            }
+        };
 
         slog::debug!(
             self.common.logger,
-            "Initial commitments have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::InitialCommitments
         );
 
         // At this point we know everyone's commitments, which can already be
@@ -292,7 +313,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
             // to let the State Chain restart the ceremony
             StageResult::Error(
                 BTreeSet::new(),
-                anyhow::Error::msg("The key is not contract compatible"),
+                CeremonyFailureReason::KeygenFailure(KeygenFailureReason::NotContractCompatible),
             )
         }
     }
@@ -438,8 +459,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
     fn process(self, messages: BTreeMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("complaints");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::Complaints,
+                    )),
+                );
             }
         };
 
@@ -487,7 +514,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
 
             StageResult::NextStage(Box::new(stage))
         } else {
-            StageResult::Error(idxs_to_report, anyhow::Error::msg("Improper complaint"))
+            StageResult::Error(
+                idxs_to_report,
+                CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidComplaint),
+            )
         }
     }
 }
@@ -506,7 +536,9 @@ mod detail {
         if check_high_degree_commitments(commitments) {
             return StageResult::Error(
                 Default::default(),
-                anyhow::Error::msg("High degree coefficient is zero"),
+                CeremonyFailureReason::KeygenFailure(
+                    KeygenFailureReason::HighDegreeCoefficientZero,
+                ),
             );
         }
 
@@ -726,13 +758,20 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
     fn process(mut self, messages: BTreeMap<usize, Option<Self::Message>>) -> KeygenStageResult {
         slog::debug!(
             self.common.logger,
-            "Processing verifications for blame responses"
+            "Processing verifications for {}",
+            BroadcastStageName::BlameResponses
         );
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("blame response");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::BlameResponses,
+                    )),
+                );
             }
         };
 
@@ -746,7 +785,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
             }
             Err(bad_parties) => StageResult::Error(
                 bad_parties,
-                anyhow::Error::msg("Invalid secret share in a blame response"),
+                CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidBlameResponse),
             ),
         }
     }
