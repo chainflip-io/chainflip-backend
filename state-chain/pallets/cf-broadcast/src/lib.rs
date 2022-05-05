@@ -577,6 +577,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_storage(payload: ThresholdSignatureFor<T, I>) -> DispatchResultWithPostInfo {
 		let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
 			.ok_or(Error::<T, I>::InvalidPayload)?;
+
+		// Here we need to be able to get the accurate broadcast id from the payload
 		let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
