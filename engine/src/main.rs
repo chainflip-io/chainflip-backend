@@ -150,7 +150,10 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
 
-    let (multisig_client, multisig_client_backend_future) = multisig::start_client(
+    use crate::multisig::eth::EthSigning;
+
+    // ETH multisig client
+    let (multisig_client, multisig_client_backend_future) = multisig::start_client::<_, EthSigning>(
         state_chain_client.our_account_id.clone(),
         db,
         incoming_p2p_message_receiver,

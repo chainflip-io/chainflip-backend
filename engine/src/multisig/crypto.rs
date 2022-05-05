@@ -1,96 +1,21 @@
-// We want to re-export certain types here
-// to make sure all of our dependencies on
-// this module are in one place
-use curv::elliptic::curves::{
-    secp256_k1::{Secp256k1Point, Secp256k1Scalar},
-    ECScalar,
-};
+pub mod eth;
 
-pub use curv::{
-    arithmetic::traits::Converter as BigIntConverter, elliptic::curves::ECPoint, BigInt,
-};
+use generic_array::{typenum::Unsigned, ArrayLength};
 
-#[derive(Clone, Copy, Debug, PartialEq, Zeroize)]
-pub struct Point(pub Secp256k1Point);
+pub use curv::{arithmetic::traits::Converter as BigIntConverter, BigInt};
+use zeroize::{DefaultIsZeroes, ZeroizeOnDrop};
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Scalar(Secp256k1Scalar);
-
-impl zeroize::Zeroize for Scalar {
-    fn zeroize(&mut self) {
-        // Secp256k1Scalar doesn't expose a way to "zeroize" it apart from dropping, so have
-        // to do it manually (I think assigning a different value would be sufficient to drop
-        // and zeroize the value, but we are not 100% sure that it won't get optimised away).
-        use core::sync::atomic;
-        unsafe { std::ptr::write_volatile(&mut self.0, Secp256k1Scalar::zero()) };
-        atomic::compiler_fence(atomic::Ordering::SeqCst);
-    }
-}
-
-impl<'de> Deserialize<'de> for Point {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = Vec::deserialize(deserializer)?;
-
-        Secp256k1Point::deserialize(&bytes)
-            .map(Point)
-            .map_err(serde::de::Error::custom)
-    }
-}
-
-impl Serialize for Point {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bytes(self.0.serialize_compressed().as_ref())
-    }
-}
-
-impl std::iter::Sum for Point {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Point(Secp256k1Point::zero()), |a, b| a + b)
-    }
-}
-
-impl<'de> Deserialize<'de> for Scalar {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = Vec::deserialize(deserializer)?;
-
-        Secp256k1Scalar::deserialize(&bytes)
-            .map(Scalar)
-            .map_err(serde::de::Error::custom)
-    }
-}
-
-impl Serialize for Scalar {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_bytes(self.0.serialize().as_ref())
-    }
-}
-
-impl std::iter::Sum for Scalar {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Scalar(Secp256k1Scalar::zero()), |a, b| a + b)
-    }
-}
+use std::fmt::Debug;
 
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroize;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct KeyShare {
-    pub y: Point,
-    pub x_i: Scalar,
+pub struct KeyShare<P: ECPoint> {
+    #[serde(bound = "")]
+    pub y: P,
+    #[serde(bound = "")]
+    pub x_i: P::Scalar,
 }
 
 // Ideally, we want to use a concrete implementation (like ChaCha20) instead of StdRng
@@ -98,188 +23,93 @@ pub struct KeyShare {
 // with rand_legacy)
 pub type Rng = rand_legacy::rngs::StdRng;
 
-#[cfg(test)]
-impl Point {
-    pub fn random(rng: &mut Rng) -> Self {
-        Point::from_scalar(&Scalar::random(rng))
+pub trait ECPoint:
+    Clone
+    + Copy
+    + Debug
+    + Default
+    + DefaultIsZeroes
+    + 'static
+    + serde::Serialize
+    + for<'de> serde::Deserialize<'de>
+    + std::ops::Mul<Self::Scalar, Output = Self>
+    + for<'a> std::ops::Mul<&'a Self::Scalar, Output = Self>
+    + std::ops::Sub<Output = Self>
+    + std::ops::Add<Output = Self>
+    + std::iter::Sum
+    + PartialEq
+    + Sync
+    + Send
+{
+    type Scalar: ECScalar;
+
+    type Underlying;
+
+    type CompressedPointLength: ArrayLength<u8> + Unsigned;
+
+    fn from_scalar(scalar: &Self::Scalar) -> Self;
+
+    fn get_element(&self) -> Self::Underlying;
+
+    fn as_bytes(&self) -> GenericArray<u8, Self::CompressedPointLength>;
+
+    fn is_point_at_infinity(&self) -> bool;
+
+    // Only relevant for ETH contract keys
+    fn is_compatible(&self) -> bool {
+        true
     }
 }
 
-impl Point {
-    pub fn from_scalar(scalar: &Scalar) -> Self {
-        Point(Secp256k1Point::generator().scalar_mul(&scalar.0))
-    }
+pub trait CryptoScheme: 'static {
+    type Point: ECPoint;
 
-    pub fn get_element(&self) -> secp256k1::PublicKey {
-        // TODO: ensure that we don't create points at infinity
-        // (we might want to sanitize p2p data)
-        self.0
-            .underlying_ref()
-            .expect("unexpected point at infinity")
-            .0
-    }
+    type Signature: Debug
+        + Clone
+        + PartialEq
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + Sync
+        + Send;
 
-    pub fn is_point_at_infinity(&self) -> bool {
-        self.0.is_zero()
-    }
+    fn build_signature(
+        z: <Self::Point as ECPoint>::Scalar,
+        group_commitment: Self::Point,
+    ) -> Self::Signature;
 
-    pub fn as_bytes(&self) -> GenericArray<u8, <Secp256k1Point as ECPoint>::CompressedPointLength> {
-        self.0.serialize_compressed()
-    }
+    fn build_challenge(
+        pubkey: Self::Point,
+        nonce_commitment: Self::Point,
+        message: &[u8],
+    ) -> <Self::Point as ECPoint>::Scalar;
 }
 
-impl Scalar {
-    pub fn random(mut rng: &mut Rng) -> Self {
-        use curv::elliptic::curves::secp256_k1::SK;
+pub trait ECScalar:
+    Clone
+    + Debug
+    + Sized
+    + Default
+    + serde::Serialize
+    + for<'de> serde::Deserialize<'de>
+    + for<'a> std::ops::Mul<&'a Self, Output = Self>
+    + for<'a> std::ops::Add<&'a Self, Output = Self>
+    + std::ops::Mul<Output = Self>
+    + std::ops::Add<Output = Self>
+    + std::ops::Sub<Output = Self>
+    + std::iter::Sum
+    + zeroize::Zeroize
+    + PartialEq
+    + Sync
+    + Send
+    + ZeroizeOnDrop
+{
+    fn random(rng: &mut Rng) -> Self;
 
-        Scalar(Secp256k1Scalar::from_underlying(Some(SK(
-            secp256k1::SecretKey::new(&mut rng),
-        ))))
-    }
+    fn from_bytes(x: &[u8; 32]) -> Self;
 
-    pub fn zero() -> Self {
-        Scalar(Secp256k1Scalar::zero())
-    }
+    fn from_usize(x: usize) -> Self;
 
-    pub fn from_usize(a: usize) -> Self {
-        Scalar(ECScalar::from_bigint(&BigInt::from(a as u64)))
-    }
+    fn zero() -> Self;
 
-    pub fn from_bytes(x: &[u8; 32]) -> Self {
-        Scalar(ECScalar::from_bigint(&BigInt::from_bytes(x)))
-    }
-
-    #[cfg(test)]
-    pub fn from_hex(sk_hex: &str) -> Self {
-        let bytes = hex::decode(sk_hex).expect("input must be hex encoded");
-
-        Scalar(Secp256k1Scalar::deserialize(&bytes).expect("input must represent a scalar"))
-    }
-
-    pub fn invert(&self) -> Option<Self> {
-        self.0.invert().map(Scalar)
-    }
-
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        match self.0.underlying_ref() {
-            Some(secret_key) => secret_key.as_ref(),
-            // None represents "zero" scalar in `curv`
-            None => &[0; 32],
-        }
-    }
-}
-
-// TODO: Look at how to dedup these adds
-impl std::ops::Add for &Scalar {
-    type Output = Scalar;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Scalar(self.0.add(&rhs.0))
-    }
-}
-
-impl std::ops::Add for Scalar {
-    type Output = Scalar;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        <&Scalar>::add(&self, &rhs)
-    }
-}
-
-impl std::ops::Mul for &Scalar {
-    type Output = Scalar;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Scalar(self.0.mul(&rhs.0))
-    }
-}
-
-impl std::ops::Mul for Scalar {
-    type Output = Scalar;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        &self * &rhs
-    }
-}
-
-impl std::ops::Mul<&Scalar> for Scalar {
-    type Output = Scalar;
-
-    fn mul(self, rhs: &Scalar) -> Self::Output {
-        &self * rhs
-    }
-}
-
-impl std::ops::Sub for &Scalar {
-    type Output = Scalar;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Scalar(self.0.sub(&rhs.0))
-    }
-}
-
-impl std::ops::Sub for Scalar {
-    type Output = Scalar;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        &self - &rhs
-    }
-}
-
-impl std::ops::Mul<Scalar> for Point {
-    type Output = Point;
-
-    fn mul(self, rhs: Scalar) -> Self::Output {
-        Point(self.0.scalar_mul(&rhs.0))
-    }
-}
-
-impl std::ops::Mul<&Scalar> for Point {
-    type Output = Point;
-
-    fn mul(self, rhs: &Scalar) -> Self::Output {
-        Point(self.0.scalar_mul(&rhs.0))
-    }
-}
-
-impl std::ops::Mul<&Scalar> for &Point {
-    type Output = Point;
-
-    fn mul(self, rhs: &Scalar) -> Self::Output {
-        Point(self.0.scalar_mul(&rhs.0))
-    }
-}
-
-// TODO: Look at how to dedup these adds
-// (See above impl Add for Scalar too)
-impl std::ops::Add for &Point {
-    type Output = Point;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Point(self.0.add_point(&rhs.0))
-    }
-}
-
-impl std::ops::Add for Point {
-    type Output = Point;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        <&Point>::add(&self, &rhs)
-    }
-}
-
-impl std::ops::Sub for Point {
-    type Output = Point;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Point(self.0.sub_point(&rhs.0))
-    }
-}
-
-impl std::ops::Sub<Point> for &Point {
-    type Output = Point;
-
-    fn sub(self, rhs: Point) -> Self::Output {
-        *self - rhs
-    }
+    fn invert(&self) -> Option<Self>;
 }

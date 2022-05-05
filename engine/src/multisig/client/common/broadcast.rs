@@ -2,12 +2,16 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     convert::{TryFrom, TryInto},
     fmt::Display,
+    marker::PhantomData,
 };
 
 use cf_traits::AuthorityCount;
 
 use crate::{
-    multisig::client::{MultisigData, MultisigMessage},
+    multisig::{
+        client::{MultisigData, MultisigMessage},
+        crypto::ECPoint,
+    },
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
@@ -49,47 +53,53 @@ pub trait BroadcastStageProcessor<D, Result>: Display {
 
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
-pub struct BroadcastStage<D, Result, P>
+pub struct BroadcastStage<D, Result, Stage, P>
 where
-    P: BroadcastStageProcessor<D, Result>,
+    Stage: BroadcastStageProcessor<D, Result>,
+    P: ECPoint,
 {
     common: CeremonyCommon,
     /// Messages collected so far
-    messages: BTreeMap<AuthorityCount, P::Message>,
+    messages: BTreeMap<AuthorityCount, Stage::Message>,
     /// Determines the actual computations before/after
     /// the data is collected
-    processor: P,
+    processor: Stage,
+    _phantom: PhantomData<P>,
 }
 
-impl<D, Result, P> BroadcastStage<D, Result, P>
+impl<D, Result, Stage, P> BroadcastStage<D, Result, Stage, P>
 where
     D: Clone,
-    P: BroadcastStageProcessor<D, Result>,
+    P: ECPoint,
+    Stage: BroadcastStageProcessor<D, Result>,
 {
-    pub fn new(processor: P, common: CeremonyCommon) -> Self {
+    pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
         BroadcastStage {
             common,
             messages: BTreeMap::new(),
             processor,
+            _phantom: Default::default(),
         }
     }
 }
 
-impl<D, Result, P> Display for BroadcastStage<D, Result, P>
+impl<D, Result, Stage, P> Display for BroadcastStage<D, Result, Stage, P>
 where
-    P: BroadcastStageProcessor<D, Result>,
+    Stage: BroadcastStageProcessor<D, Result>,
+    P: ECPoint,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BroadcastStage<{}>", &self.processor)
     }
 }
 
-impl<D, Result, P> CeremonyStage for BroadcastStage<D, Result, P>
+impl<P, D, Result, Stage> CeremonyStage for BroadcastStage<D, Result, Stage, P>
 where
-    D: Clone + Display + Into<MultisigData>,
+    P: ECPoint,
+    D: Clone + Display + Into<MultisigData<P>>,
     Result: Clone,
-    P: BroadcastStageProcessor<D, Result>,
-    <P as BroadcastStageProcessor<D, Result>>::Message: TryFrom<D>,
+    Stage: BroadcastStageProcessor<D, Result>,
+    <Stage as BroadcastStageProcessor<D, Result>>::Message: TryFrom<D>,
 {
     type Message = D;
     type Result = Result;
@@ -158,7 +168,7 @@ where
     }
 
     fn process_message(&mut self, signer_idx: AuthorityCount, m: D) -> ProcessMessageResult {
-        let m: P::Message = match m.try_into() {
+        let m: Stage::Message = match m.try_into() {
             Ok(m) => m,
             Err(_) => {
                 slog::warn!(

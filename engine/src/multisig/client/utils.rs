@@ -68,7 +68,7 @@ impl PartyIdxMapping {
 
 macro_rules! derive_from_enum {
     ($variant: ty, $variant_path: path, $enum: ty) => {
-        impl From<$variant> for $enum {
+        impl<P: ECPoint> From<$variant> for $enum {
             fn from(x: $variant) -> Self {
                 $variant_path(x)
             }
@@ -78,7 +78,7 @@ macro_rules! derive_from_enum {
 
 macro_rules! derive_try_from_variant {
     ($variant: ty, $variant_path: path, $enum: ty) => {
-        impl std::convert::TryFrom<$enum> for $variant {
+        impl<P: ECPoint> std::convert::TryFrom<$enum> for $variant {
             type Error = $enum;
 
             fn try_from(data: $enum) -> Result<Self, Self::Error> {
@@ -96,7 +96,6 @@ macro_rules! derive_impls_for_enum_variants {
     ($variant: ty, $variant_path: path, $enum: ty) => {
         derive_from_enum!($variant, $variant_path, $enum);
         derive_try_from_variant!($variant, $variant_path, $enum);
-        derive_display_as_type_name!($variant);
     };
 }
 
@@ -104,6 +103,17 @@ macro_rules! derive_impls_for_enum_variants {
 macro_rules! derive_display_as_type_name {
     ($name: ty) => {
         impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, stringify!($name))
+            }
+        }
+    };
+}
+
+/// Derive display to match the type's name
+macro_rules! derive_display_as_type_name_p {
+    ($name: ty) => {
+        impl<P: ECPoint> std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, stringify!($name))
             }

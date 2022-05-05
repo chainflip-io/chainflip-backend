@@ -62,7 +62,7 @@ tokio = {version = "1.13.1", features = ["full"]}
 tokio-stream = "0.1.5"
 url = "1.7.2"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
-zeroize = "1.4.3"
+zeroize = {version = "1.5.4"}
 libp2p = "0.39.1"
 generic-array= "0.14"
 public-ip = "0.2.2"

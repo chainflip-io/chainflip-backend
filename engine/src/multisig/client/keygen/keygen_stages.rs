@@ -1,21 +1,22 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use crate::multisig::client::{self, KeygenResultInfo};
+use crate::multisig::client::common::KeygenResultInfo;
+use crate::multisig::client::{self};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
 use cf_traits::AuthorityCount;
 use client::{
     common::{
         broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
-        CeremonyCommon, KeygenResult, StageResult,
+        CeremonyCommon, StageResult,
     },
     keygen, ThresholdParameters,
 };
 use itertools::Itertools;
 use sp_core::H256;
 
-use crate::multisig::crypto::{BigInt, BigIntConverter, KeyShare};
+use crate::multisig::crypto::{ECPoint, KeyShare};
 
 use keygen::{
     keygen_data::{
@@ -33,20 +34,20 @@ use super::keygen_data::{HashComm1, VerifyHashComm2};
 use super::keygen_frost::{generate_hash_commitment, ShamirShare};
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
 
-type KeygenStageResult = StageResult<KeygenData, KeygenResultInfo>;
+type KeygenStageResult<P> = StageResult<KeygenData<P>, KeygenResultInfo<P>>;
 
-pub struct HashCommitments1 {
+pub struct HashCommitments1<P: ECPoint> {
     common: CeremonyCommon,
     allow_high_pubkey: bool,
-    own_commitment: DKGUnverifiedCommitment,
+    own_commitment: DKGUnverifiedCommitment<P>,
     hash_commitment: H256,
-    shares: OutgoingShares,
+    shares: OutgoingShares<P>,
     context: HashContext,
 }
 
-derive_display_as_type_name!(HashCommitments1);
+derive_display_as_type_name_p!(HashCommitments1<P>);
 
-impl HashCommitments1 {
+impl<P: ECPoint> HashCommitments1<P> {
     pub fn new(mut common: CeremonyCommon, allow_high_pubkey: bool, context: HashContext) -> Self {
         // Generate the secret polynomial and commit to it by hashing all public coefficients
         let params = ThresholdParameters::from_share_count(
@@ -69,7 +70,9 @@ impl HashCommitments1 {
     }
 }
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for HashCommitments1 {
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for HashCommitments1<P>
+{
     type Message = HashComm1;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -77,14 +80,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for HashCommitments1 
         DataToSend::Broadcast(HashComm1(self.hash_commitment))
     }
 
-    fn should_delay(&self, m: &KeygenData) -> bool {
+    fn should_delay(&self, m: &KeygenData<P>) -> bool {
         matches!(m, KeygenData::VerifyHashComm2(_))
     }
 
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>> {
         // Prepare for broadcast verification
         let processor = VerifyHashCommitmentsBroadcast2 {
             common: self.common.clone(),
@@ -101,18 +104,20 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for HashCommitments1 
     }
 }
 
-pub struct VerifyHashCommitmentsBroadcast2 {
+pub struct VerifyHashCommitmentsBroadcast2<P: ECPoint> {
     common: CeremonyCommon,
     allow_high_pubkey: bool,
-    own_commitment: DKGUnverifiedCommitment,
+    own_commitment: DKGUnverifiedCommitment<P>,
     hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
-    shares_to_send: OutgoingShares,
+    shares_to_send: OutgoingShares<P>,
     context: HashContext,
 }
 
-derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2);
+derive_display_as_type_name_p!(VerifyHashCommitmentsBroadcast2<P>);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyHashCommitmentsBroadcast2 {
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for VerifyHashCommitmentsBroadcast2<P>
+{
     type Message = VerifyHashComm2;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -121,14 +126,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyHashCommitm
         })
     }
 
-    fn should_delay(&self, m: &KeygenData) -> bool {
+    fn should_delay(&self, m: &KeygenData<P>) -> bool {
         matches!(m, KeygenData::Comm1(_))
     }
 
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+    ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>> {
         let hash_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(hash_commitments) => hash_commitments,
             Err(abort_reason) => {
@@ -161,34 +166,36 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyHashCommitm
 
 /// Stage 1: Sample a secret, generate sharing polynomial coefficients for it
 /// and a ZKP of the secret. Broadcast commitments to the coefficients and the ZKP.
-pub struct AwaitCommitments1 {
+pub struct AwaitCommitments1<P: ECPoint> {
     common: CeremonyCommon,
     hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
-    own_commitment: DKGUnverifiedCommitment,
+    own_commitment: DKGUnverifiedCommitment<P>,
     /// Shares generated by us for other parties (secret)
-    shares: OutgoingShares,
+    shares: OutgoingShares<P>,
     allow_high_pubkey: bool,
     /// Context to prevent replay attacks
     context: HashContext,
 }
 
-derive_display_as_type_name!(AwaitCommitments1);
+derive_display_as_type_name_p!(AwaitCommitments1<P>);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for AwaitCommitments1 {
-    type Message = Comm1;
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for AwaitCommitments1<P>
+{
+    type Message = Comm1<P>;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(self.own_commitment.clone())
     }
 
-    fn should_delay(&self, m: &KeygenData) -> bool {
+    fn should_delay(&self, m: &KeygenData<P>) -> bool {
         matches!(m, KeygenData::Verify2(_))
     }
 
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> KeygenStageResult {
+    ) -> KeygenStageResult<P> {
         // We have received commitments from everyone, for now just need to
         // go through another round to verify consistent broadcasts
 
@@ -201,37 +208,28 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for AwaitCommitments1
             context: self.context,
         };
 
-        let stage = BroadcastStage::new(processor, self.common);
+        let stage = BroadcastStage::<_, _, _, P>::new(processor, self.common);
 
         StageResult::NextStage(Box::new(stage))
     }
 }
 
 /// Stage 2: verify broadcasts of Stage 1 data
-struct VerifyCommitmentsBroadcast2 {
+struct VerifyCommitmentsBroadcast2<P: ECPoint> {
     common: CeremonyCommon,
     hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
-    commitments: BTreeMap<AuthorityCount, Option<Comm1>>,
-    shares_to_send: OutgoingShares,
+    commitments: BTreeMap<AuthorityCount, Option<Comm1<P>>>,
+    shares_to_send: OutgoingShares<P>,
     allow_high_pubkey: bool,
     context: HashContext,
 }
 
-derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
+derive_display_as_type_name_p!(VerifyCommitmentsBroadcast2<P>);
 
-/// Check if the public key's x coordinate is smaller than "half secp256k1's order",
-/// which is a requirement imposed by the Key Manager contract
-pub fn is_contract_compatible(pk: &secp256k1::PublicKey) -> bool {
-    let pubkey = cf_chains::eth::AggKey::from(pk);
-
-    let x = BigInt::from_bytes(&pubkey.pub_key_x);
-    let half_order = BigInt::from_bytes(&secp256k1::constants::CURVE_ORDER) / 2 + 1;
-
-    x < half_order
-}
-
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitmentsBroadcast2 {
-    type Message = VerifyComm2;
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for VerifyCommitmentsBroadcast2<P>
+{
+    type Message = VerifyComm2<P>;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.commitments.clone();
@@ -239,14 +237,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
         DataToSend::Broadcast(VerifyComm2 { data })
     }
 
-    fn should_delay(&self, m: &KeygenData) -> bool {
+    fn should_delay(&self, m: &KeygenData<P>) -> bool {
         matches!(m, KeygenData::SecretShares3(_))
     }
 
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> KeygenStageResult {
+    ) -> KeygenStageResult<P> {
         let commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(abort_reason) => {
@@ -280,7 +278,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
         // Note that we skip this check in tests as it would make them
         // non-deterministic (in the future, we could address this by
         // making the signer use deterministic randomness everywhere)
-        if self.allow_high_pubkey || is_contract_compatible(&agg_pubkey.get_element()) {
+        if self.allow_high_pubkey || agg_pubkey.is_compatible() {
             let processor = SecretSharesStage3 {
                 common: self.common.clone(),
                 commitments,
@@ -308,17 +306,19 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyCommitments
 }
 
 /// Stage 3: distribute (distinct) secret shares of our secret to each party
-struct SecretSharesStage3 {
+struct SecretSharesStage3<P: ECPoint> {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: BTreeMap<AuthorityCount, DKGCommitment>,
-    shares: OutgoingShares,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    shares: OutgoingShares<P>,
 }
 
-derive_display_as_type_name!(SecretSharesStage3);
+derive_display_as_type_name_p!(SecretSharesStage3<P>);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage3 {
-    type Message = SecretShare3;
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for SecretSharesStage3<P>
+{
+    type Message = SecretShare3<P>;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // With everyone committed to their secrets and sharing polynomial coefficients
@@ -327,14 +327,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
         DataToSend::Private(self.shares.0.clone())
     }
 
-    fn should_delay(&self, m: &KeygenData) -> bool {
+    fn should_delay(&self, m: &KeygenData<P>) -> bool {
         matches!(m, KeygenData::Complaints4(_))
     }
 
     fn process(
         self,
         incoming_shares: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> KeygenStageResult {
+    ) -> KeygenStageResult<P> {
         // As the messages for this stage are sent in secret, it is possible
         // for a malicious party to send us invalid data (or not send anything
         // at all) without us being able to prove that. Because of that, we
@@ -386,33 +386,35 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for SecretSharesStage
 /// During this stage parties have a chance to complain about
 /// a party sending a secret share that isn't valid when checked
 /// against the commitments
-struct ComplaintsStage4 {
+struct ComplaintsStage4<P: ECPoint> {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: BTreeMap<AuthorityCount, DKGCommitment>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
     /// Shares sent to us from other parties (secret)
-    shares: IncomingShares,
-    outgoing_shares: OutgoingShares,
+    shares: IncomingShares<P>,
+    outgoing_shares: OutgoingShares<P>,
     complaints: BTreeSet<AuthorityCount>,
 }
 
-derive_display_as_type_name!(ComplaintsStage4);
+derive_display_as_type_name_p!(ComplaintsStage4<P>);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for ComplaintsStage4 {
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for ComplaintsStage4<P>
+{
     type Message = Complaints4;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Complaints4(self.complaints.clone()))
     }
 
-    fn should_delay(&self, m: &KeygenData) -> bool {
+    fn should_delay(&self, m: &KeygenData<P>) -> bool {
         matches!(m, KeygenData::VerifyComplaints5(_))
     }
 
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> KeygenStageResult {
+    ) -> KeygenStageResult<P> {
         let processor = VerifyComplaintsBroadcastStage5 {
             common: self.common.clone(),
             received_complaints: messages,
@@ -427,17 +429,19 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for ComplaintsStage4 
     }
 }
 
-struct VerifyComplaintsBroadcastStage5 {
+struct VerifyComplaintsBroadcastStage5<P: ECPoint> {
     common: CeremonyCommon,
     received_complaints: BTreeMap<AuthorityCount, Option<Complaints4>>,
-    commitments: BTreeMap<AuthorityCount, DKGCommitment>,
-    shares: IncomingShares,
-    outgoing_shares: OutgoingShares,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    shares: IncomingShares<P>,
+    outgoing_shares: OutgoingShares<P>,
 }
 
-derive_display_as_type_name!(VerifyComplaintsBroadcastStage5);
+derive_display_as_type_name_p!(VerifyComplaintsBroadcastStage5<P>);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsBroadcastStage5 {
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for VerifyComplaintsBroadcastStage5<P>
+{
     type Message = VerifyComplaints5;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -446,14 +450,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
         DataToSend::Broadcast(VerifyComplaints5 { data })
     }
 
-    fn should_delay(&self, data: &KeygenData) -> bool {
+    fn should_delay(&self, data: &KeygenData<P>) -> bool {
         matches!(data, KeygenData::BlameResponse6(_))
     }
 
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> KeygenStageResult {
+    ) -> KeygenStageResult<P> {
         let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(abort_reason) => {
@@ -512,13 +516,15 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyComplaintsB
 
 mod detail {
 
+    use crate::multisig::client::common::KeygenResult;
+
     use super::*;
 
-    pub fn finalize_keygen<KeygenData>(
+    pub fn finalize_keygen<KeygenData, P: ECPoint>(
         common: CeremonyCommon,
-        secret_shares: IncomingShares,
-        commitments: &BTreeMap<AuthorityCount, DKGCommitment>,
-    ) -> StageResult<KeygenData, KeygenResultInfo> {
+        secret_shares: IncomingShares<P>,
+        commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    ) -> StageResult<KeygenData, KeygenResultInfo<P>> {
         // Sanity check (failing this should not be possible due to the
         // hash commitment stage at the beginning of the ceremony)
         if check_high_degree_commitments(commitments) {
@@ -537,12 +543,12 @@ mod detail {
 
     /// This is intentionally private to ensure it is not called
     /// without additional checks in finalize keygen
-    fn compute_keygen_result_info(
+    fn compute_keygen_result_info<P: ECPoint>(
         common: CeremonyCommon,
-        secret_shares: IncomingShares,
-        commitments: &BTreeMap<AuthorityCount, DKGCommitment>,
-    ) -> KeygenResultInfo {
-        let share_count = common.all_idxs.len().try_into().expect("too many parties");
+        secret_shares: IncomingShares<P>,
+        commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    ) -> KeygenResultInfo<P> {
+        let share_count = common.all_idxs.len() as AuthorityCount;
 
         let key_share = secret_shares
             .0
@@ -578,18 +584,20 @@ mod detail {
     }
 }
 
-struct BlameResponsesStage6 {
+struct BlameResponsesStage6<P: ECPoint> {
     common: CeremonyCommon,
     complaints: BTreeMap<AuthorityCount, Complaints4>,
-    shares: IncomingShares,
-    outgoing_shares: OutgoingShares,
-    commitments: BTreeMap<AuthorityCount, DKGCommitment>,
+    shares: IncomingShares<P>,
+    outgoing_shares: OutgoingShares<P>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
 }
 
-derive_display_as_type_name!(BlameResponsesStage6);
+derive_display_as_type_name_p!(BlameResponsesStage6<P>);
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesStage6 {
-    type Message = BlameResponse6;
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for BlameResponsesStage6<P>
+{
+    type Message = BlameResponse6<P>;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // Indexes at which to reveal/broadcast secret shares
@@ -629,14 +637,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
         data
     }
 
-    fn should_delay(&self, data: &KeygenData) -> bool {
+    fn should_delay(&self, data: &KeygenData<P>) -> bool {
         matches!(data, KeygenData::VerifyBlameResponses7(_))
     }
 
     fn process(
         self,
         blame_responses: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> KeygenStageResult {
+    ) -> KeygenStageResult<P> {
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
             complaints: self.complaints,
@@ -651,22 +659,22 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for BlameResponsesSta
     }
 }
 
-struct VerifyBlameResponsesBroadcastStage7 {
+struct VerifyBlameResponsesBroadcastStage7<P: ECPoint> {
     common: CeremonyCommon,
     complaints: BTreeMap<AuthorityCount, Complaints4>,
     // Blame responses received from other parties in the previous communication round
-    blame_responses: BTreeMap<AuthorityCount, Option<BlameResponse6>>,
-    shares: IncomingShares,
-    commitments: BTreeMap<AuthorityCount, DKGCommitment>,
+    blame_responses: BTreeMap<AuthorityCount, Option<BlameResponse6<P>>>,
+    shares: IncomingShares<P>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
 }
 
-derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7);
+derive_display_as_type_name_p!(VerifyBlameResponsesBroadcastStage7<P>);
 
 /// Checks for sender_idx that their blame response contains exactly
 /// a share for each party that blamed them
-fn is_blame_response_complete(
+fn is_blame_response_complete<P: ECPoint>(
     sender_idx: AuthorityCount,
-    response: &BlameResponse6,
+    response: &BlameResponse6<P>,
     complaints: &BTreeMap<AuthorityCount, Complaints4>,
 ) -> bool {
     let expected_idxs_iter = complaints
@@ -684,14 +692,14 @@ fn is_blame_response_complete(
     Iterator::eq(response.0.keys(), expected_idxs_iter)
 }
 
-impl VerifyBlameResponsesBroadcastStage7 {
+impl<P: ECPoint> VerifyBlameResponsesBroadcastStage7<P> {
     /// Check that blame responses contain all (and only) the requested shares, and that all the shares are valid.
     /// If all responses are valid, returns shares destined for us along with the corresponding index. Otherwise,
     /// returns a list of party indexes who provided invalid responses.
     fn check_blame_responses(
         &self,
-        blame_responses: BTreeMap<AuthorityCount, BlameResponse6>,
-    ) -> Result<BTreeMap<AuthorityCount, ShamirShare>, BTreeSet<AuthorityCount>> {
+        blame_responses: BTreeMap<AuthorityCount, BlameResponse6<P>>,
+    ) -> Result<BTreeMap<AuthorityCount, ShamirShare<P>>, BTreeSet<AuthorityCount>> {
         let (shares_for_us, bad_parties): (Vec<_>, BTreeSet<_>) = blame_responses
             .iter()
             .map(|(sender_idx, response)| {
@@ -736,8 +744,10 @@ impl VerifyBlameResponsesBroadcastStage7 {
     }
 }
 
-impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameResponsesBroadcastStage7 {
-    type Message = VerifyBlameResponses7;
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+    for VerifyBlameResponsesBroadcastStage7<P>
+{
+    type Message = VerifyBlameResponses7<P>;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.blame_responses.clone();
@@ -745,14 +755,14 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo> for VerifyBlameRespon
         DataToSend::Broadcast(VerifyBlameResponses7 { data })
     }
 
-    fn should_delay(&self, _: &KeygenData) -> bool {
+    fn should_delay(&self, _: &KeygenData<P>) -> bool {
         false
     }
 
     fn process(
         mut self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> KeygenStageResult {
+    ) -> KeygenStageResult<P> {
         slog::debug!(
             self.common.logger,
             "Processing verifications for blame responses"

@@ -6,6 +6,7 @@ use anyhow::Result;
 
 use crate::multisig::{
     client::{KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
+    crypto::ECPoint,
     db::persistent::{
         add_schema_version_to_batch_write, get_data_column_handle, update_key, KEYGEN_DATA_PREFIX,
         LEGACY_DATA_COLUMN_NAME, PREFIX_SIZE,
@@ -19,7 +20,7 @@ mod old_types {
     use frame_support::Deserialize;
     use state_chain_runtime::AccountId;
 
-    use crate::multisig::client::KeygenResult;
+    use crate::multisig::{client::KeygenResult, crypto::ECPoint};
 
     #[derive(Deserialize, Debug)]
     pub struct ThresholdParameters {
@@ -34,8 +35,9 @@ mod old_types {
     }
 
     #[derive(Deserialize, Debug)]
-    pub struct KeygenResultInfo {
-        pub key: Arc<KeygenResult>,
+    pub struct KeygenResultInfo<P: ECPoint> {
+        #[serde(bound = "")]
+        pub key: Arc<KeygenResult<P>>,
         pub validator_map: Arc<PartyIdxMapping>,
         pub params: ThresholdParameters,
     }
@@ -48,10 +50,10 @@ mod old_types {
 // This is necessary to load the keys using the kvdb library
 // We then insert using the rocks db library
 // We can't do this all with rocks db because the compression algo used by default by rust_rocksdb collides with system libs, so we use an alternate algo (lz4)
-pub fn load_keys_using_kvdb_to_latest_key_type(
+pub fn load_keys_using_kvdb_to_latest_key_type<P: ECPoint>(
     path: &Path,
     logger: &slog::Logger,
-) -> Result<HashMap<KeyId, KeygenResultInfo>> {
+) -> Result<HashMap<KeyId, KeygenResultInfo<P>>> {
     slog::info!(logger, "Loading keys using kvdb");
 
     let config = kvdb_rocksdb::DatabaseConfig::default();
@@ -59,11 +61,11 @@ pub fn load_keys_using_kvdb_to_latest_key_type(
         .map_err(|e| anyhow::Error::msg(format!("could not open kvdb database: {}", e)))?;
 
     // Load the keys from column 0 (aka "col0")
-    let old_keys: HashMap<KeyId, old_types::KeygenResultInfo> = old_db
+    let old_keys: HashMap<KeyId, old_types::KeygenResultInfo<P>> = old_db
         .iter(0)
         .map(|(key_id, key_info)| {
             let key_id: KeyId = KeyId(key_id.into());
-            match bincode::deserialize::<old_types::KeygenResultInfo>(&*key_info) {
+            match bincode::deserialize::<old_types::KeygenResultInfo<P>>(&*key_info) {
                 Ok(keygen_result_info) => {
                     slog::debug!(
                         logger,
@@ -88,9 +90,9 @@ pub fn load_keys_using_kvdb_to_latest_key_type(
         .collect())
 }
 
-fn old_to_new_keygen_result_info(
-    old_keygen_result_info: old_types::KeygenResultInfo,
-) -> KeygenResultInfo {
+fn old_to_new_keygen_result_info<P: ECPoint>(
+    old_keygen_result_info: old_types::KeygenResultInfo<P>,
+) -> KeygenResultInfo<P> {
     KeygenResultInfo {
         key: old_keygen_result_info.key,
         validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(
@@ -112,7 +114,7 @@ fn old_to_new_keygen_result_info(
 }
 
 // Just adding schema version to the metadata column and delete col0 if it exists
-pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
+pub fn migration_0_to_1<P: ECPoint>(db: &mut DB) -> Result<(), anyhow::Error> {
     // Update version data
     let mut batch = WriteBatch::default();
     add_schema_version_to_batch_write(db, 1, &mut batch);
@@ -130,14 +132,14 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
     }
 
     // Read in old key types and add the new
-    let old_keys: HashMap<KeyId, old_types::KeygenResultInfo> = db
+    let old_keys: HashMap<KeyId, old_types::KeygenResultInfo<P>> = db
         .prefix_iterator_cf(get_data_column_handle(db), KEYGEN_DATA_PREFIX)
         .map(|(key_id, key_info)| {
             // Strip the prefix off the key_id
             let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
             // deserialize the `KeygenResultInfo`
-            match bincode::deserialize::<old_types::KeygenResultInfo>(&*key_info) {
+            match bincode::deserialize::<old_types::KeygenResultInfo<P>>(&*key_info) {
                 Ok(keygen_result_info) => {
                     println!(
                         "Successfully deceoding old keygen result info: {:?}",
