@@ -836,6 +836,7 @@ pub struct StandardSigningMessages {
     pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyLocalSig4<Point>>>,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn standard_signing_coroutine<'a>(
     visitor: &'a mut CeremonyVisitor,
     ceremony: &'a mut SigningCeremonyRunner,

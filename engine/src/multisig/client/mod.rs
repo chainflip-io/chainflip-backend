@@ -125,11 +125,14 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 /// anyway)
 // NOTE: the fact that this mock is needed in tests but
 // its methods are never called is a bit of a red flag
+
+#[derive(Default)]
 pub struct MockMultisigClientApi {}
 
 impl MockMultisigClientApi {
     pub fn new() -> Self {
-        MockMultisigClientApi {}
+        // clippy was asking for Default implementation
+        Default::default()
     }
 }
 
