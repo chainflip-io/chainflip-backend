@@ -16,9 +16,9 @@ mod benchmarking;
 mod migrations;
 
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, ChainflipAccount,
-	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionResult, Auctioneer, AuthorityCount,
+	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
 	QualifyNode, ReputationResetter, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
@@ -572,13 +572,14 @@ pub mod pallet {
 		EpochIndex,
 		Blake2_128Concat,
 		<T as frame_system::Config>::AccountId,
-		u16,
+		AuthorityCount,
 	>;
 
 	/// Track epochs and their associated authority count
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_authority_count)]
-	pub type EpochAuthorityCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
+	pub type EpochAuthorityCount<T: Config> =
+		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
@@ -686,6 +687,10 @@ pub mod pallet {
 				HistoricalActiveEpochs::<T>::insert(validator, vec![GENESIS_EPOCH]);
 			}
 			HistoricalAuthorities::<T>::insert(GENESIS_EPOCH, &genesis_authorities);
+			EpochAuthorityCount::<T>::insert(
+				GENESIS_EPOCH,
+				genesis_authorities.len() as AuthorityCount,
+			);
 			Pallet::<T>::start_new_epoch(&genesis_authorities, self.bond);
 		}
 	}
@@ -703,11 +708,14 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentAuthorities::<T>::get()
 	}
 
-	fn current_authority_count() -> u32 {
-		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as u32
+	fn current_authority_count() -> AuthorityCount {
+		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as AuthorityCount
 	}
 
-	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16> {
+	fn authority_index(
+		epoch_index: EpochIndex,
+		account: &Self::ValidatorId,
+	) -> Option<AuthorityCount> {
 		AuthorityIndex::<T>::get(epoch_index, account)
 	}
 
@@ -738,7 +746,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		last_block_for_claims <= current_block_number
 	}
 
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u32> {
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount> {
 		EpochAuthorityCount::<T>::get(epoch)
 	}
 
@@ -747,9 +755,9 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		epoch_index: EpochIndex,
 		new_authorities: Vec<Self::ValidatorId>,
 	) {
-		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as u32);
+		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as AuthorityCount);
 		for (i, authority) in new_authorities.iter().enumerate() {
-			AuthorityIndex::<T>::insert(epoch_index, authority, i as u16);
+			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
 			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
 		}
 		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);
@@ -787,10 +795,10 @@ impl<T: Config> Pallet<T> {
 		CurrentAuthorities::<T>::set(epoch_authorities.to_vec());
 
 		epoch_authorities.iter().enumerate().for_each(|(index, account_id)| {
-			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as u16);
+			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as AuthorityCount);
 		});
 
-		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as u32);
+		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as AuthorityCount);
 
 		// The new bond set
 		Bond::<T>::set(new_bond);

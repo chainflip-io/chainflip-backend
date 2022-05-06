@@ -69,8 +69,11 @@ async fn main() {
         .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger)
-        .expect("Failed to open database");
+    let db = PersistentKeyDB::new_and_migrate_to_latest(
+        settings.signing.db_file.as_path(),
+        &root_logger,
+    )
+    .expect("Failed to open database");
 
     // TODO: Merge this into the MultisigClientApi
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
