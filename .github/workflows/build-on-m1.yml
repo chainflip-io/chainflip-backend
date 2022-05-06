@@ -1,0 +1,13 @@
+name: Use Remote M1 Machine to Build Binary
+on: push
+jobs:
+  build-on-m1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Tailscale
+        id: tailscale
+        uses: tailscale/github-action@main
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+      - name: Run ssh
+        run: sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} ssh -o StrictHostKeyChecking=no assemhasna@100.103.245.80 mkdir /tmp/${{ github.repository }} && cd /tmp/${{ github.repository }} && git clone ${{ github.repository }} && cd ${{ github.repository }} && git checkout $GITHUB_REF_NAME && cargo build
