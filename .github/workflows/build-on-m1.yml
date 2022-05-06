@@ -10,4 +10,4 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
       - name: Run ssh
-        run: sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} ssh -o StrictHostKeyChecking=no assemhasna@100.103.245.80 'mkdir -p /tmp/${{ github.repository }} && cd /tmp/${{ github.repository }} && gh repo clone ${{ github.repository }} && cd /tmp/${{ github.repository }} && git checkout $GITHUB_REF_NAME && cargo build'
+        run: sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} ssh -o StrictHostKeyChecking=no assemhasna@100.103.245.80 'mkdir -p /tmp/${{ github.repository }} && cd /tmp/${{ github.repository }} && git clone https://github.com/chainflip-io/chainflip-backend.git && cd /tmp/${{ github.repository }} && git checkout $GITHUB_REF_NAME && cargo build'
