@@ -1,5 +1,5 @@
 use crate::{
-    logging::{REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED},
+    logging::REQUEST_TO_SIGN_IGNORED,
     multisig::{
         client::{
             common::{
@@ -132,10 +132,6 @@ async fn should_report_on_invalid_local_sig3() {
             CeremonyFailureReason::SigningFailure(SigningFailureReason::InvalidSigShare),
         )
         .await;
-    assert!(signing_ceremony
-        .nodes
-        .values()
-        .all(|node| node.tag_cache.contains_tag(SIGNING_CEREMONY_FAILED)));
 }
 
 #[tokio::test]
@@ -164,10 +160,6 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
             )),
         )
         .await;
-    assert!(signing_ceremony
-        .nodes
-        .values()
-        .all(|node| node.tag_cache.contains_tag(SIGNING_CEREMONY_FAILED)));
 }
 
 #[tokio::test]
@@ -203,10 +195,6 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
             )),
         )
         .await;
-    assert!(signing_ceremony
-        .nodes
-        .values()
-        .all(|node| node.tag_cache.contains_tag(SIGNING_CEREMONY_FAILED)));
 }
 
 #[tokio::test]
@@ -259,7 +247,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     );
 
     let test_node = signing_ceremony.nodes.get_mut(&test_node_id).unwrap();
-    let mut result_receiver = test_node.request_signing(signing_ceremony_details);
+    let result_receiver = test_node.request_signing(signing_ceremony_details);
 
     // The request to sign should not have triggered a ceremony
     assert_ok!(test_node.ensure_ceremony_at_signing_stage(
@@ -268,15 +256,9 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     ));
 
     // Check that the failure reason is correct
-    assert!(test_node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::SigningFailure(
-            SigningFailureReason::RequestIgnored(SigningRequestIgnoredReason::InvalidParticipants)
-        ),)
+    test_node.ensure_rts_ignored_reason(
+        result_receiver,
+        SigningRequestIgnoredReason::InvalidParticipants,
     );
 }
 
@@ -314,25 +296,19 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     // Send the request to sign with insufficient signer_ids specified
     let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(test_node_id);
     signing_ceremony_details.signers.pop();
-    let node_0 = signing_ceremony.nodes.get_mut(test_node_id).unwrap();
-    let mut result_receiver = node_0.request_signing(signing_ceremony_details);
+    let node = signing_ceremony.nodes.get_mut(test_node_id).unwrap();
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
     // The request to sign should not have started a ceremony
-    assert_ok!(node_0.ensure_ceremony_at_signing_stage(
+    assert_ok!(node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
 
     // Check that the failure reason is correct
-    assert!(node_0.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::SigningFailure(
-            SigningFailureReason::RequestIgnored(SigningRequestIgnoredReason::NotEnoughSigners)
-        ),)
+    node.ensure_rts_ignored_reason(
+        result_receiver,
+        SigningRequestIgnoredReason::NotEnoughSigners,
     );
 }
 
@@ -460,7 +436,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     );
 
     let node = &mut signing_ceremony.nodes.get_mut(&node_0_id).unwrap();
-    let mut result_receiver = node.request_signing(signing_ceremony_details);
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
     // The rts should not have started a ceremony
     assert_ok!(node.ensure_ceremony_at_signing_stage(
@@ -469,15 +445,9 @@ async fn should_ignore_rts_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    assert!(node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::SigningFailure(
-            SigningFailureReason::RequestIgnored(SigningRequestIgnoredReason::InvalidParticipants)
-        ),)
+    node.ensure_rts_ignored_reason(
+        result_receiver,
+        SigningRequestIgnoredReason::InvalidParticipants,
     );
 }
 
@@ -502,7 +472,7 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     // Send an rts with the same ceremony id (the default signing ceremony id for tests)
     let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&account_id);
     let node = signing_ceremony.nodes.get_mut(&account_id).unwrap();
-    let mut result_receiver = node.request_signing(signing_ceremony_details);
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
     // The rts should have been ignored
     assert_ok!(node.ensure_ceremony_at_signing_stage(
@@ -511,17 +481,9 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     ));
 
     // Check that the failure reason is correct
-    assert!(node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::SigningFailure(
-            SigningFailureReason::RequestIgnored(
-                SigningRequestIgnoredReason::CeremonyIdAlreadyUsed
-            )
-        ),)
+    node.ensure_rts_ignored_reason(
+        result_receiver,
+        SigningRequestIgnoredReason::CeremonyIdAlreadyUsed,
     );
 }
 

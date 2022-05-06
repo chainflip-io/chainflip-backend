@@ -876,7 +876,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
 
     // Send a keygen request with the duplicate id to a node
     let mut node = new_node(ACCOUNT_IDS[2].clone(), true);
-    let (result_sender, mut result_receiver) = oneshot::channel();
+    let (result_sender, result_receiver) = oneshot::channel();
     node.ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
         keygen_ids,
@@ -891,15 +891,9 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    assert!(node.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::KeygenFailure(
-            KeygenFailureReason::RequestIgnored(KeygenRequestIgnoredReason::InvalidParticipants)
-        ),)
+    node.ensure_keygen_request_ignored_reason(
+        result_receiver,
+        KeygenRequestIgnoredReason::InvalidParticipants,
     );
 }
 
@@ -914,7 +908,7 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     let node = nodes.get_mut(&ACCOUNT_IDS[0]).unwrap();
 
     // Use the same ceremony id as was used in the previous ceremony
-    let (result_sender, mut result_receiver) = oneshot::channel();
+    let (result_sender, result_receiver) = oneshot::channel();
     node.ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
         ACCOUNT_IDS.clone(),
@@ -929,15 +923,9 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     ));
 
     // Check that the failure reason is correct
-    assert!(node.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::KeygenFailure(
-            KeygenFailureReason::RequestIgnored(KeygenRequestIgnoredReason::CeremonyIdAlreadyUsed)
-        ),)
+    node.ensure_keygen_request_ignored_reason(
+        result_receiver,
+        KeygenRequestIgnoredReason::CeremonyIdAlreadyUsed,
     );
 }
 

@@ -22,11 +22,17 @@ use utilities::success_threshold_from_share_count;
 
 use crate::{
     common::{all_same, split_at},
-    logging::{KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, SIGNING_CEREMONY_FAILED},
+    logging::{
+        KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED,
+        REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
+    },
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
-            common::{CeremonyFailureReason, KeygenFailureReason},
+            common::{
+                CeremonyFailureReason, KeygenFailureReason, KeygenRequestIgnoredReason,
+                SigningFailureReason, SigningRequestIgnoredReason,
+            },
             keygen::{HashComm1, HashContext, SecretShare3},
             signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
@@ -1207,6 +1213,42 @@ impl Node {
                 stage_number, stage
             )))
         }
+    }
+
+    /// Check the failure reason and tag are correct
+    pub fn ensure_rts_ignored_reason(
+        &self,
+        mut result_receiver: CeremonyResultReceiver<SchnorrSignature>,
+        expected_reason: SigningRequestIgnoredReason,
+    ) {
+        assert!(self.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+        assert_eq!(
+            result_receiver
+                .try_recv()
+                .expect("Failed to receive ceremony result")
+                .map_err(|(_, reason)| reason),
+            Err(CeremonyFailureReason::SigningFailure(
+                SigningFailureReason::RequestIgnored(expected_reason)
+            ),)
+        );
+    }
+
+    /// Check the failure reason and tag are correct
+    pub fn ensure_keygen_request_ignored_reason(
+        &self,
+        mut result_receiver: CeremonyResultReceiver<KeygenResultInfo>,
+        expected_reason: KeygenRequestIgnoredReason,
+    ) {
+        assert!(self.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
+        assert_eq!(
+            result_receiver
+                .try_recv()
+                .expect("Failed to receive ceremony result")
+                .map_err(|(_, reason)| reason),
+            Err(CeremonyFailureReason::KeygenFailure(
+                KeygenFailureReason::RequestIgnored(expected_reason)
+            ),)
+        );
     }
 }
 
