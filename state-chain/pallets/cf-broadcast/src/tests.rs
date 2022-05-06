@@ -2,7 +2,7 @@ use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
-	TransmissionFailure,
+	SignerIdToAccountId, SignerTransactionFeeDeficit, TransmissionFailure,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -436,6 +436,9 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			vec![1]
 		);
 
+		// We still shouldn't have a valid signer in the deficit map yet
+		assert!(SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).is_none(),);
+
 		// TODO: should we move this testing below into a separate test
 
 		// We now succeed on submitting the second one
@@ -452,6 +455,14 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 				.unwrap(),
 			vec![1]
 		);
+
+		// We should have the valid signer in the list with no deficit ath this point
+		assert_eq!(
+			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			0
+		);
+		// We shouldn't have any other signers with 0 values
+		assert!(SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid).is_none());
 
 		// we should not have a transmission attempt for the old attempt id that did not succeed
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
@@ -488,6 +499,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			vec![1, 2]
 		);
 
+		const FEE_PAID: u128 = 200;
 		// We submit that the signature was accepted
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
@@ -495,7 +507,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			Validity::Valid,
 			10,
 			[0xcf; 4],
-			0
+			FEE_PAID,
 		));
 
 		// Attempt numbers, signature requests and transmission should be cleaned up
@@ -503,6 +515,12 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			broadcast_attempt_id.broadcast_id
 		)
 		.is_none());
+
+		// We should not have a deficit for the valid signer
+		assert_eq!(
+			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			FEE_PAID
+		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(
 			tx_sig_request.broadcast_attempt.broadcast_attempt_id
 		)
@@ -511,6 +529,53 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			tx_sig_request.broadcast_attempt.broadcast_attempt_id.next_attempt()
 		)
 		.is_none())
+	});
+}
+
+#[test]
+fn signature_accepted_with_invalid_signer_is_does_not_increase_deficit() {
+	new_test_ext().execute_with(|| {
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let tx_sig_request =
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+
+		let signed_tx = tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid);
+		let _ = MockBroadcast::transaction_ready_for_transmission(
+			RawOrigin::Signed(tx_sig_request.nominee).into(),
+			broadcast_attempt_id,
+			signed_tx,
+			Validity::Valid,
+		);
+
+		assert_eq!(
+			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			0
+		);
+		// The name mapping should be updated
+		assert_eq!(
+			SignerIdToAccountId::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			tx_sig_request.nominee
+		);
+
+		// now we respond with signature accepted from the invalid signer since they weren't
+		// whitelisted
+		assert_ok!(MockBroadcast::signature_accepted(
+			Origin::root(),
+			MockThresholdSignature::default(),
+			Validity::Invalid,
+			10,
+			[0xcf; 4],
+			200,
+		));
+
+		assert_eq!(
+			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			0
+		);
+		// The invalid signer is not in the list of signers with a deficit, so even though
+		// they submitted the ETH transaction
+		assert!(SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid).is_none());
 	});
 }
 

@@ -244,7 +244,7 @@ pub mod pallet {
 	/// for paying transaction fees
 	#[pallet::storage]
 	pub type SignerTransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, OptionQuery>;
 
 	/// A mapping of signer id to the the account id of the authority that registered the signer.
 	/// through a transaction_ready_for_transmission extrinsic.
@@ -252,7 +252,7 @@ pub mod pallet {
 	// create later down the line)
 	#[pallet::storage]
 	pub type SignerIdToAccountId<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId, ValueQuery>;
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
