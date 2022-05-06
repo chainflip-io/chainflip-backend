@@ -13,6 +13,7 @@ jobs:
         run: >
          sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} ssh -o StrictHostKeyChecking=no assemhasna@100.103.245.80 
          'export RUSTC_WRAPPER=sccache SCCACHE_REDIS=${{secrets.SCCACHE_REDIS}}
+         && zsh
          && brew install sccache
          && rm -rf /tmp/chainflip-io 
          && mkdir -p /tmp/chainflip-io 
