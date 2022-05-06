@@ -9,6 +9,7 @@ use std::{
     fmt::Display,
 };
 
+use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
 use cf_chains::eth::AggKey;
@@ -105,8 +106,8 @@ impl Display for SigningData {
 /// Combine individual commitments into group (schnorr) commitment.
 /// See "Signing Protocol" in Section 5.2 (page 14).
 fn gen_group_commitment(
-    signing_commitments: &BTreeMap<usize, SigningCommitment>,
-    bindings: &BTreeMap<usize, Scalar>,
+    signing_commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    bindings: &BTreeMap<AuthorityCount, Scalar>,
 ) -> Point {
     signing_commitments
         .iter()
@@ -120,8 +121,8 @@ fn gen_group_commitment(
 /// Generate a lagrange coefficient for party `signer_index`
 /// according to Section 4 (page 9)
 pub fn get_lagrange_coeff(
-    signer_index: usize,
-    all_signer_indices: &BTreeSet<usize>,
+    signer_index: AuthorityCount,
+    all_signer_indices: &BTreeSet<AuthorityCount>,
 ) -> anyhow::Result<Scalar> {
     use anyhow::Context;
 
@@ -132,8 +133,9 @@ pub fn get_lagrange_coeff(
         if *j == signer_index {
             continue;
         }
-        let j: Scalar = Scalar::from_usize(*j);
-        let signer_index: Scalar = Scalar::from_usize(signer_index);
+        let j: usize = (*j).try_into().expect("too many signers");
+        let j: Scalar = Scalar::from_usize(j);
+        let signer_index: Scalar = Scalar::from_usize(signer_index as usize);
         num = &num * &j;
         den = den * (j - signer_index);
     }
@@ -148,10 +150,10 @@ pub fn get_lagrange_coeff(
 
 /// Generate a "binding value" for party `index`. See "Signing Protocol" in Section 5.2 (page 14)
 fn gen_rho_i(
-    index: usize,
+    index: AuthorityCount,
     msg: &[u8],
-    signing_commitments: &BTreeMap<usize, SigningCommitment>,
-    all_idxs: &BTreeSet<usize>,
+    signing_commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    all_idxs: &BTreeSet<AuthorityCount>,
 ) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"I");
@@ -179,9 +181,9 @@ type SigningResponse = LocalSig3;
 /// Generate binding values for each party given their previously broadcast commitments
 fn generate_bindings(
     msg: &[u8],
-    commitments: &BTreeMap<usize, SigningCommitment>,
-    all_idxs: &BTreeSet<usize>,
-) -> BTreeMap<usize, Scalar> {
+    commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    all_idxs: &BTreeSet<AuthorityCount>,
+) -> BTreeMap<AuthorityCount, Scalar> {
     all_idxs
         .iter()
         .map(|idx| (*idx, gen_rho_i(*idx, msg, commitments, all_idxs)))
@@ -193,9 +195,9 @@ pub fn generate_local_sig(
     msg: &[u8],
     key: &KeyShare,
     nonces: &SecretNoncePair,
-    commitments: &BTreeMap<usize, SigningCommitment>,
-    own_idx: usize,
-    all_idxs: &BTreeSet<usize>,
+    commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    own_idx: AuthorityCount,
+    all_idxs: &BTreeSet<AuthorityCount>,
 ) -> SigningResponse {
     let bindings = generate_bindings(msg, commitments, all_idxs);
 
@@ -252,12 +254,12 @@ fn is_party_response_valid(
 /// return the misbehaving parties.
 pub fn aggregate_signature(
     msg: &[u8],
-    signer_idxs: &BTreeSet<usize>,
+    signer_idxs: &BTreeSet<AuthorityCount>,
     agg_pubkey: Point,
-    pubkeys: &BTreeMap<usize, Point>,
-    commitments: &BTreeMap<usize, SigningCommitment>,
-    responses: &BTreeMap<usize, SigningResponse>,
-) -> Result<SchnorrSignature, BTreeSet<usize>> {
+    pubkeys: &BTreeMap<AuthorityCount, Point>,
+    commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    responses: &BTreeMap<AuthorityCount, SigningResponse>,
+) -> Result<SchnorrSignature, BTreeSet<AuthorityCount>> {
     let bindings = generate_bindings(msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -268,7 +270,7 @@ pub fn aggregate_signature(
         msg,
     );
 
-    let invalid_idxs: BTreeSet<usize> = signer_idxs
+    let invalid_idxs: BTreeSet<AuthorityCount> = signer_idxs
         .iter()
         .copied()
         .filter(|signer_idx| {

@@ -1,5 +1,5 @@
 pub mod common {
-	use cf_traits::{BlockNumber, FlipBalance};
+	use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
 	use pallet_cf_broadcast::AttemptCount;
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
@@ -9,7 +9,7 @@ pub mod common {
 		TOKEN_ISSUANCE * TOKEN_FRACTIONS
 	};
 
-	pub const MAX_AUTHORITIES: u32 = 150;
+	pub const MAX_AUTHORITIES: AuthorityCount = 150;
 	// Number of blocks to be online to accrue a point
 	pub const ACCRUAL_BLOCKS: u32 = 2500;
 	// Number of accrual points

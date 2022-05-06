@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
 use crate::multisig::client::common::BroadcastVerificationMessage;
@@ -59,7 +60,7 @@ pub type SecretShare3 = ShamirShare;
 
 /// List of parties blamed for sending invalid secret shares
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Complaints4(pub BTreeSet<usize>);
+pub struct Complaints4(pub BTreeSet<AuthorityCount>);
 
 pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
 
@@ -71,7 +72,7 @@ pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
 /// only be recovered by collecting shares from all (N-1) nodes, which would
 /// require collusion of N-1 nodes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlameResponse6(pub BTreeMap<usize, ShamirShare>);
+pub struct BlameResponse6(pub BTreeMap<AuthorityCount, ShamirShare>);
 
 pub type VerifyBlameResponses7 = BroadcastVerificationMessage<BlameResponse6>;
 
