@@ -207,7 +207,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		let (min_number_of_authorities, max_number_of_authorities) =
 			CurrentAuthoritySetSizeRange::<T>::get();
 		// Final rule - Confirm we have our set size
-		ensure!(number_of_bidders >= min_number_of_authorities, {
+		ensure!(number_of_bidders >= min_number_of_authorities as u32, {
 			log::error!(
 				"[cf-auction] insufficient bidders to proceed. {} < {}",
 				number_of_bidders,
@@ -220,7 +220,7 @@ impl<T: Config> Auctioneer for Pallet<T> {
 		bids.reverse();
 
 		let mut target_authority_set_size =
-			min(max_number_of_authorities, number_of_bidders) as usize;
+			min(max_number_of_authorities as u32, number_of_bidders) as usize;
 		let mut next_authority_set: Vec<_> =
 			bids.iter().take(target_authority_set_size as usize).collect();
 

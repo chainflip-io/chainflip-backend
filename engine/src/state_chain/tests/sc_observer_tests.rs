@@ -343,7 +343,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
             )),
         )
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(1u16.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(1_u32.encode()))));
 
     // Heartbeat on block number 20
     mock_state_chain_rpc_client
@@ -498,7 +498,7 @@ async fn not_historical_to_authority_on_new_epoch() {
             )),
         )
         .times(1)
-        .returning(move |_, _| Ok(Some(StorageData(1u16.encode()))));
+        .returning(move |_, _| Ok(Some(StorageData(1_u32.encode()))));
 
     // Get events from the block
     // We will match on every block hash, but only the events key, as we want to return no events

@@ -1,3 +1,4 @@
+use cf_traits::AuthorityCount;
 use frame_support::{migration::get_storage_value, traits::OnRuntimeUpgrade};
 use sp_std::marker::PhantomData;
 
@@ -29,10 +30,13 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// rename ActiveValidatorSizeRange to AuthoritySetSizeRange
 
-		let active_validator_size_range =
+		let (min_size, max_size) =
 			get_storage_value::<(u32, u32)>(AUCTION_PALLET_NAME, ACTIVE_VALIDATOR_SIZE_RANGE, b"")
 				.unwrap();
-		CurrentAuthoritySetSizeRange::<T>::put(active_validator_size_range);
+		CurrentAuthoritySetSizeRange::<T>::put((
+			min_size as AuthorityCount,
+			max_size as AuthorityCount,
+		));
 
 		// rename LowestBackupValidatorBid to LowestBackupNodeBid
 		let lowest_backup_validator_bid =
