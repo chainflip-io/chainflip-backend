@@ -248,7 +248,7 @@ where
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
                 Some(Err(error)) => Err(error),
-                None => panic!("Keygen result oneshot channel dropped before receiving a result"),
+                None => panic!("Keygen result channel dropped before receiving a result"),
             }
         }
     }

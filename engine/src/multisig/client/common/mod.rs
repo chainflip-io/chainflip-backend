@@ -127,11 +127,11 @@ impl Display for CeremonyFailureReason {
             CeremonyFailureReason::KeygenFailure(keygen_failure_reason) => {
                 let inner = match keygen_failure_reason {
                     KeygenFailureReason::RequestIgnored(reason) => {
-                        format!("Request Ignored due to {:?}", reason)
+                        format!("Request Ignored ({:?})", reason)
                     }
                     KeygenFailureReason::BroadcastFailure(reason, stage_name) => {
                         format!(
-                            "Broadcast failure due to {:?} during {} stage",
+                            "Broadcast failure ({:?}) during {} stage",
                             reason, stage_name
                         )
                     }
@@ -148,13 +148,10 @@ impl Display for CeremonyFailureReason {
             CeremonyFailureReason::SigningFailure(singing_failure_reason) => {
                 let inner = match singing_failure_reason {
                     SigningFailureReason::RequestIgnored(reason) => {
-                        format!("Request Ignored due to {:?}", reason)
+                        format!("Request Ignored ({:?})", reason)
                     }
                     SigningFailureReason::BroadcastFailure(reason, stage_name) => {
-                        format!(
-                            "Broadcast failure due to {:?} during {:?}",
-                            reason, stage_name
-                        )
+                        format!("Broadcast failure ({:?}) during {:?}", reason, stage_name)
                     }
                     SigningFailureReason::InvalidSigShare => {
                         "Failed to aggregate signature".to_string()
