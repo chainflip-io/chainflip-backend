@@ -21,6 +21,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
+	sp_runtime::traits::Saturating,
 	traits::{Get, OnRuntimeUpgrade, StorageVersion},
 	Twox64Concat,
 };
@@ -99,6 +100,10 @@ pub mod pallet {
 	/// Type alias for the payload hash
 	pub type ThresholdSignatureFor<T, I> =
 		<<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+
+	/// Type alias for the Amount type of a particular chain.
+	pub type ChainAmountFor<T, I> =
+		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
@@ -235,10 +240,11 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	// TODO: Amount type
+	/// A mapping from signer id to the chain amount (in Atomic units) that the signer is owed
+	/// for paying transaction fees
 	#[pallet::storage]
 	pub type SignerTransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, u128, ValueQuery>;
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
 
 	/// A mapping of signer id to the the account id of the authority that registered the signer.
 	/// through a transaction_ready_for_transmission extrinsic.
@@ -404,7 +410,8 @@ pub mod pallet {
 			{
 				// Whitelist the signer_id so it can receive fee refunds
 				if !SignerTransactionFeeDeficit::<T, I>::contains_key(signer_id.clone()) {
-					SignerTransactionFeeDeficit::<T, I>::insert(signer_id.clone(), 0);
+					let init_amount: ChainAmountFor<T, I> = Default::default();
+					SignerTransactionFeeDeficit::<T, I>::insert(signer_id.clone(), init_amount);
 					SignerIdToAccountId::<T, I>::insert(signer_id, signer);
 				}
 
@@ -564,8 +571,7 @@ pub mod pallet {
 			tx_signer: SignerIdFor<T, I>,
 			_block_number: u64,
 			_tx_hash: TransactionHashFor<T, I>,
-			// TODO: Amount type
-			tx_fee: u128,
+			tx_fee: ChainAmountFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)

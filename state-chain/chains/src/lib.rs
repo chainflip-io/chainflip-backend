@@ -31,6 +31,15 @@ pub trait Chain: Member + Parameter {
 		+ One
 		+ Saturating
 		+ From<u64>;
+
+	type ChainAmount: Member
+		+ Parameter
+		+ Copy
+		+ Default
+		+ Into<u128>
+		+ From<u128>
+		+ Saturating
+		+ FullCodec;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -126,7 +135,7 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 }
 
 macro_rules! impl_chains {
-	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; }, ),+ $(,)? ) => {
+	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; type ChainAmount = $chain_amount:ty; }, ),+ $(,)? ) => {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
@@ -136,13 +145,17 @@ macro_rules! impl_chains {
 
 			impl Chain for $chain {
 				type ChainBlockNumber = $chain_block_number;
+				type ChainAmount = $chain_amount;
 			}
 		)+
 	};
 }
 
 impl_chains! {
-	Ethereum { type ChainBlockNumber = u64; },
+	Ethereum {
+		type ChainBlockNumber = u64;
+		type ChainAmount = u128;
+	},
 }
 
 impl ChainCrypto for Ethereum {
@@ -172,6 +185,7 @@ pub mod mocks {
 	impl_chains! {
 		MockEthereum {
 			type ChainBlockNumber = u64;
+			type ChainAmount = u128;
 		},
 	}
 
