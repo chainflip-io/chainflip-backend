@@ -3,6 +3,7 @@ use std::{
     convert::TryInto,
 };
 
+use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use zeroize::Zeroize;
@@ -18,7 +19,7 @@ use super::keygen_data::HashComm1;
 /// an iterator over its coefficients [c0, c1, c2, ...]) at x = index
 fn evaluate_polynomial<'a, T>(
     coefficients: impl DoubleEndedIterator<Item = &'a T>,
-    index: usize,
+    index: AuthorityCount,
 ) -> T
 where
     T: 'a + Clone,
@@ -28,7 +29,7 @@ where
     coefficients
         .rev()
         .cloned()
-        .reduce(|acc, coefficient| acc * Scalar::from_usize(index) + coefficient)
+        .reduce(|acc, coefficient| acc * Scalar::from_usize(index as usize) + coefficient)
         .unwrap()
 }
 
@@ -63,10 +64,10 @@ impl ShamirShare {
 
 /// Test-only helper function used to sanity check our sharing polynomial
 #[cfg(test)]
-fn reconstruct_secret(shares: &BTreeMap<usize, ShamirShare>) -> Scalar {
+fn reconstruct_secret(shares: &BTreeMap<AuthorityCount, ShamirShare>) -> Scalar {
     use crate::multisig::client::signing::frost;
 
-    let all_idxs: BTreeSet<usize> = shares.keys().into_iter().cloned().collect();
+    let all_idxs: BTreeSet<AuthorityCount> = shares.keys().into_iter().cloned().collect();
 
     shares
         .iter()
@@ -81,7 +82,7 @@ pub struct HashContext(pub [u8; 32]);
 
 /// Generate challenge against which a ZKP of our secret will be generated
 fn generate_dkg_challenge(
-    index: usize,
+    index: AuthorityCount,
     context: &HashContext,
     public: Point,
     commitment: Point,
@@ -108,7 +109,7 @@ fn generate_zkp_of_secret(
     rng: &mut Rng,
     secret: Scalar,
     context: &HashContext,
-    index: usize,
+    index: AuthorityCount,
 ) -> ZKPSignature {
     let nonce = Scalar::random(rng);
     let nonce_commitment = Point::from_scalar(&nonce);
@@ -126,9 +127,9 @@ fn generate_zkp_of_secret(
 }
 
 #[derive(Default)]
-pub struct OutgoingShares(pub BTreeMap<usize, ShamirShare>);
+pub struct OutgoingShares(pub BTreeMap<AuthorityCount, ShamirShare>);
 
-pub struct IncomingShares(pub BTreeMap<usize, ShamirShare>);
+pub struct IncomingShares(pub BTreeMap<AuthorityCount, ShamirShare>);
 
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
@@ -136,7 +137,7 @@ pub struct IncomingShares(pub BTreeMap<usize, ShamirShare>);
 pub fn generate_shares_and_commitment(
     rng: &mut Rng,
     context: &HashContext,
-    index: usize,
+    index: AuthorityCount,
     params: ThresholdParameters,
 ) -> (OutgoingShares, DKGUnverifiedCommitment) {
     let (secret, commitments, shares) =
@@ -156,9 +157,13 @@ pub fn generate_shares_and_commitment(
 // NOTE: shares should be sent after participants have exchanged commitments
 fn generate_secret_and_shares(
     rng: &mut Rng,
-    n: usize,
-    t: usize,
-) -> (Scalar, CoefficientCommitments, BTreeMap<usize, ShamirShare>) {
+    n: AuthorityCount,
+    t: AuthorityCount,
+) -> (
+    Scalar,
+    CoefficientCommitments,
+    BTreeMap<AuthorityCount, ShamirShare>,
+) {
     // Our secret contribution to the aggregate key
     let secret = Scalar::random(rng);
 
@@ -199,7 +204,7 @@ fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitm
 }
 
 // (Figure 1: Round 2, Step 2)
-pub fn verify_share(share: &ShamirShare, com: &DKGCommitment, index: usize) -> bool {
+pub fn verify_share(share: &ShamirShare, com: &DKGCommitment, index: AuthorityCount) -> bool {
     Point::from_scalar(&share.value) == evaluate_polynomial(com.commitments.0.iter(), index)
 }
 
@@ -239,11 +244,12 @@ fn is_valid_hash_commitment(
 
 // (Figure 1: Round 1, Step 5)
 pub fn validate_commitments(
-    public_coefficients: BTreeMap<usize, DKGUnverifiedCommitment>,
-    hash_commitments: BTreeMap<usize, HashComm1>,
+    public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment>,
+    hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
     context: &HashContext,
     logger: &slog::Logger,
-) -> Result<BTreeMap<usize, DKGCommitment>, (BTreeSet<usize>, KeygenFailureReason)> {
+) -> Result<BTreeMap<AuthorityCount, DKGCommitment>, (BTreeSet<AuthorityCount>, KeygenFailureReason)>
+{
     let invalid_idxs: BTreeSet<_> = public_coefficients
         .iter()
         .filter_map(|(idx, c)| {
@@ -283,7 +289,7 @@ pub fn validate_commitments(
 }
 
 /// Derive aggregate pubkey from party commitments
-pub fn derive_aggregate_pubkey(commitments: &BTreeMap<usize, DKGCommitment>) -> Point {
+pub fn derive_aggregate_pubkey(commitments: &BTreeMap<AuthorityCount, DKGCommitment>) -> Point {
     commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum()
 }
 
@@ -293,7 +299,7 @@ pub fn derive_local_pubkeys_for_parties(
         share_count: n,
         threshold: t,
     }: ThresholdParameters,
-    commitments: &BTreeMap<usize, DKGCommitment>,
+    commitments: &BTreeMap<AuthorityCount, DKGCommitment>,
 ) -> Vec<Point> {
     // Recall that each party i's secret key share `s` is the sum
     // of secret shares they receive from all other parties, which
@@ -308,7 +314,10 @@ pub fn derive_local_pubkeys_for_parties(
         .map(|idx| {
             (1..=n)
                 .map(|j| {
-                    evaluate_polynomial((0..=t).map(|k| &commitments[&j].commitments.0[k]), idx)
+                    evaluate_polynomial(
+                        (0..=t).map(|k| &commitments[&j].commitments.0[k as usize]),
+                        idx,
+                    )
                 })
                 .sum()
         })
@@ -330,7 +339,9 @@ pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitmen
 /// We don't want the coefficient commitments to add up to the "point at infinity" as this corresponds
 /// to the sum of the actual coefficient being zero, which would reduce the degree of the sharing polynomial
 /// (in Shamir Secret Sharing) and thus would reduce the effective threshold of the aggregate key
-pub fn check_high_degree_commitments(commitments: &BTreeMap<usize, DKGCommitment>) -> bool {
+pub fn check_high_degree_commitments(
+    commitments: &BTreeMap<AuthorityCount, DKGCommitment>,
+) -> bool {
     let high_degree_sum: Point = commitments
         .values()
         .map(|c| c.commitments.0.last().copied().unwrap())

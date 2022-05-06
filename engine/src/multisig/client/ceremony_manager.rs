@@ -9,6 +9,7 @@ use crate::multisig::client::common::{
 };
 use crate::multisig::crypto::Rng;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
+use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use client::{
@@ -125,7 +126,7 @@ impl CeremonyManager {
         &self,
         participants: &[AccountId],
         validator_map: &PartyIdxMapping,
-    ) -> Result<(usize, BTreeSet<usize>), &'static str> {
+    ) -> Result<(AuthorityCount, BTreeSet<AuthorityCount>), &'static str> {
         assert!(
             participants.contains(&self.my_account_id),
             "we are not among participants"
@@ -294,7 +295,8 @@ impl CeremonyManager {
 
         // Check that the number of signers is enough
         let minimum_signers_needed = key_info.params.threshold + 1;
-        if signers.len() < minimum_signers_needed {
+        let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
+        if signers_len < minimum_signers_needed {
             slog::warn!(
                 logger,
                 #REQUEST_TO_SIGN_IGNORED,

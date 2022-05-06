@@ -205,11 +205,14 @@ impl EthObserver for KeyManager {
             | KeyManagerEvent::AggKeySetByGovKey { new_key, .. } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser_api::Call::witness_eth_aggkey_rotation(
-                            cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
-                            event.block_number,
-                            event.tx_hash,
-                        ),
+                        pallet_cf_witnesser::Call::witness(Box::new(
+                            pallet_cf_vaults::Call::vault_key_rotated(
+                                cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
+                                event.block_number,
+                                event.tx_hash,
+                            )
+                            .into(),
+                        )),
                         logger,
                     )
                     .await;
@@ -217,15 +220,18 @@ impl EthObserver for KeyManager {
             KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser_api::Call::witness_signature_accepted(
-                            SchnorrVerificationComponents {
-                                s: sig_data.sig.into(),
-                                k_times_g_address: sig_data.k_times_g_address.into(),
-                            },
-                            signer,
-                            event.block_number,
-                            event.tx_hash,
-                        ),
+                        pallet_cf_witnesser::Call::witness(Box::new(
+                            pallet_cf_broadcast::Call::signature_accepted(
+                                SchnorrVerificationComponents {
+                                    s: sig_data.sig.into(),
+                                    k_times_g_address: sig_data.k_times_g_address.into(),
+                                },
+                                signer,
+                                event.block_number,
+                                event.tx_hash,
+                            )
+                            .into(),
+                        )),
                         logger,
                     )
                     .await;

@@ -546,7 +546,7 @@ pub mod pallet {
 			_block_number: u64,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
 

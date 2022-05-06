@@ -6,7 +6,7 @@
     "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
-  "AuthoritySetSizeRange": "(u32,u32)",
+  "AuthoritySetSizeRange": "(u16,u16)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
   "AggKey": {
@@ -112,8 +112,8 @@
   "KeygenResponseStatus": {
     "CandidateCount": "u32",
     "RemainingCandidates": "BTreeSet<ValidatorId>",
-    "SuccessVotes": "BTreeMap<AggKeyFor, u32>",
-    "BlameVotes": "BTreeMap<ValidatorId, u32>"
+    "SuccessVotes": "BTreeMap<AggKeyFor, u16>",
+    "BlameVotes": "BTreeMap<ValidatorId, u16>"
   },
   "KeyId": "Vec<u8>",
   "Keys": {

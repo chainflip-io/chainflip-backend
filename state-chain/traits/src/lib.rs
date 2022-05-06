@@ -23,6 +23,8 @@ pub type FlipBalance = u128;
 /// The type used as an epoch index.
 pub type EpochIndex = u32;
 
+pub type AuthorityCount = u32;
+
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
@@ -51,6 +53,9 @@ pub trait Chainflip: frame_system::Config {
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+	/// A type that allows us to check if a call was a result of witness consensus by the current
+	/// epoch.
+	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::Origin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state
@@ -95,13 +100,16 @@ pub trait EpochInfo {
 	fn current_authorities() -> Vec<Self::ValidatorId>;
 
 	/// Get the current number of authorities
-	fn current_authority_count() -> u32;
+	fn current_authority_count() -> AuthorityCount;
 
 	/// Gets authority index of a particular authority for a given epoch
-	fn authority_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
+	fn authority_index(
+		epoch_index: EpochIndex,
+		account: &Self::ValidatorId,
+	) -> Option<AuthorityCount>;
 
 	/// Authority count at a particular epoch.
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<u32>;
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
 	/// current candidate authority set
@@ -141,7 +149,7 @@ pub struct AuctionResult<ValidatorId, Amount> {
 }
 
 /// A min and max number of authorities for an authority set
-pub type AuthoritySetSizeRange = (u32, u32);
+pub type AuthoritySetSizeRange = (AuthorityCount, AuthorityCount);
 
 /// Auctioneer
 ///

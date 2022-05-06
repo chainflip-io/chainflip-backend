@@ -30,7 +30,8 @@ async fn should_ignore_rts_for_unknown_key() {
     let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let client = MultisigClient::new(
         account_id.clone(),
-        PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database"),
+        PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+            .expect("Failed to open database"),
         keygen_request_sender,
         signing_request_sender,
         &logging::test_utils::new_test_logger(),
@@ -73,7 +74,8 @@ async fn should_save_key_after_keygen() {
         let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
         let client = MultisigClient::new(
             ACCOUNT_IDS[0].clone(),
-            PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database"),
+            PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+                .expect("Failed to open database"),
             keygen_request_sender,
             signing_request_sender,
             &logging::test_utils::new_test_logger(),
@@ -98,8 +100,10 @@ async fn should_save_key_after_keygen() {
     }
 
     // Check that the key was saved by Loading it from the same db file
-    let key_store =
-        KeyStore::new(PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database"));
+    let key_store = KeyStore::new(
+        PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+            .expect("Failed to open database"),
+    );
     assert!(key_store.get_key(&key_id).is_some(), "Key not found in db");
 }
 
@@ -119,7 +123,8 @@ async fn should_load_keys_on_creation() {
     let logger = logging::test_utils::new_test_logger();
     {
         let mut key_store = KeyStore::new(
-            PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database"),
+            PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+                .expect("Failed to open database"),
         );
         key_store.set_key(key_id.clone(), stored_keygen_result_info.clone());
     }
@@ -129,7 +134,8 @@ async fn should_load_keys_on_creation() {
     let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let client = MultisigClient::new(
         ACCOUNT_IDS[0].clone(),
-        PersistentKeyDB::new(&db_file, &logger).expect("Failed to open database"),
+        PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+            .expect("Failed to open database"),
         keygen_request_sender,
         signing_request_sender,
         &logging::test_utils::new_test_logger(),
