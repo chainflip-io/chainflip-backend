@@ -12,8 +12,7 @@ jobs:
       - name: Run ssh
         run: >
          sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} ssh -o StrictHostKeyChecking=no assemhasna@100.103.245.80
-         'export RUSTC_WRAPPER=sccache SCCACHE_REDIS=${{secrets.SCCACHE_REDIS}}
-         && /bin/zsh
+         'export RUSTC_WRAPPER=/opt/homebrew/bin/sccache SCCACHE_REDIS=${{secrets.SCCACHE_REDIS}}
          && rm -rf /tmp/chainflip-io 
          && mkdir -p /tmp/chainflip-io 
          && cd /tmp/chainflip-io 
