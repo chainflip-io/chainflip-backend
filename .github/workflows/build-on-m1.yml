@@ -9,17 +9,21 @@ jobs:
         uses: tailscale/github-action@main
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-      - name: Run ssh
+      # - name: Run ssh
+      #   run: >
+      #    sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} ssh -o StrictHostKeyChecking=no assemhasna@100.103.245.80
+      #    'export RUSTC_WRAPPER=/opt/homebrew/bin/sccache SCCACHE_REDIS=${{secrets.SCCACHE_REDIS}} LIBRARY_PATH=$LIBRARY_PATH:/opt/homebrew/lib INCLUDE_PATH=$INCLUDE_PATH:/opt/homebrew/include
+      #    && rm -rf /tmp/chainflip-io 
+      #    && mkdir -p /tmp/chainflip-io 
+      #    && cd /tmp/chainflip-io 
+      #    && git clone git@github.com:chainflip-io/chainflip-backend.git 
+      #    && cd /tmp/${{ github.repository }} 
+      #    && git checkout ${{ github.ref_name }}
+      #    && cargo fmt --all -- --check
+      #    && cargo check --all-targets --all-features --locked --release
+      #    && cargo build --locked --release
+      #    && cargo test --lib --locked --release --all-features'
+      - name: Get artifacts
         run: >
-         sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} ssh -o StrictHostKeyChecking=no assemhasna@100.103.245.80
-         'export RUSTC_WRAPPER=/opt/homebrew/bin/sccache SCCACHE_REDIS=${{secrets.SCCACHE_REDIS}} LIBRARY_PATH=$LIBRARY_PATH:/opt/homebrew/lib INCLUDE_PATH=$INCLUDE_PATH:/opt/homebrew/include
-         && rm -rf /tmp/chainflip-io 
-         && mkdir -p /tmp/chainflip-io 
-         && cd /tmp/chainflip-io 
-         && git clone git@github.com:chainflip-io/chainflip-backend.git 
-         && cd /tmp/${{ github.repository }} 
-         && git checkout ${{ github.ref_name }}
-         && cargo fmt --all -- --check
-         && cargo check --all-targets --all-features --locked --release
-         && cargo build --locked --release
-         && cargo test --lib --locked --release --all-features'
+          sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} scp -rp -o StrictHostKeyChecking=no artifacts assemhasna@100.103.245.80:/tmp/chainflip-io/chainflip-backend/target/release
+        
