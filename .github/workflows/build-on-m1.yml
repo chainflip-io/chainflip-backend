@@ -25,5 +25,11 @@ jobs:
       #    && cargo test --lib --locked --release --all-features'
       - name: Get artifacts
         run: >
+          mkdir artifacts && sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} scp -rp -o StrictHostKeyChecking=no artifacts assemhasna@100.103.245.80:/tmp/chainflip-io/chainflip-backend/target/release && ls -la && ls -la artifacts
+      - name: Upload artifacts
+        run: >
           mkdir artifacts && sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} scp -rp -o StrictHostKeyChecking=no artifacts assemhasna@100.103.245.80:/tmp/chainflip-io/chainflip-backend/target/release
-        
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifacts
+          path: artifacts
