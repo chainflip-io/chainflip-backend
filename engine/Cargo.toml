@@ -2,7 +2,7 @@
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = "2018"
 name = "chainflip-engine"
-version = "0.2.5"
+version = "0.2.6"
 
 [package.metadata.deb]
 depends = "$auto"

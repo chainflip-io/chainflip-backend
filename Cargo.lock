@@ -936,7 +936,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "cf-chains",
  "frame-benchmarking",

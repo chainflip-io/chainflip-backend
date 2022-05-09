@@ -236,6 +236,16 @@ pub fn chainflip_soundcheck_config() -> Result<ChainSpec, String> {
 	)
 }
 
+/// Build the chainspec for Soundcheck Two public testnet.
+pub fn chainflip_soundcheck_two_config() -> Result<ChainSpec, String> {
+	chainflip_three_node_testnet_config_from_env(
+		"Chainflip Soundcheck Two",
+		"soundcheck-two",
+		ChainType::Live,
+		network_env::SOUNDCHECK_TWO,
+	)
+}
+
 fn chainflip_three_node_testnet_config_from_env(
 	name: &str,
 	id: &str,

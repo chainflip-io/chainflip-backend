@@ -39,6 +39,7 @@ impl SubstrateCli for Cli {
 			"three-node-test" => Box::new(chain_spec::chainflip_three_node_testnet_config()?),
 			"test" => Box::new(chain_spec::chainflip_testnet_config()?),
 			"soundcheck" => Box::new(chain_spec::chainflip_soundcheck_config()?),
+			"soundcheck-two" => Box::new(chain_spec::chainflip_soundcheck_two_config()?),
 			path =>
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
 		})
