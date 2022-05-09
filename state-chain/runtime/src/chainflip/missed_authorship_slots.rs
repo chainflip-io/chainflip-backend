@@ -50,7 +50,10 @@ impl MissedAuthorshipSlots for MissedAuraSlots {
 mod test_missed_authorship_slots {
 	use super::*;
 	use codec::Encode;
-	use frame_support::{construct_runtime, parameter_types, traits::OnInitialize};
+	use frame_support::{
+		construct_runtime, parameter_types,
+		traits::{ConstU32, OnInitialize},
+	};
 	use sp_consensus_aura::ed25519::AuthorityId;
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId},
@@ -100,6 +103,7 @@ mod test_missed_authorship_slots {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<5>;
 	}
 
 	parameter_types! {
@@ -115,6 +119,7 @@ mod test_missed_authorship_slots {
 	impl pallet_aura::Config for Test {
 		type AuthorityId = AuthorityId;
 		type DisabledValidators = ();
+		type MaxAuthorities = ConstU32<10>;
 	}
 
 	pub fn new_test_ext(authorities: Vec<u64>) -> frame_support::sp_io::TestExternalities {

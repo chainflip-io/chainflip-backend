@@ -8,7 +8,7 @@ description = "Shared Chain-specific functionality for use in the substrate runt
 [dependencies]
 # Cryptography
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
-secp256k1 = {optional = true, version = "0.20"}
+secp256k1 = {optional = true, version = "0.21"}
 
 # Ethereum
 ethabi = {default-features = false, version = "17.0"}

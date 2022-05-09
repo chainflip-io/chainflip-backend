@@ -877,7 +877,12 @@ mod verification_tests {
 
 			let verificaton_result =
 				verify_transaction(&unsigned, &signed_tx_bytes.0, &key_ref.address().0.into());
-			assert_eq!(verificaton_result, Ok(()), "Unable to verify tx signed by key {:#x}", key);
+			assert_eq!(
+				verificaton_result,
+				Ok(()),
+				"Unable to verify tx signed by key {:?}",
+				hex::encode(key.serialize_secret())
+			);
 		}
 	}
 
@@ -888,14 +893,14 @@ mod verification_tests {
 			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
 			gas_limit: U256::from(21_000u32).into(),
 			contract: [0xcf; 20].into(),
-			value: 0.into(),
+			value: 0u32.into(),
 			data: b"do_something()".to_vec(),
 			..Default::default()
 		};
 
 		let msg = LegacyTransactionMessage {
 			chain_id: Some(unsigned.chain_id),
-			nonce: 0.into(),
+			nonce: 0u32.into(),
 			gas_limit: unsigned.gas_limit.unwrap(),
 			gas_price: U256::from(1_000_000_000u32),
 			action: ethereum::TransactionAction::Call(unsigned.contract),
@@ -930,7 +935,12 @@ mod verification_tests {
 
 			let verificaton_result =
 				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
-			assert_eq!(verificaton_result, Ok(()), "Unable to verify tx signed by key {:#x}", key);
+			assert_eq!(
+				verificaton_result,
+				Ok(()),
+				"Unable to verify tx signed by key {:?}",
+				hex::encode(key.serialize_secret())
+			);
 		}
 	}
 }

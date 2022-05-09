@@ -45,7 +45,7 @@ mod tests {
 		use libsecp256k1::PublicKey;
 		use pallet_cf_staking::AccountRetired;
 		use pallet_cf_vaults::KeygenOutcome;
-		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
+		use state_chain_runtime::{constants::common::HEARTBEAT_BLOCK_INTERVAL, Event, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 		// TODO: Can we use the actual events here?
@@ -305,7 +305,7 @@ mod tests {
 			fn on_block(&self, block_number: BlockNumber) {
 				if self.active {
 					// Heartbeat -> Send transaction to state chain twice an interval
-					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
+					if block_number % (HEARTBEAT_BLOCK_INTERVAL / 2) == 0 {
 						// Online pallet
 						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
@@ -425,8 +425,7 @@ mod tests {
 			pub fn move_to_next_heartbeat_interval(&mut self) {
 				let current_block_number = System::block_number();
 				self.move_forward_blocks(
-					HeartbeatBlockInterval::get() -
-						(current_block_number % HeartbeatBlockInterval::get()) +
+					HEARTBEAT_BLOCK_INTERVAL - (current_block_number % HEARTBEAT_BLOCK_INTERVAL) +
 						1,
 				);
 			}
@@ -501,7 +500,7 @@ mod tests {
 
 	pub struct ExtBuilder {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
-		root: AccountId,
+		root: Option<AccountId>,
 		blocks_per_epoch: BlockNumber,
 		max_authorities: AuthorityCount,
 		min_authorities: AuthorityCount,
@@ -511,7 +510,7 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				accounts: vec![],
-				root: AccountId::default(),
+				root: None,
 				blocks_per_epoch: Zero::zero(),
 				max_authorities: MAX_AUTHORITIES,
 				min_authorities: 1,
@@ -526,7 +525,7 @@ mod tests {
 		}
 
 		fn root(mut self, root: AccountId) -> Self {
-			self.root = root;
+			self.root = Some(root);
 			self
 		}
 
@@ -595,7 +594,7 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_governance::GenesisConfig::<Runtime> {
-				members: vec![self.root.clone()],
+				members: self.root.iter().cloned().collect(),
 				expiry_span: EXPIRY_SPAN_IN_SECONDS,
 			}
 			.assimilate_storage(storage)
@@ -779,7 +778,7 @@ mod tests {
 			EpochInfo,
 		};
 		use pallet_cf_validator::RotationStatus;
-		use state_chain_runtime::{HeartbeatBlockInterval, Validator};
+		use state_chain_runtime::Validator;
 
 		#[test]
 		// We have a test network which goes into the first epoch
@@ -846,7 +845,7 @@ mod tests {
 					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
 					// Move forward heartbeat to get those missing nodes online
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// The rotation can now continue to the next phase.
 					assert!(matches!(
@@ -1105,9 +1104,10 @@ mod tests {
 		// All other accounts are normally charged and can call any extrinsic.
 		fn restriction_handling() {
 			super::genesis::default().build().execute_with(|| {
-				let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
+				let call: state_chain_runtime::Call =
+					frame_system::Call::remark { remark: vec![] }.into();
 				let gov_call: state_chain_runtime::Call =
-					pallet_cf_governance::Call::approve(1).into();
+					pallet_cf_governance::Call::approve { id: 1 }.into();
 				// Expect a successful normal call to work
 				let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
 					&ALICE.into(),
@@ -1140,15 +1140,17 @@ mod tests {
 	}
 
 	mod authorities {
-		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
+		use crate::tests::{
+			genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL,
+			VAULT_ROTATION_BLOCKS,
+		};
 		use cf_traits::{
 			AuthorityCount, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
-			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
-			Runtime, Validator,
+			Auction, EmergencyRotationPercentageRange, Flip, Online, Runtime, Validator,
 		};
 		use std::collections::HashMap;
 
@@ -1156,7 +1158,7 @@ mod tests {
 
 		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// We want to have at least one heartbeat within our reduced epoch
-			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_AUTHORITIES: AuthorityCount = 10;
@@ -1256,7 +1258,7 @@ mod tests {
 						.collect();
 
 					// Move forward a heartbeat, emissions should be shared to backup nodes
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
@@ -1276,7 +1278,7 @@ mod tests {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 1 heartbeat interval
 			// Blocks for our epoch, something larger than one heartbeat
-			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
 			const MAX_AUTHORITIES: AuthorityCount = 10;

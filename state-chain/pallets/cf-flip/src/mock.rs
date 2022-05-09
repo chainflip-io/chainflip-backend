@@ -3,7 +3,11 @@ use cf_traits::{
 	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
 	WaivedFees,
 };
-use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU128, ConstU8, HandleLifetime},
+	weights::{ConstantMultiplier, IdentityFee},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -59,6 +63,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 pub type FlipBalance = u128;
@@ -91,9 +96,10 @@ parameter_types! {
 
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
-	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<FlipBalance>;
 	type FeeMultiplierUpdate = ();
+	type OperationalFeeMultiplier = ConstU8<5>;
+	type LengthToFee = ConstantMultiplier<u128, ConstU128<1_000_000>>;
 }
 
 // Build genesis storage according to the mock runtime.

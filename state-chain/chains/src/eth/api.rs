@@ -14,7 +14,7 @@ pub enum EthereumApi {
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EthereumReplayProtection {
 	pub key_manager_address: [u8; 20],
 	pub chain_id: u64,

@@ -67,6 +67,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl_opaque_keys! {
@@ -93,7 +94,6 @@ impl pallet_session::Config for Test {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = Event;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
@@ -299,10 +299,8 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 pub fn run_to_block(n: u64) {
 	assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
 	while System::block_number() < n {
-		Session::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
-		Session::on_initialize(System::block_number());
-		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
+		<(Session, ValidatorPallet) as OnInitialize<u64>>::on_initialize(System::block_number());
 		MockVaultRotator::on_initialise();
 		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
 	}
