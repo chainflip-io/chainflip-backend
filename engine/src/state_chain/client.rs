@@ -1,12 +1,13 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use cf_chains::ChainAbi;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomClient;
+use frame_metadata::RuntimeMetadata;
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
+use frame_support::storage::storage_prefix;
 use frame_support::storage::types::QueryKindTrait;
-use frame_support::unsigned::TransactionValidityError;
 use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode, Value};
@@ -25,24 +26,15 @@ use sp_core::{
 };
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
-use sp_runtime::AccountId32;
+use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{AccountId, PalletInstanceAlias, SignedBlock};
+use state_chain_runtime::{PalletInstanceAlias, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::{marker::PhantomData, sync::Arc};
-use subxt::{
-    balances::Balances,
-    extrinsic::{
-        ChargeTransactionPayment, CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion,
-        CheckTxVersion, CheckWeight,
-    },
-    system::System,
-    Runtime, SignedExtension, SignedExtra, UncheckedExtrinsic,
-};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
@@ -50,101 +42,12 @@ use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
+mod signer;
+
 #[cfg(test)]
 use mockall::automock;
 
 use async_trait::async_trait;
-
-////////////////////
-// IMPORTANT: The types used here must match those in the state chain
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeImplForSigningExtrinsics {}
-impl System for RuntimeImplForSigningExtrinsics {
-    type Index = <state_chain_runtime::Runtime as frame_system::Config>::Index;
-    type BlockNumber = <state_chain_runtime::Runtime as frame_system::Config>::BlockNumber;
-    type Hash = <state_chain_runtime::Runtime as frame_system::Config>::Hash;
-    type Hashing = <state_chain_runtime::Runtime as frame_system::Config>::Hashing;
-    type AccountId = AccountId;
-    type Address = state_chain_runtime::Address;
-    type Header = <state_chain_runtime::Runtime as frame_system::Config>::Header;
-    type Extrinsic = state_chain_runtime::UncheckedExtrinsic;
-    type AccountData = <state_chain_runtime::Runtime as frame_system::Config>::AccountData;
-}
-impl Balances for RuntimeImplForSigningExtrinsics {
-    type Balance = <state_chain_runtime::Runtime as pallet_cf_flip::Config>::Balance;
-}
-// Substrate_subxt's Runtime trait allows us to use it's extrinsic signing code
-impl Runtime for RuntimeImplForSigningExtrinsics {
-    type Signature = state_chain_runtime::Signature;
-    type Extra = SCDefaultExtra<Self>;
-    fn register_type_sizes(_event_type_registry: &mut subxt::EventTypeRegistry<Self>) {
-        unreachable!();
-    }
-}
-
-/// Needed so we can use subxt's extrinsic signing code
-/// Defines extra parameters contained in an extrinsic
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
-pub struct SCDefaultExtra<T: System> {
-    spec_version: u32,
-    tx_version: u32,
-    nonce: T::Index,
-    genesis_hash: T::Hash,
-}
-
-impl<T> SignedExtra<T> for SCDefaultExtra<T>
-where
-    T: System + Balances + Clone + Debug + Eq + Send + Sync,
-{
-    #[allow(clippy::type_complexity)]
-    type Extra = (
-        CheckSpecVersion<T>,
-        CheckTxVersion<T>,
-        CheckGenesis<T>,
-        CheckEra<T>,
-        CheckNonce<T>,
-        CheckWeight<T>,
-        ChargeTransactionPayment<T>,
-    );
-
-    fn new(spec_version: u32, tx_version: u32, nonce: T::Index, genesis_hash: T::Hash) -> Self {
-        SCDefaultExtra {
-            spec_version,
-            tx_version,
-            nonce,
-            genesis_hash,
-        }
-    }
-
-    fn extra(&self) -> Self::Extra {
-        (
-            CheckSpecVersion(PhantomData, self.spec_version),
-            CheckTxVersion(PhantomData, self.tx_version),
-            CheckGenesis(PhantomData, self.genesis_hash),
-            CheckEra((Era::Immortal, PhantomData), self.genesis_hash),
-            CheckNonce(self.nonce),
-            CheckWeight(PhantomData),
-            // Note: The tip is ignored in our runtime, but we need to provide one in order to
-            // use substrate's transaction fee logic.
-            ChargeTransactionPayment(Default::default()),
-        )
-    }
-}
-
-impl<T> SignedExtension for SCDefaultExtra<T>
-where
-    T: System + Balances + Clone + Debug + Eq + Send + Sync,
-{
-    const IDENTIFIER: &'static str = "SCDefaultExtra";
-    type AccountId = T::AccountId;
-    type Call = ();
-    type AdditionalSigned = <<Self as SignedExtra<T>>::Extra as SignedExtension>::AdditionalSigned;
-    type Pre = ();
-    fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-        self.extra().additional_signed()
-    }
-}
 
 type AuthorRpcClient = sc_rpc_api::author::AuthorClient<
     state_chain_runtime::Hash,
@@ -185,7 +88,7 @@ pub trait StateChainRpcApi {
     /// sends a signed transaction. If the nonce is `None`, send an unsigned transaction.
     async fn submit_extrinsic_rpc(
         &self,
-        extrinsic: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>,
+        extrinsic: state_chain_runtime::UncheckedExtrinsic,
     ) -> Result<sp_core::H256, RpcError>;
 
     async fn storage(
@@ -227,7 +130,7 @@ pub trait StateChainRpcApi {
 impl StateChainRpcApi for StateChainRpcClient {
     async fn submit_extrinsic_rpc(
         &self,
-        extrinsic: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>,
+        extrinsic: state_chain_runtime::UncheckedExtrinsic,
     ) -> Result<sp_core::H256, RpcError> {
         self.author_rpc_client
             .submit_extrinsic(Bytes::from(extrinsic.encode()))
@@ -337,7 +240,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
     runtime_version: RwLock<sp_version::RuntimeVersion>,
     genesis_hash: state_chain_runtime::Hash,
-    pub signer: subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
+    pub signer: signer::PairSigner<sp_core::sr25519::Pair>,
 
     state_chain_rpc_client: RpcClient,
 }
@@ -363,7 +266,7 @@ pub fn mock_account_storage_key() -> StorageKey {
 #[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
-        use subxt::PairSigner;
+        use signer::PairSigner;
 
         Self {
             heartbeat_block_interval: 20,
@@ -487,41 +390,77 @@ mod storage_traits {
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
-    pub async fn submit_signed_extrinsic<Extrinsic>(
+    fn create_and_sign_extrinsic(
         &self,
-        extrinsic: Extrinsic,
+        call: state_chain_runtime::Call,
+        runtime_version: &RuntimeVersion,
+        genesis_hash: state_chain_runtime::Hash,
+        nonce: state_chain_runtime::Index,
+    ) -> state_chain_runtime::UncheckedExtrinsic {
+        let extra: state_chain_runtime::SignedExtra = (
+            frame_system::CheckNonZeroSender::new(),
+            frame_system::CheckSpecVersion::new(),
+            frame_system::CheckTxVersion::new(),
+            frame_system::CheckGenesis::new(),
+            frame_system::CheckEra::from(Era::Immortal),
+            frame_system::CheckNonce::from(nonce),
+            frame_system::CheckWeight::new(),
+            state_chain_runtime::ChargeTransactionPayment::from(0),
+        );
+        let additional_signed = (
+            (),
+            runtime_version.spec_version,
+            runtime_version.transaction_version,
+            genesis_hash,
+            genesis_hash,
+            (),
+            (),
+            (),
+        );
+
+        let signed_payload = state_chain_runtime::SignedPayload::from_raw(
+            call.clone(),
+            extra.clone(),
+            additional_signed,
+        );
+        let signature = signed_payload.using_encoded(|bytes| self.signer.sign(bytes));
+
+        state_chain_runtime::UncheckedExtrinsic::new_signed(
+            call,
+            MultiAddress::Id(self.signer.account_id().clone()),
+            signature,
+            extra,
+        )
+    }
+
+    /// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
+    pub async fn submit_signed_extrinsic<Call>(
+        &self,
+        call: Call,
         logger: &slog::Logger,
     ) -> Result<H256>
     where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
+        Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug,
     {
-        let extrinsic = state_chain_runtime::Call::from(extrinsic);
-        let encoded_extrinsic = subxt::Encoded(extrinsic.encode());
         for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             let runtime_version = { self.runtime_version.read().await.clone() };
             match self
                 .state_chain_rpc_client
-                .submit_extrinsic_rpc(
-                    subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
-                        &runtime_version,
-                        self.genesis_hash,
-                        nonce,
-                        encoded_extrinsic.clone(),
-                        &self.signer,
-                    )
-                    .await
-                    .expect("Should be able to sign"),
-                )
+                .submit_extrinsic_rpc(self.create_and_sign_extrinsic(
+                    call.clone().into(),
+                    &runtime_version,
+                    self.genesis_hash,
+                    nonce,
+                ))
                 .await
             {
                 Ok(tx_hash) => {
                     slog::info!(
                         logger,
                         "{:?} submitted successfully with tx_hash: {:#x}",
-                        extrinsic,
+                        &call,
                         tx_hash
                     );
                     return Ok(tx_hash);
@@ -606,7 +545,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             logger,
                             "Extrinsic failed with error: {}. Extrinsic: {:?}",
                             err,
-                            extrinsic
+                            &call,
                         );
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
                         return Err(err);
@@ -621,29 +560,28 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     /// Submit an unsigned extrinsic.
-    pub async fn submit_unsigned_extrinsic<Extrinsic>(
+    pub async fn submit_unsigned_extrinsic<Call>(
         &self,
-        extrinsic: Extrinsic,
+        call: Call,
         logger: &slog::Logger,
     ) -> Result<H256>
     where
-        state_chain_runtime::Call: std::convert::From<Extrinsic>,
-        Extrinsic: 'static + std::fmt::Debug + Clone + Send,
+        Call: Into<state_chain_runtime::Call> + 'static + std::fmt::Debug + Clone + Send,
     {
-        let unsigned_tx = subxt::extrinsic::create_unsigned::<RuntimeImplForSigningExtrinsics>(
-            subxt::Encoded(state_chain_runtime::Call::from(extrinsic.clone()).encode()),
-        );
-        let expected_hash = BlakeTwo256::hash_of(&unsigned_tx);
+        let call = call.into();
+        let expected_hash = BlakeTwo256::hash_of(&call);
         match self
             .state_chain_rpc_client
-            .submit_extrinsic_rpc(unsigned_tx)
+            .submit_extrinsic_rpc(state_chain_runtime::UncheckedExtrinsic::new_unsigned(
+                call.clone(),
+            ))
             .await
         {
             Ok(tx_hash) => {
                 slog::info!(
                     logger,
                     "Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
-                    extrinsic,
+                    &call,
                     tx_hash
                 );
                 assert_eq!(
@@ -662,7 +600,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         // ignore the error and return the transaction hash
                         if e.code == ErrorCode::ServerError(1013) =>
                     {
-                        slog::trace!(logger, "Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.", extrinsic, expected_hash);
+                        slog::trace!(logger, "Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.", &call, expected_hash);
                         Ok(expected_hash)
                     }
                     _ => {
@@ -671,7 +609,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             logger,
                             "Unsigned extrinsic failed with error: {}. Extrinsic: {:?}",
                             anyhow_error,
-                            extrinsic
+                            &call
                         );
                         Err(anyhow_error)
                     }
@@ -989,9 +927,8 @@ async fn inner_connect_to_state_chain(
     impl Stream<Item = Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient>>,
 )> {
-    use subxt::Signer;
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
-    let signer = subxt::PairSigner::<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>::new(
+    let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(
         sp_core::sr25519::Pair::from_seed(&read_clean_and_decode_hex_str_file(
             &state_chain_settings.signing_key_file,
             "State Chain Signing Key",
@@ -1066,8 +1003,8 @@ async fn inner_connect_to_state_chain(
                     .map_err(rpc_error_into_anyhow_error)?
                 {
                     let account_info: frame_system::AccountInfo<
-                        <RuntimeImplForSigningExtrinsics as System>::Index,
-                        <RuntimeImplForSigningExtrinsics as System>::AccountData,
+                        state_chain_runtime::Index,
+                        <state_chain_runtime::Runtime as frame_system::Config>::AccountData,
                     > = Decode::decode(&mut &encoded_account_info.0[..])?;
                     Some(account_info.nonce)
                 } else {
@@ -1125,15 +1062,24 @@ async fn inner_connect_to_state_chain(
         latest_block_hash
     );
 
-    let metadata = subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
+    let RuntimeMetadataPrefixed(metadata_prefix, metadata) = RuntimeMetadataPrefixed::decode(
         &mut &state_chain_rpc_client
             .state_rpc_client
             .metadata(Some(latest_block_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?[..],
-    )?)?;
-
-    let system_pallet_metadata = metadata.module("System")?;
+    )?;
+    if metadata_prefix != frame_metadata::META_RESERVED {
+        bail!(
+            "Invalid Metadata Prefix {}, expected {}.",
+            metadata_prefix,
+            frame_metadata::META_RESERVED
+        )
+    }
+    let metadata = match metadata {
+        RuntimeMetadata::V14(meta) => meta,
+        other => bail!("Invalid Metadata version {:?}, epected V14", other),
+    };
 
     Ok((
         latest_block_hash,
@@ -1157,16 +1103,11 @@ async fn inner_connect_to_state_chain(
             state_chain_rpc_client,
             our_account_id,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
-            events_storage_key: system_pallet_metadata.storage("Events")?.prefix(),
-            heartbeat_block_interval: metadata
-                .module("Reputation")
-                .expect("No module 'Reputation' in chain metadata")
-                .constant("HeartbeatBlockInterval")
-                .expect(
-                    "No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'",
-                )
-                .value::<u32>()
-                .expect("Could not decode HeartbeatBlockInterval to u32"),
+            events_storage_key: StorageKey(storage_prefix(b"System", b"Events").to_vec()),
+            heartbeat_block_interval: metadata.pallets.iter().find(|pallet| pallet.name == "Reputation").expect("No module 'Reputation' in chain metadata").constants.iter()
+                .find_map(|constant| if constant.name == "HeartbeatBlockInterval" { Some(&constant.value[..])} else { None })
+                .ok_or(anyhow::anyhow!("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'"))
+                .and_then(|value_bytes| Ok(u32::decode(&mut &value_bytes[..])?))?,
         }),
     ))
 }
@@ -1404,17 +1345,15 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(
-                move |_ext: UncheckedExtrinsic<RuntimeImplForSigningExtrinsics>| {
-                    Err(RpcError::JsonRpcError(Error {
-                        code: ErrorCode::ServerError(1010),
-                        message: "Invalid Transaction".to_string(),
-                        data: Some(Value::String(
-                            <&'static str>::from(InvalidTransaction::BadProof).into(),
-                        )),
-                    }))
-                },
-            );
+            .returning(move |_ext: state_chain_runtime::UncheckedExtrinsic| {
+                Err(RpcError::JsonRpcError(Error {
+                    code: ErrorCode::ServerError(1010),
+                    message: "Invalid Transaction".to_string(),
+                    data: Some(Value::String(
+                        <&'static str>::from(InvalidTransaction::BadProof).into(),
+                    )),
+                }))
+            });
 
         // Second time called, should succeed
         mock_state_chain_rpc_client
