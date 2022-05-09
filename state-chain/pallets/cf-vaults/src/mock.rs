@@ -101,7 +101,7 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockSetAggKeyWithAggKey {
 	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,

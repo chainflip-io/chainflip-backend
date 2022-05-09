@@ -5,15 +5,20 @@ pub mod chainflip;
 pub mod constants;
 mod migrations;
 pub mod runtime_apis;
+pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
 use cf_chains::{eth, Ethereum};
 pub use frame_support::{
-	construct_runtime, debug, parameter_types,
-	traits::{KeyOwnerProofSystem, Randomness, StorageInfo},
+	construct_runtime, debug,
+	instances::Instance1,
+	parameter_types,
+	traits::{
+		ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo,
+	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-		IdentityFee, Weight,
+		ConstantMultiplier, IdentityFee, Weight,
 	},
 	StorageValue,
 };
@@ -54,8 +59,9 @@ use chainflip::{
 	KeygenOffences,
 };
 use constants::common::*;
-use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::{Bonder, FlipSlasher};
+use pallet_cf_validator::PercentageRange;
+pub use pallet_transaction_payment::ChargeTransactionPayment;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -101,7 +107,7 @@ pub mod opaque {
 	}
 }
 // To learn more about runtime versioning and what each of the following value means:
-//   https://substrate.dev/docs/en/knowledgebase/runtime/upgrades#runtime-versioning
+//   https://docs.substrate.io/v3/runtime/upgrades#runtime-versioning
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
@@ -111,6 +117,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 2,
+	state_version: 1,
 };
 
 /// The version information used to identify this runtime when compiled natively.
@@ -213,7 +220,6 @@ impl pallet_session::Config for Runtime {
 	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
-	type DisabledValidatorsThreshold = ();
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
 
@@ -287,6 +293,7 @@ impl frame_system::Config for Runtime {
 	type SS58Prefix = SS58Prefix;
 	/// The set code logic, just the default since we're not a parachain.
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
@@ -299,62 +306,45 @@ impl frame_system::offchain::SigningTypes for Runtime {
 impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
+	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
 
 impl pallet_grandpa::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
-
 	type KeyOwnerProofSystem = Historical;
-
 	type KeyOwnerProof =
 		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-
 	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
 		KeyTypeId,
 		GrandpaId,
 	)>>::IdentificationTuple;
-
 	type HandleEquivocation = ();
-
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
+	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
 
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	/// The number of blocks back we should accept uncles
-	pub const UncleGenerations: BlockNumber = 5;
 }
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-	type UncleGenerations = UncleGenerations;
+	type UncleGenerations = ConstU32<5>;
 	type FilterUncle = ();
 	type EventHandler = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-	pub const BlocksPerDay: u32 = DAYS;
 }
 
 impl pallet_cf_flip::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU128<500>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type BlocksPerDay = BlocksPerDay;
+	type BlocksPerDay = ConstU32<DAYS>;
 	type StakeHandler = ChainflipStakeHandler;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
@@ -407,25 +397,21 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
-	type BlocksPerDay = BlocksPerDay;
+	type BlocksPerDay = ConstU32<DAYS>;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
 
-parameter_types! {
-	pub const TransactionByteFee: FlipBalance = 1_000_000;
-}
-
 impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
-	type TransactionByteFee = TransactionByteFee;
+	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<FlipBalance>;
+	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
 	type FeeMultiplierUpdate = ();
 }
 
 parameter_types! {
-	pub const HeartbeatBlockInterval: BlockNumber = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 	pub const MaximumReputationPointAccrued: pallet_cf_reputation::ReputationPoints = 15;
 }
@@ -433,7 +419,7 @@ parameter_types! {
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
-	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
@@ -442,17 +428,9 @@ impl pallet_cf_reputation::Config for Runtime {
 }
 
 impl pallet_cf_online::Config for Runtime {
-	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type Heartbeat = ChainflipHeartbeat;
 	type WeightInfo = pallet_cf_online::weights::PalletWeight<Runtime>;
-}
-
-use frame_support::instances::Instance1;
-use pallet_cf_validator::PercentageRange;
-
-parameter_types! {
-	pub const ThresholdFailureTimeout: BlockNumber = constants::common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
-	pub const CeremonyRetryDelay: BlockNumber = 1;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
@@ -465,15 +443,9 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
-	type ThresholdFailureTimeout = ThresholdFailureTimeout;
-	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type ThresholdFailureTimeout = ConstU32<THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS>;
+	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
-}
-
-parameter_types! {
-	pub const EthereumSigningTimeout: BlockNumber = 5;
-	pub const EthereumTransmissionTimeout: BlockNumber = 10 * MINUTES;
-	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
@@ -488,9 +460,9 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
-	type SigningTimeout = EthereumSigningTimeout;
-	type TransmissionTimeout = EthereumTransmissionTimeout;
-	type MaximumAttempts = MaximumAttempts;
+	type SigningTimeout = ConstU32<5>;
+	type TransmissionTimeout = ConstU32<{ 10 * MINUTES }>;
+	type MaximumAttempts = ConstU32<MAXIMUM_BROADCAST_ATTEMPTS>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 }
 
@@ -500,28 +472,28 @@ construct_runtime!(
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Environment: pallet_cf_environment::{Pallet, Call, Storage, Event<T>, Config},
-		Flip: pallet_cf_flip::{Pallet, Call, Event<T>, Storage, Config<T>},
-		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
-		Staking: pallet_cf_staking::{Pallet, Call, Storage, Event<T>, Config<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
-		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
+		System: frame_system,
+		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
+		Timestamp: pallet_timestamp,
+		Environment: pallet_cf_environment,
+		Flip: pallet_cf_flip,
+		Emissions: pallet_cf_emissions,
+		Staking: pallet_cf_staking,
+		TransactionPayment: pallet_transaction_payment,
+		Session: pallet_session,
 		Historical: session_historical::{Pallet},
-		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
-		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config},
-		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
-		Aura: pallet_aura::{Pallet, Config<T>},
-		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
-		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
-		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
-		EthereumVault: pallet_cf_vaults::<Instance1>::{Pallet, Call, Storage, Event<T>, Config<T>},
-		Online: pallet_cf_online::{Pallet, Call, Storage},
-		Reputation: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>, ValidateUnsigned},
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		Witnesser: pallet_cf_witnesser,
+		Auction: pallet_cf_auction,
+		Validator: pallet_cf_validator,
+		Aura: pallet_aura,
+		Authorship: pallet_authorship,
+		Grandpa: pallet_grandpa,
+		Governance: pallet_cf_governance,
+		EthereumVault: pallet_cf_vaults::<Instance1>,
+		Online: pallet_cf_online,
+		Reputation: pallet_cf_reputation,
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 	}
 );
 
@@ -535,6 +507,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type SignedBlock = generic::SignedBlock<Block>;
 /// The SignedExtension to the basic transaction logic.
 pub type SignedExtra = (
+	frame_system::CheckNonZeroSender<Runtime>,
 	frame_system::CheckSpecVersion<Runtime>,
 	frame_system::CheckTxVersion<Runtime>,
 	frame_system::CheckGenesis<Runtime>,
@@ -545,6 +518,8 @@ pub type SignedExtra = (
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
+/// The payload being signed in transactions.
+pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
@@ -553,7 +528,7 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllPallets,
+	AllPalletsWithSystem,
 	// Note: the following run *before* all pallet migrations.
 	migrations::VersionedMigration<
 		(
@@ -593,7 +568,7 @@ impl_runtime_apis! {
 
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
-			Runtime::metadata().into()
+			OpaqueMetadata::new(Runtime::metadata().into())
 		}
 	}
 
@@ -640,7 +615,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			Aura::authorities()
+			Aura::authorities().into_inner()
 		}
 	}
 
@@ -695,6 +670,21 @@ impl_runtime_apis! {
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
 			System::account_nonce(account)
+		}
+	}
+
+	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance> for Runtime {
+		fn query_info(
+			uxt: <Block as BlockT>::Extrinsic,
+			len: u32,
+		) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
+			TransactionPayment::query_info(uxt, len)
+		}
+		fn query_fee_details(
+			uxt: <Block as BlockT>::Extrinsic,
+			len: u32,
+		) -> pallet_transaction_payment::FeeDetails<Balance> {
+			TransactionPayment::query_fee_details(uxt, len)
 		}
 	}
 

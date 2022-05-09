@@ -50,7 +50,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type Call: Member
-			+ FullCodec
+			+ Parameter
 			+ From<frame_system::Call<Self>>
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ GetDispatchInfo;
@@ -69,7 +69,7 @@ pub mod pallet {
 	}
 
 	/// A hash to index the call by.
-	#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct CallHash(pub [u8; 32]);
 	impl sp_std::fmt::Debug for CallHash {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
@@ -84,6 +84,7 @@ pub mod pallet {
 	pub(super) type VoteCount = u32;
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each authority.
@@ -100,7 +101,6 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some external event has been witnessed [call_sig, who, num_votes]
@@ -194,7 +194,7 @@ pub mod pallet {
 	pub type Origin = RawOrigin;
 
 	/// The raw origin enum for this pallet.
-	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,
 		CurrentEpochWitnessThreshold,

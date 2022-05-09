@@ -13,7 +13,7 @@ impl AuraSlotExtraction {
 		Aura::current_slot() + 1
 	}
 
-	fn extract_slot_from_digest_item<H>(item: &DigestItem<H>) -> Option<AuraSlot> {
+	fn extract_slot_from_digest_item(item: &DigestItem) -> Option<AuraSlot> {
 		item.as_pre_runtime().and_then(|(id, mut data)| {
 			if id == AURA_ENGINE_ID {
 				AuraSlot::decode(&mut data).ok()
@@ -137,21 +137,21 @@ mod test_missed_authorship_slots {
 		let slot = AuraSlot::from(42);
 		assert_eq!(
 			Some(slot),
-			AuraSlotExtraction::extract_slot_from_digest_item::<()>(&DigestItem::PreRuntime(
+			AuraSlotExtraction::extract_slot_from_digest_item(&DigestItem::PreRuntime(
 				AURA_ENGINE_ID,
 				Encode::encode(&slot)
 			))
 		);
 		assert_eq!(
 			None,
-			AuraSlotExtraction::extract_slot_from_digest_item::<()>(&DigestItem::PreRuntime(
+			AuraSlotExtraction::extract_slot_from_digest_item(&DigestItem::PreRuntime(
 				*b"BORA",
 				Encode::encode(&slot)
 			))
 		);
 		assert_eq!(
 			None,
-			AuraSlotExtraction::extract_slot_from_digest_item::<()>(&DigestItem::Other(
+			AuraSlotExtraction::extract_slot_from_digest_item(&DigestItem::Other(
 				b"SomethingElse".to_vec()
 			))
 		);
@@ -163,12 +163,7 @@ mod test_missed_authorship_slots {
 			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, author_slot.encode())] };
 
 		System::reset_events();
-		System::initialize(
-			&block_number,
-			&System::parent_hash(),
-			&pre_digest,
-			frame_system::InitKind::Full,
-		);
+		System::initialize(&block_number, &System::parent_hash(), &pre_digest);
 	}
 
 	#[test]

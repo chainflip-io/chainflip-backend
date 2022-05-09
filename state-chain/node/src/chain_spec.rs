@@ -195,6 +195,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		None,
 		// Protocol ID
 		None,
+		// Fork ID
+		None,
 		// Properties
 		None,
 		// Extensions
@@ -267,6 +269,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		// Telemetry
 		None,
 		// Protocol ID
+		None,
+		// Fork ID
 		None,
 		// Properties
 		None,
@@ -390,6 +394,8 @@ fn chainflip_three_node_testnet_config_from_env(
 		// Telemetry
 		None,
 		// Protocol ID
+		None,
+		// Fork ID
 		None,
 		// Properties
 		Some(chainflip_properties()),
@@ -517,6 +523,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		None,
 		// Protocol ID
 		None,
+		// Fork ID
+		None,
 		// Properties
 		Some(chainflip_properties()),
 		// Extensions
@@ -542,7 +550,6 @@ fn testnet_genesis(
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
-			changes_trie_config: Default::default(),
 		},
 		validator: ValidatorConfig {
 			blocks_per_epoch: 8 * HOURS,
@@ -581,6 +588,7 @@ fn testnet_genesis(
 			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 		},
+		transaction_payment: Default::default(),
 	}
 }
 

@@ -19,7 +19,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemState {
 	Normal,
 	Maintenance,
@@ -35,7 +35,7 @@ type SignatureNonce = u64;
 pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
-	#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
+	#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	pub struct CfeSettings {
 		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.

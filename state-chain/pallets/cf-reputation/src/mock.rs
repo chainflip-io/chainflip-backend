@@ -117,7 +117,7 @@ impl Chainflip for Test {
 }
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum AllOffences {
 	MissedHeartbeat,
 	NotLockingYourComputer,

@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec};
 
@@ -25,6 +25,6 @@ benchmarks! {
 		let call_hash = CallHash(Hashable::blake2_256(&call));
 		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+}

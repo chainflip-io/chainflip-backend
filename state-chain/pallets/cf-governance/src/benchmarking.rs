@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec};
@@ -63,6 +63,6 @@ benchmarks! {
 	} : {
 		Pallet::<T>::expire_proposals(<ActiveProposals<T>>::get());
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+}

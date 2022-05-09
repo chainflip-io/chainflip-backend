@@ -5,9 +5,7 @@ use super::*;
 
 use cf_traits::EpochInfo;
 use codec::{Decode, Encode};
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
@@ -131,6 +129,6 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index()));
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+}

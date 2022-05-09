@@ -137,6 +137,14 @@ mod test_versioned_upgrade {
 		fn name() -> &'static str {
 			"Pallet"
 		}
+
+		fn module_name() -> &'static str {
+			"Module"
+		}
+
+		fn crate_version() -> frame_support::traits::CrateVersion {
+			Default::default()
+		}
 	}
 
 	thread_local! {

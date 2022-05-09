@@ -163,7 +163,7 @@ impl RewardsDistribution for MockRewardsDistribution {
 	}
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockUpdateFlipSupply {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_total_supply: u128,
@@ -204,7 +204,7 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockBroadcast;
 
 impl MockBroadcast {

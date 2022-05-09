@@ -123,7 +123,7 @@ thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 
 impl MockCallback<MockEthereum> {

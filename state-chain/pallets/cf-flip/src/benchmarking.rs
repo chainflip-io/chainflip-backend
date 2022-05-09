@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 
 benchmarks! {
@@ -13,6 +13,6 @@ benchmarks! {
 	verify {
 		assert_eq!(Pallet::<T>::slashing_rate(), balance.into())
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+}

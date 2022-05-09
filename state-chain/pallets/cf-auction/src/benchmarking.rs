@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
 
 benchmarks! {
@@ -13,6 +13,6 @@ benchmarks! {
 	verify {
 		assert_eq!(Pallet::<T>::current_authority_set_size_range(), range.into())
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+}

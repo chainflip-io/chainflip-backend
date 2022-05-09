@@ -11,7 +11,7 @@ pub use signer_nomination::RandomSignerNomination;
 
 use crate::{
 	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
+	Environment, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
 use cf_chains::{
 	eth::{
@@ -22,22 +22,20 @@ use cf_chains::{
 };
 use cf_traits::{
 	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
+	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, StakeHandler, StakeTransfer,
 };
-use frame_support::weights::Weight;
-
-use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
-
+use frame_support::{
+	dispatch::DispatchErrorWithPostInfo,
+	traits::Get,
+	weights::{PostDispatchInfo, Weight},
+};
 use pallet_cf_auction::HandleStakes;
-
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
-	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
+	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto},
 };
 use sp_std::{cmp::min, prelude::*};
-
-use cf_traits::RuntimeUpgrade;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -90,19 +88,22 @@ impl RewardDistribution for BackupNodeEmissions {
 		}
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
+		let heartbeat_block_interval: FlipBalance =
+			<<Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval as Get<
+				BlockNumber,
+			>>::get()
+			.unique_saturated_into();
 		// Our emission cap for this heartbeat interval
-		let emissions_cap = Emissions::backup_node_emission_per_block() *
-			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let emissions_cap =
+			Emissions::backup_node_emission_per_block().saturating_mul(heartbeat_block_interval);
 
 		// Emissions for this heartbeat interval for the active set
-		let authority_rewards = Emissions::current_authority_emission_per_block() *
-			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let authority_rewards = Emissions::current_authority_emission_per_block()
+			.saturating_mul(heartbeat_block_interval);
 
 		// The average authority emission
 		let average_authority_reward: Self::FlipBalance = authority_rewards /
-			Self::FlipBalance::unique_saturated_from(
-				Self::EpochInfo::current_authorities().len(),
-			);
+			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_authority_count());
 
 		let mut total_rewards = 0;
 
@@ -219,8 +220,11 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 	type Surplus = Surplus<Runtime>;
 
 	fn distribute(rewards: Self::Surplus) {
-		let current_block_author = Authorship::author();
-		Flip::settle_imbalance(&current_block_author, rewards);
+		if let Some(current_block_author) = Authorship::author() {
+			Flip::settle_imbalance(&current_block_author, rewards);
+		} else {
+			log::warn!("No block author! Block reward not credited.")
+		}
 	}
 }
 pub struct RuntimeUpgradeManager;

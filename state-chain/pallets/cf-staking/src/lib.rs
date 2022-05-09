@@ -19,7 +19,6 @@ use cf_traits::{
 	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
 	StakeTransfer, ThresholdSigner,
 };
-use core::time::Duration;
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -27,9 +26,15 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::prelude::*;
+use sp_std::{prelude::*, time::Duration};
 
 use cf_traits::SystemStateInfo;
+
+/// Temporary alias to work around `Duration` not supporting TypeInfo.
+///
+/// TODO: Replace this with just a u64 for the seconds. We don't care about nanos. Will do this in
+/// another PR since it requires a storage migration.
+type DurationParts = (u64, u32);
 
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
@@ -110,6 +115,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Store the list of staked accounts and whether or not they are retired
@@ -131,14 +137,14 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
-		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
+		StorageValue<_, Vec<(DurationParts, AccountId<T>)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// TTL for a claim from the moment of issue.
 	#[pallet::storage]
-	pub type ClaimTTL<T: Config> = StorageValue<_, Duration, ValueQuery>;
+	pub type ClaimTTL<T: Config> = StorageValue<_, DurationParts, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -499,7 +505,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
-			ClaimTTL::<T>::set(self.claim_ttl);
+			ClaimTTL::<T>::set((self.claim_ttl.as_secs(), 0));
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 				match Pallet::<T>::activate(staker) {
@@ -625,8 +631,8 @@ impl<T: Config> Pallet<T> {
 		T::Flip::try_claim(account_id, amount)?;
 
 		// Set expiry and build the claim parameters.
-		let expiry = T::TimeSource::now() + ClaimTTL::<T>::get();
-		Self::register_claim_expiry(account_id.clone(), expiry);
+		let expiry = T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get().0);
+		Self::register_claim_expiry(account_id.clone(), (expiry.as_secs(), 0));
 
 		let call = T::RegisterClaim::new_unsigned(
 			T::ReplayProtectionProvider::replay_protection(),
@@ -639,7 +645,13 @@ impl<T: Config> Pallet<T> {
 		// Emit a threshold signature request.
 		T::ThresholdSigner::request_signature_with_callback(
 			call.threshold_signature_payload(),
-			|id| Call::<T>::post_claim_signature(account_id.clone(), id).into(),
+			|id| {
+				Call::<T>::post_claim_signature {
+					account_id: account_id.clone(),
+					signature_request_id: id,
+				}
+				.into()
+			},
 		);
 
 		// Store the claim params for later.
@@ -697,7 +709,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
 	/// claims for the account are expired.
-	fn register_claim_expiry(account_id: AccountId<T>, expiry: Duration) {
+	fn register_claim_expiry(account_id: AccountId<T>, expiry: DurationParts) {
 		ClaimExpiries::<T>::mutate(|expiries| {
 			// We want to ensure this list remains sorted such that the head of the list contains
 			// the oldest pending claim (ie. the first to be expired). This means we put the new
@@ -723,7 +735,8 @@ impl<T: Config> Pallet<T> {
 
 		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < T::TimeSource::now());
+		let expiry_cutoff =
+			expiries.partition_point(|(expiry, _)| expiry.0 < T::TimeSource::now().as_secs());
 
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
 

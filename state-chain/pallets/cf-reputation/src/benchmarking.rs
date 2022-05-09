@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
@@ -29,6 +29,6 @@ benchmarks! {
 	} : {
 		<Pallet::<T> as Hooks<_>>::on_runtime_upgrade();
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+}

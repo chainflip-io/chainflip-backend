@@ -1,7 +1,7 @@
 //! Types and functions that are common to ethereum.
 pub mod api;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint,
@@ -10,6 +10,7 @@ use libsecp256k1::{
 	curve::{Affine, Field, Jacobian, Scalar},
 	PublicKey, SecretKey, ECMULT_CONTEXT,
 };
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
@@ -38,7 +39,7 @@ pub trait Tokenizable {
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SigData {
 	/// The address of the Key Manager contract, to prevent replay attacks
 	key_manager_address: Address,
@@ -58,6 +59,14 @@ pub struct SigData {
 	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
 	/// the Schnorr signature) to prevent certain classes of cryptographic attacks.
 	k_times_g_address: Address,
+}
+
+impl MaxEncodedLen for SigData {
+	fn max_encoded_len() -> usize {
+		<[u8; 20]>::max_encoded_len() * 2 // 2 x Addresses
+		+ <[u64; 4]>::max_encoded_len() * 3 // 3 x Uint
+		+ <[u8; 32]>::max_encoded_len() // H256
+	}
 }
 
 impl SigData {
@@ -123,7 +132,19 @@ pub enum AggKeyVerificationError {
 /// use. Ethereum generaly assumes `0` or `1` but the standard serialization format used in most
 /// libraries assumes `2` or `3`.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+)]
 pub enum ParityBit {
 	Odd,
 	Even,
@@ -169,7 +190,19 @@ impl From<ParityBit> for Uint {
 
 /// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+)]
 pub struct AggKey {
 	/// X coordinate of the public key as a 32-byte array.
 	pub pub_key_x: [u8; 32],
@@ -411,7 +444,7 @@ impl From<&secp256k1::PublicKey> for AggKey {
 	}
 }
 
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],
@@ -420,7 +453,7 @@ pub struct SchnorrVerificationComponents {
 }
 
 /// Errors that can occur when verifying an Ethereum transaction.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum TransactionVerificationError {
 	/// The transaction's chain id is invalid.
 	InvalidChainId,
@@ -437,7 +470,7 @@ pub enum TransactionVerificationError {
 }
 
 /// Parameters that are checked as part of Ethereum transaction verification.
-#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum CheckedTransactionParameter {
 	ChainId,
 	GasLimit,
@@ -462,7 +495,7 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 ///
 /// We assume the access_list (EIP-2930) is not required.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct UnsignedTransaction {
 	pub chain_id: u64,
 	pub max_priority_fee_per_gas: Option<U256>, // EIP-1559
@@ -644,7 +677,7 @@ pub fn verify_transaction(
 	unsigned.match_against_recovered(decoded_tx)
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Default)]
 pub struct TransactionHash(H256);
 impl core::fmt::Debug for TransactionHash {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {

@@ -34,7 +34,7 @@ use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
-use substrate_subxt::{
+use subxt::{
     balances::Balances,
     extrinsic::{
         ChargeTransactionPayment, CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion,
@@ -78,12 +78,12 @@ impl Balances for RuntimeImplForSigningExtrinsics {
 impl Runtime for RuntimeImplForSigningExtrinsics {
     type Signature = state_chain_runtime::Signature;
     type Extra = SCDefaultExtra<Self>;
-    fn register_type_sizes(_event_type_registry: &mut substrate_subxt::EventTypeRegistry<Self>) {
+    fn register_type_sizes(_event_type_registry: &mut subxt::EventTypeRegistry<Self>) {
         unreachable!();
     }
 }
 
-/// Needed so we can use substrate_subxt's extrinsic signing code
+/// Needed so we can use subxt's extrinsic signing code
 /// Defines extra parameters contained in an extrinsic
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
 pub struct SCDefaultExtra<T: System> {
@@ -337,8 +337,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
 
     runtime_version: RwLock<sp_version::RuntimeVersion>,
     genesis_hash: state_chain_runtime::Hash,
-    pub signer:
-        substrate_subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
+    pub signer: subxt::PairSigner<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>,
 
     state_chain_rpc_client: RpcClient,
 }
@@ -364,7 +363,7 @@ pub fn mock_account_storage_key() -> StorageKey {
 #[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
-        use substrate_subxt::PairSigner;
+        use subxt::PairSigner;
 
         Self {
             heartbeat_block_interval: 20,
@@ -498,7 +497,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
     {
         let extrinsic = state_chain_runtime::Call::from(extrinsic);
-        let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
+        let encoded_extrinsic = subxt::Encoded(extrinsic.encode());
         for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
@@ -506,7 +505,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             match self
                 .state_chain_rpc_client
                 .submit_extrinsic_rpc(
-                    substrate_subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
+                    subxt::extrinsic::create_signed::<RuntimeImplForSigningExtrinsics>(
                         &runtime_version,
                         self.genesis_hash,
                         nonce,
@@ -631,11 +630,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
-        let unsigned_tx = substrate_subxt::extrinsic::create_unsigned::<
-            RuntimeImplForSigningExtrinsics,
-        >(substrate_subxt::Encoded(
-            state_chain_runtime::Call::from(extrinsic.clone()).encode(),
-        ));
+        let unsigned_tx = subxt::extrinsic::create_unsigned::<RuntimeImplForSigningExtrinsics>(
+            subxt::Encoded(state_chain_runtime::Call::from(extrinsic.clone()).encode()),
+        );
         let expected_hash = BlakeTwo256::hash_of(&unsigned_tx);
         match self
             .state_chain_rpc_client
@@ -992,21 +989,18 @@ async fn inner_connect_to_state_chain(
     impl Stream<Item = Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient>>,
 )> {
-    use substrate_subxt::Signer;
+    use subxt::Signer;
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
-    let signer = substrate_subxt::PairSigner::<
-        RuntimeImplForSigningExtrinsics,
-        sp_core::sr25519::Pair,
-    >::new(sp_core::sr25519::Pair::from_seed(
-        &read_clean_and_decode_hex_str_file(
+    let signer = subxt::PairSigner::<RuntimeImplForSigningExtrinsics, sp_core::sr25519::Pair>::new(
+        sp_core::sr25519::Pair::from_seed(&read_clean_and_decode_hex_str_file(
             &state_chain_settings.signing_key_file,
             "State Chain Signing Key",
             |str| {
                 <[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?)
                     .map_err(|_err| anyhow::Error::msg("Wrong length"))
             },
-        )?,
-    ));
+        )?),
+    );
 
     let our_account_id = signer.account_id().to_owned();
 
@@ -1131,7 +1125,7 @@ async fn inner_connect_to_state_chain(
         latest_block_hash
     );
 
-    let metadata = substrate_subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
+    let metadata = subxt::Metadata::try_from(RuntimeMetadataPrefixed::decode(
         &mut &state_chain_rpc_client
             .state_rpc_client
             .metadata(Some(latest_block_hash))

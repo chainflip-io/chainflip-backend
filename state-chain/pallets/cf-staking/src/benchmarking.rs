@@ -4,7 +4,7 @@
 use super::*;
 
 use codec::{Decode, Encode};
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
 use sp_std::vec::Vec;
@@ -178,6 +178,6 @@ benchmarks! {
 	}: {
 		Pallet::<T>::expire_pending_claims();
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+}

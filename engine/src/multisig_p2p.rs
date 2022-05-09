@@ -173,18 +173,18 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                 );
                 state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_validator::Call::register_peer_id(
-                            sp_core::ed25519::Public(
+                        pallet_cf_validator::Call::register_peer_id {
+                            peer_id: sp_core::ed25519::Public(
                                 peer_keypair_from_cfe_config.public().encode(),
                             ),
                             port,
-                            ip_address.into(),
-                            sp_core::ed25519::Signature::try_from(
+                            ip_address: ip_address.into(),
+                            signature: sp_core::ed25519::Signature::try_from(
                                 &peer_keypair_from_cfe_config
                                     .sign(&state_chain_client.our_account_id.encode()[..])[..],
                             )
                             .unwrap(),
-                        ),
+                        },
                         logger,
                     )
                     .await?;
@@ -201,7 +201,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 
 fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<PeerId> {
     Ok(PeerId::from_public_key(
-        libp2p::identity::PublicKey::Ed25519(libp2p::identity::ed25519::PublicKey::decode(
+        &libp2p::identity::PublicKey::Ed25519(libp2p::identity::ed25519::PublicKey::decode(
             &peer_public_key.0[..],
         )?),
     ))
