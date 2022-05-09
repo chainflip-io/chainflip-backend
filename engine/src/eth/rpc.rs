@@ -1,3 +1,5 @@
+use std::{pin::Pin, time::Duration};
+
 use secp256k1::SecretKey;
 use sp_core::{H256, U256};
 use web3::{
@@ -10,7 +12,7 @@ use web3::{
     Web3,
 };
 
-use futures::TryFutureExt;
+use futures::{Future, TryFutureExt};
 
 use anyhow::{Context, Result};
 
@@ -53,7 +55,7 @@ impl EthTransport for web3::transports::Http {
 // We use a trait so we can inject a mock in the tests
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait EthRpcApi {
+pub trait EthRpcApi: Send + Sync {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
 
     async fn sign_transaction(
@@ -265,6 +267,22 @@ impl EthHttpRpcClient {
     }
 }
 
+macro_rules! fall_back_eth_rpc {
+    ($eth_dual:expr, $method:ident, $($arg:expr),*) => {
+        {
+            let request_fut = $eth_dual.ws_client.$method($($arg.clone()),*);
+
+            match tokio::time::timeout(ETH_FALLBACK_TIMEOUT, request_fut).await {
+                Ok(x) => x,
+                Err(_) => {
+                    // First request failed due to timeout, retry with the next one
+                    $eth_dual.http_client.$method($($arg),*).await
+                }
+            }
+        }
+    };
+}
+
 #[async_trait]
 pub trait EthHttpRpcApi {
     async fn block_number(&self) -> Result<U64>;
@@ -278,6 +296,50 @@ impl EthHttpRpcApi for EthHttpRpcClient {
             .block_number()
             .await
             .context("Failed to fetch block number with HTTP client")
+    }
+}
+
+pub struct EthDualClient {
+    pub ws_client: EthWsRpcClient,
+    pub http_client: EthHttpRpcClient,
+}
+
+const ETH_FALLBACK_TIMEOUT: Duration = Duration::from_secs(3);
+
+// function that takes a method and its args. Nb this method is on a trait
+
+#[async_trait]
+impl EthRpcApi for EthDualClient {
+    async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
+        fall_back_eth_rpc!(self, estimate_gas, req, block)
+    }
+
+    async fn sign_transaction(
+        &self,
+        tx: TransactionParameters,
+        key: &SecretKey,
+    ) -> Result<SignedTransaction> {
+        fall_back_eth_rpc!(self, sign_transaction, tx, &key)
+    }
+
+    async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
+        fall_back_eth_rpc!(self, send_raw_transaction, rlp)
+    }
+
+    async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
+        fall_back_eth_rpc!(self, get_logs, filter)
+    }
+
+    async fn chain_id(&self) -> Result<U256> {
+        fall_back_eth_rpc!(self, chain_id,)
+    }
+
+    async fn transaction(&self, tx_hash: H256) -> Result<Transaction> {
+        fall_back_eth_rpc!(self, transaction, tx_hash)
+    }
+
+    async fn block(&self, block_number: U64) -> Result<Block<H256>> {
+        fall_back_eth_rpc!(self, block, block_number)
     }
 }
 
