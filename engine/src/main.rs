@@ -1,7 +1,10 @@
 use chainflip_engine::{
     eth::{
-        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster,
-        EthHttpRpcClient, EthRpcApi, EthWsRpcClient,
+        self,
+        key_manager::KeyManager,
+        rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
+        stake_manager::StakeManager,
+        EthBroadcaster,
     },
     health::HealthMonitor,
     logging,

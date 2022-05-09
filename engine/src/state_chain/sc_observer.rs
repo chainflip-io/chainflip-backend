@@ -8,7 +8,7 @@ use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    eth::{EthBroadcaster, EthRpcApi, ObserveInstruction},
+    eth::{rpc::EthRpcApi, EthBroadcaster, ObserveInstruction},
     logging::COMPONENT_KEY,
     multisig::{client::MultisigClientApi, KeyId, MessageHash},
     multisig_p2p::AccountPeerMappingChange,

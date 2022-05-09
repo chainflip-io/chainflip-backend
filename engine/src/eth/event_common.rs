@@ -84,7 +84,7 @@ mod tests {
 
     use sp_core::H160;
 
-    use crate::eth::{key_manager::KeyManager, EthObserver, MockEthRpcApi};
+    use crate::eth::{key_manager::KeyManager, rpc::MockEthRpcApi, EthObserver};
 
     use super::*;
 

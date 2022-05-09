@@ -1,5 +1,9 @@
 use chainflip_engine::{
-    eth::{key_manager::KeyManager, EthHttpRpcClient, EthObserver, EthWsRpcClient},
+    eth::{
+        key_manager::KeyManager,
+        rpc::{EthHttpRpcClient, EthWsRpcClient},
+        EthObserver,
+    },
     logging::utils,
     settings::Settings,
 };

@@ -1,7 +1,8 @@
 use chainflip_engine::{
     eth::{
         key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
-        EthHttpRpcClient, EthObserver, EthWsRpcClient,
+        rpc::{EthHttpRpcClient, EthWsRpcClient},
+        EthObserver,
     },
     logging::utils,
     settings::{CommandLineOptions, Settings},
