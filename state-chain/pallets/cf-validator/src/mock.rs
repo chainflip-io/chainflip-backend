@@ -2,7 +2,7 @@ use super::*;
 use crate as pallet_cf_validator;
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{OnFinalize, OnInitialize, ValidatorRegistration},
+	traits::{OnInitialize, ValidatorRegistration},
 };
 
 use cf_traits::{

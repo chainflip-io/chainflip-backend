@@ -1254,9 +1254,9 @@ mod tests {
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
-            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
-                pallet_cf_validator::Call::force_rotation().into(),
-            ))
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            }
             .into();
 
         assert_ok!(
@@ -1288,9 +1288,9 @@ mod tests {
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
-            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
-                pallet_cf_validator::Call::force_rotation().into(),
-            ))
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            }
             .into();
 
         state_chain_client
@@ -1324,9 +1324,9 @@ mod tests {
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
-            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
-                pallet_cf_validator::Call::force_rotation().into(),
-            ))
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            }
             .into();
 
         state_chain_client
@@ -1386,9 +1386,9 @@ mod tests {
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
-            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
-                pallet_cf_validator::Call::force_rotation().into(),
-            ))
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            }
             .into();
 
         assert_ok!(
@@ -1422,9 +1422,9 @@ mod tests {
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
-            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
-                pallet_cf_validator::Call::force_rotation().into(),
-            ))
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            }
             .into();
 
         state_chain_client
@@ -1472,9 +1472,9 @@ mod tests {
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
 
         let force_rotation_call: state_chain_runtime::Call =
-            pallet_cf_governance::Call::propose_governance_extrinsic(Box::new(
-                pallet_cf_validator::Call::force_rotation().into(),
-            ))
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            }
             .into();
 
         assert_ok!(
