@@ -394,6 +394,24 @@ impl CeremonyManager {
             return;
         }
 
+        // Only stage 1 messages can create unauthorised ceremonies
+        if self.signing_states.get(&ceremony_id).is_none() {
+            // No ceremony exists for this id yet
+            match data {
+                SigningData::CommStage1(_) => {
+                    /* Let the data create an new_unauthorised state */
+                }
+                _ => {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage signing data from ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                }
+            }
+        }
+
         slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         let logger = &self.logger;
@@ -424,6 +442,22 @@ impl CeremonyManager {
                 ceremony_id
             );
             return;
+        }
+
+        // Only stage 1 messages can create unauthorised ceremonies
+        if self.keygen_states.get(&ceremony_id).is_none() {
+            // No ceremony exists for this id yet
+            match data {
+                KeygenData::HashComm1(_) => { /* Let the data create an new_unauthorised state */ }
+                _ => {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage keygen data from ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                }
+            }
         }
 
         let logger = &self.logger;
