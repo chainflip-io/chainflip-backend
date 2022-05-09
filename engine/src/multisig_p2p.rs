@@ -276,7 +276,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         })?
         .into();
     let peer_id_from_cfe_config =
-        libp2p::identity::PublicKey::Ed25519(peer_keypair_from_cfe_config.public()).into_peer_id();
+        libp2p::identity::PublicKey::Ed25519(peer_keypair_from_cfe_config.public()).to_peer_id();
     update_registered_peer_id(
         &peer_id_from_cfe_config,
         &peer_keypair_from_cfe_config,

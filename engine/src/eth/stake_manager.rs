@@ -112,18 +112,18 @@ impl EthObserver for StakeManager {
             } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch(
-                            Box::new(
-                                pallet_cf_staking::Call::staked(
+                        pallet_cf_witnesser::Call::witness_at_epoch {
+                            call: Box::new(
+                                pallet_cf_staking::Call::staked {
                                     account_id,
                                     amount,
-                                    return_addr.0,
-                                    event.tx_hash.into(),
-                                )
+                                    withdrawal_address: return_addr.0,
+                                    tx_hash: event.tx_hash.into(),
+                                }
                                 .into(),
                             ),
-                            epoch,
-                        ),
+                            epoch_index: epoch,
+                        },
                         logger,
                     )
                     .await;
@@ -131,17 +131,17 @@ impl EthObserver for StakeManager {
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch(
-                            Box::new(
-                                pallet_cf_staking::Call::claimed(
+                        pallet_cf_witnesser::Call::witness_at_epoch {
+                            call: Box::new(
+                                pallet_cf_staking::Call::claimed {
                                     account_id,
-                                    amount,
-                                    event.tx_hash.to_fixed_bytes(),
-                                )
+                                    claimed_amount: amount,
+                                    tx_hash: event.tx_hash.to_fixed_bytes(),
+                                }
                                 .into(),
                             ),
-                            epoch,
-                        ),
+                            epoch_index: epoch,
+                        },
                         logger,
                     )
                     .await;

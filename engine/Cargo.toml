@@ -42,12 +42,12 @@ jsonrpc-http-server = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 
 websocket = "0.24"
-ethbloom = "0.11.1"
+ethbloom = "0.12.1"
 dyn-clone = "1.0.4"
 kvdb-rocksdb = "0.15.2"
 lazy_static = "1.4"
 num = "0.4.0"
-parking_lot = "0.11"
+parking_lot = "0.12"
 regex = "1"
 reqwest = {version = "0.11.4", features = ["json"]}
 secp256k1 = "0.20"
@@ -61,7 +61,9 @@ thiserror = "1.0.26"
 tokio = {version = "1.13.1", features = ["full"]}
 tokio-stream = "0.1.5"
 url = "1.7.2"
-web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
+web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['signing']}
+# Required so that we can create a web3-compatilble secret key.
+web3-secp256k1 = {package = 'secp256k1', version = '0.21'}
 zeroize = "1.4.3"
 libp2p = "0.40"
 generic-array= "0.14"

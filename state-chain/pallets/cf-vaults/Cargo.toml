@@ -16,7 +16,6 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-chains = {path = '../../chains', default-features = false}
 cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false, features = ['derive'] }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
-pallet-cf-validator = { path = '../cf-validator', default-features = false }
 cf-traits = {path = '../../traits', default-features = false}
 utilities = {path = '../../../utilities', default-features = false}
 

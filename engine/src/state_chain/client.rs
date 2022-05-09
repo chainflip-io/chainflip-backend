@@ -1439,6 +1439,7 @@ mod tests {
                     impl_version: 1,
                     apis: Default::default(),
                     transaction_version: 1,
+                    state_version: 1,
                 })
             });
 
