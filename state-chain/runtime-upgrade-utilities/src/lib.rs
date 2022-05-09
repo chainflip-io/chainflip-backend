@@ -33,7 +33,7 @@ mod try_runtime_helpers {
 	};
 
 	frame_support::generate_storage_alias!(
-		RuntimeUpgradeUtils, MigrationBounds => Map<(Vec<u8>, Twox64Concat), (u16, u16)>
+		RuntimeUpgradeUtils, MigrationBounds => Map<(Twox64Concat, Vec<u8>), (u16, u16)>
 	);
 
 	pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {

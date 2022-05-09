@@ -543,6 +543,32 @@ pub type Executive = frame_executive::Executive<
 	>,
 >;
 
+#[cfg(feature = "runtime-benchmarks")]
+#[macro_use]
+extern crate frame_benchmarking;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benches {
+	define_benchmarks!(
+		[frame_benchmarking, BaselineBench::<Runtime>]
+		[frame_system, SystemBench::<Runtime>]
+		[pallet_timestamp, Timestamp]
+		[pallet_cf_environment, Environment]
+		[pallet_cf_flip, Flip]
+		[pallet_cf_emissions, Emissions]
+		[pallet_cf_staking, Staking]
+		[pallet_cf_witnesser, Witnesser]
+		[pallet_cf_auction, Auction]
+		[pallet_cf_validator, Validator]
+		[pallet_cf_governance, Governance]
+		[pallet_cf_vaults, EthereumVault]
+		[pallet_cf_online, Online]
+		[pallet_cf_reputation, Reputation]
+		[pallet_cf_threshold_signature, EthereumThresholdSigner]
+		[pallet_cf_broadcast, EthereumBroadcaster]
+	);
+}
+
 impl_runtime_apis! {
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
@@ -690,13 +716,16 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
-		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
-			// Use unwrap here otherwise the error is swallowed silently.
-			let weight = Executive::try_runtime_upgrade().map_err(|e| {
-				log::error!("{}", e);
-				e
-			})?;
-			Ok((weight, BlockWeights::get().max_block))
+		fn on_runtime_upgrade() -> (Weight, Weight) {
+			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
+			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
+			// right here and right now.
+			let weight = Executive::try_runtime_upgrade().unwrap();
+			(weight, BlockWeights::get().max_block)
+		}
+
+		fn execute_block_no_check(block: Block) -> Weight {
+			Executive::execute_block_no_check(block)
 		}
 	}
 
@@ -706,40 +735,30 @@ impl_runtime_apis! {
 			Vec<frame_benchmarking::BenchmarkList>,
 			Vec<frame_support::traits::StorageInfo>,
 		) {
-			use frame_benchmarking::{list_benchmark, Benchmarking, BenchmarkList};
+			use frame_benchmarking::{baseline, Benchmarking, BenchmarkList};
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
+			use baseline::Pallet as BaselineBench;
 
 			let mut list = Vec::<BenchmarkList>::new();
 
-			list_benchmark!(list, extra, frame_system, SystemBench::<Runtime>);
-			list_benchmark!(list, extra, pallet_timestamp, Timestamp);
-			list_benchmark!(list, extra, pallet_cf_validator, Validator);
-			list_benchmark!(list, extra, pallet_cf_auction, Auction);
-			list_benchmark!(list, extra, pallet_cf_staking, Staking);
-			list_benchmark!(list, extra, pallet_cf_flip, Flip);
-			list_benchmark!(list, extra, pallet_cf_governance, Governance);
-			list_benchmark!(list, extra, pallet_cf_online, Online);
-			list_benchmark!(list, extra, pallet_cf_emissions, Emissions);
-			list_benchmark!(list, extra, pallet_cf_reputation, Reputation);
-			list_benchmark!(list, extra, pallet_cf_vaults, EthereumVault);
-			list_benchmark!(list, extra, pallet_cf_witnesser, Witnesser);
-			list_benchmark!(list, extra, pallet_cf_threshold_signature, EthereumThresholdSigner);
-			list_benchmark!(list, extra, pallet_cf_broadcast, EthereumBroadcaster);
-			list_benchmark!(list, extra, pallet_cf_environment, Environment);
+			list_benchmarks!(list, extra);
 
 			let storage_info = AllPalletsWithSystem::storage_info();
 
-			return (list, storage_info)
+			(list, storage_info)
 		}
 
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
+			use frame_benchmarking::{baseline, Benchmarking, BenchmarkBatch, TrackedStorageKey};
 
 			use frame_system_benchmarking::Pallet as SystemBench;
+			use baseline::Pallet as BaselineBench;
+
 			impl frame_system_benchmarking::Config for Runtime {}
+			impl baseline::Config for Runtime {}
 
 			let whitelist: Vec<TrackedStorageKey> = vec![
 				// Block Number
@@ -756,24 +775,8 @@ impl_runtime_apis! {
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
+			add_benchmarks!(params, batches);
 
-			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
-			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
-			add_benchmark!(params, batches, pallet_cf_validator, Validator);
-			add_benchmark!(params, batches, pallet_cf_auction, Auction);
-			add_benchmark!(params, batches, pallet_cf_staking, Staking);
-			add_benchmark!(params, batches, pallet_cf_flip, Flip);
-			add_benchmark!(params, batches, pallet_cf_governance, Governance);
-			add_benchmark!(params, batches, pallet_cf_vaults, EthereumVault);
-			add_benchmark!(params, batches, pallet_cf_online, Online);
-			add_benchmark!(params, batches, pallet_cf_witnesser, Witnesser);
-			add_benchmark!(params, batches, pallet_cf_reputation, Reputation);
-			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
-			add_benchmark!(params, batches, pallet_cf_threshold_signature, EthereumThresholdSigner);
-			add_benchmark!(params, batches, pallet_cf_broadcast, EthereumBroadcaster);
-			add_benchmark!(params, batches, pallet_cf_environment, Environment);
-
-			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
 		}
 	}

@@ -120,10 +120,11 @@ benchmarks_instance_pallet! {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
-		let call = Call::<T, I>::vault_key_rotated(
-			new_public_key, 5u64.into(),
-			Decode::decode(&mut &TX_HASH[..]).unwrap()
-		);
+		let call = Call::<T, I>::vault_key_rotated {
+			new_public_key: new_public_key,
+			block_number: 5u64.into(),
+			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+		};
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {

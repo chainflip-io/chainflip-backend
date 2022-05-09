@@ -23,7 +23,7 @@ where
 	CurrentAuthorities::<T>::put(accounts.clone().collect::<Vec<_>>());
 	for account in accounts {
 		whitelist_account!(account);
-		OnlineCall::<T>::heartbeat()
+		OnlineCall::<T>::heartbeat {}
 			.dispatch_bypass_filter(RawOrigin::Signed(account).into())
 			.unwrap();
 	}

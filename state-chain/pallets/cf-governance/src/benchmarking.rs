@@ -11,14 +11,14 @@ use sp_std::{boxed::Box, vec};
 benchmarks! {
 	propose_governance_extrinsic {
 		let caller: T::AccountId = whitelisted_caller();
-		let call = Box::new(frame_system::Call::remark(vec![]).into());
+		let call = Box::new(frame_system::Call::remark{remark: vec![]}.into());
 		<Members<T>>::put(vec![caller.clone()]);
 	}: _(RawOrigin::Signed(caller.clone()), call)
 	verify {
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
 	}
 	approve {
-		let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::remark{remark: vec![]}.into();
 		let caller: T::AccountId = whitelisted_caller();
 		<Members<T>>::put(vec![caller.clone()]);
 		Pallet::<T>::push_proposal(Box::new(call));
@@ -29,22 +29,22 @@ benchmarks! {
 	new_membership_set {
 		let caller: T::AccountId = whitelisted_caller();
 		let members = vec![caller.clone()];
-		let call = Call::<T>::new_membership_set(members.clone());
+		let call = Call::<T>::new_membership_set{ accounts: members.clone() };
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Members::<T>::get(), members);
 	}
 	call_as_sudo {
-		let call: <T as Config>::Call = frame_system::Call::set_code_without_checks(vec![1, 2, 3, 4]).into();
-		let sudo_call = Call::<T>::call_as_sudo(Box::new(call));
+		let call: <T as Config>::Call = frame_system::Call::set_code_without_checks{ code: vec![1, 2, 3, 4] }.into();
+		let sudo_call = Call::<T>::call_as_sudo{ call: Box::new(call) };
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { sudo_call.dispatch_bypass_filter(origin)? }
 	on_initialize {
 		// TODO: mock the time to end in the expire proposals case which is more expensive
 		let b in 1 .. 100u32;
 		for _n in 1 .. b {
-			let call = Box::new(frame_system::Call::remark(vec![]).into());
+			let call = Box::new(frame_system::Call::remark{remark: vec![]}.into());
 			Pallet::<T>::push_proposal(call);
 		}
 	}: {
@@ -57,7 +57,7 @@ benchmarks! {
 	expire_proposals {
 		let b in 1 .. 100u32;
 		for _n in 1 .. b {
-			let call = Box::new(frame_system::Call::remark(vec![]).into());
+			let call = Box::new(frame_system::Call::remark{remark: vec![]}.into());
 			Pallet::<T>::push_proposal(call);
 		}
 	} : {

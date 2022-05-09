@@ -11,7 +11,7 @@ benchmarks! {
 	witness {
 		let caller: T::AccountId = whitelisted_caller();
 		let validator_id: T::ValidatorId = caller.clone().into();
-		let call: <T as Config>::Call = frame_system::Call::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
 		let epoch = T::EpochInfo::epoch_index();
 
 		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
