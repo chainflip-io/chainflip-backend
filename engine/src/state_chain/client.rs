@@ -1104,10 +1104,13 @@ async fn inner_connect_to_state_chain(
             our_account_id,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: StorageKey(storage_prefix(b"System", b"Events").to_vec()),
-            heartbeat_block_interval: metadata.pallets.iter().find(|pallet| pallet.name == "Reputation").expect("No module 'Reputation' in chain metadata").constants.iter()
+            heartbeat_block_interval: metadata
+                .pallets.iter()
+                .find(|pallet| pallet.name == "Reputation").expect("No module 'Reputation' in chain metadata")
+                .constants.iter()
                 .find_map(|constant| if constant.name == "HeartbeatBlockInterval" { Some(&constant.value[..])} else { None })
-                .ok_or(anyhow::anyhow!("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'"))
-                .and_then(|value_bytes| Ok(u32::decode(&mut &value_bytes[..])?))?,
+                .ok_or_else(|| anyhow::anyhow!("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'"))
+                .and_then(|value_bytes| Ok(u32::decode(&mut &*value_bytes)?))?,
         }),
     ))
 }
