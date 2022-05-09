@@ -1,3 +1,6 @@
+use std::{pin::Pin, time::Duration};
+
+use secp256k1::SecretKey;
 use sp_core::{H256, U256};
 use web3::{
     api::SubscriptionStream,
@@ -266,6 +269,22 @@ impl EthHttpRpcClient {
 
         Ok(Self { web3 })
     }
+}
+
+macro_rules! fall_back_eth_rpc {
+    ($eth_dual:expr, $method:ident, $($arg:expr),*) => {
+        {
+            let request_fut = $eth_dual.ws_client.$method($($arg.clone()),*);
+
+            match tokio::time::timeout(ETH_FALLBACK_TIMEOUT, request_fut).await {
+                Ok(x) => x,
+                Err(_) => {
+                    // First request failed due to timeout, retry with the next one
+                    $eth_dual.http_client.$method($($arg),*).await
+                }
+            }
+        }
+    };
 }
 
 #[async_trait]
