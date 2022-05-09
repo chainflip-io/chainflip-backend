@@ -11,3 +11,15 @@ pub const SOUNDCHECK: StateChainEnvironment = StateChainEnvironment {
 	genesis_stake_amount: 50_000 * 10u128.pow(18),
 	ethereum_deployment_block: 9819300,
 };
+
+/// Environment variables for SOUNDCHECK TWO public testnet.
+pub const SOUNDCHECK_TWO: StateChainEnvironment = StateChainEnvironment {
+	stake_manager_address: hex_literal::hex!("168F5e4ba2f13A5EB3fD47754Bba3B49580C14E3"),
+	key_manager_address: hex_literal::hex!("3196869D3Fc80cad23e8361ad65D0D9b2119be67"),
+	ethereum_chain_id: 4, // RINKEBY
+	eth_init_agg_key: hex_literal::hex!(
+		"0231ac13900d41cc9a743ce9b1e88c0b5afb4ff370fd161e6534d8472b7052d1ec"
+	),
+	genesis_stake_amount: 50_000 * 10u128.pow(18),
+	ethereum_deployment_block: 10646312,
+};
