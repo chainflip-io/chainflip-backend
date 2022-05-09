@@ -194,6 +194,8 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		let new_bond = 10;
 		let new_authorities = vec![1, 2];
 
+		register_keys(&new_authorities);
+
 		MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
 			winners: new_authorities.clone(),
 			minimum_active_bid: new_bond,
@@ -533,8 +535,11 @@ fn test_setting_vanity_names_() {
 #[test]
 fn test_missing_author_punishment() {
 	new_test_ext().execute_with(|| {
+		let winners = vec![1, 2, 3, 4];
+		register_keys(&winners[..]);
+
 		RotationPhase::<Test>::set(RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
-			winners: vec![1, 2, 3, 4],
+			winners,
 			..Default::default()
 		}));
 		move_forward_blocks(2);
