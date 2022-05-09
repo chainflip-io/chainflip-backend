@@ -25,5 +25,5 @@ jobs:
       #    && cargo test --lib --locked --release --all-features'
       - name: Get artifacts
         run: >
-          sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} scp -rp -o StrictHostKeyChecking=no artifacts assemhasna@100.103.245.80:/tmp/chainflip-io/chainflip-backend/target/release
+          mkdir artifacts && sshpass -p ${{ secrets.REMOTE_MACHINE_PASSWORD }} scp -rp -o StrictHostKeyChecking=no artifacts assemhasna@100.103.245.80:/tmp/chainflip-io/chainflip-backend/target/release
         
