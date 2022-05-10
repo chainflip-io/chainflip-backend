@@ -15,7 +15,6 @@ targets = ['x86_64-unknown-linux-gnu']
 # Chainflip
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
-pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -76,7 +75,6 @@ std = [
     'frame-system/std',
     'sp-std/std',
     'sp-runtime/std',
-    'pallet-cf-validator/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',

@@ -33,7 +33,6 @@ hex = '0.4'
 hex-literal = '0.3.1'
 jsonrpc-core-client = '18.0.0'
 jsonrpc-derive = '18.0.0'
-structopt = '0.3.8'
 
 # Substrate-node-template dependencies
 clap = { version = "3.1.6", features = ["derive"] }

@@ -16,7 +16,6 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 cf-traits = {path = '../../traits', default-features = false}
 cf-chains = {path = '../../chains', default-features = false}
-pallet-cf-validator = {path = '../cf-validator', default-features = false}
 
 # Non-substrate external deps
 log = { version = '0.4.14', default-features = false }
@@ -79,7 +78,6 @@ default = ['std']
 std = [
   'cf-chains/std',
   'cf-traits/std',
-  'pallet-cf-validator/std',
   'codec/std',
   'scale-info/std',
   'log/std',

@@ -265,27 +265,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-stream"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad5c83079eae9969be7fadefe640a1c566901f05ff91ab221de4b6f68d9507e"
-dependencies = [
- "async-stream-impl",
- "futures-core",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "async-task"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -789,14 +768,11 @@ dependencies = [
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
- "assert_matches",
  "cf-chains",
  "cf-traits",
- "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
- "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "hex-literal",
  "libsecp256k1",
@@ -968,7 +944,6 @@ name = "chainflip-engine"
 version = "0.3.0"
 dependencies = [
  "anyhow",
- "async-stream",
  "async-trait",
  "bincode",
  "bs58",
@@ -1006,7 +981,6 @@ dependencies = [
  "log 0.4.17",
  "mockall",
  "multisig-p2p-transport",
- "num",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
  "pallet-cf-environment",
@@ -1100,7 +1074,6 @@ dependencies = [
  "sp-runtime",
  "sp-timestamp",
  "state-chain-runtime",
- "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
  "try-runtime-cli",
@@ -1655,8 +1628,6 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "sc-client-api",
- "sc-rpc",
- "sc-rpc-api",
  "sp-api",
  "sp-runtime",
  "state-chain-runtime",
@@ -2243,7 +2214,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b24d4059bc0d0a0bf26b740aa21af1f96a984f0ab7a21356d00b32475388b53a"
 dependencies = [
- "num-bigint 0.2.6",
+ "num-bigint",
  "num-integer",
  "num-traits 0.2.15",
  "proc-macro2",
@@ -4950,35 +4921,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "num"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
-dependencies = [
- "num-bigint 0.4.3",
- "num-complex",
- "num-integer",
- "num-iter",
- "num-rational 0.4.0",
- "num-traits 0.2.15",
-]
-
-[[package]]
 name = "num-bigint"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "090c7f9998ee0ff65aa5b723e4009f7b217707f1fb5ea551329cc4d6231fb304"
-dependencies = [
- "autocfg 1.1.0",
- "num-integer",
- "num-traits 0.2.15",
-]
-
-[[package]]
-name = "num-bigint"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
 dependencies = [
  "autocfg 1.1.0",
  "num-integer",
@@ -5015,24 +4961,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-iter"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
-dependencies = [
- "autocfg 1.1.0",
- "num-integer",
- "num-traits 0.2.15",
-]
-
-[[package]]
 name = "num-rational"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
 dependencies = [
  "autocfg 1.1.0",
- "num-bigint 0.2.6",
+ "num-bigint",
  "num-integer",
  "num-traits 0.2.15",
 ]
@@ -5044,7 +4979,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d41702bd167c2df5520b384281bc111a4b5efcf7fbc4c9c222c815b07e0a6a6a"
 dependencies = [
  "autocfg 1.1.0",
- "num-bigint 0.4.3",
  "num-integer",
  "num-traits 0.2.15",
 ]
@@ -5296,7 +5230,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.17",
- "pallet-cf-threshold-signature",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5386,7 +5319,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5426,7 +5358,6 @@ dependencies = [
  "frame-system",
  "log 0.4.17",
  "pallet-cf-flip",
- "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5512,7 +5443,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex",
- "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

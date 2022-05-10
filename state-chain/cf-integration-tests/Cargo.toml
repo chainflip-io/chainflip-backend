@@ -11,7 +11,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
-[dependencies]
+[dev-dependencies]
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
 rand = {version='0.8.4'}
 
@@ -35,52 +35,41 @@ pallet-cf-environment = { path = "../pallets/cf-environment", default-features =
 
 
 # Additional FRAME pallets
-[dependencies.pallet-authorship]
+[dev-dependencies.pallet-authorship]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.pallet-session]
+[dev-dependencies.pallet-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 features = ['historical']
 
 # Substrate dependencies
-[dependencies.codec]
+[dev-dependencies.codec]
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
 version = '3.0.0'
 
-[dependencies.frame-benchmarking]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
-tag = 'chainflip-monthly-2022-05'
 
-[dependencies.frame-executive]
+[dev-dependencies.frame-executive]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.frame-support]
+[dev-dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.frame-system]
+[dev-dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.frame-system-benchmarking]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
-tag = 'chainflip-monthly-2022-05'
-
-[dependencies.frame-system-rpc-runtime-api]
+[dev-dependencies.frame-system-rpc-runtime-api]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
@@ -88,133 +77,90 @@ tag = 'chainflip-monthly-2022-05'
 [dev-dependencies.hex-literal]
 version = '0.3.1'
 
-[dependencies.pallet-aura]
+[dev-dependencies.pallet-aura]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.pallet-grandpa]
+[dev-dependencies.pallet-grandpa]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.pallet-randomness-collective-flip]
+[dev-dependencies.pallet-randomness-collective-flip]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.pallet-timestamp]
+[dev-dependencies.pallet-timestamp]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.pallet-transaction-payment]
+[dev-dependencies.pallet-transaction-payment]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.scale-info]
+[dev-dependencies.scale-info]
 default-features = false
 features = ['derive']
 version = '2.0.1'
 
-[dependencies.sp-block-builder]
+[dev-dependencies.sp-block-builder]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-consensus-aura]
+[dev-dependencies.sp-consensus-aura]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 version = '0.10.0-dev'
 
-[dependencies.sp-core]
+[dev-dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-inherents]
+[dev-dependencies.sp-inherents]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-offchain]
+[dev-dependencies.sp-offchain]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-runtime]
+[dev-dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-session]
+[dev-dependencies.sp-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-std]
+[dev-dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-transaction-pool]
+[dev-dependencies.sp-transaction-pool]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
-[dependencies.sp-version]
+[dev-dependencies.sp-version]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
-
-[dev-dependencies]
-assert_matches = { version = '1.5.0' }
 
 [dev-dependencies.sp-finality-grandpa]
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
 [features]
-default = ['std']
-std = [
-  'state-chain-runtime/std',
-  'cf-traits/std',
-  'cf-chains/std',
-  'codec/std',
-  'scale-info/std',
-  'frame-executive/std',
-  'frame-support/std',
-  'frame-system/std',
-  'frame-system-rpc-runtime-api/std',
-  'pallet-aura/std',
-  'pallet-grandpa/std',
-  'pallet-randomness-collective-flip/std',
-  'pallet-session/std',
-  'pallet-timestamp/std',
-  'pallet-transaction-payment/std',
-  'sp-block-builder/std',
-  'sp-consensus-aura/std',
-  'sp-core/std',
-  'sp-inherents/std',
-  'sp-offchain/std',
-  'sp-runtime/std',
-  'sp-session/std',
-  'sp-std/std',
-  'sp-transaction-pool/std',
-  'sp-version/std',
-  'pallet-cf-validator/std',
-  'pallet-cf-staking/std',
-  'pallet-cf-witnesser/std',
-  'pallet-cf-flip/std',
-  'pallet-cf-auction/std',
-  'pallet-cf-emissions/std',
-  'pallet-cf-reputation/std',
-  'pallet-cf-governance/std',
-  'pallet-cf-vaults/std',
-  'pallet-cf-broadcast/std',
-  'pallet-cf-threshold-signature/std',
-  'pallet-cf-environment/std',
-  'pallet-cf-online/std',
-]
+default = []
