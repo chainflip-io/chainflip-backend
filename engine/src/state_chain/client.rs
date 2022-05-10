@@ -1078,7 +1078,7 @@ async fn inner_connect_to_state_chain(
     }
     let metadata = match metadata {
         RuntimeMetadata::V14(meta) => meta,
-        other => bail!("Invalid Metadata version {:?}, epected V14", other),
+        other => bail!("Invalid Metadata version {:?}, expected V14", other),
     };
 
     Ok((
