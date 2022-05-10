@@ -7,10 +7,7 @@ use crate::*;
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
 pub struct DynamicSetSizeAuctionResolver {
 	current_size: u32,
-	min_size: u32,
-	max_size: u32,
-	max_contraction: u32,
-	max_expansion: u32,
+	parameters: DynamicSetSizeParameters,
 }
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
@@ -44,7 +41,7 @@ impl<T: Config> From<AuctionError> for Error<T> {
 impl DynamicSetSizeAuctionResolver {
 	pub fn try_new(
 		current_size: u32,
-		DynamicSetSizeParameters { min_size, max_size, max_contraction, max_expansion }: DynamicSetSizeParameters,
+		parameters @ DynamicSetSizeParameters { min_size, max_size, max_contraction, max_expansion }: DynamicSetSizeParameters,
 	) -> Result<Self, AuctionError> {
 		ensure!(min_size > 0, AuctionError::InvalidParameters);
 		ensure!(min_size <= max_size, AuctionError::InvalidParameters);
@@ -53,25 +50,31 @@ impl DynamicSetSizeAuctionResolver {
 				current_size.saturating_sub(max_contraction) <= max_size,
 			AuctionError::InconsistentRanges
 		);
-		Ok(Self { current_size, min_size, max_size, max_contraction, max_expansion })
+		Ok(Self { current_size, parameters })
 	}
 
 	pub fn resolve_auction<CandidateId: Clone, BidAmount: Copy + AtLeast32BitUnsigned>(
 		&self,
 		mut auction_candidates: Vec<(CandidateId, BidAmount)>,
 	) -> Result<AuctionOutcome<CandidateId, BidAmount>, AuctionError> {
-		ensure!(auction_candidates.len() as u32 >= self.min_size, {
+		ensure!(auction_candidates.len() as u32 >= self.parameters.min_size, {
 			log::error!(
 				"[cf-auction] not enough auction candidates. {} < {}",
 				auction_candidates.len(),
-				self.min_size
+				self.parameters.min_size
 			);
 			AuctionError::NotEnoughBidders
 		});
 
 		let (lower_bound, upper_bound) = (
-			max(self.min_size, self.current_size.saturating_sub(self.max_contraction)),
-			min(self.max_size, self.current_size.saturating_add(self.max_expansion)),
+			max(
+				self.parameters.min_size,
+				self.current_size.saturating_sub(self.parameters.max_contraction),
+			),
+			min(
+				self.parameters.max_size,
+				self.current_size.saturating_add(self.parameters.max_expansion),
+			),
 		);
 
 		// These conditions should always be true if the parameters are valid, but debug_assert them
@@ -200,10 +203,15 @@ mod test_auction_resolution {
 				$candidates.iter().map(|(id, _)| id).cloned().collect::<BTreeSet<_>>()
 			);
 
-			assert!(winners.len() as u32 >= $resolver.min_size);
-			assert!(winners.len() as u32 <= $resolver.max_size);
-			assert!(winners.len() as u32 >= $resolver.current_size - $resolver.max_contraction);
-			assert!(winners.len() as u32 <= $resolver.current_size + $resolver.max_expansion);
+			assert!(winners.len() as u32 >= $resolver.parameters.min_size);
+			assert!(winners.len() as u32 <= $resolver.parameters.max_size);
+			assert!(
+				winners.len() as u32 >=
+					$resolver.current_size - $resolver.parameters.max_contraction
+			);
+			assert!(
+				winners.len() as u32 <= $resolver.current_size + $resolver.parameters.max_expansion
+			);
 
 			for (_, bid_amount) in losers.iter() {
 				assert!(*bid_amount <= bond);
