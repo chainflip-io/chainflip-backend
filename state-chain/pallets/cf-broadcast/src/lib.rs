@@ -243,8 +243,8 @@ pub mod pallet {
 	/// A mapping from signer id to the chain amount (in Atomic units) that the signer is owed
 	/// for paying transaction fees
 	#[pallet::storage]
-	pub type SignerTransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, OptionQuery>;
+	pub type AccountIdTransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, ChainAmountFor<T, I>, OptionQuery>;
 
 	/// A mapping of signer id to the the account id of the authority that registered the signer.
 	/// through a transaction_ready_for_transmission extrinsic.
@@ -253,6 +253,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SignerIdToAccountId<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId, OptionQuery>;
+
+	/// A mapping from AccountId to the last registered SignerId, which is where the refunds
+	/// will be sent to
+	#[pallet::storage]
+	pub type AccountIdToRefundSignerId<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, SignerIdFor<T, I>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -409,10 +415,21 @@ pub mod pallet {
 			.is_ok()
 			{
 				// Whitelist the signer_id so it can receive fee refunds
-				if !SignerTransactionFeeDeficit::<T, I>::contains_key(signer_id.clone()) {
-					let init_amount: ChainAmountFor<T, I> = Default::default();
-					SignerTransactionFeeDeficit::<T, I>::insert(signer_id.clone(), init_amount);
-					SignerIdToAccountId::<T, I>::insert(signer_id, signer);
+				if !AccountIdTransactionFeeDeficit::<T, I>::contains_key(signer.clone()) {
+					let init_deficit: ChainAmountFor<T, I> = Default::default();
+					AccountIdTransactionFeeDeficit::<T, I>::insert(signer.clone(), init_deficit);
+				}
+
+				// white list the signer id, so if we receive SignatureAccepted events from this
+				// signer id, we can refund the fee to that authority
+				if !SignerIdToAccountId::<T, I>::contains_key(signer_id.clone()) {
+					SignerIdToAccountId::<T, I>::insert(signer_id.clone(), signer.clone());
+				}
+
+				// store the latest signer id used by an authority
+				if AccountIdToRefundSignerId::<T, I>::get(signer.clone()) != Some(signer_id.clone())
+				{
+					AccountIdToRefundSignerId::<T, I>::insert(signer, signer_id);
 				}
 
 				AwaitingTransmission::<T, I>::insert(
@@ -594,11 +611,15 @@ pub mod pallet {
 				}
 			}
 			// Add fee deficits only when we know everything else is ok
-			SignerTransactionFeeDeficit::<T, I>::mutate_exists(tx_signer, |fee_deficit| {
-				if let Some(fee_deficit) = fee_deficit.as_mut() {
-					*fee_deficit = fee_deficit.saturating_add(tx_fee);
-				}
-			});
+
+			// if this has been whitelist, we can add the fee deficit to the authority's account
+			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
+				AccountIdTransactionFeeDeficit::<T, I>::mutate_exists(account_id, |fee_deficit| {
+					if let Some(fee_deficit) = fee_deficit.as_mut() {
+						*fee_deficit = fee_deficit.saturating_add(tx_fee);
+					}
+				});
+			}
 
 			if let Some(attempt_count) = attempt_numbers.last() {
 				let last_broadcast_attempt_id =

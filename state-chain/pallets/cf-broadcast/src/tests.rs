@@ -1,8 +1,8 @@
 use crate::{
-	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
-	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
-	SignerIdToAccountId, SignerTransactionFeeDeficit, TransmissionFailure,
+	mock::*, AccountIdTransactionFeeDeficit, AwaitingTransactionSignature, AwaitingTransmission,
+	BroadcastAttemptId, BroadcastId, BroadcastIdToAttemptNumbers, BroadcastRetryQueue,
+	BroadcastStage, Error, Event as BroadcastEvent, Expiries, Instance1, PalletOffence,
+	SignatureToBroadcastIdLookup, SignerIdToAccountId, TransmissionFailure,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -437,7 +437,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 		);
 
 		// We still shouldn't have a valid signer in the deficit map yet
-		assert!(SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).is_none(),);
+		assert!(AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).is_none(),);
 
 		// TODO: should we move this testing below into a separate test
 
@@ -458,11 +458,11 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 
 		// We should have the valid signer in the list with no deficit ath this point
 		assert_eq!(
-			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
 			0
 		);
 		// We shouldn't have any other signers with 0 values
-		assert!(SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid).is_none());
+		assert!(AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid).is_none());
 
 		// we should not have a transmission attempt for the old attempt id that did not succeed
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
@@ -518,7 +518,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 
 		// We should not have a deficit for the valid signer
 		assert_eq!(
-			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
 			FEE_PAID
 		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(
