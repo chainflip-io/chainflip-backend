@@ -278,7 +278,7 @@ mod test_auction_resolution {
 			"\nCandidate bids were: {:?}. \nOutcome was: {:?}. \nTcl: {:?}.",
 			candidates,
 			outcome,
-			outcome.projected_tcl(),
+			outcome.projected_total_collateral(),
 		);
 		assert_eq!(
 			outcome.winners.len(),
@@ -286,7 +286,7 @@ mod test_auction_resolution {
 			"\nCandidate bids were: {:?}. \nOutcome was: {:?}. \nTcl: {:?}.",
 			candidates,
 			outcome,
-			outcome.projected_tcl(),
+			outcome.projected_total_collateral(),
 		);
 
 		check_auction_resolution_invariants!(candidates, auction_resolver, outcome);
@@ -319,7 +319,7 @@ mod test_auction_resolution {
 			"\nCandidate bids were: {:?}. \nOutcome was: {:?}. \nTcl: {:?}.",
 			candidates,
 			outcome,
-			outcome.projected_tcl(),
+			outcome.projected_total_collateral(),
 		);
 		assert_eq!(
 			outcome.winners.len(),
@@ -327,7 +327,7 @@ mod test_auction_resolution {
 			"\nCandidate bids were: {:?}. \nOutcome was: {:?}. \nTcl: {:?}.",
 			candidates,
 			outcome,
-			outcome.projected_tcl(),
+			outcome.projected_total_collateral(),
 		);
 
 		check_auction_resolution_invariants!(candidates, auction_resolver, outcome);

@@ -144,7 +144,7 @@ pub struct AuctionOutcome<CandidateId, BidAmount> {
 
 impl<T, BidAmount: Copy + AtLeast32BitUnsigned> AuctionOutcome<T, BidAmount> {
 	/// The total collateral locked if this auction outcome is confirmed.
-	pub fn projected_tcl(&self) -> BidAmount {
+	pub fn projected_total_collateral(&self) -> BidAmount {
 		self.bond * BidAmount::from(self.winners.len() as u32)
 	}
 }
