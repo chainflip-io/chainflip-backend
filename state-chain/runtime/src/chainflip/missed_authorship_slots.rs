@@ -9,8 +9,13 @@ use crate::{Aura, System};
 struct AuraSlotExtraction;
 
 impl AuraSlotExtraction {
-	fn expected_slot() -> AuraSlot {
-		Aura::current_slot() + 1
+	fn expected_slot() -> Option<AuraSlot> {
+		let slot = Aura::current_slot();
+		if *slot == 0 {
+			None
+		} else {
+			Some(slot.saturating_add(1u64))
+		}
 	}
 
 	fn extract_slot_from_digest_item(item: &DigestItem) -> Option<AuraSlot> {
@@ -36,11 +41,15 @@ pub struct MissedAuraSlots;
 
 impl MissedAuthorshipSlots for MissedAuraSlots {
 	fn missed_slots() -> Vec<u64> {
-		let expected = AuraSlotExtraction::expected_slot();
-		if let Some(authored) = AuraSlotExtraction::current_slot_from_digests() {
-			((*expected)..(*authored)).collect()
+		if let Some(expected) = AuraSlotExtraction::expected_slot() {
+			if let Some(authored) = AuraSlotExtraction::current_slot_from_digests() {
+				((*expected)..(*authored)).collect()
+			} else {
+				log::error!("No Aura authorship slot passed to runtime via digests!");
+				vec![]
+			}
 		} else {
-			log::error!("No Aura authorship slot passed to runtime via digests!");
+			log::info!("Skipping missed authorship check: aura not expecting any current slot.");
 			vec![]
 		}
 	}
@@ -201,5 +210,11 @@ mod test_missed_authorship_slots {
 			<Aura as OnInitialize<u64>>::on_initialize(block);
 			assert_eq!(Aura::current_slot(), slot);
 		})
+	}
+
+	#[test]
+	fn test_first_authored_block() {
+		simulate_block_authorship(0, 0);
+		assert!(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots().is_empty());
 	}
 }
