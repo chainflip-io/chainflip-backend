@@ -66,7 +66,7 @@ impl DynamicSetSizeAuctionResolver {
 			AuctionError::NotEnoughBidders
 		});
 
-		let (lower_bound, upper_bound) = (
+		let (lower_bound_inclusive, upper_bound_inclusive) = (
 			max(
 				self.parameters.min_size,
 				self.current_size.saturating_sub(self.parameters.max_contraction),
@@ -79,17 +79,16 @@ impl DynamicSetSizeAuctionResolver {
 
 		// These conditions should always be true if the parameters are valid, but debug_assert them
 		// so that we can catch it during testing.
-		debug_assert!(lower_bound > 0);
-		debug_assert!(upper_bound >= lower_bound);
+		debug_assert!(lower_bound_inclusive > 0);
+		debug_assert!(upper_bound_inclusive >= lower_bound_inclusive);
 
 		auction_candidates.sort_unstable_by_key(|&(_, amount)| Reverse(amount));
 
 		let (index, (_, bond)) = auction_candidates
 			.iter()
 			.enumerate()
-			// lower bound is inclusive
-			.skip(lower_bound as usize - 1)
-			.take(1 + (upper_bound - lower_bound) as usize)
+			.skip(lower_bound_inclusive as usize - 1)
+			.take(1 + (upper_bound_inclusive - lower_bound_inclusive) as usize)
 			// Choose the candidate that maximises total collateral (tcl).
 			// If multiple entries result in the same tcl, take the largest set size.
 			.max_by_key(|(index, &(_, amount))| (amount.saturating_mul((*index as u32 + 1).into()), *index))
