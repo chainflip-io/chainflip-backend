@@ -1,6 +1,6 @@
 [package]
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
-edition = "2018"
+edition = '2021'
 name = "chainflip-cli"
 version = "0.1.0"
 
@@ -13,7 +13,7 @@ hex = "0.4.3"
 serde = {version = "1.0", features = ["derive", "rc"]}
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 structopt = "0.3.23"
-tokio = {version = "1.5.0", features = ["full"]}
+tokio = {version = "1.13.1", features = ["full"]}
 utilities = {path = "../../utilities"}
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = 'a425fa7'}
 
@@ -27,6 +27,6 @@ cf-chains = {path = "../../state-chain/chains"}
 chainflip-node = {path = "../../state-chain/node"}
 
 # Substrate key types
-sp-core = {git='https://github.com/chainflip-io/substrate.git', tag='merge-config-option'}
-sp-consensus-aura = {git='https://github.com/chainflip-io/substrate.git', tag='merge-config-option'}
-sp-finality-grandpa = {git='https://github.com/chainflip-io/substrate.git', tag='merge-config-option'}
+sp-core = {git='https://github.com/chainflip-io/substrate.git', tag='chainflip-monthly-2021-09+1'}
+sp-consensus-aura = {git='https://github.com/chainflip-io/substrate.git', tag='chainflip-monthly-2021-09+1'}
+sp-finality-grandpa = {git='https://github.com/chainflip-io/substrate.git', tag='chainflip-monthly-2021-09+1'}

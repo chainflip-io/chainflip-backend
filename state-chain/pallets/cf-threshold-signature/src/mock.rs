@@ -2,14 +2,15 @@ use std::{collections::BTreeSet, iter::FromIterator, marker::PhantomData};
 
 use crate::{
 	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,
-	OpenRequests, RequestId,
+	OpenRequests, PalletOffence, RequestId,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
 	ChainCrypto,
 };
 use cf_traits::{
-	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, ThresholdSigner,
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, system_state_info::MockSystemStateInfo},
+	AsyncResult, Chainflip, EpochIndex, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -78,7 +79,9 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 // Mock SignerNomination
@@ -106,7 +109,10 @@ impl cf_traits::SignerNomination for MockNominator {
 		unimplemented!("Single signer nomination not needed for these tests.")
 	}
 
-	fn threshold_nomination_with_seed<H>(_seed: H) -> Option<Vec<Self::SignerId>> {
+	fn threshold_nomination_with_seed<H>(
+		_seed: H,
+		_epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
 		Self::get_nominees()
 	}
 }
@@ -169,9 +175,6 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	}
 }
 
-// Mock OffenceReporter
-cf_traits::impl_mock_offence_reporting!(u64);
-
 pub fn sign(
 	payload: <MockEthereum as ChainCrypto>::Payload,
 ) -> MockThresholdSignature<
@@ -189,8 +192,12 @@ parameter_types! {
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
+	type Offence = PalletOffence;
 	type RuntimeOrigin = Origin;
 	type ThresholdCallable = MockCallback<MockEthereum>;
 	type TargetChain = MockEthereum;
@@ -223,9 +230,9 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn with_validators(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
+	pub fn with_authorities(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			MockEpochInfo::set_validators(Vec::from_iter(validators));
+			MockEpochInfo::set_authorities(Vec::from_iter(validators));
 		});
 		self
 	}

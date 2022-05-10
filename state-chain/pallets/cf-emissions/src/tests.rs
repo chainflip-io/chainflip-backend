@@ -1,5 +1,5 @@
 use crate::{mock::*, BlockEmissions, LastMintBlock, Pallet};
-use cf_traits::{Issuance, RewardsDistribution};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Issuance, RewardsDistribution};
 use frame_support::traits::{Imbalance, OnInitialize};
 use pallet_cf_flip::{FlipIssuance, Pallet as Flip};
 
@@ -37,7 +37,7 @@ mod test_block_rewards {
 
 	fn test_with(block_number: u64, emissions_per_block: u128, expected_mint: u128) {
 		new_test_ext(vec![1, 2], Some(1000)).execute_with(|| {
-			Emissions::update_validator_block_emission(emissions_per_block);
+			Emissions::update_authority_block_emission(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
 			let _weights = Emissions::mint_rewards_for_block(block_number);
@@ -70,7 +70,7 @@ fn test_duplicate_emission_should_be_noop() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		const BLOCK_NUMBER: u64 = 5;
 
-		Emissions::update_validator_block_emission(EMISSION_RATE);
+		Emissions::update_authority_block_emission(EMISSION_RATE);
 
 		let before = Flip::<Test>::total_issuance();
 		let _weights = Emissions::mint_rewards_for_block(BLOCK_NUMBER);
@@ -91,8 +91,8 @@ fn test_duplicate_emission_should_be_noop() {
 fn should_calculate_block_emissions() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		// Block emissions are calculated at genesis.
-		assert!(Emissions::validator_emission_per_block() > 0);
-		assert!(Emissions::backup_validator_emission_per_block() > 0);
+		assert!(Emissions::current_authority_emission_per_block() > 0);
+		assert!(Emissions::backup_node_emission_per_block() > 0);
 	});
 }
 
@@ -126,6 +126,27 @@ fn should_mint_and_initiate_broadcast() {
 		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL);
 		let after = Flip::<Test>::total_issuance();
 		assert!(after > before, "Expected {:?} > {:?}", after, before);
+		assert_eq!(
+			MockBroadcast::get_called().unwrap().new_total_supply,
+			Flip::<Test>::total_issuance()
+		);
+	});
+}
+
+#[test]
+fn no_update_of_update_total_supply_during_maintanance() {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
+		// Activate maintenance mode
+		MockSystemStateInfo::set_maintenance(true);
+		// Try send a broadcast to update the total supply
+		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL);
+		// Expect nothing to be sent
+		assert!(MockBroadcast::get_called().is_none());
+		// Deactivate maintenance mode
+		MockSystemStateInfo::set_maintenance(false);
+		// Try send a broadcast to update the total supply
+		<Emissions as OnInitialize<_>>::on_initialize(MINT_INTERVAL * 2);
+		// Expect the broadcast to be sendt
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()

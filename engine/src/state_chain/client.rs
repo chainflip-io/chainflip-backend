@@ -1,17 +1,20 @@
 use anyhow::{Context, Result};
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::ChainAbi;
 use cf_traits::{ChainflipAccountData, EpochIndex};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, FullCodec};
+use custom_rpc::CustomClient;
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
+use frame_support::storage::types::QueryKindTrait;
 use frame_support::unsigned::TransactionValidityError;
-use frame_system::{AccountInfo, Phase};
+use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpc_core::{Error, ErrorCode, Value};
 use jsonrpc_core_client::{RpcChannel, RpcError};
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use multisig_p2p_transport::PeerId;
+use pallet_cf_validator::HistoricalActiveEpochs;
 use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
@@ -24,25 +27,26 @@ use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::AccountId32;
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{AccountId, Index, PalletInstanceAlias, SignedBlock};
+use state_chain_runtime::{AccountId, PalletInstanceAlias, SignedBlock};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{marker::PhantomData, sync::Arc};
-use substrate_subxt::UncheckedExtrinsic;
 use substrate_subxt::{
+    balances::Balances,
     extrinsic::{
-        CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
+        ChargeTransactionPayment, CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion,
+        CheckTxVersion, CheckWeight,
     },
     system::System,
-    Runtime, SignedExtension, SignedExtra,
+    Runtime, SignedExtension, SignedExtra, UncheckedExtrinsic,
 };
 use tokio::sync::RwLock;
 
 use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
-use crate::constants::MAX_RETRY_ATTEMPTS;
+use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 
@@ -67,6 +71,9 @@ impl System for RuntimeImplForSigningExtrinsics {
     type Extrinsic = state_chain_runtime::UncheckedExtrinsic;
     type AccountData = <state_chain_runtime::Runtime as frame_system::Config>::AccountData;
 }
+impl Balances for RuntimeImplForSigningExtrinsics {
+    type Balance = <state_chain_runtime::Runtime as pallet_cf_flip::Config>::Balance;
+}
 // Substrate_subxt's Runtime trait allows us to use it's extrinsic signing code
 impl Runtime for RuntimeImplForSigningExtrinsics {
     type Signature = state_chain_runtime::Signature;
@@ -85,9 +92,10 @@ pub struct SCDefaultExtra<T: System> {
     nonce: T::Index,
     genesis_hash: T::Hash,
 }
+
 impl<T> SignedExtra<T> for SCDefaultExtra<T>
 where
-    T: System + Clone + Debug + Eq + Send + Sync,
+    T: System + Balances + Clone + Debug + Eq + Send + Sync,
 {
     #[allow(clippy::type_complexity)]
     type Extra = (
@@ -97,7 +105,9 @@ where
         CheckEra<T>,
         CheckNonce<T>,
         CheckWeight<T>,
+        ChargeTransactionPayment<T>,
     );
+
     fn new(spec_version: u32, tx_version: u32, nonce: T::Index, genesis_hash: T::Hash) -> Self {
         SCDefaultExtra {
             spec_version,
@@ -106,6 +116,7 @@ where
             genesis_hash,
         }
     }
+
     fn extra(&self) -> Self::Extra {
         (
             CheckSpecVersion(PhantomData, self.spec_version),
@@ -114,12 +125,16 @@ where
             CheckEra((Era::Immortal, PhantomData), self.genesis_hash),
             CheckNonce(self.nonce),
             CheckWeight(PhantomData),
+            // Note: The tip is ignored in our runtime, but we need to provide one in order to
+            // use substrate's transaction fee logic.
+            ChargeTransactionPayment(Default::default()),
         )
     }
 }
+
 impl<T> SignedExtension for SCDefaultExtra<T>
 where
-    T: System + Clone + Debug + Eq + Send + Sync,
+    T: System + Balances + Clone + Debug + Eq + Send + Sync,
 {
     const IDENTIFIER: &'static str = "SCDefaultExtra";
     type AccountId = T::AccountId;
@@ -159,6 +174,7 @@ pub struct StateChainRpcClient {
     state_rpc_client: StateRpcClient,
     chain_rpc_client: ChainRpcClient,
     system_rpc_client: SystemRpcClient,
+    custom_rpc_client: CustomClient,
 }
 
 /// Wraps the substrate client library methods
@@ -203,6 +219,8 @@ pub trait StateChainRpcApi {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<RuntimeVersion>;
+
+    async fn is_auction_phase(&self) -> Result<bool>;
 }
 
 #[async_trait]
@@ -300,6 +318,14 @@ impl StateChainRpcApi for StateChainRpcClient {
             .map_err(rpc_error_into_anyhow_error)
             .context("fetch_runtime_version RPC API failed")
     }
+
+    async fn is_auction_phase(&self) -> Result<bool> {
+        self.custom_rpc_client
+            .is_auction_phase()
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .context("is_auction_phase RPC API failed")
+    }
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
@@ -353,8 +379,116 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 }
 
+mod storage_traits {
+    use codec::FullCodec;
+    use frame_support::{
+        storage::types::{QueryKindTrait, StorageDoubleMap, StorageMap, StorageValue},
+        traits::{Get, StorageInstance},
+        StorageHasher,
+    };
+    use sp_core::storage::StorageKey;
+
+    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
+    pub trait StorageDoubleMapAssociatedTypes {
+        type Key1;
+        type Key2;
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
+
+        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey;
+    }
+    impl<
+            Prefix: StorageInstance,
+            Hasher1: StorageHasher,
+            Key1: FullCodec,
+            Hasher2: StorageHasher,
+            Key2: FullCodec,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+            MaxValues: Get<Option<u32>>,
+        > StorageDoubleMapAssociatedTypes
+        for StorageDoubleMap<
+            Prefix,
+            Hasher1,
+            Key1,
+            Hasher2,
+            Key2,
+            Value,
+            QueryKind,
+            OnEmpty,
+            MaxValues,
+        >
+    {
+        type Key1 = Key1;
+        type Key2 = Key2;
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
+
+        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey {
+            StorageKey(Self::hashed_key_for(key1, key2))
+        }
+    }
+
+    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
+    pub trait StorageMapAssociatedTypes {
+        type Key;
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
+
+        fn _hashed_key_for(key: &Self::Key) -> StorageKey;
+    }
+    impl<
+            Prefix: StorageInstance,
+            Hasher: StorageHasher,
+            Key: FullCodec,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+            MaxValues: Get<Option<u32>>,
+        > StorageMapAssociatedTypes
+        for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
+    {
+        type Key = Key;
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
+
+        fn _hashed_key_for(key: &Self::Key) -> StorageKey {
+            StorageKey(Self::hashed_key_for(key))
+        }
+    }
+
+    // A method to safely extract type information about Substrate storage values (As the Key and Value types are not available)
+    pub trait StorageValueAssociatedTypes {
+        type Value: FullCodec;
+        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
+        type OnEmpty;
+
+        fn _hashed_key() -> StorageKey;
+    }
+    impl<
+            Prefix: StorageInstance,
+            Value: FullCodec,
+            QueryKind: QueryKindTrait<Value, OnEmpty>,
+            OnEmpty: Get<QueryKind::Query> + 'static,
+        > StorageValueAssociatedTypes for StorageValue<Prefix, Value, QueryKind, OnEmpty>
+    {
+        type Value = Value;
+        type QueryKind = QueryKind;
+        type OnEmpty = OnEmpty;
+
+        fn _hashed_key() -> StorageKey {
+            StorageKey(Self::hashed_key().into())
+        }
+    }
+}
+
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-    /// Sign and submit an extrinsic, retrying up to [MAX_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
+    /// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
     pub async fn submit_signed_extrinsic<Extrinsic>(
         &self,
         extrinsic: Extrinsic,
@@ -365,7 +499,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     {
         let extrinsic = state_chain_runtime::Call::from(extrinsic);
         let encoded_extrinsic = substrate_subxt::Encoded(extrinsic.encode());
-        for _ in 0..MAX_RETRY_ATTEMPTS {
+        for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
             // use the previous value but increment it for the next thread that loads/fetches it
             let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
             let runtime_version = { self.runtime_version.read().await.clone() };
@@ -497,15 +631,16 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         state_chain_runtime::Call: std::convert::From<Extrinsic>,
         Extrinsic: 'static + std::fmt::Debug + Clone + Send,
     {
+        let unsigned_tx = substrate_subxt::extrinsic::create_unsigned::<
+            RuntimeImplForSigningExtrinsics,
+        >(substrate_subxt::Encoded(
+            state_chain_runtime::Call::from(extrinsic.clone()).encode(),
+        ));
+        let expected_hash = BlakeTwo256::hash_of(&unsigned_tx);
         match self
             .state_chain_rpc_client
-            .submit_extrinsic_rpc(substrate_subxt::extrinsic::create_unsigned::<
-                RuntimeImplForSigningExtrinsics,
-            >(substrate_subxt::Encoded(
-                state_chain_runtime::Call::from(extrinsic.clone()).encode(),
-            )))
+            .submit_extrinsic_rpc(unsigned_tx)
             .await
-            .map_err(rpc_error_into_anyhow_error)
         {
             Ok(tx_hash) => {
                 slog::info!(
@@ -514,11 +649,36 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     extrinsic,
                     tx_hash
                 );
+                assert_eq!(
+                    tx_hash, expected_hash,
+                    "tx_hash returned from RPC does not match expected hash"
+                );
                 Ok(tx_hash)
             }
-            Err(err) => {
-                slog::error!(logger, "Failed to submit unsigned extrinsic: {:?}", err);
-                Err(err)
+            Err(rpc_err) => {
+                match rpc_err {
+                    RpcError::JsonRpcError(ref e)
+                        // POOL_ALREADY_IMPORTED error occurs when the transaction is already in the pool
+                        // More than one node can submit the same unsigned extrinsic. E.g. in the case of
+                        // a threshold signature success. Thus, if we get a "Transaction already in pool" "error"
+                        // we know that this particular extrinsic has already been submitted. And so we can
+                        // ignore the error and return the transaction hash
+                        if e.code == ErrorCode::ServerError(1013) =>
+                    {
+                        slog::trace!(logger, "Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.", extrinsic, expected_hash);
+                        Ok(expected_hash)
+                    }
+                    _ => {
+                        let anyhow_error = rpc_error_into_anyhow_error(rpc_err);
+                        slog::error!(
+                            logger,
+                            "Unsigned extrinsic failed with error: {}. Extrinsic: {:?}",
+                            anyhow_error,
+                            extrinsic
+                        );
+                        Err(anyhow_error)
+                    }
+                }
             }
         }
     }
@@ -567,20 +727,64 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         ))
     }
 
-    pub async fn get_storage_value<ValueType: Decode + Debug + Default>(
+    async fn get_storage_item<
+        Value: FullCodec,
+        OnEmpty,
+        QueryKind: QueryKindTrait<Value, OnEmpty>,
+    >(
         &self,
-        block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<ValueType> {
+        block_hash: H256,
+        log_str: &str,
+    ) -> Result<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
         self.state_chain_rpc_client
             .storage(block_hash, storage_key.clone())
             .await
             .context(format!(
-                "Failed to get storage value with key: {:?} at block hash {:#x}",
-                storage_key, block_hash
+                "Failed to get storage {} with key: {:?} at block hash {:#x}",
+                log_str, storage_key, block_hash
             ))?
-            .map(|data| ValueType::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
-            .unwrap_or_else(|| Ok(ValueType::default()))
+            .map(|data| Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
+            .map_or(Ok(None), |v| v.map(Some))
+            .map(QueryKind::from_optional_value_to_query)
+    }
+
+    pub async fn get_storage_value<StorageValue: storage_traits::StorageValueAssociatedTypes>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
+        self.get_storage_item::<StorageValue::Value, StorageValue::OnEmpty, StorageValue::QueryKind>(StorageValue::_hashed_key(), block_hash, "value").await
+    }
+
+    pub async fn get_storage_map<StorageMap: storage_traits::StorageMapAssociatedTypes>(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        key: &StorageMap::Key,
+    ) -> Result<
+        <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+    > {
+        self.get_storage_item::<StorageMap::Value, StorageMap::OnEmpty, StorageMap::QueryKind>(
+            StorageMap::_hashed_key_for(key),
+            block_hash,
+            "map",
+        )
+        .await
+    }
+
+    pub async fn get_storage_double_map<
+        StorageDoubleMap: storage_traits::StorageDoubleMapAssociatedTypes,
+    >(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        key1: &StorageDoubleMap::Key1,
+        key2: &StorageDoubleMap::Key2,
+    ) -> Result<
+        <StorageDoubleMap::QueryKind as QueryKindTrait<
+            StorageDoubleMap::Value,
+            StorageDoubleMap::OnEmpty,
+        >>::Query,
+    > {
+        self.get_storage_item::<StorageDoubleMap::Value, StorageDoubleMap::OnEmpty, StorageDoubleMap::QueryKind>(StorageDoubleMap::_hashed_key_for(key1, key2), block_hash, "double map").await
     }
 
     async fn get_from_storage_with_key<StorageType: Decode + Debug>(
@@ -675,21 +879,17 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         epoch_index: EpochIndex,
     ) -> Result<Vault<C>>
     where
-        C: Chain + ChainCrypto + Debug + Clone + 'static + PalletInstanceAlias,
+        C: ChainAbi + Debug + Clone + 'static + PalletInstanceAlias,
         state_chain_runtime::Runtime:
             pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
     {
-        let vaults = self
-            .get_from_storage_with_key::<Vault<C>>(
-                block_hash,
-                StorageKey(pallet_cf_vaults::Vaults::<
-                    state_chain_runtime::Runtime,
-                    <C as PalletInstanceAlias>::Instance,
-                >::hashed_key_for(&epoch_index)),
-            )
-            .await?;
-
-        Ok(vaults.last().expect("should have a vault").to_owned())
+        Ok(self
+            .get_storage_map::<pallet_cf_vaults::Vaults<
+                state_chain_runtime::Runtime,
+                <C as PalletInstanceAlias>::Instance,
+            >>(block_hash, &epoch_index)
+            .await?
+            .expect("should have a vault"))
     }
 
     /// Get all the events from a particular block
@@ -720,16 +920,24 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: state_chain_runtime::Hash,
     ) -> Result<ChainflipAccountData> {
         Ok(self
-            .get_storage_value::<AccountInfo<Index, ChainflipAccountData>>(
+            .get_storage_map::<frame_system::Account<state_chain_runtime::Runtime>>(
                 block_hash,
-                StorageKey(
-                    frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
-                        &self.our_account_id,
-                    ),
-                ),
+                &self.our_account_id,
             )
             .await?
             .data)
+    }
+
+    /// Get the historical active epochs of this validator at a particular block
+    pub async fn get_historical_active_epochs(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<Vec<EpochIndex>> {
+        self.get_storage_map::<HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            block_hash,
+            &self.our_account_id,
+        )
+        .await
     }
 
     /// Get the latest epoch number at the provided block hash
@@ -737,12 +945,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<EpochIndex> {
-        self.get_storage_value::<EpochIndex>(
+        self.get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
             block_hash,
-            StorageKey(
-                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
-                    .into(),
-            ),
         )
         .await
     }
@@ -750,6 +954,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
+    }
+
+    pub async fn is_auction_phase(&self) -> Result<bool> {
+        self.state_chain_rpc_client.is_auction_phase().await
     }
 }
 
@@ -760,8 +968,22 @@ fn try_unwrap_value<T, E>(lorv: sp_rpc::list::ListOrValue<Option<T>>, error: E) 
     }
 }
 
-#[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain(
+    state_chain_settings: &settings::StateChain,
+    wait_for_staking: bool,
+    logger: &slog::Logger,
+) -> Result<(
+    H256,
+    impl Stream<Item = Result<state_chain_runtime::Header>>,
+    Arc<StateChainClient<StateChainRpcClient>>,
+)> {
+    inner_connect_to_state_chain(state_chain_settings, wait_for_staking, logger)
+        .await
+        .map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node. {}", e)))
+}
+
+#[allow(clippy::eval_order_dependence)]
+async fn inner_connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
     wait_for_staking: bool,
     logger: &slog::Logger,
@@ -969,19 +1191,22 @@ pub async fn connect_to_state_chain_without_signer(
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
     let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.into();
+    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
+    let custom_rpc_client: CustomClient = rpc_client.into();
 
     Ok(StateChainRpcClient {
         system_rpc_client,
         author_rpc_client,
         state_rpc_client,
         chain_rpc_client,
+        custom_rpc_client,
     })
 }
 
 #[cfg(test)]
 pub mod test_utils {
     use cf_traits::ChainflipAccountState;
+    use frame_system::AccountInfo;
 
     use super::*;
 
@@ -997,6 +1222,7 @@ pub mod test_utils {
         StorageChangeSet { block, changes }
     }
 
+    // TODO: Get some chain data for this test
     #[test]
     fn storage_change_set_encoding_works() {
         let account_info = AccountInfo {
@@ -1005,8 +1231,7 @@ pub mod test_utils {
             providers: 2,
             sufficients: 0,
             data: ChainflipAccountData {
-                state: ChainflipAccountState::Validator,
-                last_active_epoch: Some(1),
+                state: ChainflipAccountState::CurrentAuthority,
             },
         };
 
@@ -1016,9 +1241,8 @@ pub mod test_utils {
         let storage_data = changes.1.unwrap().0;
 
         // this was retrieved from the chain itself
-        let storage_data_expected: Vec<u8> = vec![
-            12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 1, 1, 0, 0, 0,
-        ];
+        let storage_data_expected: Vec<u8> =
+            vec![12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0];
 
         assert_eq!(storage_data, storage_data_expected);
     }
@@ -1116,7 +1340,7 @@ mod tests {
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
-            .times(MAX_RETRY_ATTEMPTS)
+            .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(RpcError::JsonRpcError(Error {
                     code: ErrorCode::ServerError(1014),
@@ -1150,7 +1374,7 @@ mod tests {
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
-            .times(MAX_RETRY_ATTEMPTS)
+            .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(RpcError::JsonRpcError(Error {
                     code: ErrorCode::ServerError(1010),

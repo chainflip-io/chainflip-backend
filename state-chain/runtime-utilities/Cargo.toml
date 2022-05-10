@@ -1,7 +1,7 @@
 [package]
 name = "cf-runtime-utilities"
 version = "0.1.0"
-edition = "2018"
+edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
 description = "Utilities for interacting with substrate runtimes."
 
@@ -18,23 +18,23 @@ version = '2.3.1'
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 # Not used in this crate but required in order to import sp-io without conflicts.
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [features]
 default = ['std']

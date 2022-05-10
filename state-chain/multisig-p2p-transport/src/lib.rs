@@ -174,19 +174,19 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	/// RPC Metadata
 	type Metadata;
 
-	/// Connect to validators and disconnect from old validators
+	/// Connect to authorities and disconnect from old authorities
 	#[rpc(name = "p2p_set_peers")]
 	fn set_peers(&self, peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>) -> Result<u64>;
 
-	/// Connect to a validator
+	/// Connect to a authority
 	#[rpc(name = "p2p_add_peer")]
 	fn add_peer(&self, peer_id: PeerIdTransferable, port: u16, address: Ipv6Addr) -> Result<u64>;
 
-	/// Disconnect from a validator
+	/// Disconnect from a authority
 	#[rpc(name = "p2p_remove_peer")]
 	fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64>;
 
-	/// Send a message to validators returning a HTTP status code
+	/// Send a message to authorities returning a HTTP status code
 	#[rpc(name = "p2p_send_message")]
 	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> Result<u64>;
 
@@ -263,7 +263,7 @@ impl<
 	}
 }
 
-pub fn new_p2p_validator_network_node<
+pub fn new_p2p_network_node<
 	MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
 	PN: PeerNetwork + Send + Sync + 'static,
 >(
@@ -284,7 +284,7 @@ pub fn new_p2p_validator_network_node<
 			{
 				type Metadata = MetaData;
 
-				/// Connect to validators
+				/// Connect to authorities
 				fn set_peers(
 					&self,
 					peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>,
@@ -321,7 +321,7 @@ pub fn new_p2p_validator_network_node<
 					Ok(200)
 				}
 
-				/// Connect to a validator
+				/// Connect to an authority
 				fn add_peer(
 					&self,
 					peer_id: PeerIdTransferable,
@@ -346,7 +346,7 @@ pub fn new_p2p_validator_network_node<
 					}
 				}
 
-				/// Disconnect from a validator
+				/// Disconnect from an authority
 				fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64> {
 					let peer_id: PeerId = peer_id.try_into()?;
 					let mut state = self.state.write().unwrap();
@@ -597,7 +597,7 @@ mod tests {
 		}
 	}
 
-	async fn new_p2p_validator_network_node_with_test_probes() -> (
+	async fn new_p2p_network_node_with_test_probes() -> (
 		tokio::sync::mpsc::UnboundedSender<Event>,
 		P2PRpcClient,
 		Arc<RwLock<P2PValidatorNetworkNodeState>>,
@@ -618,7 +618,7 @@ mod tests {
 		let task_manager = sc_service::TaskManager::new(task_executor, None).unwrap();
 		let message_sender_spawn_handle = task_manager.spawn_handle();
 
-		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_validator_network_node(
+		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_network_node(
 			network_expectations.clone(),
 			message_sender_spawn_handle,
 			sc_rpc::testing::TaskExecutor,
@@ -710,7 +710,7 @@ mod tests {
 	#[tokio::test]
 	async fn add_and_remove_peers() {
 		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
@@ -862,7 +862,7 @@ mod tests {
 	#[tokio::test]
 	async fn set_peers() {
 		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
@@ -958,7 +958,7 @@ mod tests {
 	#[tokio::test]
 	async fn send_message() {
 		let (_event_sender, client, _internal_state, network_expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerId::random();
 		let peer_1 = PeerId::random();
@@ -1078,7 +1078,7 @@ mod tests {
 	#[tokio::test]
 	async fn rpc_subscribe() {
 		let (event_sender, client, _internal_state, _expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerId::random();
 		let peer_0_transferable = PeerIdTransferable::from(&peer_0);

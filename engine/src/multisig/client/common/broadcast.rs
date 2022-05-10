@@ -1,8 +1,10 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, BTreeSet},
     convert::{TryFrom, TryInto},
     fmt::Display,
 };
+
+use cf_traits::AuthorityCount;
 
 use crate::{
     multisig::client::{MultisigData, MultisigMessage},
@@ -19,7 +21,7 @@ pub use super::broadcast_verification::verify_broadcasts;
 /// parties in private
 pub enum DataToSend<T> {
     Broadcast(T),
-    Private(HashMap<usize, T>),
+    Private(BTreeMap<AuthorityCount, T>),
 }
 
 /// Abstracts away computations performed during every "broadcast" stage
@@ -39,7 +41,10 @@ pub trait BroadcastStageProcessor<D, Result>: Display {
     /// Determines how the data for this stage (of type `Self::Message`)
     /// should be processed once it either received it from all other parties
     /// or the stage timed out (None is used for missing messages)
-    fn process(self, messages: HashMap<usize, Option<Self::Message>>) -> StageResult<D, Result>;
+    fn process(
+        self,
+        messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
+    ) -> StageResult<D, Result>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
@@ -50,7 +55,7 @@ where
 {
     common: CeremonyCommon,
     /// Messages collected so far
-    messages: HashMap<usize, P::Message>,
+    messages: BTreeMap<AuthorityCount, P::Message>,
     /// Determines the actual computations before/after
     /// the data is collected
     processor: P,
@@ -64,7 +69,7 @@ where
     pub fn new(processor: P, common: CeremonyCommon) -> Self {
         BroadcastStage {
             common,
-            messages: HashMap::new(),
+            messages: BTreeMap::new(),
             processor,
         }
     }
@@ -92,7 +97,7 @@ where
     fn init(&mut self) {
         let common = &self.common;
 
-        let idx_to_id = |idx: &usize| {
+        let idx_to_id = |idx: &AuthorityCount| {
             common
                 .validator_mapping
                 .get_id(*idx)
@@ -112,10 +117,11 @@ where
                             .filter(|idx| **idx != common.own_idx)
                             .map(idx_to_id)
                             .collect(),
-                        MultisigMessage {
+                        bincode::serialize(&MultisigMessage {
                             ceremony_id: common.ceremony_id,
                             data: ceremony_data.into(),
-                        },
+                        })
+                        .unwrap(),
                     ),
                 )
             }
@@ -130,10 +136,11 @@ where
                             let ceremony_data: D = stage_data.into();
                             (
                                 idx_to_id(&idx),
-                                MultisigMessage {
+                                bincode::serialize(&MultisigMessage {
                                     ceremony_id: common.ceremony_id,
                                     data: ceremony_data.into(),
-                                },
+                                })
+                                .unwrap(),
                             )
                         })
                         .collect(),
@@ -150,7 +157,7 @@ where
             .expect("Could not send p2p message.");
     }
 
-    fn process_message(&mut self, signer_idx: usize, m: D) -> ProcessMessageResult {
+    fn process_message(&mut self, signer_idx: AuthorityCount, m: D) -> ProcessMessageResult {
         let m: P::Message = match m.try_into() {
             Ok(m) => m,
             Err(_) => {
@@ -206,7 +213,7 @@ where
 
         // Turns values T into Option<T>, inserting `None` where
         // data hasn't been received for `idx`
-        let messages: HashMap<_, _> = self
+        let messages: BTreeMap<_, _> = self
             .common
             .all_idxs
             .iter()
@@ -216,12 +223,12 @@ where
         self.processor.process(messages)
     }
 
-    fn awaited_parties(&self) -> Vec<usize> {
-        let mut awaited = vec![];
+    fn awaited_parties(&self) -> BTreeSet<AuthorityCount> {
+        let mut awaited = BTreeSet::new();
 
         for idx in &self.common.all_idxs {
             if !self.messages.contains_key(idx) {
-                awaited.push(*idx);
+                awaited.insert(*idx);
             }
         }
 

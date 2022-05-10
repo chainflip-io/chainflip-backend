@@ -4,10 +4,10 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, CfeSettings,
-	EmissionsConfig, EnvironmentConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
-	GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
+	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumVaultConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
 use utilities::clean_eth_address;
@@ -17,6 +17,7 @@ mod network_env;
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
+const FLIP_TOKEN_ADDRESS_DEFAULT: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
 const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
 const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_RINKEBY;
@@ -49,6 +50,7 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 }
 
 pub struct StateChainEnvironment {
+	flip_token_address: [u8; 20],
 	stake_manager_address: [u8; 20],
 	key_manager_address: [u8; 20],
 	ethereum_chain_id: u64,
@@ -57,12 +59,15 @@ pub struct StateChainEnvironment {
 	genesis_stake_amount: u128,
 	// CFE config values starts here
 	eth_block_safety_margin: u32,
-	pending_sign_duration: u32,
 	max_ceremony_stage_duration: u32,
-	max_extrinsic_retry_attempts: u32,
 }
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
+	let flip_token_address: [u8; 20] = clean_eth_address(
+		&env::var("FLIP_TOKEN_ADDRESS")
+			.unwrap_or_else(|_| String::from(FLIP_TOKEN_ADDRESS_DEFAULT)),
+	)
+	.unwrap();
 	let stake_manager_address: [u8; 20] = clean_eth_address(
 		&env::var("STAKE_MANAGER_ADDRESS")
 			.unwrap_or_else(|_| String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
@@ -98,22 +103,13 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<u32>()
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
-	let max_extrinsic_retry_attempts = env::var("MAX_EXTRINSIC_RETRY_ATTEMPTS")
-		.unwrap_or(format!("{}", CfeSettings::default().max_extrinsic_retry_attempts))
-		.parse::<u32>()
-		.expect("MAX_EXTRINSIC_RETRY_ATTEMPTS env var could not be parsed to u32");
-
 	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
 		.unwrap_or(format!("{}", CfeSettings::default().max_ceremony_stage_duration))
 		.parse::<u32>()
 		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
 
-	let pending_sign_duration = env::var("PENDING_SIGN_DURATION")
-		.unwrap_or(format!("{}", CfeSettings::default().pending_sign_duration))
-		.parse::<u32>()
-		.expect("PENDING_SIGN_DURATION env var could not be parsed to u32");
-
 	StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -121,11 +117,19 @@ pub fn get_environment() -> StateChainEnvironment {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	}
 }
+
+/// The reputation penalty and suspension duration for each offence.
+const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
+	(Offence::ParticipateKeygenFailed, (15, u32::MAX)),
+	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::InvalidTransactionAuthored, (15, 0)),
+	(Offence::TransactionFailedOnTransmission, (15, 0)),
+];
 
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
@@ -141,6 +145,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary =
 		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -148,9 +153,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -172,14 +175,13 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
-						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -210,6 +212,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let bashful_sr25519 =
 		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -217,9 +220,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -247,14 +248,13 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				],
 				1,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
-						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -311,6 +311,7 @@ fn chainflip_three_node_testnet_config_from_env(
 	let snow_white =
 		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -318,9 +319,7 @@ fn chainflip_three_node_testnet_config_from_env(
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = environment;
 	Ok(ChainSpec::from_genesis(
 		name,
@@ -372,14 +371,13 @@ fn chainflip_three_node_testnet_config_from_env(
 				],
 				2,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
-						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -417,6 +415,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	let snow_white =
 		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	let StateChainEnvironment {
+		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
 		ethereum_chain_id,
@@ -424,9 +423,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		ethereum_deployment_block,
 		genesis_stake_amount,
 		eth_block_safety_margin,
-		pending_sign_duration,
 		max_ceremony_stage_duration,
-		max_extrinsic_retry_attempts,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -500,14 +497,13 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				],
 				3,
 				EnvironmentConfig {
+					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
-						pending_sign_duration,
 						max_ceremony_stage_duration,
-						max_extrinsic_retry_attempts,
 					},
 				},
 				eth_init_agg_key,
@@ -529,14 +525,14 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 }
 
 /// Configure initial storage state for FRAME modules.
-/// 150 validator limit
+/// 150 authority limit
 #[allow(clippy::too_many_arguments)]
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	genesis_stakers: Vec<AccountId>,
-	min_validators: u32,
+	min_authorities: u32,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
@@ -568,19 +564,22 @@ fn testnet_genesis(
 			minimum_stake: MIN_STAKE,
 			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 		},
-		auction: AuctionConfig { validator_size_range: (min_validators, MAX_VALIDATORS) },
+		auction: AuctionConfig { authority_set_size_range: (min_authorities, MAX_AUTHORITIES) },
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
-		reputation: ReputationConfig { accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS) },
+		reputation: ReputationConfig {
+			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+			penalties: PENALTIES.to_vec(),
+		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),
 			deployment_block: ethereum_deployment_block,
 		},
 		emissions: EmissionsConfig {
-			validator_emission_inflation: VALIDATOR_EMISSION_INFLATION_BPS,
-			backup_validator_emission_inflation: BACKUP_VALIDATOR_EMISSION_INFLATION_BPS,
+			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 		},
 	}
 }

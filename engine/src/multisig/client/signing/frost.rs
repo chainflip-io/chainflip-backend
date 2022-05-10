@@ -4,11 +4,12 @@
 //! centralised signature aggregator and don't have a preprocessing stage.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     convert::TryInto,
     fmt::Display,
 };
 
+use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
 use cf_chains::eth::AggKey;
@@ -38,9 +39,9 @@ pub struct SecretNoncePair {
 impl SecretNoncePair {
     /// Generate a random pair of nonces (in a Box,
     /// to avoid them being copied on move)
-    pub fn sample_random(mut rng: &mut Rng) -> Box<Self> {
-        let d = Scalar::random(&mut rng);
-        let e = Scalar::random(&mut rng);
+    pub fn sample_random(rng: &mut Rng) -> Box<Self> {
+        let d = Scalar::random(rng);
+        let e = Scalar::random(rng);
 
         let d_pub = Point::from_scalar(&d);
         let e_pub = Point::from_scalar(&e);
@@ -105,8 +106,8 @@ impl Display for SigningData {
 /// Combine individual commitments into group (schnorr) commitment.
 /// See "Signing Protocol" in Section 5.2 (page 14).
 fn gen_group_commitment(
-    signing_commitments: &HashMap<usize, SigningCommitment>,
-    bindings: &HashMap<usize, Scalar>,
+    signing_commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    bindings: &BTreeMap<AuthorityCount, Scalar>,
 ) -> Point {
     signing_commitments
         .iter()
@@ -120,8 +121,8 @@ fn gen_group_commitment(
 /// Generate a lagrange coefficient for party `signer_index`
 /// according to Section 4 (page 9)
 pub fn get_lagrange_coeff(
-    signer_index: usize,
-    all_signer_indices: &BTreeSet<usize>,
+    signer_index: AuthorityCount,
+    all_signer_indices: &BTreeSet<AuthorityCount>,
 ) -> anyhow::Result<Scalar> {
     use anyhow::Context;
 
@@ -132,8 +133,9 @@ pub fn get_lagrange_coeff(
         if *j == signer_index {
             continue;
         }
-        let j: Scalar = Scalar::from_usize(*j);
-        let signer_index: Scalar = Scalar::from_usize(signer_index);
+        let j: usize = (*j).try_into().expect("too many signers");
+        let j: Scalar = Scalar::from_usize(j);
+        let signer_index: Scalar = Scalar::from_usize(signer_index as usize);
         num = &num * &j;
         den = den * (j - signer_index);
     }
@@ -148,10 +150,10 @@ pub fn get_lagrange_coeff(
 
 /// Generate a "binding value" for party `index`. See "Signing Protocol" in Section 5.2 (page 14)
 fn gen_rho_i(
-    index: usize,
+    index: AuthorityCount,
     msg: &[u8],
-    signing_commitments: &HashMap<usize, SigningCommitment>,
-    all_idxs: &BTreeSet<usize>,
+    signing_commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    all_idxs: &BTreeSet<AuthorityCount>,
 ) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"I");
@@ -179,9 +181,9 @@ type SigningResponse = LocalSig3;
 /// Generate binding values for each party given their previously broadcast commitments
 fn generate_bindings(
     msg: &[u8],
-    commitments: &HashMap<usize, SigningCommitment>,
-    all_idxs: &BTreeSet<usize>,
-) -> HashMap<usize, Scalar> {
+    commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    all_idxs: &BTreeSet<AuthorityCount>,
+) -> BTreeMap<AuthorityCount, Scalar> {
     all_idxs
         .iter()
         .map(|idx| (*idx, gen_rho_i(*idx, msg, commitments, all_idxs)))
@@ -193,9 +195,9 @@ pub fn generate_local_sig(
     msg: &[u8],
     key: &KeyShare,
     nonces: &SecretNoncePair,
-    commitments: &HashMap<usize, SigningCommitment>,
-    own_idx: usize,
-    all_idxs: &BTreeSet<usize>,
+    commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    own_idx: AuthorityCount,
+    all_idxs: &BTreeSet<AuthorityCount>,
 ) -> SigningResponse {
     let bindings = generate_bindings(msg, commitments, all_idxs);
 
@@ -252,12 +254,12 @@ fn is_party_response_valid(
 /// return the misbehaving parties.
 pub fn aggregate_signature(
     msg: &[u8],
-    signer_idxs: &BTreeSet<usize>,
+    signer_idxs: &BTreeSet<AuthorityCount>,
     agg_pubkey: Point,
-    pubkeys: &HashMap<usize, Point>,
-    commitments: &HashMap<usize, SigningCommitment>,
-    responses: &HashMap<usize, SigningResponse>,
-) -> Result<SchnorrSignature, Vec<usize>> {
+    pubkeys: &BTreeMap<AuthorityCount, Point>,
+    commitments: &BTreeMap<AuthorityCount, SigningCommitment>,
+    responses: &BTreeMap<AuthorityCount, SigningResponse>,
+) -> Result<SchnorrSignature, BTreeSet<AuthorityCount>> {
     let bindings = generate_bindings(msg, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -268,29 +270,29 @@ pub fn aggregate_signature(
         msg,
     );
 
-    let mut invalid_idxs = vec![];
+    let invalid_idxs: BTreeSet<AuthorityCount> = signer_idxs
+        .iter()
+        .copied()
+        .filter(|signer_idx| {
+            let rho_i = &bindings[signer_idx];
+            let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
 
-    for signer_idx in signer_idxs {
-        let rho_i = &bindings[signer_idx];
-        let lambda_i = get_lagrange_coeff(*signer_idx, signer_idxs).unwrap();
+            let commitment = &commitments[signer_idx];
+            let commitment_i = commitment.d + (commitment.e * rho_i);
 
-        let commitment = &commitments[signer_idx];
-        let commitment_i = commitment.d + (commitment.e * rho_i);
+            let y_i = pubkeys[signer_idx];
 
-        let y_i = pubkeys[signer_idx];
+            let response = &responses[signer_idx];
 
-        let response = &responses[signer_idx];
-
-        if !is_party_response_valid(
-            &y_i,
-            &lambda_i,
-            &commitment_i,
-            &challenge,
-            &response.response,
-        ) {
-            invalid_idxs.push(*signer_idx);
-        }
-    }
+            !is_party_response_valid(
+                &y_i,
+                &lambda_i,
+                &commitment_i,
+                &challenge,
+                &response.response,
+            )
+        })
+        .collect();
 
     if invalid_idxs.is_empty() {
         // Response shares/shards are additive, so we simply need to

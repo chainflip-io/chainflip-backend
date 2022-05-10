@@ -1,11 +1,29 @@
-use crate::migrations::v1::v0_types::{VaultRotationStatusV0, VaultV0};
+use crate::*;
 
-use super::*;
 use frame_support::{storage::migration::*, StorageHasher};
 #[cfg(feature = "try-runtime")]
 use frame_support::{traits::OnRuntimeUpgradeHelpersExt, Hashable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::convert::{TryFrom, TryInto};
+use v0_types::{VaultRotationStatusV0, VaultV0};
+
+pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
+
+impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		migrate_storage::<T, I>()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		pre_migration_checks::<T, I>()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		post_migration_checks::<T, I>()
+	}
+}
 
 const PALLET_NAME_V0: &[u8; 6] = b"Vaults";
 
@@ -52,16 +70,18 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 		}
 	}
 
-	// The Nonce value needs to be moved from a double map to simple map.
-	take_storage_item::<_, <T::Chain as ChainAbi>::Nonce, Blake2_128Concat>(
+	// The Ethereum ChainNonces value has been migrated to a single global nonce in the environment
+	// pallet.
+	let nonce = take_storage_item::<_, u64, Blake2_128Concat>(
 		PALLET_NAME_V1,
 		b"ChainNonces",
 		ChainId::Ethereum,
 	)
-	.map(ChainNonce::<T, I>::put)
 	.unwrap_or_else(|| {
-		log::info!("🏯 No nonce value to migrate.");
+		log::warn!("🏯 No nonce value to migrate.");
+		0
 	});
+	put_storage_value(b"Environment", b"GlobalSignatureNonce", b"", nonce);
 
 	// If possible we should avoid upgrading during a rotation, but just in case...
 	if let Some(status_v0) = take_storage_item::<_, VaultRotationStatusV0<T, I>, Blake2_128Concat>(
@@ -90,14 +110,11 @@ pub fn migrate_storage<T: Config<I>, I: 'static>() -> frame_support::weights::We
 		log::info!("🏯 No pending vault rotations to migrate.");
 	}
 
-	releases::V1.put::<Pallet<T, I>>();
 	0
 }
 
 #[cfg(feature = "try-runtime")]
 pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static str> {
-	ensure!(StorageVersion::get::<Pallet<T, I>>() == releases::V0, "Expected storage version V0.");
-
 	ensure!(
 		have_storage_value(
 			PALLET_NAME_V0,
@@ -129,7 +146,6 @@ pub fn pre_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static s
 
 #[cfg(feature = "try-runtime")]
 pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static str> {
-	ensure!(StorageVersion::get::<Pallet<T, I>>() == releases::V1, "Expected storage version V1.");
 	ensure!(
 		Vaults::<T, I>::contains_key(CurrentEpochIndex::<T>::get()),
 		"💥 No vault for current epoch!"
@@ -156,14 +172,23 @@ pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static 
 }
 
 mod v0_types {
+
+	use cf_traits::AuthorityCount;
+
 	use super::*;
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+	pub struct BlockHeightWindowV0 {
+		pub from: u64,
+		pub to: Option<u64>,
+	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 	pub struct VaultV0<T: Config<I>, I: 'static = ()> {
 		/// The vault's public key.
 		pub public_key: Vec<u8>,
 		/// The active window for this vault
-		pub active_window: BlockHeightWindow,
+		pub active_window: BlockHeightWindowV0,
 		/// Marker.
 		_phantom_data: PhantomData<(T, I)>,
 	}
@@ -177,7 +202,7 @@ mod v0_types {
 					.public_key
 					.try_into()
 					.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")?,
-				active_window: old.active_window,
+				active_from_block: old.active_window.from.into(),
 			})
 		}
 	}
@@ -205,7 +230,7 @@ mod v0_types {
 
 		fn try_from(old: KeygenResponseStatusV0<T, I>) -> Result<Self, Self::Error> {
 			Ok(Self {
-				candidate_count: old.candidate_count,
+				candidate_count: old.candidate_count as AuthorityCount,
 				remaining_candidates: old.remaining_candidates,
 				success_votes: old
 					.success_votes
@@ -213,10 +238,14 @@ mod v0_types {
 					.map(|(key, votes)| {
 						key.try_into()
 							.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")
-							.map(|key| (key, votes))
+							.map(|key| (key, votes as AuthorityCount))
 					})
 					.collect::<Result<_, _>>()?,
-				blame_votes: old.blame_votes,
+				blame_votes: old
+					.blame_votes
+					.into_iter()
+					.map(|(key, votes)| (key, votes as AuthorityCount))
+					.collect(),
 			})
 		}
 	}

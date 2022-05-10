@@ -3,7 +3,7 @@ name = 'pallet-cf-witnesser'
 version = '0.1.0'
 authors = ['Chainflip <https://chainflip.io>']
 description = 'FRAME pallet for chainflip witnessing.'
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = 'TBC'
 publish = false
@@ -13,6 +13,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend/pallets/'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+hex = { version = "0.4", default-features = false }
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
 pallet-cf-validator = { path = '../cf-validator', default-features = false }
@@ -33,12 +34,12 @@ version = '2.3.1'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.scale-info]
 default-features = false
@@ -48,29 +49,32 @@ version = '1.0'
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 # Dev dependencies
+[dev-dependencies]
+cf-test-utilities = { path = '../../test-utilities', default-features = false }
+
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dev-dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [features]
 default = ['std']
@@ -90,4 +94,4 @@ runtime-benchmarks = [
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime'] 
+try-runtime = ['frame-support/try-runtime']

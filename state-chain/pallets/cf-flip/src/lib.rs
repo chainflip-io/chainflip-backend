@@ -152,7 +152,7 @@ pub mod pallet {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Set the slashing rate
-			<SlashingRate<T>>::set(slashing_rate);
+			SlashingRate::<T>::set(slashing_rate);
 			Ok(().into())
 		}
 	}
@@ -174,6 +174,7 @@ pub mod pallet {
 		fn build(&self) {
 			TotalIssuance::<T>::set(self.total_issuance);
 			OffchainFunds::<T>::set(self.total_issuance);
+			SlashingRate::<T>::set(Default::default());
 		}
 	}
 }
@@ -181,12 +182,12 @@ pub mod pallet {
 /// All balance information for a Flip account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct FlipAccount<Amount> {
-	/// Amount that has been staked and is considered as a bid in the validator auction. Includes
+	/// Amount that has been staked and is considered as a bid in the auction. Includes
 	/// any bonded and vesting funds. Excludes any funds in the process of being claimed.
 	stake: Amount,
 
-	/// Amount that is bonded due to validator status and cannot be withdrawn.
-	validator_bond: Amount,
+	/// Amount that is bonded and cannot be withdrawn.
+	bond: Amount,
 }
 
 impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
@@ -197,12 +198,12 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 
 	/// Excludes the bond.
 	pub fn liquid(&self) -> Balance {
-		self.stake.saturating_sub(self.validator_bond)
+		self.stake.saturating_sub(self.bond)
 	}
 
-	// The current validator bond
+	// The current bond
 	pub fn bond(&self) -> Balance {
-		self.validator_bond
+		self.bond
 	}
 }
 
@@ -235,15 +236,6 @@ impl<T: Config> Pallet<T> {
 	/// Amount of funds allocated to a [Reserve].
 	pub fn reserved_balance(reserve_id: ReserveId) -> T::Balance {
 		Reserve::<T>::get(reserve_id)
-	}
-
-	/// Sets the validator bond for an account.
-	pub fn set_validator_bond(account_id: &T::AccountId, amount: T::Balance) {
-		Account::<T>::mutate_exists(account_id, |maybe_account| {
-			if let Some(account) = maybe_account.as_mut() {
-				account.validator_bond = amount
-			}
-		})
 	}
 
 	/// Slashable funds for an account.
@@ -392,8 +384,13 @@ impl<T: Config> Bonding for Bonder<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount) {
-		Pallet::<T>::set_validator_bond(validator, bond);
+	// Inline set_bond
+	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount) {
+		Account::<T>::mutate_exists(authority, |maybe_account| {
+			if let Some(account) = maybe_account.as_mut() {
+				account.bond = bond
+			}
+		})
 	}
 }
 
@@ -489,11 +486,11 @@ where
 	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Get the slashing rate
 		let slashing_rate: T::Balance = SlashingRate::<T>::get();
-		// Get the MBA aka the bond
-		let bond = Account::<T>::get(account_id).validator_bond;
+		// Get the MAB aka the bond
+		let bond = Account::<T>::get(account_id).bond;
 		// Get blocks_offline as Balance
 		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
-		// slash per day = n % of MBA
+		// slash per day = n % of MAB
 		let slash_per_day = (bond / T::Balance::from(100_u32)).saturating_mul(slashing_rate);
 		// Burn per block
 		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();

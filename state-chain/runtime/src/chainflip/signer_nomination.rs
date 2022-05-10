@@ -1,9 +1,10 @@
-use crate::{Online, Reputation, Runtime, System, Validator};
-use cf_traits::{Chainflip, EpochInfo, IsOnline};
-use frame_support::Hashable;
+use crate::{Runtime, Validator};
+use cf_traits::{Chainflip, EpochIndex, EpochInfo};
+use frame_support::{traits::Get, Hashable};
 use nanorand::{Rng, WyRand};
-use sp_runtime::traits::BlockNumberProvider;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+
+use super::{ExclusionSetFor, SigningOffences};
 
 /// Tries to select `n` items randomly from the provided Vec.
 ///
@@ -40,14 +41,13 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 	u64::from_be_bytes(bytes)
 }
 
-fn online_validators() -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	let block_number = <System as BlockNumberProvider>::current_block_number();
-	<Validator as EpochInfo>::current_validators()
-		.iter()
-		.filter(|validator_id| {
-			!Reputation::is_suspended_at(block_number, validator_id) &&
-				Online::is_online(validator_id)
-		})
+fn eligible_authorities() -> Vec<<Runtime as Chainflip>::ValidatorId> {
+	let exluded_from_signing = ExclusionSetFor::<SigningOffences>::get();
+
+	<Validator as EpochInfo>::current_authorities()
+		.into_iter()
+		.collect::<BTreeSet<_>>()
+		.difference(&exluded_from_signing)
 		.cloned()
 		.collect()
 }
@@ -59,14 +59,19 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId> {
-		select_one(seed_from_hashable(seed), online_validators())
+		select_one(seed_from_hashable(seed), eligible_authorities())
 	}
 
-	fn threshold_nomination_with_seed<H: Hashable>(seed: H) -> Option<Vec<Self::SignerId>> {
+	fn threshold_nomination_with_seed<H: Hashable>(
+		seed: H,
+		epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
 		try_select_random_subset(
 			seed_from_hashable(seed),
-			<Validator as EpochInfo>::consensus_threshold() as usize,
-			online_validators(),
+			cf_utilities::success_threshold_from_share_count(
+				<Validator as EpochInfo>::authority_count_at_epoch(epoch_index).unwrap_or_default(),
+			) as usize,
+			eligible_authorities(),
 		)
 	}
 }
@@ -77,17 +82,17 @@ mod tests {
 
 	use super::*;
 
-	/// Generates a set of validators with the SignerId = index + 1
-	fn validator_set(len: usize) -> Vec<u64> {
+	/// Generates a set of authorities with the SignerId = index + 1
+	fn authority_set(len: usize) -> Vec<u64> {
 		(0..len as u64).collect::<Vec<_>>()
 	}
 
 	#[test]
 	fn test_select_one() {
-		// Expect a validator in a set of 150 validators.
-		let a = select_one(seed_from_hashable(String::from("seed")), validator_set(150)).unwrap();
+		// Expect an authority in a set of 150 authorities.
+		let a = select_one(seed_from_hashable(String::from("seed")), authority_set(150)).unwrap();
 		// Expect a different value for different seed (collision is unlikely).
-		let b = select_one(seed_from_hashable(String::from("seedy")), validator_set(150)).unwrap();
+		let b = select_one(seed_from_hashable(String::from("seedy")), authority_set(150)).unwrap();
 		assert_ne!(a, b);
 		// If an empty set is provided, the result is `None`
 		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), vec![],).is_none());

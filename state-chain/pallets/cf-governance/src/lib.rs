@@ -17,6 +17,14 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+mod old_storage {
+	frame_support::generate_storage_alias!(Governance, ProposalCount => Value<u32>);
+
+	pub fn take_old_id() -> Option<u32> {
+		ProposalCount::take()
+	}
+}
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -91,7 +99,7 @@ pub mod pallet {
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
-	/// Count how many proposals have ever been submitted
+	/// Number of proposals that have been submitted
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_id_counter)]
 	pub(super) type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
@@ -102,7 +110,7 @@ pub mod pallet {
 	pub(super) type ExecutionPipeline<T> =
 		StorageValue<_, Vec<(OpaqueCall, ProposalId)>, ValueQuery>;
 
-	/// Time in seconds after a proposal expires
+	/// Time in seconds until a proposal expires
 	#[pallet::storage]
 	#[pallet::getter(fn expiry_span)]
 	pub(super) type ExpiryTime<T> = StorageValue<_, Timestamp, ValueQuery>;
@@ -122,6 +130,13 @@ pub mod pallet {
 			// Execute all proposals which reached threshold in the last block
 			let execution_weight = Self::execute_proposals();
 			active_proposal_weight + execution_weight
+		}
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if let Some(old) = crate::old_storage::take_old_id() {
+				ProposalIdCounter::<T>::put(old);
+			}
+			0
 		}
 	}
 

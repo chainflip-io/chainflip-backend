@@ -1,19 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(assert_matches)]
-#![feature(array_map)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
+use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::{Offence, OffenceReporter},
-	AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex,
-	EpochTransitionHandler, KeyProvider, NonceProvider, SuccessOrFailure, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
+	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
@@ -53,6 +52,7 @@ pub type CeremonyId = u64;
 pub type KeygenOutcomeFor<T, I = ()> =
 	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
+pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
 pub type TransactionHashFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionHash;
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
@@ -61,19 +61,19 @@ pub type ThresholdSignatureFor<T, I = ()> =
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
-	candidate_count: u32,
+	candidate_count: AuthorityCount,
 	/// The candidates that have yet to reply.
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
-	success_votes: BTreeMap<AggKeyFor<T, I>, u32>,
-	/// A map of the number of blame votes that each validator has received.
-	blame_votes: BTreeMap<T::ValidatorId, u32>,
+	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
+	/// A map of the number of blame votes that keygen participant has received.
+	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
 }
 
 impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
-			candidate_count: candidates.len() as u32,
+			candidate_count: candidates.len() as AuthorityCount,
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
@@ -83,12 +83,12 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	/// The success threshold is the smallest number of respondents able to reach consensus.
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
-	fn success_threshold(&self) -> u32 {
+	fn success_threshold(&self) -> AuthorityCount {
 		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
 	/// The blame threshold is the number of blame votes that result in punishment.
-	fn blame_threshold(&self) -> u32 {
+	fn blame_threshold(&self) -> AuthorityCount {
 		self.success_threshold()
 	}
 
@@ -125,55 +125,13 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	/// How many candidates are we still awaiting a response from?
-	fn remaining_candidate_count(&self) -> u32 {
-		self.remaining_candidates.len() as u32
+	fn remaining_candidate_count(&self) -> AuthorityCount {
+		self.remaining_candidates.len() as AuthorityCount
 	}
 
 	/// How many responses have we received so far?
-	fn response_count(&self) -> u32 {
+	fn response_count(&self) -> AuthorityCount {
 		self.candidate_count.saturating_sub(self.remaining_candidate_count())
-	}
-
-	/// Returns `Some(key)` *iff any* key has at least `self.success_threshold()` number of votes,
-	/// otherwise returns `None`.
-	fn success_consensus(&self) -> Option<AggKeyFor<T, I>> {
-		for key in SuccessVoters::<T, I>::iter_keys() {
-			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
-				self.success_threshold() as usize
-			{
-				return Some(key)
-			}
-		}
-		None
-	}
-
-	/// Returns `Some(blamed_nodes)` *iff* at least `self.success_threshold()` number of nodes voted
-	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
-	/// votes.
-	///
-	/// If less than `self.success_threshold()` voted for failure, returns `None`.
-	fn failure_consensus(&self) -> Option<BTreeSet<T::ValidatorId>> {
-		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
-			self.success_threshold() as usize
-		{
-			return None
-		}
-
-		Some(
-			self.blame_votes
-				.iter()
-				.filter_map(
-					|(id, vote_count)| {
-						if *vote_count >= self.blame_threshold() {
-							Some(id)
-						} else {
-							None
-						}
-					},
-				)
-				.cloned()
-				.collect(),
-		)
 	}
 
 	/// Resolves the keygen outcome as follows:
@@ -225,16 +183,48 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	/// Determines the keygen outcome based on threshold consensus.
+	/// - If less than `self.success_threshold()` voted for failure or success returns `None`.
+	/// - Returns `Some(KeygenOutcomeSuccess(key))` *iff any* key has at least
+	///   `self.success_threshold()` number of
+	/// votes.
+	/// - Returns `Some(KeygenOutcomeFailur(blamed_nodes))` *iff* at least
+	///   `self.success_threshold()` number of nodes voted
+	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
+	/// votes.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
 		if self.response_count() < self.success_threshold() {
 			return None
 		}
 
-		self.success_consensus()
-			// If it's a success, return success.
-			.map(KeygenOutcome::Success)
-			// Otherwise check if we have consensus on failure.
-			.or_else(|| self.failure_consensus().map(KeygenOutcome::Failure))
+		for key in SuccessVoters::<T, I>::iter_keys() {
+			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
+				self.success_threshold() as usize
+			{
+				return Some(KeygenOutcome::Success(key))
+			}
+		}
+
+		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
+			self.success_threshold() as usize
+		{
+			return None
+		}
+
+		Some(KeygenOutcome::Failure(
+			self.blame_votes
+				.iter()
+				.filter_map(
+					|(id, vote_count)| {
+						if *vote_count >= self.blame_threshold() {
+							Some(id)
+						} else {
+							None
+						}
+					},
+				)
+				.cloned()
+				.collect(),
+		))
 	}
 }
 
@@ -256,30 +246,24 @@ impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
 	}
 }
 
-/// The bounds within which a public key for a vault should be used for witnessing.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct BlockHeightWindow {
-	pub from: u64,
-	pub to: Option<u64>,
-}
-
 /// A single vault.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct Vault<T: ChainCrypto> {
+pub struct Vault<T: ChainAbi> {
 	/// The vault's public key.
 	pub public_key: T::AggKey,
-	/// The active window for this vault
-	pub active_window: BlockHeightWindow,
+	/// The first active block for this vault
+	pub active_from_block: T::ChainBlockNumber,
 }
 
-pub mod releases {
-	use frame_support::traits::StorageVersion;
-
-	// Genesis version
-	pub const V0: StorageVersion = StorageVersion::new(0);
-	// Version 1 - Makes the pallet instantiable.
-	pub const V1: StorageVersion = StorageVersion::new(1);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	/// Failing a keygen ceremony carries its own consequences.
+	ParticipateKeygenFailed,
+	/// In addition, failing keygen is considered a regular signing offence.
+	SigningOffence,
 }
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -287,7 +271,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::storage_version(releases::V1)]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -296,7 +280,10 @@ pub mod pallet {
 		/// The event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The chain that managed by this vault must implement the api types.
+		/// Offences supported in this runtime.
+		type Offence: From<PalletOffence>;
+
+		/// The chain that is managed by this vault must implement the api types.
 		type Chain: ChainAbi;
 
 		/// The supported api calls for the chain.
@@ -305,11 +292,20 @@ pub mod pallet {
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
 
-		/// For reporting misbehaving validators.
-		type OffenceReporter: OffenceReporter<ValidatorId = Self::ValidatorId>;
+		/// For reporting misbehaviour
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = Self::ValidatorId,
+			Offence = Self::Offence,
+		>;
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+
+		/// Something that can provide the key manager address and chain id.
+		type EthEnvironmentProvider: EthEnvironmentProvider;
+
+		// Something that can give us the next nonce.
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -351,6 +347,7 @@ pub mod pallet {
 				};
 
 				if resolve {
+					let candidate_count = response_status.candidate_count;
 					match response_status.resolve_keygen_outcome() {
 						KeygenOutcome::Success(new_public_key) => {
 							weight += T::WeightInfo::on_initialize_success();
@@ -358,7 +355,17 @@ pub mod pallet {
 						},
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-							Self::on_keygen_failure(keygen_ceremony_id, offenders);
+							let offenders = if (offenders.len() as AuthorityCount) <
+								utilities::success_threshold_from_share_count(candidate_count)
+							{
+								offenders
+							} else {
+								BTreeSet::default()
+							};
+							Self::on_keygen_failure(
+								keygen_ceremony_id,
+								&offenders.into_iter().collect::<Vec<_>>(),
+							);
 						},
 					}
 					KeygenResolutionPendingSince::<T, I>::kill();
@@ -368,18 +375,18 @@ pub mod pallet {
 			weight
 		}
 
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migrations::migrate_storage::<T, I>()
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::pre_migration_checks::<T, I>()
+			migrations::PalletMigration::<T, I>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::post_migration_checks::<T, I>()
+			migrations::PalletMigration::<T, I>::post_upgrade()
 		}
 	}
 
@@ -407,12 +414,6 @@ pub mod pallet {
 	pub type FailureVoters<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
-	/// Threshold key nonces for this chain.
-	#[pallet::storage]
-	#[pallet::getter(fn chain_nonce)]
-	pub(super) type ChainNonce<T, I = ()> =
-		StorageValue<_, <<T as Config<I>>::Chain as ChainAbi>::Nonce, ValueQuery>;
-
 	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_resolution_pending_since)]
@@ -432,9 +433,9 @@ pub mod pallet {
 		VaultsRotated,
 		/// The new public key witnessed externally was not the expected one \[key\]
 		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
-		/// A validator has reported that keygen was successful \[validator_id\]
+		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
-		/// A validator has reported that keygen has failed \[validator_id\]
+		/// A keygen participant has reported that keygen has failed \[validator_id\]
 		KeygenFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
 		KeygenSuccess(CeremonyId),
@@ -448,21 +449,19 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid ceremony id
 		InvalidCeremonyId,
-		/// We have an empty validator set
-		EmptyValidatorSet,
+		/// We have an empty authority set
+		EmptyAuthoritySet,
 		/// The rotation has not been confirmed
 		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
 		NoActiveRotation,
-		/// The specified chain is not supported.
-		UnsupportedChain,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
 		/// The generated key is not a valid public key.
 		InvalidPublicKey,
 		/// A rotation for the requested ChainId is already underway.
 		DuplicateRotationRequest,
-		/// A validator sent a response for a ceremony in which they weren't involved, or to which
+		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
 	}
@@ -542,7 +541,6 @@ pub mod pallet {
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [UnsupportedChain](Error::UnsupportedChain)
 		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
@@ -552,10 +550,10 @@ pub mod pallet {
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
-			block_number: u64,
+			block_number: ChainBlockNumberFor<T, I>,
 			tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
 			let rotation =
 				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
@@ -577,16 +575,6 @@ pub mod pallet {
 				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
 			}
 
-			// We update the current epoch with an active window for the outgoers
-			Vaults::<T, I>::try_mutate_exists(CurrentEpochIndex::<T>::get(), |maybe_vault| {
-				if let Some(vault) = maybe_vault.as_mut() {
-					vault.active_window.to = Some(block_number);
-					Ok(())
-				} else {
-					Err(Error::<T, I>::UnsupportedChain)
-				}
-			})?;
-
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
 			// For the new epoch we create a new vault with the new public key and its active
@@ -595,10 +583,8 @@ pub mod pallet {
 				CurrentEpochIndex::<T>::get().saturating_add(1),
 				Vault {
 					public_key: new_public_key,
-					active_window: BlockHeightWindow {
-						from: block_number.saturating_add(1),
-						to: None,
-					},
+					active_from_block: block_number
+						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 				},
 			);
 
@@ -609,24 +595,24 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		/// The provided Vec must be convertible to the chain's AggKey.
 		///
 		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
 		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
 		pub vault_key: Vec<u8>,
-		pub deployment_block: u64,
+		pub deployment_block: ChainBlockNumberFor<T, I>,
 	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { vault_key: Default::default(), deployment_block: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
 			use sp_std::convert::TryFrom;
 
@@ -637,31 +623,18 @@ pub mod pallet {
 
 			Vaults::<T, I>::insert(
 				CurrentEpochIndex::<T>::get(),
-				Vault {
-					public_key,
-					active_window: BlockHeightWindow { from: self.deployment_block, to: None },
-				},
+				Vault { public_key, active_from_block: self.deployment_block },
 			);
 		}
 	}
 }
 
-impl<T: Config<I>, I: 'static> NonceProvider<T::Chain> for Pallet<T, I> {
-	fn next_nonce() -> <T::Chain as ChainAbi>::Nonce {
-		ChainNonce::<T, I>::mutate(|nonce| {
-			*nonce += One::one();
-			*nonce
-		})
-	}
-}
-
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	// Called once there's consensus between the authorities that the keygen was successful
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
-		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
-
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-				<Self as NonceProvider<_>>::next_nonce(),
+				<T::ReplayProtectionProvider>::replay_protection(),
 				new_public_key,
 			),
 		);
@@ -669,19 +642,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 			new_public_key,
 		});
+		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 	}
 
-	fn on_keygen_failure(
-		ceremony_id: CeremonyId,
-		offenders: impl IntoIterator<Item = T::ValidatorId>,
-	) {
-		Self::deposit_event(Event::KeygenFailure(ceremony_id));
-
-		for offender in offenders {
-			T::OffenceReporter::report(Offence::ParticipateKeygenFailed, &offender);
-		}
-
+	// Called once there's consensus between the authorities that the keygen was unsuccessful
+	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
+		// TODO: We should combine this reporting to include both, so we only send a
+		// single: partipate keygen failure report, and the report handles both
+		// cases.
+		T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
+		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 	}
 
 	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {
@@ -697,7 +669,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
 		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
+		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyAuthoritySet);
 		ensure!(
 			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
 			Error::<T, I>::DuplicateRotationRequest
@@ -752,8 +724,9 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 	type ValidatorId = <T as Chainflip>::ValidatorId;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], _new_validators: &[Self::ValidatorId]) {
+	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
+		T::OffenceReporter::forgive_all(PalletOffence::ParticipateKeygenFailed);
 	}
 }
 

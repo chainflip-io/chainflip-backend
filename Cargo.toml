@@ -16,7 +16,6 @@ members = [
   'state-chain/pallets/cf-reputation',
   'state-chain/pallets/cf-broadcast',
   'state-chain/pallets/cf-witnesser',
-  'state-chain/pallets/cf-witnesser-api',
   'state-chain/pallets/cf-governance',
   'state-chain/pallets/cf-online',
   'state-chain/pallets/cf-environment',
@@ -24,6 +23,7 @@ members = [
   'state-chain/runtime-benchmark-utilities',
   'state-chain/runtime-upgrade-utilities',
   'state-chain/runtime-utilities',
+  'state-chain/test-utilities',
   'state-chain/runtime-utilities/macros',
   'state-chain/runtime',
   'state-chain/traits',
@@ -31,4 +31,5 @@ members = [
   'engine/cli',
   'engine/insert-genesis-keyshare',
   'utilities',
+  'state-chain/custom-rpc',
 ]

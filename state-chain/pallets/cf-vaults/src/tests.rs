@@ -1,8 +1,9 @@
 use crate::{
-	mock::*, BlockHeightWindow, CeremonyId, Error, Event as PalletEvent, FailureVoters,
-	KeygenOutcome, KeygenResolutionPendingSince, PendingVaultRotation, SuccessVoters, Vault,
+	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenOutcome,
+	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
 	VaultRotationStatus, Vaults,
 };
+use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
 	SuccessOrFailure, VaultRotator,
@@ -10,17 +11,14 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
-fn last_event() -> Event {
-	frame_system::Pallet::<MockRuntime>::events()
-		.pop()
-		.expect("Event expected")
-		.event
-}
-
 macro_rules! assert_last_event {
 	($pat:pat) => {
-		let event = last_event();
-		assert!(matches!(last_event(), Event::VaultsPallet($pat)), "Unexpected event {:?}", event);
+		let event = last_event::<MockRuntime>();
+		assert!(
+			matches!(last_event::<MockRuntime>(), Event::VaultsPallet($pat)),
+			"Unexpected event {:?}",
+			event
+		);
 	};
 }
 
@@ -35,7 +33,7 @@ fn no_candidates_is_noop_and_error() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]),
-			Error::<MockRuntime, _>::EmptyValidatorSet
+			Error::<MockRuntime, _>::EmptyAuthoritySet
 		);
 	});
 }
@@ -51,7 +49,7 @@ fn keygen_request_emitted() {
 		);
 		// Check the event emitted
 		assert_eq!(
-			last_event(),
+			last_event::<MockRuntime>(),
 			PalletEvent::<MockRuntime, _>::KeygenRequest(
 				current_ceremony_id(),
 				ALL_CANDIDATES.to_vec(),
@@ -80,10 +78,10 @@ fn keygen_success() {
 
 		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
 
-		assert_matches!(
+		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
-		);
+		));
 	});
 }
 
@@ -97,10 +95,10 @@ fn keygen_failure() {
 		let ceremony_id = current_ceremony_id();
 
 		// The ceremony failed.
-		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES.to_vec());
+		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES);
 
 		// KeygenAborted event emitted.
-		assert_eq!(last_event(), PalletEvent::KeygenFailure(ceremony_id).into());
+		assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
 		// Outcome is ready.
 		assert_eq!(
@@ -108,8 +106,14 @@ fn keygen_failure() {
 			AsyncResult::Ready(SuccessOrFailure::Failure)
 		);
 
-		// Bad validators have been reported.
-		assert_eq!(MockOffenceReporter::get_reported(), BAD_CANDIDATES);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::ParticipateKeygenFailed,
+			BAD_CANDIDATES.iter().cloned(),
+		);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::SigningOffence,
+			BAD_CANDIDATES.iter().cloned(),
+		);
 	});
 }
 
@@ -259,10 +263,10 @@ fn keygen_report_success() {
 			AsyncResult::Pending
 		);
 
-		assert_matches!(
+		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
-		);
+		));
 
 		assert_last_event!(crate::Event::KeygenSuccess(..));
 
@@ -399,7 +403,8 @@ fn keygen_report_failure() {
 			AsyncResult::Ready(SuccessOrFailure::Failure)
 		);
 
-		assert_eq!(MockOffenceReporter::get_reported(), vec![CHARLIE]);
+		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![CHARLIE]);
+		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![CHARLIE]);
 
 		assert_last_event!(crate::Event::KeygenFailure(..));
 
@@ -432,8 +437,9 @@ fn test_grace_period() {
 		VaultsPallet::on_initialize(26);
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
-		// All non-responding candidates should have been reported.
-		assert_eq!(MockOffenceReporter::get_reported(), vec![BOB, CHARLIE]);
+		// Too many candidates failed to report, so we report nobody.
+		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![]);
+		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![]);
 	});
 }
 
@@ -478,34 +484,28 @@ fn vault_key_rotated() {
 		// We have yet to move to the new epoch
 		let current_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index();
 
-		let Vault { public_key, active_window } =
+		let Vault { public_key, active_from_block } =
 			Vaults::<MockRuntime, _>::get(current_epoch).expect("Ethereum Vault should exist");
-
 		assert_eq!(
 			public_key, GENESIS_AGG_PUB_KEY,
 			"we should have the old agg key in the genesis vault"
 		);
-
 		assert_eq!(
-			active_window,
-			BlockHeightWindow { from: 0, to: Some(ROTATION_BLOCK_NUMBER) },
-			"we should have the block height set for the genesis or current epoch"
+			active_from_block, 0,
+			"we should have set the from block for the genesis or current epoch"
 		);
 
 		// The next epoch
 		let next_epoch = current_epoch + 1;
-
-		let Vault { public_key, active_window } = Vaults::<MockRuntime, _>::get(next_epoch)
+		let Vault { public_key, active_from_block } = Vaults::<MockRuntime, _>::get(next_epoch)
 			.expect("Ethereum Vault should exist in the next epoch");
-
 		assert_eq!(
 			public_key, NEW_AGG_PUB_KEY,
 			"we should have the new public key in the new vault for the next epoch"
 		);
-
 		assert_eq!(
-			active_window,
-			BlockHeightWindow { from: ROTATION_BLOCK_NUMBER.saturating_add(1), to: None },
+			active_from_block,
+			ROTATION_BLOCK_NUMBER.saturating_add(1),
 			"we should have set the starting point for the new vault's active window as the next
 			after the reported block number"
 		);

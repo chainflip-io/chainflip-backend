@@ -23,13 +23,13 @@ This crate provides a `VersionedMigration` type that can be used to structure su
     ]
     ```
 
-2. Add a migrations module and pallet `StorageVersion` if you haven't done so already:
+2. Add a migrations module and pallet `StorageVersion`  to the pallet's `lib.rs` file if you haven't done so already:
 
     ```rust
-    mod migrations;
+    mod migrations; // <--- We will create this module file next
 
-    // This import is required if not already present.
-    use frame_support::traits::OnRuntimeUpgrade;
+    // These imports are required if not already present.
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
 
     // Bump this if already present.
     pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
@@ -56,7 +56,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
     use cf_runtime_upgrade_utilities::VersionedMigration;
 
     pub type PalletMigration<T> =
-        (VersionedMigration<crate::Pallet<T>, my_migration::Migration, 0, 1>,);
+        (VersionedMigration<crate::Pallet<T>, my_migration::Migration<T>, 0, 1>,);
     ```
 
 4. Now create `migrations/my_migration.rs` with an implemtation of `OnRuntimeUpgrade`:
@@ -68,7 +68,6 @@ This crate provides a `VersionedMigration` type that can be used to structure su
     /// My first migration.
     pub struct Migration<T: Config>(PhantomData<T>);
 
-    
     impl<T: Config> OnRuntimeUpgrade for Migration<T> {
         fn on_runtime_upgrade() -> frame_support::weights::Weight {
             todo!()

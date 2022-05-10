@@ -1,10 +1,15 @@
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, AttemptCount, Instance1, SignerNomination};
+use crate::{
+	self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence, SignerNomination,
+};
 use cf_chains::mocks::{MockApiCall, MockEthereum, MockTransactionBuilder};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, threshold_signer::MockThresholdSigner},
-	Chainflip,
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
+		threshold_signer::MockThresholdSigner,
+	},
+	Chainflip, EpochIndex,
 };
 use frame_support::parameter_types;
 use sp_core::H256;
@@ -63,15 +68,15 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 }
 
-cf_traits::impl_mock_offence_reporting!(u64);
-
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockNominator;
@@ -84,7 +89,10 @@ impl SignerNomination for MockNominator {
 		NOMINATION.with(|cell| *cell.borrow())
 	}
 
-	fn threshold_nomination_with_seed<S>(_seed: S) -> Option<Vec<Self::SignerId>> {
+	fn threshold_nomination_with_seed<S>(
+		_seed: S,
+		_epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
 		Some(vec![RANDOM_NOMINEE])
 	}
 }
@@ -99,9 +107,13 @@ parameter_types! {
 	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
+pub type MockOffenceReporter =
+	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
+	type Offence = PalletOffence;
 	type TargetChain = MockEthereum;
 	type ApiCall = MockApiCall<MockEthereum>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;

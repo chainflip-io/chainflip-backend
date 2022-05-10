@@ -27,6 +27,7 @@ cargo-base-job: &cargo-base-job
   environment:
     SCCACHE_CACHE_SIZE: 14G
   resource_class: xlarge
+
 ######################## /Anchors ########################
 
 ######################## Config ########################
@@ -38,16 +39,20 @@ executors:
         auth: *dockerconfig
   rust-base:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2021-11-16
         auth: *dockerconfig
   rust-base-ci:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2021-11-16
         auth: *dockerconfig
         user: ci
   rust-poetry:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
+        auth: *dockerconfig
+  java-executor:
+    docker:
+      - image: cimg/openjdk:17.0.2
         auth: *dockerconfig
 orbs:
   docker: circleci/docker@1.7.0
@@ -118,29 +123,6 @@ commands:
 
 ######################## Workflows ########################
 workflows:
-  create-rust-base:
-    jobs:
-      - docker-build:
-          name: build-rust-base
-          extra_build_args: "--build-arg NIGHTLY=nightly-2021-07-05"
-          image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
-          dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
-      - docker-build:
-          name: build-rust-poetry
-          image: chainflip-io/chainflip-backend/rust-poetry
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
-          tag: latest
-          dockerfile: Dockerfile.rust-poetry
-          context:
-            - ghcr-credentials
-          <<: *only_main_branches
-
-  # We run docs separately to the main flow, so it doesn't slow the process down.
   chainflip-backend-non-blocking:
     when:
       not: <<pipeline.parameters.build_testnet>>
@@ -185,15 +167,24 @@ workflows:
             - ghcr-credentials
             - github-credentials
             - discord-webhooks
-      - test-single-node:
+      - git-clone-docgen-repo:
           requires:
             - cargo-build-and-test
+          context:
+            - github-credentials
+      - test-single-node:
+          requires:
+            - git-clone-docgen-repo
           context:
             - ghcr-credentials
             - do-credentials
             - infura-endpoints
             - aws-credentials
-
+      - docgen-store-artifacts:
+          requires:
+            - test-single-node
+          context:
+            - do-credentials
       # The follow jobs run on all successful merges to protected branches.
       # Protected branches include main, develop, release/*, epic/*
       - docker-build:
@@ -429,7 +420,7 @@ jobs:
       - run: sccache --show-stats
       # TODO: remove the global ignores (#1254)
       - run: |
-          cargo clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
+          sh clippy.sh
           sccache --show-stats
 
   cargo-doc:
@@ -496,6 +487,23 @@ jobs:
           root: ./
           paths:
             - cluster
+
+  git-clone-docgen-repo:
+    resource_class: small
+    docker:
+      - image: "cimg/node:17.8.0"
+    steps:
+      - gh/setup
+      - gh/clone:
+          repo: https://github.com/chainflip-io/chainflip-docgen.git
+          dir: chainflip-docgen
+      - run: |
+          cd chainflip-docgen
+          npm install
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - chainflip-docgen/*
 
   run-integration-tests:
     resource_class: xlarge
@@ -567,8 +575,37 @@ jobs:
             curl
             --url 'http://localhost:5555/health'
             -vv
+      - run:
+          name: Generate State Chain docs
+          command: |
+            export WS_ENDPOINT="ws://localhost:9944"
+            export TYPES_FILE="../state-chain/types.json"
+            cd ./chainflip-docgen/
+            npm run generate
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - chainflip-docgen/*
       - store_artifacts:
           path: target/release
+
+  docgen-store-artifacts:
+    executor: java-executor
+    steps:
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Install graphviz
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y graphviz
+      - run:
+          name: Generate class diagram
+          command: |
+            cd ./chainflip-docgen/
+            java -jar plantuml.jar generated/class.puml
+      - store_artifacts:
+          path: ./chainflip-docgen/generated
 
   create-testnet:
     parameters:

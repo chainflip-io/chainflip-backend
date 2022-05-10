@@ -17,7 +17,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use bitvec::prelude::*;
-use cf_traits::{EpochIndex, EpochInfo, EpochTransitionHandler};
+use cf_traits::{EpochIndex, EpochInfo};
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{
@@ -69,9 +69,15 @@ pub mod pallet {
 	}
 
 	/// A hash to index the call by.
-	pub(super) type CallHash = [u8; 32];
+	#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+	pub struct CallHash(pub [u8; 32]);
+	impl sp_std::fmt::Debug for CallHash {
+		fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+			write!(f, "0x{}", hex::encode(self.0))
+		}
+	}
 
-	/// Convenience alias for a collection of bits representing the votes of each validator.
+	/// Convenience alias for a collection of bits representing the votes of each authority.
 	pub(super) type VoteMask = BitSlice<Msb0, u8>;
 
 	/// The type used for tallying votes.
@@ -80,25 +86,14 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator.
+	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each authority.
 	#[pallet::storage]
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
 
-	/// Defines a unique index for each validator for every epoch.
+	/// A flag indicating that the CallHash has been executed.
 	#[pallet::storage]
-	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		EpochIndex,
-		Blake2_128Concat,
-		<T as frame_system::Config>::AccountId,
-		u16,
-	>;
-
-	/// Track epochs and their associated validator count
-	#[pallet::storage]
-	pub type EpochValidatorCount<T: Config> = StorageMap<_, Twox64Concat, EpochIndex, u32>;
+	pub type CallHashExecuted<T: Config> = StorageMap<_, Identity, CallHash, ()>;
 
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
@@ -120,17 +115,20 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// CRITICAL: The validator index is out of bounds. This should never happen.
-		ValidatorIndexOutOfBounds,
+		/// CRITICAL: The authority index is out of bounds. This should never happen.
+		AuthorityIndexOutOfBounds,
 
-		/// Witness is not a validator.
+		/// Witness is not an authority.
 		UnauthorisedWitness,
 
-		/// A witness vote was cast twice by the same validator.
+		/// A witness vote was cast twice by the same authority.
 		DuplicateWitness,
 
 		/// The epoch has expired
 		EpochExpired,
+
+		/// Invalid epoch
+		InvalidEpoch,
 	}
 
 	#[pallet::call]
@@ -150,7 +148,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
-		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
+		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness(
@@ -178,17 +176,16 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
-		/// - [ValidatorIndexOutOfBounds](Error::ValidatorIndexOutOfBounds)
+		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
 		pub fn witness_at_epoch(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 			epoch_index: EpochIndex,
-			block_number: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::do_witness_at_epoch(who, *call, epoch_index, block_number)
+			Self::do_witness_at_epoch(who, *call, epoch_index)
 		}
 	}
 
@@ -199,7 +196,8 @@ pub mod pallet {
 	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 	pub enum RawOrigin {
-		WitnessThreshold,
+		HistoricalActiveEpochWitnessThreshold,
+		CurrentEpochWitnessThreshold,
 	}
 }
 
@@ -210,13 +208,13 @@ impl<T: Config> Pallet<T> {
 	/// high level:
 	///
 	/// 1. Ensure we are not submitting a witness for an expired epoch
-	/// 2. Look up the account id in the list of validators.
+	/// 2. Look up the account id in the list of authorities.
 	/// 3. Get the list of votes for the epoch and call, or an empty list if this is the first vote.
 	/// 4. Add the account's vote to the list.
 	/// 5. Check the number of votes against the required threshold.
 	/// 6. If the threshold is exceeded, execute the voted-on `call`.
 	///
-	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator
+	/// This implementation uses a bitmask whereby each index to the bitmask represents an authority
 	/// account ID in the current Epoch.
 	///
 	/// **Note:**
@@ -226,29 +224,28 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 		epoch_index: EpochIndex,
-		_block_number: T::BlockNumber,
 	) -> DispatchResultWithPostInfo {
 		// Ensure the epoch has not yet expired
 		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
-		// Look up the signer in the list of validators
-		let index = ValidatorIndex::<T>::get(&epoch_index, &who)
+		// The number of authorities for the epoch
+		// This value is updated alongside ValidatorIndex, so if we have a authority, we have an
+		// authority count.
+		let num_authorities =
+			T::EpochInfo::authority_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
+
+		let index = T::EpochInfo::authority_index(epoch_index, &who.clone().into())
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
-		// The number of validators for the epoch
-		// This value is updated alongside ValidatorIndex, so if we have a validator, we have a
-		// validator count.
-		let num_validators = EpochValidatorCount::<T>::get(epoch_index).unwrap_or_default();
-
 		// Register the vote
-		let call_hash = Hashable::blake2_256(&call);
+		let call_hash = CallHash(Hashable::blake2_256(&call));
 		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
 			&epoch_index,
 			&call_hash,
 			|buffer| {
 				// If there is no storage item, create an empty one.
 				if buffer.is_none() {
-					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators as usize);
+					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_authorities as usize);
 					*buffer = Some(empty_mask.into_vec())
 				}
 
@@ -258,12 +255,12 @@ impl<T: Config> Pallet<T> {
 
 				// Convert to an addressable bitmask
 				let bits = VoteMask::from_slice_mut(bytes)
-				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
+				.expect("Only panics if the slice size exceeds the max; The number of authorities should never exceed this;");
 
 				let mut vote_count = bits.count_ones();
 
 				// Get a reference to the existing vote.
-				let mut vote = bits.get_mut(index).ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+				let mut vote = bits.get_mut(index).ok_or(Error::<T>::AuthorityIndexOutOfBounds)?;
 
 				// Return an error if already voted, otherwise set the indexed bit to `true` to
 				// indicate a vote.
@@ -285,13 +282,23 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == success_threshold_from_share_count(num_validators) as usize {
+		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
+			CallHashExecuted::<T>::get(&call_hash).is_none()
+		{
 			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
-			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
+			let result = call.dispatch_bypass_filter(
+				(if epoch_index == T::EpochInfo::epoch_index() {
+					RawOrigin::CurrentEpochWitnessThreshold
+				} else {
+					RawOrigin::HistoricalActiveEpochWitnessThreshold
+				})
+				.into(),
+			);
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
+			CallHashExecuted::<T>::insert(&call_hash, ());
 		}
 
 		Ok(().into())
@@ -301,7 +308,7 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index(), Default::default())
+		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index())
 	}
 }
 
@@ -318,9 +325,8 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 		who: Self::AccountId,
 		call: Self::Call,
 		epoch: EpochIndex,
-		block_number: Self::BlockNumber,
 	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who.into(), call, epoch, block_number)
+		Self::do_witness_at_epoch(who.into(), call, epoch)
 	}
 }
 
@@ -343,8 +349,9 @@ where
 
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		match o.into() {
-			Ok(o) => match o {
-				RawOrigin::WitnessThreshold => Ok(()),
+			Ok(raw_origin) => match raw_origin {
+				RawOrigin::HistoricalActiveEpochWitnessThreshold |
+				RawOrigin::CurrentEpochWitnessThreshold => Ok(()),
 			},
 			Err(o) => Err(o),
 		}
@@ -352,23 +359,39 @@ where
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
-		RawOrigin::WitnessThreshold.into()
+		RawOrigin::HistoricalActiveEpochWitnessThreshold.into()
 	}
 }
 
-impl<T: Config> EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
+/// Simple struct on which to implement EnsureOrigin for our pallet's custom origin type.
+///
+/// # Example:
+///
+/// ```ignore
+/// if let Ok(()) = EnsureWitnessedAtCurrentEpoch::ensure_origin(origin) {
+///     log::debug!("This extrinsic was called as a result of witness threshold consensus.");
+/// }
+/// ```
+pub struct EnsureWitnessedAtCurrentEpoch;
 
-	fn on_new_epoch(_old_validators: &[Self::ValidatorId], new_validators: &[Self::ValidatorId]) {
-		// Update the list of validators in the witnesser.
-		let epoch = T::EpochInfo::epoch_index();
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessedAtCurrentEpoch
+where
+	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
+{
+	type Success = ();
 
-		let mut total = 0;
-		for (i, v) in new_validators.iter().enumerate() {
-			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
-			total += 1;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		match o.into() {
+			Ok(raw_origin) => match raw_origin {
+				RawOrigin::CurrentEpochWitnessThreshold => Ok(()),
+				_ => Err(raw_origin.into()),
+			},
+			Err(o) => Err(o),
 		}
+	}
 
-		EpochValidatorCount::<T>::insert(epoch, total);
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		RawOrigin::CurrentEpochWitnessThreshold.into()
 	}
 }

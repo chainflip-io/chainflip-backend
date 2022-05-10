@@ -17,8 +17,8 @@ use codec::{Decode, Encode};
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
-	offence_reporting::{Offence, OffenceReporter},
-	AsyncResult, CeremonyIdProvider, Chainflip, KeyProvider, SignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
+	KeyProvider, SignerNomination,
 };
 use frame_support::{
 	ensure,
@@ -32,7 +32,6 @@ use sp_runtime::{
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	convert::TryInto,
 	iter::FromIterator,
 	marker::PhantomData,
 	prelude::*,
@@ -52,6 +51,11 @@ type AttemptCount = u32;
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum PalletOffence {
+	ParticipateSigningFailed,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -59,7 +63,6 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 		pallet_prelude::*,
-		storage::bounded_btree_set::BoundedBTreeSet,
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
 	};
@@ -68,11 +71,9 @@ pub mod pallet {
 	/// Metadata for a pending threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
-		/// Whether or not this request has been scheduled to be retried.
-		pub retry_scheduled: bool,
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
-		/// The number of blame votes (accusations) each validator has received.
+		/// The number of blame votes (accusations) each authority has received.
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
@@ -81,18 +82,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> CeremonyContext<T, I> {
-		/// Based on the current state of the ceremony, defines whether we have reached a point
-		/// where enough respondents have reported a failure of the ceremony such that we can
-		/// schedule a retry.
-		pub fn countdown_initiation_threshold_reached(&self) -> bool {
-			// The number of responses at which we start a timeout to allow other participants to
-			// respond.
-			let response_threshold = self.participant_count / 10 + 1;
-
-			self.remaining_respondents.len() <=
-				(self.participant_count - response_threshold) as usize
-		}
-
 		/// Based on the reported blame_counts, decide which nodes should be reported for failure.
 		///
 		/// We assume that at least 2/3 of participants need to blame a node for it to be reliable.
@@ -106,10 +95,10 @@ pub mod pallet {
 		/// **TODO:** See if there is a better / more scientific basis for the abovementioned
 		/// assumptions and thresholds. Also consider emergency rotations - we may not want this to
 		/// immediately trigger an ER. For instance, imagine a failed tx: if we retry we most likely
-		/// want to retry with the current validator set - however if we rotate, then the next
-		/// validator set will no longer be in control of the vault.
+		/// want to retry with the current authority set - however if we rotate, then the next
+		/// authority set will no longer be in control of the vault.
 		/// Similarly for vault rotations - we can't abort a rotation at the setAggKey stage: we
-		/// have to keep retrying with the current set of validators.
+		/// have to keep retrying with the current set of authorities.
 		pub fn offenders(&self) -> Vec<T::ValidatorId> {
 			// A threshold for number of blame 'accusations' that are required for someone to be
 			// punished.
@@ -146,6 +135,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// The top-level offence type must support this pallet's offence type.
+		type Offence: From<PalletOffence>;
+
 		/// The top-level origin type of the runtime.
 		type RuntimeOrigin: From<Origin<Self, I>>
 			+ IsType<<Self as frame_system::Config>::Origin>
@@ -166,7 +158,10 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 
 		/// For reporting bad actors.
-		type OffenceReporter: OffenceReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = <Self as Chainflip>::ValidatorId,
+			Offence = Self::Offence,
+		>;
 
 		/// CeremonyId source.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
@@ -187,11 +182,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	/// A counter to generate fresh ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn signing_ceremony_id_counter)]
-	pub type SigningCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// A counter to generate fresh request ids.
 	#[pallet::storage]
@@ -268,8 +258,6 @@ pub mod pallet {
 		/// The reporting party is not one of the signatories for this ceremony, or has already
 		/// responded.
 		InvalidRespondent,
-		/// Too many parties were reported as having failed in the threshold ceremony.
-		ExcessOffenders,
 		/// The request Id is stale or not yet valid.
 		InvalidRequestId,
 	}
@@ -285,9 +273,10 @@ pub mod pallet {
 				{
 					num_retries += 1;
 					// Report the offenders.
-					for offender in failed_ceremony_context.offenders() {
-						T::OffenceReporter::report(Offence::ParticipateSigningFailed, &offender);
-					}
+					T::OffenceReporter::report_many(
+						PalletOffence::ParticipateSigningFailed,
+						failed_ceremony_context.offenders().as_slice(),
+					);
 
 					// Clean up old ceremony and start a new one.
 					if let Some((request_id, attempt, payload)) =
@@ -409,8 +398,7 @@ pub mod pallet {
 		/// Report that a threshold signature ceremony has failed and incriminate the guilty
 		/// participants.
 		///
-		/// The `offenders` argument takes a [BoundedBTreeSet] where the set size is limited
-		/// to the current size of the threshold group.
+		/// The `offenders` argument takes a [BTreeSet]
 		///
 		/// ## Events
 		///
@@ -424,10 +412,7 @@ pub mod pallet {
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
 			id: CeremonyId,
-			offenders: BoundedBTreeSet<
-				<T as Chainflip>::ValidatorId,
-				cf_traits::CurrentThreshold<T>,
-			>,
+			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let reporter_id = ensure_signed(origin)?.into();
 
@@ -444,12 +429,6 @@ pub mod pallet {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
-						if !context.retry_scheduled &&
-							context.countdown_initiation_threshold_reached()
-						{
-							context.retry_scheduled = true;
-							Self::schedule_retry(id, T::ThresholdFailureTimeout::get());
-						}
 						if context.remaining_respondents.is_empty() {
 							// No more respondents waiting: we can retry on the next block.
 							Self::schedule_retry(id, 1u32.into());
@@ -483,11 +462,7 @@ pub mod pallet {
 			id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			Call::<T, I>::report_signature_failed(
-				id,
-				offenders.try_into().map_err(|_| Error::<T, I>::ExcessOffenders)?,
-			)
-			.dispatch_bypass_filter(origin)
+			Call::<T, I>::report_signature_failed(id, offenders).dispatch_bypass_filter(origin)
 		}
 	}
 }
@@ -500,8 +475,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		});
+
 		// Start a ceremony.
 		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
+
+		// Schedule an initial retry.
+		Self::schedule_retry(ceremony_id, T::ThresholdFailureTimeout::get());
 
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
 
@@ -524,14 +503,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let key_id = T::KeyProvider::current_key_id();
 
 		// Select nominees for threshold signature.
-		if let Some(nominees) =
-			T::SignerNomination::threshold_nomination_with_seed((ceremony_id, attempt))
-		{
+		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed(
+			(ceremony_id, attempt),
+			T::EpochInfo::epoch_index(),
+		) {
 			// Store the context.
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					retry_scheduled: false,
 					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
 					blame_counts: Default::default(),
 					participant_count: nominees.len() as u32,
@@ -551,7 +530,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					retry_scheduled: true,
 					remaining_respondents: Default::default(),
 					blame_counts: Default::default(),
 					participant_count: 0,

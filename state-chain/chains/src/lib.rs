@@ -1,10 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(array_map)] // stable as of rust 1.55
 
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
+use codec::FullCodec;
 use eth::SchnorrVerificationComponents;
-use frame_support::{pallet_prelude::Member, Parameter};
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::{
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	Parameter,
+};
+use sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	convert::{Into, TryFrom},
 	fmt::Debug,
@@ -18,7 +21,17 @@ pub mod benchmarking;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
-pub trait Chain: Member + Parameter {}
+pub trait Chain: Member + Parameter {
+	type ChainBlockNumber: FullCodec
+		+ Member
+		+ Parameter
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ Default
+		+ One
+		+ Saturating
+		+ From<u64>;
+}
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
@@ -41,7 +54,7 @@ pub trait ChainAbi: ChainCrypto {
 	type UnsignedTransaction: Member + Parameter + Default;
 	type SignedTransaction: Member + Parameter;
 	type SignerCredential: Member + Parameter;
-	type Nonce: Member + Parameter + AtLeast32BitUnsigned + Copy + Default;
+	type ReplayProtection: Member + Parameter + Default;
 	type ValidationError;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated
@@ -83,18 +96,26 @@ where
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(nonce: Abi::Nonce, new_key: <Abi as ChainCrypto>::AggKey) -> Self;
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		new_key: <Abi as ChainCrypto>::AggKey,
+	) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(nonce: Abi::Nonce, new_total_supply: u128, block_number: u64) -> Self;
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		new_total_supply: u128,
+		block_number: u64,
+		stake_manager_address: &[u8; 20],
+	) -> Self;
 }
 
 /// Constructs the `RegisterClaim` api call.
 pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		nonce: Abi::Nonce,
+		replay_protection: Abi::ReplayProtection,
 		node_id: &[u8; 32],
 		amount: u128,
 		address: &[u8; 20],
@@ -105,7 +126,7 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 }
 
 macro_rules! impl_chains {
-	( $( $chain:ident ),+ $(,)? ) => {
+	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; }, ),+ $(,)? ) => {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
@@ -113,13 +134,15 @@ macro_rules! impl_chains {
 			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
 			pub struct $chain;
 
-			impl Chain for $chain {}
+			impl Chain for $chain {
+				type ChainBlockNumber = $chain_block_number;
+			}
 		)+
 	};
 }
 
 impl_chains! {
-	Ethereum,
+	Ethereum { type ChainBlockNumber = u64; },
 }
 
 impl ChainCrypto for Ethereum {
@@ -143,11 +166,13 @@ impl ChainCrypto for Ethereum {
 pub mod mocks {
 	use sp_std::marker::PhantomData;
 
-	use crate::*;
+	use crate::{eth::api::EthereumReplayProtection, *};
 
 	// Chain implementation used for testing.
 	impl_chains! {
-		MockEthereum,
+		MockEthereum {
+			type ChainBlockNumber = u64;
+		},
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default)]
@@ -209,7 +234,7 @@ pub mod mocks {
 		type UnsignedTransaction = MockUnsignedTransaction;
 		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
 		type SignerCredential = Validity;
-		type Nonce = u32;
+		type ReplayProtection = EthereumReplayProtection;
 		type ValidationError = &'static str;
 
 		fn verify_signed_transaction(

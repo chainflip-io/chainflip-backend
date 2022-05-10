@@ -87,7 +87,7 @@ use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyShare {
     pub y: Point,
     pub x_i: Scalar,
@@ -100,8 +100,8 @@ pub type Rng = rand_legacy::rngs::StdRng;
 
 #[cfg(test)]
 impl Point {
-    pub fn random(mut rng: &mut Rng) -> Self {
-        Point::from_scalar(&Scalar::random(&mut rng))
+    pub fn random(rng: &mut Rng) -> Self {
+        Point::from_scalar(&Scalar::random(rng))
     }
 }
 
@@ -119,6 +119,10 @@ impl Point {
             .0
     }
 
+    pub fn is_point_at_infinity(&self) -> bool {
+        self.0.is_zero()
+    }
+
     pub fn as_bytes(&self) -> GenericArray<u8, <Secp256k1Point as ECPoint>::CompressedPointLength> {
         self.0.serialize_compressed()
     }
@@ -128,10 +132,9 @@ impl Scalar {
     pub fn random(mut rng: &mut Rng) -> Self {
         use curv::elliptic::curves::secp256_k1::SK;
 
-        let scalar = secp256k1::SecretKey::new(&mut rng);
-
-        let scalar = Secp256k1Scalar::from_underlying(Some(SK(scalar)));
-        Scalar(scalar)
+        Scalar(Secp256k1Scalar::from_underlying(Some(SK(
+            secp256k1::SecretKey::new(&mut rng),
+        ))))
     }
 
     pub fn zero() -> Self {

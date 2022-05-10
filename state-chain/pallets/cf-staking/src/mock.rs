@@ -1,6 +1,9 @@
 use crate as pallet_cf_staking;
-use cf_chains::{eth, ChainAbi, ChainCrypto, Ethereum};
-use cf_traits::{impl_mock_waived_fees, AsyncResult, ThresholdSigner, WaivedFees};
+use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
+	AuthorityCount, ThresholdSigner, WaivedFees,
+};
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
@@ -15,8 +18,11 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
-	Chainflip, NonceProvider,
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck,
+		eth_environment_provider::MockEthEnvironmentProvider, time_source,
+	},
+	Chainflip, ReplayProtectionProvider,
 };
 
 // Configure a mock runtime to test the pallet.
@@ -69,7 +75,9 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 parameter_types! {
@@ -101,14 +109,20 @@ impl pallet_cf_flip::Config for Test {
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call, u64);
-cf_traits::impl_mock_epoch_info!(AccountId, u128, u32);
+cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
-pub const NONCE: u64 = 42;
+pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
+pub const CHAIN_ID: u64 = 31337;
+pub const COUNTER: u64 = 42;
 
-impl NonceProvider<Ethereum> for Test {
-	fn next_nonce() -> <Ethereum as ChainAbi>::Nonce {
-		NONCE
+impl ReplayProtectionProvider<Ethereum> for Test {
+	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
+		EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: COUNTER,
+		}
 	}
 }
 
@@ -151,7 +165,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 // The dummy signature can't be Default - this would be interpreted as no signature.
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
-	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_addr: [0xcf; 20] };
+	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
@@ -160,16 +174,20 @@ impl pallet_cf_staking::Config for Test {
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
-	type NonceProvider = Self;
+	type ReplayProtectionProvider = Self;
 	type ThresholdSigner = MockThresholdSigner;
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = eth::api::EthereumApi;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
 pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
+// Used as genesis node for testing.
+pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
+
 pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -177,7 +195,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
 		staking: StakingConfig {
-			genesis_stakers: vec![],
+			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
 			minimum_stake: MIN_STAKE,
 			claim_ttl: Duration::from_secs(10),
 		},

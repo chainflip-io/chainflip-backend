@@ -5,8 +5,9 @@ use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
+		system_state_info::MockSystemStateInfo,
 	},
-	Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
+	AuthorityCount, Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
@@ -23,9 +24,9 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
-pub const MIN_VALIDATOR_SIZE: u32 = 1;
-pub const MAX_VALIDATOR_SIZE: u32 = 3;
-pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
+pub const MIN_AUTHORITY_SIZE: AuthorityCount = 1;
+pub const MAX_AUTHORITY_SIZE: AuthorityCount = 3;
+pub const BACKUP_NODE_RATIO: u32 = 3;
 pub const NUMBER_OF_BIDDERS: u32 = 9;
 pub const BIDDER_GROUP_A: u32 = 1;
 pub const BIDDER_GROUP_B: u32 = 2;
@@ -51,32 +52,10 @@ pub fn generate_bids(number_of_bids: u32, group: u32) {
 	});
 }
 
-pub fn set_bidders(bidders: Vec<(ValidatorId, Amount)>) {
-	BIDDER_SET.with(|cell| {
-		*cell.borrow_mut() = bidders;
-	});
-}
-
-pub fn run_complete_auction() -> AuctionResult<ValidatorId, Amount> {
-	let auction_result =
-		<AuctionPallet as Auctioneer>::resolve_auction().expect("the auction should run");
-
-	<AuctionPallet as Auctioneer>::update_validator_status(&auction_result.winners);
-
-	MockEpochInfo::set_bond(auction_result.minimum_active_bid);
-	MockEpochInfo::set_validators(auction_result.winners.clone());
-
-	auction_result
-}
-
-pub fn last_event() -> mock::Event {
-	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-}
-
 // The set we would expect
 pub fn expected_winning_set() -> (Vec<ValidatorId>, Amount) {
 	let mut bidders = MockBidderProvider::get_bidders();
-	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
+	bidders.truncate(MAX_AUTHORITY_SIZE as usize);
 	(bidders.iter().map(|(validator_id, _)| *validator_id).collect(), bidders.last().unwrap().1)
 }
 
@@ -122,9 +101,8 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
-	pub const BackupValidatorRatio: u32 = BACKUP_VALIDATOR_RATIO;
-	pub const PercentageOfBackupValidatorsInEmergency: u32 = 30;
+	pub const BackupValidatorRatio: u32 = BACKUP_NODE_RATIO;
+	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
 }
 
 pub struct MockEmergencyRotation;
@@ -144,7 +122,7 @@ impl EmergencyRotation for MockEmergencyRotation {
 impl_mock_online!(ValidatorId);
 
 pub struct MockQualifyValidator;
-impl QualifyValidator for MockQualifyValidator {
+impl QualifyNode for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
@@ -158,20 +136,21 @@ impl Chainflip for Test {
 	type Amount = Amount;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 impl Config for Test {
 	type Event = Event;
 	type BidderProvider = MockBidderProvider;
-	type MinValidators = MinValidators;
 	type ChainflipAccount = MockChainflipAccount;
-	type ActiveToBackupValidatorRatio = BackupValidatorRatio;
+	type AuthorityToBackupRatio = BackupValidatorRatio;
 	type KeygenExclusionSet = MockKeygenExclusion<Self>;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
-	type PercentageOfBackupValidatorsInEmergency = PercentageOfBackupValidatorsInEmergency;
-	type ValidatorQualification = MockQualifyValidator;
+	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
+	type AuctionQualification = MockQualifyValidator;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -197,7 +176,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		auction_pallet: AuctionPalletConfig {
-			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
+			authority_set_size_range: (MIN_AUTHORITY_SIZE, MAX_AUTHORITY_SIZE),
 		},
 	};
 

@@ -2,7 +2,7 @@
 name = 'state-chain-runtime'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false
@@ -13,7 +13,7 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [build-dependencies.substrate-wasm-builder]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies]
 # Required to get wasm to compile.
@@ -22,10 +22,12 @@ getrandom = { version = "0.2", features = ["js"], default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 nanorand = { version = '0.6', default-features = false, features = ['wyrand']}
+serde = { version = "1.0.126", optional = true, features = ['derive'] }
 
 # Chainflip local dependencies
 cf-traits = { path = "../traits", default-features = false }
 cf-chains = { path = "../chains", default-features = false }
+cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 cf-runtime-benchmark-utilities = { path = "../runtime-benchmark-utilities", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
@@ -33,7 +35,6 @@ pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = fal
 pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
 pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
 pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
-pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-features = false }
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
@@ -46,12 +47,12 @@ pallet-cf-environment = { path = "../pallets/cf-environment", default-features =
 [dependencies.pallet-authorship]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.pallet-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 features = ['historical']
 
 # Substrate dependencies
@@ -65,33 +66,33 @@ version = '2.3.1'
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-executive]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-system-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-system-rpc-runtime-api]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.hex-literal]
 optional = true
@@ -100,27 +101,27 @@ version = '0.3.1'
 [dependencies.pallet-aura]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.pallet-grandpa]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.pallet-randomness-collective-flip]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.pallet-timestamp]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.pallet-transaction-payment]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.scale-info]
 default-features = false
@@ -130,62 +131,62 @@ version = '1.0'
 [dependencies.sp-api]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-block-builder]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-consensus-aura]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 version = '0.10.0-dev'
 
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-inherents]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-offchain]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-transaction-pool]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-version]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-try-runtime]
 optional = true
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 
@@ -215,11 +216,13 @@ runtime-benchmarks = [
   'pallet-cf-emissions/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
+  'pallet-cf-environment/runtime-benchmarks',
 ]
 std = [
   'frame-try-runtime/std',
   'cf-traits/std',
   'cf-chains/std',
+  'cf-utilities/std',
   'cf-runtime-benchmark-utilities/std',
   'codec/std',
   'scale-info/std',
@@ -234,6 +237,7 @@ std = [
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment/std',
+  'serde',
   'sp-api/std',
   'sp-block-builder/std',
   'sp-consensus-aura/std',
@@ -252,7 +256,6 @@ std = [
   'pallet-cf-auction/std',
   'pallet-cf-emissions/std',
   'pallet-cf-reputation/std',
-  'pallet-cf-witnesser-api/std',
   'pallet-cf-governance/std',
   'pallet-cf-vaults/std',
   'pallet-cf-broadcast/std',
@@ -270,4 +273,5 @@ try-runtime = [
   "pallet-cf-reputation/try-runtime",
   "pallet-cf-online/try-runtime",
   "pallet-cf-emissions/try-runtime",
+  "pallet-cf-environment/try-runtime",
 ]

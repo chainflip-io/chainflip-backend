@@ -6,7 +6,7 @@
     "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
-  "ActiveValidatorRange": "(u32,u32)",
+  "AuthoritySetSizeRange": "(u16,u16)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
   "AggKey": {
@@ -36,12 +36,15 @@
   "BasisPoints": "u32",
   "Balance": "FlipBalance",
   "Bid": "(ValidatorId, Amount)",
-  "BlockHeightWindow": {
-    "from": "u64",
-    "to": "Option<u64>"
-  },
   "BlockNumber": "u32",
-  "BroadcastAttemptId": "u64",
+  "BroadcastAttempt": {
+    "broadcast_attempt_id": "BroadcastAttemptId",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
+  "BroadcastAttemptId": {
+    "broadcast_id": "BroadcastId",
+    "attempt_count": "AttemptCount"
+  },
   "BroadcastId": "u32",
   "BroadcastStage": {
     "_enum": [
@@ -51,6 +54,7 @@
   },
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
+  "ChainBlockNumber": "u64",
   "ChainflipAccountData": {
     "state": "ChainflipAccountState",
     "last_active_epoch": "Option<EpochIndex>"
@@ -72,15 +76,15 @@
   "Ed25519Signature": "[u8;64]",
   "EpochIndex": "u32",
   "EthereumAddress": "[u8;20]",
-  "EthTransactionHash": "[u8;32]",
-  "FailedBroadcastAttempt": {
-    "broadcast_id": "BroadcastId",
-    "attempt_count": "AttemptCount",
-    "unsigned_tx": "UnsignedTransactionFor"
+  "EthereumReplayProtection": {
+    "key_manager_address": "EthereumAddress",
+    "chain_id": "Uint",
+    "nonce": "Uint"
   },
+  "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
     "stake": "Amount",
-    "validator_bond": "Amount"
+    "authority_bond": "Amount"
   },
   "FlipBalance": "u128",
   "H256": "[u8; 32]",
@@ -108,8 +112,8 @@
   "KeygenResponseStatus": {
     "CandidateCount": "u32",
     "RemainingCandidates": "BTreeSet<ValidatorId>",
-    "SuccessVotes": "BTreeMap<AggKeyFor, u32>",
-    "BlameVotes": "BTreeMap<ValidatorId, u32>"
+    "SuccessVotes": "BTreeMap<AggKeyFor, u16>",
+    "BlameVotes": "BTreeMap<ValidatorId, u16>"
   },
   "KeyId": "Vec<u8>",
   "Keys": {
@@ -121,13 +125,15 @@
     "online": "u32",
     "offline": "u32"
   },
-  "Nonce": "u64",
+  "SignatureNonce": "u64",
   "Offence": {
     "_enum": [
       "ParticipateSigningFailed",
       "ParticipateKeygenFailed",
       "InvalidTransactionAuthored",
-      "TransactionFailedOnTransmission"
+      "TransactionFailedOnTransmission",
+      "MissedAuthorshipSlot",
+      "MissedHeartbeat"
     ]
   },
   "OnlineCredits": "BlockNumber",
@@ -139,6 +145,10 @@
     ]
   },
   "PayloadFor": "[u8; 32]",
+  "Penalty": {
+    "reputation": "ReputationPoints",
+    "suspension": "BlockNumber"
+  },
   "Percentage": "u8",
   "PercentageRange": {
     "top": "u8",
@@ -153,7 +163,7 @@
     "expiry": "Uint"
   },
   "RemainingBid": "(ValidatorId, Amount)",
-  "Reputation": {
+  "ReputationTracker": {
     "online_credits": "OnlineCredits",
     "reputation_points": "ReputationPoints"
   },
@@ -175,9 +185,10 @@
     }
   },
   "RotationStatusOf": "RotationStatus",
+  "RuntimeReputationTracker": "ReputationTracker",
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
-    "k_times_g_addr": "[u8; 20]"
+    "k_times_g_address": "[u8; 20]"
   },
   "SemVer": {
     "major": "u8",
@@ -188,10 +199,12 @@
   "SignatureFor": "SchnorrVerificationComponents",
   "SignerIdFor": "EthereumAddress",
   "SigData": {
+    "key_manager_address": "EthereumAddress",
+    "chain_id": "Uint",
     "msg_hash": "H256",
     "sig": "Uint",
     "nonce": "Uint",
-    "k_times_g_addr": "EthereumAddress"
+    "k_times_g_address": "EthereumAddress"
   },
   "SignedTransactionFor": "Vec<u8>",
   "StakeAttempt": "(EthereumAddress, Amount)",
@@ -201,11 +214,26 @@
       "Failure"
     ]
   },
+  "SystemState": {
+    "_enum": [
+      "Normal",
+      "Maintenance"
+    ]
+  },
   "ThresholdSignature": "ThresholdSignatureFor",
   "ThresholdSignatureFor": "SchnorrVerificationComponents",
   "Timestamp": "u64",
   "TransactionHash": "H256",
   "TransactionHashFor": "TransactionHash",
+  "TransactionSigningAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "unsigned_tx": "UnsignedTransactionFor"
+  },
+  "TransmissionAttempt": {
+    "broadcast_attempt": "BroadcastAttempt",
+    "signer": "ValidatorId",
+    "signed_tx": "SignedTransactionFor"
+  },
   "TransmissionFailure": {
     "_enum": [
       "TransactionRejected",
@@ -226,9 +254,8 @@
   "ValidatorId": "AccountId",
   "Vault": {
     "public_key": "AggKeyFor",
-    "active_window": "BlockHeightWindow"
+    "active_from_block": "u64"
   },
-  "ValidatorSize": "u32",
   "AwaitingKeygen": {
     "ceremony_id": "CeremonyId",
     "response_status": "KeygenResponseStatus"
@@ -243,7 +270,8 @@
     "_enum": {
       "AwaitingKeygen": "AwaitingKeygen",
       "AwaitingRotation": "AwaitingRotation",
-      "Complete": "Complete"
+      "Complete": "Complete",
+      "Failed": "()"
     }
   },
   "Version": "SemVer",

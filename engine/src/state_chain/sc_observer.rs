@@ -1,119 +1,100 @@
-use cf_chains::Ethereum;
-use cf_traits::{ChainflipAccountData, ChainflipAccountState};
-use futures::{Stream, StreamExt};
-use pallet_cf_broadcast::TransmissionFailure;
-use pallet_cf_vaults::BlockHeightWindow;
+use futures::{stream, Stream, StreamExt};
+use pallet_cf_validator::CeremonyId;
 use slog::o;
-use sp_core::H256;
+use sp_core::{Hasher, H256};
+use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    eth::{EthBroadcaster, EthRpcApi},
-    logging::{CEREMONY_ID_KEY, COMPONENT_KEY, LOG_ACCOUNT_STATE},
-    multisig::{
-        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigInstruction, MultisigOutcome,
-        SigningInfo, SigningOutcome,
-    },
+    eth::{EthBroadcaster, EthRpcApi, ObserveInstruction},
+    logging::COMPONENT_KEY,
+    multisig::{client::MultisigClientApi, KeyId, MessageHash},
     multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-async fn process_multisig_outcome<RpcClient>(
+async fn handle_keygen_request<MultisigClient, RpcClient>(
+    multisig_client: Arc<MultisigClient>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
-    multisig_outcome: MultisigOutcome,
-    logger: &slog::Logger,
+    ceremony_id: CeremonyId,
+    validator_candidates: Vec<AccountId32>,
+    logger: slog::Logger,
 ) where
-    RpcClient: StateChainRpcApi,
+    MultisigClient: MultisigClientApi + Send + Sync + 'static,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    match multisig_outcome {
-        MultisigOutcome::Signing(SigningOutcome { id, result }) => match result {
-            Ok(sig) => {
-                let _result = state_chain_client
-                    .submit_unsigned_extrinsic(
-                        pallet_cf_threshold_signature::Call::signature_success(id, sig.into()),
-                        logger,
-                    )
-                    .await;
-            }
-            Err((err, bad_account_ids)) => {
-                slog::error!(
-                    logger,
-                    "Signing ceremony failed with error: {:?}",
-                    err;
-                    CEREMONY_ID_KEY => id,
-                );
+    use pallet_cf_vaults::KeygenOutcome;
 
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
-                            id,
-                            bad_account_ids.into_iter().collect(),
-                        ),
-                        logger,
+    tokio::spawn(async move {
+        let keygen_outcome = multisig_client
+            .keygen(ceremony_id, validator_candidates.clone())
+            .await;
+
+        let keygen_outcome = match keygen_outcome {
+            Ok(public_key) => {
+                // Keygen verification: before the new key is returned to the SC,
+                // we first ensure that all parties can use it for signing
+
+                let public_key_bytes = public_key.serialize();
+
+                // We arbitrarily choose the data to sign over to be the hash of the generated pubkey
+                let data_to_sign = sp_core::hashing::blake2_256(&public_key_bytes);
+                match multisig_client
+                    .sign(
+                        ceremony_id,
+                        KeyId(public_key_bytes.to_vec()),
+                        validator_candidates,
+                        MessageHash(data_to_sign),
                     )
-                    .await;
+                    .await
+                {
+                    // Report keygen success if we are able to sign
+                    Ok(_signature) => KeygenOutcome::Success(
+                        cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
+                    ),
+                    // Report keygen failure if we failed to sign
+                    Err((bad_account_ids, _error)) => {
+                        KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                    }
+                }
             }
-        },
-        MultisigOutcome::Keygen(KeygenOutcome { id, result }) => match result {
-            Ok(pubkey) => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_vaults::Call::report_keygen_outcome(
-                            id,
-                            pallet_cf_vaults::KeygenOutcome::Success(
-                                cf_chains::eth::AggKey::from_pubkey_compressed(pubkey.serialize()),
-                            ),
-                        ),
-                        logger,
-                    )
-                    .await;
+            Err((bad_account_ids, _error)) => {
+                KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
             }
-            Err((err, bad_account_ids)) => {
-                slog::error!(
-                    logger,
-                    "Keygen ceremony failed with error: {:?}",
-                    err;
-                    CEREMONY_ID_KEY => id,
-                );
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_vaults::Call::report_keygen_outcome(
-                            id,
-                            pallet_cf_vaults::KeygenOutcome::Failure(BTreeSet::from_iter(
-                                bad_account_ids,
-                            )),
-                        ),
-                        logger,
-                    )
-                    .await;
-            }
-        },
-    };
+        };
+
+        let _result = state_chain_client
+            .submit_signed_extrinsic(
+                pallet_cf_vaults::Call::report_keygen_outcome(ceremony_id, keygen_outcome),
+                &logger,
+            )
+            .await;
+    });
 }
 
-pub async fn start<BlockStream, RpcClient, EthRpc>(
+pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster<EthRpc>,
-    multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
+    multisig_client: Arc<MultisigClient>,
     account_peer_mapping_change_sender: UnboundedSender<(
         AccountId,
         sp_core::ed25519::Public,
         AccountPeerMappingChange,
     )>,
-    mut multisig_outcome_receiver: UnboundedReceiver<MultisigOutcome>,
 
     // TODO: we should be able to factor this out into a single ETH window sender
-    sm_window_sender: UnboundedSender<BlockHeightWindow>,
-    km_window_sender: UnboundedSender<BlockHeightWindow>,
+    sm_instruction_sender: UnboundedSender<ObserveInstruction>,
+    km_instruction_sender: UnboundedSender<ObserveInstruction>,
     initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
-    RpcClient: StateChainRpcApi,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
     EthRpc: EthRpcApi,
+    MultisigClient: MultisigClientApi + Send + Sync + 'static,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
@@ -130,70 +111,79 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
         .await
         .expect("Should be able to submit first heartbeat");
 
-    async fn get_current_account_state<RpcClient: StateChainRpcApi>(
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
-        block_hash: H256,
-        logger: &slog::Logger,
-    ) -> (ChainflipAccountData, bool) {
-        let new_account_data = state_chain_client
-            .get_account_data(block_hash)
-            .await
-            .expect("Could not get account data");
-
-        let current_epoch = state_chain_client
-            .epoch_at_block(block_hash)
-            .await
-            .expect("Could not get current epoch");
-
-        let is_outgoing = if let Some(last_active_epoch) = new_account_data.last_active_epoch {
-            last_active_epoch + 1 == current_epoch
-        } else {
-            false
-        };
-
-        slog::debug!(logger, #LOG_ACCOUNT_STATE, "Account state: {:?}",  new_account_data.state;
-        "is_outgoing" => is_outgoing, "last_active_epoch" => new_account_data.last_active_epoch);
-
-        (new_account_data, is_outgoing)
-    }
-
-    async fn send_windows_to_witness_processes<RpcClient: StateChainRpcApi>(
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
-        block_hash: H256,
-        account_data: ChainflipAccountData,
-        sm_window_sender: &UnboundedSender<BlockHeightWindow>,
-        km_window_sender: &UnboundedSender<BlockHeightWindow>,
-    ) -> anyhow::Result<()> {
-        let eth_vault = state_chain_client
-            .get_vault::<Ethereum>(
-                block_hash,
-                account_data
-                    .last_active_epoch
-                    .expect("we are active or outgoing"),
-            )
-            .await?;
-        sm_window_sender
-            .send(eth_vault.active_window.clone())
+    let send_instruction = |observe_instruction: ObserveInstruction| {
+        km_instruction_sender
+            .send(observe_instruction.clone())
             .unwrap();
-        km_window_sender.send(eth_vault.active_window).unwrap();
-        Ok(())
+        sm_instruction_sender.send(observe_instruction).unwrap();
+    };
+
+    macro_rules! start_epoch_observation {
+        ($state_chain_client:ident, $block_hash:expr, $epoch:expr) => {
+            let block_hash = $block_hash;
+            let epoch = $epoch;
+
+            send_instruction(ObserveInstruction::Start(
+                $state_chain_client
+                    .get_storage_map::<pallet_cf_vaults::Vaults<
+                        state_chain_runtime::Runtime,
+                        state_chain_runtime::EthereumInstance,
+                    >>(block_hash, &epoch)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .active_from_block,
+                epoch,
+            ));
+        };
     }
 
-    // Initialise the account state
-    let (mut account_data, mut is_outgoing) =
-        get_current_account_state(state_chain_client.clone(), initial_block_hash, &logger).await;
+    macro_rules! try_end_previous_epoch_observation {
+        ($state_chain_client:ident, $block_hash:expr, $epoch:expr) => {{
+            let block_hash = $block_hash;
+            let epoch = $epoch;
 
-    if account_data.state == ChainflipAccountState::Validator || is_outgoing {
-        send_windows_to_witness_processes(
-            state_chain_client.clone(),
-            initial_block_hash,
-            account_data,
-            &sm_window_sender,
-            &km_window_sender,
-        )
-        .await
-        .expect("Failed to send windows to the witness processes");
+            if let Some(vault) = $state_chain_client
+                .get_storage_map::<pallet_cf_vaults::Vaults<
+                    state_chain_runtime::Runtime,
+                    state_chain_runtime::EthereumInstance,
+                >>(block_hash, &epoch)
+                .await
+                .unwrap()
+            {
+                send_instruction(ObserveInstruction::End(vault.active_from_block));
+                true
+            } else {
+                false
+            }
+        }};
     }
+
+    let historical_active_epochs = state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+        initial_block_hash,
+        &state_chain_client.our_account_id
+    ).await.unwrap();
+
+    assert!(historical_active_epochs.iter().is_sorted());
+
+    let mut active_in_current_epoch = stream::iter(historical_active_epochs.into_iter())
+        .fold(false, |acc, epoch| {
+            let state_chain_client = state_chain_client.clone();
+            async move {
+                start_epoch_observation!(state_chain_client, initial_block_hash, epoch);
+                if try_end_previous_epoch_observation!(
+                    state_chain_client,
+                    initial_block_hash,
+                    epoch + 1
+                ) {
+                    acc
+                } else {
+                    assert!(!acc);
+                    true
+                }
+            }
+        })
+        .await;
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     loop {
@@ -211,8 +201,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                     current_block_hash
                                 );
 
-                                let mut received_new_epoch = false;
-
                                 // Process this block's events
                                 match state_chain_client.get_events(current_block_hash).await {
                                     Ok(events) => {
@@ -222,9 +210,23 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
 
                                             match event {
                                                 state_chain_runtime::Event::Validator(
-                                                    pallet_cf_validator::Event::NewEpoch(_),
+                                                    pallet_cf_validator::Event::NewEpoch(new_epoch),
                                                 ) => {
-                                                    received_new_epoch = true;
+                                                    let current_block_hash = current_block_header.hash();
+
+                                                    if active_in_current_epoch {
+                                                        assert!(try_end_previous_epoch_observation!(state_chain_client, current_block_hash, new_epoch));
+                                                    }
+
+                                                    active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
+                                                        current_block_hash,
+                                                        &new_epoch,
+                                                        &state_chain_client.our_account_id
+                                                    ).await.unwrap().is_some();
+
+                                                    if active_in_current_epoch {
+                                                        start_epoch_observation!(state_chain_client, current_block_hash, new_epoch);
+                                                    }
                                                 }
                                                 state_chain_runtime::Event::Validator(
                                                     pallet_cf_validator::Event::PeerIdRegistered(
@@ -264,15 +266,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         ceremony_id,
                                                         validator_candidates,
                                                     ),
-                                                ) => {
-                                                    let gen_new_key_event = MultisigInstruction::Keygen(
-                                                        KeygenInfo::new(ceremony_id, validator_candidates),
-                                                    );
-
-                                                    multisig_instruction_sender
-                                                        .send(gen_new_key_event)
-                                                        .map_err(|_| "Receiver should exist")
-                                                        .unwrap();
+                                                ) if validator_candidates.contains(&state_chain_client.our_account_id) => {
+                                                    handle_keygen_request(multisig_client.clone(), state_chain_client.clone(), ceremony_id, validator_candidates, logger.clone()).await;
                                                 }
                                                 state_chain_runtime::Event::EthereumThresholdSigner(
                                                     pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
@@ -282,18 +277,32 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         payload,
                                                     ),
                                                 ) if validators.contains(&state_chain_client.our_account_id) => {
-                                                    let sign_tx = MultisigInstruction::Sign(SigningInfo::new(
-                                                        ceremony_id,
-                                                        KeyId(key_id),
-                                                        MessageHash(payload.to_fixed_bytes()),
-                                                        validators,
-                                                    ));
-
-                                                    // The below will be replaced with one shot channels
-                                                    multisig_instruction_sender
-                                                        .send(sign_tx)
-                                                        .map_err(|_| "Receiver should exist")
-                                                        .unwrap();
+                                                    let multisig_client = multisig_client.clone();
+                                                    let state_chain_client = state_chain_client.clone();
+                                                    let logger = logger.clone();
+                                                    tokio::spawn(async move {
+                                                        match multisig_client.sign(ceremony_id, KeyId(key_id), validators, MessageHash(payload.to_fixed_bytes())).await {
+                                                            Ok(signature) => {
+                                                                let _result = state_chain_client
+                                                                    .submit_unsigned_extrinsic(
+                                                                        pallet_cf_threshold_signature::Call::signature_success(ceremony_id, signature.into()),
+                                                                        &logger,
+                                                                    )
+                                                                    .await;
+                                                            }
+                                                            Err((bad_account_ids, _error)) => {
+                                                                let _result = state_chain_client
+                                                                    .submit_signed_extrinsic(
+                                                                        pallet_cf_threshold_signature::Call::report_signature_failed_unbounded(
+                                                                            ceremony_id,
+                                                                            BTreeSet::from_iter(bad_account_ids),
+                                                                        ),
+                                                                        &logger,
+                                                                    )
+                                                                    .await;
+                                                            }
+                                                        }
+                                                    });
                                                 }
                                                 state_chain_runtime::Event::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Event::TransactionSigningRequest(
@@ -343,7 +352,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                         signed_tx,
                                                     ),
                                                 ) => {
-                                                    let response_extrinsic = match eth_broadcaster
+                                                    let expected_broadcast_tx_hash = Keccak256::hash(&signed_tx[..]);
+                                                    match eth_broadcaster
                                                         .send(signed_tx)
                                                         .await
                                                     {
@@ -354,26 +364,17 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                                                 attempt_id,
                                                                 tx_hash
                                                             );
-                                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_success(
-                                                                attempt_id, tx_hash
-                                                            )
+                                                            assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
                                                         }
                                                         Err(e) => {
-                                                            slog::error!(
+                                                            slog::info!(
                                                                 logger,
                                                                 "TransmissionRequest attempt_id {} failed: {:?}",
                                                                 attempt_id,
                                                                 e
                                                             );
-                                                            // TODO: Fill in the transaction hash with the real one
-                                                            pallet_cf_witnesser_api::Call::witness_eth_transmission_failure(
-                                                                attempt_id, TransmissionFailure::TransactionRejected, Default::default()
-                                                            )
                                                         }
                                                     };
-                                                    let _result = state_chain_client
-                                                        .submit_signed_extrinsic(response_extrinsic, &logger)
-                                                        .await;
                                                 }
                                                 ignored_event => {
                                                     // ignore events we don't care about
@@ -396,37 +397,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                                         );
                                     }
                                 }
-
-                                // Backup and passive nodes need to update their state on every block (since it's possible to move
-                                // between Backup and Passive on every block), while Active nodes only need to update every new epoch.
-                                if received_new_epoch || matches!(
-                                    account_data.state,
-                                    ChainflipAccountState::Backup | ChainflipAccountState::Passive
-                                ) {
-                                    let (new_account_data, new_is_outgoing) =
-                                        get_current_account_state(state_chain_client.clone(), current_block_hash, &logger).await;
-                                    account_data = new_account_data;
-                                    is_outgoing = new_is_outgoing;
-
-                                }
-
-                                // New windows should be sent to outgoing validators (so they know when to finish) or to
-                                // new/existing validators (so they know when to start)
-                                // Note: nodes that were outgoing in the last epoch (active 2 epochs ago) have already
-                                // received their end window, so we don't need to send anything to them
-                                if received_new_epoch && (matches!(account_data.state, ChainflipAccountState::Validator) || is_outgoing) {
-                                    send_windows_to_witness_processes(
-                                        state_chain_client.clone(),
-                                        current_block_hash,
-                                        account_data,
-                                        &sm_window_sender,
-                                        &km_window_sender,
-                                    )
-                                    .await
-                                    .expect("Failed to send windows to the witness processes");
-                                }
-
-
 
                                 // All nodes must send a heartbeat regardless of their validator status (at least for now).
                                 // We send it in the middle of the online interval (so any node sync issues don't
@@ -456,17 +426,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc>(
                     }
                 }
             },
-            option_multisig_outcome = multisig_outcome_receiver.recv() => {
-                match option_multisig_outcome {
-                    Some(multisig_outcome) => {
-                        process_multisig_outcome(state_chain_client.clone(), multisig_outcome, &logger).await;
-                    },
-                    None => {
-                        slog::error!(logger, "Exiting as multisig_outcome channel ended");
-                        break
-                    }
-                }
-            }
         }
     }
 }

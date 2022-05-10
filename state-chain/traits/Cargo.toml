@@ -1,7 +1,7 @@
 [package]
 name = "cf-traits"
 version = "0.1.0"
-edition = "2018"
+edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
 description = "Common traits used in the Chainflip runtime"
 
@@ -10,7 +10,6 @@ log = { version = '0.4.14', default-features = false }
 
 # Internal
 cf-chains = { path ='../chains', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -27,39 +26,41 @@ version = '1.0'
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 optional = true
 
-[dev-dependencies.sp-io]
-default-features = false
+[dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
+
+[dev-dependencies.sp-io]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2021-09+1'
 
 [features]
 default = ['std']
 std = [
     'cf-chains/std',
-    'cf-utilities/std',
     'codec/std',
     'scale-info/std',
     'sp-std/std',

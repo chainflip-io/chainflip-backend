@@ -37,7 +37,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), version.clone())
 	verify {
 		let validator_id: ValidatorIdOf<T> = caller.into();
-		assert_eq!(Pallet::<T>::validator_cfe_version(validator_id), version)
+		assert_eq!(Pallet::<T>::node_cfe_version(validator_id), version)
 	}
 	// TODO: this benchmark is failing in in an test environment.
 	// Pretty sure the reason for this is that the account function

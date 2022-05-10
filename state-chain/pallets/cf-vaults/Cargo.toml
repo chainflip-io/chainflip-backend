@@ -2,7 +2,7 @@
 name = 'pallet-cf-vaults'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2018'
+edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false
@@ -15,6 +15,8 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 cf-chains = {path = '../../chains', default-features = false}
 cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false, features = ['derive'] }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+pallet-cf-validator = { path = '../cf-validator', default-features = false }
 cf-traits = {path = '../../traits', default-features = false}
 utilities = {path = '../../../utilities', default-features = false}
 
@@ -30,12 +32,12 @@ version = '2.3.1'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.scale-info]
 default-features = false
@@ -45,38 +47,40 @@ version = '1.0'
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 # Dev dependencies
 [dev-dependencies]
 hex = {version = "0.4", default-features = false}
+cf-test-utilities = { path = '../../test-utilities' }
 
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [dev-dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2021-09+1'
 
 [features]
 default = ['std']
 std = [
   'cf-chains/std',
   'cf-runtime-utilities/std',
+  'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
@@ -93,4 +97,7 @@ runtime-benchmarks = [
     'frame-system/runtime-benchmarks',
     'cf-traits/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = [
+  'frame-support/try-runtime',
+  'cf-runtime-upgrade-utilities/try-runtime',
+]

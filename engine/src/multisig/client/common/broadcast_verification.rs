@@ -1,5 +1,6 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
+use cf_traits::AuthorityCount;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
@@ -9,11 +10,11 @@ use super::StageResult;
 #[derive(PartialEq, Debug)]
 pub enum BroadcastFailureReason {
     /// Enough missing messages from broadcast + verification to stop consensus (contains parties to report)
-    InsufficientMessages(BTreeSet<usize>),
+    InsufficientMessages(BTreeSet<AuthorityCount>),
     /// Not enough broadcast verification messages received to continue verification (contains parties to report)
-    InsufficientVerificationMessages(BTreeSet<usize>),
+    InsufficientVerificationMessages(BTreeSet<AuthorityCount>),
     /// Consensus could not be reached for one or more parties due to differing values (contains parties to report)
-    Inconsistency(BTreeSet<usize>),
+    Inconsistency(BTreeSet<AuthorityCount>),
 }
 
 impl BroadcastFailureReason {
@@ -50,7 +51,7 @@ impl BroadcastFailureReason {
 /// `None` indicates that the data hasn't been received.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BroadcastVerificationMessage<T: Clone> {
-    pub data: HashMap<usize, Option<T>>,
+    pub data: BTreeMap<AuthorityCount, Option<T>>,
 }
 
 fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
@@ -66,7 +67,7 @@ fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
 /// Check that the reported indexes match the expected ones exactly
 fn check_verification_message_indexes<T>(
     message: &BroadcastVerificationMessage<T>,
-    expected_idxs: &BTreeSet<usize>,
+    expected_idxs: &BTreeSet<AuthorityCount>,
 ) -> bool
 where
     T: Clone,
@@ -82,14 +83,14 @@ where
 // or (c) that ~1/3 of parties colluded to slash the broadcasting party. (Should we reduce
 // the threshold to 50% for symmetry?)
 pub fn verify_broadcasts<T>(
-    verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<T>>>,
+    verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
     logger: &slog::Logger,
-) -> Result<HashMap<usize, T>, BroadcastFailureReason>
+) -> Result<BTreeMap<AuthorityCount, T>, BroadcastFailureReason>
 where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
 {
     let num_parties = verification_messages.len();
-    let threshold = threshold_from_share_count(num_parties as u32) as usize;
+    let threshold = threshold_from_share_count(num_parties as AuthorityCount) as usize;
 
     // We know these indexes to be correct, as this data structure is constructed
     // locally based on ceremony parameters
@@ -98,7 +99,7 @@ where
     // Even if we haven't received data from all parties at this point, we
     // might still be able to recover as long as there is a quorum agreement
     // on every value.
-    let verification_messages: HashMap<_, _> = verification_messages
+    let verification_messages: BTreeMap<_, _> = verification_messages
         .into_iter()
         .filter_map(|(k, v)| v.map(|unwrapped_v| (k, unwrapped_v)))
         // We ignore all messages that don't contain all (and only) expected signer indexes
@@ -146,7 +147,7 @@ where
             <= threshold
     });
 
-    let mut agreed_on_values = HashMap::<usize, T>::new();
+    let mut agreed_on_values = BTreeMap::<AuthorityCount, T>::new();
 
     let mut reported_parties = BTreeSet::new();
 
@@ -192,16 +193,16 @@ mod tests {
 
     /// Transforms the (more concise) test data into the expected "shape";
     fn to_broadcast_verification_messages(
-        test_data: Vec<(usize, Option<Vec<Option<i32>>>)>,
-    ) -> HashMap<usize, Option<BroadcastVerificationMessage<i32>>> {
+        test_data: Vec<(AuthorityCount, Option<Vec<Option<i32>>>)>,
+    ) -> BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<i32>>> {
         test_data
             .into_iter()
             .map(|(idx, opt_values)| {
                 let opt_data = opt_values.map(|values| {
-                    let data: HashMap<_, _> = values
+                    let data: BTreeMap<_, _> = values
                         .iter()
                         .enumerate()
-                        .map(|(i, d)| (i + 1, *d))
+                        .map(|(i, d)| (i as AuthorityCount + 1, *d))
                         .collect();
 
                     BroadcastVerificationMessage { data }
@@ -215,10 +216,10 @@ mod tests {
     /// check that the result matches `expected` (transforming the reported idxs Vec into a Set
     /// to make it *NOT* sensitive to the order of elements)
     fn check_broadcast_verification(
-        verification_messages: HashMap<usize, Option<BroadcastVerificationMessage<i32>>>,
-        expected: Result<Vec<(usize, i32)>, BroadcastFailureReason>,
+        verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<i32>>>,
+        expected: Result<Vec<(AuthorityCount, i32)>, BroadcastFailureReason>,
     ) {
-        let expected = expected.map(|values| values.into_iter().collect::<HashMap<_, _>>());
+        let expected = expected.map(|values| values.into_iter().collect::<BTreeMap<_, _>>());
 
         assert_eq!(
             verify_broadcasts(verification_messages, &new_test_logger()),
@@ -232,7 +233,7 @@ mod tests {
         // even though some parties disagree on some values
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), None, Some(1), Some(1)])),
             (3, Some(vec![Some(2), Some(1), None, Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(2)])),
@@ -249,7 +250,7 @@ mod tests {
         // is due to them sending messages inconsistently
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), None, Some(1), Some(2)])),
+            (1_u32, Some(vec![Some(1), None, Some(1), Some(2)])),
             (2, Some(vec![Some(1), Some(2), Some(1), Some(1)])),
             (3, Some(vec![Some(2), Some(2), Some(2), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(2)])),
@@ -270,7 +271,7 @@ mod tests {
         // because 4 is missing all messages and 3 is missing one message from 2
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), None, Some(1), Some(1)])),
             (4, None),
@@ -290,7 +291,7 @@ mod tests {
         // We are missing broadcast verification messages from 3 and 4.
 
         let all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (3, None),
             (4, None),
@@ -314,7 +315,7 @@ mod tests {
 
         // Note that party 3's message is missing
         let all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (3, None),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
@@ -329,7 +330,7 @@ mod tests {
         // Note that party 2's message is missing an "inner" message
         // for party 4.
         let all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
@@ -344,7 +345,7 @@ mod tests {
         // Note that party 2's message contains an extra message
         // for non-existent party 5.
         let all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
@@ -359,7 +360,7 @@ mod tests {
         // Note that party 2's message is missing an "inner" message
         // for party 4. It will be "replaced" by a non-existent index below
         let mut all_messages = to_broadcast_verification_messages(vec![
-            (1usize, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
+            (1_u32, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (2, Some(vec![Some(1), Some(1), Some(1)])),
             (3, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
             (4, Some(vec![Some(1), Some(1), Some(1), Some(1)])),
