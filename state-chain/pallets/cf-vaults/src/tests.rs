@@ -15,7 +15,7 @@ macro_rules! assert_last_event {
 	($pat:pat) => {
 		let event = last_event::<MockRuntime>();
 		assert!(
-			matches!(last_event::<MockRuntime>(), Event::VaultsPallet($pat)),
+			matches!(last_event::<MockRuntime>(), $crate::mock::Event::VaultsPallet($pat)),
 			"Unexpected event {:?}",
 			event
 		);

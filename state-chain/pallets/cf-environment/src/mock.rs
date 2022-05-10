@@ -23,8 +23,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
+		System: frame_system,
+		Environment: pallet_cf_environment,
 	}
 );
 

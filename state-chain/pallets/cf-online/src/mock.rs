@@ -37,8 +37,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Pallet, Call, Storage},
+		System: frame_system,
+		OnlinePallet: pallet_cf_online,
 	}
 );
 

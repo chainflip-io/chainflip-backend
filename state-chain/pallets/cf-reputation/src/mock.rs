@@ -31,8 +31,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		ReputationPallet: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
+		System: frame_system,
+		ReputationPallet: pallet_cf_reputation,
 	}
 );
 

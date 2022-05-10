@@ -28,8 +28,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MockBroadcast: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		MockBroadcast: pallet_cf_broadcast::<Instance1>,
 	}
 );
 

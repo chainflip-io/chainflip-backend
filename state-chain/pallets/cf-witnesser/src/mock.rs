@@ -21,9 +21,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Witnesser: pallet_cf_witness::{Pallet, Call, Storage, Event<T>, Origin},
-		Dummy: dummy::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Witnesser: pallet_cf_witness,
+		Dummy: dummy,
 	}
 );
 

@@ -46,9 +46,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Emissions: pallet_cf_emissions::{Pallet, Call, Storage, Event<T>, Config},
+		System: frame_system,
+		Flip: pallet_cf_flip,
+		Emissions: pallet_cf_emissions,
 	}
 );
 

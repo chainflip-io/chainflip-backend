@@ -28,9 +28,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+		System: frame_system,
+		Flip: pallet_cf_flip,
+		TransactionPayment: pallet_transaction_payment,
 	}
 );
 
@@ -118,8 +118,11 @@ pub fn check_balance_integrity() {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config =
-		GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance: 1_000 } };
+	let config = GenesisConfig {
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000 },
+		transaction_payment: Default::default(),
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

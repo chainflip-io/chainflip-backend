@@ -70,9 +70,9 @@ mod test_missed_authorship_slots {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-			Aura: pallet_aura::{Pallet, Config<T>},
+			System: frame_system,
+			Timestamp: pallet_timestamp,
+			Aura: pallet_aura,
 		}
 	);
 

@@ -36,8 +36,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MockEthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Origin<T>, Call, Storage, Event<T>, ValidateUnsigned},
+		System: frame_system,
+		MockEthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 	}
 );
 

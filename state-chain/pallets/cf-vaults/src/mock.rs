@@ -39,8 +39,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config<T>},
+		System: frame_system,
+		VaultsPallet: pallet_cf_vaults,
 	}
 );
 
