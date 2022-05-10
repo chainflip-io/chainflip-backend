@@ -99,24 +99,6 @@ async fn should_delay_comm1_before_rts() {
 }
 
 #[tokio::test]
-async fn should_ignore_non_first_stage_data_before_rts() {
-    let mut signing_ceremony = new_signing_ceremony_with_keygen().await.0;
-    let (_, signing_messages) = standard_signing(&mut signing_ceremony).await;
-
-    let mut signing_ceremony = new_signing_ceremony_with_keygen().await.0;
-
-    // Send messages from all stages except the first stage
-    signing_ceremony.distribute_messages(signing_messages.stage_2_messages);
-    signing_ceremony.distribute_messages(signing_messages.stage_3_messages);
-    signing_ceremony.distribute_messages(signing_messages.stage_4_messages);
-
-    // Check that an unauthorised ceremony is not created
-    let [test_id] = &signing_ceremony.select_account_ids();
-    let node = signing_ceremony.get_mut_node(test_id);
-    assert_eq!(node.ceremony_manager.get_signing_states_len(), 0);
-}
-
-#[tokio::test]
 async fn should_report_on_invalid_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 

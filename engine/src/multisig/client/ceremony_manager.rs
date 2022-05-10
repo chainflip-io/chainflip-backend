@@ -528,3 +528,58 @@ pub fn generate_keygen_context(
 
     HashContext(*hasher.finalize().as_ref())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::{
+        logging::test_utils::new_test_logger,
+        multisig::client::common::BroadcastVerificationMessage,
+    };
+
+    #[test]
+    fn should_ignore_non_first_stage_keygen_data_before_request() {
+        // Create a new ceremony manager
+        let mut ceremony_manager = CeremonyManager::new(
+            AccountId::default(),
+            tokio::sync::mpsc::unbounded_channel().0,
+            &new_test_logger(),
+        );
+
+        // Process a stage 2 message
+        ceremony_manager.process_keygen_data(
+            AccountId::default(),
+            0,
+            KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and no unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
+    }
+
+    #[test]
+    fn should_ignore_non_first_stage_singing_data_before_request() {
+        // Create a new ceremony manager
+        let mut ceremony_manager = CeremonyManager::new(
+            AccountId::default(),
+            tokio::sync::mpsc::unbounded_channel().0,
+            &new_test_logger(),
+        );
+
+        // Process a stage 2 message
+        ceremony_manager.process_signing_data(
+            AccountId::default(),
+            0,
+            SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and no unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_signing_states_len(), 0);
+    }
+}

@@ -96,26 +96,6 @@ async fn should_delay_comm1_before_keygen_request() {
     assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(2, ceremony.ceremony_id));
 }
 
-#[tokio::test]
-async fn should_ignore_non_first_stage_data_before_keygen_request() {
-    // Run a keygen so we can use its messages
-    let (_, _, messages, _nodes) = standard_keygen(KeygenCeremonyRunner::new_with_default()).await;
-    let mut ceremony = KeygenCeremonyRunner::new_with_default();
-
-    // Send messages from all stages except the first stage (stage_1a)
-    let [test_id] = ceremony.select_account_ids();
-    ceremony.distribute_messages(messages.stage_2a_messages);
-    ceremony.distribute_messages(messages.stage_1_messages);
-    ceremony.distribute_messages(messages.stage_2_messages);
-    ceremony.distribute_messages(messages.stage_3_messages);
-    ceremony.distribute_messages(messages.stage_4_messages);
-    ceremony.distribute_messages(messages.stage_5_messages);
-
-    // Check that an unauthorised ceremony is not created
-    let node = ceremony.get_mut_node(&test_id);
-    assert_eq!(node.ceremony_manager.get_keygen_states_len(), 0);
-}
-
 // Data for any stage that arrives one stage too early should be properly delayed
 // and processed after the stage transition is made
 #[tokio::test]
