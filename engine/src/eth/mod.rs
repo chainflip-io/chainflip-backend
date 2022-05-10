@@ -30,10 +30,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::{
-    stream::{self},
-    StreamExt, TryStreamExt,
-};
+use futures::{stream, StreamExt};
 use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
@@ -425,7 +422,7 @@ pub trait EthObserver {
                 .fuse();
                 let eth_rpc_c = eth_rpc.clone();
 
-                let decode_log_fn = Arc::new(self.decode_log_closure()?);
+                let decode_log_fn = self.decode_log_closure()?;
 
                 // convert from heads to events
                 let events = past_and_fut_heads
@@ -454,28 +451,28 @@ pub trait EthObserver {
                                 Ok(vec![])
                             };
 
-                            (block_number.as_u64(), header.base_fee_per_gas, result_logs, eth_rpc)
+                            (block_number.as_u64(), header.base_fee_per_gas, result_logs)
                         }
                     })
-                    .then(
-                        move |(block_number, base_fee_per_gas, result_logs, eth_rpc)| {
-                            let decode_log_fn = decode_log_fn.clone();
-                            async move {
-                                BlockEvents {
-                                    block_number,
-                                    events: match result_logs {
-                                        Ok(result_logs) => stream::iter(result_logs).then(|unparsed_log| {
+                    .map(
+                        move |(block_number, base_fee_per_gas, result_logs)| BlockEvents {
+                            block_number,
+                            events: result_logs.and_then(|logs| {
+                                logs.into_iter()
+                                    .map(
+                                        |unparsed_log| -> Result<
+                                            EventWithCommon<Self::EventParameters>,
+                                            anyhow::Error,
+                                        > {
                                             EventWithCommon::<Self::EventParameters>::new_with_decoded_logs(
-                                                decode_log_fn.clone(),
+                                                &decode_log_fn,
                                                 unparsed_log,
-                                                &eth_rpc,
                                                 base_fee_per_gas,
                                             )
-                                        }).try_collect::<Vec<_>>().await,
-                                        Err(err) => Err(err),
-                                    },
-                                }
-                            }
+                                        },
+                                    )
+                                    .collect::<Result<Vec<_>>>()
+                            }),
                         },
                     );
 
@@ -883,22 +880,24 @@ mod merged_stream_tests {
     use crate::logging::test_utils::new_test_logger_with_tag_cache;
     use crate::logging::ETH_WS_STREAM_YIELDED;
 
-    use super::key_manager::ChainflipKey;
     use super::key_manager::KeyManagerEvent;
+    use super::{key_manager::ChainflipKey, rpc::mocks::MockEthHttpRpcClient};
 
     use super::key_manager::KeyManager;
 
     use super::*;
 
-    fn test_km_contract() -> KeyManager {
-        KeyManager::new(H160::default()).unwrap()
+    // Arbitrariily chosen one of the EthRpc's for these tests
+    fn test_km_contract() -> KeyManager<MockEthHttpRpcClient> {
+        let mock_eth_http_rpc_client = MockEthHttpRpcClient::new();
+        KeyManager::new(H160::default(), mock_eth_http_rpc_client).unwrap()
     }
 
     fn key_change(block_number: u64, log_index: u8) -> EventWithCommon<KeyManagerEvent> {
         EventWithCommon::<KeyManagerEvent> {
             tx_hash: Default::default(),
             log_index: U256::from(log_index),
-            tx_fee: U256::from(0),
+            base_fee_per_gas: U256::from(2),
             block_number,
             event_parameters: KeyManagerEvent::AggKeySetByAggKey {
                 old_key: ChainflipKey::default(),

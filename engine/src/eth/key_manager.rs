@@ -1,7 +1,7 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
-use crate::eth::EventParseError;
+use crate::eth::{rpc::EthRpcApi, EventParseError};
 use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
@@ -13,7 +13,7 @@ use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
-    types::{H160, H256},
+    types::{Transaction, H160, H256},
 };
 
 use anyhow::Result;
@@ -27,9 +27,10 @@ use super::DecodeLogClosure;
 use super::EthObserver;
 
 /// A wrapper for the KeyManager Ethereum contract.
-pub struct KeyManager {
+pub struct KeyManager<EthRpc: EthRpcApi> {
     pub deployed_address: H160,
     pub contract: ethabi::Contract,
+    pub eth_rpc: EthRpc,
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]
@@ -183,7 +184,7 @@ pub enum KeyManagerEvent {
 }
 
 #[async_trait]
-impl EthObserver for KeyManager {
+impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
     type EventParameters = KeyManagerEvent;
 
     fn contract_name(&self) -> &'static str {
@@ -218,6 +219,18 @@ impl EthObserver for KeyManager {
                     .await;
             }
             KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
+                let tx_fee = {
+                    let Transaction { gas_price, gas, .. } =
+                        self.eth_rpc.transaction(event.tx_hash).await.unwrap();
+                    let gas_price = gas_price
+                        .ok_or_else(|| {
+                            anyhow::Error::msg("Could not get gas price from ETH transaction")
+                        })
+                        .unwrap();
+
+                    let priority_fee = gas_price - event.base_fee_per_gas;
+                    (gas * event.base_fee_per_gas) + (gas * priority_fee)
+                };
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_witnesser::Call::witness(Box::new(
@@ -229,7 +242,7 @@ impl EthObserver for KeyManager {
                                 signer,
                                 event.block_number,
                                 event.tx_hash,
-                                event.tx_fee.try_into().unwrap(),
+                                tx_fee.try_into().expect("Failed to convert tx fee to u128"),
                             )
                             .into(),
                         )),
@@ -287,11 +300,12 @@ impl EthObserver for KeyManager {
     }
 }
 
-impl KeyManager {
+impl<EthRpc: EthRpcApi> KeyManager<EthRpc> {
     /// Loads the contract abi to get the event definitions
-    pub fn new(deployed_address: H160) -> Result<Self> {
+    pub fn new(deployed_address: H160, eth_rpc: EthRpc) -> Result<Self> {
         Ok(Self {
             deployed_address,
+            eth_rpc,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
     }
@@ -300,7 +314,7 @@ impl KeyManager {
 #[cfg(test)]
 mod tests {
 
-    use crate::eth::EventParseError;
+    use crate::eth::{rpc::mocks::MockEthHttpRpcClient, EventParseError};
 
     use super::*;
     use hex;
@@ -313,10 +327,14 @@ mod tests {
     // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
 
+    fn new_test_key_manager() -> KeyManager<MockEthHttpRpcClient> {
+        KeyManager::new(H160::default(), MockEthHttpRpcClient::new()).unwrap()
+    }
+
     // 🔑 Aggregate Key sets the new Aggregate Key 🔑
     #[test]
     fn test_ak_set_by_ak_parsing() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = new_test_key_manager();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
             H256::from_str("0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521")
@@ -343,7 +361,7 @@ mod tests {
     // 🔑 Governance Key sets the new Aggregate Key 🔑
     #[test]
     fn test_ak_set_gk_parsing() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = new_test_key_manager();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
             H256::from_str("0xe441a6cf7a12870075eb2f6399c0de122bfe6cd8a75bfa83b05d5b611552532e")
@@ -371,7 +389,7 @@ mod tests {
     // 🔑 Governance Key sets the new Governance Key 🔑
     #[test]
     fn test_gk_set_by_gk_parsing() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = new_test_key_manager();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
             H256::from_str("0xb79780665df55038fba66988b1b3f2eda919a59b75cd2581f31f8f04f58bec7c")
@@ -398,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_sig_accepted_parsing() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = new_test_key_manager();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
             H256::from_str("0x38045dba3d9ee1fee641ad521bd1cf34c28562f6658772ee04678edf17b9a3bc")
@@ -436,7 +454,7 @@ mod tests {
 
     #[test]
     fn test_invalid_sig() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = new_test_key_manager();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let invalid_signature =
             H256::from_str("0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5")

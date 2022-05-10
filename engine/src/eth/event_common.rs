@@ -1,21 +1,19 @@
 use anyhow::Result;
 use sp_core::U256;
 
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 use web3::{
     ethabi::RawLog,
-    types::{Log, Transaction, H256},
+    types::{Log, H256},
 };
-
-use super::EthRpcApi;
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq)]
 pub struct EventWithCommon<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: H256,
-    /// The transaction fee in Wei
-    pub tx_fee: U256,
+    /// Base fee per unit of gas for the block this event was included in
+    pub base_fee_per_gas: U256,
     /// The index number of this particular log, in the list of logs emitted by the tx_hash
     pub log_index: U256,
     /// The block number at which the event occurred
@@ -35,31 +33,20 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
 }
 
 impl<EventParameters: Debug> EventWithCommon<EventParameters> {
-    pub async fn new_with_decoded_logs<LogDecoder, EthRpc>(
-        decode_log: Arc<LogDecoder>,
+    pub fn new_with_decoded_logs<LogDecoder>(
+        decode_log: &LogDecoder,
         log: Log,
-        eth_rpc: &EthRpc,
         base_fee_per_gas: U256,
     ) -> Result<Self>
     where
         LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>,
-        EthRpc: 'static + EthRpcApi + Send + Sync,
     {
-        let tx_hash = log
-            .transaction_hash
-            .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?;
-
-        let Transaction { gas_price, gas, .. } = eth_rpc.transaction(tx_hash).await?;
-        let gas_price = gas_price
-            .ok_or_else(|| anyhow::Error::msg("Could not get gas price from ETH transaction"))?;
-
-        let priority_fee = gas_price - base_fee_per_gas;
-        let tx_fee = (gas * base_fee_per_gas) + (gas * priority_fee);
-
         Ok(Self {
-            tx_hash,
+            tx_hash: log
+                .transaction_hash
+                .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?,
             log_index: log.log_index.expect("Should have log index"),
-            tx_fee,
+            base_fee_per_gas,
             block_number: log
                 .block_number
                 .expect("Should have a block number")
@@ -84,29 +71,20 @@ mod tests {
 
     use sp_core::H160;
 
-    use crate::eth::{key_manager::KeyManager, rpc::MockEthRpcApi, EthObserver};
+    use crate::eth::{key_manager::KeyManager, rpc::mocks::MockEthHttpRpcClient, EthObserver};
 
     use super::*;
 
     #[tokio::test]
     async fn common_event_info_decoded_correctly() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = KeyManager::new(H160::default(), MockEthHttpRpcClient::new()).unwrap();
 
         let transaction_hash =
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
                 .unwrap();
 
-        let mut eth_rpc = MockEthRpcApi::new();
-        eth_rpc.expect_transaction().times(1).returning(|_| {
-            Ok(Transaction {
-                gas_price: Some(U256::from(1_000_000)),
-                gas: U256::from(1_000_000),
-                ..Default::default()
-            })
-        });
-
         let event = EventWithCommon::new_with_decoded_logs(
-            Arc::new(key_manager.decode_log_closure().unwrap()),
+            &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
                 topics: vec![H256::from_str("0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521")
@@ -121,9 +99,8 @@ mod tests {
                 log_type: None,
                 removed: None,
             },
-            &eth_rpc,
             U256::default(),
-        ).await.unwrap();
+        ).unwrap();
 
         assert_eq!(event.tx_hash, transaction_hash);
     }

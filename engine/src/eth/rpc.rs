@@ -1,5 +1,3 @@
-use std::{pin::Pin, time::Duration};
-
 use secp256k1::SecretKey;
 use sp_core::{H256, U256};
 use web3::{
@@ -12,12 +10,15 @@ use web3::{
     Web3,
 };
 
-use futures::{Future, TryFutureExt};
+use futures::{future::select_ok, TryFutureExt};
 
 use anyhow::{Context, Result};
 
 use crate::{
-    constants::{ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL, WEB3_REQUEST_TIMEOUT},
+    constants::{
+        ETH_DUAL_REQUEST_TIMEOUT, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
+        WEB3_REQUEST_TIMEOUT,
+    },
     settings,
 };
 
@@ -267,22 +268,6 @@ impl EthHttpRpcClient {
     }
 }
 
-macro_rules! fall_back_eth_rpc {
-    ($eth_dual:expr, $method:ident, $($arg:expr),*) => {
-        {
-            let request_fut = $eth_dual.ws_client.$method($($arg.clone()),*);
-
-            match tokio::time::timeout(ETH_FALLBACK_TIMEOUT, request_fut).await {
-                Ok(x) => x,
-                Err(_) => {
-                    // First request failed due to timeout, retry with the next one
-                    $eth_dual.http_client.$method($($arg),*).await
-                }
-            }
-        }
-    };
-}
-
 #[async_trait]
 pub trait EthHttpRpcApi {
     async fn block_number(&self) -> Result<U64>;
@@ -299,19 +284,40 @@ impl EthHttpRpcApi for EthHttpRpcClient {
     }
 }
 
-pub struct EthDualClient {
-    pub ws_client: EthWsRpcClient,
-    pub http_client: EthHttpRpcClient,
+#[derive(Clone)]
+pub struct EthDualRpcClient {
+    ws_client: EthWsRpcClient,
+    http_client: EthHttpRpcClient,
 }
 
-const ETH_FALLBACK_TIMEOUT: Duration = Duration::from_secs(3);
+impl EthDualRpcClient {
+    pub fn new(ws_client: EthWsRpcClient, http_client: EthHttpRpcClient) -> Self {
+        Self {
+            ws_client,
+            http_client,
+        }
+    }
+}
 
-// function that takes a method and its args. Nb this method is on a trait
+macro_rules! dual_call_rpc {
+    ($eth_dual:expr, $method:ident, $($arg:expr),*) => {
+        {
+            let ws_request = $eth_dual.ws_client.$method($($arg.clone()),*);
+            let http_request = $eth_dual.http_client.$method($($arg.clone()),*);
+
+            tokio::time::timeout(ETH_DUAL_REQUEST_TIMEOUT, select_ok([ws_request, http_request]))
+                .await
+                .context("ETH Dual RPC request timed out")?
+                .context("ETH Dual RPC request failed")
+                .map(|x| x.0)
+        }
+    };
+}
 
 #[async_trait]
-impl EthRpcApi for EthDualClient {
+impl EthRpcApi for EthDualRpcClient {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
-        fall_back_eth_rpc!(self, estimate_gas, req, block)
+        dual_call_rpc!(self, estimate_gas, req, block)
     }
 
     async fn sign_transaction(
@@ -319,27 +325,27 @@ impl EthRpcApi for EthDualClient {
         tx: TransactionParameters,
         key: &SecretKey,
     ) -> Result<SignedTransaction> {
-        fall_back_eth_rpc!(self, sign_transaction, tx, &key)
+        dual_call_rpc!(self, sign_transaction, tx, &key)
     }
 
     async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
-        fall_back_eth_rpc!(self, send_raw_transaction, rlp)
+        dual_call_rpc!(self, send_raw_transaction, rlp)
     }
 
     async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-        fall_back_eth_rpc!(self, get_logs, filter)
+        dual_call_rpc!(self, get_logs, filter)
     }
 
     async fn chain_id(&self) -> Result<U256> {
-        fall_back_eth_rpc!(self, chain_id,)
+        dual_call_rpc!(self, chain_id,)
     }
 
     async fn transaction(&self, tx_hash: H256) -> Result<Transaction> {
-        fall_back_eth_rpc!(self, transaction, tx_hash)
+        dual_call_rpc!(self, transaction, tx_hash)
     }
 
     async fn block(&self, block_number: U64) -> Result<Block<H256>> {
-        fall_back_eth_rpc!(self, block, block_number)
+        dual_call_rpc!(self, block, block_number)
     }
 }
 
