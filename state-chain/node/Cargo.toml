@@ -51,6 +51,7 @@ sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag
 sp-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 sc-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 sc-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-finality-grandpa-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 sp-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 sp-runtime = { version = "6.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }

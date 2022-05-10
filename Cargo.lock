@@ -1080,6 +1080,7 @@ dependencies = [
  "sc-consensus-aura",
  "sc-executor",
  "sc-finality-grandpa",
+ "sc-finality-grandpa-rpc",
  "sc-keystore",
  "sc-rpc",
  "sc-rpc-api",
@@ -7411,6 +7412,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-finality-grandpa-rpc"
+version = "0.10.0-dev"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05#9bf63f0f67b5d56912d34e71fcefae73687f0772"
+dependencies = [
+ "finality-grandpa",
+ "futures 0.3.21",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-pubsub",
+ "log 0.4.17",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-finality-grandpa",
+ "sc-rpc",
+ "serde 1.0.137",
+ "serde_json",
+ "sp-blockchain",
+ "sp-core",
+ "sp-runtime",
+ "thiserror",
+]
+
+[[package]]
 name = "sc-informant"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05#9bf63f0f67b5d56912d34e71fcefae73687f0772"
@@ -9944,7 +9969,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if 1.0.0",
  "digest 0.10.3",
- "rand 0.4.6",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

@@ -161,6 +161,8 @@ fn remote_keystore(_url: &str) -> Result<Arc<LocalKeystore>, &'static str> {
 
 /// Builds a new service for a full client.
 pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> {
+	use sc_finality_grandpa_rpc::{GrandpaApi, GrandpaRpcHandler};
+
 	let sc_service::PartialComponents {
 		client,
 		backend,
@@ -171,6 +173,34 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		transaction_pool,
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
+
+	let (
+		shared_voter_state,
+		shared_authority_set,
+		justification_stream,
+		subscription_executor,
+		finality_provider,
+	) = {
+		let (_grandpa_block_import, grandpa_link) =
+			sc_finality_grandpa::block_import_with_authority_set_hard_forks(
+				client.clone(),
+				&(client.clone() as Arc<_>),
+				select_chain.clone(),
+				Vec::new(),
+				telemetry.as_ref().map(|x| x.handle()),
+			)?;
+
+		(
+			sc_finality_grandpa::SharedVoterState::empty(),
+			grandpa_link.shared_authority_set().clone(),
+			grandpa_link.justification_stream(),
+			sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
+			sc_finality_grandpa::FinalityProofProvider::new_for_service(
+				backend.clone(),
+				Some(grandpa_link.shared_authority_set().clone()),
+			),
+		)
+	};
 
 	if let Some(url) = &config.keystore_remote {
 		match remote_keystore(url) {
@@ -254,6 +284,14 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			io.extend_with(pallet_transaction_payment_rpc::TransactionPaymentApi::to_delegate(
 				pallet_transaction_payment_rpc::TransactionPayment::new(client.clone()),
 			));
+
+			io.extend_with(GrandpaApi::to_delegate(GrandpaRpcHandler::new(
+				shared_authority_set.clone(),
+				shared_voter_state.clone(),
+				justification_stream.clone(),
+				subscription_executor.clone(),
+				finality_provider.clone(),
+			)));
 
 			// Implement custom RPC extensions
 			io.extend_with(CustomApi::to_delegate(CustomRpc {
