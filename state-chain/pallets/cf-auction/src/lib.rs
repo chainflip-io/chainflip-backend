@@ -89,7 +89,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<T::ValidatorId>, T::Amount),
-		/// The active validator range upper limit has changed \[before, after\]
+		/// The auction parameters have been changed \[before, after\]
 		AuctionParametersChanged(DynamicSetSizeParameters, DynamicSetSizeParameters),
 	}
 
