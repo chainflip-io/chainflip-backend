@@ -220,14 +220,13 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
             }
             KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
                 let tx_fee = {
-                    let Transaction { gas_price, gas, .. } =
-                        self.eth_rpc.transaction(event.tx_hash).await.unwrap();
-                    let gas_price = gas_price
-                        .ok_or_else(|| {
-                            anyhow::Error::msg("Could not get gas price from ETH transaction")
-                        })
-                        .unwrap();
-
+                    let Transaction { gas_price, gas, .. } = self
+                        .eth_rpc
+                        .transaction(event.tx_hash)
+                        .await
+                        .expect("Failed to get transaction");
+                    let gas_price =
+                        gas_price.expect("Could not get ETH gas price from transaction");
                     let priority_fee = gas_price - event.base_fee_per_gas;
                     (gas * event.base_fee_per_gas) + (gas * priority_fee)
                 };
