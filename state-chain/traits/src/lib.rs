@@ -133,16 +133,26 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 
 /// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct AuctionOutcome<T: Chainflip> {
+pub struct AuctionOutcome<CandidateId, BidAmount> {
 	/// The auction winners.
-	pub winners: Vec<T::ValidatorId>,
+	pub winners: Vec<CandidateId>,
 	/// The auction losers and their bids.
-	pub losers: Vec<(T::ValidatorId, T::Amount)>,
+	pub losers: Vec<(CandidateId, BidAmount)>,
 	/// The resulting bond for the next epoch.
-	pub bond: T::Amount,
+	pub bond: BidAmount,
 }
 
-impl<T: Chainflip> Default for AuctionOutcome<T> {
+impl<T, BidAmount: Copy + AtLeast32BitUnsigned> AuctionOutcome<T, BidAmount> {
+	/// The total collateral locked if this auction outcome is confirmed.
+	pub fn projected_total_collateral(&self) -> BidAmount {
+		self.bond * BidAmount::from(self.winners.len() as u32)
+	}
+}
+
+pub type RuntimeAuctionOutcome<T> =
+	AuctionOutcome<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
+
+impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, BidAmount> {
 	fn default() -> Self {
 		AuctionOutcome {
 			winners: Default::default(),
@@ -155,7 +165,7 @@ impl<T: Chainflip> Default for AuctionOutcome<T> {
 pub trait Auctioneer<T: Chainflip> {
 	type Error: Into<DispatchError>;
 
-	fn resolve_auction() -> Result<AuctionOutcome<T>, Self::Error>;
+	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
 }
 
 pub trait BackupNodes {

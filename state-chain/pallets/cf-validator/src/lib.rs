@@ -18,10 +18,11 @@ mod migrations;
 
 pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Auctioneer, Chainflip,
-	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
-	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyNode, ReputationResetter, StakeHandler, SuccessOrFailure, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Chainflip, ChainflipAccount,
+	ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyNode, ReputationResetter, RuntimeAuctionOutcome, StakeHandler, SuccessOrFailure,
+	VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -61,9 +62,9 @@ pub struct PercentageRange {
 pub enum RotationStatus<T: Config> {
 	Idle,
 	RunAuction,
-	AwaitingVaults(AuctionOutcome<T>),
-	VaultsRotated(AuctionOutcome<T>),
-	SessionRotating(AuctionOutcome<T>),
+	AwaitingVaults(RuntimeAuctionOutcome<T>),
+	VaultsRotated(RuntimeAuctionOutcome<T>),
+	SessionRotating(RuntimeAuctionOutcome<T>),
 }
 
 impl<T: Config> sp_std::fmt::Debug for RotationStatus<T> {
@@ -689,10 +690,8 @@ pub mod pallet {
 			const GENESIS_EPOCH: u32 = 0;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 			CurrentEpochStartedAt::<T>::set(Default::default());
-			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			let genesis_authorities = pallet_session::Pallet::<T>::validators();
-			EpochAuthorityCount::<T>::insert(GENESIS_EPOCH, genesis_authorities.len() as u32);
-			Pallet::<T>::start_new_epoch(AuctionOutcome {
+			Pallet::<T>::start_new_epoch(RuntimeAuctionOutcome::<T> {
 				winners: genesis_authorities,
 				bond: self.bond,
 				..Default::default()
@@ -785,7 +784,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(auction_outcome: AuctionOutcome<T>) {
+	fn start_new_epoch(auction_outcome: RuntimeAuctionOutcome<T>) {
 		let epoch_authorities = auction_outcome.winners;
 		let new_bond = auction_outcome.bond;
 		let backup_candidates = auction_outcome.losers;

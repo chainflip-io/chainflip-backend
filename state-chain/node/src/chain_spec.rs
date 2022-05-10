@@ -564,7 +564,12 @@ fn testnet_genesis(
 			minimum_stake: MIN_STAKE,
 			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 		},
-		auction: AuctionConfig { min_size: min_authorities, max_size: MAX_AUTHORITIES },
+		auction: AuctionConfig {
+			min_size: min_authorities,
+			max_size: MAX_AUTHORITIES,
+			max_expansion: MAX_AUTHORITIES / 10,
+			max_contraction: MAX_AUTHORITIES / 10,
+		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },

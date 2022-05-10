@@ -11,7 +11,8 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionOutcome, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyNode,
+	Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyNode,
+	RuntimeAuctionOutcome,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -101,12 +102,12 @@ impl pallet_session::Config for Test {
 pub struct MockAuctioneer;
 
 thread_local! {
-	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(Default::default()));
+	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(Default::default()));
 	pub static AUCTION_WINNERS: RefCell<Option<Vec<ValidatorId>>> = RefCell::new(None);
 }
 
 impl MockAuctioneer {
-	pub fn set_run_behaviour(behaviour: Result<AuctionOutcome<Test>, &'static str>) {
+	pub fn set_run_behaviour(behaviour: Result<RuntimeAuctionOutcome<Test>, &'static str>) {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| {
 			*cell.borrow_mut() = behaviour;
 		});
@@ -116,7 +117,7 @@ impl MockAuctioneer {
 impl Auctioneer<Test> for MockAuctioneer {
 	type Error = &'static str;
 
-	fn resolve_auction() -> Result<AuctionOutcome<Test>, Self::Error> {
+	fn resolve_auction() -> Result<RuntimeAuctionOutcome<Test>, Self::Error> {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| {
 			let run_behaviour = (*cell.borrow()).clone();
 			run_behaviour.map(|result| {
