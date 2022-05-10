@@ -209,12 +209,12 @@ mod tests {
 							state_chain_runtime::Witnesser::witness_at_epoch(
 								Origin::signed(self.node_id.clone()),
 								Box::new(
-									pallet_cf_staking::Call::staked(
-										validator_id.clone(),
-										*amount,
-										ETH_ZERO_ADDRESS,
-										TX_HASH,
-									)
+									pallet_cf_staking::Call::staked {
+										account_id: validator_id.clone(),
+										amount: *amount,
+										withdrawal_address: ETH_ZERO_ADDRESS,
+										tx_hash: TX_HASH,
+									}
 									.into(),
 								),
 								*epoch,
@@ -265,11 +265,11 @@ mod tests {
 										// If we rotating let's witness the keys being rotated on the contract
 										state_chain_runtime::Witnesser::witness(
 											Origin::signed(self.node_id.clone()),
-											Box::new(pallet_cf_vaults::Call::vault_key_rotated(
-												(&*self.threshold_signer).borrow_mut().proposed_public_key(),
-												100,
-												[1u8; 32].into(),
-											).into()),
+											Box::new(pallet_cf_vaults::Call::vault_key_rotated {
+												new_public_key: (&*self.threshold_signer).borrow_mut().proposed_public_key(),
+												block_number: 100,
+												tx_hash: [1u8; 32].into(),
+											}.into()),
 										).expect("should be able to vault key rotation for node");
 									}
 							},
