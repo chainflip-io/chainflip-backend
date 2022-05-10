@@ -89,8 +89,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<T::ValidatorId>, T::Amount),
-		/// The auction parameters have been changed \[before, after\]
-		AuctionParametersChanged(DynamicSetSizeParameters, DynamicSetSizeParameters),
+		/// The auction parameters have been changed \[new_parameters\]
+		AuctionParametersChanged(DynamicSetSizeParameters),
 	}
 
 	#[pallet::error]
@@ -122,8 +122,8 @@ pub mod pallet {
 			parameters: DynamicSetSizeParameters,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let old = Self::try_update_auction_parameters(parameters)?;
-			Self::deposit_event(Event::AuctionParametersChanged(old, parameters));
+			let _ok = Self::try_update_auction_parameters(parameters)?;
+			Self::deposit_event(Event::AuctionParametersChanged(parameters));
 			Ok(().into())
 		}
 	}
@@ -183,15 +183,12 @@ impl<T: Config> Auctioneer<T> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	fn try_update_auction_parameters(
 		new_parameters: DynamicSetSizeParameters,
-	) -> Result<DynamicSetSizeParameters, Error<T>> {
+	) -> Result<(), Error<T>> {
 		let _ = DynamicSetSizeAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			new_parameters,
 		)?;
-		let old_parameters = AuctionParameters::<T>::get();
-		if old_parameters != new_parameters {
-			AuctionParameters::<T>::put(new_parameters);
-		}
-		Ok(old_parameters)
+		AuctionParameters::<T>::put(new_parameters);
+		Ok(())
 	}
 }
