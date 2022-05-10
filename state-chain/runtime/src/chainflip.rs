@@ -220,11 +220,9 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 	type Surplus = Surplus<Runtime>;
 
 	fn distribute(rewards: Self::Surplus) {
-		if let Some(current_block_author) = Authorship::author() {
-			Flip::settle_imbalance(&current_block_author, rewards);
-		} else {
-			log::warn!("No block author! Block reward not credited.")
-		}
+		let current_block_author =
+			Authorship::author().expect("A block without an author is invalid.");
+		Flip::settle_imbalance(&current_block_author, rewards);
 	}
 }
 pub struct RuntimeUpgradeManager;
