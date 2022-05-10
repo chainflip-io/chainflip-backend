@@ -1,6 +1,8 @@
 use crate::Runtime;
 use cf_traits::{Chainflip, ChainflipAccountStore};
-use frame_support::{dispatch::Weight, generate_storage_alias, traits::OnRuntimeUpgrade};
+use frame_support::{
+	dispatch::Weight, generate_storage_alias, traits::OnRuntimeUpgrade, weights::RuntimeDbWeight,
+};
 use pallet_cf_validator::{BackupValidatorTriage, RuntimeBackupTriage};
 use sp_std::prelude::*;
 
@@ -31,7 +33,7 @@ impl OnRuntimeUpgrade for Migration {
 			);
 			BackupValidatorTriage::<Runtime>::put(triage);
 		}
-		0
+		RuntimeDbWeight::default().reads_writes(2, 3)
 	}
 
 	#[cfg(feature = "try-runtime")]
