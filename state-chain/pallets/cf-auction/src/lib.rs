@@ -116,7 +116,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidAuctionParameters](Error::InvalidAuctionParameters)
-		#[pallet::weight(10_000 /*T::WeightInfo::set_auction_parameters()*/ )]
+		#[pallet::weight(T::WeightInfo::set_auction_parameters())]
 		pub fn set_auction_parameters(
 			origin: OriginFor<T>,
 			parameters: DynamicSetSizeParameters,
