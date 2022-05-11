@@ -16,8 +16,8 @@ use anyhow::{Context, Result};
 
 use crate::{
     constants::{
-        ETH_DUAL_REQUEST_TIMEOUT, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
-        WEB3_REQUEST_TIMEOUT,
+        ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, ETH_NODE_CONNECTION_TIMEOUT,
+        SYNC_POLL_INTERVAL,
     },
     settings,
 };
@@ -128,7 +128,7 @@ where
         // NOTE: if this does time out we will most likely have a
         // "memory leak" associated with rust-web3's state for this
         // request not getting properly cleaned up
-        tokio::time::timeout(WEB3_REQUEST_TIMEOUT, request_fut)
+        tokio::time::timeout(ETH_LOG_REQUEST_TIMEOUT, request_fut)
             .await
             .context(format!(
                 "{} client: get_logs request timeout",

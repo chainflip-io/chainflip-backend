@@ -18,7 +18,7 @@ pub const MAX_EXTRINSIC_RETRY_ATTEMPTS: usize = 10;
 pub const ETH_NODE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Duration before we give up waiting on a response for a web3 request
-pub const WEB3_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+pub const ETH_LOG_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Duration before we timeout a select_ok request to both http and ws
 pub const ETH_DUAL_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
