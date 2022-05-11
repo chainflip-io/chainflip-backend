@@ -953,7 +953,10 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
-					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
+					assert!(matches!(
+						Validator::rotation_phase(),
+						RotationStatus::AwaitingVaults(..)
+					));
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
