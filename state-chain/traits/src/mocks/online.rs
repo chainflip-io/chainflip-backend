@@ -20,7 +20,7 @@ macro_rules! impl_mock_online {
 
 			fn is_online(validator_id: &Self::ValidatorId) -> bool {
 				ONLINE.with(|cell| {
-					cell.borrow().get(validator_id).map(ToOwned::to_owned).unwrap_or_default()
+					cell.borrow().get(validator_id).map(ToOwned::to_owned).unwrap_or(true)
 				})
 			}
 		}

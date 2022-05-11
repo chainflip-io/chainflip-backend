@@ -12,11 +12,14 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, DispatchResult, RuntimeDebug};
+use sp_runtime::{
+	traits::{Bounded, MaybeSerializeDeserialize},
+	DispatchError, DispatchResult, RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -37,7 +40,8 @@ pub trait Chainflip: frame_system::Config {
 		+ Ord
 		+ Copy
 		+ AtLeast32BitUnsigned
-		+ MaybeSerializeDeserialize;
+		+ MaybeSerializeDeserialize
+		+ Bounded;
 
 	/// An identity for a node
 	type ValidatorId: Member
@@ -45,8 +49,7 @@ pub trait Chainflip: frame_system::Config {
 		+ MaxEncodedLen
 		+ Ord
 		+ core::fmt::Debug
-		+ From<<Self as frame_system::Config>::AccountId>
-		+ Into<<Self as frame_system::Config>::AccountId>
+		+ IsType<<Self as frame_system::Config>::AccountId>
 		+ MaybeSerializeDeserialize;
 
 	/// An id type for keys used in threshold signature ceremonies.
@@ -138,37 +141,41 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-/// A bid represented by an authority and the amount they wish to bid
-pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
-/// A bid that has been classified as out of the authority set
-pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
-
-/// A successful auction result
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Default)]
-pub struct AuctionResult<ValidatorId, Amount> {
-	pub winners: Vec<ValidatorId>,
-	pub minimum_active_bid: Amount,
+/// The outcome of a successful auction.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+pub struct AuctionOutcome<CandidateId, BidAmount> {
+	/// The auction winners.
+	pub winners: Vec<CandidateId>,
+	/// The auction losers and their bids.
+	pub losers: Vec<(CandidateId, BidAmount)>,
+	/// The resulting bond for the next epoch.
+	pub bond: BidAmount,
 }
 
-/// A min and max number of authorities for an authority set
-pub type AuthoritySetSizeRange = (AuthorityCount, AuthorityCount);
+impl<T, BidAmount: Copy + AtLeast32BitUnsigned> AuctionOutcome<T, BidAmount> {
+	/// The total collateral locked if this auction outcome is confirmed.
+	pub fn projected_total_collateral(&self) -> BidAmount {
+		self.bond * BidAmount::from(self.winners.len() as u32)
+	}
+}
 
-/// Auctioneer
-///
-/// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
-/// returned as an `AuctionResult` calling `run_auction()`.
-pub trait Auctioneer {
-	type ValidatorId;
-	type Amount;
+pub type RuntimeAuctionOutcome<T> =
+	AuctionOutcome<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
+
+impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, BidAmount> {
+	fn default() -> Self {
+		AuctionOutcome {
+			winners: Default::default(),
+			losers: Default::default(),
+			bond: Default::default(),
+		}
+	}
+}
+
+pub trait Auctioneer<T: Chainflip> {
 	type Error: Into<DispatchError>;
 
-	/// Run an auction
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error>;
-
-	// TODO: there's probably a better place to put this (both in terms of being in this trait)
-	// and where it's called
-	/// Update the states of backup and passive nodes
-	fn update_backup_and_passive_states();
+	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
 }
 
 pub trait BackupNodes {
@@ -219,7 +226,7 @@ pub trait BidderProvider {
 	type Amount;
 	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
 	/// greater than zero
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
 /// Provide feedback on staking

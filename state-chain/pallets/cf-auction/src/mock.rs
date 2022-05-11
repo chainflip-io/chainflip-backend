@@ -7,7 +7,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
 		system_state_info::MockSystemStateInfo,
 	},
-	AuthorityCount, Bid, Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
+	Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
@@ -24,39 +24,16 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
-pub const MIN_AUTHORITY_SIZE: AuthorityCount = 1;
-pub const MAX_AUTHORITY_SIZE: AuthorityCount = 3;
-pub const BACKUP_NODE_RATIO: u32 = 3;
-pub const NUMBER_OF_BIDDERS: u32 = 9;
-pub const BIDDER_GROUP_A: u32 = 1;
-pub const BIDDER_GROUP_B: u32 = 2;
+pub const MIN_AUTHORITY_SIZE: u32 = 1;
+pub const MAX_AUTHORITY_SIZE: u32 = 3;
+pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 2;
+pub const MAX_AUTHORITY_SET_CONTRACTION: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
 	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
-}
-
-// Create a set of descending bids, including an invalid bid of amount 0
-// offset the ids to create unique bidder groups.  By default all bidders are online.
-pub fn generate_bids(number_of_bids: u32, group: u32) {
-	BIDDER_SET.with(|cell| {
-		let mut cell = cell.borrow_mut();
-		(*cell).clear();
-		for bid_number in (1..=number_of_bids as u64).rev() {
-			let validator_id = bid_number * group as u64;
-			MockOnline::set_online(&validator_id, true);
-			(*cell).push((validator_id, (bid_number * 100).into()));
-		}
-	});
-}
-
-// The set we would expect
-pub fn expected_winning_set() -> (Vec<ValidatorId>, Amount) {
-	let mut bidders = MockBidderProvider::get_bidders();
-	bidders.truncate(MAX_AUTHORITY_SIZE as usize);
-	(bidders.iter().map(|(validator_id, _)| *validator_id).collect(), bidders.last().unwrap().1)
 }
 
 construct_runtime!(
@@ -101,11 +78,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-parameter_types! {
-	pub const BackupValidatorRatio: u32 = BACKUP_NODE_RATIO;
-	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
-}
-
 pub struct MockEmergencyRotation;
 
 impl EmergencyRotation for MockEmergencyRotation {
@@ -146,12 +118,11 @@ impl Config for Test {
 	type Event = Event;
 	type BidderProvider = MockBidderProvider;
 	type ChainflipAccount = MockChainflipAccount;
-	type AuthorityToBackupRatio = BackupValidatorRatio;
 	type KeygenExclusionSet = MockKeygenExclusion<Self>;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
-	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
 	type AuctionQualification = MockQualifyValidator;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -162,22 +133,33 @@ impl ValidatorRegistration<ValidatorId> for Test {
 
 pub struct MockBidderProvider;
 
+impl MockBidderProvider {
+	// Create a set of descending bids, including an invalid bid of amount 0
+	// offset the ids to create unique bidder groups.  By default all bidders are online.
+	pub fn set_bids(bids: &[(ValidatorId, Amount)]) {
+		BIDDER_SET.with(|cell| {
+			*cell.borrow_mut() = bids.to_vec();
+		});
+	}
+}
+
 impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	generate_bids(NUMBER_OF_BIDDERS, BIDDER_GROUP_A);
-
 	let config = GenesisConfig {
 		system: Default::default(),
 		auction_pallet: AuctionPalletConfig {
-			authority_set_size_range: (MIN_AUTHORITY_SIZE, MAX_AUTHORITY_SIZE),
+			min_size: MIN_AUTHORITY_SIZE,
+			max_size: MAX_AUTHORITY_SIZE,
+			max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+			max_contraction: MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	};
 

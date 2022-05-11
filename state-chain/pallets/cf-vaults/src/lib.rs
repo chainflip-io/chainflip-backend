@@ -67,7 +67,7 @@ pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
 	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
-	/// A map of the number of blame votes that keygen participant has received.
+	/// A map of the number of blame votes that each keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
 }
 
@@ -405,13 +405,13 @@ pub mod pallet {
 	pub type PendingVaultRotation<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultRotationStatus<T, I>>;
 
-	/// Vault rotation statuses for the current epoch rotation.
+	/// The voters who voted for success for a particular agg key rotation
 	#[pallet::storage]
 	#[pallet::getter(fn success_voters)]
 	pub type SuccessVoters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
 
-	/// Vault rotation statuses for the current epoch rotation.
+	/// The voters who voted for failure for a particular agg key rotation
 	#[pallet::storage]
 	#[pallet::getter(fn failure_voters)]
 	pub type FailureVoters<T: Config<I>, I: 'static = ()> =

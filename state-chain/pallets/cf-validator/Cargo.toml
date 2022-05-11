@@ -68,7 +68,6 @@ tag = 'chainflip-monthly-2022-05'
 
 # Dev dependencies
 [dev-dependencies]
-assert_matches = { version = "1.5.0" }
 cf-test-utilities = { path = '../../test-utilities' }
 
 [dev-dependencies.sp-io]
