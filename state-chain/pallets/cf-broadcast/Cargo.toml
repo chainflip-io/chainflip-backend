@@ -18,6 +18,7 @@ cf-chains = { path = "../../chains", default-features = false }
 cf-traits = { path = "../../traits", default-features = false }
 pallet-cf-threshold-signature = { path = "../cf-threshold-signature", default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-runtime-benchmark-utilities = { path = '../../runtime-benchmark-utilities', default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 
