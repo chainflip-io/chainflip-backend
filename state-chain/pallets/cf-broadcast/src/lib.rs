@@ -278,6 +278,9 @@ pub mod pallet {
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
 		/// A broadcast has been aborted after failing `MaximumAttempts`. \[broadcast_id\]
 		BroadcastAborted(BroadcastId),
+		/// An account id has used a new signer id for a transaction
+		/// so we want to refund to that new signer id \[account_id, signer_id\]
+		RefundSignerIdForAccountIdUpdated(T::AccountId, SignerIdFor<T, I>),
 	}
 
 	#[pallet::error]
@@ -427,7 +430,10 @@ pub mod pallet {
 				// store the latest signer id used by an authority
 				if AccountIdToRefundSignerId::<T, I>::get(signer.clone()) != Some(signer_id.clone())
 				{
-					AccountIdToRefundSignerId::<T, I>::insert(signer, signer_id);
+					AccountIdToRefundSignerId::<T, I>::insert(signer.clone(), signer_id.clone());
+					Self::deposit_event(Event::<T, I>::RefundSignerIdForAccountIdUpdated(
+						signer, signer_id,
+					));
 				}
 
 				AwaitingTransmission::<T, I>::insert(

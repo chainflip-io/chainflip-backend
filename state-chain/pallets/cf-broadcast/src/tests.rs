@@ -78,6 +78,9 @@ impl MockCfe {
 					// Informational only. No action required by the CFE.
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
+				BroadcastEvent::RefundSignerIdForAccountIdUpdated(_, _) => {
+					// Information only. No action required by the CFE.
+				},
 			},
 			_ => panic!("Unexpected event"),
 		};
