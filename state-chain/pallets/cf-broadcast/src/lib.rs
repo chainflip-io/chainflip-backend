@@ -248,8 +248,6 @@ pub mod pallet {
 
 	/// A mapping of signer id to the the account id of the authority that registered the signer.
 	/// through a transaction_ready_for_transmission extrinsic.
-	// (Currently not used for anything, but it's nice to have information that will be hard to
-	// create later down the line)
 	#[pallet::storage]
 	pub type SignerIdToAccountId<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId, OptionQuery>;
