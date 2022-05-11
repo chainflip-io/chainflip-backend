@@ -62,7 +62,6 @@ impl MockCfe {
 						},
 						Scenario::Timeout => {
 							// Ignore the request.
-							return
 						},
 						_ => {
 							assert_eq!(nominee, RANDOM_NOMINEE);
@@ -91,7 +90,9 @@ impl MockCfe {
 				},
 				BroadcastEvent::TransmissionRequest(_, _signed_tx) => {
 					match scenario {
-						Scenario::Timeout => return,
+						Scenario::Timeout => {
+							// Ignore the request.
+						},
 
 						// NB: This is ok for the sake of testing, but conceptually it's slightly
 						// different to the real version, as we submit signature_accepted after
