@@ -21,7 +21,6 @@ enum Scenario {
 
 thread_local! {
 	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
-	pub static FAILED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
 	pub static EXPIRED_ATTEMPTS: std::cell::RefCell<Vec<(BroadcastAttemptId, BroadcastStage)>> = Default::default();
 	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
 }
@@ -117,10 +116,6 @@ impl MockCfe {
 				},
 				BroadcastEvent::BroadcastRetryScheduled(_) => {
 					// Informational only. No action required by the CFE.
-				},
-				BroadcastEvent::BroadcastFailed(broadcast_attempt_id, _) => {
-					FAILED_BROADCASTS
-						.with(|cell| cell.borrow_mut().push(broadcast_attempt_id.broadcast_id));
 				},
 				BroadcastEvent::BroadcastAttemptExpired(broadcast_attempt_id, stage) =>
 					EXPIRED_ATTEMPTS

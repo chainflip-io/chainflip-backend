@@ -265,8 +265,6 @@ pub mod pallet {
 		BroadcastComplete(BroadcastAttemptId),
 		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_attempt_id\]
 		BroadcastRetryScheduled(BroadcastAttemptId),
-		/// A broadcast has failed irrecoverably. \[broadcast_attempt_id, failed_transaction\]
-		BroadcastFailed(BroadcastAttemptId, UnsignedTransactionFor<T, I>),
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
 		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
@@ -466,9 +464,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// TODO: Weight
-		#[pallet::weight(0)]
-		// Submitted when the node nominated to sign the transaction cannot sign
+		/// Submitted when the nominated node cannot sign the transaction.
+		///
+		/// ## Events
+		///
+		/// - []
+		#[pallet::weight(0)] // TODO: Weight
 		pub fn transaction_signing_failure(
 			origin: OriginFor<T>,
 			broadcast_attempt_id: BroadcastAttemptId,
