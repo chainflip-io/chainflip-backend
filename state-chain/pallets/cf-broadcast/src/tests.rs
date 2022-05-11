@@ -40,24 +40,61 @@ impl MockCfe {
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
 			Event::MockBroadcast(broadcast_event) => match broadcast_event {
-				BroadcastEvent::TransactionSigningRequest(attempt_id, nominee, unsigned_tx) => {
+				BroadcastEvent::TransactionSigningRequest(
+					broadcast_attempt_id,
+					nominee,
+					unsigned_tx,
+				) => {
 					if let Scenario::Timeout = scenario {
 						// Ignore the request.
 						return
 					}
-					Self::handle_transaction_signature_request(
-						attempt_id,
-						nominee,
-						unsigned_tx,
-						scenario,
+					assert_eq!(nominee, RANDOM_NOMINEE);
+					// Only the nominee can return the signed tx.
+					assert_noop!(
+						MockBroadcast::transaction_ready_for_transmission(
+							RawOrigin::Signed(nominee + 1).into(),
+							broadcast_attempt_id,
+							unsigned_tx.clone().signed(Validity::Valid),
+							Validity::Valid
+						),
+						Error::<Test, Instance1>::InvalidSigner
 					);
+					// Only the nominee can return the signed tx.
+					assert_ok!(MockBroadcast::transaction_ready_for_transmission(
+						RawOrigin::Signed(nominee).into(),
+						broadcast_attempt_id,
+						unsigned_tx.signed(Validity::Valid),
+						match scenario {
+							Scenario::BadSigner => Validity::Invalid,
+							_ => Validity::Valid,
+						}
+					));
 				},
-				BroadcastEvent::TransmissionRequest(attempt_id, _signed_tx) => {
+				BroadcastEvent::TransmissionRequest(broadcast_attempt_id, _signed_tx) => {
 					if let Scenario::Timeout = scenario {
 						// Ignore the request.
 						return
 					}
-					Self::handle_broadcast_request(attempt_id, scenario);
+					assert_ok!(match scenario {
+						Scenario::SigningFailure => {
+							MockBroadcast::transaction_signing_failure(
+								Origin::root(),
+								broadcast_attempt_id,
+							)
+						},
+						Scenario::HappyPath => {
+							MockBroadcast::signature_accepted(
+								Origin::root(),
+								MockThresholdSignature::default(),
+								Validity::Valid,
+                                0,
+								10,
+								[0xcf; 4],
+							)
+						},
+						_ => unimplemented!(),
+					});
 				},
 				BroadcastEvent::BroadcastComplete(broadcast_attempt_id) => {
 					COMPLETED_BROADCASTS
@@ -83,57 +120,6 @@ impl MockCfe {
 			},
 			_ => panic!("Unexpected event"),
 		};
-	}
-
-	// Accepts an unsigned tx, making sure the nominee has been assigned.
-	fn handle_transaction_signature_request(
-		// TODO: Use BroadcastAttempt
-		attempt_id: BroadcastAttemptId,
-		nominee: u64,
-		unsigned_tx: MockUnsignedTransaction,
-		scenario: Scenario,
-	) {
-		assert_eq!(nominee, RANDOM_NOMINEE);
-		// Only the nominee can return the signed tx.
-		assert_noop!(
-			MockBroadcast::transaction_ready_for_transmission(
-				RawOrigin::Signed(nominee + 1).into(),
-				attempt_id,
-				unsigned_tx.clone().signed(Validity::Valid),
-				Validity::Valid
-			),
-			Error::<Test, Instance1>::InvalidSigner
-		);
-		// Only the nominee can return the signed tx.
-		assert_ok!(MockBroadcast::transaction_ready_for_transmission(
-			RawOrigin::Signed(nominee).into(),
-			attempt_id,
-			unsigned_tx.signed(Validity::Valid),
-			match scenario {
-				Scenario::BadSigner => Validity::Invalid,
-				_ => Validity::Valid,
-			}
-		));
-	}
-
-	// Simulate different outcomes.
-	fn handle_broadcast_request(broadcast_attempt_id: BroadcastAttemptId, scenario: Scenario) {
-		assert_ok!(match scenario {
-			Scenario::SigningFailure => {
-				MockBroadcast::transaction_signing_failure(Origin::root(), broadcast_attempt_id)
-			},
-			Scenario::HappyPath => {
-				MockBroadcast::signature_accepted(
-					Origin::root(),
-					MockThresholdSignature::default(),
-					Validity::Valid,
-					0,
-					10,
-					[0xcf; 4],
-				)
-			},
-			_ => unimplemented!(),
-		});
 	}
 }
 
