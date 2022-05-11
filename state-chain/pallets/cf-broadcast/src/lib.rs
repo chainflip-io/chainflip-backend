@@ -401,12 +401,15 @@ pub mod pallet {
 			signed_tx: SignedTransactionFor<T, I>,
 			signer_id: SignerIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let signer = ensure_signed(origin)?;
+			let extrinsic_signer = ensure_signed(origin)?;
 
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
-			ensure!(signing_attempt.nominee == signer.clone().into(), Error::<T, I>::InvalidSigner);
+			ensure!(
+				signing_attempt.nominee == extrinsic_signer.clone().into(),
+				Error::<T, I>::InvalidSigner
+			);
 
 			// it's no longer being signed, it's being broadcast
 			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
