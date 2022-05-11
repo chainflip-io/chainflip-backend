@@ -1,5 +1,4 @@
-use cf_traits::AuthorityCount;
-use frame_support::{migration::get_storage_value, traits::OnRuntimeUpgrade};
+use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 
 use crate::*;
@@ -43,7 +42,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
-		use frame_support::{assert_err, assert_ok};
+		use frame_support::assert_err;
 
 		assert_err!(CurrentPhase::try_get(), ());
 		assert_err!(LastAuctionResult::try_get(), ());
