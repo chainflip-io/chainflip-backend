@@ -145,8 +145,8 @@ impl Display for CeremonyFailureReason {
                 };
                 write!(f, "Keygen Failure: {}", inner)
             }
-            CeremonyFailureReason::SigningFailure(singing_failure_reason) => {
-                let inner = match singing_failure_reason {
+            CeremonyFailureReason::SigningFailure(signing_failure_reason) => {
+                let inner = match signing_failure_reason {
                     SigningFailureReason::RequestIgnored(reason) => {
                         format!("Request Ignored ({:?})", reason)
                     }
@@ -157,7 +157,7 @@ impl Display for CeremonyFailureReason {
                         "Failed to aggregate signature".to_string()
                     }
                 };
-                write!(f, "Singing Failure: {}", inner)
+                write!(f, "Signing Failure: {}", inner)
             }
             CeremonyFailureReason::DuplicateCeremonyId => {
                 write!(f, "Duplicate Ceremony Id")

@@ -204,7 +204,7 @@ async fn should_ignore_duplicate_rts() {
 
     let (messages, _result_receivers) = signing_ceremony.request().await;
 
-    // Run the singing ceremony to half way
+    // Run the signing ceremony to half way
     run_stages!(signing_ceremony, messages, frost::VerifyComm2,);
 
     assert_ok!(signing_ceremony.nodes[&test_id]
