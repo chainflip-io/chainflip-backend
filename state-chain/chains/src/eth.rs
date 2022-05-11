@@ -877,12 +877,7 @@ mod verification_tests {
 
 			let verificaton_result =
 				verify_transaction(&unsigned, &signed_tx_bytes.0, &key_ref.address().0.into());
-			assert_eq!(
-				verificaton_result,
-				Ok(()),
-				"Unable to verify tx signed by key {:?}",
-				hex::encode(key.serialize_secret())
-			);
+			assert_eq!(verificaton_result, Ok(()),);
 		}
 	}
 
