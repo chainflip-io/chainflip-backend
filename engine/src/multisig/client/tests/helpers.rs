@@ -1216,38 +1216,21 @@ impl Node {
     }
 
     /// Check the failure reason and tag are correct
-    pub fn ensure_rts_ignored_reason(
+    pub fn ensure_failure_reason<CeremonyResult>(
         &self,
-        mut result_receiver: CeremonyResultReceiver<SchnorrSignature>,
-        expected_reason: SigningRequestIgnoredReason,
-    ) {
-        assert!(self.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+        mut result_receiver: CeremonyResultReceiver<CeremonyResult>,
+        expected_reason: CeremonyFailureReason,
+        expected_tag: &str,
+    ) where
+        CeremonyResult: PartialEq + std::fmt::Debug,
+    {
+        assert!(self.tag_cache.contains_tag(expected_tag));
         assert_eq!(
             result_receiver
                 .try_recv()
                 .expect("Failed to receive ceremony result")
                 .map_err(|(_, reason)| reason),
-            Err(CeremonyFailureReason::SigningFailure(
-                SigningFailureReason::RequestIgnored(expected_reason)
-            ),)
-        );
-    }
-
-    /// Check the failure reason and tag are correct
-    pub fn ensure_keygen_request_ignored_reason(
-        &self,
-        mut result_receiver: CeremonyResultReceiver<KeygenResultInfo>,
-        expected_reason: KeygenRequestIgnoredReason,
-    ) {
-        assert!(self.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
-        assert_eq!(
-            result_receiver
-                .try_recv()
-                .expect("Failed to receive ceremony result")
-                .map_err(|(_, reason)| reason),
-            Err(CeremonyFailureReason::KeygenFailure(
-                KeygenFailureReason::RequestIgnored(expected_reason)
-            ),)
+            Err(expected_reason)
         );
     }
 }

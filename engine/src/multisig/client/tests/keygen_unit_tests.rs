@@ -891,9 +891,12 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_keygen_request_ignored_reason(
+    node.ensure_failure_reason(
         result_receiver,
-        KeygenRequestIgnoredReason::InvalidParticipants,
+        CeremonyFailureReason::KeygenFailure(KeygenFailureReason::RequestIgnored(
+            KeygenRequestIgnoredReason::InvalidParticipants,
+        )),
+        KEYGEN_REQUEST_IGNORED,
     );
 }
 
@@ -923,9 +926,12 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_keygen_request_ignored_reason(
+    node.ensure_failure_reason(
         result_receiver,
-        KeygenRequestIgnoredReason::CeremonyIdAlreadyUsed,
+        CeremonyFailureReason::KeygenFailure(KeygenFailureReason::RequestIgnored(
+            KeygenRequestIgnoredReason::CeremonyIdAlreadyUsed,
+        )),
+        KEYGEN_REQUEST_IGNORED,
     );
 }
 

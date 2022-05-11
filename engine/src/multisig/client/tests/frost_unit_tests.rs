@@ -256,9 +256,12 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     ));
 
     // Check that the failure reason is correct
-    test_node.ensure_rts_ignored_reason(
+    test_node.ensure_failure_reason(
         result_receiver,
-        SigningRequestIgnoredReason::InvalidParticipants,
+        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+            SigningRequestIgnoredReason::InvalidParticipants,
+        )),
+        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
@@ -306,9 +309,12 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_rts_ignored_reason(
+    node.ensure_failure_reason(
         result_receiver,
-        SigningRequestIgnoredReason::NotEnoughSigners,
+        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+            SigningRequestIgnoredReason::NotEnoughSigners,
+        )),
+        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
@@ -445,9 +451,12 @@ async fn should_ignore_rts_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_rts_ignored_reason(
+    node.ensure_failure_reason(
         result_receiver,
-        SigningRequestIgnoredReason::InvalidParticipants,
+        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+            SigningRequestIgnoredReason::InvalidParticipants,
+        )),
+        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
@@ -481,9 +490,12 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_rts_ignored_reason(
+    node.ensure_failure_reason(
         result_receiver,
-        SigningRequestIgnoredReason::CeremonyIdAlreadyUsed,
+        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+            SigningRequestIgnoredReason::CeremonyIdAlreadyUsed,
+        )),
+        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
