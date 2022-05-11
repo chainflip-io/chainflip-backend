@@ -112,12 +112,17 @@ impl EthObserver for StakeManager {
             } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser_api::Call::witness_staked(
-                            account_id,
-                            amount,
-                            return_addr.0,
+                        pallet_cf_witnesser::Call::witness_at_epoch(
+                            Box::new(
+                                pallet_cf_staking::Call::staked(
+                                    account_id,
+                                    amount,
+                                    return_addr.0,
+                                    event.tx_hash.into(),
+                                )
+                                .into(),
+                            ),
                             epoch,
-                            event.tx_hash.into(),
                         ),
                         logger,
                     )
@@ -126,11 +131,16 @@ impl EthObserver for StakeManager {
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser_api::Call::witness_claimed(
-                            account_id,
-                            amount,
+                        pallet_cf_witnesser::Call::witness_at_epoch(
+                            Box::new(
+                                pallet_cf_staking::Call::claimed(
+                                    account_id,
+                                    amount,
+                                    event.tx_hash.to_fixed_bytes(),
+                                )
+                                .into(),
+                            ),
                             epoch,
-                            event.tx_hash.to_fixed_bytes(),
                         ),
                         logger,
                     )

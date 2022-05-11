@@ -415,12 +415,6 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
-impl pallet_cf_witnesser_api::Config for Runtime {
-	type Call = Call;
-	type Witnesser = Witnesser;
-	type WeightInfoWitnesser = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
-}
-
 parameter_types! {
 	pub const HeartbeatBlockInterval: BlockNumber = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
@@ -500,7 +494,7 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
+		Environment: pallet_cf_environment::{Pallet, Call, Storage, Event<T>, Config},
 		Flip: pallet_cf_flip::{Pallet, Call, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Pallet, Event<T>, Storage, Config},
 		Staking: pallet_cf_staking::{Pallet, Call, Storage, Event<T>, Config<T>},
@@ -508,7 +502,6 @@ construct_runtime!(
 		Session: pallet_session::{Pallet, Storage, Event, Config<T>},
 		Historical: session_historical::{Pallet},
 		Witnesser: pallet_cf_witnesser::{Pallet, Call, Storage, Event<T>, Origin},
-		WitnesserApi: pallet_cf_witnesser_api::{Pallet, Call},
 		Auction: pallet_cf_auction::{Pallet, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Pallet, Config<T>},
@@ -559,6 +552,7 @@ pub type Executive = frame_executive::Executive<
 				migrations::DeleteRewardsPallet,
 				migrations::UnifyCeremonyIds,
 				migrations::refactor_offences::Migration,
+				migrations::migrate_contract_addresses::Migration,
 				migrations::add_flip_contract_address::Migration,
 				migrations::migrate_claims::Migration,
 			),

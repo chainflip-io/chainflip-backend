@@ -15,7 +15,7 @@ mod tests {
 		Staking, System, Timestamp, Validator,
 	};
 
-	use cf_traits::{BlockNumber, EpochIndex, FlipBalance, IsOnline};
+	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance, IsOnline};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use rand::{prelude::*, SeedableRng};
@@ -203,13 +203,18 @@ mod tests {
 					match event {
 						ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
 							// Witness event -> send transaction to state chain
-							state_chain_runtime::WitnesserApi::witness_staked(
+							state_chain_runtime::Witnesser::witness_at_epoch(
 								Origin::signed(self.node_id.clone()),
-								validator_id.clone(),
-								*amount,
-								ETH_ZERO_ADDRESS,
+								Box::new(
+									pallet_cf_staking::Call::staked(
+										validator_id.clone(),
+										*amount,
+										ETH_ZERO_ADDRESS,
+										TX_HASH,
+									)
+									.into(),
+								),
 								*epoch,
-								TX_HASH,
 							)
 							.expect("should be able to witness stake for node");
 						},
@@ -255,11 +260,13 @@ mod tests {
 								pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 									if let EngineState::Rotation = self.engine_state {
 										// If we rotating let's witness the keys being rotated on the contract
-										state_chain_runtime::WitnesserApi::witness_eth_aggkey_rotation(
+										state_chain_runtime::Witnesser::witness(
 											Origin::signed(self.node_id.clone()),
-											(&*self.threshold_signer).borrow_mut().proposed_public_key(),
-											100,
-											[1u8; 32].into(),
+											Box::new(pallet_cf_vaults::Call::vault_key_rotated(
+												(&*self.threshold_signer).borrow_mut().proposed_public_key(),
+												100,
+												[1u8; 32].into(),
+											).into()),
 										).expect("should be able to vault key rotation for node");
 									}
 							},
@@ -511,8 +518,8 @@ mod tests {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
 		root: AccountId,
 		blocks_per_epoch: BlockNumber,
-		max_authorities: u32,
-		min_authorities: u32,
+		max_authorities: AuthorityCount,
+		min_authorities: AuthorityCount,
 	}
 
 	impl Default for ExtBuilder {
@@ -543,12 +550,12 @@ mod tests {
 			self
 		}
 
-		fn min_authorities(mut self, min_authorities: u32) -> Self {
+		fn min_authorities(mut self, min_authorities: AuthorityCount) -> Self {
 			self.min_authorities = min_authorities;
 			self
 		}
 
-		fn max_authorities(mut self, max_authorities: u32) -> Self {
+		fn max_authorities(mut self, max_authorities: AuthorityCount) -> Self {
 			self.max_authorities = max_authorities;
 			self
 		}
@@ -883,7 +890,7 @@ mod tests {
 		// - Nodes without keys state remains passive with `None` as their last active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
-			const MAX_SET_SIZE: u32 = 5;
+			const MAX_SET_SIZE: AuthorityCount = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.min_authorities(MAX_SET_SIZE)
@@ -893,13 +900,13 @@ mod tests {
 					let genesis_nodes = Validator::current_authorities();
 
 					let number_of_passive_nodes = MAX_SET_SIZE
-						.checked_sub(genesis_nodes.len() as u32)
+						.checked_sub(genesis_nodes.len() as AuthorityCount)
 						.expect("Max set size must be at least the number of genesis authorities");
 
 					let (mut testnet, passive_nodes) =
 						network::Network::create(number_of_passive_nodes as u8, &genesis_nodes);
 
-					assert_eq!(testnet.live_nodes().len() as u32, MAX_SET_SIZE);
+					assert_eq!(testnet.live_nodes().len() as AuthorityCount, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
@@ -1027,7 +1034,7 @@ mod tests {
 		// not claim when out of the period
 		fn cannot_claim_stake_out_of_claim_period() {
 			const EPOCH_BLOCKS: u32 = 100;
-			const MAX_AUTHORITIES: u32 = 3;
+			const MAX_AUTHORITIES: AuthorityCount = 3;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_authorities(MAX_AUTHORITIES)
@@ -1159,7 +1166,7 @@ mod tests {
 	mod authorities {
 		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
 		use cf_traits::{
-			BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
+			AuthorityCount, BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
 		use pallet_cf_validator::PercentageRange;
@@ -1176,7 +1183,7 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
-			const MAX_AUTHORITIES: u32 = 10;
+			const MAX_AUTHORITIES: AuthorityCount = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_authorities(MAX_AUTHORITIES)
@@ -1301,7 +1308,7 @@ mod tests {
 			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
-			const MAX_AUTHORITIES: u32 = 10;
+			const MAX_AUTHORITIES: AuthorityCount = 10;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.max_authorities(MAX_AUTHORITIES)

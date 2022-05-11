@@ -5,9 +5,9 @@
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
-	ReplayProtectionProvider, SuccessOrFailure, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
+	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -61,19 +61,19 @@ pub type ThresholdSignatureFor<T, I = ()> =
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
-	candidate_count: u32,
+	candidate_count: AuthorityCount,
 	/// The candidates that have yet to reply.
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
-	success_votes: BTreeMap<AggKeyFor<T, I>, u32>,
-	/// A map of the number of blame votes that keygen participant has received.
-	blame_votes: BTreeMap<T::ValidatorId, u32>,
+	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
+	/// A map of the number of blame votes that each keygen participant has received.
+	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
 }
 
 impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
-			candidate_count: candidates.len() as u32,
+			candidate_count: candidates.len() as AuthorityCount,
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
@@ -83,12 +83,12 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	/// The success threshold is the smallest number of respondents able to reach consensus.
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
-	fn success_threshold(&self) -> u32 {
+	fn success_threshold(&self) -> AuthorityCount {
 		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
 	/// The blame threshold is the number of blame votes that result in punishment.
-	fn blame_threshold(&self) -> u32 {
+	fn blame_threshold(&self) -> AuthorityCount {
 		self.success_threshold()
 	}
 
@@ -125,12 +125,12 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	/// How many candidates are we still awaiting a response from?
-	fn remaining_candidate_count(&self) -> u32 {
-		self.remaining_candidates.len() as u32
+	fn remaining_candidate_count(&self) -> AuthorityCount {
+		self.remaining_candidates.len() as AuthorityCount
 	}
 
 	/// How many responses have we received so far?
-	fn response_count(&self) -> u32 {
+	fn response_count(&self) -> AuthorityCount {
 		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
@@ -355,7 +355,7 @@ pub mod pallet {
 						},
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-							let offenders = if (offenders.len() as u32) <
+							let offenders = if (offenders.len() as AuthorityCount) <
 								utilities::success_threshold_from_share_count(candidate_count)
 							{
 								offenders
@@ -553,7 +553,7 @@ pub mod pallet {
 			block_number: ChainBlockNumberFor<T, I>,
 			tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
 			let rotation =
 				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;

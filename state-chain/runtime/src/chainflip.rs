@@ -43,6 +43,7 @@ impl Chainflip for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
@@ -191,7 +192,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 			},
 			EthereumApi::UpdateFlipSupply(_) => eth::UnsignedTransaction {
 				chain_id: Environment::ethereum_chain_id(),
-				contract: Environment::stake_manager_address().into(),
+				contract: Environment::flip_token_address().into(),
 				data,
 				..Default::default()
 			},

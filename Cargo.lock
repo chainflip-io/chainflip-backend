@@ -783,7 +783,7 @@ name = "cf-chains"
 version = "0.1.0"
 dependencies = [
  "cf-runtime-benchmark-utilities",
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=87ea2a3)",
+ "ethabi 14.1.0",
  "ethereum",
  "frame-support",
  "frame-system",
@@ -831,7 +831,6 @@ dependencies = [
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
- "pallet-cf-witnesser-api",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
  "pallet-session",
@@ -1034,7 +1033,7 @@ dependencies = [
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
- "pallet-cf-witnesser-api",
+ "pallet-cf-witnesser",
  "parity-scale-codec",
  "parking_lot 0.11.2",
  "public-ip",
@@ -1987,18 +1986,6 @@ checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
 dependencies = [
  "cc",
  "libc",
-]
-
-[[package]]
-name = "ethabi"
-version = "14.1.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=114a29d#114a29de12b8b2d5af4de17c44634dd006b9997a"
-dependencies = [
- "anyhow",
- "ethereum-types",
- "hex",
- "sha3",
- "uint",
 ]
 
 [[package]]
@@ -5316,6 +5303,7 @@ dependencies = [
  "frame-system",
  "hex",
  "log 0.4.14",
+ "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5344,29 +5332,6 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "utilities",
-]
-
-[[package]]
-name = "pallet-cf-witnesser-api"
-version = "0.1.0"
-dependencies = [
- "cf-chains",
- "cf-traits",
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-cf-broadcast",
- "pallet-cf-staking",
- "pallet-cf-threshold-signature",
- "pallet-cf-vaults",
- "pallet-cf-witnesser",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -8816,7 +8781,6 @@ dependencies = [
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
- "pallet-cf-witnesser-api",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
  "pallet-session",

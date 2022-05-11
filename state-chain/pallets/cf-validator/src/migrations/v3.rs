@@ -1,4 +1,5 @@
 use crate::*;
+use cf_runtime_upgrade_utilities::move_storage;
 use frame_support::storage::{migration::*, storage_prefix};
 use sp_std::marker::PhantomData;
 
@@ -19,10 +20,12 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		remove_storage_prefix(VALIDATOR_PALLET_NAME, VALIDATOR_LOOKUP_NAME, b"");
 		remove_storage_prefix(WITNESSER_PALLET_NAME, NUM_VALIDATORS_NAME, b"");
 
-		let validators_prefix = storage_prefix(VALIDATOR_PALLET_NAME, VALIDATORS_NAME);
-		let current_authorities_prefix =
-			storage_prefix(VALIDATOR_PALLET_NAME, CURRENT_AUTHORITIES_NAME);
-		move_prefix(&validators_prefix, &current_authorities_prefix);
+		move_storage(
+			VALIDATOR_PALLET_NAME,
+			VALIDATORS_NAME,
+			VALIDATOR_PALLET_NAME,
+			CURRENT_AUTHORITIES_NAME,
+		);
 
 		// move it from witnesser pallet to validator pallet *and* rename it from ValidatorIndex to
 		// AuthorityIndex
@@ -39,7 +42,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		let current_epoch = T::EpochInfo::epoch_index();
 		let current_validators = CurrentAuthorities::<T>::get();
 		let current_bond = Bond::<T>::get();
-		let number_of_current_validators = current_validators.len() as u32;
+		let number_of_current_validators = current_validators.len() as AuthorityCount;
 
 		EpochAuthorityCount::<T>::insert(current_epoch, number_of_current_validators);
 
@@ -84,6 +87,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade() -> Result<(), &'static str> {
 		let epoch_index = T::EpochInfo::epoch_index();
 		assert!(EpochAuthorityCount::<T>::get(&epoch_index).is_some());
+		assert!(!CurrentAuthorities::<T>::get().is_empty());
 		assert_eq!(
 			HistoricalAuthorities::<T>::get(T::EpochInfo::epoch_index()),
 			CurrentAuthorities::<T>::get(),

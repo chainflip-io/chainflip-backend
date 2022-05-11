@@ -567,8 +567,8 @@ fn testnet_genesis(
 		auction: AuctionConfig {
 			min_size: min_authorities,
 			max_size: MAX_AUTHORITIES,
-			max_expansion: MAX_AUTHORITIES / 10,
-			max_contraction: MAX_AUTHORITIES / 10,
+			max_expansion: MAX_AUTHORITIES,
+			max_contraction: MAX_AUTHORITIES,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },

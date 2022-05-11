@@ -36,10 +36,6 @@
   },
   "BasisPoints": "u32",
   "Balance": "FlipBalance",
-  "BlockHeightWindow": {
-    "from": "u64",
-    "to": "Option<u64>"
-  },
   "BlockNumber": "u32",
   "BroadcastAttempt": {
     "broadcast_attempt_id": "BroadcastAttemptId",
@@ -117,8 +113,8 @@
   "KeygenResponseStatus": {
     "CandidateCount": "u32",
     "RemainingCandidates": "BTreeSet<ValidatorId>",
-    "SuccessVotes": "BTreeMap<AggKeyFor, u32>",
-    "BlameVotes": "BTreeMap<ValidatorId, u32>"
+    "SuccessVotes": "BTreeMap<AggKeyFor, u16>",
+    "BlameVotes": "BTreeMap<ValidatorId, u16>"
   },
   "KeyId": "Vec<u8>",
   "Keys": {
@@ -216,6 +212,12 @@
     "_enum": [
       "Success",
       "Failure"
+    ]
+  },
+  "SystemState": {
+    "_enum": [
+      "Normal",
+      "Maintenance"
     ]
   },
   "ThresholdSignature": "ThresholdSignatureFor",

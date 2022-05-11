@@ -1,7 +1,7 @@
-mod db_tests;
 mod frost_unit_tests;
 mod helpers;
 mod keygen_unit_tests;
+mod multisig_client_tests;
 
 pub use helpers::{
     new_nodes, run_keygen_with_err_on_high_pubkey, standard_signing, KeygenCeremonyRunner,
