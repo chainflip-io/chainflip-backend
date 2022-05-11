@@ -456,11 +456,11 @@ pub mod pallet {
 					"Unable to verify tranaction signature for broadcast attempt id {}",
 					broadcast_attempt_id
 				);
-				Self::report_and_schedule_retry(
-					&signing_attempt.nominee.clone(),
-					signing_attempt.broadcast_attempt,
+				T::OffenceReporter::report(
 					PalletOffence::InvalidTransactionAuthored,
-				)
+					signing_attempt.nominee,
+				);
+				Self::schedule_retry(signing_attempt.broadcast_attempt);
 			}
 
 			Ok(().into())
@@ -673,15 +673,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			log::warn!("No online validators at the moment.");
 			Self::schedule_retry(broadcast_attempt);
 		}
-	}
-
-	fn report_and_schedule_retry(
-		signer: &T::ValidatorId,
-		failed_broadcast_attempt: BroadcastAttempt<T, I>,
-		offence: PalletOffence,
-	) {
-		T::OffenceReporter::report(offence, signer.clone());
-		Self::schedule_retry(failed_broadcast_attempt);
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
