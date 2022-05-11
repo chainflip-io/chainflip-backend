@@ -6,11 +6,29 @@ thread_local! {
 
 pub struct MockChainflipAccount;
 
+impl MockChainflipAccount {
+	pub fn is_backup(account_id: &u64) -> bool {
+		matches!(
+			Self::get(account_id).state,
+			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup) |
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
+		)
+	}
+
+	pub fn is_passive(account_id: &u64) -> bool {
+		matches!(
+			Self::get(account_id).state,
+			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive) |
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
+		)
+	}
+}
+
 impl ChainflipAccount for MockChainflipAccount {
 	type AccountId = u64;
 
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
-		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
+		CHAINFLIP_ACCOUNTS.with(|cell| cell.borrow().get(account_id).cloned().unwrap_or_default())
 	}
 
 	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive) {
