@@ -367,7 +367,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                 }
                                                 state_chain_runtime::Event::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Event::TransmissionRequest(
-                                                        attempt_id,
+                                                        broadcast_attempt_id,
                                                         signed_tx,
                                                     ),
                                                 ) => {
@@ -379,8 +379,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         Ok(tx_hash) => {
                                                             slog::debug!(
                                                                 logger,
-                                                                "Successful TransmissionRequest attempt_id {}, tx_hash: {:#x}",
-                                                                attempt_id,
+                                                                "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
+                                                                broadcast_attempt_id,
                                                                 tx_hash
                                                             );
                                                             assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
@@ -388,8 +388,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         Err(e) => {
                                                             slog::info!(
                                                                 logger,
-                                                                "TransmissionRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
+                                                                "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
+                                                                broadcast_attempt_id,
                                                                 e
                                                             );
                                                         }
