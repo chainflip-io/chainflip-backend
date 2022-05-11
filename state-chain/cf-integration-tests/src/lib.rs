@@ -41,6 +41,7 @@ mod tests {
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
+		use codec::Encode;
 		use frame_support::traits::HandleLifetime;
 		use libsecp256k1::PublicKey;
 		use pallet_cf_staking::AccountRetired;
@@ -434,19 +435,25 @@ mod tests {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
 				let current_block_number = System::block_number();
 				while System::block_number() < current_block_number + n {
-					Timestamp::set_timestamp(
-						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
-					);
-					Session::on_initialize(System::block_number());
-					Online::on_initialize(System::block_number());
-					Flip::on_initialize(System::block_number());
-					Staking::on_initialize(System::block_number());
-					Auction::on_initialize(System::block_number());
-					Emissions::on_initialize(System::block_number());
-					Governance::on_initialize(System::block_number());
-					Reputation::on_initialize(System::block_number());
-					EthereumVault::on_initialize(System::block_number());
-					Validator::on_initialize(System::block_number());
+					let block_number = System::block_number() + 1;
+					let mut digest = sp_runtime::Digest::default();
+					digest.push(sp_runtime::DigestItem::PreRuntime(
+						sp_consensus_aura::AURA_ENGINE_ID,
+						sp_consensus_aura::Slot::from(block_number as u64).encode(),
+					));
+					System::initialize(&block_number, &System::block_hash(block_number), &digest);
+					System::on_initialize(block_number);
+					Session::on_initialize(block_number);
+					Online::on_initialize(block_number);
+					Flip::on_initialize(block_number);
+					Staking::on_initialize(block_number);
+					Auction::on_initialize(block_number);
+					Emissions::on_initialize(block_number);
+					Governance::on_initialize(block_number);
+					Reputation::on_initialize(block_number);
+					EthereumVault::on_initialize(block_number);
+					Validator::on_initialize(block_number);
+					Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
 
 					// Notify contract events
 					for event in self.stake_manager_contract.events() {
@@ -474,9 +481,8 @@ mod tests {
 
 					// A completed block notification
 					for engine in self.engines.values() {
-						engine.on_block(System::block_number());
+						engine.on_block(block_number);
 					}
-					System::set_block_number(System::block_number() + 1);
 				}
 			}
 		}
