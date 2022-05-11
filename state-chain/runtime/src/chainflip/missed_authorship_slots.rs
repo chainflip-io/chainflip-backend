@@ -61,7 +61,7 @@ mod test_missed_authorship_slots {
 	use codec::Encode;
 	use frame_support::{
 		construct_runtime, parameter_types,
-		traits::{ConstU32, OnInitialize},
+		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use sp_consensus_aura::ed25519::AuthorityId;
 	use sp_runtime::{
@@ -115,13 +115,12 @@ mod test_missed_authorship_slots {
 		type MaxConsumers = frame_support::traits::ConstU32<5>;
 	}
 
-	parameter_types! {
-		pub const MinimumPeriod: u64 = 1;
-	}
+	const SLOT_DURATION: u64 = 6;
+
 	impl pallet_timestamp::Config for Test {
 		type Moment = u64;
 		type OnTimestampSet = Aura;
-		type MinimumPeriod = MinimumPeriod;
+		type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
 		type WeightInfo = ();
 	}
 
@@ -171,50 +170,49 @@ mod test_missed_authorship_slots {
 		);
 	}
 
-	fn simulate_block_authorship(block_number: u64, slot: u64) {
-		let author_slot = AuraSlot::from(slot);
-		let pre_digest =
-			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, author_slot.encode())] };
-
-		System::reset_events();
-		System::initialize(&block_number, &System::parent_hash(), &pre_digest);
-	}
-
 	#[test]
 	fn test_missed_slots() {
+		// The genesis slot is some value greater than zero.
+		const GENESIS_SLOT: u64 = 12345u64;
+
+		fn simulate_block_authorship<F: Fn(Vec<u64>)>(block_number: u64, assertions: F) {
+			// one slot per block, so slot == block_number
+			let author_slot = AuraSlot::from(GENESIS_SLOT + block_number);
+			let pre_digest =
+				Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, author_slot.encode())] };
+
+			System::reset_events();
+			System::initialize(&block_number, &System::parent_hash(), &pre_digest);
+			System::on_initialize(block_number);
+			Timestamp::on_initialize(block_number);
+			assertions(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots());
+			Aura::on_initialize(block_number);
+			Timestamp::set_timestamp(block_number);
+		}
+
 		new_test_ext(vec![0, 1, 2, 3, 4]).execute_with(|| {
-			let (block, slot) = (33u64, 3u64);
-			simulate_block_authorship(block, slot);
+			// No expected slot at genesis, so no missed slots.
+			simulate_block_authorship(1, |missed_slots| {
+				assert!(missed_slots.is_empty());
+			});
 
-			// Our author is authoring for slot 3. 0 has already been authored (genesis), so
-			// 1 and 2 were skipped.
-			assert_eq!(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots(), vec![1, 2]);
-
-			// Aura updates after this - current slot should now be 3.
-			<Aura as OnInitialize<u64>>::on_initialize(block);
-			assert_eq!(Aura::current_slot(), slot);
+			// Author block 3 - we missed slot 2.
+			simulate_block_authorship(3, |missed_slots| {
+				assert_eq!(missed_slots, [2].map(|x| GENESIS_SLOT + x));
+			});
+			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 3);
 
 			// Author for the next slot, assert we haven't missed a slot.
-			let (block, slot) = (44u64, 4u64);
-			simulate_block_authorship(block, slot);
-			assert!(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots().is_empty());
+			simulate_block_authorship(4, |missed_slots| {
+				assert!(missed_slots.is_empty());
+			});
+			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 4);
 
-			<Aura as OnInitialize<u64>>::on_initialize(block);
-			assert_eq!(Aura::current_slot(), slot);
-
-			// Author for slot 6, assert we missed slot 5.
-			let (block, slot) = (66u64, 6u64);
-			simulate_block_authorship(block, slot);
-			assert_eq!(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots(), vec![5]);
-
-			<Aura as OnInitialize<u64>>::on_initialize(block);
-			assert_eq!(Aura::current_slot(), slot);
-		})
-	}
-
-	#[test]
-	fn test_first_authored_block() {
-		simulate_block_authorship(0, 0);
-		assert!(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots().is_empty());
+			// Author for slot 7, assert we missed slots 5 and 6.
+			simulate_block_authorship(7, |missed_slots| {
+				assert_eq!(missed_slots, [5, 6].map(|x| GENESIS_SLOT + x));
+			});
+			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 7);
+		});
 	}
 }
