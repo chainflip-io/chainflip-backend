@@ -568,13 +568,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     where
         Call: Into<state_chain_runtime::Call> + 'static + std::fmt::Debug + Clone + Send,
     {
-        let runtime_call = call.clone().into();
-        let expected_hash = BlakeTwo256::hash_of(&runtime_call);
+        let extrinsic = state_chain_runtime::UncheckedExtrinsic::new_unsigned(call.clone().into());
+        let expected_hash = BlakeTwo256::hash_of(&extrinsic);
         match self
             .state_chain_rpc_client
-            .submit_extrinsic_rpc(state_chain_runtime::UncheckedExtrinsic::new_unsigned(
-                runtime_call,
-            ))
+            .submit_extrinsic_rpc(extrinsic)
             .await
         {
             Ok(tx_hash) => {
