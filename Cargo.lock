@@ -744,6 +744,7 @@ name = "cf-chains"
 version = "0.1.0"
 dependencies = [
  "cf-runtime-benchmark-utilities",
+ "cf-test-utilities",
  "ethabi",
  "ethereum",
  "ethereum-types",
@@ -856,6 +857,7 @@ name = "cf-test-utilities"
 version = "0.1.0"
 dependencies = [
  "frame-system",
+ "parity-scale-codec",
 ]
 
 [[package]]

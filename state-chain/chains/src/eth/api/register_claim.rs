@@ -204,4 +204,9 @@ mod test_register_claim {
 				.unwrap()
 		);
 	}
+
+	#[test]
+	fn test_max_encoded_len() {
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<RegisterClaim>();
+	}
 }

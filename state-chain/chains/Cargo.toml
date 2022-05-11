@@ -58,6 +58,7 @@ tag = 'chainflip-monthly-2022-05'
 
 
 [dev-dependencies]
+cf-test-utilities = { path = '../test-utilities' }
 hex-literal = {version = '0.3'}
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['test']}
 rand = {version='0.8.4'}

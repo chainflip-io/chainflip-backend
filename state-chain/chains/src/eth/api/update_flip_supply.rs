@@ -9,7 +9,7 @@ use crate::eth::{SchnorrVerificationComponents, SigData};
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct UpdateFlipSupply {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -181,5 +181,10 @@ mod test_update_flip_supply {
 				])
 				.unwrap()
 		);
+	}
+
+	#[test]
+	fn test_max_encoded_len() {
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<UpdateFlipSupply>();
 	}
 }

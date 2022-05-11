@@ -940,7 +940,7 @@ mod verification_tests {
 	}
 
 	#[test]
-	fn sig_data_max_encoded_len_is_correct() {
-		assert_eq!(std::mem::size_of::<SigData>(), SigData::max_encoded_len());
+	fn test_max_encoded_len() {
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<SigData>();
 	}
 }
