@@ -12,12 +12,12 @@ use web3::{
 pub struct EventWithCommon<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: H256,
-    /// Base fee per unit of gas for the block this event was included in
-    pub base_fee_per_gas: U256,
     /// The index number of this particular log, in the list of logs emitted by the tx_hash
     pub log_index: U256,
     /// The block number at which the event occurred
     pub block_number: u64,
+    /// Base fee per unit of gas for the block this event was included in
+    pub base_fee_per_gas: U256,
     /// The event specific parameters
     pub event_parameters: EventParameters,
 }
