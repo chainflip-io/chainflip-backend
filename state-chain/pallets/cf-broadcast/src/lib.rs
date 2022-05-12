@@ -411,9 +411,9 @@ pub mod pallet {
 			.is_ok()
 			{
 				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
-				if !TransactionFeeDeficit::<T, I>::contains_key(&signer) {
+				if !TransactionFeeDeficit::<T, I>::contains_key(&extrinsic_signer) {
 					TransactionFeeDeficit::<T, I>::insert(
-						&signer,
+						&extrinsic_signer,
 						ChainAmountFor::<T, I>::default(),
 					);
 				}
@@ -421,13 +421,16 @@ pub mod pallet {
 				// white list the signer id, so if we receive SignatureAccepted events from this
 				// signer id, we can refund the fee to that authority
 				if !SignerIdToAccountId::<T, I>::contains_key(&signer_id) {
-					SignerIdToAccountId::<T, I>::insert(&signer_id, &signer);
+					SignerIdToAccountId::<T, I>::insert(&signer_id, &extrinsic_signer);
 				}
 
 				// store the latest signer id used by an authority
-				if RefundSignerId::<T, I>::get(&signer) != Some(signer_id.clone()) {
-					RefundSignerId::<T, I>::insert(&signer, &signer_id);
-					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated(signer, signer_id));
+				if RefundSignerId::<T, I>::get(&extrinsic_signer) != Some(signer_id.clone()) {
+					RefundSignerId::<T, I>::insert(&extrinsic_signer, &signer_id);
+					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated(
+						extrinsic_signer,
+						signer_id,
+					));
 				}
 
 				AwaitingTransmission::<T, I>::insert(

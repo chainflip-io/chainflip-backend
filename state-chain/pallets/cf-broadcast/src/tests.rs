@@ -2,7 +2,7 @@ use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
-	SignatureToBroadcastIdLookup, SignerIdToAccountId, TransactionFeeDeficit, TransmissionFailure,
+	SignatureToBroadcastIdLookup, SignerIdToAccountId, TransactionFeeDeficit,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -102,10 +102,9 @@ impl MockCfe {
 								Origin::root(),
 								MockThresholdSignature::default(),
 								Validity::Valid,
-                                0,
+								200,
 								10,
 								[0xcf; 4],
-								200,
 							));
 						},
 						_ => unimplemented!(),
