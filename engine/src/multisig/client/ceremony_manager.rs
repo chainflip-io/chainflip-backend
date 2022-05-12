@@ -32,7 +32,10 @@ pub type CeremonyResultReceiver<T> =
 
 type SigningStateRunner<C> =
     StateRunner<SigningData<<C as CryptoScheme>::Point>, <C as CryptoScheme>::Signature>;
-type KeygenStateRunner<P> = StateRunner<KeygenData<P>, KeygenResultInfo<P>>;
+type KeygenStateRunner<C> = StateRunner<
+    KeygenData<<C as CryptoScheme>::Point>,
+    KeygenResultInfo<<C as CryptoScheme>::Point>,
+>;
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
@@ -40,7 +43,7 @@ pub struct CeremonyManager<C: CryptoScheme> {
     my_account_id: AccountId,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     signing_states: HashMap<CeremonyId, SigningStateRunner<C>>,
-    keygen_states: HashMap<CeremonyId, KeygenStateRunner<C::Point>>,
+    keygen_states: HashMap<CeremonyId, KeygenStateRunner<C>>,
     ceremony_id_tracker: CeremonyIdTracker,
     allowing_high_pubkey: bool,
     logger: slog::Logger,
@@ -225,7 +228,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
         let logger_no_ceremony_id = &self.logger;
         let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
-            KeygenStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+            KeygenStateRunner::<C>::new_unauthorised(ceremony_id, logger_no_ceremony_id)
         });
 
         let initial_stage = {
@@ -432,7 +435,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         let state = self
             .keygen_states
             .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
+            .or_insert_with(|| KeygenStateRunner::<C>::new_unauthorised(ceremony_id, logger));
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_keygen_ceremony_outcome(ceremony_id, result);

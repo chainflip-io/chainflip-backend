@@ -119,42 +119,43 @@ pub trait MultisigClientApi<C: CryptoScheme> {
     ) -> Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)>;
 }
 
-/// This is constructed by hand since mockall
-/// fails to parse complex generic parameters
-/// (and none of mockall's features were used
-/// anyway)
+// This is constructed by hand since mockall
+// fails to parse complex generic parameters
+// (and none of mockall's features were used
+// anyway)
 // NOTE: the fact that this mock is needed in tests but
 // its methods are never called is a bit of a red flag
 
-#[derive(Default)]
-pub struct MockMultisigClientApi {}
+#[cfg(test)]
+pub mod mocks {
 
-impl MockMultisigClientApi {
-    pub fn new() -> Self {
-        // clippy was asking for Default implementation
-        Default::default()
-    }
-}
+    use super::*;
+    use mockall::mock;
 
-#[async_trait]
-impl<C: CryptoScheme> MultisigClientApi<C> for MockMultisigClientApi {
-    async fn keygen(
-        &self,
-        _ceremony_id: CeremonyId,
-        _participants: Vec<AccountId>,
-    ) -> Result<<C::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)> {
-        // Never called
-        unimplemented!();
-    }
-    async fn sign(
-        &self,
-        _ceremony_id: CeremonyId,
-        _key_id: KeyId,
-        _signers: Vec<AccountId>,
-        _data: MessageHash,
-    ) -> Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)> {
-        // Never called
-        unimplemented!();
+    use crate::multisig::crypto::eth::EthSigning;
+
+    type Point = <EthSigning as CryptoScheme>::Point;
+    type PublicKey = <Point as ECPoint>::Underlying;
+    type Signature = <EthSigning as CryptoScheme>::Signature;
+
+    mock! {
+        pub MultisigClientApi {}
+
+        #[async_trait]
+        impl MultisigClientApi<EthSigning> for MultisigClientApi {
+            async fn keygen(
+                &self,
+                _ceremony_id: CeremonyId,
+                _participants: Vec<AccountId>,
+            ) -> Result<PublicKey, (BTreeSet<AccountId>, anyhow::Error)>;
+            async fn sign(
+                &self,
+                _ceremony_id: CeremonyId,
+                _key_id: KeyId,
+                _signers: Vec<AccountId>,
+                _data: MessageHash,
+            ) -> Result<Signature, (BTreeSet<AccountId>, anyhow::Error)>;
+        }
     }
 }
 

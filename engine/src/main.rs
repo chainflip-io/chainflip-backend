@@ -152,17 +152,17 @@ async fn main() {
 
     use crate::multisig::eth::EthSigning;
 
-    // ETH multisig client
-    let (multisig_client, multisig_client_backend_future) = multisig::start_client::<_, EthSigning>(
-        state_chain_client.our_account_id.clone(),
-        db,
-        incoming_p2p_message_receiver,
-        outgoing_p2p_message_sender,
-        &root_logger,
-    );
+    let (eth_multisig_client, eth_multisig_client_backend_future) =
+        multisig::start_client::<_, EthSigning>(
+            state_chain_client.our_account_id.clone(),
+            db,
+            incoming_p2p_message_receiver,
+            outgoing_p2p_message_sender,
+            &root_logger,
+        );
 
     tokio::join!(
-        multisig_client_backend_future,
+        eth_multisig_client_backend_future,
         async {
             multisig_p2p::start(
                 &settings,
@@ -181,7 +181,7 @@ async fn main() {
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
-            multisig_client,
+            eth_multisig_client,
             account_peer_mapping_change_sender,
             // send messages to these channels to start witnessing
             sm_instruction_sender,
@@ -189,7 +189,7 @@ async fn main() {
             latest_block_hash,
             &root_logger
         ),
-        // Start eth observors
+        // Start eth observers
         eth::start_contract_observer(
             stake_manager_contract,
             &eth_ws_rpc_client,
