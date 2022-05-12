@@ -585,9 +585,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			payload: ThresholdSignatureFor<T, I>,
 			tx_signer: SignerIdFor<T, I>,
+			tx_fee: ChainAmountFor<T, I>,
 			_block_number: u64,
 			_tx_hash: TransactionHashFor<T, I>,
-			tx_fee: ChainAmountFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)

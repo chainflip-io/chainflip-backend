@@ -132,9 +132,9 @@ impl MockCfe {
 					Origin::root(),
 					MockThresholdSignature::default(),
 					Validity::Valid,
+					0,
 					10,
 					[0xcf; 4],
-					0,
 				)
 			},
 			_ => unimplemented!(),
@@ -364,9 +364,9 @@ fn test_invalid_sigdata_is_noop() {
 				RawOrigin::Signed(0).into(),
 				MockThresholdSignature::default(),
 				Validity::Valid,
+				0,
 				10,
 				[0u8; 4],
-				0
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
@@ -522,9 +522,9 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			Origin::root(),
 			MockThresholdSignature::default(),
 			Validity::Valid,
+			FEE_PAID,
 			10,
 			[0xcf; 4],
-			FEE_PAID,
 		));
 
 		// Attempt numbers, signature requests and transmission should be cleaned up
@@ -588,9 +588,9 @@ fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_defi
 			Origin::root(),
 			MockThresholdSignature::default(),
 			Validity::Invalid,
+			200,
 			10,
 			[0xcf; 4],
-			200,
 		));
 
 		assert_eq!(
@@ -684,9 +684,9 @@ fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attemp
 			Origin::root(),
 			MockThresholdSignature::default(),
 			Validity::Valid,
+			0,
 			10,
 			[0xcf; 4],
-			0
 		));
 
 		// Success should clear these out
