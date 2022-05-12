@@ -7,11 +7,19 @@ use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_system::RawOrigin;
 
 benchmarks! {
-	set_current_authority_set_size_range {
-		let range = (2, 100);
-	}: _(RawOrigin::Root, range.into())
+	set_auction_parameters {
+		let params = DynamicSetSizeParameters {
+			min_size: 3,
+			max_size: 150,
+			max_contraction: 10,
+			max_expansion: 15,
+		};
+	}: _(RawOrigin::Root, params)
 	verify {
-		assert_eq!(Pallet::<T>::current_authority_set_size_range(), range.into())
+		assert_eq!(
+			Pallet::<T>::auction_parameters(),
+			params
+		);
 	}
 }
 

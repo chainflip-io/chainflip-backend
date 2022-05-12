@@ -49,10 +49,7 @@ use sp_version::RuntimeVersion;
 use cf_traits::ChainflipAccountData;
 pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
-use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, ChainflipStakeHandler,
-	KeygenOffences,
-};
+use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
 use constants::common::*;
 use pallet_cf_broadcast::AttemptCount;
 use pallet_cf_flip::{Bonder, FlipSlasher};
@@ -119,11 +116,6 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-parameter_types! {
-	pub const AuthorityToBackupRatio: u32 = 3;
-	pub const PercentageOfBackupNodesInEmergency: u32 = 30;
-}
-
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
@@ -137,10 +129,9 @@ impl pallet_cf_auction::Config for Runtime {
 			pallet_session::Pallet<Self>,
 		>,
 	);
-	type AuthorityToBackupRatio = AuthorityToBackupRatio;
 	type EmergencyRotation = Validator;
-	type PercentageOfBackupNodesInEmergency = PercentageOfBackupNodesInEmergency;
 	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 // FIXME: These would be changed
@@ -355,7 +346,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = ChainflipStakeHandler;
+	type StakeHandler = pallet_cf_validator::UpdateBackupAndPassiveAccounts<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 }
@@ -555,17 +546,20 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	AllPallets,
 	// Note: the following run *before* all pallet migrations.
-	migrations::VersionedMigration<
-		(
-			migrations::DeleteRewardsPallet,
-			migrations::UnifyCeremonyIds,
-			migrations::refactor_offences::Migration,
-			migrations::migrate_contract_addresses::Migration,
-			migrations::add_flip_contract_address::Migration,
-			migrations::migrate_claims::Migration,
-		),
-		112,
-	>,
+	(
+		migrations::VersionedMigration<
+			(
+				migrations::DeleteRewardsPallet,
+				migrations::UnifyCeremonyIds,
+				migrations::refactor_offences::Migration,
+				migrations::migrate_contract_addresses::Migration,
+				migrations::add_flip_contract_address::Migration,
+				migrations::migrate_claims::Migration,
+			),
+			112,
+		>,
+		migrations::VersionedMigration<(migrations::migrate_backup_triage::Migration,), 113>,
+	),
 >;
 
 impl_runtime_apis! {
