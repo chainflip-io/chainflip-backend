@@ -398,13 +398,14 @@ impl CeremonyManager {
 
         // Only stage 1 messages can create unauthorised ceremonies
         let logger = &self.logger;
+        let is_not_first_stage_data = !matches!(data, SigningData::CommStage1(_));
         let state = match self.signing_states.entry(ceremony_id) {
             std::collections::hash_map::Entry::Vacant(entry) => {
                 // No ceremony exists for this id yet
-                if !matches!(data, SigningData::CommStage1(_)) {
+                if is_not_first_stage_data {
                     slog::debug!(
                         self.logger,
-                        "Ignoring non-initial stage signing data from ceremony {}",
+                        "Ignoring non-initial stage signing data for ceremony {}",
                         ceremony_id
                     );
                     return;
@@ -413,7 +414,21 @@ impl CeremonyManager {
                     entry.insert(SigningStateRunner::new_unauthorised(ceremony_id, logger))
                 }
             }
-            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                let state = entry.into_mut();
+
+                // Only first stage messages should be processed (delayed) if we're not authorized
+                if !state.is_authorized() && is_not_first_stage_data {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage signing data for ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                } else {
+                    state
+                }
+            }
         };
 
         if let Some(result) = state.process_message(sender_id, data) {
@@ -442,13 +457,14 @@ impl CeremonyManager {
 
         // Only stage 1 messages can create unauthorised ceremonies
         let logger = &self.logger;
+        let is_not_first_stage_data = !matches!(data, KeygenData::HashComm1(_));
         let state = match self.keygen_states.entry(ceremony_id) {
             std::collections::hash_map::Entry::Vacant(entry) => {
                 // No ceremony exists for this id yet
-                if !matches!(data, KeygenData::HashComm1(_)) {
+                if is_not_first_stage_data {
                     slog::debug!(
                         self.logger,
-                        "Ignoring non-initial stage keygen data from ceremony {}",
+                        "Ignoring non-initial stage keygen data for ceremony {}",
                         ceremony_id
                     );
                     return;
@@ -457,7 +473,21 @@ impl CeremonyManager {
                     entry.insert(KeygenStateRunner::new_unauthorised(ceremony_id, logger))
                 }
             }
-            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                let state = entry.into_mut();
+
+                // Only first stage messages should be processed (delayed) if we're not authorized
+                if !state.is_authorized() && is_not_first_stage_data {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage keygen data for ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                } else {
+                    state
+                }
+            }
         };
 
         if let Some(result) = state.process_message(sender_id, data) {
@@ -541,8 +571,13 @@ mod tests {
         multisig::client::common::BroadcastVerificationMessage,
     };
 
+    use crate::multisig::crypto::Point;
+    use client::signing::frost::SigningCommitment;
+
     #[test]
     fn should_ignore_non_first_stage_keygen_data_before_request() {
+        let ceremony_id = 0_u64;
+
         // Create a new ceremony manager
         let mut ceremony_manager = CeremonyManager::new(
             AccountId::default(),
@@ -553,7 +588,7 @@ mod tests {
         // Process a stage 2 message
         ceremony_manager.process_keygen_data(
             AccountId::default(),
-            0,
+            ceremony_id,
             KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
                 data: BTreeMap::new(),
             }),
@@ -561,10 +596,42 @@ mod tests {
 
         // Check that the message was ignored and no unauthorised ceremony was created
         assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
+
+        // Process a stage 1 message
+        ceremony_manager.process_keygen_data(
+            AccountId::default(),
+            ceremony_id,
+            KeygenData::HashComm1(client::keygen::HashComm1(sp_core::H256::default())),
+        );
+
+        // Check that the message was not ignored and an unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
+
+        // Process a stage 2 message
+        ceremony_manager.process_keygen_data(
+            AccountId::default(),
+            ceremony_id,
+            KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and not added to the delayed messages of the unauthorised ceremony.
+        // Only 1 first stage message should be in the delayed messages.
+        assert_eq!(
+            ceremony_manager
+                .keygen_states
+                .get(&ceremony_id)
+                .unwrap()
+                .get_delayed_messages_len(),
+            1
+        )
     }
 
     #[test]
     fn should_ignore_non_first_stage_singing_data_before_request() {
+        let ceremony_id = 0_u64;
+
         // Create a new ceremony manager
         let mut ceremony_manager = CeremonyManager::new(
             AccountId::default(),
@@ -575,7 +642,7 @@ mod tests {
         // Process a stage 2 message
         ceremony_manager.process_signing_data(
             AccountId::default(),
-            0,
+            ceremony_id,
             SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
                 data: BTreeMap::new(),
             }),
@@ -583,5 +650,39 @@ mod tests {
 
         // Check that the message was ignored and no unauthorised ceremony was created
         assert_eq!(ceremony_manager.get_signing_states_len(), 0);
+
+        // Process a stage 1 message
+        let mut rng = <Rng as rand_legacy::SeedableRng>::from_seed([0; 32]);
+        ceremony_manager.process_signing_data(
+            AccountId::default(),
+            ceremony_id,
+            SigningData::CommStage1(SigningCommitment {
+                d: Point::random(&mut rng),
+                e: Point::random(&mut rng),
+            }),
+        );
+
+        // Check that the message was not ignored and an unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_signing_states_len(), 1);
+
+        // Process a stage 2 message
+        ceremony_manager.process_signing_data(
+            AccountId::default(),
+            ceremony_id,
+            SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and not added to the delayed messages of the unauthorised ceremony.
+        // Only 1 first stage message should be in the delayed messages.
+        assert_eq!(
+            ceremony_manager
+                .signing_states
+                .get(&ceremony_id)
+                .unwrap()
+                .get_delayed_messages_len(),
+            1
+        )
     }
 }
