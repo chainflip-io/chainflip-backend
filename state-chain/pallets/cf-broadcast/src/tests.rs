@@ -1,8 +1,9 @@
 use crate::{
-	mock::*, AccountIdTransactionFeeDeficit, AwaitingTransactionSignature, AwaitingTransmission,
-	BroadcastAttemptId, BroadcastId, BroadcastIdToAttemptNumbers, BroadcastRetryQueue,
-	BroadcastStage, Error, Event as BroadcastEvent, Expiries, Instance1, PalletOffence,
-	SignatureToBroadcastIdLookup, SignerIdToAccountId, TransmissionFailure,
+	mock::*, AccountIdToRefundSignerId, AccountIdTransactionFeeDeficit,
+	AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
+	BroadcastIdCounter, BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
+	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
+	SignerIdToAccountId, TransmissionFailure,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -437,7 +438,11 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 		);
 
 		// We still shouldn't have a valid signer in the deficit map yet
-		assert!(AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).is_none(),);
+		// or any of the related maps
+		assert!(AccountIdTransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee)
+			.is_none());
+		assert!(SignerIdToAccountId::<Test, Instance1>::get(Validity::Valid).is_none());
+		assert!(AccountIdToRefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).is_none());
 
 		// TODO: should we move this testing below into a separate test
 
@@ -458,11 +463,24 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 
 		// We should have the valid signer in the list with no deficit ath this point
 		assert_eq!(
-			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
 			0
 		);
+		// .. and related identity mappings
+		assert_eq!(
+			SignerIdToAccountId::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			tx_sig_request.nominee
+		);
+		assert_eq!(
+			AccountIdToRefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			Validity::Valid
+		);
+
 		// We shouldn't have any other signers with 0 values
-		assert!(AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid).is_none());
+		const WRONG_XT_SUBMITTER: u64 = 666;
+		assert!(
+			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(WRONG_XT_SUBMITTER).is_none()
+		);
 
 		// we should not have a transmission attempt for the old attempt id that did not succeed
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
@@ -516,9 +534,9 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 		)
 		.is_none());
 
-		// We should not have a deficit for the valid signer
+		// We should now have a deficit for the valid signer
 		assert_eq!(
-			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
 			FEE_PAID
 		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(
@@ -533,7 +551,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 }
 
 #[test]
-fn signature_accepted_with_invalid_signer_is_does_not_increase_deficit() {
+fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_deficit() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
@@ -548,14 +566,21 @@ fn signature_accepted_with_invalid_signer_is_does_not_increase_deficit() {
 			Validity::Valid,
 		);
 
+		// We have whitelisted their address, 0 deficit
 		assert_eq!(
-			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
 			0
 		);
-		// The name mapping should be updated
+		// The mapping from SignerId to account id should be updated
 		assert_eq!(
 			SignerIdToAccountId::<Test, Instance1>::get(Validity::Valid).unwrap(),
 			tx_sig_request.nominee
+		);
+
+		// The mapping from account id to signer id should be updated
+		assert_eq!(
+			AccountIdToRefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			Validity::Valid
 		);
 
 		// now we respond with signature accepted from the invalid signer since they weren't
@@ -570,12 +595,9 @@ fn signature_accepted_with_invalid_signer_is_does_not_increase_deficit() {
 		));
 
 		assert_eq!(
-			SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			AccountIdTransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
 			0
 		);
-		// The invalid signer is not in the list of signers with a deficit, so even though
-		// they submitted the ETH transaction
-		assert!(SignerTransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid).is_none());
 	});
 }
 

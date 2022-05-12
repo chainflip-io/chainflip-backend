@@ -414,7 +414,7 @@ pub mod pallet {
 			)
 			.is_ok()
 			{
-				// Whitelist the signer_id so it can receive fee refunds
+				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
 				if !AccountIdTransactionFeeDeficit::<T, I>::contains_key(signer.clone()) {
 					let init_deficit: ChainAmountFor<T, I> = Default::default();
 					AccountIdTransactionFeeDeficit::<T, I>::insert(signer.clone(), init_deficit);
