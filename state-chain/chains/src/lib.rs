@@ -154,6 +154,7 @@ macro_rules! impl_chains {
 impl_chains! {
 	Ethereum {
 		type ChainBlockNumber = u64;
+		// TODO: Review the choice of u128 for the ChainAmount.
 		type ChainAmount = u128;
 	},
 }
