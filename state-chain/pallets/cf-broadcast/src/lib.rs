@@ -611,7 +611,7 @@ pub mod pallet {
 			}
 			// Add fee deficits only when we know everything else is ok
 
-			// if this has been whitelist, we can add the fee deficit to the authority's account
+			// if this has been whitelisted, we can add the fee deficit to the authority's account
 			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
 				TransactionFeeDeficit::<T, I>::mutate_exists(account_id, |fee_deficit| {
 					if let Some(fee_deficit) = fee_deficit.as_mut() {
