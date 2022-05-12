@@ -36,15 +36,20 @@ where
         logger: logger.new(o!(COMPONENT_KEY => "ETH_WSSafeStream")),
     };
 
-    fn log_if_none<T>(item: Option<T>, name: &str, logger: &slog::Logger) -> Option<T> {
-        if item.is_none() {
-            slog::error!(
-                logger,
-                "Terminating stream. Latest WS block header does not have a {}.",
-                name
-            );
-        }
-        item
+    macro_rules! break_unwrap {
+        ($item:expr, $name:expr, $logger:expr) => {{
+            match $item {
+                Some(item) => item,
+                None => {
+                    slog::error!(
+                        $logger,
+                        "Terminating stream. Latest WS block header does not have a {}.",
+                        $name
+                    );
+                    break None;
+                }
+            }
+        }};
     }
 
     Box::pin(
@@ -62,13 +67,14 @@ where
                             break None;
                         }
                     };
+
                     let current_block_number =
-                        log_if_none(current_header.number, "block number", &state.logger)?;
-                    let current_base_fee_per_gas = log_if_none(
+                        break_unwrap!(current_header.number, "block number", &state.logger);
+                    let current_base_fee_per_gas = break_unwrap!(
                         current_header.base_fee_per_gas,
                         "base fee per gas",
-                        &state.logger,
-                    )?;
+                        &state.logger
+                    );
 
                     // Terminate stream if we have skipped into the future
                     if let Some(last_block_pulled) = state.last_block_pulled {
