@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::multisig::client::{
     self,
-    common::{BroadcastStageName, CeremonyFailureReason, SigningFailureReason},
+    common::{BroadcastStageName, SigningFailureReason},
     signing,
 };
 
@@ -18,7 +18,7 @@ use signing::frost::{
 
 use signing::SigningStateCommonInfo;
 
-type SigningStageResult = StageResult<SigningData, SchnorrSignature>;
+type SigningStageResult = StageResult<SigningData, SchnorrSignature, SigningFailureReason>;
 
 macro_rules! should_delay {
     ($variant:path) => {
@@ -52,7 +52,9 @@ impl AwaitCommitments1 {
 
 derive_display_as_type_name!(AwaitCommitments1);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature, SigningFailureReason>
+    for AwaitCommitments1
+{
     type Message = Comm1;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -97,7 +99,9 @@ struct VerifyCommitmentsBroadcast2 {
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcast2 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature, SigningFailureReason>
+    for VerifyCommitmentsBroadcast2
+{
     type Message = VerifyComm2;
 
     /// Simply report all data that we have received from
@@ -120,10 +124,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
             Err((reported_parties, abort_reason)) => {
                 return SigningStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                    SigningFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::InitialCommitments,
-                    )),
+                    ),
                 );
             }
         };
@@ -159,7 +163,9 @@ struct LocalSigStage3 {
 
 derive_display_as_type_name!(LocalSigStage3);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature, SigningFailureReason>
+    for LocalSigStage3
+{
     type Message = LocalSig3;
 
     /// With all nonce commitments verified, we can generate the group commitment
@@ -216,7 +222,9 @@ struct VerifyLocalSigsBroadcastStage4 {
 
 derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastStage4 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature, SigningFailureReason>
+    for VerifyLocalSigsBroadcastStage4
+{
     type Message = VerifyLocalSig4;
 
     /// Broadcast all signature shares sent to us
@@ -242,10 +250,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             Err((reported_parties, abort_reason)) => {
                 return SigningStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                    SigningFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::LocalSignatures,
-                    )),
+                    ),
                 );
             }
         };
@@ -277,10 +285,9 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             &local_sigs,
         ) {
             Ok(sig) => StageResult::Done(sig),
-            Err(failed_idxs) => StageResult::Error(
-                failed_idxs,
-                CeremonyFailureReason::SigningFailure(SigningFailureReason::InvalidSigShare),
-            ),
+            Err(failed_idxs) => {
+                StageResult::Error(failed_idxs, SigningFailureReason::InvalidSigShare)
+            }
         }
     }
 }

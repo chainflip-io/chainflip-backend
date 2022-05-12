@@ -300,7 +300,7 @@ async fn should_report_on_invalid_blame_response6() {
         .complete_with_error(
             &[bad_node_id_1.clone()],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidBlameResponse),
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
         )
         .await;
 }
@@ -355,7 +355,7 @@ async fn should_report_on_incomplete_blame_response() {
         .complete_with_error(
             &[bad_node_id_1.clone()],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidBlameResponse),
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
         )
         .await;
 }
@@ -388,7 +388,7 @@ async fn should_abort_on_blames_at_invalid_indexes() {
         .complete_with_error(
             &[bad_node_id.clone()],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidComplaint),
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
         )
         .await;
 }
@@ -559,7 +559,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
         .complete_with_error(
             &[bad_account_id.clone()],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+            CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::InitialCommitments,
             )),
@@ -594,7 +594,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
         .complete_with_error(
             &[bad_account_id.clone()],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+            CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::HashCommitments,
             )),
@@ -641,7 +641,7 @@ async fn should_report_on_invalid_hash_comm1a() {
         .complete_with_error(
             &[bad_account_id],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidCommitment),
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment),
         )
         .await;
 }
@@ -686,7 +686,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
         .complete_with_error(
             &[bad_account_id.clone()],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+            CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::Complaints,
             )),
@@ -759,7 +759,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
         .complete_with_error(
             &[bad_account_id.clone()],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+            CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::BlameResponses,
             )),
@@ -805,7 +805,7 @@ async fn should_report_on_invalid_comm1() {
         .complete_with_error(
             &[bad_account_id],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidCommitment),
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment),
         )
         .await;
 }
@@ -843,7 +843,7 @@ async fn should_report_on_invalid_complaints4() {
         .complete_with_error(
             &[bad_account_id],
             result_receivers,
-            CeremonyFailureReason::KeygenFailure(KeygenFailureReason::InvalidComplaint),
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
         )
         .await;
 }
@@ -893,7 +893,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     // Check that the failure reason is correct
     node.ensure_failure_reason(
         result_receiver,
-        CeremonyFailureReason::KeygenFailure(KeygenFailureReason::RequestIgnored(
+        CeremonyFailureReason::Other(KeygenFailureReason::RequestIgnored(
             KeygenRequestIgnoredReason::InvalidParticipants,
         )),
         KEYGEN_REQUEST_IGNORED,
@@ -928,7 +928,7 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     // Check that the failure reason is correct
     node.ensure_failure_reason(
         result_receiver,
-        CeremonyFailureReason::KeygenFailure(KeygenFailureReason::RequestIgnored(
+        CeremonyFailureReason::Other(KeygenFailureReason::RequestIgnored(
             KeygenRequestIgnoredReason::CeremonyIdAlreadyUsed,
         )),
         KEYGEN_REQUEST_IGNORED,
@@ -1304,7 +1304,7 @@ mod timeout {
                 .complete_with_error(
                     &[non_sending_party_id_1],
                     result_receivers,
-                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::HashCommitments,
                     )),
@@ -1334,7 +1334,7 @@ mod timeout {
                 .complete_with_error(
                     &[non_sending_party_id_1],
                     result_receivers,
-                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::InitialCommitments,
                     )),
@@ -1375,7 +1375,7 @@ mod timeout {
                 .complete_with_error(
                     &[non_sending_party_id_1],
                     result_receivers,
-                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::Complaints,
                     )),
@@ -1431,7 +1431,7 @@ mod timeout {
                 .complete_with_error(
                     &[non_sending_party_id_1],
                     result_receivers,
-                    CeremonyFailureReason::KeygenFailure(KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::Other(KeygenFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::BlameResponses,
                     )),

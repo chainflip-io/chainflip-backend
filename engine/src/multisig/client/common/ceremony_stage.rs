@@ -9,14 +9,12 @@ use crate::{
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
-use super::CeremonyFailureReason;
-
 /// Outcome of a given ceremony stage
-pub enum StageResult<M, Result> {
+pub enum StageResult<M, Result, FailureReason> {
     /// Ceremony proceeds to the next stage
-    NextStage(Box<dyn CeremonyStage<Message = M, Result = Result>>),
+    NextStage(Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason>>),
     /// Ceremony aborted (contains parties to report)
-    Error(BTreeSet<AuthorityCount>, CeremonyFailureReason),
+    Error(BTreeSet<AuthorityCount>, FailureReason),
     /// Ceremony finished and successful
     Done(Result),
 }
@@ -37,6 +35,8 @@ pub trait CeremonyStage: std::fmt::Display {
     type Message;
     // Result to return if the ceremony is successful
     type Result;
+    // Failure reason type to return if the ceremony is aborted
+    type FailureReason;
 
     /// Perform initial computation for this stage (and initiate communication with other parties)
     fn init(&mut self);
@@ -55,7 +55,7 @@ pub trait CeremonyStage: std::fmt::Display {
 
     /// Verify data for this stage after it is received from all other parties,
     /// either abort or proceed to the next stage based on the result
-    fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result>;
+    fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;

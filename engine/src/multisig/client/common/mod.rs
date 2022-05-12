@@ -40,11 +40,10 @@ pub struct KeygenResultInfo {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum CeremonyFailureReason {
-    KeygenFailure(KeygenFailureReason),
-    SigningFailure(SigningFailureReason),
+pub enum CeremonyFailureReason<T> {
     DuplicateCeremonyId,
     ExpiredBeforeBeingAuthorized,
+    Other(T),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -120,51 +119,60 @@ impl Display for BroadcastStageName {
     }
 }
 
-/// Display the ceremony failure reason as a readable string
-impl Display for CeremonyFailureReason {
+impl<T> Display for CeremonyFailureReason<T>
+where
+    T: Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CeremonyFailureReason::KeygenFailure(keygen_failure_reason) => {
-                let inner = match keygen_failure_reason {
-                    KeygenFailureReason::RequestIgnored(reason) => {
-                        format!("Request Ignored ({:?})", reason)
-                    }
-                    KeygenFailureReason::BroadcastFailure(reason, stage_name) => {
-                        format!(
-                            "Broadcast failure ({:?}) during {} stage",
-                            reason, stage_name
-                        )
-                    }
-                    KeygenFailureReason::NotContractCompatible => {
-                        "The key is not contract compatible".to_string()
-                    }
-                    KeygenFailureReason::InvalidBlameResponse => {
-                        "Invalid secret share in a blame response".to_string()
-                    }
-                    _ => format!("{:?}", keygen_failure_reason),
-                };
-                write!(f, "Keygen Failure: {}", inner)
-            }
-            CeremonyFailureReason::SigningFailure(signing_failure_reason) => {
-                let inner = match signing_failure_reason {
-                    SigningFailureReason::RequestIgnored(reason) => {
-                        format!("Request Ignored ({:?})", reason)
-                    }
-                    SigningFailureReason::BroadcastFailure(reason, stage_name) => {
-                        format!("Broadcast failure ({:?}) during {:?}", reason, stage_name)
-                    }
-                    SigningFailureReason::InvalidSigShare => {
-                        "Failed to aggregate signature".to_string()
-                    }
-                };
-                write!(f, "Signing Failure: {}", inner)
-            }
             CeremonyFailureReason::DuplicateCeremonyId => {
                 write!(f, "Duplicate Ceremony Id")
             }
             CeremonyFailureReason::ExpiredBeforeBeingAuthorized => {
                 write!(f, "Ceremony expired before being authorized")
             }
+            CeremonyFailureReason::Other(reason) => {
+                write!(f, "{}", reason)
+            }
         }
+    }
+}
+
+impl Display for KeygenFailureReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inner = match self {
+            KeygenFailureReason::RequestIgnored(reason) => {
+                format!("Request Ignored ({:?})", reason)
+            }
+            KeygenFailureReason::BroadcastFailure(reason, stage_name) => {
+                format!(
+                    "Broadcast failure ({:?}) during {} stage",
+                    reason, stage_name
+                )
+            }
+            KeygenFailureReason::NotContractCompatible => {
+                "The key is not contract compatible".to_string()
+            }
+            KeygenFailureReason::InvalidBlameResponse => {
+                "Invalid secret share in a blame response".to_string()
+            }
+            _ => format!("{:?}", self),
+        };
+        write!(f, "Keygen Failure: {}", inner)
+    }
+}
+
+impl Display for SigningFailureReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inner = match self {
+            SigningFailureReason::RequestIgnored(reason) => {
+                format!("Request Ignored ({:?})", reason)
+            }
+            SigningFailureReason::BroadcastFailure(reason, stage_name) => {
+                format!("Broadcast failure ({:?}) during {:?}", reason, stage_name)
+            }
+            SigningFailureReason::InvalidSigShare => "Failed to aggregate signature".to_string(),
+        };
+        write!(f, "Signing Failure: {}", inner)
     }
 }

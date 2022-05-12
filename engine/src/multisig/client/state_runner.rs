@@ -22,14 +22,25 @@ use super::{
     utils::PartyIdxMapping,
 };
 
-pub struct StateAuthorised<CeremonyData, CeremonyResult> {
-    pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: CeremonyResultSender<CeremonyResult>,
+type OptionalCeremonyReturn<CeremonyResult, FailureReason> =
+    Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>>;
+
+pub struct StateAuthorised<CeremonyData, CeremonyResult, FailureReason> {
+    pub stage: Option<
+        Box<
+            dyn CeremonyStage<
+                Message = CeremonyData,
+                Result = CeremonyResult,
+                FailureReason = FailureReason,
+            >,
+        >,
+    >,
+    pub result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
-pub struct StateRunner<CeremonyData, CeremonyResult> {
-    inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
+pub struct StateRunner<CeremonyData, CeremonyResult, FailureReason> {
+    inner: Option<StateAuthorised<CeremonyData, CeremonyResult, FailureReason>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
     delayed_messages: BTreeMap<AccountId, CeremonyData>,
@@ -38,9 +49,11 @@ pub struct StateRunner<CeremonyData, CeremonyResult> {
     logger: slog::Logger,
 }
 
-impl<CeremonyData, CeremonyResult> StateRunner<CeremonyData, CeremonyResult>
+impl<CeremonyData, CeremonyResult, FailureReason>
+    StateRunner<CeremonyData, CeremonyResult, FailureReason>
 where
     CeremonyData: Display,
+    FailureReason: Display,
 {
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
@@ -58,12 +71,18 @@ where
     /// the state machine to make progress
     pub fn on_ceremony_request(
         &mut self,
-        mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
+        mut stage: Box<
+            dyn CeremonyStage<
+                Message = CeremonyData,
+                Result = CeremonyResult,
+                FailureReason = FailureReason,
+            >,
+        >,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: CeremonyResultSender<CeremonyResult>,
+        result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
     ) -> Result<
-        Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>>,
-        CeremonyFailureReason,
+        OptionalCeremonyReturn<CeremonyResult, FailureReason>,
+        CeremonyFailureReason<FailureReason>,
     > {
         if self.inner.is_some() {
             let _result = result_sender.send(Err((
@@ -90,9 +109,7 @@ where
         Ok(self.process_delayed())
     }
 
-    fn finalize_current_stage(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
+    fn finalize_current_stage(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -127,7 +144,7 @@ where
             }
             StageResult::Error(bad_validators, reason) => Some(Err((
                 authorised_state.idx_mapping.get_ids(bad_validators),
-                reason,
+                CeremonyFailureReason::Other(reason),
             ))),
             StageResult::Done(result) => {
                 slog::debug!(self.logger, "Ceremony reached the final stage!");
@@ -143,7 +160,7 @@ where
         &mut self,
         sender_id: AccountId,
         data: CeremonyData,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
+    ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         slog::trace!(
             self.logger,
             "Received message {} from party [{}] ",
@@ -189,9 +206,7 @@ where
     }
 
     /// Process previously delayed messages (which arrived one stage too early)
-    pub fn process_delayed(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
+    pub fn process_delayed(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
@@ -247,9 +262,7 @@ where
 
     /// Check if the stage has timed out, and if so, proceed according to the
     /// protocol rules for the stage
-    pub fn try_expiring(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason)>> {
+    pub fn try_expiring(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {
                 None => {
@@ -297,7 +310,9 @@ where
         self.inner.is_some()
     }
 
-    pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<CeremonyResult>> {
+    pub fn try_into_result_sender(
+        self,
+    ) -> Option<CeremonyResultSender<CeremonyResult, FailureReason>> {
         self.inner.map(|inner| inner.result_sender)
     }
 

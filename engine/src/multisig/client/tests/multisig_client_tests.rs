@@ -49,7 +49,7 @@ async fn should_ignore_rts_for_unknown_key() {
     let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
     assert_eq!(
         failure_reason,
-        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+        CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
             SigningRequestIgnoredReason::UnknownKey
         ))
     );

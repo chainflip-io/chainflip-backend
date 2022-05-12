@@ -129,7 +129,7 @@ async fn should_report_on_invalid_local_sig3() {
         .complete_with_error(
             &[bad_account_id],
             result_receivers,
-            CeremonyFailureReason::SigningFailure(SigningFailureReason::InvalidSigShare),
+            CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare),
         )
         .await;
 }
@@ -154,7 +154,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
         .complete_with_error(
             &[bad_account_id],
             result_receivers,
-            CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+            CeremonyFailureReason::Other(SigningFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::InitialCommitments,
             )),
@@ -189,7 +189,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
         .complete_with_error(
             &[bad_account_id],
             result_receivers,
-            CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+            CeremonyFailureReason::Other(SigningFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::LocalSignatures,
             )),
@@ -258,7 +258,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     // Check that the failure reason is correct
     test_node.ensure_failure_reason(
         result_receiver,
-        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+        CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
             SigningRequestIgnoredReason::InvalidParticipants,
         )),
         REQUEST_TO_SIGN_IGNORED,
@@ -311,7 +311,7 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     // Check that the failure reason is correct
     node.ensure_failure_reason(
         result_receiver,
-        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+        CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
             SigningRequestIgnoredReason::NotEnoughSigners,
         )),
         REQUEST_TO_SIGN_IGNORED,
@@ -453,7 +453,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     // Check that the failure reason is correct
     node.ensure_failure_reason(
         result_receiver,
-        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+        CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
             SigningRequestIgnoredReason::InvalidParticipants,
         )),
         REQUEST_TO_SIGN_IGNORED,
@@ -492,7 +492,7 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     // Check that the failure reason is correct
     node.ensure_failure_reason(
         result_receiver,
-        CeremonyFailureReason::SigningFailure(SigningFailureReason::RequestIgnored(
+        CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
             SigningRequestIgnoredReason::CeremonyIdAlreadyUsed,
         )),
         REQUEST_TO_SIGN_IGNORED,
@@ -835,7 +835,7 @@ mod timeout {
                 .complete_with_error(
                     &[non_sending_party_id_1],
                     result_receivers,
-                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::Other(SigningFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::InitialCommitments,
                     )),
@@ -876,7 +876,7 @@ mod timeout {
                 .complete_with_error(
                     &[non_sending_party_id_1],
                     result_receivers,
-                    CeremonyFailureReason::SigningFailure(SigningFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::Other(SigningFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::LocalSignatures,
                     )),

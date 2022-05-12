@@ -26,7 +26,7 @@ pub enum DataToSend<T> {
 
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
-pub trait BroadcastStageProcessor<D, Result>: Display {
+pub trait BroadcastStageProcessor<D, Result, FailureReason>: Display {
     /// The specific variant of D shared between parties
     /// during this stage
     type Message: Clone + Into<D> + TryFrom<D>;
@@ -44,14 +44,14 @@ pub trait BroadcastStageProcessor<D, Result>: Display {
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<D, Result>;
+    ) -> StageResult<D, Result, FailureReason>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
-pub struct BroadcastStage<D, Result, P>
+pub struct BroadcastStage<D, Result, P, FailureReason>
 where
-    P: BroadcastStageProcessor<D, Result>,
+    P: BroadcastStageProcessor<D, Result, FailureReason>,
 {
     common: CeremonyCommon,
     /// Messages collected so far
@@ -61,10 +61,10 @@ where
     processor: P,
 }
 
-impl<D, Result, P> BroadcastStage<D, Result, P>
+impl<D, Result, P, FailureReason> BroadcastStage<D, Result, P, FailureReason>
 where
     D: Clone,
-    P: BroadcastStageProcessor<D, Result>,
+    P: BroadcastStageProcessor<D, Result, FailureReason>,
 {
     pub fn new(processor: P, common: CeremonyCommon) -> Self {
         BroadcastStage {
@@ -75,24 +75,25 @@ where
     }
 }
 
-impl<D, Result, P> Display for BroadcastStage<D, Result, P>
+impl<D, Result, P, FailureReason> Display for BroadcastStage<D, Result, P, FailureReason>
 where
-    P: BroadcastStageProcessor<D, Result>,
+    P: BroadcastStageProcessor<D, Result, FailureReason>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BroadcastStage<{}>", &self.processor)
     }
 }
 
-impl<D, Result, P> CeremonyStage for BroadcastStage<D, Result, P>
+impl<D, Result, P, FailureReason> CeremonyStage for BroadcastStage<D, Result, P, FailureReason>
 where
     D: Clone + Display + Into<MultisigData>,
     Result: Clone,
-    P: BroadcastStageProcessor<D, Result>,
-    <P as BroadcastStageProcessor<D, Result>>::Message: TryFrom<D>,
+    P: BroadcastStageProcessor<D, Result, FailureReason>,
+    <P as BroadcastStageProcessor<D, Result, FailureReason>>::Message: TryFrom<D>,
 {
     type Message = D;
     type Result = Result;
+    type FailureReason = FailureReason;
 
     fn init(&mut self) {
         let common = &self.common;
@@ -204,7 +205,7 @@ where
         self.processor.should_delay(m)
     }
 
-    fn finalize(mut self: Box<Self>) -> StageResult<D, Result> {
+    fn finalize(mut self: Box<Self>) -> StageResult<D, Result, FailureReason> {
         // Because we might want to finalize the stage before
         // all data has been received (e.g. due to a timeout),
         // we insert None for any missing data
