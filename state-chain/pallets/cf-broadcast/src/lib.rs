@@ -415,8 +415,10 @@ pub mod pallet {
 			{
 				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
 				if !TransactionFeeDeficit::<T, I>::contains_key(&signer) {
-					let init_deficit: ChainAmountFor<T, I> = Default::default();
-					TransactionFeeDeficit::<T, I>::insert(&signer, init_deficit);
+					TransactionFeeDeficit::<T, I>::insert(
+						&signer,
+						ChainAmountFor::<T, I>::default(),
+					);
 				}
 
 				// white list the signer id, so if we receive SignatureAccepted events from this
