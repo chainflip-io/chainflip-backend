@@ -326,6 +326,8 @@ impl EthRpcApi for EthDualRpcClient {
         tx: TransactionParameters,
         key: &SecretKey,
     ) -> Result<SignedTransaction> {
+        // NB: This clippy allow applies file-wide, but we only need it for this borrow
+        #![allow(clippy::needless_borrow)]
         dual_call_rpc!(self, sign_transaction, tx, &key)
     }
 
