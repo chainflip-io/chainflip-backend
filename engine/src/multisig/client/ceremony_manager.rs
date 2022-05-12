@@ -394,26 +394,27 @@ impl CeremonyManager {
             return;
         }
 
-        let state_entry = self.signing_states.entry(ceremony_id);
-
-        // Only stage 1 messages can create unauthorised ceremonies
-        if matches!(state_entry, std::collections::hash_map::Entry::Vacant(_)) {
-            // No ceremony exists for this id yet
-            if !matches!(data, SigningData::CommStage1(_)) {
-                slog::debug!(
-                    self.logger,
-                    "Ignoring non-initial stage signing data from ceremony {}",
-                    ceremony_id
-                );
-                return;
-            }
-        }
-
         slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
+        // Only stage 1 messages can create unauthorised ceremonies
         let logger = &self.logger;
-        let state = state_entry
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
+        let state = match self.signing_states.entry(ceremony_id) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                // No ceremony exists for this id yet
+                if !matches!(data, SigningData::CommStage1(_)) {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage signing data from ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                } else {
+                    // Create a new unauthorised state for this ceremony
+                    entry.insert(SigningStateRunner::new_unauthorised(ceremony_id, logger))
+                }
+            }
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+        };
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
@@ -439,24 +440,25 @@ impl CeremonyManager {
             return;
         }
 
-        let state_entry = self.keygen_states.entry(ceremony_id);
-
         // Only stage 1 messages can create unauthorised ceremonies
-        if matches!(state_entry, std::collections::hash_map::Entry::Vacant(_)) {
-            // No ceremony exists for this id yet
-            if !matches!(data, KeygenData::HashComm1(_)) {
-                slog::debug!(
-                    self.logger,
-                    "Ignoring non-initial stage keygen data from ceremony {}",
-                    ceremony_id
-                );
-                return;
-            }
-        }
-
         let logger = &self.logger;
-        let state =
-            state_entry.or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
+        let state = match self.keygen_states.entry(ceremony_id) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                // No ceremony exists for this id yet
+                if !matches!(data, KeygenData::HashComm1(_)) {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage keygen data from ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                } else {
+                    // Create a new unauthorised state for this ceremony
+                    entry.insert(KeygenStateRunner::new_unauthorised(ceremony_id, logger))
+                }
+            }
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+        };
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_keygen_ceremony_outcome(ceremony_id, result);
