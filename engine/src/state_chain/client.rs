@@ -405,6 +405,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             frame_system::CheckEra::from(Era::Immortal),
             frame_system::CheckNonce::from(nonce),
             frame_system::CheckWeight::new(),
+            // This is the tx fee tip. Normally this determines transaction priority. We currently ignore this in the
+            // runtime but it needs to be set to some default value.
             state_chain_runtime::ChargeTransactionPayment::from(0),
         );
         let additional_signed = (
