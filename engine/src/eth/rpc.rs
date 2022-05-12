@@ -303,7 +303,7 @@ macro_rules! dual_call_rpc {
     ($eth_dual:expr, $method:ident, $($arg:expr),*) => {
         {
             let ws_request = $eth_dual.ws_client.$method($($arg.clone()),*);
-            let http_request = $eth_dual.http_client.$method($($arg.clone()),*);
+            let http_request = $eth_dual.http_client.$method($($arg),*);
 
             // TODO: Work out how to wait for both errors (select_ok returns only the last error)
             tokio::time::timeout(ETH_DUAL_REQUEST_TIMEOUT, select_ok([ws_request, http_request]))
