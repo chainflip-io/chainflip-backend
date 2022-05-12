@@ -55,12 +55,24 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                         cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
                     ),
                     // Report keygen failure if we failed to sign
-                    Err((bad_account_ids, _error)) => {
+                    Err((bad_account_ids, error)) => {
+                        slog::debug!(
+                            logger,
+                            "Keygen ceremony {} verification failed: {:?}",
+                            ceremony_id,
+                            error
+                        );
                         KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
                     }
                 }
             }
-            Err((bad_account_ids, _error)) => {
+            Err((bad_account_ids, error)) => {
+                slog::debug!(
+                    logger,
+                    "Keygen ceremony {} failed: {:?}",
+                    ceremony_id,
+                    error
+                );
                 KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
             }
         };
