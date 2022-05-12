@@ -613,7 +613,7 @@ pub mod pallet {
 
 			// if this has been whitelisted, we can add the fee deficit to the authority's account
 			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
-				TransactionFeeDeficit::<T, I>::mutate_exists(account_id, |fee_deficit| {
+				TransactionFeeDeficit::<T, I>::mutate(account_id, |fee_deficit| {
 					if let Some(fee_deficit) = fee_deficit.as_mut() {
 						*fee_deficit = fee_deficit.saturating_add(tx_fee);
 					}
