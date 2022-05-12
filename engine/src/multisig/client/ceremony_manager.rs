@@ -443,6 +443,8 @@ impl CeremonyManager {
         ceremony_id: CeremonyId,
         data: KeygenData,
     ) {
+        use std::collections::hash_map::Entry;
+
         if self
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
@@ -459,7 +461,7 @@ impl CeremonyManager {
         let logger = &self.logger;
         let is_not_first_stage_data = !matches!(data, KeygenData::HashComm1(_));
         let state = match self.keygen_states.entry(ceremony_id) {
-            std::collections::hash_map::Entry::Vacant(entry) => {
+            Entry::Vacant(entry) => {
                 // No ceremony exists for this id yet
                 if is_not_first_stage_data {
                     slog::debug!(
@@ -473,7 +475,7 @@ impl CeremonyManager {
                     entry.insert(KeygenStateRunner::new_unauthorised(ceremony_id, logger))
                 }
             }
-            std::collections::hash_map::Entry::Occupied(entry) => {
+            Entry::Occupied(entry) => {
                 let state = entry.into_mut();
 
                 // Only first stage messages should be processed (delayed) if we're not authorized
@@ -573,6 +575,7 @@ mod tests {
 
     use crate::multisig::crypto::Point;
     use client::signing::frost::SigningCommitment;
+    use rand_legacy::SeedableRng;
 
     #[test]
     fn should_ignore_non_first_stage_keygen_data_before_request() {
@@ -652,7 +655,7 @@ mod tests {
         assert_eq!(ceremony_manager.get_signing_states_len(), 0);
 
         // Process a stage 1 message
-        let mut rng = <Rng as rand_legacy::SeedableRng>::from_seed([0; 32]);
+        let mut rng = Rng::from_seed([0; 32]);
         ceremony_manager.process_signing_data(
             AccountId::default(),
             ceremony_id,
