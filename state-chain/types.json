@@ -6,7 +6,6 @@
     "sufficients": "RefCount",
     "data": "ChainflipAccountData"
   },
-  "AuthoritySetSizeRange": "(u16,u16)",
   "ActiveProposal": "(ProposalId, Timestamp)",
   "Address": "MultiAddress",
   "AggKey": {
@@ -25,17 +24,18 @@
   "AttemptCount": "u32",
   "AuctionError": {
     "_enum": [
+      "InvalidParameters",
+      "InconsistentRanges",
       "NotEnoughBidders"
     ]
   },
-  "AuctionRange": "(u32,u32)",
-  "AuctionResult": {
+  "AuctionOutcome": {
     "winners": "Vec<ValidatorId>",
-    "minimum_active_bid": "Amount"
+    "losers": "Vec<(ValidatorId, Amount)>",
+    "bond": "Amount"
   },
   "BasisPoints": "u32",
   "Balance": "FlipBalance",
-  "Bid": "(ValidatorId, Amount)",
   "BlockNumber": "u32",
   "BroadcastAttempt": {
     "broadcast_attempt_id": "BroadcastAttemptId",
@@ -66,12 +66,13 @@
       "Validator"
     ]
   },
-  "ChainId": {
-    "_enum": [
-      "Ethereum"
-    ]
-  },
   "Duration": "(u64,u32)",
+  "DynamicSetSizeParameters": {
+    "min_size": "u32",
+    "max_size": "u32",
+    "max_contraction": "u32",
+    "max_expansion": "u32"
+  },
   "Ed25519PublicKey": "[u8;32]",
   "Ed25519Signature": "[u8;64]",
   "EpochIndex": "u32",
@@ -162,7 +163,6 @@
     "address": "EthereumAddress",
     "expiry": "Uint"
   },
-  "RemainingBid": "(ValidatorId, Amount)",
   "ReputationTracker": {
     "online_credits": "OnlineCredits",
     "reputation_points": "ReputationPoints"
@@ -184,7 +184,7 @@
       "SessionRotating": "(AuctionResult)"
     }
   },
-  "RotationStatusOf": "RotationStatus",
+  "RuntimeAuctionOutcome": "AuctionOutcome",
   "RuntimeReputationTracker": "ReputationTracker",
   "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
