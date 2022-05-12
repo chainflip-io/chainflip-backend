@@ -33,7 +33,7 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
 }
 
 impl<EventParameters: Debug> EventWithCommon<EventParameters> {
-    pub fn new_with_decoded_logs<LogDecoder>(
+    pub fn new_from_unparsed_logs<LogDecoder>(
         decode_log: &LogDecoder,
         log: Log,
         base_fee_per_gas: U256,
@@ -83,7 +83,7 @@ mod tests {
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
                 .unwrap();
 
-        let event = EventWithCommon::new_with_decoded_logs(
+        let event = EventWithCommon::new_from_unparsed_logs(
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),

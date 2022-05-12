@@ -464,7 +464,7 @@ pub trait EthObserver {
                                             EventWithCommon<Self::EventParameters>,
                                             anyhow::Error,
                                         > {
-                                            EventWithCommon::<Self::EventParameters>::new_with_decoded_logs(
+                                            EventWithCommon::<Self::EventParameters>::new_from_unparsed_logs(
                                                 &decode_log_fn,
                                                 unparsed_log,
                                                 base_fee_per_gas,
