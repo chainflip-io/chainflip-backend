@@ -305,6 +305,7 @@ macro_rules! dual_call_rpc {
             let ws_request = $eth_dual.ws_client.$method($($arg.clone()),*);
             let http_request = $eth_dual.http_client.$method($($arg.clone()),*);
 
+            // TODO: Work out how to wait for both errors (select_ok returns only the last error)
             tokio::time::timeout(ETH_DUAL_REQUEST_TIMEOUT, select_ok([ws_request, http_request]))
                 .await
                 .context("ETH Dual RPC request timed out")?
