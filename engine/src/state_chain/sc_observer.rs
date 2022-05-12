@@ -296,7 +296,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                     )
                                                                     .await;
                                                             }
-                                                            Err((bad_account_ids, _error)) => {
+                                                            Err((bad_account_ids, error)) => {
+                                                                slog::debug!(logger, "Threshold signing ceremony {} failed: {:?}", ceremony_id, error);
                                                                 let _result = state_chain_client
                                                                     .submit_signed_extrinsic(
                                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded {
