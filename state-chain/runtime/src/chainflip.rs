@@ -208,6 +208,7 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 	type Surplus = Surplus<Runtime>;
 
 	fn distribute(rewards: Self::Surplus) {
+		// TODO: Check if it's ok to panic here.
 		let current_block_author =
 			Authorship::author().expect("A block without an author is invalid.");
 		Flip::settle_imbalance(&current_block_author, rewards);
