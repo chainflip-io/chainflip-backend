@@ -338,7 +338,7 @@ impl Scalar {
     }
 }
 
-/// Ethereum crypto scheme
+/// Ethereum crypto scheme (as defined by the Key Manager contract)
 pub struct EthSigning {}
 
 impl CryptoScheme for EthSigning {
@@ -371,5 +371,13 @@ impl CryptoScheme for EthSigning {
         );
 
         Scalar::from_bytes(&e)
+    }
+
+    fn build_response(
+        nonce: <Self::Point as ECPoint>::Scalar,
+        private_key: &<Self::Point as ECPoint>::Scalar,
+        challenge: <Self::Point as ECPoint>::Scalar,
+    ) -> <Self::Point as ECPoint>::Scalar {
+        nonce - challenge * private_key
     }
 }

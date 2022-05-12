@@ -224,14 +224,13 @@ pub fn generate_local_sig<C: CryptoScheme>(
     let key_share = lambda_i * &key.x_i;
 
     let response =
-        generate_contract_schnorr_sig::<C>(key_share, key.y, group_commitment, nonce_share, msg);
+        generate_schnorr_response::<C>(&key_share, key.y, group_commitment, nonce_share, msg);
 
     SigningResponse { response }
 }
 
-/// Schnorr signature as defined by the Key Manager contract
-pub fn generate_contract_schnorr_sig<C: CryptoScheme>(
-    private_key: <C::Point as ECPoint>::Scalar,
+pub fn generate_schnorr_response<C: CryptoScheme>(
+    private_key: &<C::Point as ECPoint>::Scalar,
     pubkey: C::Point,
     nonce_commitment: C::Point,
     nonce: <C::Point as ECPoint>::Scalar,
@@ -239,7 +238,7 @@ pub fn generate_contract_schnorr_sig<C: CryptoScheme>(
 ) -> <C::Point as ECPoint>::Scalar {
     let challenge = C::build_challenge(pubkey, nonce_commitment, message);
 
-    nonce - private_key * challenge
+    C::build_response(nonce, &private_key, challenge)
 }
 
 /// Check the validity of a signature response share.
@@ -339,8 +338,8 @@ mod tests {
         let private_key = Scalar::from_hex(SECRET_KEY);
         let public_key = Point::from_scalar(&private_key);
 
-        let response = generate_contract_schnorr_sig::<EthSigning>(
-            private_key,
+        let response = generate_schnorr_response::<EthSigning>(
+            &private_key,
             public_key,
             commitment,
             nonce,

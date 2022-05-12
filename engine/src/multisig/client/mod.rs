@@ -351,7 +351,6 @@ where
         single_party_keygen(self.my_account_id.clone(), rng)
     }
 
-    /// NOTE: This only makes sense for ETH contract
     fn single_party_signing(
         &self,
         data: MessageHash,
@@ -368,13 +367,8 @@ where
 
         let r = C::Point::from_scalar(&nonce);
 
-        let sigma = signing::frost::generate_contract_schnorr_sig::<C>(
-            key.x_i.clone(),
-            key.y,
-            r,
-            nonce,
-            &data.0,
-        );
+        let sigma =
+            signing::frost::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
 
         C::build_signature(sigma, r)
     }

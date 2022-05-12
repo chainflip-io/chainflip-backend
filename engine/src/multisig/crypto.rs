@@ -82,6 +82,12 @@ pub trait CryptoScheme: 'static {
         nonce_commitment: Self::Point,
         message: &[u8],
     ) -> <Self::Point as ECPoint>::Scalar;
+
+    fn build_response(
+        nonce: <Self::Point as ECPoint>::Scalar,
+        private_key: &<Self::Point as ECPoint>::Scalar,
+        challenge: <Self::Point as ECPoint>::Scalar,
+    ) -> <Self::Point as ECPoint>::Scalar;
 }
 
 pub trait ECScalar:
