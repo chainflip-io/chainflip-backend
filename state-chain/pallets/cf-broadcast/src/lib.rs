@@ -214,7 +214,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Lookup table between Signature -> Broadcast
+	/// Lookup table between Signature -> Broadcast.
 	#[pallet::storage]
 	pub type SignatureToBroadcastIdLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ThresholdSignatureFor<T, I>, BroadcastId, OptionQuery>;
@@ -240,23 +240,21 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// A mapping from signer id to the chain amount (in Atomic units) that the signer is owed
-	/// for paying transaction fees
+	/// Tracks how much an account is owed for paying transaction fees.
 	#[pallet::storage]
-	pub type AccountIdTransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, ChainAmountFor<T, I>, OptionQuery>;
+	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, ChainAmountFor<T, I>>;
 
 	/// A mapping of signer id to the the account id of the authority that registered the signer.
 	/// through a transaction_ready_for_transmission extrinsic.
 	#[pallet::storage]
 	pub type SignerIdToAccountId<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId, OptionQuery>;
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId>;
 
-	/// A mapping from AccountId to the last registered SignerId, which is where the refunds
-	/// will be sent to
+	/// The signer id to send refunds to for a given account id.
 	#[pallet::storage]
-	pub type AccountIdToRefundSignerId<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, SignerIdFor<T, I>, OptionQuery>;
+	pub type RefundSignerId<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, SignerIdFor<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -280,7 +278,7 @@ pub mod pallet {
 		BroadcastAborted(BroadcastId),
 		/// An account id has used a new signer id for a transaction
 		/// so we want to refund to that new signer id \[account_id, signer_id\]
-		RefundSignerIdForAccountIdUpdated(T::AccountId, SignerIdFor<T, I>),
+		RefundSignerIdUpdated(T::AccountId, SignerIdFor<T, I>),
 	}
 
 	#[pallet::error]
@@ -416,24 +414,21 @@ pub mod pallet {
 			.is_ok()
 			{
 				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
-				if !AccountIdTransactionFeeDeficit::<T, I>::contains_key(signer.clone()) {
+				if !TransactionFeeDeficit::<T, I>::contains_key(&signer) {
 					let init_deficit: ChainAmountFor<T, I> = Default::default();
-					AccountIdTransactionFeeDeficit::<T, I>::insert(signer.clone(), init_deficit);
+					TransactionFeeDeficit::<T, I>::insert(&signer, init_deficit);
 				}
 
 				// white list the signer id, so if we receive SignatureAccepted events from this
 				// signer id, we can refund the fee to that authority
-				if !SignerIdToAccountId::<T, I>::contains_key(signer_id.clone()) {
-					SignerIdToAccountId::<T, I>::insert(signer_id.clone(), signer.clone());
+				if !SignerIdToAccountId::<T, I>::contains_key(&signer_id) {
+					SignerIdToAccountId::<T, I>::insert(&signer_id, &signer);
 				}
 
 				// store the latest signer id used by an authority
-				if AccountIdToRefundSignerId::<T, I>::get(signer.clone()) != Some(signer_id.clone())
-				{
-					AccountIdToRefundSignerId::<T, I>::insert(signer.clone(), signer_id.clone());
-					Self::deposit_event(Event::<T, I>::RefundSignerIdForAccountIdUpdated(
-						signer, signer_id,
-					));
+				if RefundSignerId::<T, I>::get(&signer) != Some(signer_id.clone()) {
+					RefundSignerId::<T, I>::insert(&signer, &signer_id);
+					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated(signer, signer_id));
 				}
 
 				AwaitingTransmission::<T, I>::insert(
@@ -618,7 +613,7 @@ pub mod pallet {
 
 			// if this has been whitelist, we can add the fee deficit to the authority's account
 			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
-				AccountIdTransactionFeeDeficit::<T, I>::mutate_exists(account_id, |fee_deficit| {
+				TransactionFeeDeficit::<T, I>::mutate_exists(account_id, |fee_deficit| {
 					if let Some(fee_deficit) = fee_deficit.as_mut() {
 						*fee_deficit = fee_deficit.saturating_add(tx_fee);
 					}
