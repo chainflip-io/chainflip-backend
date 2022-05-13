@@ -245,9 +245,9 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// A mapping from Signature to Payload.
+	/// Stores all needed information to be able to re-request the signature
 	#[pallet::storage]
-	pub type ApiCallLookup<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ThresholdSignatureData<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		BroadcastId,
@@ -629,7 +629,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		BroadcastIdToAttemptNumbers::<T, I>::insert(broadcast_id, vec![0]);
 
 		// Save the payload and the coresponinding signature to the lookup table
-		ApiCallLookup::<T, I>::insert(broadcast_id, (api_call, signature));
+		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 			broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
@@ -651,22 +651,40 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
+	fn encapsulate_threshold_signature_data(
+		broadcast_id: u32,
+	) -> Result<(PayloadFor<T, I>, ThresholdSignatureFor<T, I>, <T as Config<I>>::ApiCall), ()> {
+		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+			let payload = api_call.threshold_signature_payload();
+			Ok((payload, signature, api_call))
+		} else {
+			Err(().into())
+		}
+	}
+
 	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		let (api_call, signature) =
-			ApiCallLookup::<T, I>::get(broadcast_attempt.broadcast_attempt_id.broadcast_id)
-				.expect("no api call lookup entry for this broadcast id");
-		let payload = api_call.threshold_signature_payload();
-		// Check if the signature is still valid
-		if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
-			&T::KeyProvider::current_key(),
-			&payload,
-			&signature,
+		if let Ok((payload, signature, api_call)) = Self::encapsulate_threshold_signature_data(
+			broadcast_attempt.broadcast_attempt_id.broadcast_id,
 		) {
-			// Clean up the storage, re-request the signature and return if the signature is invalid
-			let _ = Self::clean_up_storage(signature);
-			ApiCallLookup::<T, I>::remove(broadcast_attempt.broadcast_attempt_id.broadcast_id);
-			Self::threshold_sign_and_broadcast(api_call);
-			return
+			if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+				&T::KeyProvider::current_key(),
+				&payload,
+				&signature,
+			) {
+				let _ = Self::clean_up_storage(signature);
+				ThresholdSignatureData::<T, I>::remove(
+					broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				);
+				Self::threshold_sign_and_broadcast(api_call);
+				log::info!(
+					"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
+					broadcast_attempt.broadcast_attempt_id.broadcast_id
+				);
+				// Early return the function if we re-request the signature
+				return
+			}
+		} else {
+			log::error!("No threshold signature data is available.");
 		}
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
