@@ -135,7 +135,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum FlipOperation {
 	Stake(AccountId, FlipBalance),
 	BurnFromAccount(AccountId, FlipBalance),

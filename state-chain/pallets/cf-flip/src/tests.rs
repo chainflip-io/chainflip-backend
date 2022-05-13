@@ -30,23 +30,6 @@ impl FlipOperation {
 	}
 }
 
-impl sp_std::fmt::Debug for FlipOperation {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		match self {
-			FlipOperation::Stake(account_id, amount) =>
-				write!(f, "Stake({}, {})", account_id, amount),
-			FlipOperation::BurnFromAccount(account_id, amount) => {
-				write!(f, "BurnFromAccount({}, {})", account_id, amount)
-			},
-			FlipOperation::MintToAccount(account_id, amount) => {
-				write!(f, "MintToAccount({}, {})", account_id, amount)
-			},
-			FlipOperation::Claim(account_id, amount) =>
-				write!(f, "Claim({}, {})", account_id, amount),
-		}
-	}
-}
-
 impl Arbitrary for FlipOperation {
 	fn arbitrary(g: &mut Gen) -> FlipOperation {
 		let random_account = match u8::arbitrary(g) % 3 {
@@ -80,7 +63,6 @@ fn balance_has_integrity(events: Vec<FlipOperation>) -> TestResult {
 	})
 }
 
-#[cfg(test)]
 #[test]
 fn account_to_account() {
 	new_test_ext().execute_with(|| {
