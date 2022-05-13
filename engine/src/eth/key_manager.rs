@@ -206,14 +206,18 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
             | KeyManagerEvent::AggKeySetByGovKey { new_key, .. } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness(Box::new(
-                            pallet_cf_vaults::Call::vault_key_rotated(
-                                cf_chains::eth::AggKey::from_pubkey_compressed(new_key.serialize()),
-                                event.block_number,
-                                event.tx_hash,
-                            )
-                            .into(),
-                        )),
+                        pallet_cf_witnesser::Call::witness {
+                            call: Box::new(
+                                pallet_cf_vaults::Call::vault_key_rotated {
+                                    new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
+                                        new_key.serialize(),
+                                    ),
+                                    block_number: event.block_number,
+                                    tx_hash: event.tx_hash,
+                                }
+                                .into(),
+                            ),
+                        },
                         logger,
                     )
                     .await;
@@ -232,19 +236,21 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                 };
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness(Box::new(
-                            pallet_cf_broadcast::Call::signature_accepted(
-                                SchnorrVerificationComponents {
-                                    s: sig_data.sig.into(),
-                                    k_times_g_address: sig_data.k_times_g_address.into(),
-                                },
-                                signer,
-                                tx_fee.try_into().expect("Failed to convert tx fee to u128"),
-                                event.block_number,
-                                event.tx_hash,
-                            )
-                            .into(),
-                        )),
+                        pallet_cf_witnesser::Call::witness {
+                            call: Box::new(
+                                pallet_cf_broadcast::Call::signature_accepted {
+                                    payload: SchnorrVerificationComponents {
+                                        s: sig_data.sig.into(),
+                                        k_times_g_address: sig_data.k_times_g_address.into(),
+                                    },
+                                    tx_signer: signer,
+                                    tx_fee: tx_fee.try_into().expect("Failed to convert tx fee to u128"),
+                                    block_number: event.block_number,
+                                    tx_hash: event.tx_hash,
+                                }
+                                .into(),
+                            ),
+                        },
                         logger,
                     )
                     .await;

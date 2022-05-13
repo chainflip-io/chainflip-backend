@@ -30,7 +30,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::{stream, StreamExt};
+use futures::{stream, StreamExt, TryFutureExt};
 use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
@@ -52,6 +52,7 @@ use web3::{
         U64,
     },
 };
+use web3_secp256k1::SecretKey;
 
 use tokio_stream::Stream;
 
@@ -265,10 +266,10 @@ where
             data: unsigned_tx.data.clone().into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
-            transaction_type: Some(web3::types::U64::from(2)),
+            transaction_type: Some(web3::types::U64::from(2u64)),
             // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
             // input at least as much gas as the estimate will return (stupid? yes)
-            gas: U256::from(15_000_000),
+            gas: U256::from(15_000_000u64),
             ..Default::default()
         };
         // query for the gas estimate if the SC didn't provide it
@@ -283,7 +284,7 @@ where
         };
 
         // increase the estimate by 50%
-        let uint256_2 = U256::from(2);
+        let uint256_2 = U256::from(2u64);
         tx_params.gas = gas_estimate
             .saturating_mul(uint256_2)
             .saturating_sub(gas_estimate.checked_div(uint256_2).unwrap());

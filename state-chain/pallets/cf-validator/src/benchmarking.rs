@@ -10,7 +10,7 @@ use frame_system::RawOrigin;
 benchmarks! {
 	set_blocks_for_epoch {
 		let b = 2_u32;
-		let call = Call::<T>::set_blocks_for_epoch(b.into());
+		let call = Call::<T>::set_blocks_for_epoch { number_of_blocks: b.into() };
 		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
@@ -19,7 +19,7 @@ benchmarks! {
 		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
 	}
 	force_rotation {
-		let call = Call::<T>::force_rotation();
+		let call = Call::<T>::force_rotation {};
 		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?

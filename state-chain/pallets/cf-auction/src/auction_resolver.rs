@@ -4,13 +4,17 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 
 use crate::*;
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(
+	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
+)]
 pub struct DynamicSetSizeAuctionResolver {
 	current_size: u32,
 	parameters: DynamicSetSizeParameters,
 }
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(
+	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
+)]
 pub struct DynamicSetSizeParameters {
 	pub min_size: u32,
 	pub max_size: u32,
@@ -18,7 +22,7 @@ pub struct DynamicSetSizeParameters {
 	pub max_expansion: u32,
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum AuctionError {
 	/// Parameters must make sense ie. min <= max. And zero is not a valid size.
 	InvalidParameters,

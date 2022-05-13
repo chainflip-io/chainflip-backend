@@ -16,7 +16,6 @@ targets = ['x86_64-unknown-linux-gnu']
 hex = { version = "0.4", default-features = false }
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
-pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
 # Local deps
 utilities = { path = '../../../utilities', default-features = false }
@@ -29,38 +28,38 @@ bitvec = { default-features = false, version = '0.20', features = ["alloc"] }
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
-version = '2.3.1'
+version = '3.0.0'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2021-09+1'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2021-09+1'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.scale-info]
 default-features = false
 features = ['derive']
-version = '1.0'
+version = '2.0.1'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2021-09+1'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2021-09+1'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2021-09+1'
+tag = 'chainflip-monthly-2022-05'
 
 # Dev dependencies
 [dev-dependencies]
@@ -69,12 +68,12 @@ cf-test-utilities = { path = '../../test-utilities', default-features = false }
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2021-09+1'
+tag = 'chainflip-monthly-2022-05'
 
 [dev-dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2021-09+1'
+tag = 'chainflip-monthly-2022-05'
 
 [features]
 default = ['std']
@@ -85,7 +84,6 @@ std = [
     'scale-info/std',
     'frame-support/std',
     'frame-system/std',
-    'pallet-cf-validator/std',
     'sp-runtime/std',
     'sp-std/std',
 ]

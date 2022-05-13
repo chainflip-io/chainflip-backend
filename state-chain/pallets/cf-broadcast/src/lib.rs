@@ -18,7 +18,7 @@ use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
 use cf_traits::{
 	offence_reporting::OffenceReporter, Broadcaster, Chainflip, SignerNomination, ThresholdSigner,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	sp_runtime::traits::Saturating,
@@ -27,12 +27,13 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 /// The reasons for which a broadcast might fail.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum TransmissionFailure {
 	/// The transaction was rejected because of some user error, for example, insuffient funds.
 	TransactionRejected,
@@ -47,7 +48,7 @@ pub type BroadcastId = u32;
 pub type AttemptCount = u32;
 
 /// A unique id for each broadcast attempt
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default, Copy)]
 pub struct BroadcastAttemptId {
 	pub broadcast_id: BroadcastId,
 	pub attempt_count: AttemptCount,
@@ -70,7 +71,7 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	InvalidTransactionAuthored,
 	TransactionFailedOnTransmission,
@@ -105,14 +106,16 @@ pub mod pallet {
 	pub type ChainAmountFor<T, I> =
 		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt_id: BroadcastAttemptId,
 		pub unsigned_tx: UnsignedTransactionFor<T, I>,
 	}
 
 	/// The first step in the process - a transaction signing attempt.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct TransactionSigningAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt: BroadcastAttempt<T, I>,
 		pub nominee: T::ValidatorId,
@@ -120,7 +123,8 @@ pub mod pallet {
 
 	/// The second step in the process - the transaction is already signed, it needs to be
 	/// broadcast.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct TransmissionAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt: BroadcastAttempt<T, I>,
 		pub signer: T::ValidatorId,
@@ -128,7 +132,7 @@ pub mod pallet {
 	}
 
 	/// For tagging the signing or transmission stage of the broadcast
-	#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum BroadcastStage {
 		TransactionSigning,
 		Transmission,
@@ -193,6 +197,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// A counter for incrementing the broadcast id.
@@ -638,7 +643,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
-			|id| Call::on_signature_ready(id, api_call).into(),
+			|id| Call::on_signature_ready { threshold_request_id: id, api_call }.into(),
 		);
 	}
 

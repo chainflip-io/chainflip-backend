@@ -9,7 +9,7 @@ use frame_support::{assert_noop, assert_ok};
 #[test]
 fn call_on_threshold() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
@@ -55,7 +55,7 @@ fn call_on_threshold() {
 #[test]
 fn no_double_call_on_epoch_boundary() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), 1));
@@ -101,7 +101,7 @@ fn no_double_call_on_epoch_boundary() {
 #[test]
 fn cannot_double_witness() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
@@ -118,7 +118,7 @@ fn cannot_double_witness() {
 #[test]
 fn only_authorities_can_witness() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
 		// Validators can witness
 		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
@@ -136,7 +136,7 @@ fn only_authorities_can_witness() {
 #[test]
 fn can_continue_to_witness_for_old_epochs() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value()));
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
 		// These are ALISSA, BOBSON, CHARLEMAGNE
 		let mut current_authorities = MockEpochInfo::current_authorities();
