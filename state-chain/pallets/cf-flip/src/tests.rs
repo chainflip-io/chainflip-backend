@@ -52,13 +52,15 @@ impl Arbitrary for FlipOperation {
 fn balance_has_integrity(events: Vec<FlipOperation>) -> TestResult {
 	new_test_ext().execute_with(|| -> TestResult {
 		let mut result = TestResult::passed();
-		for e in events.iter() {
-			e.execute();
-			if !check_balance_integrity() {
-				result = TestResult::from_bool(false);
-				break
-			}
-		}
+		events
+			.iter()
+			.any(|event| {
+				event.execute();
+				!check_balance_integrity()
+			})
+			.then(|| {
+				result = TestResult::failed();
+			});
 		result
 	})
 }
