@@ -1,6 +1,6 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
-    eth::{EthBroadcaster, EthWsRpcClient},
+    eth::{rpc::EthWsRpcClient, EthBroadcaster},
     state_chain::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },

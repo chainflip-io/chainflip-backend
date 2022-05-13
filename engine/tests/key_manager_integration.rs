@@ -1,7 +1,8 @@
 use chainflip_engine::{
     eth::{
         key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
-        EthHttpRpcClient, EthObserver, EthWsRpcClient,
+        rpc::{EthHttpRpcClient, EthWsRpcClient},
+        EthObserver,
     },
     logging::utils,
     settings::{CommandLineOptions, Settings},
@@ -31,7 +32,11 @@ pub async fn test_all_key_manager_events() {
     let eth_http_rpc_client = EthHttpRpcClient::new(&settings.eth, &root_logger)
         .expect("Couldn't create EthHttpRpcClient");
 
-    let key_manager = KeyManager::new(integration_test_settings.eth.key_manager_address).unwrap();
+    let key_manager = KeyManager::new(
+        integration_test_settings.eth.key_manager_address,
+        eth_ws_rpc_client.clone(),
+    )
+    .unwrap();
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
