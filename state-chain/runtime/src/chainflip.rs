@@ -10,7 +10,7 @@ use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
 use crate::{
-	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
+	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
 	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
 };
 use cf_chains::{
@@ -22,13 +22,11 @@ use cf_chains::{
 };
 use cf_traits::{
 	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
+	ReplayProtectionProvider, RewardsDistribution, StakeTransfer,
 };
 use frame_support::weights::Weight;
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
-
-use pallet_cf_auction::HandleStakes;
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
@@ -48,16 +46,6 @@ impl Chainflip for Runtime {
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
-}
-
-pub struct ChainflipStakeHandler;
-impl StakeHandler for ChainflipStakeHandler {
-	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
-
-	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount) {
-		HandleStakes::<Runtime>::stake_updated(validator_id, new_total);
-	}
 }
 
 trait RewardDistribution {
@@ -156,7 +144,7 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		let backup_nodes = <Auction as BackupNodes>::backup_nodes();
+		let backup_nodes = <Validator as BackupNodes>::backup_nodes();
 		BackupNodeEmissions::distribute_rewards(&backup_nodes);
 
 		// Check the state of the network and if we are within the emergency rotation range
