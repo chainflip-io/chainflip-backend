@@ -14,7 +14,7 @@ pub struct DeleteRewardsPallet;
 const VALIDATOR_REWARDS: ReserveId = *b"VALR";
 
 generate_storage_alias!(
-	Rewards, RewardsEntitlement => Map<(ReserveId, Twox64Concat), FlipBalance>
+	Rewards, RewardsEntitlement => Map<(Twox64Concat, ReserveId), FlipBalance>
 );
 
 impl OnRuntimeUpgrade for DeleteRewardsPallet {

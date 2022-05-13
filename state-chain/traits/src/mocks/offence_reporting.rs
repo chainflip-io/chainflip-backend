@@ -58,9 +58,11 @@ where
 
 #[cfg(test)]
 mod test {
+	use scale_info::TypeInfo;
+
 	use super::*;
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	enum MockOffence {
 		BeingNaughty,
 		BeingSuperNaughty,

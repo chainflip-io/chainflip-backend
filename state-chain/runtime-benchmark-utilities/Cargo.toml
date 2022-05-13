@@ -10,7 +10,7 @@ description = "Utilities to help write benchmarks for the Chainflip runtime."
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [features]
 default = ['std']

@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 
 const HEART_BLOCK_INTERVAL: u32 = 150;
@@ -30,6 +30,6 @@ benchmarks! {
 	} : {
 		Pallet::<T>::on_initialize((HEART_BLOCK_INTERVAL + 1).into());
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+}

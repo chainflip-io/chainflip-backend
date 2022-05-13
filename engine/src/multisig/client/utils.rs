@@ -1,5 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
+use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// for the corresponding ceremony
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PartyIdxMapping {
-    id_to_idx: HashMap<AccountId, usize>,
+    id_to_idx: HashMap<AccountId, AuthorityCount>,
     // TODO: create SortedVec and use it here:
     // Sorted Account Ids
     account_ids: Vec<AccountId>,
@@ -16,18 +17,19 @@ pub struct PartyIdxMapping {
 
 impl PartyIdxMapping {
     /// Get party index based on their account id
-    pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
+    pub fn get_idx(&self, id: &AccountId) -> Option<AuthorityCount> {
         self.id_to_idx.get(id).copied()
     }
 
     /// Get party account id based on their index
-    pub fn get_id(&self, idx: usize) -> Option<&AccountId> {
+    pub fn get_id(&self, idx: AuthorityCount) -> Option<&AccountId> {
         let idx = idx.checked_sub(1)?;
-        self.account_ids.get(idx)
+        self.account_ids.get(idx as usize)
     }
 
     /// Map all signer ids to their corresponding signer idx
-    pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<BTreeSet<usize>, ()> {
+    #[allow(clippy::result_unit_err)]
+    pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<BTreeSet<AuthorityCount>, ()> {
         signer_ids
             .iter()
             .map(|id| self.get_idx(id).ok_or(()))
@@ -36,7 +38,7 @@ impl PartyIdxMapping {
 
     /// Convert all indexes to Account Ids. Precondition: the indexes must be
     /// valid for the ceremony
-    pub fn get_ids(&self, idxs: BTreeSet<usize>) -> BTreeSet<AccountId> {
+    pub fn get_ids(&self, idxs: BTreeSet<AuthorityCount>) -> BTreeSet<AccountId> {
         idxs.iter()
             .map(|idx| {
                 self.get_id(*idx)
@@ -54,7 +56,7 @@ impl PartyIdxMapping {
 
         for (i, account_id) in signers.iter().enumerate() {
             // indexes start with 1 for signing
-            id_to_idx.insert(account_id.clone(), i + 1);
+            id_to_idx.insert(account_id.clone(), i as AuthorityCount + 1);
         }
 
         PartyIdxMapping {

@@ -70,13 +70,13 @@ fn non_validators_should_not_appear_in_network_state() {
 
 		let current_epoch = MockEpochInfo::epoch_index();
 		assert!(
-			!MockEpochInfo::validator_index(current_epoch, &BOB).is_some(),
-			"Bob should not be a validator"
+			!MockEpochInfo::authority_index(current_epoch, &BOB).is_some(),
+			"Bob should not be an authority"
 		);
 
 		assert!(
-			MockEpochInfo::validator_index(current_epoch, &ALICE).is_some(),
-			"Alice should be a validator"
+			MockEpochInfo::authority_index(current_epoch, &ALICE).is_some(),
+			"Alice should be an authority"
 		);
 
 		assert!(<OnlinePallet as IsOnline>::is_online(&BOB), "Bob should be online");

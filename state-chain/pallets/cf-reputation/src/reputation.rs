@@ -1,11 +1,15 @@
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{pallet_prelude::Member, Parameter};
+use scale_info::TypeInfo;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Saturating, Zero};
 use sp_std::fmt::Debug;
 
 pub type ReputationPoints = i32;
 
-/// Reputation of a validator
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+/// Reputation of a node
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq)]
+#[scale_info(skip_type_params(P))]
+#[codec(mel_bound(P: ReputationParameters))]
 pub struct ReputationTracker<P: ReputationParameters> {
 	online_credits: P::OnlineCredits,
 	pub reputation_points: ReputationPoints,
@@ -27,7 +31,13 @@ impl<P: ReputationParameters> Debug for ReputationTracker<P> {
 }
 
 pub trait ReputationParameters {
-	type OnlineCredits: AtLeast32BitUnsigned + Copy + Debug + Default;
+	type OnlineCredits: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ AtLeast32BitUnsigned
+		+ Copy
+		+ Debug
+		+ Default;
 
 	fn bounds() -> (ReputationPoints, ReputationPoints);
 	fn accrual_rate() -> (ReputationPoints, Self::OnlineCredits);

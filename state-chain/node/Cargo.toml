@@ -16,147 +16,70 @@ name = 'chainflip-node'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
-[build-dependencies.substrate-build-script-utils]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
 # Chainflip Runtime
 [dependencies.state-chain-runtime]
 path = '../runtime'
 
 [dependencies]
-# Chainflip-specific dependencies
+# Local dependencies
+cf-chains = {path = "../chains"}
 multisig-p2p-transport = {path = '../multisig-p2p-transport'}
+utilities = {path = '../../utilities'}
+custom-rpc = {path = '../custom-rpc'}
+
+# Added by Chainflip
 futures = {version = '0.3.4'}
 hex = '0.4'
 hex-literal = '0.3.1'
 jsonrpc-core-client = '18.0.0'
 jsonrpc-derive = '18.0.0'
-utilities = {path = '../../utilities'}
-custom-rpc = {path = '../custom-rpc'}
 
-# Substrate dependencies
-jsonrpc-core = '18.0.0'
-structopt = '0.3.8'
-cf-chains = {path = "../chains"}
+# Substrate-node-template dependencies
+clap = { version = "3.1.6", features = ["derive"] }
 
-# Substrate dependencies
-[dependencies.frame-benchmarking]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05", features = ["wasmtime"] }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-executor = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05", features = ["wasmtime"]  }
+sc-service = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05", features = ["wasmtime"]  }
+sc-telemetry = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-keystore = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-transaction-pool-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-finality-grandpa-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-runtime = { version = "6.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-keyring = { version = "6.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 
-[dependencies.frame-benchmarking-cli]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+# These dependencies are used for the node template's RPCs
+jsonrpc-core = "18.0.0"
+sc-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-blockchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-basic-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 
-[dependencies.sc-basic-authorship]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+# These dependencies are used for runtime benchmarking
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+frame-benchmarking-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 
-[dependencies.sc-cli]
-features = ['wasmtime']
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+# CLI-specific dependencies
+try-runtime-cli = { optional = true, git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 
-[dependencies.sc-client-api]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-consensus]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-consensus-aura]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-executor]
-features = ['wasmtime']
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-finality-grandpa]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-keystore]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-rpc]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-rpc-api]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-service]
-features = ['wasmtime']
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-telemetry]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-transaction-pool]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sc-transaction-pool-api]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-api]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-block-builder]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-blockchain]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-consensus]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-consensus-aura]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-core]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-finality-grandpa]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-runtime]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.sp-timestamp]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.substrate-frame-rpc-system]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.frame-try-runtime]
-optional = true
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
-
-[dependencies.try-runtime-cli]
-optional = true
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+[build-dependencies]
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
 
 [features]
 default = []
@@ -172,7 +95,7 @@ try-runtime = [
 [package.metadata.deb]
 depends = "$auto"
 extended-description = """\
-Chainflip Validator Node Package"""
+Chainflip Node Package"""
 maintainer = "Chainflip UG <dev@chainflip.io>"
 name = "chainflip-node"
 priority = "required"

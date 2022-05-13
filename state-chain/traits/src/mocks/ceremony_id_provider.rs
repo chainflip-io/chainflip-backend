@@ -1,4 +1,5 @@
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::traits::One;
 use sp_std::{marker::PhantomData, ops::AddAssign};
 
@@ -6,7 +7,7 @@ use frame_support::{storage, StorageHasher, Twox64Concat};
 
 use crate::CeremonyIdProvider;
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct ConstCeremonyIdProvider<const ID: u64>();
 
 impl<const ID: u64> CeremonyIdProvider for ConstCeremonyIdProvider<ID> {
@@ -17,7 +18,7 @@ impl<const ID: u64> CeremonyIdProvider for ConstCeremonyIdProvider<ID> {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCeremonyIdProvider<Id>(PhantomData<Id>);
 
 impl<Id: Encode + Decode + Default> MockCeremonyIdProvider<Id> {

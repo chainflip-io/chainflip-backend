@@ -3,14 +3,14 @@ pub trait OffenceReporter {
 	type ValidatorId;
 	type Offence;
 
-	/// Report a validator.
-	fn report(offence: impl Into<Self::Offence>, validator_id: Self::ValidatorId) {
-		Self::report_many(offence, &[validator_id]);
+	/// Report a node.
+	fn report(offence: impl Into<Self::Offence>, node: Self::ValidatorId) {
+		Self::report_many(offence, &[node]);
 	}
 
-	/// Report multiple validators.
-	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]);
+	/// Report multiple nodes
+	fn report_many(offence: impl Into<Self::Offence>, nodes: &[Self::ValidatorId]);
 
-	/// Forgive all validators for an offence.
+	/// Forgive all nodes
 	fn forgive_all(offence: impl Into<Self::Offence>);
 }

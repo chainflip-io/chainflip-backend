@@ -39,8 +39,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Pallet, Call, Storage, Event<T>, Config<T>},
+		System: frame_system,
+		VaultsPallet: pallet_cf_vaults,
 	}
 );
 
@@ -72,6 +72,7 @@ impl frame_system::Config for MockRuntime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 parameter_types! {}
@@ -82,6 +83,8 @@ impl Chainflip for MockRuntime {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch =
+		cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
@@ -99,7 +102,7 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
 	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
@@ -187,9 +190,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		},
 	};
 
-	let validators = vec![ALICE, BOB, CHARLIE];
-	MockEpochInfo::set_epoch_validator_count(0, validators.len() as u32);
-	MockEpochInfo::set_validators(validators);
+	let authorities = vec![ALICE, BOB, CHARLIE];
+	MockEpochInfo::set_epoch_authority_count(0, authorities.len() as AuthorityCount);
+	MockEpochInfo::set_authorities(authorities);
+
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {

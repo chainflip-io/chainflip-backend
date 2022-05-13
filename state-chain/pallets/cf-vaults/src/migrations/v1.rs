@@ -29,7 +29,7 @@ const PALLET_NAME_V0: &[u8; 6] = b"Vaults";
 
 const PALLET_NAME_V1: &[u8; 13] = b"EthereumVault";
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 enum ChainId {
 	Ethereum,
 }
@@ -172,15 +172,18 @@ pub fn post_migration_checks<T: Config<I>, I: 'static>() -> Result<(), &'static 
 }
 
 mod v0_types {
+
+	use cf_traits::AuthorityCount;
+
 	use super::*;
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Default)]
 	pub struct BlockHeightWindowV0 {
 		pub from: u64,
 		pub to: Option<u64>,
 	}
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 	pub struct VaultV0<T: Config<I>, I: 'static = ()> {
 		/// The vault's public key.
 		pub public_key: Vec<u8>,
@@ -199,15 +202,12 @@ mod v0_types {
 					.public_key
 					.try_into()
 					.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")?,
-				active_window: BlockHeightWindow {
-					from: old.active_window.from.into(),
-					to: old.active_window.to.map(Into::into),
-				},
+				active_from_block: old.active_window.from.into(),
 			})
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 	pub struct KeygenResponseStatusV0<T: Config<I>, I: 'static = ()> {
 		/// The total number of candidates participating in the keygen ceremony.
 		candidate_count: u32,
@@ -230,7 +230,7 @@ mod v0_types {
 
 		fn try_from(old: KeygenResponseStatusV0<T, I>) -> Result<Self, Self::Error> {
 			Ok(Self {
-				candidate_count: old.candidate_count,
+				candidate_count: old.candidate_count as AuthorityCount,
 				remaining_candidates: old.remaining_candidates,
 				success_votes: old
 					.success_votes
@@ -238,15 +238,19 @@ mod v0_types {
 					.map(|(key, votes)| {
 						key.try_into()
 							.map_err(|_| "Unable to convert Vec<u8> public key to AggKey format.")
-							.map(|key| (key, votes))
+							.map(|key| (key, votes as AuthorityCount))
 					})
 					.collect::<Result<_, _>>()?,
-				blame_votes: old.blame_votes,
+				blame_votes: old
+					.blame_votes
+					.into_iter()
+					.map(|(key, votes)| (key, votes as AuthorityCount))
+					.collect(),
 			})
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 	pub enum VaultRotationStatusV0<T: Config<I>, I: 'static = ()> {
 		AwaitingKeygen {
 			keygen_ceremony_id: CeremonyId,

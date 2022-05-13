@@ -3,13 +3,14 @@ use cf_chains::{
 	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
 	UpdateFlipSupply,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types, storage,
 	traits::{Imbalance, UnfilteredDispatchable},
 	StorageHasher, Twox64Concat,
 };
 use frame_system as system;
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -45,9 +46,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Emissions: pallet_cf_emissions::{Pallet, Call, Storage, Event<T>, Config},
+		System: frame_system,
+		Flip: pallet_cf_flip,
+		Emissions: pallet_cf_emissions,
 	}
 );
 
@@ -80,6 +81,7 @@ impl system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl Chainflip for Test {
@@ -88,6 +90,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
@@ -162,7 +165,7 @@ impl RewardsDistribution for MockRewardsDistribution {
 	}
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockUpdateFlipSupply {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_total_supply: u128,
@@ -203,7 +206,7 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockBroadcast;
 
 impl MockBroadcast {
@@ -247,14 +250,14 @@ pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::Test
 		flip: FlipConfig { total_issuance },
 		emissions: {
 			EmissionsConfig {
-				validator_emission_inflation: 1000,       // 10%
-				backup_validator_emission_inflation: 100, // 1%
+				current_authority_emission_inflation: 1000, // 10%
+				backup_node_emission_inflation: 100,        // 1%
 			}
 		},
 	};
 
 	for v in validators {
-		epoch_info::Mock::add_validator(v);
+		epoch_info::Mock::add_authorities(v);
 	}
 
 	config.build_storage().unwrap().into()

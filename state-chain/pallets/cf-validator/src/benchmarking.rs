@@ -10,7 +10,7 @@ use frame_system::RawOrigin;
 benchmarks! {
 	set_blocks_for_epoch {
 		let b = 2_u32;
-		let call = Call::<T>::set_blocks_for_epoch(b.into());
+		let call = Call::<T>::set_blocks_for_epoch { number_of_blocks: b.into() };
 		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
@@ -19,7 +19,7 @@ benchmarks! {
 		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
 	}
 	force_rotation {
-		let call = Call::<T>::force_rotation();
+		let call = Call::<T>::force_rotation {};
 		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
@@ -37,7 +37,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), version.clone())
 	verify {
 		let validator_id: ValidatorIdOf<T> = caller.into();
-		assert_eq!(Pallet::<T>::validator_cfe_version(validator_id), version)
+		assert_eq!(Pallet::<T>::node_cfe_version(validator_id), version)
 	}
 	// TODO: this benchmark is failing in in an test environment.
 	// Pretty sure the reason for this is that the account function
@@ -74,7 +74,7 @@ benchmarks! {
 		let name = str::repeat("x", 64).as_bytes().to_vec();
 	}: _(RawOrigin::Signed(caller.clone()), name.clone())
 	verify {
-		assert_eq!(VanityNames::<T>::get().get(&caller), Some(&name));
+		assert_eq!(VanityNames::<T>::get().get(&caller.into()), Some(&name));
 	}
 }
 

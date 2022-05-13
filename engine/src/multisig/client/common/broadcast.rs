@@ -4,6 +4,8 @@ use std::{
     fmt::Display,
 };
 
+use cf_traits::AuthorityCount;
+
 use crate::{
     multisig::client::{MultisigData, MultisigMessage},
     multisig_p2p::OutgoingMultisigStageMessages,
@@ -19,7 +21,7 @@ pub use super::broadcast_verification::verify_broadcasts;
 /// parties in private
 pub enum DataToSend<T> {
     Broadcast(T),
-    Private(BTreeMap<usize, T>),
+    Private(BTreeMap<AuthorityCount, T>),
 }
 
 /// Abstracts away computations performed during every "broadcast" stage
@@ -39,7 +41,10 @@ pub trait BroadcastStageProcessor<D, Result>: Display {
     /// Determines how the data for this stage (of type `Self::Message`)
     /// should be processed once it either received it from all other parties
     /// or the stage timed out (None is used for missing messages)
-    fn process(self, messages: BTreeMap<usize, Option<Self::Message>>) -> StageResult<D, Result>;
+    fn process(
+        self,
+        messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
+    ) -> StageResult<D, Result>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
@@ -50,7 +55,7 @@ where
 {
     common: CeremonyCommon,
     /// Messages collected so far
-    messages: BTreeMap<usize, P::Message>,
+    messages: BTreeMap<AuthorityCount, P::Message>,
     /// Determines the actual computations before/after
     /// the data is collected
     processor: P,
@@ -92,7 +97,7 @@ where
     fn init(&mut self) {
         let common = &self.common;
 
-        let idx_to_id = |idx: &usize| {
+        let idx_to_id = |idx: &AuthorityCount| {
             common
                 .validator_mapping
                 .get_id(*idx)
@@ -152,7 +157,7 @@ where
             .expect("Could not send p2p message.");
     }
 
-    fn process_message(&mut self, signer_idx: usize, m: D) -> ProcessMessageResult {
+    fn process_message(&mut self, signer_idx: AuthorityCount, m: D) -> ProcessMessageResult {
         let m: P::Message = match m.try_into() {
             Ok(m) => m,
             Err(_) => {
@@ -218,7 +223,7 @@ where
         self.processor.process(messages)
     }
 
-    fn awaited_parties(&self) -> BTreeSet<usize> {
+    fn awaited_parties(&self) -> BTreeSet<AuthorityCount> {
         let mut awaited = BTreeSet::new();
 
         for idx in &self.common.all_idxs {

@@ -28,8 +28,8 @@ This crate provides a `VersionedMigration` type that can be used to structure su
     ```rust
     mod migrations; // <--- We will create this module file next
 
-    // This import is required if not already present.
-    use frame_support::traits::OnRuntimeUpgrade;
+    // These imports are required if not already present.
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
 
     // Bump this if already present.
     pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);

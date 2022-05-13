@@ -28,8 +28,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MockBroadcast: pallet_cf_broadcast::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		MockBroadcast: pallet_cf_broadcast::<Instance1>,
 	}
 );
 
@@ -66,6 +66,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl Chainflip for Test {
@@ -74,6 +75,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }

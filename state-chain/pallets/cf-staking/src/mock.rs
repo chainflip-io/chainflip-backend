@@ -2,7 +2,7 @@ use crate as pallet_cf_staking;
 use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
 use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	ThresholdSigner, WaivedFees,
+	AuthorityCount, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
@@ -32,9 +32,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Staking: pallet_cf_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		System: frame_system,
+		Flip: pallet_cf_flip,
+		Staking: pallet_cf_staking,
 	}
 );
 
@@ -67,6 +67,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl Chainflip for Test {
@@ -75,6 +76,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
@@ -108,7 +110,7 @@ impl pallet_cf_flip::Config for Test {
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call, u64);
-cf_traits::impl_mock_epoch_info!(AccountId, u128, u32);
+cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
 pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];

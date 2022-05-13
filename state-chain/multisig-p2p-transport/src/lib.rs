@@ -135,18 +135,7 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 
 	fn remove_reserved_peer(&self, peer_id: PeerId) {
-		if let Err(err) = self.remove_peers_from_reserved_set(
-			CHAINFLIP_P2P_PROTOCOL_NAME,
-			std::iter::once(
-				[multiaddr::Protocol::P2p(peer_id.into())]
-					.iter()
-					.cloned()
-					.collect::<multiaddr::Multiaddr>(),
-			)
-			.collect(),
-		) {
-			log::error!(target: "p2p", "remove_peers_from_reserved_set failed: {}", err);
-		}
+		self.remove_peers_from_reserved_set(CHAINFLIP_P2P_PROTOCOL_NAME, vec![peer_id])
 	}
 
 	async fn try_send_notification(&self, target: PeerId, message: &[u8]) -> bool {
@@ -174,19 +163,19 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	/// RPC Metadata
 	type Metadata;
 
-	/// Connect to validators and disconnect from old validators
+	/// Connect to authorities and disconnect from old authorities
 	#[rpc(name = "p2p_set_peers")]
 	fn set_peers(&self, peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>) -> Result<u64>;
 
-	/// Connect to a validator
+	/// Connect to a authority
 	#[rpc(name = "p2p_add_peer")]
 	fn add_peer(&self, peer_id: PeerIdTransferable, port: u16, address: Ipv6Addr) -> Result<u64>;
 
-	/// Disconnect from a validator
+	/// Disconnect from a authority
 	#[rpc(name = "p2p_remove_peer")]
 	fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64>;
 
-	/// Send a message to validators returning a HTTP status code
+	/// Send a message to authorities returning a HTTP status code
 	#[rpc(name = "p2p_send_message")]
 	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> Result<u64>;
 
@@ -237,33 +226,34 @@ impl<
 			state.reserved_peers.insert(peer_id, (port, ip_address, sender));
 			let p2p_network_service = self.p2p_network_service.clone();
 			let retry_send_period = self.retry_send_period;
-			self.message_sender_spawner.spawn("cf-peer-message-sender", async move {
-				while let Some(message) = receiver.recv().await {
-					// TODO: Logic here can be improved to effectively only send when you have a
-					// strong indication it will succeed (By using the connect and disconnect
-					// notifications) Also it is not ideal to drop new messages, better to drop old
-					// messages.
-					let mut attempts = RETRY_SEND_ATTEMPTS;
-					while attempts > 0 {
-						if p2p_network_service.try_send_notification(peer_id, &message).await {
-							break
-						} else {
-							attempts -= 1;
-							tokio::time::sleep(retry_send_period).await;
+			self.message_sender_spawner
+				.spawn("cf-peer-message-sender", "chainflip", async move {
+					while let Some(message) = receiver.recv().await {
+						// TODO: Logic here can be improved to effectively only send when you have a
+						// strong indication it will succeed (By using the connect and disconnect
+						// notifications) Also it is not ideal to drop new messages, better to drop
+						// old messages.
+						let mut attempts = RETRY_SEND_ATTEMPTS;
+						while attempts > 0 {
+							if p2p_network_service.try_send_notification(peer_id, &message).await {
+								break
+							} else {
+								attempts -= 1;
+								tokio::time::sleep(retry_send_period).await;
+							}
+						}
+						if 0 == attempts {
+							log::info!("Dropping message for peer {}", peer_id);
 						}
 					}
-					if 0 == attempts {
-						log::info!("Dropping message for peer {}", peer_id);
-					}
-				}
-			});
+				});
 			self.p2p_network_service.reserve_peer(peer_id, port, ip_address);
 			true
 		}
 	}
 }
 
-pub fn new_p2p_validator_network_node<
+pub fn new_p2p_network_node<
 	MetaData: jsonrpc_pubsub::PubSubMetadata + Send + Sync + 'static,
 	PN: PeerNetwork + Send + Sync + 'static,
 >(
@@ -284,7 +274,7 @@ pub fn new_p2p_validator_network_node<
 			{
 				type Metadata = MetaData;
 
-				/// Connect to validators
+				/// Connect to authorities
 				fn set_peers(
 					&self,
 					peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>,
@@ -321,7 +311,7 @@ pub fn new_p2p_validator_network_node<
 					Ok(200)
 				}
 
-				/// Connect to a validator
+				/// Connect to an authority
 				fn add_peer(
 					&self,
 					peer_id: PeerIdTransferable,
@@ -346,7 +336,7 @@ pub fn new_p2p_validator_network_node<
 					}
 				}
 
-				/// Disconnect from a validator
+				/// Disconnect from an authority
 				fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64> {
 					let peer_id: PeerId = peer_id.try_into()?;
 					let mut state = self.state.write().unwrap();
@@ -597,7 +587,7 @@ mod tests {
 		}
 	}
 
-	async fn new_p2p_validator_network_node_with_test_probes() -> (
+	async fn new_p2p_network_node_with_test_probes() -> (
 		tokio::sync::mpsc::UnboundedSender<Event>,
 		P2PRpcClient,
 		Arc<RwLock<P2PValidatorNetworkNodeState>>,
@@ -613,12 +603,10 @@ mod tests {
 		});
 
 		let handle = tokio::runtime::Handle::current();
-		let task_executor: sc_service::TaskExecutor =
-			(move |future, _| handle.spawn(future).map(|_| ())).into();
-		let task_manager = sc_service::TaskManager::new(task_executor, None).unwrap();
+		let task_manager = sc_service::TaskManager::new(handle, None).unwrap();
 		let message_sender_spawn_handle = task_manager.spawn_handle();
 
-		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_validator_network_node(
+		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_network_node(
 			network_expectations.clone(),
 			message_sender_spawn_handle,
 			sc_rpc::testing::TaskExecutor,
@@ -710,7 +698,7 @@ mod tests {
 	#[tokio::test]
 	async fn add_and_remove_peers() {
 		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
@@ -862,7 +850,7 @@ mod tests {
 	#[tokio::test]
 	async fn set_peers() {
 		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
@@ -958,7 +946,7 @@ mod tests {
 	#[tokio::test]
 	async fn send_message() {
 		let (_event_sender, client, _internal_state, network_expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerId::random();
 		let peer_1 = PeerId::random();
@@ -1078,7 +1066,7 @@ mod tests {
 	#[tokio::test]
 	async fn rpc_subscribe() {
 		let (event_sender, client, _internal_state, _expectations, _task_manager) =
-			new_p2p_validator_network_node_with_test_probes().await;
+			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerId::random();
 		let peer_0_transferable = PeerIdTransferable::from(&peer_0);

@@ -5,16 +5,17 @@ use crate::{
 	ChainCrypto, Ethereum,
 };
 
-use codec::{Decode, Encode};
-use ethabi::{Param, ParamType, StateMutability};
+use codec::{Decode, Encode, MaxEncodedLen};
+use ethabi::ParamType;
+use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
-use super::EthereumReplayProtection;
+use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SetAggKeyWithAggKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -58,10 +59,10 @@ impl SetAggKeyWithAggKey {
 	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
 	/// it here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
-		ethabi::Function::new(
+		ethabi_function(
 			"setAggKeyWithAggKey",
 			vec![
-				Param::new(
+				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
 						ParamType::Address,
@@ -72,14 +73,11 @@ impl SetAggKeyWithAggKey {
 						ParamType::Address,
 					]),
 				),
-				Param::new(
+				ethabi_param(
 					"newKey",
 					ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)]),
 				),
 			],
-			vec![],
-			false,
-			StateMutability::NonPayable,
 		)
 	}
 }

@@ -7,15 +7,19 @@ pub mod offence_reporting;
 pub use async_result::AsyncResult;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
 	Hashable, Parameter,
 };
-use sp_runtime::{traits::MaybeSerializeDeserialize, DispatchError, DispatchResult, RuntimeDebug};
+use scale_info::TypeInfo;
+use sp_runtime::{
+	traits::{Bounded, MaybeSerializeDeserialize},
+	DispatchError, DispatchResult, RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -23,26 +27,29 @@ pub type FlipBalance = u128;
 /// The type used as an epoch index.
 pub type EpochIndex = u32;
 
+pub type AuthorityCount = u32;
+
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member
 		+ Parameter
+		+ MaxEncodedLen
 		+ Default
 		+ Eq
 		+ Ord
 		+ Copy
 		+ AtLeast32BitUnsigned
-		+ MaybeSerializeDeserialize;
+		+ MaybeSerializeDeserialize
+		+ Bounded;
 
-	/// An identity for a validator
+	/// An identity for a node
 	type ValidatorId: Member
-		+ Default
 		+ Parameter
+		+ MaxEncodedLen
 		+ Ord
 		+ core::fmt::Debug
-		+ From<<Self as frame_system::Config>::AccountId>
-		+ Into<<Self as frame_system::Config>::AccountId>
+		+ IsType<<Self as frame_system::Config>::AccountId>
 		+ MaybeSerializeDeserialize;
 
 	/// An id type for keys used in threshold signature ceremonies.
@@ -51,6 +58,9 @@ pub trait Chainflip: frame_system::Config {
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+	/// A type that allows us to check if a call was a result of witness consensus by the current
+	/// epoch.
+	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::Origin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state
@@ -91,20 +101,23 @@ pub trait EpochInfo {
 	/// The last expired epoch
 	fn last_expired_epoch() -> EpochIndex;
 
-	/// The current set of validators
-	fn current_validators() -> Vec<Self::ValidatorId>;
+	/// The current authority set's validator ids
+	fn current_authorities() -> Vec<Self::ValidatorId>;
 
-	/// Get the current number of validators
-	fn current_validator_count() -> u32;
+	/// Get the current number of authorities
+	fn current_authority_count() -> AuthorityCount;
 
-	/// Gets validator index of a particular validator for a given epoch
-	fn validator_index(epoch_index: EpochIndex, account: &Self::ValidatorId) -> Option<u16>;
+	/// Gets authority index of a particular authority for a given epoch
+	fn authority_index(
+		epoch_index: EpochIndex,
+		account: &Self::ValidatorId,
+	) -> Option<AuthorityCount>;
 
-	/// Validator count at a particular epoch.
-	fn validator_count_at_epoch(epoch_index: EpochIndex) -> Option<u32>;
+	/// Authority count at a particular epoch.
+	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to be included in the
-	/// current candidate validator set
+	/// current candidate authority set
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
@@ -114,9 +127,9 @@ pub trait EpochInfo {
 	fn is_auction_phase() -> bool;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_validator_info_for_epoch(
+	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_validators: Vec<Self::ValidatorId>,
+		new_authorities: Vec<Self::ValidatorId>,
 	);
 }
 
@@ -128,64 +141,51 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-/// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
-/// finally it is completed
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum AuctionPhase<ValidatorId, Amount> {
-	/// Waiting for bids
-	WaitingForBids,
-	/// We have ran the auction and have a set of validators with minimum active bid awaiting
-	/// confirmation
-	ValidatorsSelected(Vec<ValidatorId>, Amount),
+/// The outcome of a successful auction.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+pub struct AuctionOutcome<CandidateId, BidAmount> {
+	/// The auction winners.
+	pub winners: Vec<CandidateId>,
+	/// The auction losers and their bids.
+	pub losers: Vec<(CandidateId, BidAmount)>,
+	/// The resulting bond for the next epoch.
+	pub bond: BidAmount,
 }
 
-impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
-	fn default() -> Self {
-		AuctionPhase::WaitingForBids
+impl<T, BidAmount: Copy + AtLeast32BitUnsigned> AuctionOutcome<T, BidAmount> {
+	/// The total collateral locked if this auction outcome is confirmed.
+	pub fn projected_total_collateral(&self) -> BidAmount {
+		self.bond * BidAmount::from(self.winners.len() as u32)
 	}
 }
 
-/// A bid represented by a validator and the amount they wish to bid
-pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
-/// A bid that has been classified as out of the validating set
-pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
+pub type RuntimeAuctionOutcome<T> =
+	AuctionOutcome<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-/// A successful auction result
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct AuctionResult<ValidatorId, Amount> {
-	pub winners: Vec<ValidatorId>,
-	pub minimum_active_bid: Amount,
+impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, BidAmount> {
+	fn default() -> Self {
+		AuctionOutcome {
+			winners: Default::default(),
+			losers: Default::default(),
+			bond: Default::default(),
+		}
+	}
 }
 
-/// A range of min, max for active validator set
-pub type ActiveValidatorRange = (u32, u32);
-
-/// Auctioneer
-///
-/// The auctioneer is responsible in running and confirming an auction.  Bidders are selected and
-/// returned as an `AuctionResult` calling `run_auction()`.
-pub trait Auctioneer {
-	type ValidatorId;
-	type Amount;
+pub trait Auctioneer<T: Chainflip> {
 	type Error: Into<DispatchError>;
 
-	/// Run an auction by qualifying a validator
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error>;
-
-	// TODO: there's probably a better place to put this (both in terms of being in this trait)
-	// and where it's called
-	/// Update the states of backup and passive nodes
-	fn update_backup_and_passive_states();
+	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
 }
 
-pub trait BackupValidators {
+pub trait BackupNodes {
 	type ValidatorId;
 
-	/// The current set of backup validators.  The set may change at anytime.
-	fn backup_validators() -> Vec<Self::ValidatorId>;
+	/// The current set of backup nodes.  The set may change on any stake or claim event
+	fn backup_nodes() -> Vec<Self::ValidatorId>;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SuccessOrFailure {
 	Success,
 	Failure,
@@ -207,11 +207,9 @@ pub trait VaultRotator {
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
+
 	/// A new epoch has started
-	///
-	/// The `previous_epoch_validators` now let `epoch_validators` take control
-	/// There can be an overlap between these two sets of validators
-	fn on_new_epoch(epoch_validators: &[Self::ValidatorId]);
+	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]);
 }
 
 /// Resetter for Reputation Points and Online Credits of a Validator
@@ -228,14 +226,14 @@ pub trait BidderProvider {
 	type Amount;
 	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
 	/// greater than zero
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
 /// Provide feedback on staking
 pub trait StakeHandler {
 	type ValidatorId;
 	type Amount;
-	/// A validator has updated their stake and now has a new total amount
+	/// A node has updated their stake and now has a new total amount
 	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
@@ -317,28 +315,28 @@ pub trait EthEnvironmentProvider {
 pub trait IsOnline {
 	/// The validator id used
 	type ValidatorId;
-	/// The online status of the validator
+	/// The online status of the node
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct NetworkState<ValidatorId: Default> {
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+pub struct NetworkState<ValidatorId> {
 	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
 	/// Online nodes
 	pub online: Vec<ValidatorId>,
 }
 
-impl<ValidatorId: Default> NetworkState<ValidatorId> {
-	/// Return the number of nodes with state Validator in the network
+impl<ValidatorId> NetworkState<ValidatorId> {
+	/// Returns the total number of nodes in the network.
 	pub fn number_of_nodes(&self) -> u32 {
 		(self.online.len() + self.offline.len()) as u32
 	}
 
-	/// Return the percentage of validators online rounded down
+	/// Return the percentage of nodes online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		let number_online = self.online.len() as u32;
 
@@ -359,13 +357,13 @@ pub trait EmergencyRotation {
 	fn emergency_rotation_completed();
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	HistoricalAuthority(BackupOrPassive),
@@ -373,7 +371,7 @@ pub enum ChainflipAccountState {
 }
 
 // TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
 }
@@ -393,23 +391,13 @@ pub trait ChainflipAccount {
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	/// Updates the state of a
 	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
-	/// Set the validator to be the current authority
+	/// Set the node to be a current authority
 	fn set_current_authority(account_id: &Self::AccountId);
-	/// Sets the validator state to historical
-	fn set_historical_validator(account_id: &Self::AccountId);
-	/// Sets the current validator to the historical validator, should be called
-	/// once the validator has no more active epochs
+	/// Sets the authority state to historical
+	fn set_historical_authority(account_id: &Self::AccountId);
+	/// Sets the current authority to the historical authority, should be called
+	/// once the authority has no more active epochs
 	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
-}
-
-// Remove in place of a proper validator enum
-/// An outgoing node
-pub trait IsOutgoing {
-	type AccountId;
-
-	/// Returns true if this account is an outgoer which by definition is a node that was in the
-	/// active set in the *last* epoch
-	fn is_outgoing(account_id: &Self::AccountId) -> bool;
 }
 
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
@@ -448,7 +436,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 
 	// TODO: How to check if we set to backup or passive
 	// we might want to combine this with an update_backup_or_passive
-	fn set_historical_validator(account_id: &Self::AccountId) {
+	fn set_historical_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state =
 				ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive);
@@ -471,9 +459,9 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	}
 }
 
-/// Slashing a validator
+/// Slashing a node
 pub trait Slashing {
-	/// An identifier for our validator
+	/// An identifier for our node
 	type AccountId;
 	/// Block number
 	type BlockNumber;
@@ -565,7 +553,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 
 /// The heartbeat of the network
 pub trait Heartbeat {
-	type ValidatorId: Default;
+	type ValidatorId;
 	type BlockNumber;
 	/// A heartbeat has been submitted
 	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber);
@@ -573,13 +561,13 @@ pub trait Heartbeat {
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }
 
-/// Updating and calculating emissions per block for validators and backup validators
+/// Updating and calculating emissions per block for authorities and backup nodes
 pub trait BlockEmissions {
 	type Balance;
-	/// Update the emissions per block for a validator
-	fn update_validator_block_emission(emission: Self::Balance);
-	/// Update the emissions per block for a backup validator
-	fn update_backup_validator_block_emission(emission: Self::Balance);
+	/// Update the emissions per block for an authority
+	fn update_authority_block_emission(emission: Self::Balance);
+	/// Update the emissions per block for a backup node
+	fn update_backup_node_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
 	fn calculate_block_emissions();
 }
@@ -591,17 +579,17 @@ pub trait WaivedFees {
 	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
 }
 
-/// Qualify what is considered as a potential validator for the network
-pub trait QualifyValidator {
+/// Qualify what is considered as a potential authority for the network
+pub trait QualifyNode {
 	type ValidatorId;
-	/// Is the validator qualified to be a validator and meet our expectations of one
+	/// Is the node qualified to be an authority and meet our expectations of one
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
 }
 
-/// Qualify if the validator has registered
+/// Qualify if the node has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
-impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyValidator
+impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyNode
 	for SessionKeysRegistered<T, R>
 {
 	type ValidatorId = T;
@@ -610,11 +598,11 @@ impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyValidator
 	}
 }
 
-impl<A, B, C> QualifyValidator for (A, B, C)
+impl<A, B, C> QualifyNode for (A, B, C)
 where
-	A: QualifyValidator<ValidatorId = B::ValidatorId>,
-	B: QualifyValidator,
-	C: QualifyValidator<ValidatorId = B::ValidatorId>,
+	A: QualifyNode<ValidatorId = B::ValidatorId>,
+	B: QualifyNode,
+	C: QualifyNode<ValidatorId = B::ValidatorId>,
 {
 	type ValidatorId = A::ValidatorId;
 
@@ -643,19 +631,19 @@ pub trait HistoricalEpoch {
 	type EpochIndex;
 	type Amount;
 	/// All validators which were in an epoch's authority set.
-	fn epoch_validators(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
+	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
-	/// The unexpired epochs for which a validator was in the authority set.
-	fn active_epochs_for_validator(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
-	/// Removes an epoch from a validator's list of active epochs.
-	fn deactivate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
-	/// Add an epoch to a validator's list of active epochs.
-	fn activate_epoch(validator: &Self::ValidatorId, epoch: EpochIndex);
-	///  Returns the amount of a validator's stake that is currently bonded.
-	fn active_bond(validator: &Self::ValidatorId) -> Self::Amount;
-	/// Returns the number of active epochs a validator is still active in
-	fn number_of_active_epochs_for_validator(id: &Self::ValidatorId) -> u32;
+	/// The unexpired epochs for which a node was in the authority set.
+	fn active_epochs_for_authority(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
+	/// Removes an epoch from an authority's list of active epochs.
+	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
+	/// Add an epoch to a authority's list of active epochs.
+	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
+	///  Returns the amount of a authority's stake that is currently bonded.
+	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
+	/// Returns the number of active epochs a authority is still active in
+	fn number_of_active_epochs_for_authority(id: &Self::ValidatorId) -> u32;
 }
 
 /// Handles the expiry of an epoch
@@ -667,8 +655,8 @@ pub trait EpochExpiry {
 pub trait Bonding {
 	type ValidatorId;
 	type Amount;
-	/// Update the bond of an validator
-	fn update_validator_bond(validator: &Self::ValidatorId, bond: Self::Amount);
+	/// Update the bond of an authority
+	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
 pub trait CeremonyIdProvider {
 	type CeremonyId;

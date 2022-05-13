@@ -1,9 +1,9 @@
 pub type Mock = MockEpochInfo;
-crate::impl_mock_epoch_info!(u64, u128, u32);
+crate::impl_mock_epoch_info!(u64, u128, u32, u32);
 
 #[macro_export]
 macro_rules! impl_mock_epoch_info {
-	($account_id:ty, $balance:ty, $epoch_index:ty) => {
+	($account_id:ty, $balance:ty, $epoch_index:ty, $authority_count:ty) => {
 		use std::cell::RefCell;
 		use $crate::EpochInfo;
 
@@ -11,27 +11,27 @@ macro_rules! impl_mock_epoch_info {
 		use std::collections::HashMap;
 
 		thread_local! {
-			pub static CURRENT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
-			pub static VALIDATOR_INDEX: RefCell<HashMap<$epoch_index, HashMap<$account_id, u16>>> = RefCell::new(HashMap::new());
+			pub static CURRENT_AUTHORITIES: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
+			pub static AUTHORITY_INDEX: RefCell<HashMap<$epoch_index, HashMap<$account_id, $authority_count>>> = RefCell::new(HashMap::new());
 			pub static BOND: RefCell<$balance> = RefCell::new(0);
 			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
 			pub static LAST_EXPIRED_EPOCH: RefCell<$epoch_index> = RefCell::new(Default::default());
 			pub static AUCTION_PHASE: RefCell<bool> = RefCell::new(false);
-			pub static EPOCH_VALIDATOR_COUNT: RefCell<HashMap<$epoch_index, u32>> = RefCell::new(Default::default());
+			pub static EPOCH_AUTHORITY_COUNT: RefCell<HashMap<$epoch_index, $authority_count>> = RefCell::new(Default::default());
 		}
 
 		impl MockEpochInfo {
 
-			/// Get the current number of validators.
-			pub fn set_validators(validators: Vec<$account_id>) {
-				CURRENT_VALIDATORS.with(|cell| {
-					*cell.borrow_mut() = validators;
+			/// Set the current authorities.
+			pub fn set_authorities(authorities: Vec<$account_id>) {
+				CURRENT_AUTHORITIES.with(|cell| {
+					*cell.borrow_mut() = authorities;
 				})
 			}
 
-			/// Add a validator to the current validators.
-			pub fn add_validator(account: $account_id) {
-				CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
+			/// Add an authority to the current authorities.
+			pub fn add_authorities(account: $account_id) {
+				CURRENT_AUTHORITIES.with(|cell| cell.borrow_mut().push(account))
 			}
 
 			/// Set the bond amount.
@@ -52,33 +52,33 @@ macro_rules! impl_mock_epoch_info {
 				LAST_EXPIRED_EPOCH.with(|cell| *(cell.borrow_mut()) = epoch_index);
 			}
 
-			pub fn set_epoch_validator_count(epoch_index: $epoch_index, count: u32) {
-				EPOCH_VALIDATOR_COUNT.with(|cell| {
+			pub fn set_epoch_authority_count(epoch_index: $epoch_index, count: $authority_count) {
+				EPOCH_AUTHORITY_COUNT.with(|cell| {
 					cell.borrow_mut().insert(epoch_index, count);
 				})
 			}
 
-			pub fn set_validator_indices(epoch_index: $epoch_index, account_ids: Vec<$account_id>) {
-				VALIDATOR_INDEX.with(|cell| {
+			pub fn set_authority_indices(epoch_index: $epoch_index, account_ids: Vec<$account_id>) {
+				AUTHORITY_INDEX.with(|cell| {
 					let mut map = cell.borrow_mut();
-					let validator_index = map.entry(epoch_index).or_insert(HashMap::new());
+					let authority_index = map.entry(epoch_index).or_insert(HashMap::new());
 					for (i, account_id) in account_ids.iter().enumerate() {
-						validator_index.insert(account_id.clone(), i as u16);
+						authority_index.insert(account_id.clone(), i as $authority_count);
 					}
 				})
 			}
 
-			pub fn next_epoch(validators: Vec<$account_id>) -> $epoch_index {
+			pub fn next_epoch(authorities: Vec<$account_id>) -> $epoch_index {
 				let new_epoch_index = EPOCH.with(|cell| *(cell.borrow_mut()) + 1);
 				MockEpochInfo::set_epoch(new_epoch_index);
-				MockEpochInfo::set_validators(validators.clone());
-				MockEpochInfo::inner_add_validator_info_for_epoch(new_epoch_index, validators);
+				MockEpochInfo::set_authorities(authorities.clone());
+				MockEpochInfo::inner_add_authority_info_for_epoch(new_epoch_index, authorities);
 				new_epoch_index
 			}
 
-			pub fn inner_add_validator_info_for_epoch(epoch_index: $epoch_index, new_validators: Vec<$account_id>) {
-				MockEpochInfo::set_epoch_validator_count(epoch_index, new_validators.len() as u32);
-				MockEpochInfo::set_validator_indices(epoch_index, new_validators);
+			pub fn inner_add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: Vec<$account_id>) {
+				MockEpochInfo::set_epoch_authority_count(epoch_index, new_authorities.len() as $authority_count);
+				MockEpochInfo::set_authority_indices(epoch_index, new_authorities);
 			}
 		}
 
@@ -90,26 +90,26 @@ macro_rules! impl_mock_epoch_info {
 				LAST_EXPIRED_EPOCH.with(|cell| *cell.borrow())
 			}
 
-			fn current_validators() -> Vec<Self::ValidatorId> {
-				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
+			fn current_authorities() -> Vec<Self::ValidatorId> {
+				CURRENT_AUTHORITIES.with(|cell| cell.borrow().clone())
 			}
 
-			fn current_validator_count() -> u32 {
-				CURRENT_VALIDATORS.with(|cell| cell.borrow().len() as u32)
+			fn current_authority_count() -> $authority_count {
+				CURRENT_AUTHORITIES.with(|cell| cell.borrow().len() as $authority_count)
 			}
 
-			fn validator_index(
+			fn authority_index(
 				epoch_index: $epoch_index,
 				account: &Self::ValidatorId,
-			) -> Option<u16> {
-				VALIDATOR_INDEX.with(|cell| {
+			) -> Option<$authority_count> {
+				AUTHORITY_INDEX.with(|cell| {
 					let map = cell.borrow();
-					map.get(&epoch_index).and_then(|validator_index| validator_index.get(account).cloned())
+					map.get(&epoch_index).and_then(|authority_index| authority_index.get(account).cloned())
 				})
 			}
 
-			fn validator_count_at_epoch(epoch: $epoch_index) -> Option<u32> {
-				EPOCH_VALIDATOR_COUNT.with(|cell| {
+			fn authority_count_at_epoch(epoch: $epoch_index) -> Option<$authority_count> {
+				EPOCH_AUTHORITY_COUNT.with(|cell| {
 					cell.borrow().get(&epoch).cloned()
 				})
 			}
@@ -127,8 +127,8 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn add_validator_info_for_epoch(epoch_index: $epoch_index, new_validators: Vec<Self::ValidatorId>) {
-				MockEpochInfo::inner_add_validator_info_for_epoch(epoch_index, new_validators);
+			fn add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: Vec<Self::ValidatorId>) {
+				MockEpochInfo::inner_add_authority_info_for_epoch(epoch_index, new_authorities);
 			}
 		}
 	};
