@@ -162,8 +162,7 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
             )
         })
         .for_each(|(key_id, keygen_result_info)| {
-            let keygen_result_info_bin = bincode::serialize(&keygen_result_info).unwrap();
-            update_key(db, &key_id, keygen_result_info_bin).expect("Should update key in database");
+            update_key(db, &key_id, &keygen_result_info).expect("Should update key in database");
         });
 
     Ok(())
