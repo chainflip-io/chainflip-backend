@@ -431,19 +431,16 @@ async fn should_ignore_duplicate_keygen_request() {
         unknown_id,
     );
     let node = ceremony.get_mut_node(&node_id);
-    let mut result_receiver = node.request_keygen(keygen_ceremony_details);
+    let result_receiver = node.request_keygen(keygen_ceremony_details);
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert_ok!(node.ensure_ceremony_at_keygen_stage(2, ceremony_id));
 
     // Check that the failure reason is correct
-    assert!(node.tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::DuplicateCeremonyId)
+    node.ensure_failure_reason(
+        result_receiver,
+        CeremonyFailureReason::DuplicateCeremonyId,
+        KEYGEN_REQUEST_IGNORED,
     );
 }
 

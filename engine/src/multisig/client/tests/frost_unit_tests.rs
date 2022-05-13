@@ -213,19 +213,16 @@ async fn should_ignore_duplicate_rts() {
     // Send another request to sign with the same ceremony_id and key_id to a node
     let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&test_id);
     let node = &mut signing_ceremony.nodes.get_mut(&test_id).unwrap();
-    let mut result_receiver = node.request_signing(signing_ceremony_details);
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
     // The request should have been rejected and the existing ceremony is unchanged
     assert_ok!(node.ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
 
     // Check that the failure reason is correct
-    assert!(node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result")
-            .map_err(|(_, reason)| reason),
-        Err(CeremonyFailureReason::DuplicateCeremonyId)
+    node.ensure_failure_reason(
+        result_receiver,
+        CeremonyFailureReason::DuplicateCeremonyId,
+        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
