@@ -1,4 +1,3 @@
-use secp256k1::SecretKey;
 use sp_core::{H256, U256};
 use web3::{
     api::SubscriptionStream,
@@ -9,6 +8,7 @@ use web3::{
     },
     Web3,
 };
+use web3_secp256k1::SecretKey;
 
 use futures::{future::select_ok, TryFutureExt};
 

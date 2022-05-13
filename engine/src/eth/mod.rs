@@ -30,8 +30,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::{stream, StreamExt, TryFutureExt};
-use secp256k1::SecretKey;
+use futures::{stream, StreamExt};
 use slog::o;
 use sp_core::{H160, U256};
 use std::{
