@@ -1,6 +1,4 @@
 use std::mem;
-extern crate quickcheck;
-extern crate quickcheck_macros;
 
 use crate::{
 	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
@@ -10,35 +8,47 @@ use frame_support::{
 	assert_noop, assert_ok,
 	traits::{HandleLifetime, Imbalance},
 };
-use quickcheck::{quickcheck, Arbitrary, Gen, TestResult};
+use quickcheck::{Arbitrary, Gen, TestResult};
+use quickcheck_macros::quickcheck;
 
-impl FlipEvent {
+impl FlipOperation {
 	pub fn execute(&self) {
 		match self {
-			FlipEvent::Stake(account_id, amount) => {
+			FlipOperation::Stake(account_id, amount) => {
 				<Flip as StakeTransfer>::credit_stake(account_id, *amount);
 			},
-			FlipEvent::BurnFromAccount(account_id, amount) => {
+			FlipOperation::BurnFromAccount(account_id, amount) => {
 				Flip::settle(account_id, Flip::burn(*amount).into());
 			},
-			FlipEvent::MintToAccount(account_id, amount) => {
+			FlipOperation::MintToAccount(account_id, amount) => {
 				Flip::settle(account_id, Flip::mint(*amount).into());
 			},
-			FlipEvent::Claim(account_id, amount) => {
+			FlipOperation::Claim(account_id, amount) => {
 				<Flip as StakeTransfer>::try_claim(account_id, *amount).unwrap_or_default();
 			},
 		}
 	}
 }
 
-impl sp_std::fmt::Debug for FlipEvents {
+impl sp_std::fmt::Debug for FlipOperation {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "FlipEvents -> Not Important")
+		match self {
+			FlipOperation::Stake(account_id, amount) =>
+				write!(f, "Stake({}, {})", account_id, amount),
+			FlipOperation::BurnFromAccount(account_id, amount) => {
+				write!(f, "BurnFromAccount({}, {})", account_id, amount)
+			},
+			FlipOperation::MintToAccount(account_id, amount) => {
+				write!(f, "MintToAccount({}, {})", account_id, amount)
+			},
+			FlipOperation::Claim(account_id, amount) =>
+				write!(f, "Claim({}, {})", account_id, amount),
+		}
 	}
 }
 
-impl Arbitrary for FlipEvent {
-	fn arbitrary(g: &mut Gen) -> FlipEvent {
+impl Arbitrary for FlipOperation {
+	fn arbitrary(g: &mut Gen) -> FlipOperation {
 		let random_account = match u8::arbitrary(g) % 3 {
 			0 => ALICE,
 			1 => BOB,
@@ -46,29 +56,20 @@ impl Arbitrary for FlipEvent {
 			_ => unreachable!(),
 		};
 		match u8::arbitrary(g) % 4 {
-			0 => FlipEvent::Stake(random_account, u128::arbitrary(g)),
-			1 => FlipEvent::BurnFromAccount(random_account, u128::arbitrary(g)),
-			2 => FlipEvent::MintToAccount(random_account, u128::arbitrary(g)),
-			3 => FlipEvent::Claim(random_account, u128::arbitrary(g)),
+			0 => FlipOperation::Stake(random_account, u128::arbitrary(g)),
+			1 => FlipOperation::BurnFromAccount(random_account, u128::arbitrary(g)),
+			2 => FlipOperation::MintToAccount(random_account, u128::arbitrary(g)),
+			3 => FlipOperation::Claim(random_account, u128::arbitrary(g)),
 			_ => unreachable!(),
 		}
 	}
 }
 
-impl Arbitrary for FlipEvents {
-	fn arbitrary(g: &mut Gen) -> FlipEvents {
-		let mut vec = vec![];
-		for _ in 0..u8::arbitrary(g) {
-			vec.push(FlipEvent::arbitrary(g));
-		}
-		FlipEvents { events: vec }
-	}
-}
-
-fn balance_has_integrity(events: FlipEvents) -> TestResult {
+#[quickcheck]
+fn balance_has_integrity(events: Vec<FlipOperation>) -> TestResult {
 	new_test_ext().execute_with(|| -> TestResult {
 		let mut result = TestResult::passed();
-		for e in events.events.iter() {
+		for e in events.iter() {
 			e.execute();
 			if !check_balance_integrity() {
 				result = TestResult::from_bool(false);
@@ -77,12 +78,6 @@ fn balance_has_integrity(events: FlipEvents) -> TestResult {
 		}
 		result
 	})
-}
-
-#[cfg(test)]
-#[test]
-fn quickcheck_balance_itegrity() {
-	quickcheck(balance_has_integrity as fn(FlipEvents) -> TestResult);
 }
 
 #[cfg(test)]
