@@ -135,18 +135,7 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 
 	fn remove_reserved_peer(&self, peer_id: PeerId) {
-		if let Err(err) = self.remove_peers_from_reserved_set(
-			CHAINFLIP_P2P_PROTOCOL_NAME,
-			std::iter::once(
-				[multiaddr::Protocol::P2p(peer_id.into())]
-					.iter()
-					.cloned()
-					.collect::<multiaddr::Multiaddr>(),
-			)
-			.collect(),
-		) {
-			log::error!(target: "p2p", "remove_peers_from_reserved_set failed: {}", err);
-		}
+		self.remove_peers_from_reserved_set(CHAINFLIP_P2P_PROTOCOL_NAME, vec![peer_id])
 	}
 
 	async fn try_send_notification(&self, target: PeerId, message: &[u8]) -> bool {
@@ -237,26 +226,27 @@ impl<
 			state.reserved_peers.insert(peer_id, (port, ip_address, sender));
 			let p2p_network_service = self.p2p_network_service.clone();
 			let retry_send_period = self.retry_send_period;
-			self.message_sender_spawner.spawn("cf-peer-message-sender", async move {
-				while let Some(message) = receiver.recv().await {
-					// TODO: Logic here can be improved to effectively only send when you have a
-					// strong indication it will succeed (By using the connect and disconnect
-					// notifications) Also it is not ideal to drop new messages, better to drop old
-					// messages.
-					let mut attempts = RETRY_SEND_ATTEMPTS;
-					while attempts > 0 {
-						if p2p_network_service.try_send_notification(peer_id, &message).await {
-							break
-						} else {
-							attempts -= 1;
-							tokio::time::sleep(retry_send_period).await;
+			self.message_sender_spawner
+				.spawn("cf-peer-message-sender", "chainflip", async move {
+					while let Some(message) = receiver.recv().await {
+						// TODO: Logic here can be improved to effectively only send when you have a
+						// strong indication it will succeed (By using the connect and disconnect
+						// notifications) Also it is not ideal to drop new messages, better to drop
+						// old messages.
+						let mut attempts = RETRY_SEND_ATTEMPTS;
+						while attempts > 0 {
+							if p2p_network_service.try_send_notification(peer_id, &message).await {
+								break
+							} else {
+								attempts -= 1;
+								tokio::time::sleep(retry_send_period).await;
+							}
+						}
+						if 0 == attempts {
+							log::info!("Dropping message for peer {}", peer_id);
 						}
 					}
-					if 0 == attempts {
-						log::info!("Dropping message for peer {}", peer_id);
-					}
-				}
-			});
+				});
 			self.p2p_network_service.reserve_peer(peer_id, port, ip_address);
 			true
 		}
@@ -613,9 +603,7 @@ mod tests {
 		});
 
 		let handle = tokio::runtime::Handle::current();
-		let task_executor: sc_service::TaskExecutor =
-			(move |future, _| handle.spawn(future).map(|_| ())).into();
-		let task_manager = sc_service::TaskManager::new(task_executor, None).unwrap();
+		let task_manager = sc_service::TaskManager::new(handle, None).unwrap();
 		let message_sender_spawn_handle = task_manager.spawn_handle();
 
 		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_network_node(

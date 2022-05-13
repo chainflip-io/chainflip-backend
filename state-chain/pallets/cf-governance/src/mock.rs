@@ -22,8 +22,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Governance: pallet_cf_governance::{Pallet, Call, Storage, Event<T>, Config<T>, Origin},
+		System: frame_system,
+		Governance: pallet_cf_governance,
 	}
 );
 
@@ -61,6 +61,7 @@ impl system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 pub struct UpgradeConditionMock;

@@ -24,7 +24,7 @@ where
 	for validator_id in authorities {
 		let account_id = validator_id.into_ref();
 		whitelist_account!(account_id);
-		OnlineCall::<T>::heartbeat()
+		OnlineCall::<T>::heartbeat {}
 			.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into())
 			.unwrap();
 	}

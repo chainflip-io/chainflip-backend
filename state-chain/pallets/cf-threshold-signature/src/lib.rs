@@ -13,7 +13,8 @@ mod benchmarking;
 
 pub mod weights;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
@@ -51,7 +52,7 @@ type AttemptCount = u32;
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
@@ -69,7 +70,8 @@ pub mod pallet {
 	use frame_system::{ensure_none, pallet_prelude::*};
 
 	/// Metadata for a pending threshold signature ceremony.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
@@ -180,6 +182,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -301,7 +304,8 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode)]
+	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::validate_unsigned]
@@ -309,7 +313,7 @@ pub mod pallet {
 		type Call = Call<T, I>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::<T, I>::signature_success(ceremony_id, signature) = call {
+			if let Call::<T, I>::signature_success { ceremony_id, signature } = call {
 				let (_, _, payload) =
 					OpenRequests::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
@@ -462,7 +466,7 @@ pub mod pallet {
 			id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			Call::<T, I>::report_signature_failed(id, offenders).dispatch_bypass_filter(origin)
+			Call::<T, I>::report_signature_failed { id, offenders }.dispatch_bypass_filter(origin)
 		}
 	}
 }

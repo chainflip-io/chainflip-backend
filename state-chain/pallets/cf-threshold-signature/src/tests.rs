@@ -346,7 +346,7 @@ mod unsigned_validation {
 			let (_, ceremony_id) = MockEthereumThresholdSigner::request_signature(PAYLOAD);
 			assert_ok!(Test::validate_unsigned(
 				TransactionSource::External,
-				&PalletCall::signature_success(ceremony_id, sign(PAYLOAD)).into()
+				&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }.into()
 			));
 		});
 	}
@@ -358,7 +358,8 @@ mod unsigned_validation {
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,
-					&PalletCall::signature_success(1234, sign(PAYLOAD)).into()
+					&PalletCall::signature_success { ceremony_id: 1234, signature: sign(PAYLOAD) }
+						.into()
 				)
 				.unwrap_err(),
 				InvalidTransaction::Stale.into()
@@ -375,7 +376,8 @@ mod unsigned_validation {
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,
-					&PalletCall::signature_success(ceremony_id, INVALID_SIGNATURE).into()
+					&PalletCall::signature_success { ceremony_id, signature: INVALID_SIGNATURE }
+						.into()
 				)
 				.unwrap_err(),
 				InvalidTransaction::BadProof.into()
@@ -389,7 +391,7 @@ mod unsigned_validation {
 			assert_eq!(
 				MockEthereumThresholdSigner::validate_unsigned(
 					TransactionSource::External,
-					&PalletCall::report_signature_failed(0, Default::default(),)
+					&PalletCall::report_signature_failed { id: 0, offenders: Default::default() }
 				)
 				.unwrap_err(),
 				InvalidTransaction::Call.into()

@@ -4,7 +4,7 @@ mod v1_types {
 	use super::*;
 	use codec::{Decode, Encode};
 	use frame_support::RuntimeDebug;
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Default)]
 	pub struct AuctionResult<ValidatorId, Amount> {
 		pub winners: Vec<ValidatorId>,
 		pub minimum_active_bid: Amount,

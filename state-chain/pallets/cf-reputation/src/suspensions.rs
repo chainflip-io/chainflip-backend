@@ -1,12 +1,13 @@
 use codec::{Decode, Encode};
 use frame_support::RuntimeDebug;
+use scale_info::TypeInfo;
 use sp_runtime::traits::{AtLeast32BitUnsigned, BlockNumberProvider};
 use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
 	iter,
 };
 
-#[derive(Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct SuspensionTracker<Id, Block, Offence> {
 	offence: Offence,
 	current_block: Block,
@@ -70,7 +71,7 @@ mod test_suspension_tracking {
 
 	use super::*;
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	enum Offence {
 		EatingTheLastRolo,
 	}
