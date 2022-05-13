@@ -20,7 +20,7 @@ mod tests {
 
     // If no `ENV_VAR_INPUT_FILE` is defined, then these default names and ids are used to run the genesis unit test
     const DEFAULT_CSV_CONTENT: &str = "node_name, node_id
-DOC,5F9ofCBWLMFXotypXtbUnbLXkM1Z9As47GRhDDFJDsxKgpBu
+DOC,5HEezwP9EediVA3s7UqkWKhxqTBwUuYgx3jCcqKV2jB79Fpy
 BASHFUL,5DJVVEYPDFZjj9JtJRE2vGvpeSnzBAUA74VXPSpkGKhJSHbN
 DOPEY,5Ge1xF1U3EUgKiGYjLCWmgcDHXQnfGNEujwXYTjShF6GcmYZ";
 
