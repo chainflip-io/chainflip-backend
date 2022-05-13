@@ -4,13 +4,16 @@ use rocksdb::{WriteBatch, DB};
 
 use anyhow::Result;
 
-use crate::multisig::{
-    client::{KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
-    db::persistent::{
-        add_schema_version_to_batch_write, get_data_column_handle, update_key, KEYGEN_DATA_PREFIX,
-        LEGACY_DATA_COLUMN_NAME, PREFIX_SIZE,
+use crate::{
+    logging::utils::new_discard_logger,
+    multisig::{
+        client::{KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
+        db::persistent::{
+            add_schema_version_to_batch_write, get_data_column_handle, KEYGEN_DATA_PREFIX,
+            LEGACY_DATA_COLUMN_NAME, PREFIX_SIZE,
+        },
+        KeyDB, KeyId, PersistentKeyDB,
     },
-    KeyId,
 };
 
 mod old_types {
@@ -112,10 +115,10 @@ fn old_to_new_keygen_result_info(
 }
 
 // Just adding schema version to the metadata column and delete col0 if it exists
-pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
+pub fn migration_0_to_1(mut db: DB) -> Result<PersistentKeyDB, anyhow::Error> {
     // Update version data
     let mut batch = WriteBatch::default();
-    add_schema_version_to_batch_write(db, 1, &mut batch);
+    add_schema_version_to_batch_write(&db, 1, &mut batch);
 
     // Write the batch
     db.write(batch).map_err(|e| {
@@ -131,7 +134,7 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
 
     // Read in old key types and add the new
     let old_keys: HashMap<KeyId, old_types::KeygenResultInfo> = db
-        .prefix_iterator_cf(get_data_column_handle(db), KEYGEN_DATA_PREFIX)
+        .prefix_iterator_cf(get_data_column_handle(&db), KEYGEN_DATA_PREFIX)
         .map(|(key_id, key_info)| {
             // Strip the prefix off the key_id
             let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
@@ -152,6 +155,8 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
         })
         .collect();
 
+    let mut p_kdb = PersistentKeyDB::new_from_db(db, &new_discard_logger());
+
     // only write if all the keys were successfully deserialized
     old_keys
         .into_iter()
@@ -162,8 +167,8 @@ pub fn migration_0_to_1(db: &mut DB) -> Result<(), anyhow::Error> {
             )
         })
         .for_each(|(key_id, keygen_result_info)| {
-            update_key(db, &key_id, &keygen_result_info).expect("Should update key in database");
+            p_kdb.update_key(&key_id, &keygen_result_info);
         });
 
-    Ok(())
+    Ok(p_kdb)
 }

@@ -1,9 +1,7 @@
 use chainflip_engine::multisig::{
     client::KeygenResultInfo,
-    db::persistent::{
-        update_key, DATA_COLUMN, DB_SCHEMA_VERSION, DB_SCHEMA_VERSION_KEY, METADATA_COLUMN,
-    },
-    KeyId,
+    db::persistent::{DATA_COLUMN, DB_SCHEMA_VERSION, DB_SCHEMA_VERSION_KEY, METADATA_COLUMN},
+    KeyDB, KeyId, PersistentKeyDB,
 };
 use rocksdb::{Options, DB};
 use std::env;
@@ -42,7 +40,9 @@ fn main() {
     )
     .expect("Should write DB_SCHEMA_VERSION");
 
+    let mut p_kdb =
+        PersistentKeyDB::new_from_db(db, &chainflip_engine::logging::utils::new_discard_logger());
+
     // Write the key share to the db
-    update_key(&db, &KeyId(agg_pubkey_bytes), &keygen_result_info)
-        .expect("Should write key share to db");
+    p_kdb.update_key(&KeyId(agg_pubkey_bytes), &keygen_result_info);
 }
