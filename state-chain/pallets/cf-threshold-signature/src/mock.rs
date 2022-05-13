@@ -19,6 +19,7 @@ use frame_support::{
 	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system;
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -35,8 +36,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MockEthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>::{Pallet, Origin<T>, Call, Storage, Event<T>, ValidateUnsigned},
+		System: frame_system,
+		MockEthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 	}
 );
 
@@ -69,6 +70,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 use cf_traits::mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo};
@@ -79,6 +81,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
@@ -122,7 +125,7 @@ thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 
 impl MockCallback<MockEthereum> {
@@ -229,9 +232,9 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn with_validators(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
+	pub fn with_authorities(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			MockEpochInfo::set_validators(Vec::from_iter(validators));
+			MockEpochInfo::set_authorities(Vec::from_iter(validators));
 		});
 		self
 	}

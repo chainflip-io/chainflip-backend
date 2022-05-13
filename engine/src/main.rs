@@ -58,19 +58,24 @@ async fn main() {
 
     state_chain_client
         .submit_signed_extrinsic(
-            pallet_cf_validator::Call::cfe_version(SemVer {
-                major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-                minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-                patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-            }),
+            pallet_cf_validator::Call::cfe_version {
+                version: SemVer {
+                    major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+                    minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+                    patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+                },
+            },
             &root_logger,
         )
         .await
         .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(settings.signing.db_file.as_path(), &root_logger)
-        .expect("Failed to open database");
+    let db = PersistentKeyDB::new_and_migrate_to_latest(
+        settings.signing.db_file.as_path(),
+        &root_logger,
+    )
+    .expect("Failed to open database");
 
     // TODO: Merge this into the MultisigClientApi
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
@@ -82,8 +87,8 @@ async fn main() {
         tokio::sync::mpsc::unbounded_channel();
 
     // TODO: multi consumer, single producer?
-    let (sm_window_sender, sm_window_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (km_window_sender, km_window_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sm_instruction_sender, sm_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (km_instruction_sender, km_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     {
         // ensure configured eth node is pointing to the correct chain id
@@ -178,8 +183,8 @@ async fn main() {
             multisig_client,
             account_peer_mapping_change_sender,
             // send messages to these channels to start witnessing
-            sm_window_sender,
-            km_window_sender,
+            sm_instruction_sender,
+            km_instruction_sender,
             latest_block_hash,
             &root_logger
         ),
@@ -188,7 +193,7 @@ async fn main() {
             stake_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            sm_window_receiver,
+            sm_instruction_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),
@@ -196,7 +201,7 @@ async fn main() {
             key_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            km_window_receiver,
+            km_instruction_receiver,
             state_chain_client.clone(),
             &root_logger,
         ),

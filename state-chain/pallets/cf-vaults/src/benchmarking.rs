@@ -5,9 +5,7 @@ use super::*;
 
 use cf_traits::EpochInfo;
 use codec::{Decode, Encode};
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
@@ -18,18 +16,18 @@ const CEREMONY_ID: u64 = 1;
 const NEW_PUBLIC_KEY: [u8; 33] = [0x02; 33];
 const TX_HASH: [u8; 32] = [0xab; 32];
 
-/// Generate a validator set
-fn generate_validator_set<T: Config<I>, I: 'static>(
+/// Generate an authority set
+fn generate_authority_set<T: Config<I>, I: 'static>(
 	set_size: u32,
 	caller: T::ValidatorId,
 ) -> BTreeSet<T::ValidatorId> {
-	let mut validator_set: BTreeSet<T::ValidatorId> = BTreeSet::new();
+	let mut authority_set: BTreeSet<T::ValidatorId> = BTreeSet::new();
 	for i in 0..set_size {
 		let validator_id = account("doogle", i, 0);
-		validator_set.insert(validator_id);
+		authority_set.insert(validator_id);
 	}
-	validator_set.insert(caller);
-	validator_set
+	authority_set.insert(caller);
+	authority_set
 }
 
 fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
@@ -43,8 +41,8 @@ benchmarks_instance_pallet! {
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(150, caller.clone().into());
-		let blamed: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(b, caller.clone().into());
+		let candidates: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
+		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.clone().into());
 		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates.clone());
 
 		for validator_id in candidates {
@@ -70,7 +68,7 @@ benchmarks_instance_pallet! {
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(150, caller.clone().into());
+		let candidates: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
 		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates.clone());
 
 		for validator_id in candidates {
@@ -97,7 +95,7 @@ benchmarks_instance_pallet! {
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_validator_set::<T, I>(150, caller.clone().into());
+		let candidates: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
 		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
 
 		PendingVaultRotation::<T, I>::put(
@@ -122,15 +120,16 @@ benchmarks_instance_pallet! {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
-		let call = Call::<T, I>::vault_key_rotated(
-			new_public_key, 5u64.into(),
-			Decode::decode(&mut &TX_HASH[..]).unwrap()
-		);
-		let origin = T::EnsureWitnessed::successful_origin();
+		let call = Call::<T, I>::vault_key_rotated {
+			new_public_key: new_public_key,
+			block_number: 5u64.into(),
+			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+		};
+		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index()));
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+}

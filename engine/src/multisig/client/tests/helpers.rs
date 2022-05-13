@@ -10,6 +10,7 @@ use std::{
 
 use anyhow::Result;
 use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
+use cf_traits::AuthorityCount;
 use futures::{stream, Future, StreamExt};
 use itertools::{Either, Itertools};
 
@@ -690,7 +691,7 @@ impl SigningCeremonyRunner {
             nodes
                 .into_iter()
                 .sorted_by_key(|(account_id, _)| account_id.clone()),
-            success_threshold_from_share_count(nodes_len as u32) as usize,
+            success_threshold_from_share_count(nodes_len as AuthorityCount) as usize,
         );
 
         (
@@ -1101,8 +1102,8 @@ pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
-            share_count: ACCOUNT_IDS.len(),
-            threshold: ACCOUNT_IDS.len(),
+            share_count: ACCOUNT_IDS.len() as AuthorityCount,
+            threshold: ACCOUNT_IDS.len() as AuthorityCount,
         },
     );
     fake_comm1

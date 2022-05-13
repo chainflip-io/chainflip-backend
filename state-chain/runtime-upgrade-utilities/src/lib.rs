@@ -6,6 +6,9 @@ use frame_support::{
 };
 use sp_std::marker::PhantomData;
 
+mod helper_functions;
+pub use helper_functions::*;
+
 /// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to verion `TO`.
 ///
 /// In order for the runtime upgrade `U` to proceed, two conditions should be satisfied:
@@ -30,7 +33,7 @@ mod try_runtime_helpers {
 	};
 
 	frame_support::generate_storage_alias!(
-		RuntimeUpgradeUtils, MigrationBounds => Map<(Vec<u8>, Twox64Concat), (u16, u16)>
+		RuntimeUpgradeUtils, MigrationBounds => Map<(Twox64Concat, Vec<u8>), (u16, u16)>
 	);
 
 	pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
@@ -133,6 +136,14 @@ mod test_versioned_upgrade {
 
 		fn name() -> &'static str {
 			"Pallet"
+		}
+
+		fn module_name() -> &'static str {
+			"Module"
+		}
+
+		fn crate_version() -> frame_support::traits::CrateVersion {
+			Default::default()
 		}
 	}
 

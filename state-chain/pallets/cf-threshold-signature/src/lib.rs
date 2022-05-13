@@ -13,7 +13,8 @@ mod benchmarking;
 
 pub mod weights;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
@@ -51,7 +52,7 @@ type AttemptCount = u32;
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
@@ -69,11 +70,12 @@ pub mod pallet {
 	use frame_system::{ensure_none, pallet_prelude::*};
 
 	/// Metadata for a pending threshold signature ceremony.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
-		/// The number of blame votes (accusations) each validator has received.
+		/// The number of blame votes (accusations) each authority has received.
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
@@ -95,10 +97,10 @@ pub mod pallet {
 		/// **TODO:** See if there is a better / more scientific basis for the abovementioned
 		/// assumptions and thresholds. Also consider emergency rotations - we may not want this to
 		/// immediately trigger an ER. For instance, imagine a failed tx: if we retry we most likely
-		/// want to retry with the current validator set - however if we rotate, then the next
-		/// validator set will no longer be in control of the vault.
+		/// want to retry with the current authority set - however if we rotate, then the next
+		/// authority set will no longer be in control of the vault.
 		/// Similarly for vault rotations - we can't abort a rotation at the setAggKey stage: we
-		/// have to keep retrying with the current set of validators.
+		/// have to keep retrying with the current set of authorities.
 		pub fn offenders(&self) -> Vec<T::ValidatorId> {
 			// A threshold for number of blame 'accusations' that are required for someone to be
 			// punished.
@@ -180,13 +182,9 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	/// A counter to generate fresh ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn signing_ceremony_id_counter)]
-	pub type SigningCeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// A counter to generate fresh request ids.
 	#[pallet::storage]
@@ -306,7 +304,8 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode)]
+	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::validate_unsigned]
@@ -314,7 +313,7 @@ pub mod pallet {
 		type Call = Call<T, I>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::<T, I>::signature_success(ceremony_id, signature) = call {
+			if let Call::<T, I>::signature_success { ceremony_id, signature } = call {
 				let (_, _, payload) =
 					OpenRequests::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
@@ -467,7 +466,7 @@ pub mod pallet {
 			id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			Call::<T, I>::report_signature_failed(id, offenders).dispatch_bypass_filter(origin)
+			Call::<T, I>::report_signature_failed { id, offenders }.dispatch_bypass_filter(origin)
 		}
 	}
 }

@@ -12,13 +12,13 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::{
-	impl_mock_stake_transfer, mocks::system_state_info::MockSystemStateInfo, BlockNumber,
-	Chainflip, Heartbeat, NetworkState,
+	impl_mock_stake_transfer, mocks::system_state_info::MockSystemStateInfo, AuthorityCount,
+	BlockNumber, Chainflip, Heartbeat, NetworkState,
 };
 
 type ValidatorId = u64;
 
-cf_traits::impl_mock_epoch_info!(ValidatorId, u128, u32);
+cf_traits::impl_mock_epoch_info!(ValidatorId, u128, u32, AuthorityCount);
 impl_mock_stake_transfer!(ValidatorId, u128);
 
 thread_local! {
@@ -37,8 +37,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Pallet, Call, Storage},
+		System: frame_system,
+		OnlinePallet: pallet_cf_online,
 	}
 );
 
@@ -70,6 +70,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 // A heartbeat interval in blocks
@@ -110,6 +111,7 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
@@ -125,7 +127,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
-	MockEpochInfo::add_validator(ALICE);
+	MockEpochInfo::add_authorities(ALICE);
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

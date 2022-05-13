@@ -24,7 +24,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState, QualifyValidator};
+	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState, QualifyNode};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::Saturating;
@@ -79,7 +79,7 @@ pub mod pallet {
 		}
 	}
 
-	/// A validator is considered online if fewer than [T::HeartbeatBlockInterval] blocks
+	/// A node is considered online if fewer than [T::HeartbeatBlockInterval] blocks
 	/// have elapsed since their last heartbeat submission.
 	impl<T: Config> IsOnline for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
@@ -126,7 +126,7 @@ pub mod pallet {
 		/// Partitions the validators based on whether they are considered online or offline.
 		fn current_network_state() -> NetworkState<T::ValidatorId> {
 			let (online, offline) =
-				T::EpochInfo::current_validators().into_iter().partition(Self::is_online);
+				T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
 
 			NetworkState { online, offline }
 		}
@@ -140,7 +140,7 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> QualifyValidator for Pallet<T> {
+	impl<T: Config> QualifyNode for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
 		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {

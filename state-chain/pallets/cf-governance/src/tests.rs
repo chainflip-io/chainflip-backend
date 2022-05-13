@@ -11,9 +11,9 @@ use crate as pallet_cf_governance;
 const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 
 fn mock_extrinsic() -> Box<Call> {
-	Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set(vec![
-		EVE, PETER, MAX,
-	])))
+	Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set {
+		accounts: vec![EVE, PETER, MAX],
+	}))
 }
 
 fn next_block() {
@@ -178,12 +178,14 @@ fn sudo_extrinsic() {
 	new_test_ext().execute_with(|| {
 		// Define a sudo call
 		let sudo_call =
-			Box::new(Call::System(frame_system::Call::<Test>::set_code_without_checks(vec![
-				1, 2, 3, 4,
-			])));
+			Box::new(Call::System(frame_system::Call::<Test>::set_code_without_checks {
+				code: vec![1, 2, 3, 4],
+			}));
 		// Wrap the sudo call as governance extrinsic
 		let governance_extrinsic =
-			Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::call_as_sudo(sudo_call)));
+			Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::call_as_sudo {
+				call: sudo_call,
+			}));
 		// Propose the governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(ALICE),

@@ -8,11 +8,12 @@ description = "Shared Chain-specific functionality for use in the substrate runt
 [dependencies]
 # Cryptography
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
-secp256k1 = {optional = true, version = "0.20"}
+secp256k1 = {optional = true, version = "0.21"}
 
 # Ethereum
-ethabi = {default-features = false, features = ['codec', 'serialize'], git = 'https://github.com/chainflip-io/ethabi', rev = '87ea2a3'}
-ethereum = {default-features = false, version = "0.10"}
+ethabi = {default-features = false, version = "17.0"}
+ethereum-types = {default-features = false, version = "0.13.1"}
+ethereum = {default-features = false, version = "0.12"}
 rlp = {default-features = false, version = "0.5"}
 
 # Other
@@ -27,32 +28,39 @@ cf-runtime-benchmark-utilities = { path = '../runtime-benchmark-utilities', defa
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
-version = '2.3.1'
+version = '3.0.0'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '2.0.1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.frame-system]
 default-features = false
+optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 
 [dev-dependencies]
+cf-test-utilities = { path = '../test-utilities' }
 hex-literal = {version = '0.3'}
-web3 = {git = 'https://github.com/tomusdrw/rust-web3', rev = '861cfcd', features = ['test']}
+web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['test']}
 rand = {version='0.8.4'}
 
 [features]
@@ -60,10 +68,9 @@ default = ['std']
 std = [
     'cf-runtime-benchmark-utilities/std',
     'codec/std',
-    'ethabi/std',
+    'ethabi/full-serde',
     'ethereum/std',
     'frame-support/std',
-    'frame-system/std',
     'hex/std',
     'libsecp256k1/std',
     'log/std',

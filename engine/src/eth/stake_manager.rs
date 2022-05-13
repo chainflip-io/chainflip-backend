@@ -9,6 +9,7 @@ use crate::{
     state_chain::client::StateChainRpcApi,
 };
 
+use cf_traits::EpochIndex;
 use sp_runtime::AccountId32;
 
 use web3::{
@@ -94,6 +95,7 @@ impl EthObserver for StakeManager {
 
     async fn handle_event<RpcClient>(
         &self,
+        epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
@@ -110,12 +112,18 @@ impl EthObserver for StakeManager {
             } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser_api::Call::witness_staked(
-                            account_id,
-                            amount,
-                            return_addr.0,
-                            event.tx_hash.into(),
-                        ),
+                        pallet_cf_witnesser::Call::witness_at_epoch {
+                            call: Box::new(
+                                pallet_cf_staking::Call::staked {
+                                    account_id,
+                                    amount,
+                                    withdrawal_address: return_addr.0,
+                                    tx_hash: event.tx_hash.into(),
+                                }
+                                .into(),
+                            ),
+                            epoch_index: epoch,
+                        },
                         logger,
                     )
                     .await;
@@ -123,11 +131,17 @@ impl EthObserver for StakeManager {
             StakeManagerEvent::ClaimExecuted { account_id, amount } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser_api::Call::witness_claimed(
-                            account_id,
-                            amount,
-                            event.tx_hash.to_fixed_bytes(),
-                        ),
+                        pallet_cf_witnesser::Call::witness_at_epoch {
+                            call: Box::new(
+                                pallet_cf_staking::Call::claimed {
+                                    account_id,
+                                    claimed_amount: amount,
+                                    tx_hash: event.tx_hash.to_fixed_bytes(),
+                                }
+                                .into(),
+                            ),
+                            epoch_index: epoch,
+                        },
                         logger,
                     )
                     .await;

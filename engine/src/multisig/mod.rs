@@ -24,9 +24,6 @@ pub use client::{MultisigClient, MultisigMessage, SchnorrSignature};
 
 pub use db::{KeyDB, PersistentKeyDB};
 
-#[cfg(test)]
-pub use db::KeyDBMock;
-
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
 

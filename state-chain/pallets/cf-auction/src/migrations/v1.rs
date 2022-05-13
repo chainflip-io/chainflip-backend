@@ -28,7 +28,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
-		// For my sanity
 		log::info!(target: "runtime:cf_auction", "AuctionPhase.exists()? {:?}", CurrentPhase::exists());
 		log::info!(target: "runtime:cf_auction", "LastAuctionResult.exits()? {:?}", LastAuctionResult::exists());
 		log::info!(target: "runtime:cf_auction", "CurrentAuctionIndex.exits()? {:?}", CurrentAuctionIndex::exists());
@@ -45,7 +44,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade() -> Result<(), &'static str> {
 		use frame_support::assert_err;
 
-		// We should expect no values for these items
 		assert_err!(CurrentPhase::try_get(), ());
 		assert_err!(LastAuctionResult::try_get(), ());
 		assert_err!(CurrentAuctionIndex::try_get(), ());

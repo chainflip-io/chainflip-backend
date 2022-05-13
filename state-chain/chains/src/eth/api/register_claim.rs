@@ -5,16 +5,17 @@ use crate::{
 	ChainCrypto, Ethereum,
 };
 
-use codec::{Decode, Encode};
-use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint};
+use codec::{Decode, Encode, MaxEncodedLen};
+use ethabi::{Address, ParamType, Token, Uint};
+use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
 
-use super::EthereumReplayProtection;
+use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
-#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct RegisterClaim {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -26,6 +27,15 @@ pub struct RegisterClaim {
 	pub address: Address,
 	/// The expiry duration in seconds.
 	pub expiry: Uint,
+}
+
+impl MaxEncodedLen for RegisterClaim {
+	fn max_encoded_len() -> usize {
+		SigData::max_encoded_len()
+		+ 2 * <[u64; 4]>::max_encoded_len() // 2 x Uint
+		+ <[u8; 32]>::max_encoded_len() // 1 x [u8; 32]
+		+ <[u8; 20]>::max_encoded_len() // 1 x Address
+	}
 }
 
 impl RegisterClaim {
@@ -78,10 +88,10 @@ impl RegisterClaim {
 	/// the json abi definition is currently not supported in no-std, so instead swe hard-code it
 	/// here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
-		ethabi::Function::new(
+		ethabi_function(
 			"registerClaim",
 			vec![
-				Param::new(
+				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
 						// keyManagerAddress
@@ -98,14 +108,11 @@ impl RegisterClaim {
 						ParamType::Address,
 					]),
 				),
-				Param::new("nodeID", ParamType::FixedBytes(32)),
-				Param::new("amount", ParamType::Uint(256)),
-				Param::new("staker", ParamType::Address),
-				Param::new("expiryTime", ParamType::Uint(48)),
+				ethabi_param("nodeID", ParamType::FixedBytes(32)),
+				ethabi_param("amount", ParamType::Uint(256)),
+				ethabi_param("staker", ParamType::Address),
+				ethabi_param("expiryTime", ParamType::Uint(48)),
 			],
-			vec![],
-			false,
-			StateMutability::NonPayable,
 		)
 	}
 }
@@ -196,5 +203,10 @@ mod test_register_claim {
 				])
 				.unwrap()
 		);
+	}
+
+	#[test]
+	fn test_max_encoded_len() {
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<RegisterClaim>();
 	}
 }

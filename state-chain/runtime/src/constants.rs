@@ -1,5 +1,5 @@
 pub mod common {
-	use cf_traits::{BlockNumber, FlipBalance};
+	use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
 	use pallet_cf_broadcast::AttemptCount;
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
@@ -9,7 +9,7 @@ pub mod common {
 		TOKEN_ISSUANCE * TOKEN_FRACTIONS
 	};
 
-	pub const MAX_VALIDATORS: u32 = 150;
+	pub const MAX_AUTHORITIES: AuthorityCount = 150;
 	// Number of blocks to be online to accrue a point
 	pub const ACCRUAL_BLOCKS: u32 = 2500;
 	// Number of accrual points
@@ -39,8 +39,8 @@ pub mod common {
 
 	pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
 
-	pub const VALIDATOR_EMISSION_INFLATION_BPS: u32 = 1000;
-	pub const BACKUP_VALIDATOR_EMISSION_INFLATION_BPS: u32 = 100;
+	pub const CURRENT_AUTHORITY_EMISSION_INFLATION_BPS: u32 = 1000;
+	pub const BACKUP_NODE_EMISSION_INFLATION_BPS: u32 = 100;
 
 	/// The number of blocks to wait for a threshold signature ceremony to complete.
 	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 = 15;

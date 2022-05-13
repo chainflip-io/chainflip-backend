@@ -10,8 +10,8 @@ use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
 use crate::{
-	AccountId, Auction, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, Flip, FlipBalance, HeartbeatBlockInterval, Reputation, Runtime, System, Validator,
+	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
+	Environment, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
 use cf_chains::{
 	eth::{
@@ -21,23 +21,19 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BackupValidators, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, StakeHandler, StakeTransfer,
+	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, StakeTransfer,
 };
-use frame_support::weights::Weight;
+use frame_support::{traits::Get, weights::Weight};
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
-
-use pallet_cf_auction::HandleStakes;
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
-	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom},
+	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto},
 };
 use sp_std::{cmp::min, prelude::*};
-
-use cf_traits::RuntimeUpgrade;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -45,18 +41,9 @@ impl Chainflip for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
-}
-
-pub struct ChainflipStakeHandler;
-impl StakeHandler for ChainflipStakeHandler {
-	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
-
-	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount) {
-		HandleStakes::<Runtime>::stake_updated(validator_id, new_total);
-	}
 }
 
 trait RewardDistribution {
@@ -69,12 +56,12 @@ trait RewardDistribution {
 	type Issuance: Issuance;
 
 	/// Distribute rewards
-	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight;
+	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight;
 }
 
-struct BackupValidatorEmissions;
+struct BackupNodeEmissions;
 
-impl RewardDistribution for BackupValidatorEmissions {
+impl RewardDistribution for BackupNodeEmissions {
 	type EpochInfo = Validator;
 	type StakeTransfer = Flip;
 	type ValidatorId = AccountId;
@@ -83,37 +70,40 @@ impl RewardDistribution for BackupValidatorEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_validators: &[Self::ValidatorId]) -> Weight {
-		if backup_validators.is_empty() {
+	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight {
+		if backup_nodes.is_empty() {
 			return 0
 		}
 		// The current minimum active bid
 		let minimum_active_bid = Self::EpochInfo::bond();
+		let heartbeat_block_interval: FlipBalance =
+			<<Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval as Get<
+				BlockNumber,
+			>>::get()
+			.unique_saturated_into();
 		// Our emission cap for this heartbeat interval
-		let emissions_cap = Emissions::backup_validator_emission_per_block() *
-			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let emissions_cap =
+			Emissions::backup_node_emission_per_block().saturating_mul(heartbeat_block_interval);
 
 		// Emissions for this heartbeat interval for the active set
-		let validator_rewards = Emissions::validator_emission_per_block() *
-			Self::FlipBalance::unique_saturated_from(HeartbeatBlockInterval::get());
+		let authority_rewards = Emissions::current_authority_emission_per_block()
+			.saturating_mul(heartbeat_block_interval);
 
-		// The average validator emission
-		let average_validator_reward: Self::FlipBalance = validator_rewards /
-			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_validators().len());
+		// The average authority emission
+		let average_authority_reward: Self::FlipBalance = authority_rewards /
+			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_authority_count());
 
 		let mut total_rewards = 0;
 
-		// Calculate rewards for each backup validator and total rewards for capping
-		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_validators
+		// Calculate rewards for each backup node and total rewards for capping
+		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_nodes
 			.iter()
-			.map(|backup_validator| {
-				let backup_validator_stake =
-					Self::StakeTransfer::stakeable_balance(backup_validator);
-				let reward_scaling_factor =
-					min(1, (backup_validator_stake / minimum_active_bid) ^ 2);
-				let reward = (reward_scaling_factor * average_validator_reward * 8) / 10;
+			.map(|backup_node| {
+				let backup_node_stake = Self::StakeTransfer::stakeable_balance(backup_node);
+				let reward_scaling_factor = min(1, (backup_node_stake / minimum_active_bid) ^ 2);
+				let reward = (reward_scaling_factor * average_authority_reward * 8) / 10;
 				total_rewards += reward;
-				(backup_validator.clone(), reward)
+				(backup_node.clone(), reward)
 			})
 			.collect();
 
@@ -155,8 +145,8 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		let backup_validators = <Auction as BackupValidators>::backup_validators();
-		BackupValidatorEmissions::distribute_rewards(&backup_validators);
+		let backup_nodes = <Validator as BackupNodes>::backup_nodes();
+		BackupNodeEmissions::distribute_rewards(&backup_nodes);
 
 		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request
@@ -203,7 +193,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 			},
 			EthereumApi::UpdateFlipSupply(_) => eth::UnsignedTransaction {
 				chain_id: Environment::ethereum_chain_id(),
-				contract: Environment::stake_manager_address().into(),
+				contract: Environment::flip_token_address().into(),
 				data,
 				..Default::default()
 			},
@@ -218,7 +208,9 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 	type Surplus = Surplus<Runtime>;
 
 	fn distribute(rewards: Self::Surplus) {
-		let current_block_author = Authorship::author();
+		// TODO: Check if it's ok to panic here.
+		let current_block_author =
+			Authorship::author().expect("A block without an author is invalid.");
 		Flip::settle_imbalance(&current_block_author, rewards);
 	}
 }

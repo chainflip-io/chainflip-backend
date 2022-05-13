@@ -9,10 +9,11 @@ mod ws_safe_stream;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use cf_traits::EpochIndex;
 use regex::Regex;
 
 use crate::{
-    common::{read_clean_and_decode_hex_str_file, Mutex},
+    common::read_clean_and_decode_hex_str_file,
     constants::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_FALLING_BEHIND_MARGIN_BLOCKS,
         ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL, ETH_NODE_CONNECTION_TIMEOUT, SYNC_POLL_INTERVAL,
@@ -31,8 +32,6 @@ use futures::{
     stream::{self},
     StreamExt, TryFutureExt,
 };
-use pallet_cf_vaults::BlockHeightWindow;
-use secp256k1::SecretKey;
 use slog::o;
 use sp_core::{H160, U256};
 use std::{
@@ -41,7 +40,7 @@ use std::{
     fmt::{self, Debug},
     pin::Pin,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use thiserror::Error;
 use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
@@ -55,6 +54,7 @@ use web3::{
     },
     Web3,
 };
+use web3_secp256k1::SecretKey;
 
 use tokio_stream::Stream;
 
@@ -96,13 +96,22 @@ impl SignatureAndEvent {
     }
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum ObserveInstruction {
+    Start(
+        <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
+        EpochIndex,
+    ),
+    End(<cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber),
+}
+
 // TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     contract_observer: ContractObserver,
     eth_ws_rpc: &EthWsRpcClient,
     eth_http_rpc: &EthHttpRpcClient,
-    mut window_receiver: UnboundedReceiver<BlockHeightWindow<cf_chains::Ethereum>>,
+    mut instruction_receiver: UnboundedReceiver<ObserveInstruction>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) where
@@ -119,65 +128,65 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
 
     let contract_observer = Arc::new(contract_observer);
 
-    while let Some(received_window) = window_receiver.recv().await {
-        if let Some((handle, end_at_block)) = option_handle_end_block.take() {
-            // if we already have a thread, we want to tell it when to stop and await on it
-            if let Some(window_to) = received_window.to {
-                if end_at_block.lock().await.is_none() {
-                    // we now have the block we want to end at
-                    *end_at_block.lock().await = Some(window_to);
-                    handle.await.unwrap();
-                }
-            } else {
-                // NB: If we receive another start event, then we just keep the current task going
-                panic!("Received two 'end' events in a row. This should not occur.");
+    while let Some(observe_instruction) = instruction_receiver.recv().await {
+        match observe_instruction {
+            ObserveInstruction::End(to_block) => {
+                let (handle, end_at_block) = option_handle_end_block
+                    .take()
+                    .expect("Received two 'end' events in a row. This should not occur.");
+                // We already have a thread, we want to tell it when to stop and await on it
+                *end_at_block.lock().unwrap() = Some(to_block);
+                handle.await.unwrap();
             }
-        } else {
-            let task_end_at_block = Arc::new(Mutex::new(received_window.to));
+            ObserveInstruction::Start(from_block, epoch) => {
+                assert!(
+                    option_handle_end_block.is_none(),
+                    "Received two 'start' events in a row. This should not occur."
+                );
+                option_handle_end_block = Some({
+                    let task_end_at_block = Arc::new(Mutex::new(None));
 
-            // clone for capture by tokio task
-            let task_end_at_block_c = task_end_at_block.clone();
-            let eth_ws_rpc = eth_ws_rpc.clone();
-            let eth_http_rpc = eth_http_rpc.clone();
-            let logger = logger.clone();
-            let contract_observer = contract_observer.clone();
-            let state_chain_client = state_chain_client.clone();
-            option_handle_end_block = Some((
-                tokio::spawn(async move {
-                    slog::info!(
-                        logger,
-                        "Start observing from ETH block: {}",
-                        received_window.from
-                    );
-                    let mut event_stream = contract_observer
-                        .event_stream(eth_ws_rpc, eth_http_rpc, received_window.from, &logger)
-                        .await
-                        .expect("Failed to initialise event stream");
+                    // clone for capture by tokio task
+                    let task_end_at_block_c = task_end_at_block.clone();
+                    let eth_ws_rpc = eth_ws_rpc.clone();
+                    let eth_http_rpc = eth_http_rpc.clone();
+                    let logger = logger.clone();
+                    let contract_observer = contract_observer.clone();
+                    let state_chain_client = state_chain_client.clone();
+                    (
+                        tokio::spawn(async move {
+                            slog::info!(logger, "Start observing from ETH block: {}", from_block);
+                            let mut event_stream = contract_observer
+                                .event_stream(eth_ws_rpc, eth_http_rpc, from_block, &logger)
+                                .await
+                                .expect("Failed to initialise event stream");
 
-                    // TOOD: Handle None on stream, and result event being an error
-                    while let Some(event) = event_stream.next().await {
-                        if let Some(window_to) = *task_end_at_block.lock().await {
-                            // TODO: Have the stream end when the safe head gets to the block number,
-                            // not just when we receive an event (which could be arbitrarily far in the future)
-                            // past our window_to
-                            if event.block_number > window_to {
-                                slog::info!(
-                                    logger,
-                                    "Finished observing events at ETH block: {}",
-                                    event.block_number
-                                );
-                                // we have reached the block height we wanted to witness up to
-                                // so can stop the witness process
-                                break;
+                            // TOOD: Handle None on stream, and result event being an error
+                            while let Some(event) = event_stream.next().await {
+                                if let Some(end_at_block) = *task_end_at_block.lock().unwrap() {
+                                    // TODO: Have the stream end when the safe head gets to the block number,
+                                    // not just when we receive an event (which could be arbitrarily far in the future)
+                                    // past our window_to
+                                    if event.block_number >= end_at_block {
+                                        slog::info!(
+                                            logger,
+                                            "Finished observing events at ETH block: {}",
+                                            event.block_number
+                                        );
+                                        // we have reached the block height we wanted to witness up to
+                                        // so can stop the witness process
+                                        break;
+                                    }
+                                }
+                                contract_observer
+                                    .handle_event(epoch, event, state_chain_client.clone(), &logger)
+                                    .await;
                             }
-                        }
-                        contract_observer
-                            .handle_event(event, state_chain_client.clone(), &logger)
-                            .await;
-                    }
-                }),
-                task_end_at_block_c,
-            ))
+                        }),
+                        task_end_at_block_c,
+                    )
+                })
+            }
         }
     }
 }
@@ -527,10 +536,10 @@ where
             data: unsigned_tx.data.clone().into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
-            transaction_type: Some(web3::types::U64::from(2)),
+            transaction_type: Some(web3::types::U64::from(2u64)),
             // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
             // input at least as much gas as the estimate will return (stupid? yes)
-            gas: U256::from(15_000_000),
+            gas: U256::from(15_000_000u64),
             ..Default::default()
         };
         // query for the gas estimate if the SC didn't provide it
@@ -545,7 +554,7 @@ where
         };
 
         // increase the estimate by 50%
-        let uint256_2 = U256::from(2);
+        let uint256_2 = U256::from(2u64);
         tx_params.gas = gas_estimate
             .saturating_mul(uint256_2)
             .saturating_sub(gas_estimate.checked_div(uint256_2).unwrap());
@@ -1053,6 +1062,7 @@ pub trait EthObserver {
 
     async fn handle_event<RpcClient>(
         &self,
+        epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,

@@ -16,7 +16,6 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 cf-traits = {path = '../../traits', default-features = false}
 cf-chains = {path = '../../chains', default-features = false}
-pallet-cf-validator = {path = '../cf-validator', default-features = false}
 
 # Non-substrate external deps
 log = { version = '0.4.14', default-features = false }
@@ -26,43 +25,43 @@ log = { version = '0.4.14', default-features = false }
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
-version = '2.3.1'
+version = '3.0.0'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.scale-info]
 default-features = false
 features = ['derive']
-version = '1.0'
+version = '2.0.1'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 # Dev dependencies
 [dev-dependencies]
@@ -72,14 +71,13 @@ cf-test-utilities = { path = '../../test-utilities' }
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'merge-config-option'
+tag = 'chainflip-monthly-2022-05'
 
 [features]
 default = ['std']
 std = [
   'cf-chains/std',
   'cf-traits/std',
-  'pallet-cf-validator/std',
   'codec/std',
   'scale-info/std',
   'log/std',

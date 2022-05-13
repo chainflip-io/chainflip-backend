@@ -31,8 +31,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		ReputationPallet: pallet_cf_reputation::{Pallet, Call, Storage, Event<T>, Config<T>},
+		System: frame_system,
+		ReputationPallet: pallet_cf_reputation,
 	}
 );
 
@@ -64,6 +64,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 // A heartbeat interval in blocks
@@ -111,12 +112,13 @@ impl Chainflip for Test {
 	type Amount = u128;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum AllOffences {
 	MissedHeartbeat,
 	NotLockingYourComputer,

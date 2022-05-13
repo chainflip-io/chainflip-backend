@@ -1,8 +1,9 @@
 use codec::{Decode, Encode};
 use frame_support::RuntimeDebug;
+use scale_info::TypeInfo;
 
 /// A result type for asynchronous operations.
-#[derive(Clone, Copy, RuntimeDebug, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Copy, RuntimeDebug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum AsyncResult<R> {
 	/// Result is ready.
 	Ready(R),
