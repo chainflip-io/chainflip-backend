@@ -668,7 +668,7 @@ pub trait CeremonyIdProvider {
 /// Something that is able to provide block authorship slots that were missed.
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
-	fn missed_slots() -> Vec<u64>;
+	fn missed_slots() -> sp_std::ops::Range<u64>;
 }
 
 /// Something that manages access to the system state.

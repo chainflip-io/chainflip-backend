@@ -168,24 +168,25 @@ impl QualifyNode for MockQualifyValidator {
 }
 
 thread_local! {
-	pub static MISSED_SLOTS: RefCell<Vec<u64>> = RefCell::new(Default::default());
+	pub static MISSED_SLOTS: RefCell<(u64, u64)> = RefCell::new(Default::default());
 }
 
 pub struct MockMissedAuthorshipSlots;
 
 impl MockMissedAuthorshipSlots {
-	pub fn set(slots: Vec<u64>) {
-		MISSED_SLOTS.with(|cell| *cell.borrow_mut() = slots)
+	pub fn set(expected: u64, authored: u64) {
+		MISSED_SLOTS.with(|cell| *cell.borrow_mut() = (expected, authored))
 	}
 
-	pub fn get() -> Vec<u64> {
-		MISSED_SLOTS.with(|cell| cell.borrow().clone())
+	pub fn get() -> (u64, u64) {
+		MISSED_SLOTS.with(|cell| *cell.borrow())
 	}
 }
 
 impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
-	fn missed_slots() -> Vec<u64> {
-		Self::get()
+	fn missed_slots() -> sp_std::ops::Range<u64> {
+		let (expected, authored) = Self::get();
+		expected..authored
 	}
 }
 
