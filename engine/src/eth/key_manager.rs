@@ -244,7 +244,9 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                                         k_times_g_address: sig_data.k_times_g_address.into(),
                                     },
                                     tx_signer: signer,
-                                    tx_fee: tx_fee.try_into().expect("Failed to convert tx fee to u128"),
+                                    tx_fee: tx_fee
+                                        .try_into()
+                                        .expect("Failed to convert tx fee to u128"),
                                     block_number: event.block_number,
                                     tx_hash: event.tx_hash,
                                 }
