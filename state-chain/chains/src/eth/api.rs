@@ -7,14 +7,14 @@ pub mod set_agg_key_with_agg_key;
 pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum EthereumApi {
 	SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey),
 	RegisterClaim(register_claim::RegisterClaim),
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EthereumReplayProtection {
 	pub key_manager_address: [u8; 20],
 	pub chain_id: u64,
@@ -159,4 +159,19 @@ impl_api_calls! {
 	register_claim::RegisterClaim,
 	set_agg_key_with_agg_key::SetAggKeyWithAggKey,
 	update_flip_supply::UpdateFlipSupply,
+}
+
+fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {
+	#[allow(deprecated)]
+	ethabi::Function {
+		name: name.into(),
+		inputs: params,
+		outputs: vec![],
+		constant: None,
+		state_mutability: ethabi::StateMutability::NonPayable,
+	}
+}
+
+fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
+	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }

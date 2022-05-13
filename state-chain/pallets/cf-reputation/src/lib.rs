@@ -59,7 +59,7 @@ impl<T: Config> ReputationParameters for T {
 type RuntimeReputationTracker<T> = reputation::ReputationTracker<T>;
 
 /// A reputation penalty as a ratio of points penalised over number of blocks
-#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct ReputationPenaltyRate<BlockNumber> {
 	pub points: ReputationPoints,
 	pub per_blocks: BlockNumber,
@@ -67,7 +67,9 @@ pub struct ReputationPenaltyRate<BlockNumber> {
 
 /// A penalty comprises the reputation that will be deducted and the number of blocks suspension
 /// that are imposed.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+#[codec(mel_bound(T: Config))]
 pub struct Penalty<T: Config> {
 	reputation: ReputationPoints,
 	suspension: T::BlockNumber,
@@ -88,7 +90,7 @@ impl<T: Config> Default for Penalty<T> {
 	}
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PalletOffence {
 	MissedHeartbeat,
 }
@@ -101,6 +103,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -109,7 +112,12 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The runtime offence type must be compatible with this pallet's offence type.
-		type Offence: From<PalletOffence> + Member + Parameter + Copy + MaybeSerializeDeserialize;
+		type Offence: From<PalletOffence>
+			+ Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize;
 
 		/// When we have to, we slash
 		type Slasher: Slashing<

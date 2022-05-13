@@ -17,6 +17,6 @@ impl<T: Chainflip> MockKeygenExclusion<T> {
 
 impl<T: Chainflip> Get<BTreeSet<T::ValidatorId>> for MockKeygenExclusion<T> {
 	fn get() -> BTreeSet<T::ValidatorId> {
-		KeygenExclusion::<T>::get()
+		KeygenExclusion::<T>::get().unwrap_or_default()
 	}
 }

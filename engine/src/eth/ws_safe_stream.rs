@@ -36,92 +36,110 @@ where
         logger: logger.new(o!(COMPONENT_KEY => "ETH_WSSafeStream")),
     };
 
-    Box::pin(stream::unfold(init_state, move |mut state| async move {
-        loop {
-            if let Some(header) = state.stream.next().await {
-                let current_header = match header {
-                    Ok(header) => header,
-                    Err(err) => {
-                        slog::error!(
-                            state.logger,
-                            "Terminating stream. Error pulling head from stream: {}",
-                            err
-                        );
-                        break None;
-                    }
-                };
-                let current_block_number = match current_header.number {
-                    Some(number) => number,
-                    None => {
-                        slog::error!(
-                            state.logger,
-                            "Termintaing stream. Latest WS block header does not have a block number."
-                        );
-                        break None;
-                    }
-                };
-
-                // Terminate stream if we have skipped into the future
-                if let Some(last_block_pulled) = state.last_block_pulled {
-                    if current_block_number > last_block_pulled + 1 {
-                        break None;
-                    }
+    macro_rules! break_unwrap {
+        ($item:expr, $name:expr, $logger:expr) => {{
+            match $item {
+                Some(item) => item,
+                None => {
+                    slog::error!(
+                        $logger,
+                        "Terminating stream. Latest WS block header does not have a {}.",
+                        $name
+                    );
+                    break None;
                 }
-
-                state.last_block_pulled = Some(current_block_number);
-
-                if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
-                    let last_unsafe_block_number = last_unsafe_block_header.block_number;
-                    assert!(current_block_number <= last_unsafe_block_number + 1);
-
-                    // if we receive two of the same block number then we still need to drop the first
-                    // hence + 1
-                    let reorg_depth =
-                        ((last_unsafe_block_number + 1) - current_block_number).as_u64();
-
-                    if reorg_depth > safety_margin {
-                        break None;
-                    } else if reorg_depth > 0 {
-                        (0..reorg_depth).for_each(|_| {
-                            state.unsafe_block_headers.pop_back();
-                        });
-                    }
-                }
-
-                state.unsafe_block_headers.push_back(EthNumberBloom {
-                    block_number: current_block_number,
-                    logs_bloom: current_header.logs_bloom,
-                });
-
-                if let Some(header) = state.unsafe_block_headers.front() {
-                    if header.block_number.saturating_add(U64::from(safety_margin))
-                        <= current_block_number
-                    {
-                        break Some((
-                            state
-                                .unsafe_block_headers
-                                .pop_front()
-                                .expect("already checked for item above"),
-                            state,
-                        ));
-                    } else {
-                        // we don't want to return None to the caller here. Instead we want to keep progressing
-                        // through the inner stream
-                        continue;
-                    }
-                }
-            } else {
-                // when the inner stream is consumed, we want to end the wrapping/safe stream
-                break None;
             }
-        }
-    }).fuse())
+        }};
+    }
+
+    Box::pin(
+        stream::unfold(init_state, move |mut state| async move {
+            loop {
+                if let Some(header) = state.stream.next().await {
+                    let current_header = match header {
+                        Ok(header) => header,
+                        Err(err) => {
+                            slog::error!(
+                                state.logger,
+                                "Terminating stream. Error pulling head from stream: {}",
+                                err
+                            );
+                            break None;
+                        }
+                    };
+
+                    let current_block_number =
+                        break_unwrap!(current_header.number, "block number", &state.logger);
+                    let current_base_fee_per_gas = break_unwrap!(
+                        current_header.base_fee_per_gas,
+                        "base fee per gas",
+                        &state.logger
+                    );
+
+                    // Terminate stream if we have skipped into the future
+                    if let Some(last_block_pulled) = state.last_block_pulled {
+                        if current_block_number > last_block_pulled + 1 {
+                            break None;
+                        }
+                    }
+
+                    state.last_block_pulled = Some(current_block_number);
+
+                    if let Some(last_unsafe_block_header) = state.unsafe_block_headers.back() {
+                        let last_unsafe_block_number = last_unsafe_block_header.block_number;
+                        assert!(current_block_number <= last_unsafe_block_number + 1);
+
+                        // if we receive two of the same block number then we still need to drop the first
+                        // hence + 1
+                        let reorg_depth =
+                            ((last_unsafe_block_number + 1) - current_block_number).as_u64();
+
+                        if reorg_depth > safety_margin {
+                            break None;
+                        } else if reorg_depth > 0 {
+                            (0..reorg_depth).for_each(|_| {
+                                state.unsafe_block_headers.pop_back();
+                            });
+                        }
+                    }
+
+                    state.unsafe_block_headers.push_back(EthNumberBloom {
+                        block_number: current_block_number,
+                        logs_bloom: current_header.logs_bloom,
+                        base_fee_per_gas: current_base_fee_per_gas,
+                    });
+
+                    if let Some(header) = state.unsafe_block_headers.front() {
+                        if header.block_number.saturating_add(U64::from(safety_margin))
+                            <= current_block_number
+                        {
+                            break Some((
+                                state
+                                    .unsafe_block_headers
+                                    .pop_front()
+                                    .expect("already checked for item above"),
+                                state,
+                            ));
+                        } else {
+                            // we don't want to return None to the caller here. Instead we want to keep progressing
+                            // through the inner stream
+                            continue;
+                        }
+                    }
+                } else {
+                    // when the inner stream is consumed, we want to end the wrapping/safe stream
+                    break None;
+                }
+            }
+        })
+        .fuse(),
+    )
 }
 
 #[cfg(test)]
 pub mod tests {
 
-    use sp_core::{H160, H256};
+    use sp_core::{H160, H256, U256};
 
     use crate::logging::test_utils::new_test_logger;
 
@@ -132,6 +150,7 @@ pub mod tests {
             // fields that matter
             hash: Some(H256::from([hash; 32])),
             number: Some(U64::from(block_number)),
+            base_fee_per_gas: Some(U256::from(1)),
 
             // defaults
             logs_bloom: Default::default(),
@@ -141,12 +160,11 @@ pub mod tests {
             state_root: H256::default(),
             transactions_root: H256::default(),
             receipts_root: H256::default(),
-            gas_used: sp_core::U256::default(),
-            gas_limit: sp_core::U256::default(),
-            base_fee_per_gas: Default::default(),
+            gas_used: U256::default(),
+            gas_limit: U256::default(),
             extra_data: Default::default(),
             timestamp: Default::default(),
-            difficulty: sp_core::U256::default(),
+            difficulty: U256::default(),
             mix_hash: Default::default(),
             nonce: Default::default(),
         };
@@ -158,6 +176,7 @@ pub mod tests {
             EthNumberBloom {
                 block_number: block_header.number.unwrap(),
                 logs_bloom: block_header.logs_bloom,
+                base_fee_per_gas: block_header.base_fee_per_gas.unwrap(),
             }
         }
     }

@@ -326,7 +326,7 @@ mod test_tx_payments {
 
 	use super::*;
 
-	const CALL: &Call = &Call::System(frame_system::Call::remark(vec![])); // call doesn't matter
+	const CALL: &Call = &Call::System(frame_system::Call::remark { remark: vec![] }); // call doesn't matter
 
 	#[test]
 	fn test_zero_fee() {

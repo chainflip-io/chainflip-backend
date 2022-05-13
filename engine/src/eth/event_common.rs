@@ -16,6 +16,8 @@ pub struct EventWithCommon<EventParameters: Debug> {
     pub log_index: U256,
     /// The block number at which the event occurred
     pub block_number: u64,
+    /// Base fee per unit of gas for the block this event was included in
+    pub base_fee_per_gas: U256,
     /// The event specific parameters
     pub event_parameters: EventParameters,
 }
@@ -31,15 +33,20 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
 }
 
 impl<EventParameters: Debug> EventWithCommon<EventParameters> {
-    pub fn decode<LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>>(
+    pub fn new_from_unparsed_logs<LogDecoder>(
         decode_log: &LogDecoder,
         log: Log,
-    ) -> Result<Self> {
+        base_fee_per_gas: U256,
+    ) -> Result<Self>
+    where
+        LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>,
+    {
         Ok(Self {
             tx_hash: log
                 .transaction_hash
                 .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?,
             log_index: log.log_index.expect("Should have log index"),
+            base_fee_per_gas,
             block_number: log
                 .block_number
                 .expect("Should have a block number")
@@ -64,19 +71,19 @@ mod tests {
 
     use sp_core::H160;
 
-    use crate::eth::{key_manager::KeyManager, EthObserver};
+    use crate::eth::{key_manager::KeyManager, rpc::mocks::MockEthHttpRpcClient, EthObserver};
 
     use super::*;
 
     #[tokio::test]
     async fn common_event_info_decoded_correctly() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = KeyManager::new(H160::default(), MockEthHttpRpcClient::new()).unwrap();
 
         let transaction_hash =
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
                 .unwrap();
 
-        let event = EventWithCommon::decode(
+        let event = EventWithCommon::new_from_unparsed_logs(
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
@@ -91,7 +98,8 @@ mod tests {
                 transaction_log_index: None,
                 log_type: None,
                 removed: None,
-            }
+            },
+            U256::default(),
         ).unwrap();
 
         assert_eq!(event.tx_hash, transaction_hash);

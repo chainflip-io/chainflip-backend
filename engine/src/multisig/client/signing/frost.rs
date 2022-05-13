@@ -370,8 +370,8 @@ fn build_challenge(
         .try_into()
         .expect("Should never fail, the `message` argument should always be a valid hash");
 
-    let e =
-        AggKey::from(&pubkey).message_challenge(&msg_hash, &pubkey_to_eth_addr(nonce_commitment));
+    let e = AggKey::from_pubkey_compressed(pubkey.serialize())
+        .message_challenge(&msg_hash, &pubkey_to_eth_addr(nonce_commitment));
 
     Scalar::from_bytes(&e)
 }

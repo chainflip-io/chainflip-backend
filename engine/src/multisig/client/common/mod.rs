@@ -28,7 +28,12 @@ impl KeygenResult {
     /// Gets the serialized compressed public key (33 bytes - 32 bytes + a y parity byte)
     pub fn get_public_key_bytes(&self) -> Vec<u8> {
         use crate::multisig::crypto::ECPoint;
-        self.key_share.y.0.serialize_compressed().as_ref().into()
+        self.key_share
+            .y
+            .0
+            .serialize_compressed()
+            .as_slice()
+            .to_vec()
     }
 }
 

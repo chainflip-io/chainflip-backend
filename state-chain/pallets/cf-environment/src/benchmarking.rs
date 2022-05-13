@@ -10,7 +10,7 @@ use frame_support::dispatch::UnfilteredDispatchable;
 benchmarks! {
 	set_system_state {
 		let caller: T::AccountId = whitelisted_caller();
-		let call = Call::<T>::set_system_state(SystemState::Maintenance);
+		let call = Call::<T>::set_system_state { state: SystemState::Maintenance };
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {

@@ -1,14 +1,15 @@
 use crate::{eth::Tokenizable, ChainCrypto, Ethereum};
-use codec::{Decode, Encode};
-use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint};
+use codec::{Decode, Encode, MaxEncodedLen};
+use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::RuntimeDebug;
+use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 use crate::eth::{SchnorrVerificationComponents, SigData};
 
-use super::EthereumReplayProtection;
+use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct UpdateFlipSupply {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
@@ -18,6 +19,14 @@ pub struct UpdateFlipSupply {
 	pub state_chain_block_number: Uint,
 	/// The address of the stake manager - to mint or burn tokens
 	pub stake_manager_address: Address,
+}
+
+impl MaxEncodedLen for UpdateFlipSupply {
+	fn max_encoded_len() -> usize {
+		SigData::max_encoded_len() +
+			2 * <[u64; 4]>::max_encoded_len() +
+			<[u8; 20]>::max_encoded_len()
+	}
 }
 
 impl UpdateFlipSupply {
@@ -67,10 +76,10 @@ impl UpdateFlipSupply {
 	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
 	/// it here and verify against the abi in a unit test.
 	fn get_function(&self) -> ethabi::Function {
-		ethabi::Function::new(
+		ethabi_function(
 			"updateFlipSupply",
 			vec![
-				Param::new(
+				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
 						ParamType::Address,
@@ -81,13 +90,10 @@ impl UpdateFlipSupply {
 						ParamType::Address,
 					]),
 				),
-				Param::new("newTotalSupply", ParamType::Uint(256)),
-				Param::new("stateChainBlockNumber", ParamType::Uint(256)),
-				Param::new("staker", ParamType::Address),
+				ethabi_param("newTotalSupply", ParamType::Uint(256)),
+				ethabi_param("stateChainBlockNumber", ParamType::Uint(256)),
+				ethabi_param("staker", ParamType::Address),
 			],
-			vec![],
-			false,
-			StateMutability::NonPayable,
 		)
 	}
 }
@@ -175,5 +181,10 @@ mod test_update_flip_supply {
 				])
 				.unwrap()
 		);
+	}
+
+	#[test]
+	fn test_max_encoded_len() {
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<UpdateFlipSupply>();
 	}
 }

@@ -41,9 +41,10 @@ mod tests {
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
+		use codec::Encode;
 		use libsecp256k1::PublicKey;
 		use pallet_cf_vaults::KeygenOutcome;
-		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
+		use state_chain_runtime::{constants::common::HEARTBEAT_BLOCK_INTERVAL, Event, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 		// TODO: Can we use the actual events here?
@@ -206,12 +207,12 @@ mod tests {
 							state_chain_runtime::Witnesser::witness_at_epoch(
 								Origin::signed(self.node_id.clone()),
 								Box::new(
-									pallet_cf_staking::Call::staked(
-										validator_id.clone(),
-										*amount,
-										ETH_ZERO_ADDRESS,
-										TX_HASH,
-									)
+									pallet_cf_staking::Call::staked {
+										account_id: validator_id.clone(),
+										amount: *amount,
+										withdrawal_address: ETH_ZERO_ADDRESS,
+										tx_hash: TX_HASH,
+									}
 									.into(),
 								),
 								*epoch,
@@ -262,11 +263,11 @@ mod tests {
 										// If we rotating let's witness the keys being rotated on the contract
 										state_chain_runtime::Witnesser::witness(
 											Origin::signed(self.node_id.clone()),
-											Box::new(pallet_cf_vaults::Call::vault_key_rotated(
-												(&*self.threshold_signer).borrow_mut().proposed_public_key(),
-												100,
-												[1u8; 32].into(),
-											).into()),
+											Box::new(pallet_cf_vaults::Call::vault_key_rotated {
+												new_public_key: (&*self.threshold_signer).borrow_mut().proposed_public_key(),
+												block_number: 100,
+												tx_hash: [1u8; 32].into(),
+											}.into()),
 										).expect("should be able to vault key rotation for node");
 									}
 							},
@@ -302,7 +303,7 @@ mod tests {
 			fn on_block(&self, block_number: BlockNumber) {
 				if self.live {
 					// Heartbeat -> Send transaction to state chain twice an interval
-					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
+					if block_number % (HEARTBEAT_BLOCK_INTERVAL / 2) == 0 {
 						// Online pallet
 						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
@@ -337,7 +338,6 @@ mod tests {
 			let seed = &node_id.clone().to_string();
 			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
-			use sp_core::Encode;
 			assert_ok!(state_chain_runtime::Validator::register_peer_id(
 				state_chain_runtime::Origin::signed(node_id.clone()),
 				peer_keypair.public(),
@@ -437,19 +437,25 @@ mod tests {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
 				let current_block_number = System::block_number();
 				while System::block_number() < current_block_number + n {
-					Timestamp::set_timestamp(
-						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
-					);
-					Session::on_initialize(System::block_number());
-					Online::on_initialize(System::block_number());
-					Flip::on_initialize(System::block_number());
-					Staking::on_initialize(System::block_number());
-					Auction::on_initialize(System::block_number());
-					Emissions::on_initialize(System::block_number());
-					Governance::on_initialize(System::block_number());
-					Reputation::on_initialize(System::block_number());
-					EthereumVault::on_initialize(System::block_number());
-					Validator::on_initialize(System::block_number());
+					let block_number = System::block_number() + 1;
+					let mut digest = sp_runtime::Digest::default();
+					digest.push(sp_runtime::DigestItem::PreRuntime(
+						sp_consensus_aura::AURA_ENGINE_ID,
+						sp_consensus_aura::Slot::from(block_number as u64).encode(),
+					));
+					System::initialize(&block_number, &System::block_hash(block_number), &digest);
+					System::on_initialize(block_number);
+					Session::on_initialize(block_number);
+					Online::on_initialize(block_number);
+					Flip::on_initialize(block_number);
+					Staking::on_initialize(block_number);
+					Auction::on_initialize(block_number);
+					Emissions::on_initialize(block_number);
+					Governance::on_initialize(block_number);
+					Reputation::on_initialize(block_number);
+					EthereumVault::on_initialize(block_number);
+					Validator::on_initialize(block_number);
+					Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
 
 					// Notify contract events
 					for event in self.stake_manager_contract.events() {
@@ -477,9 +483,8 @@ mod tests {
 
 					// A completed block notification
 					for engine in self.engines.values() {
-						engine.on_block(System::block_number());
+						engine.on_block(block_number);
 					}
-					System::set_block_number(System::block_number() + 1);
 				}
 			}
 		}
@@ -503,7 +508,7 @@ mod tests {
 
 	pub struct ExtBuilder {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
-		root: AccountId,
+		root: Option<AccountId>,
 		blocks_per_epoch: BlockNumber,
 		max_authorities: AuthorityCount,
 		min_authorities: AuthorityCount,
@@ -513,7 +518,7 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				accounts: vec![],
-				root: AccountId::default(),
+				root: None,
 				blocks_per_epoch: Zero::zero(),
 				max_authorities: MAX_AUTHORITIES,
 				min_authorities: 1,
@@ -528,7 +533,7 @@ mod tests {
 		}
 
 		fn root(mut self, root: AccountId) -> Self {
-			self.root = root;
+			self.root = Some(root);
 			self
 		}
 
@@ -600,7 +605,7 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_governance::GenesisConfig::<Runtime> {
-				members: vec![self.root.clone()],
+				members: self.root.iter().cloned().collect(),
 				expiry_span: EXPIRY_SPAN_IN_SECONDS,
 			}
 			.assimilate_storage(storage)
@@ -790,7 +795,7 @@ mod tests {
 			ChainflipAccountStore, EpochInfo,
 		};
 		use pallet_cf_validator::RotationStatus;
-		use state_chain_runtime::{HeartbeatBlockInterval, Validator};
+		use state_chain_runtime::Validator;
 
 		#[test]
 		// We have a test network which goes into the first epoch
@@ -857,7 +862,7 @@ mod tests {
 					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
 					// Move forward heartbeat to get those missing nodes online
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// The rotation can now continue to the next phase.
 					assert!(matches!(
@@ -936,7 +941,10 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
-					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
+					assert!(matches!(
+						Validator::rotation_phase(),
+						RotationStatus::AwaitingVaults(..)
+					));
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -1107,9 +1115,10 @@ mod tests {
 		// All other accounts are normally charged and can call any extrinsic.
 		fn restriction_handling() {
 			super::genesis::default().build().execute_with(|| {
-				let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
+				let call: state_chain_runtime::Call =
+					frame_system::Call::remark { remark: vec![] }.into();
 				let gov_call: state_chain_runtime::Call =
-					pallet_cf_governance::Call::approve(1).into();
+					pallet_cf_governance::Call::approve { id: 1 }.into();
 				// Expect a successful normal call to work
 				let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
 					&ALICE.into(),
@@ -1142,19 +1151,21 @@ mod tests {
 	}
 
 	mod authorities {
-		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
+		use crate::tests::{
+			genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL,
+			VAULT_ROTATION_BLOCKS,
+		};
 		use cf_traits::{
 			AuthorityCount, BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo, FlipBalance, StakeTransfer,
 		};
-		use state_chain_runtime::{Flip, HeartbeatBlockInterval, Runtime, Validator};
+		use state_chain_runtime::{Flip, Runtime, Validator};
 		use std::collections::HashMap;
 
 		#[test]
-
 		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// We want to have at least one heartbeat within our reduced epoch
-			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_AUTHORITIES: AuthorityCount = 10;
@@ -1259,7 +1270,7 @@ mod tests {
 						.collect();
 
 					// Move forward a heartbeat, emissions should be shared to backup nodes
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
