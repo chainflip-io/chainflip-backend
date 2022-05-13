@@ -312,26 +312,12 @@ pub mod pallet {
 
 				match stage {
 					BroadcastStage::TransactionSigning => {
-						// We take here. We only allow a single transaction signature request
-						// to be valid at a time
-						if let Some(signing_attempt) =
-							AwaitingTransactionSignature::<T, I>::take(attempt_id)
+						// We remove the old transaction signatrue  here. We only allow a single
+						// transaction signature request to be valid at a time
+						if let Some(broadcast_attempt) =
+							Self::clean_up_awaiting_transaction_signature_attempt(*attempt_id)
 						{
-							// invalidate the old attempt count by removing it from the mapping
-							BroadcastIdToAttemptNumbers::<T, I>::mutate(
-								signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-								|attempt_numbers| {
-									if let Some(attempt_numbers) = attempt_numbers {
-										attempt_numbers.retain(|x| {
-											*x != signing_attempt
-												.broadcast_attempt
-												.broadcast_attempt_id
-												.attempt_count
-										});
-									}
-								},
-							);
-							notify_and_retry(signing_attempt.broadcast_attempt);
+							notify_and_retry(broadcast_attempt);
 						}
 					},
 					// when we retry we actually don't want to take the attempt or the count
@@ -488,8 +474,7 @@ pub mod pallet {
 				Error::<T, I>::InvalidSigner
 			);
 
-			// we want to take the old transaction
-			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
+			Self::clean_up_awaiting_transaction_signature_attempt(broadcast_attempt_id);
 
 			Self::schedule_retry(signing_attempt.broadcast_attempt);
 
@@ -594,6 +579,36 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn clean_up_awaiting_transaction_signature_attempt(
+		broadcast_attempt_id: BroadcastAttemptId,
+	) -> Option<BroadcastAttempt<T, I>> {
+		if let Some(signing_attempt) =
+			AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id)
+		{
+			assert_eq!(
+				signing_attempt.broadcast_attempt.broadcast_attempt_id,
+				broadcast_attempt_id,
+				"The broadcast attempt id of the signing attempt should match that of the broadcast attempt id of its key"
+			);
+			BroadcastIdToAttemptNumbers::<T, I>::mutate(
+				broadcast_attempt_id.broadcast_id,
+				|attempt_numbers| {
+					if let Some(attempt_numbers) = attempt_numbers {
+						attempt_numbers.retain(|x| {
+							*x != signing_attempt
+								.broadcast_attempt
+								.broadcast_attempt_id
+								.attempt_count
+						});
+					}
+				},
+			);
+			Some(signing_attempt.broadcast_attempt)
+		} else {
+			None
+		}
+	}
+
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(
