@@ -238,7 +238,7 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 ) -> <C::Point as ECPoint>::Scalar {
     let challenge = C::build_challenge(pubkey, nonce_commitment, message);
 
-    C::build_response(nonce, &private_key, challenge)
+    C::build_response(nonce, private_key, challenge)
 }
 
 /// Check the validity of a signature response share.
