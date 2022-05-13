@@ -398,27 +398,27 @@ impl CeremonyManager {
 
         // Only stage 1 messages can create unauthorised ceremonies
         let logger = &self.logger;
-        let is_not_first_stage_data = !matches!(data, SigningData::CommStage1(_));
+        let is_first_stage_data = matches!(data, SigningData::CommStage1(_));
         let state = match self.signing_states.entry(ceremony_id) {
             std::collections::hash_map::Entry::Vacant(entry) => {
                 // No ceremony exists for this id yet
-                if is_not_first_stage_data {
+                if is_first_stage_data {
+                    // Create a new unauthorised state for this ceremony
+                    entry.insert(SigningStateRunner::new_unauthorised(ceremony_id, logger))
+                } else {
                     slog::debug!(
                         self.logger,
                         "Ignoring non-initial stage signing data for ceremony {}",
                         ceremony_id
                     );
                     return;
-                } else {
-                    // Create a new unauthorised state for this ceremony
-                    entry.insert(SigningStateRunner::new_unauthorised(ceremony_id, logger))
                 }
             }
             std::collections::hash_map::Entry::Occupied(entry) => {
                 let state = entry.into_mut();
 
                 // Only first stage messages should be processed (delayed) if we're not authorized
-                if !state.is_authorized() && is_not_first_stage_data {
+                if !state.is_authorized() && !is_first_stage_data {
                     slog::debug!(
                         self.logger,
                         "Ignoring non-initial stage signing data for ceremony {}",
@@ -459,27 +459,27 @@ impl CeremonyManager {
 
         // Only stage 1 messages can create unauthorised ceremonies
         let logger = &self.logger;
-        let is_not_first_stage_data = !matches!(data, KeygenData::HashComm1(_));
+        let is_first_stage_data = matches!(data, KeygenData::HashComm1(_));
         let state = match self.keygen_states.entry(ceremony_id) {
             Entry::Vacant(entry) => {
                 // No ceremony exists for this id yet
-                if is_not_first_stage_data {
+                if is_first_stage_data {
+                    // Create a new unauthorised state for this ceremony
+                    entry.insert(KeygenStateRunner::new_unauthorised(ceremony_id, logger))
+                } else {
                     slog::debug!(
                         self.logger,
                         "Ignoring non-initial stage keygen data for ceremony {}",
                         ceremony_id
                     );
                     return;
-                } else {
-                    // Create a new unauthorised state for this ceremony
-                    entry.insert(KeygenStateRunner::new_unauthorised(ceremony_id, logger))
                 }
             }
             Entry::Occupied(entry) => {
                 let state = entry.into_mut();
 
                 // Only first stage messages should be processed (delayed) if we're not authorized
-                if !state.is_authorized() && is_not_first_stage_data {
+                if !state.is_authorized() && !is_first_stage_data {
                     slog::debug!(
                         self.logger,
                         "Ignoring non-initial stage keygen data for ceremony {}",
