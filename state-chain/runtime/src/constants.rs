@@ -2,6 +2,8 @@ pub mod common {
 	use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
 	use pallet_cf_broadcast::AttemptCount;
 
+	pub const CHAINFLIP_SS58_PREFIX: u16 = 0xcf;
+
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
 		const TOKEN_DECIMALS: u32 = 18;
