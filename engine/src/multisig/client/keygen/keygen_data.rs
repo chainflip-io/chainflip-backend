@@ -89,11 +89,10 @@ derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyBlameResponses7<P>, K
 
 derive_display_as_type_name!(HashComm1);
 derive_display_as_type_name!(VerifyHashComm2);
+derive_display_as_type_name!(Comm1<P: ECPoint>);
+derive_display_as_type_name!(VerifyComm2<P: ECPoint>);
 derive_display_as_type_name!(ShamirShare<P: ECPoint>);
 derive_display_as_type_name!(Complaints4);
 derive_display_as_type_name!(VerifyComplaints5);
 derive_display_as_type_name!(BlameResponse6<P: ECPoint>);
 derive_display_as_type_name!(VerifyBlameResponses7<P: ECPoint>);
-
-derive_display_as_type_name!(Comm1<P: ECPoint>);
-derive_display_as_type_name!(VerifyComm2<P: ECPoint>);
