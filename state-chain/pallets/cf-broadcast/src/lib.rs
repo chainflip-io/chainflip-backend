@@ -720,29 +720,50 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	fn try_re_request_threshold_signature(broadcast_id: BroadcastId) -> bool {
+		match Self::encapsulate_threshold_signature_data(broadcast_id) {
+			// Case 1: We can encapsluate the threshold data and the signature is invalid -> clean
+			// up storage and scedule a re-try
+			Ok((payload, signature, api_call))
+				if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+					&T::KeyProvider::current_key(),
+					&payload,
+					&signature,
+				) =>
+			{
+				if Self::clean_up_storage(signature).is_err() {
+					log::error!(
+						"Failed to clean up storage for broadcast attempt {}",
+						broadcast_id
+					);
+				}
+				ThresholdSignatureData::<T, I>::remove(broadcast_id);
+				Self::threshold_sign_and_broadcast(api_call);
+				true
+			},
+			// Case 2: We can encapsulate the threshold data and the signature is valid -> no need
+			// to do anything
+			Ok(_) => false,
+			// Case 3: We can't encapsulate the threshold data -> we can not really do anything
+			// beside continue retrying
+			Err(_) => {
+				log::error!("No threshold signature data is available.");
+				false
+			},
+		}
+	}
+
 	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		if let Ok((payload, signature, api_call)) = Self::encapsulate_threshold_signature_data(
+		// Re-requests the threshold signature if necessary
+		if Self::try_re_request_threshold_signature(
 			broadcast_attempt.broadcast_attempt_id.broadcast_id,
 		) {
-			if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
-				&T::KeyProvider::current_key(),
-				&payload,
-				&signature,
-			) {
-				let _ = Self::clean_up_storage(signature);
-				ThresholdSignatureData::<T, I>::remove(
-					broadcast_attempt.broadcast_attempt_id.broadcast_id,
-				);
-				Self::threshold_sign_and_broadcast(api_call);
-				log::info!(
-					"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
-					broadcast_attempt.broadcast_attempt_id.broadcast_id
-				);
-				// Early return the function if we re-request the signature
-				return
-			}
-		} else {
-			log::error!("No threshold signature data is available.");
+			log::info!(
+				"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
+				broadcast_attempt.broadcast_attempt_id.broadcast_id
+			);
+			// Early return the function if we re-requested the signature
+			return
 		}
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
