@@ -312,7 +312,7 @@ pub mod pallet {
 
 				match stage {
 					BroadcastStage::TransactionSigning => {
-						// We remove the old transaction signatrue  here. We only allow a single
+						// We remove the old transaction signature  here. We only allow a single
 						// transaction signature request to be valid at a time
 						if let Some(broadcast_attempt) =
 							Self::clean_up_awaiting_transaction_signature_attempt(*attempt_id)
