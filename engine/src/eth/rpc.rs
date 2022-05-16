@@ -1,4 +1,3 @@
-use secp256k1::SecretKey;
 use sp_core::{H256, U256};
 use web3::{
     api::SubscriptionStream,
