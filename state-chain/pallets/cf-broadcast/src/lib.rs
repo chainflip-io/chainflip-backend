@@ -113,6 +113,13 @@ pub mod pallet {
 	pub type ChainAmountFor<T, I> =
 		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
 
+	/// Type alias for the instance's configured ApiCall.
+	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
+
+	/// Type alias for the threshold signature data.
+	pub type ThresholdSignatureInformationFor<T, I> =
+		(PayloadFor<T, I>, ThresholdSignatureFor<T, I>, ApiCallFor<T, I>);
+
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
@@ -261,9 +268,10 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		BroadcastId,
-		(<T as Config<I>>::ApiCall, ThresholdSignatureFor<T, I>),
+		(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
 		OptionQuery,
 	>;
+
 	/// Tracks how much an account is owed for paying transaction fees.
 	#[pallet::storage]
 	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
@@ -711,12 +719,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn encapsulate_threshold_signature_data(
 		broadcast_id: u32,
-	) -> Result<(PayloadFor<T, I>, ThresholdSignatureFor<T, I>, <T as Config<I>>::ApiCall), ()> {
+	) -> Result<ThresholdSignatureInformationFor<T, I>, ()> {
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let payload = api_call.threshold_signature_payload();
 			Ok((payload, signature, api_call))
 		} else {
-			Err(().into())
+			Err(())
 		}
 	}
 
