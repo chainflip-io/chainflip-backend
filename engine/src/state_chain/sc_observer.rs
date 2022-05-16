@@ -22,7 +22,7 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
     validator_candidates: Vec<AccountId32>,
     logger: slog::Logger,
 ) where
-    MultisigClient: MultisigClientApi + Send + Sync + 'static,
+    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
     use pallet_cf_vaults::KeygenOutcome;
@@ -109,7 +109,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
     EthRpc: EthRpcApi,
-    MultisigClient: MultisigClientApi + Send + Sync + 'static,
+    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 

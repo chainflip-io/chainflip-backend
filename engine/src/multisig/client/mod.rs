@@ -19,7 +19,6 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
     common::format_iterator,
-    eth::utils::pubkey_to_eth_addr,
     logging::CEREMONY_ID_KEY,
     multisig::{crypto::Rng, KeyDB, KeyId},
 };
@@ -51,15 +50,10 @@ use self::{
     signing::frost::SigningData,
 };
 
-use super::MessageHash;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SchnorrSignature {
-    /// Scalar component
-    pub s: [u8; 32],
-    /// Point component (commitment)
-    pub r: secp256k1::PublicKey,
-}
+use super::{
+    crypto::{CryptoScheme, ECPoint},
+    MessageHash,
+};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThresholdParameters {
@@ -78,90 +72,116 @@ impl ThresholdParameters {
     }
 }
 
-impl From<SchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
-    fn from(cfe_sig: SchnorrSignature) -> Self {
-        Self {
-            s: cfe_sig.s,
-            k_times_g_address: pubkey_to_eth_addr(cfe_sig.r),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum MultisigData {
-    Keygen(KeygenData),
-    Signing(SigningData),
+pub enum MultisigData<P: ECPoint> {
+    #[serde(bound = "")]
+    Keygen(KeygenData<P>),
+    #[serde(bound = "")]
+    Signing(SigningData<P>),
 }
 
-derive_try_from_variant!(KeygenData, MultisigData::Keygen, MultisigData);
-derive_try_from_variant!(SigningData, MultisigData::Signing, MultisigData);
+derive_try_from_variant!(impl<P: ECPoint> for KeygenData<P>, MultisigData::Keygen, MultisigData<P>);
+derive_try_from_variant!(impl<P: ECPoint> for SigningData<P>, MultisigData::Signing, MultisigData<P>);
 
-impl From<SigningData> for MultisigData {
-    fn from(data: SigningData) -> Self {
+impl<P: ECPoint> From<SigningData<P>> for MultisigData<P> {
+    fn from(data: SigningData<P>) -> Self {
         MultisigData::Signing(data)
     }
 }
 
-impl From<KeygenData> for MultisigData {
-    fn from(data: KeygenData) -> Self {
+impl<P: ECPoint> From<KeygenData<P>> for MultisigData<P> {
+    fn from(data: KeygenData<P>) -> Self {
         MultisigData::Keygen(data)
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MultisigMessage {
+pub struct MultisigMessage<P: ECPoint> {
     ceremony_id: CeremonyId,
-    data: MultisigData,
+    #[serde(bound = "")]
+    data: MultisigData<P>,
 }
 
-#[cfg(test)]
-use mockall::automock;
-
 /// The public interface to the multi-signature code
-#[cfg_attr(test, automock)]
 #[async_trait]
-pub trait MultisigClientApi {
+pub trait MultisigClientApi<C: CryptoScheme> {
     async fn keygen(
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)>;
+    ) -> Result<<C::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)>;
     async fn sign(
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>;
+    ) -> Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)>;
 }
 
-type KeygenRequestSender = UnboundedSender<(
+// This is constructed by hand since mockall
+// fails to parse complex generic parameters
+// (and none of mockall's features were used
+// anyway)
+// NOTE: the fact that this mock is needed in tests but
+// its methods are never called is a bit of a red flag
+
+#[cfg(test)]
+pub mod mocks {
+
+    use super::*;
+    use mockall::mock;
+
+    use crate::multisig::crypto::CryptoScheme;
+
+    mock! {
+        pub MultisigClientApi<C: CryptoScheme + Send + Sync> {}
+
+        #[async_trait]
+        impl<C: CryptoScheme + Send + Sync> MultisigClientApi<C> for MultisigClientApi<C> {
+            async fn keygen(
+                &self,
+                _ceremony_id: CeremonyId,
+                _participants: Vec<AccountId>,
+            ) -> Result<<<C as CryptoScheme>::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)>;
+            async fn sign(
+                &self,
+                _ceremony_id: CeremonyId,
+                _key_id: KeyId,
+                _signers: Vec<AccountId>,
+                _data: MessageHash,
+            ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, anyhow::Error)>;
+        }
+    }
+}
+
+type KeygenRequestSender<P> = UnboundedSender<(
     CeremonyId,
     Vec<AccountId>,
     Rng,
-    CeremonyResultSender<KeygenResultInfo>,
+    CeremonyResultSender<KeygenResultInfo<P>>,
 )>;
 
-type SigningRequestSender = UnboundedSender<(
+type SigningRequestSender<C> = UnboundedSender<(
     CeremonyId,
     Vec<AccountId>,
     MessageHash,
-    KeygenResultInfo,
+    KeygenResultInfo<<C as CryptoScheme>::Point>,
     Rng,
-    CeremonyResultSender<SchnorrSignature>,
+    CeremonyResultSender<<C as CryptoScheme>::Signature>,
 )>;
 
 /// Multisig client acts as the frontend for the multisig functionality, delegating
 /// the actual signing to "Ceremony Manager". It is additionally responsible for
 /// persistently storing generated keys and providing them to the signing ceremonies.
-pub struct MultisigClient<KeyDatabase>
+pub struct MultisigClient<KeyDatabase, C: CryptoScheme>
 where
-    KeyDatabase: KeyDB,
+    KeyDatabase: KeyDB<C::Point>,
 {
     my_account_id: AccountId,
-    keygen_request_sender: KeygenRequestSender,
-    signing_request_sender: SigningRequestSender,
-    key_store: std::sync::Mutex<KeyStore<KeyDatabase>>,
+    keygen_request_sender: KeygenRequestSender<C::Point>,
+    signing_request_sender: SigningRequestSender<C>,
+    key_store: std::sync::Mutex<KeyStore<KeyDatabase, C::Point>>,
     logger: slog::Logger,
 }
 
@@ -170,15 +190,16 @@ enum RequestStatus<Output> {
     WaitForOneshot(CeremonyResultReceiver<Output>),
 }
 
-impl<S> MultisigClient<S>
+impl<S, C> MultisigClient<S, C>
 where
-    S: KeyDB,
+    S: KeyDB<C::Point>,
+    C: CryptoScheme,
 {
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        keygen_request_sender: KeygenRequestSender,
-        signing_request_sender: SigningRequestSender,
+        keygen_request_sender: KeygenRequestSender<C::Point>,
+        signing_request_sender: SigningRequestSender<C>,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
@@ -198,8 +219,10 @@ where
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> impl '_ + Future<Output = Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)>>
-    {
+    ) -> impl '_
+           + Future<
+        Output = Result<<C::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)>,
+    > {
         assert!(participants.contains(&self.my_account_id));
 
         slog::info!(
@@ -259,8 +282,7 @@ where
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> impl '_ + Future<Output = Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>>
-    {
+    ) -> impl '_ + Future<Output = Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)>> {
         assert!(signers.contains(&self.my_account_id));
 
         slog::debug!(
@@ -319,7 +341,7 @@ where
         })
     }
 
-    fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo {
+    fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
         slog::info!(self.logger, "Performing solo keygen");
 
         single_party_keygen(self.my_account_id.clone(), rng)
@@ -328,36 +350,31 @@ where
     fn single_party_signing(
         &self,
         data: MessageHash,
-        keygen_result_info: KeygenResultInfo,
+        keygen_result_info: KeygenResultInfo<C::Point>,
         mut rng: Rng,
-    ) -> SchnorrSignature {
-        use crate::multisig::crypto::{Point, Scalar};
+    ) -> C::Signature {
+        use crate::multisig::crypto::ECScalar;
 
         slog::info!(self.logger, "Performing solo signing");
 
         let key = &keygen_result_info.key.key_share;
 
-        let nonce = Scalar::random(&mut rng);
+        let nonce = <C::Point as ECPoint>::Scalar::random(&mut rng);
 
-        let r = Point::from_scalar(&nonce);
+        let r = C::Point::from_scalar(&nonce);
 
-        let sigma = signing::frost::generate_contract_schnorr_sig(
-            key.x_i.clone(),
-            key.y,
-            r,
-            nonce,
-            &data.0,
-        );
+        let sigma =
+            signing::frost::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
 
-        SchnorrSignature {
-            s: *sigma.as_bytes(),
-            r: r.get_element(),
-        }
+        C::build_signature(sigma, r)
     }
 }
 
-pub fn single_party_keygen(my_account_id: AccountId, mut rng: Rng) -> KeygenResultInfo {
-    use crate::multisig::crypto::{KeyShare, Point, Scalar};
+pub fn single_party_keygen<Point: ECPoint>(
+    my_account_id: AccountId,
+    mut rng: Rng,
+) -> KeygenResultInfo<Point> {
+    use crate::multisig::crypto::{ECScalar, KeyShare};
 
     let params = ThresholdParameters::from_share_count(1);
 
@@ -368,11 +385,11 @@ pub fn single_party_keygen(my_account_id: AccountId, mut rng: Rng) -> KeygenResu
     const ALLOWING_HIGH_PUBKEY: bool = true;
 
     let (secret_key, public_key) = loop {
-        let secret_key = Scalar::random(&mut rng);
+        let secret_key = Point::Scalar::random(&mut rng);
 
         let public_key = Point::from_scalar(&secret_key);
 
-        if keygen::is_contract_compatible(&public_key.get_element()) || ALLOWING_HIGH_PUBKEY {
+        if public_key.is_compatible() || ALLOWING_HIGH_PUBKEY {
             break (secret_key, public_key);
         }
     };
@@ -392,12 +409,14 @@ pub fn single_party_keygen(my_account_id: AccountId, mut rng: Rng) -> KeygenResu
 }
 
 #[async_trait]
-impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyDatabase> {
+impl<KeyDatabase: KeyDB<C::Point> + Send + Sync, C: CryptoScheme> MultisigClientApi<C>
+    for MultisigClient<KeyDatabase, C>
+{
     async fn keygen(
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<secp256k1::PublicKey, (BTreeSet<AccountId>, anyhow::Error)> {
+    ) -> Result<<C::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)> {
         self.initiate_keygen(ceremony_id, participants).await
     }
 
@@ -407,7 +426,7 @@ impl<KeyDatabase: KeyDB + Send + Sync> MultisigClientApi for MultisigClient<KeyD
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)> {
+    ) -> Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)> {
         self.initiate_signing(ceremony_id, key_id, signers, data)
             .await
     }

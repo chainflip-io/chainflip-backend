@@ -1,7 +1,7 @@
 use chainflip_engine::multisig::{
     client::KeygenResultInfo,
     db::persistent::{DATA_COLUMN, DB_SCHEMA_VERSION, DB_SCHEMA_VERSION_KEY, METADATA_COLUMN},
-    KeyDB, KeyId, PersistentKeyDB,
+    eth, KeyDB, KeyId, PersistentKeyDB,
 };
 use rocksdb::{Options, DB};
 use std::env;
@@ -19,8 +19,9 @@ fn main() {
 
     let secret_share_bytes = hex::decode(secret_share_hex).expect("Secret is not valid hex");
 
-    let keygen_result_info = bincode::deserialize::<KeygenResultInfo>(&*secret_share_bytes)
-        .expect("Could not deserialize KeygenResultInfo");
+    let keygen_result_info =
+        bincode::deserialize::<KeygenResultInfo<eth::Point>>(&*secret_share_bytes)
+            .expect("Could not deserialize KeygenResultInfo");
 
     let signing_db_path =
         env::var("SIGNING_DB_PATH").expect("SIGNING_DB_PATH environment variable not set");

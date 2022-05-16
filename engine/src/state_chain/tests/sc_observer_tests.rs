@@ -23,7 +23,7 @@ use crate::{
         EthBroadcaster, ObserveInstruction,
     },
     logging::{self, test_utils::new_test_logger},
-    multisig::client::MockMultisigClientApi,
+    multisig::client::mocks::MockMultisigClientApi,
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{

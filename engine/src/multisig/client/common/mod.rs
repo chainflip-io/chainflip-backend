@@ -10,36 +10,33 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::multisig::crypto::{KeyShare, Point};
+use crate::multisig::crypto::{ECPoint, KeyShare};
 
 use super::{utils::PartyIdxMapping, ThresholdParameters};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct KeygenResult {
-    pub key_share: KeyShare,
-    pub party_public_keys: Vec<Point>,
+pub struct KeygenResult<P: ECPoint> {
+    #[serde(bound = "")]
+    pub key_share: KeyShare<P>,
+    #[serde(bound = "")]
+    pub party_public_keys: Vec<P>,
 }
 
-impl KeygenResult {
-    pub fn get_public_key(&self) -> Point {
+impl<P: ECPoint> KeygenResult<P> {
+    pub fn get_public_key(&self) -> P {
         self.key_share.y
     }
 
     /// Gets the serialized compressed public key (33 bytes - 32 bytes + a y parity byte)
     pub fn get_public_key_bytes(&self) -> Vec<u8> {
-        use crate::multisig::crypto::ECPoint;
-        self.key_share
-            .y
-            .0
-            .serialize_compressed()
-            .as_slice()
-            .to_vec()
+        self.key_share.y.as_bytes().as_ref().into()
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct KeygenResultInfo {
-    pub key: Arc<KeygenResult>,
+pub struct KeygenResultInfo<P: ECPoint> {
+    #[serde(bound = "")]
+    pub key: Arc<KeygenResult<P>>,
     pub validator_map: Arc<PartyIdxMapping>,
     pub params: ThresholdParameters,
 }

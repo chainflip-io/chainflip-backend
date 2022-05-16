@@ -1,15 +1,15 @@
 use std::{collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path};
 
-use super::{
-    migrations::v0_to_v1::{load_keys_using_kvdb_to_latest_key_type, migration_0_to_1},
-    KeyDB,
-};
+use super::{migrations::v0_to_v1::load_keys_using_kvdb_to_latest_key_type, KeyDB};
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
 
 use crate::{
     logging::COMPONENT_KEY,
-    multisig::{client::KeygenResultInfo, KeyId},
+    multisig::{
+        client::KeygenResultInfo, crypto::ECPoint, db::migrations::v0_to_v1::migration_0_to_1,
+        KeyId,
+    },
 };
 
 use anyhow::{Context, Result};
@@ -43,12 +43,13 @@ pub const LEGACY_DATA_COLUMN_NAME: &str = "col0";
 const BACKUPS_DIRECTORY: &str = "backups";
 
 /// Database for keys and persistent metadata
-pub struct PersistentKeyDB {
+pub struct PersistentKeyDB<P: ECPoint> {
     /// Rocksdb database instance
     db: DB,
     logger: slog::Logger,
+    _phantom: std::marker::PhantomData<P>,
 }
-impl PersistentKeyDB {
+impl<P: ECPoint> PersistentKeyDB<P> {
     /// Create a new persistent key database. If the database exists and the schema version
     /// is below the latest, it will attempt to migrate the data to the latest version
     pub fn new_and_migrate_to_latest(db_path: &Path, logger: &slog::Logger) -> Result<Self> {
@@ -124,7 +125,6 @@ impl PersistentKeyDB {
         let mut p_kdb = migrate_db_to_latest(db, logger, db_path)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
-        // Import the keys from the kvdb migration
         if requires_kvdb_to_rocks_migration {
             for (key_id, key) in keys_from_kvdb {
                 p_kdb.update_key(&key_id, &key);
@@ -138,13 +138,14 @@ impl PersistentKeyDB {
         PersistentKeyDB {
             db,
             logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
+            _phantom: Default::default(),
         }
     }
 }
 
-impl KeyDB for PersistentKeyDB {
+impl<P: ECPoint> KeyDB<P> for PersistentKeyDB<P> {
     /// Write the keyshare to the db, indexed by the key id
-    fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo) {
+    fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo<P>) {
         let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
         self.db
@@ -157,7 +158,7 @@ impl KeyDB for PersistentKeyDB {
             .unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
     }
 
-    fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
+    fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo<P>> {
         self.db
             .prefix_iterator_cf(get_data_column_handle(&self.db), KEYGEN_DATA_PREFIX)
             .filter_map(|(key_id, key_info)| {
@@ -165,7 +166,7 @@ impl KeyDB for PersistentKeyDB {
                 let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
                 // deserialize the `KeygenResultInfo`
-                match bincode::deserialize::<KeygenResultInfo>(&*key_info) {
+                match bincode::deserialize::<KeygenResultInfo<P>>(&*key_info) {
                     Ok(keygen_result_info) => {
                         slog::debug!(
                             self.logger,
@@ -296,13 +297,12 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> u32 {
     }
 }
 
-/// Migrates the db forward one version migration at a time to the latest `DB_SCHEMA_VERSION`
 /// Returning a PersistentKeyDB
-fn migrate_db_to_latest(
+fn migrate_db_to_latest<P: ECPoint>(
     db: DB,
     logger: &slog::Logger,
     path: &Path,
-) -> Result<PersistentKeyDB, anyhow::Error> {
+) -> Result<PersistentKeyDB<P>, anyhow::Error> {
     let db_schema_version = read_schema_version(&db, logger);
 
     if db_schema_version > DB_SCHEMA_VERSION {
@@ -356,6 +356,8 @@ mod tests {
 
     use super::*;
 
+    use crate::multisig::crypto::eth::Point;
+
     use crate::{
         logging::test_utils::new_test_logger,
         multisig::{client::single_party_keygen, db::PersistentKeyDB},
@@ -389,7 +391,7 @@ mod tests {
     fn can_create_new_database() {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(
             &db_path, &logger
         ));
         assert!(db_path.exists());
@@ -400,7 +402,7 @@ mod tests {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a fresh db. This will also write the schema version
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(
             &db_path, &logger
         ));
 
@@ -426,7 +428,7 @@ mod tests {
     fn new_db_returns_db_when_db_data_version_is_latest() {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION);
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(
             &db_path,
             &new_test_logger()
         ));
@@ -461,7 +463,8 @@ mod tests {
 
         // Load the old db and see if the keygen data is migrated and schema version is updated
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db =
+                PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             assert_eq!(key.params.threshold, 1);
@@ -488,7 +491,7 @@ mod tests {
         {
             let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest(db, &new_test_logger(), &db_path).is_err());
+            assert!(migrate_db_to_latest::<Point>(db, &new_test_logger(), &db_path).is_err());
         }
     }
 
@@ -497,20 +500,22 @@ mod tests {
         // doesn't really matter if it's random, we won't be using the exact values
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
-        let bashful_secret = single_party_keygen(AccountId32::new([0; 32]), rng);
+        let bashful_secret = single_party_keygen::<Point>(AccountId32::new([0; 32]), rng);
 
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         {
-            let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let mut p_db =
+                PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
             p_db.update_key(&key_id, &bashful_secret);
         }
 
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db =
+                PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
             let keys = p_db.load_keys();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             // single party keygen has a threshold of 0
@@ -524,7 +529,8 @@ mod tests {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
 
-        let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+        let mut p_db =
+            PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
         let keys_before = p_db.load_keys();
         // there should be no key [0; 33] yet
@@ -553,7 +559,8 @@ mod tests {
 
         // Load the db and trigger the migration and therefore the backup
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db =
+                PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
             assert_eq!(read_schema_version(&p_db.db, &logger), DB_SCHEMA_VERSION);
         }
 
@@ -599,7 +606,7 @@ mod tests {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(
             &db_path, &logger
         ));
 
@@ -620,7 +627,7 @@ mod tests {
         let logger = new_test_logger();
         let (directory, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(
             &db_path, &logger
         ));
 
@@ -658,15 +665,11 @@ mod tests {
         }
 
         // Load the bad db and make sure it errors
-        {
-            assert!(PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).is_err());
-        }
+        assert!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).is_err());
 
         // Confirm that the db was not migrated, by checking that the metadata column doesn't exist.
-        {
-            assert!(!DB::list_cf(&Options::default(), &db_path)
-                .expect("Should get column families")
-                .contains(&METADATA_COLUMN.to_string()))
-        }
+        assert!(!DB::list_cf(&Options::default(), &db_path)
+            .expect("Should get column families")
+            .contains(&METADATA_COLUMN.to_string()))
     }
 }
