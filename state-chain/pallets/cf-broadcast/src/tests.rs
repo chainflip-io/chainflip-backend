@@ -8,6 +8,7 @@ use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
 	ChainAbi,
 };
+use cf_traits::{mocks::threshold_signer::MockThresholdSigner, AsyncResult, ThresholdSigner};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
 
@@ -874,6 +875,11 @@ fn re_request_threshold_signature() {
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
+		// Expect the threshold signature pipeline to be empty
+		assert_eq!(
+			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
+			AsyncResult::Void
+		);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_some()
 		);
@@ -888,6 +894,11 @@ fn re_request_threshold_signature() {
 		// Expect the broadcast to be deleted
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
+		);
+		// Verify that we have a new signature request in the pipeline
+		assert_eq!(
+			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
+			AsyncResult::Pending
 		);
 	});
 }
