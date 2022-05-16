@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Display};
+use std::collections::BTreeMap;
 
 use crate::multisig::{
     client::{self, signing},
@@ -53,11 +53,7 @@ impl<C: CryptoScheme> AwaitCommitments1<C> {
     }
 }
 
-impl<C: CryptoScheme> Display for AwaitCommitments1<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AwaitCommitments1")
-    }
-}
+derive_display_as_type_name!(AwaitCommitments1<C: CryptoScheme>);
 
 impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
     for AwaitCommitments1<C>
@@ -104,11 +100,7 @@ struct VerifyCommitmentsBroadcast2<C: CryptoScheme> {
     commitments: BTreeMap<AuthorityCount, Option<Comm1<C::Point>>>,
 }
 
-impl<C: CryptoScheme> Display for VerifyCommitmentsBroadcast2<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "VerifyCommitmentsBroadcast2")
-    }
-}
+derive_display_as_type_name!(VerifyCommitmentsBroadcast2<C: CryptoScheme>);
 
 impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
     for VerifyCommitmentsBroadcast2<C>
@@ -165,11 +157,7 @@ struct LocalSigStage3<C: CryptoScheme> {
     commitments: BTreeMap<AuthorityCount, Comm1<C::Point>>,
 }
 
-impl<C: CryptoScheme> Display for LocalSigStage3<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LocalSigStage3")
-    }
-}
+derive_display_as_type_name!(LocalSigStage3<C: CryptoScheme>);
 
 impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
     for LocalSigStage3<C>
@@ -228,11 +216,7 @@ struct VerifyLocalSigsBroadcastStage4<C: CryptoScheme> {
     local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<C::Point>>>,
 }
 
-impl<C: CryptoScheme> Display for VerifyLocalSigsBroadcastStage4<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "VerifyLocalSigsBroadcastStage4")
-    }
-}
+derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<C: CryptoScheme>);
 
 impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
     for VerifyLocalSigsBroadcastStage4<C>
