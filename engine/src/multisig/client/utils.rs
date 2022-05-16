@@ -67,8 +67,8 @@ impl PartyIdxMapping {
 }
 
 macro_rules! derive_from_enum {
-    ($variant: ty, $variant_path: path, $enum: ty) => {
-        impl<P: ECPoint> From<$variant> for $enum {
+    (impl $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)? for $variant: ty, $variant_path: path, $enum: ty) => {
+        impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? From<$variant> for $enum {
             fn from(x: $variant) -> Self {
                 $variant_path(x)
             }
@@ -77,8 +77,8 @@ macro_rules! derive_from_enum {
 }
 
 macro_rules! derive_try_from_variant {
-    ($variant: ty, $variant_path: path, $enum: ty) => {
-        impl<P: ECPoint> std::convert::TryFrom<$enum> for $variant {
+    (impl $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)? for $variant: ty, $variant_path: path, $enum: ty) => {
+        impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? std::convert::TryFrom<$enum> for $variant {
             type Error = $enum;
 
             fn try_from(data: $enum) -> Result<Self, Self::Error> {
@@ -93,9 +93,9 @@ macro_rules! derive_try_from_variant {
 }
 
 macro_rules! derive_impls_for_enum_variants {
-    ($variant: ty, $variant_path: path, $enum: ty) => {
-        derive_from_enum!($variant, $variant_path, $enum);
-        derive_try_from_variant!($variant, $variant_path, $enum);
+    (impl $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)? for $variant:ty, $variant_path:path, $enum:ty) => {
+        derive_from_enum!(impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? for $variant, $variant_path, $enum);
+        derive_try_from_variant!(impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? for $variant, $variant_path, $enum);
     };
 }
 

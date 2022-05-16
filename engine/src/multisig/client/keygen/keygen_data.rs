@@ -7,12 +7,6 @@ use crate::multisig::{client::common::BroadcastVerificationMessage, crypto::ECPo
 
 use super::keygen_frost::ShamirShare;
 
-macro_rules! derive_impls_for_keygen_data {
-    ($variant: ty, $variant_path: path) => {
-        derive_impls_for_enum_variants!($variant, $variant_path, KeygenData<P>);
-    };
-}
-
 /// Data sent between parties over p2p for a keygen ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum KeygenData<P: ECPoint> {
@@ -83,15 +77,15 @@ pub struct BlameResponse6<P: ECPoint>(
 
 pub type VerifyBlameResponses7<P> = BroadcastVerificationMessage<BlameResponse6<P>>;
 
-derive_impls_for_keygen_data!(HashComm1, KeygenData::HashComm1);
-derive_impls_for_keygen_data!(VerifyHashComm2, KeygenData::VerifyHashComm2);
-derive_impls_for_keygen_data!(Comm1<P>, KeygenData::Comm1);
-derive_impls_for_keygen_data!(VerifyComm2<P>, KeygenData::Verify2);
-derive_impls_for_keygen_data!(ShamirShare<P>, KeygenData::SecretShares3);
-derive_impls_for_keygen_data!(Complaints4, KeygenData::Complaints4);
-derive_impls_for_keygen_data!(VerifyComplaints5, KeygenData::VerifyComplaints5);
-derive_impls_for_keygen_data!(BlameResponse6<P>, KeygenData::BlameResponse6);
-derive_impls_for_keygen_data!(VerifyBlameResponses7<P>, KeygenData::VerifyBlameResponses7);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for HashComm1, KeygenData::HashComm1, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyHashComm2, KeygenData::VerifyHashComm2, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for Comm1<P>, KeygenData::Comm1, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComm2<P>, KeygenData::Verify2, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for ShamirShare<P>, KeygenData::SecretShares3, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for Complaints4, KeygenData::Complaints4, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComplaints5, KeygenData::VerifyComplaints5, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for BlameResponse6<P>, KeygenData::BlameResponse6, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyBlameResponses7<P>, KeygenData::VerifyBlameResponses7, KeygenData<P>);
 
 derive_display_as_type_name!(HashComm1);
 derive_display_as_type_name!(VerifyHashComm2);

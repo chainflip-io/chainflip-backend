@@ -70,12 +70,6 @@ pub struct LocalSig3<P: ECPoint> {
     pub response: P::Scalar,
 }
 
-macro_rules! derive_impls_for_signing_data {
-    ($variant: ty, $variant_path: path) => {
-        derive_impls_for_enum_variants!($variant, $variant_path, SigningData<P>);
-    };
-}
-
 /// Data exchanged between parties during various stages
 /// of the FROST signing protocol
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -90,10 +84,10 @@ pub enum SigningData<P: ECPoint> {
     VerifyLocalSigsStage4(VerifyLocalSig4<P>),
 }
 
-derive_impls_for_signing_data!(Comm1<P>, SigningData::CommStage1);
-derive_impls_for_signing_data!(VerifyComm2<P>, SigningData::BroadcastVerificationStage2);
-derive_impls_for_signing_data!(LocalSig3<P>, SigningData::LocalSigStage3);
-derive_impls_for_signing_data!(VerifyLocalSig4<P>, SigningData::VerifyLocalSigsStage4);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for Comm1<P>, SigningData::CommStage1, SigningData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComm2<P>, SigningData::BroadcastVerificationStage2, SigningData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for LocalSig3<P>, SigningData::LocalSigStage3, SigningData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyLocalSig4<P>, SigningData::VerifyLocalSigsStage4, SigningData<P>);
 
 derive_display_as_type_name!(Comm1<P: ECPoint>);
 derive_display_as_type_name!(VerifyComm2<P: ECPoint>);
