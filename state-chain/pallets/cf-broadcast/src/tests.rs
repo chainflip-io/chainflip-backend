@@ -2,7 +2,8 @@ use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
-	SignatureToBroadcastIdLookup, SignerIdToAccountId, TransactionFeeDeficit, TransmissionFailure,
+	SignatureToBroadcastIdLookup, SignerIdToAccountId, ThresholdSignatureData,
+	TransactionFeeDeficit, TransmissionFailure,
 };
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -895,6 +896,13 @@ fn re_request_threshold_signature() {
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
 		);
+		// Verify storage has been deleted
+		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
+			MockThresholdSignature::default()
+		)
+		.is_none());
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(1).is_none());
+		assert!(ThresholdSignatureData::<Test, Instance1>::get(1).is_none());
 		// Verify that we have a new signature request in the pipeline
 		assert_eq!(
 			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
