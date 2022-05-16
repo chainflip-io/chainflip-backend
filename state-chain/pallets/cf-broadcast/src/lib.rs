@@ -453,11 +453,17 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Submitted when the nominated node cannot sign the transaction.
+		/// Submitted by the nominated node when they cannot sign the transaction.
+		/// This triggers a retry of the signing of the transaction
 		///
 		/// ## Events
 		///
 		/// - []
+		///
+		/// ## Errors
+		///
+		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
+		/// - [InvalidSigner](Error::InvalidSigner)
 		#[pallet::weight(0)] // TODO: Weight
 		pub fn transaction_signing_failure(
 			origin: OriginFor<T>,
