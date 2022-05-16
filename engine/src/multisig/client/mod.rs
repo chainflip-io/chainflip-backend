@@ -21,11 +21,7 @@ use crate::{
     common::format_iterator,
     eth::utils::pubkey_to_eth_addr,
     logging::CEREMONY_ID_KEY,
-    multisig::{
-        client::common::{SigningFailureReason, SigningRequestIgnoredReason},
-        crypto::Rng,
-        KeyDB, KeyId,
-    },
+    multisig::{client::common::SigningFailureReason, crypto::Rng, KeyDB, KeyId},
 };
 
 use async_trait::async_trait;
@@ -341,9 +337,7 @@ where
                 }
                 None => Err((
                     BTreeSet::new(),
-                    CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
-                        SigningRequestIgnoredReason::UnknownKey,
-                    )),
+                    CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),
                 )),
             }
         })

@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use crate::multisig::client::common::{BroadcastStageName, KeygenFailureReason};
+use crate::multisig::client::common::{
+    BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
+};
 use crate::multisig::client::{self, KeygenResultInfo};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
@@ -139,7 +141,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::HashCommitments,
                     ),
@@ -268,7 +270,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::InitialCommitments,
                     ),
@@ -284,7 +286,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
         ) {
             Ok(comms) => comms,
             Err((blamed_parties, reason)) => {
-                return StageResult::Error(blamed_parties, reason);
+                return StageResult::Error(blamed_parties, CeremonyFailureReason::Other(reason));
             }
         };
 
@@ -323,7 +325,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
             // It is nobody's fault that the key is not compatible,
             // so we abort with an empty list of responsible nodes
             // to let the State Chain restart the ceremony
-            StageResult::Error(BTreeSet::new(), KeygenFailureReason::NotContractCompatible)
+            StageResult::Error(
+                BTreeSet::new(),
+                CeremonyFailureReason::Other(KeygenFailureReason::NotContractCompatible),
+            )
         }
     }
 }
@@ -486,7 +491,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::Complaints,
                     ),
@@ -538,7 +543,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
 
             StageResult::NextStage(Box::new(stage))
         } else {
-            StageResult::Error(idxs_to_report, KeygenFailureReason::InvalidComplaint)
+            StageResult::Error(
+                idxs_to_report,
+                CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
+            )
         }
     }
 }
@@ -557,7 +565,7 @@ mod detail {
         if check_high_degree_commitments(commitments) {
             return StageResult::Error(
                 Default::default(),
-                KeygenFailureReason::HighDegreeCoefficientZero,
+                CeremonyFailureReason::Other(KeygenFailureReason::HighDegreeCoefficientZero),
             );
         }
 
@@ -801,7 +809,7 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    KeygenFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::BlameResponses,
                     ),
@@ -817,9 +825,10 @@ impl BroadcastStageProcessor<KeygenData, KeygenResultInfo, KeygenFailureReason>
 
                 detail::finalize_keygen(self.common, self.shares, &self.commitments)
             }
-            Err(bad_parties) => {
-                StageResult::Error(bad_parties, KeygenFailureReason::InvalidBlameResponse)
-            }
+            Err(bad_parties) => StageResult::Error(
+                bad_parties,
+                CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
+            ),
         }
     }
 }

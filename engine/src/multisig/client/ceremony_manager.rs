@@ -3,10 +3,7 @@ use std::sync::Arc;
 
 use crate::common::format_iterator;
 use crate::multisig::client;
-use crate::multisig::client::common::{
-    KeygenFailureReason, KeygenRequestIgnoredReason, SigningFailureReason,
-    SigningRequestIgnoredReason,
-};
+use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::crypto::Rng;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use cf_traits::AuthorityCount;
@@ -234,9 +231,7 @@ impl CeremonyManager {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
                 let _result = result_sender.send(Err((
                     BTreeSet::new(),
-                    CeremonyFailureReason::Other(KeygenFailureReason::RequestIgnored(
-                        KeygenRequestIgnoredReason::InvalidParticipants,
-                    )),
+                    CeremonyFailureReason::InvalidParticipants,
                 )));
                 return;
             }
@@ -249,9 +244,7 @@ impl CeremonyManager {
             slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
-                CeremonyFailureReason::Other(KeygenFailureReason::RequestIgnored(
-                    KeygenRequestIgnoredReason::CeremonyIdAlreadyUsed,
-                )),
+                CeremonyFailureReason::CeremonyIdAlreadyUsed,
             )));
             return;
         }
@@ -282,7 +275,7 @@ impl CeremonyManager {
 
         match state.on_ceremony_request(initial_stage, validator_map, result_sender) {
             Ok(Some(result)) => {
-                self.process_keygen_ceremony_outcome(ceremony_id, result);
+            self.process_keygen_ceremony_outcome(ceremony_id, result);
             }
             Err(reason) => {
                 slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
@@ -317,9 +310,7 @@ impl CeremonyManager {
             );
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
-                CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
-                    SigningRequestIgnoredReason::NotEnoughSigners,
-                )),
+                CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
             )));
             return;
         }
@@ -332,9 +323,7 @@ impl CeremonyManager {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
                 let _result = result_sender.send(Err((
                     BTreeSet::new(),
-                    CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
-                        SigningRequestIgnoredReason::InvalidParticipants,
-                    )),
+                    CeremonyFailureReason::InvalidParticipants,
                 )));
                 return;
             }
@@ -347,9 +336,7 @@ impl CeremonyManager {
             slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
-                CeremonyFailureReason::Other(SigningFailureReason::RequestIgnored(
-                    SigningRequestIgnoredReason::CeremonyIdAlreadyUsed,
-                )),
+                CeremonyFailureReason::CeremonyIdAlreadyUsed,
             )));
             return;
         }
@@ -387,7 +374,7 @@ impl CeremonyManager {
 
         match state.on_ceremony_request(initial_stage, key_info.validator_map, result_sender) {
             Ok(Some(result)) => {
-                self.process_signing_ceremony_outcome(ceremony_id, result);
+            self.process_signing_ceremony_outcome(ceremony_id, result);
             }
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);

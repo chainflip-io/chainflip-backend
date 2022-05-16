@@ -138,16 +138,16 @@ where
     if reported_parties.is_empty() {
         Ok(agreed_on_values)
     } else {
-        Err(if insufficient_messages {
-            (
-                reported_parties,
-                BroadcastFailureReason::InsufficientMessages,
-            )
-        } else {
-            // If the failure was not due to "InsufficientMessages",
-            // then it must be caused by (or at least partially caused by) inconsistency.
-            (reported_parties, BroadcastFailureReason::Inconsistency)
-        })
+        Err((
+            reported_parties,
+            if insufficient_messages {
+                BroadcastFailureReason::InsufficientMessages
+            } else {
+                // If the failure was not due to "InsufficientMessages",
+                // then it must be caused by (or at least partially caused by) inconsistency.
+                BroadcastFailureReason::Inconsistency
+            },
+        ))
     }
 }
 

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::multisig::client::{
     self,
-    common::{BroadcastStageName, SigningFailureReason},
+    common::{BroadcastStageName, CeremonyFailureReason, SigningFailureReason},
     signing,
 };
 
@@ -124,7 +124,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature, SigningFailureReason
             Err((reported_parties, abort_reason)) => {
                 return SigningStageResult::Error(
                     reported_parties,
-                    SigningFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::InitialCommitments,
                     ),
@@ -250,7 +250,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature, SigningFailureReason
             Err((reported_parties, abort_reason)) => {
                 return SigningStageResult::Error(
                     reported_parties,
-                    SigningFailureReason::BroadcastFailure(
+                    CeremonyFailureReason::BroadcastFailure(
                         abort_reason,
                         BroadcastStageName::LocalSignatures,
                     ),
@@ -285,9 +285,10 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature, SigningFailureReason
             &local_sigs,
         ) {
             Ok(sig) => StageResult::Done(sig),
-            Err(failed_idxs) => {
-                StageResult::Error(failed_idxs, SigningFailureReason::InvalidSigShare)
-            }
+            Err(failed_idxs) => StageResult::Error(
+                failed_idxs,
+                CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare),
+            ),
         }
     }
 }
