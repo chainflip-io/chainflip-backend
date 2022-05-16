@@ -1,5 +1,5 @@
 use crate::{
-    logging::REQUEST_TO_SIGN_IGNORED,
+    logging::{CEREMONY_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED},
     multisig::{
         client::{
             common::{
@@ -222,7 +222,7 @@ async fn should_ignore_duplicate_rts() {
     node.ensure_failure_reason(
         result_receiver,
         CeremonyFailureReason::DuplicateCeremonyId,
-        REQUEST_TO_SIGN_IGNORED,
+        CEREMONY_REQUEST_IGNORED,
     );
 }
 

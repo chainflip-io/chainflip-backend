@@ -273,14 +273,9 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(initial_stage, validator_map, result_sender) {
-            Ok(Some(result)) => {
+        if let Some(result) = state.on_ceremony_request(initial_stage, validator_map, result_sender)
+        {
             self.process_keygen_ceremony_outcome(ceremony_id, result);
-            }
-            Err(reason) => {
-                slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
-            }
-            _ => { /* nothing to do */ }
         };
     }
 
@@ -372,14 +367,10 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(initial_stage, key_info.validator_map, result_sender) {
-            Ok(Some(result)) => {
+        if let Some(result) =
+            state.on_ceremony_request(initial_stage, key_info.validator_map, result_sender)
+        {
             self.process_signing_ceremony_outcome(ceremony_id, result);
-            }
-            Err(reason) => {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-            }
-            _ => { /* nothing to do */ }
         };
     }
 

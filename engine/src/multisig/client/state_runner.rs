@@ -11,8 +11,8 @@ use pallet_cf_vaults::CeremonyId;
 use crate::{
     common::format_iterator,
     constants::MAX_STAGE_DURATION,
-    logging::CEREMONY_ID_KEY,
-    multisig::client::common::{ProcessMessageResult, StageResult},
+    logging::{CEREMONY_ID_KEY, CEREMONY_REQUEST_IGNORED},
+    multisig::client::common::{ProcessMessageResult, SigningFailureReason, StageResult},
 };
 use state_chain_runtime::AccountId;
 
@@ -80,16 +80,18 @@ where
         >,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
-    ) -> Result<
-        OptionalCeremonyReturn<CeremonyResult, FailureReason>,
-        CeremonyFailureReason<FailureReason>,
-    > {
+    ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         if self.inner.is_some() {
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
                 CeremonyFailureReason::DuplicateCeremonyId,
             )));
-            return Err(CeremonyFailureReason::DuplicateCeremonyId);
+            slog::warn!(
+                self.logger, #CEREMONY_REQUEST_IGNORED,
+                "{}",
+                CeremonyFailureReason::<SigningFailureReason>::DuplicateCeremonyId
+            );
+            return None;
         }
 
         stage.init();
@@ -106,7 +108,7 @@ where
         // control when our stages time out)
         self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
 
-        Ok(self.process_delayed())
+        self.process_delayed()
     }
 
     fn finalize_current_stage(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
@@ -144,7 +146,7 @@ where
             }
             StageResult::Error(bad_validators, reason) => Some(Err((
                 authorised_state.idx_mapping.get_ids(bad_validators),
-                CeremonyFailureReason::Other(reason),
+                reason,
             ))),
             StageResult::Done(result) => {
                 slog::debug!(self.logger, "Ceremony reached the final stage!");
