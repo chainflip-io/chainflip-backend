@@ -1,15 +1,15 @@
 use std::{collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path};
 
-use super::{
-    migrations::v0_to_v1::{load_keys_using_kvdb_to_latest_key_type, migration_0_to_1},
-    KeyDB,
-};
+use super::{migrations::v0_to_v1::load_keys_using_kvdb_to_latest_key_type, KeyDB};
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
 
 use crate::{
     logging::COMPONENT_KEY,
-    multisig::{client::KeygenResultInfo, crypto::ECPoint, KeyId},
+    multisig::{
+        client::KeygenResultInfo, crypto::ECPoint, db::migrations::v0_to_v1::migration_0_to_1,
+        KeyId,
+    },
 };
 
 use anyhow::{Context, Result};
@@ -53,8 +53,6 @@ impl<P: ECPoint> PersistentKeyDB<P> {
     /// Create a new persistent key database. If the database exists and the schema version
     /// is below the latest, it will attempt to migrate the data to the latest version
     pub fn new_and_migrate_to_latest(db_path: &Path, logger: &slog::Logger) -> Result<Self> {
-        let logger = logger.new(o!(COMPONENT_KEY => "PersistentKeyDB"));
-
         // Use a prefix extractor on the data column
         let mut cfopts_for_prefix = Options::default();
         cfopts_for_prefix
@@ -105,7 +103,7 @@ impl<P: ECPoint> PersistentKeyDB<P> {
 
         // load the old keys before initialising the new database
         let keys_from_kvdb = if requires_kvdb_to_rocks_migration {
-            load_keys_using_kvdb_to_latest_key_type(db_path, &logger)?
+            load_keys_using_kvdb_to_latest_key_type(db_path, logger)?
         } else {
             HashMap::new()
         };
@@ -118,21 +116,15 @@ impl<P: ECPoint> PersistentKeyDB<P> {
             cfs.into_iter().map(|(_, cf_desc)| cf_desc).collect();
 
         // Open the db or create a new one if it doesn't exist
-        let mut db =
+        let db =
             DB::open_cf_descriptors(&create_missing_db_and_cols_opts, &db_path, cf_descriptors)
                 .map_err(anyhow::Error::msg)
                 .context(format!("Failed to open database at: {}", db_path.display()))?;
 
         // Preform migrations and write the schema version
-        migrate_db_to_latest::<P>(&mut db, &logger, db_path)
+        let mut p_kdb = migrate_db_to_latest(db, logger, db_path)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
-        // Import the keys from the kvdb migration
-        let mut p_kdb = PersistentKeyDB {
-            db,
-            logger,
-            _phantom: Default::default(),
-        };
         if requires_kvdb_to_rocks_migration {
             for (key_id, key) in keys_from_kvdb {
                 p_kdb.update_key(&key_id, &key);
@@ -141,29 +133,29 @@ impl<P: ECPoint> PersistentKeyDB<P> {
 
         Ok(p_kdb)
     }
-}
 
-/// Write the key_id & key_share pair to the db.
-pub fn update_key(db: &DB, key_id: &KeyId, key_share: Vec<u8>) -> Result<(), anyhow::Error> {
-    let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
-
-    db.put_cf(get_data_column_handle(db), key_id_with_prefix, &key_share)
-        .map_err(anyhow::Error::msg)
-        .with_context(|| {
-            format!(
-                "Could not write key share for key_id `{}` to database",
-                &key_id
-            )
-        })
+    pub fn new_from_db(db: DB, logger: &slog::Logger) -> Self {
+        PersistentKeyDB {
+            db,
+            logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
+            _phantom: Default::default(),
+        }
+    }
 }
 
 impl<P: ECPoint> KeyDB<P> for PersistentKeyDB<P> {
+    /// Write the keyshare to the db, indexed by the key id
     fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo<P>) {
-        // TODO: this error should be handled better
-        let keygen_result_info_encoded =
-            bincode::serialize(keygen_result_info).expect("Could not serialize keygen_result_info");
+        let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
-        update_key(&self.db, key_id, keygen_result_info_encoded).expect("Should update key");
+        self.db
+            .put_cf(
+                get_data_column_handle(&self.db),
+                key_id_with_prefix,
+                &bincode::serialize(keygen_result_info)
+                    .expect("Couldn't serialize keygen result info"),
+            )
+            .unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo<P>> {
@@ -305,13 +297,13 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> u32 {
     }
 }
 
-/// Migrates the db forward one version migration at a time to the latest `DB_SCHEMA_VERSION`
+/// Returning a PersistentKeyDB
 fn migrate_db_to_latest<P: ECPoint>(
-    db: &mut DB,
+    db: DB,
     logger: &slog::Logger,
     path: &Path,
-) -> Result<(), anyhow::Error> {
-    let db_schema_version = read_schema_version(db, logger);
+) -> Result<PersistentKeyDB<P>, anyhow::Error> {
+    let db_schema_version = read_schema_version(&db, logger);
 
     if db_schema_version > DB_SCHEMA_VERSION {
         return Err(anyhow::Error::msg(
@@ -337,22 +329,23 @@ fn migrate_db_to_latest<P: ECPoint>(
                 .map_err(anyhow::Error::msg)
                 .context("Failed to create database backup before migration")?
         );
-    }
 
-    for version in (db_schema_version + 1)..=DB_SCHEMA_VERSION {
-        match version {
-            1 => {
-                migration_0_to_1::<P>(db)?;
-            }
-            _ => {
-                return Err(anyhow::Error::msg(format!(
-                    "Invalid migration to schema version {}",
-                    version
-                )))
-            }
+        if db_schema_version == 0 {
+            Ok(migration_0_to_1(db)?)
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Invalid migration to schema version {}",
+                db_schema_version
+            )))
         }
+    } else {
+        slog::info!(
+            logger,
+            "Database already at latest version of: {}",
+            DB_SCHEMA_VERSION
+        );
+        Ok(PersistentKeyDB::new_from_db(db, logger))
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -496,9 +489,9 @@ mod tests {
 
         // Open the db and make sure the `migrate_db_to_latest` errors
         {
-            let mut db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
+            let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest::<Point>(&mut db, &new_test_logger(), &db_path).is_err());
+            assert!(migrate_db_to_latest::<Point>(db, &new_test_logger(), &db_path).is_err());
         }
     }
 
@@ -508,21 +501,16 @@ mod tests {
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
         let bashful_secret = single_party_keygen::<Point>(AccountId32::new([0; 32]), rng);
-        let bashful_secret_bin = bincode::serialize(&bashful_secret).unwrap();
 
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         {
-            let p_db =
+            let mut p_db =
                 PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-            let db = p_db.db;
 
-            let key = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
-
-            db.put_cf(get_data_column_handle(&db), &key, &bashful_secret_bin)
-                .expect("Should write key share");
+            p_db.update_key(&key_id, &bashful_secret);
         }
 
         {

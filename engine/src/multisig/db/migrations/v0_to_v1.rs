@@ -2,16 +2,19 @@ use std::{collections::HashMap, path::Path, sync::Arc};
 
 use rocksdb::{WriteBatch, DB};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
-use crate::multisig::{
-    client::{KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
-    crypto::ECPoint,
-    db::persistent::{
-        add_schema_version_to_batch_write, get_data_column_handle, update_key, KEYGEN_DATA_PREFIX,
-        LEGACY_DATA_COLUMN_NAME, PREFIX_SIZE,
+use crate::{
+    logging::utils::new_discard_logger,
+    multisig::{
+        client::{KeygenResultInfo, PartyIdxMapping, ThresholdParameters},
+        crypto::ECPoint,
+        db::persistent::{
+            add_schema_version_to_batch_write, get_data_column_handle, KEYGEN_DATA_PREFIX,
+            LEGACY_DATA_COLUMN_NAME, PREFIX_SIZE,
+        },
+        KeyDB, KeyId, PersistentKeyDB,
     },
-    KeyId,
 };
 
 mod old_types {
@@ -114,45 +117,42 @@ fn old_to_new_keygen_result_info<P: ECPoint>(
 }
 
 // Just adding schema version to the metadata column and delete col0 if it exists
-pub fn migration_0_to_1<P: ECPoint>(db: &mut DB) -> Result<(), anyhow::Error> {
+pub fn migration_0_to_1<P: ECPoint>(mut db: DB) -> Result<PersistentKeyDB<P>, anyhow::Error> {
     // Update version data
     let mut batch = WriteBatch::default();
-    add_schema_version_to_batch_write(db, 1, &mut batch);
+    add_schema_version_to_batch_write(&db, 1, &mut batch);
 
     // Write the batch
-    db.write(batch).map_err(|e| {
-        anyhow::Error::msg(format!("Failed to write to db during migration: {}", e))
-    })?;
+    db.write(batch)
+        .context("Failed to write to db during migration")?;
 
     // Delete the old column family
     let old_cf_name = LEGACY_DATA_COLUMN_NAME;
     if db.cf_handle(LEGACY_DATA_COLUMN_NAME).is_some() {
         db.drop_cf(old_cf_name)
-            .unwrap_or_else(|_| panic!("Should drop old column family {}", old_cf_name));
+            .context("Error dropping old column family")?;
     }
 
     // Read in old key types and add the new
-    let old_keys: HashMap<KeyId, old_types::KeygenResultInfo<P>> = db
-        .prefix_iterator_cf(get_data_column_handle(db), KEYGEN_DATA_PREFIX)
+    let old_keys = db
+        .prefix_iterator_cf(get_data_column_handle(&db), KEYGEN_DATA_PREFIX)
         .map(|(key_id, key_info)| {
             // Strip the prefix off the key_id
             let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
-            // deserialize the `KeygenResultInfo`
-            match bincode::deserialize::<old_types::KeygenResultInfo<P>>(&*key_info) {
-                Ok(keygen_result_info) => {
+            bincode::deserialize::<old_types::KeygenResultInfo<P>>(&*key_info)
+                .map(|keygen_result_info| {
                     println!(
                         "Successfully deceoding old keygen result info: {:?}",
                         keygen_result_info
                     );
                     (key_id, keygen_result_info)
-                }
-                Err(_) => {
-                    panic!("We should not get an error on the db");
-                }
-            }
+                })
+                .map_err(|e| anyhow::anyhow!(e))
         })
-        .collect();
+        .collect::<Result<HashMap<KeyId, old_types::KeygenResultInfo<P>>>>()?;
+
+    let mut p_kdb = PersistentKeyDB::new_from_db(db, &new_discard_logger());
 
     // only write if all the keys were successfully deserialized
     old_keys
@@ -164,9 +164,8 @@ pub fn migration_0_to_1<P: ECPoint>(db: &mut DB) -> Result<(), anyhow::Error> {
             )
         })
         .for_each(|(key_id, keygen_result_info)| {
-            let keygen_result_info_bin = bincode::serialize(&keygen_result_info).unwrap();
-            update_key(db, &key_id, keygen_result_info_bin).expect("Should update key in database");
+            p_kdb.update_key(&key_id, &keygen_result_info);
         });
 
-    Ok(())
+    Ok(p_kdb)
 }

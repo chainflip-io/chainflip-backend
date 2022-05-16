@@ -116,7 +116,7 @@ impl ECPoint for Point {
         // Check if the public key's x coordinate is smaller than "half secp256k1's order",
         // which is a requirement imposed by the Key Manager contract
         let pk = self.get_element();
-        let pubkey = cf_chains::eth::AggKey::from(&pk);
+        let pubkey = cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize());
 
         let x = BigInt::from_bytes(&pubkey.pub_key_x);
         let half_order = BigInt::from_bytes(&secp256k1::constants::CURVE_ORDER) / 2 + 1;
@@ -365,7 +365,7 @@ impl CryptoScheme for EthSigning {
             .try_into()
             .expect("Should never fail, the `message` argument should always be a valid hash");
 
-        let e = AggKey::from(&pubkey.get_element()).message_challenge(
+        let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize()).message_challenge(
             &msg_hash,
             &pubkey_to_eth_addr(nonce_commitment.get_element()),
         );

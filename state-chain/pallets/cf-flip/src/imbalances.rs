@@ -6,6 +6,7 @@
 use crate::{self as Flip, Config, ReserveId};
 use codec::{Decode, Encode};
 use frame_support::traits::{Imbalance, SameOrOther, TryDrop};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, CheckedSub, Saturating, Zero},
 	RuntimeDebug,
@@ -13,7 +14,7 @@ use sp_runtime::{
 use sp_std::{mem, result};
 
 /// Internal sources of funds.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub enum InternalSource<AccountId> {
 	/// A user account.
 	Account(AccountId),
@@ -22,7 +23,7 @@ pub enum InternalSource<AccountId> {
 }
 
 /// The origin of an imbalance.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub enum ImbalanceSource<AccountId> {
 	/// External, aka. off-chain.
 	External,
