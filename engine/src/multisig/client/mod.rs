@@ -132,29 +132,25 @@ pub mod mocks {
     use super::*;
     use mockall::mock;
 
-    use crate::multisig::crypto::eth::EthSigning;
-
-    type Point = <EthSigning as CryptoScheme>::Point;
-    type PublicKey = <Point as ECPoint>::Underlying;
-    type Signature = <EthSigning as CryptoScheme>::Signature;
+    use crate::multisig::crypto::CryptoScheme;
 
     mock! {
-        pub MultisigClientApi {}
+        pub MultisigClientApi<C: CryptoScheme + Send + Sync> {}
 
         #[async_trait]
-        impl MultisigClientApi<EthSigning> for MultisigClientApi {
+        impl<C: CryptoScheme + Send + Sync> MultisigClientApi<C> for MultisigClientApi<C> {
             async fn keygen(
                 &self,
                 _ceremony_id: CeremonyId,
                 _participants: Vec<AccountId>,
-            ) -> Result<PublicKey, (BTreeSet<AccountId>, anyhow::Error)>;
+            ) -> Result<<<C as CryptoScheme>::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)>;
             async fn sign(
                 &self,
                 _ceremony_id: CeremonyId,
                 _key_id: KeyId,
                 _signers: Vec<AccountId>,
                 _data: MessageHash,
-            ) -> Result<Signature, (BTreeSet<AccountId>, anyhow::Error)>;
+            ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, anyhow::Error)>;
         }
     }
 }
