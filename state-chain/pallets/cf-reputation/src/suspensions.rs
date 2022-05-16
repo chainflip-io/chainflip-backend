@@ -37,6 +37,7 @@ impl<T: crate::Config> StorageLoadable<T>
 	}
 
 	fn commit(&mut self) {
+		self.release_expired();
 		crate::Suspensions::<T>::insert(self.offence, self.all.clone());
 	}
 }
@@ -46,12 +47,19 @@ where
 	Block: AtLeast32BitUnsigned + Copy,
 	Id: Ord + Clone,
 {
-	/// Suspend a node for a number of blocks.
+	/// Suspend a list of nodes for a number of blocks.
 	pub fn suspend(&mut self, ids: impl IntoIterator<Item = Id>, duration: Block) {
 		let current_block = self.current_block;
 		self.all
 			.extend(iter::repeat_with(move || current_block.saturating_add(duration)).zip(ids));
 		self.all.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
+	}
+
+	/// Release any nodes whose suspension period has expired.
+	pub fn release_expired(&mut self) {
+		while matches!(self.all.front(), Some((block, _)) if *block < self.current_block) {
+			self.all.pop_front();
+		}
 	}
 
 	/// Get the set of currently suspended validators.
@@ -106,9 +114,22 @@ mod test_suspension_tracking {
 		tracker.advance_blocks(SUSPENSION_DURATION);
 
 		assert_eq!(tracker.get_suspended(), BTreeSet::from_iter([3, 4, 5]), "{:?}", tracker);
+		assert_eq!(
+			tracker.all.iter().map(|(_, id)| *id).collect::<BTreeSet<_>>(),
+			[1, 2, 3, 4, 5].into_iter().collect::<BTreeSet<_>>()
+		);
+		tracker.release_expired();
+		assert_eq!(
+			tracker.all.iter().map(|(_, id)| *id).collect::<BTreeSet<_>>(),
+			[3, 4, 5].into_iter().collect::<BTreeSet<_>>()
+		);
 
 		tracker.advance_blocks(1);
 
 		assert_eq!(tracker.get_suspended(), BTreeSet::from_iter([]), "{:?}", tracker);
+
+		assert!(!tracker.all.is_empty());
+		tracker.release_expired();
+		assert!(tracker.all.is_empty());
 	}
 }
