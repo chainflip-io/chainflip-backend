@@ -45,7 +45,7 @@ pub struct HashCommitments1<P: ECPoint> {
     context: HashContext,
 }
 
-derive_display_as_type_name_p!(HashCommitments1<P>);
+derive_display_as_type_name!(HashCommitments1<P: ECPoint>);
 
 impl<P: ECPoint> HashCommitments1<P> {
     pub fn new(mut common: CeremonyCommon, allow_high_pubkey: bool, context: HashContext) -> Self {
@@ -113,7 +113,7 @@ pub struct VerifyHashCommitmentsBroadcast2<P: ECPoint> {
     context: HashContext,
 }
 
-derive_display_as_type_name_p!(VerifyHashCommitmentsBroadcast2<P>);
+derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     for VerifyHashCommitmentsBroadcast2<P>
@@ -177,7 +177,7 @@ pub struct AwaitCommitments1<P: ECPoint> {
     context: HashContext,
 }
 
-derive_display_as_type_name_p!(AwaitCommitments1<P>);
+derive_display_as_type_name!(AwaitCommitments1<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     for AwaitCommitments1<P>
@@ -224,7 +224,7 @@ struct VerifyCommitmentsBroadcast2<P: ECPoint> {
     context: HashContext,
 }
 
-derive_display_as_type_name_p!(VerifyCommitmentsBroadcast2<P>);
+derive_display_as_type_name!(VerifyCommitmentsBroadcast2<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     for VerifyCommitmentsBroadcast2<P>
@@ -313,7 +313,7 @@ struct SecretSharesStage3<P: ECPoint> {
     shares: OutgoingShares<P>,
 }
 
-derive_display_as_type_name_p!(SecretSharesStage3<P>);
+derive_display_as_type_name!(SecretSharesStage3<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     for SecretSharesStage3<P>
@@ -396,7 +396,7 @@ struct ComplaintsStage4<P: ECPoint> {
     complaints: BTreeSet<AuthorityCount>,
 }
 
-derive_display_as_type_name_p!(ComplaintsStage4<P>);
+derive_display_as_type_name!(ComplaintsStage4<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     for ComplaintsStage4<P>
@@ -437,7 +437,7 @@ struct VerifyComplaintsBroadcastStage5<P: ECPoint> {
     outgoing_shares: OutgoingShares<P>,
 }
 
-derive_display_as_type_name_p!(VerifyComplaintsBroadcastStage5<P>);
+derive_display_as_type_name!(VerifyComplaintsBroadcastStage5<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     for VerifyComplaintsBroadcastStage5<P>
@@ -592,7 +592,7 @@ struct BlameResponsesStage6<P: ECPoint> {
     commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
 }
 
-derive_display_as_type_name_p!(BlameResponsesStage6<P>);
+derive_display_as_type_name!(BlameResponsesStage6<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     for BlameResponsesStage6<P>
@@ -668,7 +668,7 @@ struct VerifyBlameResponsesBroadcastStage7<P: ECPoint> {
     commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
 }
 
-derive_display_as_type_name_p!(VerifyBlameResponsesBroadcastStage7<P>);
+derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage7<P: ECPoint>);
 
 /// Checks for sender_idx that their blame response contains exactly
 /// a share for each party that blamed them

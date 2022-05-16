@@ -95,11 +95,11 @@ derive_impls_for_keygen_data!(VerifyBlameResponses7<P>, KeygenData::VerifyBlameR
 
 derive_display_as_type_name!(HashComm1);
 derive_display_as_type_name!(VerifyHashComm2);
-derive_display_as_type_name_p!(ShamirShare<P>);
+derive_display_as_type_name!(ShamirShare<P: ECPoint>);
 derive_display_as_type_name!(Complaints4);
 derive_display_as_type_name!(VerifyComplaints5);
-derive_display_as_type_name_p!(BlameResponse6<P>);
-derive_display_as_type_name_p!(VerifyBlameResponses7<P>);
+derive_display_as_type_name!(BlameResponse6<P: ECPoint>);
+derive_display_as_type_name!(VerifyBlameResponses7<P: ECPoint>);
 
-derive_display_as_type_name_p!(Comm1<P>);
-derive_display_as_type_name_p!(VerifyComm2<P>);
+derive_display_as_type_name!(Comm1<P: ECPoint>);
+derive_display_as_type_name!(VerifyComm2<P: ECPoint>);

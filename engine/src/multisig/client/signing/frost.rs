@@ -95,10 +95,10 @@ derive_impls_for_signing_data!(VerifyComm2<P>, SigningData::BroadcastVerificatio
 derive_impls_for_signing_data!(LocalSig3<P>, SigningData::LocalSigStage3);
 derive_impls_for_signing_data!(VerifyLocalSig4<P>, SigningData::VerifyLocalSigsStage4);
 
-derive_display_as_type_name_p!(Comm1<P>);
-derive_display_as_type_name_p!(VerifyComm2<P>);
-derive_display_as_type_name_p!(LocalSig3<P>);
-derive_display_as_type_name_p!(VerifyLocalSig4<P>);
+derive_display_as_type_name!(Comm1<P: ECPoint>);
+derive_display_as_type_name!(VerifyComm2<P: ECPoint>);
+derive_display_as_type_name!(LocalSig3<P: ECPoint>);
+derive_display_as_type_name!(VerifyLocalSig4<P: ECPoint>);
 
 impl<P: ECPoint> Display for SigningData<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

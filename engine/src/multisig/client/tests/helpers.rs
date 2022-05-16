@@ -1162,15 +1162,15 @@ impl Node {
         let stage = self.ceremony_manager.get_keygen_stage_for(ceremony_id);
         let is_at_stage = match stage_number {
             STAGE_FINISHED_OR_NOT_STARTED => stage == None,
-            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1<P>>"),
-            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2<P>>"),
-            3 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1<P>>"),
-            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2<P>>"),
-            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3<P>>"),
-            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage4<P>>"),
-            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage5<P>>"),
-            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage6<P>>"),
-            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage7<P>>"),
+            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
+            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage4>"),
+            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage5>"),
+            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage6>"),
+            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage7>"),
             _ => false,
         };
         if is_at_stage {

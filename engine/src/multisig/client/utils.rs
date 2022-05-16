@@ -101,24 +101,14 @@ macro_rules! derive_impls_for_enum_variants {
 
 /// Derive display to match the type's name
 macro_rules! derive_display_as_type_name {
-    ($name: ty) => {
-        impl std::fmt::Display for $name {
+    ( $name:ident $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)? ) => {
+        impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? std::fmt::Display for $name $(< $( $lt ),+ >)?
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, stringify!($name))
             }
         }
-    };
-}
-
-/// Derive display to match the type's name
-macro_rules! derive_display_as_type_name_p {
-    ($name: ty) => {
-        impl<P: ECPoint> std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, stringify!($name))
-            }
-        }
-    };
+    }
 }
 
 #[cfg(test)]
