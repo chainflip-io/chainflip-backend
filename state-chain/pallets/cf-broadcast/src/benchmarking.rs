@@ -22,7 +22,7 @@ benchmarks_instance_pallet! {
 	// 	let origin = T::EnsureWitnessed::successful_origin();
 	// } : { call.dispatch_bypass_filter(origin)? }
 	transaction_ready_for_transmission {} : {}
-	transmission_failure {} : {}
+	transaction_signing_failure {} : {}
 	on_signature_ready {} : {}
 	signature_accepted {} : {}
 }
