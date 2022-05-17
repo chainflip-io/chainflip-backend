@@ -315,8 +315,9 @@ pub mod pallet {
 						// We remove the old transaction signature  here. We only allow a single
 						// transaction signature request to be valid at a time
 						if let Some(broadcast_attempt) =
-							Self::clean_up_awaiting_transaction_signature_attempt(*attempt_id)
-						{
+							Self::take_and_clean_up_awaiting_transaction_signature_attempt(
+								*attempt_id,
+							) {
 							notify_and_retry(broadcast_attempt);
 						}
 					},
@@ -458,7 +459,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - []
+		/// - N/A
 		///
 		/// ## Errors
 		///
@@ -480,7 +481,7 @@ pub mod pallet {
 				Error::<T, I>::InvalidSigner
 			);
 
-			Self::clean_up_awaiting_transaction_signature_attempt(broadcast_attempt_id);
+			Self::take_and_clean_up_awaiting_transaction_signature_attempt(broadcast_attempt_id);
 
 			Self::schedule_retry(signing_attempt.broadcast_attempt);
 
@@ -585,7 +586,7 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn clean_up_awaiting_transaction_signature_attempt(
+	pub fn take_and_clean_up_awaiting_transaction_signature_attempt(
 		broadcast_attempt_id: BroadcastAttemptId,
 	) -> Option<BroadcastAttempt<T, I>> {
 		if let Some(signing_attempt) =
