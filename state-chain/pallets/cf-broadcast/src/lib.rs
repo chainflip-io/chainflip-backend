@@ -600,12 +600,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_attempt_id.broadcast_id,
 				|attempt_numbers| {
 					if let Some(attempt_numbers) = attempt_numbers {
-						attempt_numbers.retain(|x| {
-							*x != signing_attempt
-								.broadcast_attempt
-								.broadcast_attempt_id
-								.attempt_count
-						});
+						attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
 					}
 				},
 			);
