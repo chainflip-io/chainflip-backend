@@ -891,11 +891,11 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
             0
         );
 
-        // Receive comm1 with the default keygen ceremony id
+        // Receive stage 1a message with the default keygen ceremony id
         ceremony.distribute_message(
             &sender_id,
             &test_id,
-            gen_invalid_keygen_comm1(&mut Rng::from_entropy()),
+            get_invalid_hash_comm(&mut Rng::from_entropy()),
         );
 
         // Check that the unauthorised ceremony was created
