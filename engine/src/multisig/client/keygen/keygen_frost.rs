@@ -536,11 +536,11 @@ pub mod genesis {
             return Err(anyhow::Error::msg("High degree coefficient is zero"));
         }
 
-        let validator_map = PartyIdxMapping::from_unsorted_signers(&signers);
+        let validator_map = PartyIdxMapping::from_unsorted_signers(signers);
 
         let keygen_result_infos: HashMap<_, _> = (1..=n)
             .map(|idx| {
-                // Collect shares for `idx`
+                // Collect shares destined for `idx`
                 let incoming_shares: BTreeMap<_, _> = outgoing_secret_shares
                     .iter()
                     .map(|(sender_idx, shares)| (*sender_idx, shares[&idx].clone()))

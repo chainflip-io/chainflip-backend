@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
 
 use crate::multisig::client::common::KeygenResultInfo;
 use crate::multisig::client::{self};
@@ -16,7 +15,7 @@ use client::{
 use itertools::Itertools;
 use sp_core::H256;
 
-use crate::multisig::crypto::{ECPoint, KeyShare};
+use crate::multisig::crypto::ECPoint;
 
 use keygen::{
     keygen_data::{
