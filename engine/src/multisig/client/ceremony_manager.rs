@@ -404,9 +404,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
         // Only stage 1 messages can create unauthorised ceremonies
         let state = if matches!(data, SigningData::CommStage1(_)) {
-            self.signing_states
-                .entry(ceremony_id)
-                .or_insert_with(|| SigningStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger))
+            self.signing_states.entry(ceremony_id).or_insert_with(|| {
+                SigningStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger)
+            })
         } else {
             match self.signing_states.entry(ceremony_id) {
                 Entry::Occupied(entry) => {
@@ -462,9 +462,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
         // Only stage 1 messages can create unauthorised ceremonies
         let state = if matches!(data, KeygenData::HashComm1(_)) {
-            self.keygen_states
-                .entry(ceremony_id)
-                .or_insert_with(|| KeygenStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger))
+            self.keygen_states.entry(ceremony_id).or_insert_with(|| {
+                KeygenStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger)
+            })
         } else {
             match self.keygen_states.entry(ceremony_id) {
                 Entry::Occupied(entry) => {
@@ -570,27 +570,30 @@ mod tests {
     use super::*;
     use crate::{
         logging::test_utils::new_test_logger,
-        multisig::client::common::BroadcastVerificationMessage,
+        multisig::{
+            client::common::BroadcastVerificationMessage,
+            eth::{EthSigning, Point},
+        },
     };
 
-    use crate::multisig::crypto::Point;
     use client::signing::frost::SigningCommitment;
     use rand_legacy::SeedableRng;
 
     #[test]
     fn should_ignore_non_first_stage_keygen_data_before_request() {
         let ceremony_id = 0_u64;
+        let account_id = AccountId::new([1; 32]);
 
         // Create a new ceremony manager
-        let mut ceremony_manager = CeremonyManager::new(
-            AccountId::default(),
+        let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+            account_id.clone(),
             tokio::sync::mpsc::unbounded_channel().0,
             &new_test_logger(),
         );
 
         // Process a stage 2 message
         ceremony_manager.process_keygen_data(
-            AccountId::default(),
+            account_id.clone(),
             ceremony_id,
             KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
                 data: BTreeMap::new(),
@@ -602,7 +605,7 @@ mod tests {
 
         // Process a stage 1 message
         ceremony_manager.process_keygen_data(
-            AccountId::default(),
+            account_id.clone(),
             ceremony_id,
             KeygenData::HashComm1(client::keygen::HashComm1(sp_core::H256::default())),
         );
@@ -612,7 +615,7 @@ mod tests {
 
         // Process a stage 2 message
         ceremony_manager.process_keygen_data(
-            AccountId::default(),
+            account_id,
             ceremony_id,
             KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
                 data: BTreeMap::new(),
@@ -632,19 +635,20 @@ mod tests {
     }
 
     #[test]
-    fn should_ignore_non_first_stage_singing_data_before_request() {
+    fn should_ignore_non_first_stage_signing_data_before_request() {
         let ceremony_id = 0_u64;
+        let account_id = AccountId::new([1; 32]);
 
         // Create a new ceremony manager
-        let mut ceremony_manager = CeremonyManager::new(
-            AccountId::default(),
+        let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+            account_id.clone(),
             tokio::sync::mpsc::unbounded_channel().0,
             &new_test_logger(),
         );
 
         // Process a stage 2 message
         ceremony_manager.process_signing_data(
-            AccountId::default(),
+            account_id.clone(),
             ceremony_id,
             SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
                 data: BTreeMap::new(),
@@ -657,7 +661,7 @@ mod tests {
         // Process a stage 1 message
         let mut rng = Rng::from_seed([0; 32]);
         ceremony_manager.process_signing_data(
-            AccountId::default(),
+            account_id.clone(),
             ceremony_id,
             SigningData::CommStage1(SigningCommitment {
                 d: Point::random(&mut rng),
@@ -670,7 +674,7 @@ mod tests {
 
         // Process a stage 2 message
         ceremony_manager.process_signing_data(
-            AccountId::default(),
+            account_id,
             ceremony_id,
             SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
                 data: BTreeMap::new(),
