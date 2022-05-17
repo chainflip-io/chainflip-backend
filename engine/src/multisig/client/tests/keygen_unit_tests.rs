@@ -1330,3 +1330,43 @@ mod timeout {
         }
     }
 }
+
+#[tokio::test]
+async fn genesis_keys_can_sign() {
+    use crate::multisig::crypto::eth::Point;
+    use crate::multisig::tests::fixtures::MESSAGE_HASH;
+
+    let account_ids: Vec<_> = [1, 2, 3, 4]
+        .iter()
+        .map(|i| AccountId::new([*i; 32]))
+        .collect();
+
+    // Limit iteration count so we don't loop forever
+    // in case there is a bug
+    const MAX_KEYGEN_ATTEMPTS: usize = 20;
+
+    let mut attempt_counter = 0;
+
+    let (key_id, key_data) = loop {
+        attempt_counter += 1;
+        match keygen::generate_key_data::<Point>(&account_ids) {
+            Ok(result) => break result,
+            Err(_) => {
+                if attempt_counter >= MAX_KEYGEN_ATTEMPTS {
+                    panic!("too many keygen attempts");
+                }
+            }
+        }
+    };
+
+    let (mut signing_ceremony, _non_signing_nodes) =
+        SigningCeremonyRunner::new_with_threshold_subset_of_signers(
+            new_nodes(account_ids),
+            1,
+            key_id.clone(),
+            key_data.clone(),
+            MESSAGE_HASH.clone(),
+            Rng::from_entropy(),
+        );
+    standard_signing(&mut signing_ceremony).await;
+}

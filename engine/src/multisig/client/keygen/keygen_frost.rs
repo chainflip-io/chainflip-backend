@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     convert::TryInto,
+    sync::Arc,
 };
 
 use cf_traits::AuthorityCount;
@@ -9,8 +10,8 @@ use sp_core::H256;
 use zeroize::Zeroize;
 
 use crate::multisig::{
-    client::ThresholdParameters,
-    crypto::{ECPoint, ECScalar, Rng},
+    client::{KeygenResult, KeygenResultInfo, ThresholdParameters},
+    crypto::{ECPoint, ECScalar, KeyShare, Rng},
 };
 
 use super::keygen_data::HashComm1;
@@ -363,6 +364,33 @@ pub fn check_high_degree_commitments<P: ECPoint>(
     high_degree_sum.is_point_at_infinity()
 }
 
+pub fn compute_keygen_result<P: ECPoint>(
+    params: ThresholdParameters,
+    secret_shares: IncomingShares<P>,
+    commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+) -> Arc<KeygenResult<P>> {
+    let key_share = secret_shares
+        .0
+        .values()
+        .map(|share| share.value.clone())
+        .sum();
+
+    // The shares are no longer needed so we zeroize them
+    drop(secret_shares);
+
+    let agg_pubkey = derive_aggregate_pubkey(commitments);
+
+    let party_public_keys = derive_local_pubkeys_for_parties(params, commitments);
+
+    Arc::new(KeygenResult {
+        key_share: KeyShare {
+            y: agg_pubkey,
+            x_i: key_share,
+        },
+        party_public_keys,
+    })
+}
+
 #[cfg(test)]
 impl<P: ECPoint> DKGUnverifiedCommitment<P> {
     /// Change the lowest degree coefficient so that it fails ZKP check
@@ -467,5 +495,72 @@ mod tests {
 
             secret_shares.push(secret_share);
         }
+    }
+}
+
+pub mod genesis {
+
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::multisig::KeyId;
+    use state_chain_runtime::AccountId;
+
+    pub fn generate_key_data<P: ECPoint>(
+        signers: &[AccountId],
+    ) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<P>>)> {
+        let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
+        let n = params.share_count;
+        let t = params.threshold;
+
+        use crate::multisig::client::PartyIdxMapping;
+        use rand_legacy::FromEntropy;
+
+        let mut rng = Rng::from_entropy();
+
+        let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
+            .map(|idx| {
+                let (_secret, commitments, shares) =
+                    generate_secret_and_shares::<P>(&mut rng, n, t);
+                ((idx, DKGCommitment { commitments }), (idx, shares))
+            })
+            .unzip();
+
+        let agg_pubkey = derive_aggregate_pubkey(&commitments);
+
+        if !agg_pubkey.is_compatible() {
+            return Err(anyhow::Error::msg("pubkey is not compatible"));
+        }
+
+        if check_high_degree_commitments(&commitments) {
+            return Err(anyhow::Error::msg("High degree coefficient is zero"));
+        }
+
+        let validator_map = PartyIdxMapping::from_unsorted_signers(&signers);
+
+        let keygen_result_infos: HashMap<_, _> = (1..=n)
+            .map(|idx| {
+                // Collect shares for `idx`
+                let incoming_shares: BTreeMap<_, _> = outgoing_secret_shares
+                    .iter()
+                    .map(|(sender_idx, shares)| (*sender_idx, shares[&idx].clone()))
+                    .collect();
+
+                (
+                    validator_map.get_id(idx).unwrap().clone(),
+                    KeygenResultInfo {
+                        key: compute_keygen_result(
+                            params,
+                            IncomingShares(incoming_shares),
+                            &commitments,
+                        ),
+                        validator_map: Arc::new(validator_map.clone()),
+                        params,
+                    },
+                )
+            })
+            .collect();
+
+        Ok((KeyId(agg_pubkey.as_bytes().to_vec()), keygen_result_infos))
     }
 }

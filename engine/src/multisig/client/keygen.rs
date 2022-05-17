@@ -10,6 +10,7 @@ pub use keygen_data::{
     VerifyComm2, VerifyComplaints5, VerifyHashComm2,
 };
 
+pub use keygen_frost::genesis::generate_key_data;
 pub use keygen_frost::HashContext;
 
 pub use keygen_stages::HashCommitments1;
