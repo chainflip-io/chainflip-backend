@@ -5,9 +5,7 @@ use super::*;
 
 use cf_traits::EpochInfo;
 use codec::{Decode, Encode};
-use frame_benchmarking::{
-	account, benchmarks_instance_pallet, impl_benchmark_test_suite, whitelisted_caller,
-};
+use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
@@ -122,15 +120,16 @@ benchmarks_instance_pallet! {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
-		let call = Call::<T, I>::vault_key_rotated(
-			new_public_key, 5u64.into(),
-			Decode::decode(&mut &TX_HASH[..]).unwrap()
-		);
+		let call = Call::<T, I>::vault_key_rotated {
+			new_public_key: new_public_key,
+			block_number: 5u64.into(),
+			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+		};
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index()));
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+}

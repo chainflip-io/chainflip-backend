@@ -18,11 +18,11 @@ mod migrations;
 
 pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Chainflip,
-	ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation, EpochIndex,
-	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyNode, ReputationResetter, RuntimeAuctionOutcome, StakeHandler, SuccessOrFailure,
-	VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bonding,
+	Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation,
+	EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch,
+	MissedAuthorshipSlots, QualifyNode, ReputationResetter, RuntimeAuctionOutcome, StakeHandler,
+	SuccessOrFailure, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -33,13 +33,13 @@ use sp_core::ed25519;
 use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-use cf_traits::Bonding;
-
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 type SessionIndex = u32;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode)]
+#[derive(
+	Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode, TypeInfo, MaxEncodedLen,
+)]
 pub struct SemVer {
 	pub major: u8,
 	pub minor: u8,
@@ -52,13 +52,14 @@ type Ed25519Signature = ed25519::Signature;
 pub type Ipv6Addr = u128;
 
 /// A percentage range
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct PercentageRange {
 	pub top: u8,
 	pub bottom: u8,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub enum RotationStatus<T: Config> {
 	Idle,
 	RunAuction,
@@ -104,7 +105,7 @@ impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 type VanityName = Vec<u8>;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
@@ -123,6 +124,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::without_storage_info]
 	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 

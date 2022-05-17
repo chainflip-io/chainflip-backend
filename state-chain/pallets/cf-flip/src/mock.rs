@@ -3,7 +3,11 @@ use cf_traits::{
 	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
 	WaivedFees,
 };
-use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU128, ConstU8, HandleLifetime},
+	weights::{ConstantMultiplier, IdentityFee},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -24,9 +28,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+		System: frame_system,
+		Flip: pallet_cf_flip,
+		TransactionPayment: pallet_transaction_payment,
 	}
 );
 
@@ -59,6 +63,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 pub type FlipBalance = u128;
@@ -91,9 +96,10 @@ parameter_types! {
 
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
-	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<FlipBalance>;
 	type FeeMultiplierUpdate = ();
+	type OperationalFeeMultiplier = ConstU8<5>;
+	type LengthToFee = ConstantMultiplier<u128, ConstU128<1_000_000>>;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -101,19 +107,22 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
-pub fn check_balance_integrity() {
+pub fn check_balance_integrity() -> bool {
 	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
 		.map(|account| account.total())
 		.sum::<FlipBalance>();
 	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<FlipBalance>();
 
-	assert_eq!(accounts_total + reserves_total, Flip::onchain_funds());
+	(accounts_total + reserves_total) == Flip::onchain_funds()
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config =
-		GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance: 1_000 } };
+	let config = GenesisConfig {
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000 },
+		transaction_payment: Default::default(),
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
@@ -134,4 +143,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	});
 
 	ext
+}
+#[derive(Clone, Debug)]
+pub enum FlipOperation {
+	Stake(AccountId, FlipBalance),
+	BurnFromAccount(AccountId, FlipBalance),
+	MintToAccount(AccountId, FlipBalance),
+	Claim(AccountId, FlipBalance),
 }

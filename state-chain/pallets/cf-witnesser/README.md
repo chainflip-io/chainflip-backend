@@ -35,7 +35,7 @@ steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
     ```rust
     construct_runtime!(
         // ...
-        Witness: pallet_cf_witness::{Pallet, Call, Event<T>, Origin},
+        Witness: pallet_cf_witness,
         //...
     )
     ```

@@ -5,7 +5,7 @@ use slog::o;
 use tokio::time::Interval;
 use web3::types::U64;
 
-use crate::{common::make_periodic_tick, eth::EthHttpRpcApi, logging::COMPONENT_KEY};
+use crate::{common::make_periodic_tick, eth::rpc::EthHttpRpcApi, logging::COMPONENT_KEY};
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -125,6 +125,7 @@ pub mod tests {
     use futures::StreamExt;
     use mockall::{predicate::eq, Sequence};
     use sp_core::H256;
+    use sp_core::U256;
     use web3::types::Block;
     use web3::types::H2048;
 
@@ -133,9 +134,8 @@ pub mod tests {
     // in tests, this can be instant
     const TEST_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
-    use crate::constants::ETH_BLOCK_SAFETY_MARGIN;
-    use crate::eth::mocks::MockEthHttpRpcClient;
     use crate::logging::test_utils::new_test_logger;
+    use crate::{constants::ETH_BLOCK_SAFETY_MARGIN, eth::rpc::mocks::MockEthHttpRpcClient};
 
     use anyhow::Result;
 
@@ -144,6 +144,7 @@ pub mod tests {
             hash: Some(H256([(block_number % 256) as u8; 32])),
             number: Some(U64::from(block_number)),
             logs_bloom: Some(H2048::default()),
+            base_fee_per_gas: Some(U256::from(1)),
             ..Default::default()
         })
     }

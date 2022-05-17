@@ -78,7 +78,7 @@ fn staked_amount_is_added_and_subtracted() {
 
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -93,7 +93,7 @@ fn staked_amount_is_added_and_subtracted() {
 				0
 			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE_A2, STAKE_A1 + STAKE_A2)),
-			Event::System(frame_system::Event::NewAccount(BOB)),
+			Event::System(frame_system::Event::NewAccount { account: BOB }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(BOB)),
@@ -152,7 +152,7 @@ fn claiming_unclaimable_is_err() {
 
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -267,7 +267,7 @@ fn staked_and_claimed_events_must_match() {
 
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -281,7 +281,7 @@ fn staked_and_claimed_events_must_match() {
 				STAKE,
 				0
 			)),
-			Event::System(frame_system::Event::KilledAccount(ALICE)),
+			Event::System(frame_system::Event::KilledAccount { account: ALICE }),
 			Event::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
 		);
 	});
@@ -297,21 +297,12 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 			BadOrigin
 		);
 		assert_noop!(
-			Staking::staked(
-				Origin::signed(Default::default()),
-				ALICE,
-				STAKE,
-				ETH_ZERO_ADDRESS,
-				TX_HASH,
-			),
+			Staking::staked(Origin::signed(ALICE), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH,),
 			BadOrigin
 		);
 
 		assert_noop!(Staking::claimed(Origin::none(), ALICE, STAKE, TX_HASH), BadOrigin);
-		assert_noop!(
-			Staking::claimed(Origin::signed(Default::default()), ALICE, STAKE, TX_HASH),
-			BadOrigin
-		);
+		assert_noop!(Staking::claimed(Origin::signed(ALICE), ALICE, STAKE, TX_HASH), BadOrigin);
 	});
 }
 
@@ -338,7 +329,7 @@ fn signature_is_inserted() {
 
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -463,7 +454,7 @@ fn test_retirement() {
 
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -525,7 +516,7 @@ fn claim_expiry() {
 
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -533,7 +524,7 @@ fn claim_expiry() {
 				0
 			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
-			Event::System(frame_system::Event::NewAccount(BOB)),
+			Event::System(frame_system::Event::NewAccount { account: BOB }),
 			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(BOB)),
@@ -628,7 +619,7 @@ fn test_claim_all() {
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -675,7 +666,7 @@ fn test_check_withdrawal_address() {
 		}
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
@@ -737,7 +728,7 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 		// Expect an failed stake event to be fired but no stake event
 		assert_event_sequence!(
 			Test,
-			Event::System(frame_system::Event::NewAccount(ALICE)),
+			Event::System(frame_system::Event::NewAccount { account: ALICE }),
 			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),

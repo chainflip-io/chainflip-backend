@@ -17,7 +17,7 @@ struct Liveness {
 }
 
 frame_support::generate_storage_alias!(
-	Online, Nodes => Map<(<Runtime as Chainflip>::ValidatorId, Blake2_128Concat), Liveness>
+	Online, Nodes => Map<(Blake2_128Concat, <Runtime as Chainflip>::ValidatorId), Liveness>
 );
 
 impl OnRuntimeUpgrade for Migration {

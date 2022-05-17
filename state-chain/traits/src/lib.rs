@@ -7,7 +7,7 @@ pub mod offence_reporting;
 pub use async_result::AsyncResult;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	pallet_prelude::Member,
@@ -15,6 +15,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
 	Hashable, Parameter,
 };
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
@@ -33,6 +34,7 @@ pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member
 		+ Parameter
+		+ MaxEncodedLen
 		+ Default
 		+ Eq
 		+ Ord
@@ -43,8 +45,8 @@ pub trait Chainflip: frame_system::Config {
 
 	/// An identity for a node
 	type ValidatorId: Member
-		+ Default
 		+ Parameter
+		+ MaxEncodedLen
 		+ Ord
 		+ core::fmt::Debug
 		+ IsType<<Self as frame_system::Config>::AccountId>
@@ -140,7 +142,7 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 }
 
 /// The outcome of a successful auction.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct AuctionOutcome<CandidateId, BidAmount> {
 	/// The auction winners.
 	pub winners: Vec<CandidateId>,
@@ -183,7 +185,7 @@ pub trait BackupNodes {
 	fn backup_nodes() -> Vec<Self::ValidatorId>;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SuccessOrFailure {
 	Success,
 	Failure,
@@ -320,15 +322,15 @@ pub trait IsOnline {
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct NetworkState<ValidatorId: Default> {
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+pub struct NetworkState<ValidatorId> {
 	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
 	/// Online nodes
 	pub online: Vec<ValidatorId>,
 }
 
-impl<ValidatorId: Default> NetworkState<ValidatorId> {
+impl<ValidatorId> NetworkState<ValidatorId> {
 	/// Returns the total number of nodes in the network.
 	pub fn number_of_nodes(&self) -> u32 {
 		(self.online.len() + self.offline.len()) as u32
@@ -355,13 +357,13 @@ pub trait EmergencyRotation {
 	fn emergency_rotation_completed();
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	HistoricalAuthority(BackupOrPassive),
@@ -369,7 +371,7 @@ pub enum ChainflipAccountState {
 }
 
 // TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
 }
@@ -551,7 +553,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 
 /// The heartbeat of the network
 pub trait Heartbeat {
-	type ValidatorId: Default;
+	type ValidatorId;
 	type BlockNumber;
 	/// A heartbeat has been submitted
 	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber);

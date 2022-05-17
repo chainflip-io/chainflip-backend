@@ -3,15 +3,12 @@ use std::sync::Arc;
 
 use crate::common::format_iterator;
 use crate::multisig::client;
-use crate::multisig::crypto::Rng;
+use crate::multisig::crypto::{CryptoScheme, Rng};
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
-use client::{
-    signing::frost::SigningData, state_runner::StateRunner, utils::PartyIdxMapping,
-    SchnorrSignature,
-};
+use client::{signing::frost::SigningData, state_runner::StateRunner, utils::PartyIdxMapping};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
@@ -33,22 +30,26 @@ pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (BTreeSet<AccountId
 pub type CeremonyResultReceiver<T> =
     oneshot::Receiver<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
 
-type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
-type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
+type SigningStateRunner<C> =
+    StateRunner<SigningData<<C as CryptoScheme>::Point>, <C as CryptoScheme>::Signature>;
+type KeygenStateRunner<C> = StateRunner<
+    KeygenData<<C as CryptoScheme>::Point>,
+    KeygenResultInfo<<C as CryptoScheme>::Point>,
+>;
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
-pub struct CeremonyManager {
+pub struct CeremonyManager<C: CryptoScheme> {
     my_account_id: AccountId,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    signing_states: HashMap<CeremonyId, SigningStateRunner>,
-    keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
+    signing_states: HashMap<CeremonyId, SigningStateRunner<C>>,
+    keygen_states: HashMap<CeremonyId, KeygenStateRunner<C>>,
     ceremony_id_tracker: CeremonyIdTracker,
     allowing_high_pubkey: bool,
     logger: slog::Logger,
 }
 
-impl CeremonyManager {
+impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn new(
         my_account_id: AccountId,
         outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
@@ -147,7 +148,7 @@ impl CeremonyManager {
     fn process_signing_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>,
+        result: Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)>,
     ) {
         let result_sender = self
             .signing_states
@@ -172,7 +173,7 @@ impl CeremonyManager {
     fn process_keygen_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<KeygenResultInfo, (BTreeSet<AccountId>, anyhow::Error)>,
+        result: Result<KeygenResultInfo<C::Point>, (BTreeSet<AccountId>, anyhow::Error)>,
     ) {
         let result_sender = self
             .keygen_states
@@ -200,7 +201,7 @@ impl CeremonyManager {
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
         rng: Rng,
-        result_sender: CeremonyResultSender<KeygenResultInfo>,
+        result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>>,
     ) {
         // TODO: Consider similarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
 
@@ -227,7 +228,7 @@ impl CeremonyManager {
 
         let logger_no_ceremony_id = &self.logger;
         let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
-            KeygenStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+            KeygenStateRunner::<C>::new_unauthorised(ceremony_id, logger_no_ceremony_id)
         });
 
         let initial_stage = {
@@ -266,9 +267,9 @@ impl CeremonyManager {
         ceremony_id: CeremonyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-        key_info: KeygenResultInfo,
+        key_info: KeygenResultInfo<C::Point>,
         rng: Rng,
-        result_sender: CeremonyResultSender<SchnorrSignature>,
+        result_sender: CeremonyResultSender<C::Signature>,
     ) {
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
@@ -309,7 +310,7 @@ impl CeremonyManager {
         let logger_no_ceremony_id = &self.logger;
 
         let state = self.signing_states.entry(ceremony_id).or_insert_with(|| {
-            SigningStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+            SigningStateRunner::<C>::new_unauthorised(ceremony_id, logger_no_ceremony_id)
         });
 
         let initial_stage = {
@@ -325,7 +326,7 @@ impl CeremonyManager {
                 rng,
             };
 
-            let processor = AwaitCommitments1::new(
+            let processor = AwaitCommitments1::<C>::new(
                 common.clone(),
                 SigningStateCommonInfo {
                     data,
@@ -348,7 +349,11 @@ impl CeremonyManager {
     }
 
     /// Process message from another validator
-    pub fn process_p2p_message(&mut self, sender_id: AccountId, message: MultisigMessage) {
+    pub fn process_p2p_message(
+        &mut self,
+        sender_id: AccountId,
+        message: MultisigMessage<C::Point>,
+    ) {
         match message {
             MultisigMessage {
                 ceremony_id,
@@ -377,7 +382,7 @@ impl CeremonyManager {
         &mut self,
         sender_id: AccountId,
         ceremony_id: CeremonyId,
-        data: SigningData,
+        data: SigningData<C::Point>,
     ) {
         use std::collections::hash_map::Entry;
         // Check if we have state for this data and delegate message to that state
@@ -401,7 +406,7 @@ impl CeremonyManager {
         let state = if matches!(data, SigningData::CommStage1(_)) {
             self.signing_states
                 .entry(ceremony_id)
-                .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, &self.logger))
+                .or_insert_with(|| SigningStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger))
         } else {
             match self.signing_states.entry(ceremony_id) {
                 Entry::Occupied(entry) => {
@@ -439,7 +444,7 @@ impl CeremonyManager {
         &mut self,
         sender_id: AccountId,
         ceremony_id: CeremonyId,
-        data: KeygenData,
+        data: KeygenData<C::Point>,
     ) {
         use std::collections::hash_map::Entry;
 
@@ -459,7 +464,7 @@ impl CeremonyManager {
         let state = if matches!(data, KeygenData::HashComm1(_)) {
             self.keygen_states
                 .entry(ceremony_id)
-                .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, &self.logger))
+                .or_insert_with(|| KeygenStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger))
         } else {
             match self.keygen_states.entry(ceremony_id) {
                 Entry::Occupied(entry) => {
@@ -494,7 +499,7 @@ impl CeremonyManager {
 }
 
 #[cfg(test)]
-impl CeremonyManager {
+impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn expire_all(&mut self) {
         for state in self.signing_states.values_mut() {
             state.set_expiry_time(std::time::Instant::now());

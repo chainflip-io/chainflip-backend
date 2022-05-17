@@ -4,7 +4,7 @@ use sp_runtime::traits::Bounded;
 use sp_std::cmp::Reverse;
 
 /// Tracker for backup and passive validators.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct BackupTriage<Id, Amount> {
 	pub backup: Vec<Bid<Id, Amount>>,
 	pub passive: Vec<Bid<Id, Amount>>,
@@ -20,7 +20,9 @@ impl<Id, Amount> Default for BackupTriage<Id, Amount> {
 pub type RuntimeBackupTriage<T> =
 	BackupTriage<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, PartialOrd, Ord)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug, PartialOrd, Ord,
+)]
 pub struct Bid<Id, Amount> {
 	pub bidder_id: Id,
 	pub amount: Amount,

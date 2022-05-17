@@ -37,8 +37,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Pallet, Call, Storage},
+		System: frame_system,
+		OnlinePallet: pallet_cf_online,
 	}
 );
 
@@ -70,6 +70,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 // A heartbeat interval in blocks

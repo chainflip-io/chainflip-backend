@@ -1,24 +1,28 @@
 use std::collections::BTreeMap;
 
-use crate::multisig::client::{self, signing};
+use crate::multisig::{
+    client::{self, signing},
+    crypto::CryptoScheme,
+};
 
 use cf_traits::AuthorityCount;
 use client::common::{
     broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
     {CeremonyCommon, StageResult},
 };
-use client::SchnorrSignature;
+
 use signing::frost::{
     self, Comm1, LocalSig3, SecretNoncePair, SigningData, VerifyComm2, VerifyLocalSig4,
 };
 
 use signing::SigningStateCommonInfo;
 
-type SigningStageResult = StageResult<SigningData, SchnorrSignature>;
+type SigningStageResult<C> =
+    StageResult<SigningData<<C as CryptoScheme>::Point>, <C as CryptoScheme>::Signature>;
 
 macro_rules! should_delay {
     ($variant:path) => {
-        fn should_delay(&self, m: &SigningData) -> bool {
+        fn should_delay(&self, m: &SigningData<C::Point>) -> bool {
             matches!(m, $variant(_))
         }
     };
@@ -28,14 +32,17 @@ macro_rules! should_delay {
 
 /// Stage 1: Generate an broadcast our secret nonce pair
 /// and collect those from all other parties
-pub struct AwaitCommitments1 {
+pub struct AwaitCommitments1<C: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo,
-    nonces: Box<SecretNoncePair>,
+    signing_common: SigningStateCommonInfo<C::Point>,
+    nonces: Box<SecretNoncePair<C::Point>>,
 }
 
-impl AwaitCommitments1 {
-    pub fn new(mut common: CeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
+impl<C: CryptoScheme> AwaitCommitments1<C> {
+    pub fn new(
+        mut common: CeremonyCommon,
+        signing_common: SigningStateCommonInfo<C::Point>,
+    ) -> Self {
         let nonces = SecretNoncePair::sample_random(&mut common.rng);
 
         AwaitCommitments1 {
@@ -46,10 +53,12 @@ impl AwaitCommitments1 {
     }
 }
 
-derive_display_as_type_name!(AwaitCommitments1);
+derive_display_as_type_name!(AwaitCommitments1<C: CryptoScheme>);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
-    type Message = Comm1;
+impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+    for AwaitCommitments1<C>
+{
+    type Message = Comm1<C::Point>;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
@@ -58,15 +67,15 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
         })
     }
 
-    should_delay!(SigningData::BroadcastVerificationStage2);
+    should_delay!(SigningData::BroadcastVerificationStage2<C::Point>);
 
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult {
+    ) -> SigningStageResult<C> {
         // No verification is necessary here, just generating new stage
 
-        let processor = VerifyCommitmentsBroadcast2 {
+        let processor = VerifyCommitmentsBroadcast2::<C> {
             common: self.common.clone(),
             signing_common: self.signing_common.clone(),
             nonces: self.nonces,
@@ -82,19 +91,21 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 // ************
 
 /// Stage 2: Verifying data broadcast during stage 1
-struct VerifyCommitmentsBroadcast2 {
+struct VerifyCommitmentsBroadcast2<C: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo,
+    signing_common: SigningStateCommonInfo<C::Point>,
     // Our nonce pair generated in the previous stage
-    nonces: Box<SecretNoncePair>,
+    nonces: Box<SecretNoncePair<C::Point>>,
     // Public nonce commitments collected in the previous stage
-    commitments: BTreeMap<AuthorityCount, Option<Comm1>>,
+    commitments: BTreeMap<AuthorityCount, Option<Comm1<C::Point>>>,
 }
 
-derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
+derive_display_as_type_name!(VerifyCommitmentsBroadcast2<C: CryptoScheme>);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcast2 {
-    type Message = VerifyComm2;
+impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+    for VerifyCommitmentsBroadcast2<C>
+{
+    type Message = VerifyComm2<C::Point>;
 
     /// Simply report all data that we have received from
     /// other parties in the last stage
@@ -104,13 +115,13 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
         DataToSend::Broadcast(VerifyComm2 { data })
     }
 
-    should_delay!(SigningData::LocalSigStage3);
+    should_delay!(SigningData::LocalSigStage3<C::Point>);
 
     /// Verify that all values have been broadcast correctly during stage 1
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult {
+    ) -> SigningStageResult<C> {
         let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err(abort_reason) => {
@@ -123,7 +134,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
             "Initial commitments have been correctly broadcast"
         );
 
-        let processor = LocalSigStage3 {
+        let processor = LocalSigStage3::<C> {
             common: self.common.clone(),
             signing_common: self.signing_common,
             nonces: self.nonces,
@@ -137,24 +148,26 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 }
 
 /// Stage 3: Generating and broadcasting signature response shares
-struct LocalSigStage3 {
+struct LocalSigStage3<C: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo,
+    signing_common: SigningStateCommonInfo<C::Point>,
     // Our nonce pair generated in the previous stage
-    nonces: Box<SecretNoncePair>,
+    nonces: Box<SecretNoncePair<C::Point>>,
     // Public nonce commitments (verified)
-    commitments: BTreeMap<AuthorityCount, Comm1>,
+    commitments: BTreeMap<AuthorityCount, Comm1<C::Point>>,
 }
 
-derive_display_as_type_name!(LocalSigStage3);
+derive_display_as_type_name!(LocalSigStage3<C: CryptoScheme>);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
-    type Message = LocalSig3;
+impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+    for LocalSigStage3<C>
+{
+    type Message = LocalSig3<C::Point>;
 
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
     fn init(&mut self) -> DataToSend<Self::Message> {
-        let data = DataToSend::Broadcast(frost::generate_local_sig(
+        let data = DataToSend::Broadcast(frost::generate_local_sig::<C>(
             &self.signing_common.data.0,
             &self.signing_common.key.key_share,
             &self.nonces,
@@ -172,15 +185,15 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
         data
     }
 
-    should_delay!(SigningData::VerifyLocalSigsStage4);
+    should_delay!(SigningData::VerifyLocalSigsStage4<C::Point>);
 
     /// Nothing to process here yet, simply creating the new stage once all of the
     /// data has been collected
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult {
-        let processor = VerifyLocalSigsBroadcastStage4 {
+    ) -> SigningStageResult<C> {
+        let processor = VerifyLocalSigsBroadcastStage4::<C> {
             common: self.common.clone(),
             signing_common: self.signing_common.clone(),
             commitments: self.commitments,
@@ -194,19 +207,21 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
 }
 
 /// Stage 4: Verifying the broadcasting of signature shares
-struct VerifyLocalSigsBroadcastStage4 {
+struct VerifyLocalSigsBroadcastStage4<C: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo,
+    signing_common: SigningStateCommonInfo<C::Point>,
     /// Nonce commitments from all parties (verified to be correctly broadcast)
-    commitments: BTreeMap<AuthorityCount, Comm1>,
+    commitments: BTreeMap<AuthorityCount, Comm1<C::Point>>,
     /// Signature shares sent to us (NOT verified to be correctly broadcast)
-    local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3>>,
+    local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<C::Point>>>,
 }
 
-derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4);
+derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<C: CryptoScheme>);
 
-impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastStage4 {
-    type Message = VerifyLocalSig4;
+impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+    for VerifyLocalSigsBroadcastStage4<C>
+{
+    type Message = VerifyLocalSig4<C::Point>;
 
     /// Broadcast all signature shares sent to us
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -215,7 +230,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
         DataToSend::Broadcast(VerifyLocalSig4 { data })
     }
 
-    fn should_delay(&self, _: &SigningData) -> bool {
+    fn should_delay(&self, _: &SigningData<C::Point>) -> bool {
         // Nothing to delay as we don't expect any further stages
         false
     }
@@ -225,7 +240,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult {
+    ) -> SigningStageResult<C> {
         let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
             Err(abort_reason) => {
@@ -250,7 +265,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             })
             .collect();
 
-        match frost::aggregate_signature(
+        match frost::aggregate_signature::<C>(
             &self.signing_common.data.0,
             all_idxs,
             self.signing_common.key.get_public_key(),
