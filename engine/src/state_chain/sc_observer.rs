@@ -356,12 +356,22 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             // In the long run all transaction parameters will be provided by the state
                                                             // chain and the above eth_broadcaster.sign_tx method can be made
                                                             // infallible.
+
                                                             slog::error!(
                                                                 logger,
                                                                 "TransactionSigningRequest attempt_id {} failed: {:?}",
                                                                 attempt_id,
                                                                 e
                                                             );
+
+                                                            let _result = state_chain_client.submit_signed_extrinsic(
+                                                                state_chain_runtime::Call::EthereumBroadcaster(
+                                                                    pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                        broadcast_attempt_id: attempt_id,
+                                                                    },
+                                                                ),
+                                                                &logger,
+                                                            ).await;
                                                         }
                                                     }
                                                 }
