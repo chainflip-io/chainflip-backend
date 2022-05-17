@@ -1,6 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-use cf_runtime_benchmark_utilities::BenchmarkDefault;
+use crate::benchmarking_default::BenchmarkDefault;
 use codec::{FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use frame_support::{
@@ -14,6 +13,8 @@ use sp_std::{
 	fmt::Debug,
 	prelude::*,
 };
+
+pub mod benchmarking_default;
 
 pub mod eth;
 
@@ -62,8 +63,8 @@ pub trait ChainCrypto: Chain {
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
 	type UnsignedTransaction: Member + Parameter + Default;
-	type SignedTransaction: Member + Parameter;
-	type SignerCredential: Member + Parameter;
+	type SignedTransaction: Member + Parameter + BenchmarkDefault;
+	type SignerCredential: Member + Parameter + BenchmarkDefault;
 	type ReplayProtection: Member + Parameter + Default;
 	type ValidationError;
 
@@ -198,6 +199,15 @@ pub mod mocks {
 		/// Simulate a transaction signature.
 		pub fn signed(self, signature: Validity) -> MockSignedTransation<Self> {
 			MockSignedTransation::<Self> { transaction: self, signature }
+		}
+	}
+
+	impl Default for MockSignedTransation<MockUnsignedTransaction> {
+		fn default() -> Self {
+			MockSignedTransation {
+				transaction: MockUnsignedTransaction::default(),
+				signature: Validity::Valid,
+			}
 		}
 	}
 

@@ -4,12 +4,11 @@
 use super::*;
 
 use cf_chains::eth::{TransactionHash, H256};
-use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 use frame_system::RawOrigin;
 
-// use cf_runtime_benchmark_utilities::BenchmarkDefault;
+use cf_chains::benchmarking_default::BenchmarkDefault;
 
 // type TransactionHashFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
 type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
@@ -31,15 +30,15 @@ benchmarks_instance_pallet! {
 	// 	let call = Call::<T, I>::start_broadcast(unsigned.into());
 	// 	let origin = T::EnsureWitnessed::successful_origin();
 	// } : { call.dispatch_bypass_filter(origin)? }
-	// transaction_ready_for_transmission {
-	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	let broadcast_attempt_id = BroadcastAttemptId {
-	// 		broadcast_id: 1,
-	// 		attempt_count: 1
-	// 	};
-	// 	let signed_tx = SignedTransactionFor::<T, I>::default();
-	// 	let signer_id = SignerIdFor::<T, I>::default();
-	// } : _(RawOrigin::Signed(caller), broadcast_attempt_id, signed_tx, signer_id)
+	transaction_ready_for_transmission {
+		let caller: T::AccountId = whitelisted_caller();
+		let broadcast_attempt_id = BroadcastAttemptId {
+			broadcast_id: 1,
+			attempt_count: 1
+		};
+		let signed_tx = SignedTransactionFor::<T, I>::benchmark_default();
+		let signer_id = SignerIdFor::<T, I>::benchmark_default();
+	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, signed_tx, signer_id)
 	transmission_failure {
 		let origin = T::EnsureWitnessed::successful_origin();
 		let transaction_hash = TransactionHashFor::<T, I>::benchmark_default();
@@ -48,7 +47,7 @@ benchmarks_instance_pallet! {
 			attempt_count: 1
 		};
 		let tf = TransmissionFailure::TransactionRejected;
-		let call = Call::<T, I>::transmission_failure(broadcast_attempt_id, tf, transaction_hash);
+		let call = Call::<T, I>::transmission_failure { broadcast_attempt_id: broadcast_attempt_id, failure: tf, tx_hash: transaction_hash };
 	} : { call.dispatch_bypass_filter(origin)? }
 	// on_signature_ready {
 	// 	let origin = T::EnsureThresholdSigned::successful_origin();
