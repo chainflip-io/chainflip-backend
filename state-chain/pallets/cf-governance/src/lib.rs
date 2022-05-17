@@ -39,7 +39,7 @@ pub mod pallet {
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
 
-	use codec::{Encode, FullCodec};
+	use codec::Encode;
 	use frame_system::{pallet, pallet_prelude::*};
 	use sp_std::{boxed::Box, vec::Vec};
 
@@ -47,12 +47,18 @@ pub mod pallet {
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
-	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
 		/// Encoded representation of a extrinsic
 		pub call: OpaqueCall,
 		/// Array of accounts which already approved the proposal
 		pub approved: Vec<AccountId>,
+	}
+
+	impl<T> Default for Proposal<T> {
+		fn default() -> Self {
+			Self { call: Default::default(), approved: Default::default() }
+		}
 	}
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -71,7 +77,7 @@ pub mod pallet {
 		type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::Origin>;
 		/// The overarching call type.
 		type Call: Member
-			+ FullCodec
+			+ Parameter
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ From<frame_system::Call<Self>>
 			+ GetDispatchInfo;
@@ -84,7 +90,9 @@ pub mod pallet {
 		/// Provides to implementation for a runtime upgrade
 		type RuntimeUpgrade: RuntimeUpgrade;
 	}
+
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
@@ -331,7 +339,7 @@ pub mod pallet {
 	pub type Origin = RawOrigin;
 
 	/// The raw origin enum for this pallet.
-	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
 	pub enum RawOrigin {
 		GovernanceThreshold,
 	}

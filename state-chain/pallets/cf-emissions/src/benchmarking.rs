@@ -3,7 +3,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
 
@@ -42,10 +42,10 @@ benchmarks! {
 		 let mint_interval = Pallet::<T>::mint_interval();
 		 assert_eq!(mint_interval, (50 as u32).into());
 	}
-}
 
-impl_benchmark_test_suite!(
-	Pallet,
-	crate::mock::new_test_ext(Default::default(), Default::default()),
-	crate::mock::Test,
-);
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(Default::default(), Default::default()),
+		crate::mock::Test,
+	);
+}

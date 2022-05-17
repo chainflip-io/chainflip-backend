@@ -5,13 +5,13 @@ pub mod frost_stages;
 
 use std::sync::Arc;
 
-use crate::multisig::MessageHash;
+use crate::multisig::{crypto::ECPoint, MessageHash};
 
 use super::common::KeygenResult;
 
 /// Data common for signing stages
 #[derive(Clone)]
-pub struct SigningStateCommonInfo {
+pub struct SigningStateCommonInfo<P: ECPoint> {
     pub data: MessageHash,
-    pub key: Arc<KeygenResult>,
+    pub key: Arc<KeygenResult<P>>,
 }

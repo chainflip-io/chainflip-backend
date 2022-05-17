@@ -2,7 +2,7 @@ use super::*;
 use crate as pallet_cf_validator;
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{OnFinalize, OnInitialize, ValidatorRegistration},
+	traits::{OnInitialize, ValidatorRegistration},
 };
 
 use cf_traits::{
@@ -11,8 +11,10 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	AuctionResult, Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyNode,
+	Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyNode,
+	RuntimeAuctionOutcome,
 };
+use frame_system::RawOrigin;
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
@@ -34,9 +36,9 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		ValidatorPallet: pallet_cf_validator::{Pallet, Call, Storage, Event<T>, Config<T>},
+		System: frame_system,
+		Session: pallet_session,
+		ValidatorPallet: pallet_cf_validator,
 	}
 );
 
@@ -67,6 +69,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl_opaque_keys! {
@@ -93,7 +96,6 @@ impl pallet_session::Config for Test {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = Event;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
@@ -101,24 +103,22 @@ impl pallet_session::Config for Test {
 pub struct MockAuctioneer;
 
 thread_local! {
-	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<AuctionResult<ValidatorId, Amount>, &'static str>> = RefCell::new(Ok(Default::default()));
+	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(Default::default()));
 	pub static AUCTION_WINNERS: RefCell<Option<Vec<ValidatorId>>> = RefCell::new(None);
 }
 
 impl MockAuctioneer {
-	pub fn set_run_behaviour(behaviour: Result<AuctionResult<ValidatorId, Amount>, &'static str>) {
+	pub fn set_run_behaviour(behaviour: Result<RuntimeAuctionOutcome<Test>, &'static str>) {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| {
 			*cell.borrow_mut() = behaviour;
 		});
 	}
 }
 
-impl Auctioneer for MockAuctioneer {
-	type ValidatorId = ValidatorId;
-	type Amount = Amount;
+impl Auctioneer<Test> for MockAuctioneer {
 	type Error = &'static str;
 
-	fn resolve_auction() -> Result<AuctionResult<Self::ValidatorId, Self::Amount>, Self::Error> {
+	fn resolve_auction() -> Result<RuntimeAuctionOutcome<Test>, Self::Error> {
 		AUCTION_RUN_BEHAVIOUR.with(|cell| {
 			let run_behaviour = (*cell.borrow()).clone();
 			run_behaviour.map(|result| {
@@ -128,10 +128,6 @@ impl Auctioneer for MockAuctioneer {
 				result
 			})
 		})
-	}
-
-	fn update_backup_and_passive_states() {
-		// no op
 	}
 }
 
@@ -248,6 +244,18 @@ pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 pub const MINIMUM_ACTIVE_BID_AT_GENESIS: Amount = 1;
 pub const EPOCH_DURATION: u64 = 10;
 
+pub fn register_keys(ids: &[u64]) {
+	for id in ids {
+		System::inc_providers(id);
+		Session::set_keys(
+			RawOrigin::Signed(*id).into(),
+			UintAuthorityId(*id).into(),
+			Default::default(),
+		)
+		.unwrap();
+	}
+}
+
 pub(crate) struct TestExternalitiesWithCheck {
 	ext: sp_io::TestExternalities,
 }
@@ -299,10 +307,8 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 pub fn run_to_block(n: u64) {
 	assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
 	while System::block_number() < n {
-		Session::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
-		Session::on_initialize(System::block_number());
-		<ValidatorPallet as OnInitialize<u64>>::on_initialize(System::block_number());
+		AllPalletsWithoutSystem::on_initialize(System::block_number());
 		MockVaultRotator::on_initialise();
 		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
 	}

@@ -5,7 +5,7 @@ use cf_traits::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
 		vault_rotation::MockVaultRotator,
 	},
-	SystemStateInfo, VaultRotator,
+	AuctionOutcome, SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -80,10 +80,10 @@ fn should_request_emergency_rotation() {
 		// Once we've passed the Idle phase, requesting an emergency rotation should have no
 		// effect on the rotation status.
 		for status in [
-			RotationStatusOf::<Test>::RunAuction,
-			RotationStatusOf::<Test>::AwaitingVaults(Default::default()),
-			RotationStatusOf::<Test>::VaultsRotated(Default::default()),
-			RotationStatusOf::<Test>::SessionRotating(Default::default()),
+			RotationStatus::<Test>::RunAuction,
+			RotationStatus::<Test>::AwaitingVaults(Default::default()),
+			RotationStatus::<Test>::VaultsRotated(Default::default()),
+			RotationStatus::<Test>::SessionRotating(Default::default()),
 		] {
 			RotationPhase::<Test>::put(&status);
 			ValidatorPallet::request_emergency_rotation();
@@ -109,10 +109,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		MockAuctioneer::set_run_behaviour(Ok(Default::default()));
 
 		move_forward_blocks(1);
-		assert!(matches!(
-			RotationPhase::<Test>::get(),
-			RotationStatusOf::<Test>::AwaitingVaults(..)
-		))
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::AwaitingVaults(..)))
 	});
 }
 
@@ -120,7 +117,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 	new_test_ext().execute_with(|| {
 		MockVaultRotator::set_error_on_start(true);
-		RotationPhase::<Test>::set(RotationStatusOf::<Test>::RunAuction);
+		RotationPhase::<Test>::set(RotationStatus::<Test>::RunAuction);
 		// Move forward a few blocks, vault rotations fail because the vault rotator can't start.
 		// We keep trying to resolve the auction.
 		move_forward_blocks(10);
@@ -184,7 +181,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 fn should_rotate_when_forced() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-		assert!(matches!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction));
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction));
 	});
 }
 
@@ -194,9 +191,12 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		let new_bond = 10;
 		let new_authorities = vec![1, 2];
 
-		MockAuctioneer::set_run_behaviour(Ok(AuctionResult {
+		register_keys(&new_authorities);
+
+		MockAuctioneer::set_run_behaviour(Ok(AuctionOutcome {
 			winners: new_authorities.clone(),
-			minimum_active_bid: new_bond,
+			losers: vec![],
+			bond: new_bond,
 		}));
 
 		assert_eq!(
@@ -211,12 +211,9 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			DUMMY_GENESIS_VALIDATORS,
 			"we should still be validating with the genesis authorities"
 		);
-		assert!(matches!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction));
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction));
 		move_forward_blocks(1);
-		assert!(matches!(
-			RotationPhase::<Test>::get(),
-			RotationStatusOf::<Test>::AwaitingVaults(..)
-		));
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::AwaitingVaults(..)));
 		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
 		assert_next_epoch();
 		assert_eq!(
@@ -533,8 +530,11 @@ fn test_setting_vanity_names_() {
 #[test]
 fn test_missing_author_punishment() {
 	new_test_ext().execute_with(|| {
-		RotationPhase::<Test>::set(RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
-			winners: vec![1, 2, 3, 4],
+		let winners = vec![1, 2, 3, 4];
+		register_keys(&winners[..]);
+
+		RotationPhase::<Test>::set(RotationStatus::<Test>::VaultsRotated(AuctionOutcome {
+			winners,
 			..Default::default()
 		}));
 		move_forward_blocks(2);
@@ -558,12 +558,12 @@ fn no_auction_during_maintenance() {
 		// Assert that we are in maintenance mode
 		assert!(MockSystemStateInfo::ensure_no_maintenance().is_err());
 		// Try to start an auction
-		RotationPhase::<Test>::set(RotationStatusOf::<Test>::RunAuction);
+		RotationPhase::<Test>::set(RotationStatus::<Test>::RunAuction);
 		// Move a few blocks forward to trigger the auction
 		move_forward_blocks(1);
 		// Expect the auction to not be started - we are stll in the auction mode and not moving
 		// from here
-		assert_eq!(RotationPhase::<Test>::get(), RotationStatusOf::<Test>::RunAuction);
+		assert_eq!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction);
 		// Deactivate maintenance mode
 		MockSystemStateInfo::set_maintenance(false);
 		// Expect the maintenance mode to be deactivated
@@ -573,10 +573,7 @@ fn no_auction_during_maintenance() {
 		// Expect the auction to be to be completed
 		assert_eq!(
 			RotationPhase::<Test>::get(),
-			RotationStatusOf::<Test>::VaultsRotated(AuctionResult {
-				winners: vec![],
-				minimum_active_bid: 0
-			})
+			RotationStatus::<Test>::VaultsRotated(Default::default())
 		);
 	});
 }
@@ -585,7 +582,7 @@ fn no_auction_during_maintenance() {
 fn test_reputation_reset() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
 		// Simulate an epoch rotation and give the validators some reputation.
-		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+		RotationPhase::<Test>::put(RotationStatus::<Test>::SessionRotating(AuctionOutcome {
 			winners: vec![1, 2, 3],
 			..Default::default()
 		}));
@@ -598,7 +595,7 @@ fn test_reputation_reset() {
 		let first_epoch = ValidatorPallet::current_epoch();
 
 		// Simulate another epoch rotation and give the validators some reputation.
-		RotationPhase::<Test>::put(RotationStatusOf::<Test>::SessionRotating(AuctionResult {
+		RotationPhase::<Test>::put(RotationStatus::<Test>::SessionRotating(AuctionOutcome {
 			winners: vec![4, 5, 6],
 			..Default::default()
 		}));
@@ -620,5 +617,70 @@ fn test_reputation_reset() {
 		for id in &[4, 5, 6] {
 			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
 		}
-	})
+	});
+}
+
+#[cfg(test)]
+mod bond_expiry {
+	use super::*;
+
+	#[test]
+	fn increasing_bond() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			let initial_epoch = ValidatorPallet::current_epoch();
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![1, 2],
+				bond: 100,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 100);
+
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![2, 3],
+				bond: 101,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 101);
+
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&2),
+				[initial_epoch + 1, initial_epoch + 2]
+			);
+			assert_eq!(EpochHistory::<Test>::active_bond(&2), 101);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&3), 101);
+		});
+	}
+
+	#[test]
+	fn decreasing_bond() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			let initial_epoch = ValidatorPallet::current_epoch();
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![1, 2],
+				bond: 100,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 100);
+
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![2, 3],
+				bond: 99,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 99);
+
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&2),
+				[initial_epoch + 1, initial_epoch + 2]
+			);
+			assert_eq!(EpochHistory::<Test>::active_bond(&2), 100);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&3), 99);
+		});
+	}
 }

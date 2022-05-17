@@ -1,12 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use cf_runtime_benchmark_utilities::BenchmarkDefault;
-use codec::FullCodec;
+use codec::{FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
+use scale_info::TypeInfo;
 use sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	convert::{Into, TryFrom},
@@ -31,6 +32,15 @@ pub trait Chain: Member + Parameter {
 		+ One
 		+ Saturating
 		+ From<u64>;
+
+	type ChainAmount: Member
+		+ Parameter
+		+ Copy
+		+ Default
+		+ Into<u128>
+		+ From<u128>
+		+ Saturating
+		+ FullCodec;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -73,7 +83,7 @@ pub trait ChainAbi: ChainCrypto {
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
-pub trait ApiCall<Abi: ChainAbi>: Parameter {
+pub trait ApiCall<Abi: ChainAbi>: Parameter + MaxEncodedLen {
 	/// Get the payload over which the threshold signature should be generated.
 	fn threshold_signature_payload(&self) -> <Abi as ChainCrypto>::Payload;
 
@@ -126,23 +136,28 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 }
 
 macro_rules! impl_chains {
-	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; }, ),+ $(,)? ) => {
+	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; type ChainAmount = $chain_amount:ty; }, ),+ $(,)? ) => {
 		use codec::{Decode, Encode};
 		use sp_runtime::RuntimeDebug;
 
 		$(
-			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode)]
+			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 			pub struct $chain;
 
 			impl Chain for $chain {
 				type ChainBlockNumber = $chain_block_number;
+				type ChainAmount = $chain_amount;
 			}
 		)+
 	};
 }
 
 impl_chains! {
-	Ethereum { type ChainBlockNumber = u64; },
+	Ethereum {
+		type ChainBlockNumber = u64;
+		// TODO: Review the choice of u128 for the ChainAmount.
+		type ChainAmount = u128;
+	},
 }
 
 impl ChainCrypto for Ethereum {
@@ -172,10 +187,11 @@ pub mod mocks {
 	impl_chains! {
 		MockEthereum {
 			type ChainBlockNumber = u64;
+			type ChainAmount = u128;
 		},
 	}
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 	pub struct MockUnsignedTransaction;
 
 	impl MockUnsignedTransaction {
@@ -185,7 +201,7 @@ pub mod mocks {
 		}
 	}
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockSignedTransation<Unsigned> {
 		transaction: Unsigned,
 		signature: Validity,
@@ -203,13 +219,13 @@ pub mod mocks {
 		}
 	}
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum Validity {
 		Valid,
 		Invalid,
 	}
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo)]
 	pub struct MockThresholdSignature<K, P> {
 		pub signing_key: K,
 		pub signed_payload: P,
@@ -253,8 +269,14 @@ pub mod mocks {
 		}
 	}
 
-	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
+
+	impl<C: ChainCrypto> MaxEncodedLen for MockApiCall<C> {
+		fn max_encoded_len() -> usize {
+			<[u8; 32]>::max_encoded_len() * 3
+		}
+	}
 
 	impl<C: ChainAbi> ApiCall<C> for MockApiCall<C> {
 		fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload {

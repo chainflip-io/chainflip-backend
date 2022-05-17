@@ -28,27 +28,27 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_auction.
 pub trait WeightInfo {
-	fn set_current_authority_set_size_range() -> Weight;
+	fn set_auction_parameters() -> Weight;
 }
 
 /// Weights for pallet_cf_auction using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Auction CurrentAuthoritySetSizeRange (r:1 w:1)
-	fn set_current_authority_set_size_range() -> Weight {
-		inner_set_current_authority_set_size_range()
+	fn set_auction_parameters() -> Weight {
+		inner_set_auction_parameters()
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	// Storage: Auction CurrentAuthoritySetSizeRange (r:1 w:1)
-	fn set_current_authority_set_size_range() -> Weight {
-		inner_set_current_authority_set_size_range()
+	fn set_auction_parameters() -> Weight {
+		inner_set_auction_parameters()
 	}
 }
 
-fn inner_set_current_authority_set_size_range() -> Weight {
+fn inner_set_auction_parameters() -> Weight {
 	#[allow(clippy::unnecessary_cast)]
 	(31_000_000 as Weight)
 		.saturating_add(RocksDbWeight::get().reads(1 as Weight))

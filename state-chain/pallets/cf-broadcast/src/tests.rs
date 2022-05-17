@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, SignatureToBroadcastIdLookup,
-	TransmissionFailure,
+	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
+	SignatureToBroadcastIdLookup, SignerIdToAccountId, TransactionFeeDeficit, TransmissionFailure,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -77,6 +77,9 @@ impl MockCfe {
 					// Informational only. No action required by the CFE.
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
+				BroadcastEvent::RefundSignerIdUpdated(_, _) => {
+					// Information only. No action required by the CFE.
+				},
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -129,6 +132,7 @@ impl MockCfe {
 					Origin::root(),
 					MockThresholdSignature::default(),
 					Validity::Valid,
+					0,
 					10,
 					[0xcf; 4],
 				)
@@ -360,6 +364,7 @@ fn test_invalid_sigdata_is_noop() {
 				RawOrigin::Signed(0).into(),
 				MockThresholdSignature::default(),
 				Validity::Valid,
+				0,
 				10,
 				[0u8; 4],
 			),
@@ -434,6 +439,12 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			vec![1]
 		);
 
+		// We still shouldn't have a valid signer in the deficit map yet
+		// or any of the related maps
+		assert!(TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).is_none());
+		assert!(SignerIdToAccountId::<Test, Instance1>::get(Validity::Valid).is_none());
+		assert!(RefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).is_none());
+
 		// TODO: should we move this testing below into a separate test
 
 		// We now succeed on submitting the second one
@@ -450,6 +461,25 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 				.unwrap(),
 			vec![1]
 		);
+
+		// We should have the valid signer in the list with no deficit ath this point
+		assert_eq!(
+			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			0
+		);
+		// .. and related identity mappings
+		assert_eq!(
+			SignerIdToAccountId::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			tx_sig_request.nominee
+		);
+		assert_eq!(
+			RefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			Validity::Valid
+		);
+
+		// We shouldn't have any other signers with 0 values
+		const WRONG_XT_SUBMITTER: u64 = 666;
+		assert!(TransactionFeeDeficit::<Test, Instance1>::get(WRONG_XT_SUBMITTER).is_none());
 
 		// we should not have a transmission attempt for the old attempt id that did not succeed
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
@@ -486,13 +516,15 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			vec![1, 2]
 		);
 
+		const FEE_PAID: u128 = 200;
 		// We submit that the signature was accepted
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
 			Validity::Valid,
+			FEE_PAID,
 			10,
-			[0xcf; 4]
+			[0xcf; 4],
 		));
 
 		// Attempt numbers, signature requests and transmission should be cleaned up
@@ -500,6 +532,12 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 			broadcast_attempt_id.broadcast_id
 		)
 		.is_none());
+
+		// We should now have a deficit for the valid signer
+		assert_eq!(
+			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			FEE_PAID
+		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(
 			tx_sig_request.broadcast_attempt.broadcast_attempt_id
 		)
@@ -512,101 +550,53 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 }
 
 #[test]
-fn cfe_responds_success_to_expired_retried_transmission_attempt_broadcast_attempt_id_is_success() {
+fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_deficit() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-
-		// Initiate broadcast
 		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
 		let tx_sig_request =
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
-		assert!(tx_sig_request.broadcast_attempt.broadcast_attempt_id.attempt_count == 0);
+
 		let signed_tx = tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid);
 		let _ = MockBroadcast::transaction_ready_for_transmission(
 			RawOrigin::Signed(tx_sig_request.nominee).into(),
 			broadcast_attempt_id,
-			signed_tx.clone(),
+			signed_tx,
 			Validity::Valid,
 		);
 
-		// Check for expiries, there should be one, TransactionSigning expiry
-		let current_block = System::block_number();
-		// we should have no expiries at this point, but in expiry blocks we should
-		assert_eq!(Expiries::<Test, Instance1>::get(current_block), vec![]);
-		let signing_expiry_block = current_block + SIGNING_EXPIRY_BLOCKS;
-
+		// We have whitelisted their address, 0 deficit
 		assert_eq!(
-			Expiries::<Test, Instance1>::get(signing_expiry_block),
-			vec![(BroadcastStage::TransactionSigning, broadcast_attempt_id)]
+			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			0
+		);
+		// The mapping from SignerId to account id should be updated
+		assert_eq!(
+			SignerIdToAccountId::<Test, Instance1>::get(Validity::Valid).unwrap(),
+			tx_sig_request.nominee
 		);
 
-		// Signer has signed the tx
+		// The mapping from account id to signer id should be updated
 		assert_eq!(
-			System::events().pop().expect("an event").event,
-			Event::MockBroadcast(crate::Event::TransmissionRequest(
-				tx_sig_request.broadcast_attempt.broadcast_attempt_id,
-				signed_tx
-			))
+			RefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			Validity::Valid
 		);
 
-		// Simulate the expiry hook for the expected expiry block.
-		// The was an expiry on this block, but because the transaction signing was successful
-		// it was removed from storage, so we don't add another expiry. It succeeded
-		MockBroadcast::on_initialize(signing_expiry_block);
-		assert_eq!(Expiries::<Test, Instance1>::get(signing_expiry_block), vec![]);
-
-		// We added an awaiting transmission, and also an expiry for it
-		let transmission_attempt =
-			AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
-		assert_eq!(transmission_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count, 0);
-		let transmission_expiry_block = current_block + TRANSMISSION_EXPIRY_BLOCKS;
-		assert_eq!(
-			Expiries::<Test, Instance1>::get(transmission_expiry_block),
-			vec![(BroadcastStage::Transmission, broadcast_attempt_id)]
-		);
-
-		MockBroadcast::on_initialize(transmission_expiry_block);
-
-		// NB: Now, we have *started again*. We do not retry the tranmission alone, but ask to sign
-		// again
-		assert_eq!(
-			Expiries::<Test, Instance1>::get(signing_expiry_block),
-			vec![(BroadcastStage::TransactionSigning, broadcast_attempt_id.next_attempt())]
-		);
-
-		let transaction_signing_attempt = AwaitingTransactionSignature::<Test, Instance1>::get(
-			broadcast_attempt_id.next_attempt(),
-		)
-		.unwrap();
-		assert_eq!(
-			transaction_signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count,
-			1
-		);
-
-		// Should contain both attempt counts
-		assert_eq!(
-			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
-				.unwrap(),
-			vec![0, 1]
-		);
-
-		// submit the signature accepted for the old broadcast attempt
+		// now we respond with signature accepted from the invalid signer since they weren't
+		// whitelisted
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
-			Validity::Valid,
+			Validity::Invalid,
+			200,
 			10,
-			[0xcf; 4]
+			[0xcf; 4],
 		));
 
-		// Success should clear these out
-		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
-			broadcast_attempt_id.broadcast_id
-		)
-		.is_none());
-		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
-		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
-			.is_none());
+		assert_eq!(
+			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
+			0
+		);
 	});
 }
 

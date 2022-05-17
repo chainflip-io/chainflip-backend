@@ -1,12 +1,13 @@
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
 use pallet_cf_reputation::{GetValidatorsExcludedFor, OffenceList};
+use scale_info::TypeInfo;
 
 use crate::Runtime;
 
 /// Offences that can be reported in this runtime.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum Offence {
 	/// There was a failure in participation during a signing
 	ParticipateSigningFailed,

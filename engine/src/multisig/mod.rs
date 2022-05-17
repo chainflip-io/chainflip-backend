@@ -7,6 +7,8 @@ mod crypto;
 /// Storage for the keys
 pub mod db;
 
+pub use crypto::eth;
+
 #[cfg(test)]
 mod tests;
 
@@ -20,9 +22,11 @@ use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageM
 use slog::o;
 use state_chain_runtime::AccountId;
 
-pub use client::{MultisigClient, MultisigMessage, SchnorrSignature};
+pub use client::{MultisigClient, MultisigMessage};
 
 pub use db::{KeyDB, PersistentKeyDB};
+
+use self::crypto::CryptoScheme;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
@@ -44,15 +48,16 @@ impl std::fmt::Display for KeyId {
 }
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC
-pub fn start_client<S>(
+pub fn start_client<S, C>(
     my_account_id: AccountId,
     db: S,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     logger: &slog::Logger,
-) -> (Arc<MultisigClient<S>>, impl futures::Future)
+) -> (Arc<MultisigClient<S, C>>, impl futures::Future)
 where
-    S: KeyDB,
+    S: KeyDB<C::Point>,
+    C: CryptoScheme,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "MultisigClient"));
 
@@ -75,7 +80,7 @@ where
         use crate::multisig::client::ceremony_manager::CeremonyManager;
 
         let mut ceremony_manager =
-            CeremonyManager::new(my_account_id, outgoing_p2p_message_sender, &logger);
+            CeremonyManager::<C>::new(my_account_id, outgoing_p2p_message_sender, &logger);
 
         async move {
             // Stream outputs () approximately every ten seconds

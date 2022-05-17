@@ -18,20 +18,22 @@ use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
 use cf_traits::{
 	offence_reporting::OffenceReporter, Broadcaster, Chainflip, SignerNomination, ThresholdSigner,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
+	sp_runtime::traits::Saturating,
 	traits::{Get, OnRuntimeUpgrade, StorageVersion},
 	Twox64Concat,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 /// The reasons for which a broadcast might fail.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum TransmissionFailure {
 	/// The transaction was rejected because of some user error, for example, insuffient funds.
 	TransactionRejected,
@@ -46,7 +48,7 @@ pub type BroadcastId = u32;
 pub type AttemptCount = u32;
 
 /// A unique id for each broadcast attempt
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, Default, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default, Copy)]
 pub struct BroadcastAttemptId {
 	pub broadcast_id: BroadcastId,
 	pub attempt_count: AttemptCount,
@@ -69,7 +71,7 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	InvalidTransactionAuthored,
 	TransactionFailedOnTransmission,
@@ -100,14 +102,20 @@ pub mod pallet {
 	pub type ThresholdSignatureFor<T, I> =
 		<<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	/// Type alias for the Amount type of a particular chain.
+	pub type ChainAmountFor<T, I> =
+		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
+
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt_id: BroadcastAttemptId,
 		pub unsigned_tx: UnsignedTransactionFor<T, I>,
 	}
 
 	/// The first step in the process - a transaction signing attempt.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct TransactionSigningAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt: BroadcastAttempt<T, I>,
 		pub nominee: T::ValidatorId,
@@ -115,7 +123,8 @@ pub mod pallet {
 
 	/// The second step in the process - the transaction is already signed, it needs to be
 	/// broadcast.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
 	pub struct TransmissionAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt: BroadcastAttempt<T, I>,
 		pub signer: T::ValidatorId,
@@ -123,7 +132,7 @@ pub mod pallet {
 	}
 
 	/// For tagging the signing or transmission stage of the broadcast
-	#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum BroadcastStage {
 		TransactionSigning,
 		Transmission,
@@ -188,6 +197,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// A counter for incrementing the broadcast id.
@@ -209,7 +219,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Lookup table between Signature -> Broadcast
+	/// Lookup table between Signature -> Broadcast.
 	#[pallet::storage]
 	pub type SignatureToBroadcastIdLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ThresholdSignatureFor<T, I>, BroadcastId, OptionQuery>;
@@ -235,6 +245,22 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Tracks how much an account is owed for paying transaction fees.
+	#[pallet::storage]
+	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, ChainAmountFor<T, I>>;
+
+	/// A mapping of signer id to the the account id of the authority that registered the signer.
+	/// through a transaction_ready_for_transmission extrinsic.
+	#[pallet::storage]
+	pub type SignerIdToAccountId<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId>;
+
+	/// The signer id to send refunds to for a given account id.
+	#[pallet::storage]
+	pub type RefundSignerId<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::AccountId, SignerIdFor<T, I>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -255,6 +281,9 @@ pub mod pallet {
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
 		/// A broadcast has been aborted after failing `MaximumAttempts`. \[broadcast_id\]
 		BroadcastAborted(BroadcastId),
+		/// An account id has used a new signer id for a transaction
+		/// so we want to refund to that new signer id \[account_id, signer_id\]
+		RefundSignerIdUpdated(T::AccountId, SignerIdFor<T, I>),
 	}
 
 	#[pallet::error]
@@ -377,7 +406,7 @@ pub mod pallet {
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
-			ensure!(signing_attempt.nominee == signer.into(), Error::<T, I>::InvalidSigner);
+			ensure!(signing_attempt.nominee == signer.clone().into(), Error::<T, I>::InvalidSigner);
 
 			// it's no longer being signed, it's being broadcast
 			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
@@ -389,6 +418,26 @@ pub mod pallet {
 			)
 			.is_ok()
 			{
+				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
+				if !TransactionFeeDeficit::<T, I>::contains_key(&signer) {
+					TransactionFeeDeficit::<T, I>::insert(
+						&signer,
+						ChainAmountFor::<T, I>::default(),
+					);
+				}
+
+				// white list the signer id, so if we receive SignatureAccepted events from this
+				// signer id, we can refund the fee to that authority
+				if !SignerIdToAccountId::<T, I>::contains_key(&signer_id) {
+					SignerIdToAccountId::<T, I>::insert(&signer_id, &signer);
+				}
+
+				// store the latest signer id used by an authority
+				if RefundSignerId::<T, I>::get(&signer) != Some(signer_id.clone()) {
+					RefundSignerId::<T, I>::insert(&signer, &signer_id);
+					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated(signer, signer_id));
+				}
+
 				AwaitingTransmission::<T, I>::insert(
 					broadcast_attempt_id,
 					TransmissionAttempt {
@@ -542,7 +591,8 @@ pub mod pallet {
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
 			payload: ThresholdSignatureFor<T, I>,
-			_tx_signer: SignerIdFor<T, I>,
+			tx_signer: SignerIdFor<T, I>,
+			tx_fee: ChainAmountFor<T, I>,
 			_block_number: u64,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
@@ -553,6 +603,7 @@ pub mod pallet {
 			// Here we need to be able to get the accurate broadcast id from the payload
 			let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+
 			for attempt_count in &attempt_numbers {
 				let broadcast_attempt_id =
 					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -565,6 +616,17 @@ pub mod pallet {
 					log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 				}
 			}
+			// Add fee deficits only when we know everything else is ok
+
+			// if this has been whitelisted, we can add the fee deficit to the authority's account
+			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
+				TransactionFeeDeficit::<T, I>::mutate(account_id, |fee_deficit| {
+					if let Some(fee_deficit) = fee_deficit.as_mut() {
+						*fee_deficit = fee_deficit.saturating_add(tx_fee);
+					}
+				});
+			}
+
 			if let Some(attempt_count) = attempt_numbers.last() {
 				let last_broadcast_attempt_id =
 					BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
@@ -581,7 +643,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
-			|id| Call::on_signature_ready(id, api_call).into(),
+			|id| Call::on_signature_ready { threshold_request_id: id, api_call }.into(),
 		);
 	}
 

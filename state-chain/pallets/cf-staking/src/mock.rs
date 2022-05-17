@@ -32,9 +32,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Staking: pallet_cf_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		System: frame_system,
+		Flip: pallet_cf_flip,
+		Staking: pallet_cf_staking,
 	}
 );
 
@@ -67,6 +67,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl Chainflip for Test {

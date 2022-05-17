@@ -4,8 +4,9 @@
 
 use chainflip_engine::{
     eth::{
+        rpc::{EthHttpRpcClient, EthWsRpcClient},
         stake_manager::{StakeManager, StakeManagerEvent},
-        EthHttpRpcClient, EthObserver, EthWsRpcClient,
+        EthObserver,
     },
     logging::utils,
     settings::{CommandLineOptions, Settings},

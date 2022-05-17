@@ -1,7 +1,10 @@
 use chainflip_engine::{
     eth::{
-        self, key_manager::KeyManager, stake_manager::StakeManager, EthBroadcaster,
-        EthHttpRpcClient, EthRpcApi, EthWsRpcClient,
+        self,
+        key_manager::KeyManager,
+        rpc::{EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
+        stake_manager::StakeManager,
+        EthBroadcaster,
     },
     health::HealthMonitor,
     logging,
@@ -47,9 +50,11 @@ async fn main() {
     let eth_http_rpc_client =
         EthHttpRpcClient::new(&settings.eth, &root_logger).expect("Should create EthHttpRpcClient");
 
-    let eth_broadcaster =
-        EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &root_logger)
-            .expect("Failed to create ETH broadcaster");
+    let eth_dual_rpc =
+        EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone());
+
+    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
+        .expect("Failed to create ETH broadcaster");
 
     let (latest_block_hash, state_chain_block_stream, state_chain_client) =
         state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
@@ -58,11 +63,13 @@ async fn main() {
 
     state_chain_client
         .submit_signed_extrinsic(
-            pallet_cf_validator::Call::cfe_version(SemVer {
-                major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-                minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-                patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-            }),
+            pallet_cf_validator::Call::cfe_version {
+                version: SemVer {
+                    major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+                    minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+                    patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+                },
+            },
             &root_logger,
         )
         .await
@@ -147,19 +154,22 @@ async fn main() {
         .await
         .expect("Should get KeyManager address from SC");
 
-    let key_manager_contract =
-        KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
+    let key_manager_contract = KeyManager::new(key_manager_address.into(), eth_dual_rpc)
+        .expect("Should create KeyManager contract");
 
-    let (multisig_client, multisig_client_backend_future) = multisig::start_client(
-        state_chain_client.our_account_id.clone(),
-        db,
-        incoming_p2p_message_receiver,
-        outgoing_p2p_message_sender,
-        &root_logger,
-    );
+    use crate::multisig::eth::EthSigning;
+
+    let (eth_multisig_client, eth_multisig_client_backend_future) =
+        multisig::start_client::<_, EthSigning>(
+            state_chain_client.our_account_id.clone(),
+            db,
+            incoming_p2p_message_receiver,
+            outgoing_p2p_message_sender,
+            &root_logger,
+        );
 
     tokio::join!(
-        multisig_client_backend_future,
+        eth_multisig_client_backend_future,
         async {
             multisig_p2p::start(
                 &settings,
@@ -178,7 +188,7 @@ async fn main() {
             state_chain_client.clone(),
             state_chain_block_stream,
             eth_broadcaster,
-            multisig_client,
+            eth_multisig_client,
             account_peer_mapping_change_sender,
             // send messages to these channels to start witnessing
             sm_instruction_sender,
@@ -186,7 +196,7 @@ async fn main() {
             latest_block_hash,
             &root_logger
         ),
-        // Start eth observors
+        // Start eth observers
         eth::start_contract_observer(
             stake_manager_contract,
             &eth_ws_rpc_client,

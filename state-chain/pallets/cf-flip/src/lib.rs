@@ -15,6 +15,7 @@ mod imbalances;
 mod on_charge_transaction;
 
 pub mod weights;
+use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{Bonding, Slashing, StakeHandler};
@@ -26,7 +27,7 @@ use frame_support::{
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
@@ -56,8 +57,9 @@ pub mod pallet {
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
 		/// The balance of an account.
-		type Balance: Parameter
-			+ Member
+		type Balance: Member
+			+ Parameter
+			+ MaxEncodedLen
 			+ AtLeast32BitUnsigned
 			+ Default
 			+ Copy
@@ -113,7 +115,6 @@ pub mod pallet {
 	pub type OffchainFunds<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some imbalance could not be settled and the remainder will be reverted. /[reverted_to,
@@ -180,7 +181,7 @@ pub mod pallet {
 }
 
 /// All balance information for a Flip account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct FlipAccount<Amount> {
 	/// Amount that has been staked and is considered as a bid in the auction. Includes
 	/// any bonded and vesting funds. Excludes any funds in the process of being claimed.

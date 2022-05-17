@@ -2,12 +2,16 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     convert::{TryFrom, TryInto},
     fmt::Display,
+    marker::PhantomData,
 };
 
 use cf_traits::AuthorityCount;
 
 use crate::{
-    multisig::client::{MultisigData, MultisigMessage},
+    multisig::{
+        client::{MultisigData, MultisigMessage},
+        crypto::ECPoint,
+    },
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
@@ -26,17 +30,17 @@ pub enum DataToSend<T> {
 
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
-pub trait BroadcastStageProcessor<D, Result>: Display {
+pub trait BroadcastStageProcessor<Data, Result>: Display {
     /// The specific variant of D shared between parties
     /// during this stage
-    type Message: Clone + Into<D> + TryFrom<D>;
+    type Message: Clone + Into<Data> + TryFrom<Data>;
 
     /// Init the stage, returning the data to broadcast
     fn init(&mut self) -> DataToSend<Self::Message>;
 
     /// For a given message, signal if it needs to be delayed
     /// until the next stage
-    fn should_delay(&self, m: &D) -> bool;
+    fn should_delay(&self, m: &Data) -> bool;
 
     /// Determines how the data for this stage (of type `Self::Message`)
     /// should be processed once it either received it from all other parties
@@ -44,54 +48,60 @@ pub trait BroadcastStageProcessor<D, Result>: Display {
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<D, Result>;
+    ) -> StageResult<Data, Result>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
-pub struct BroadcastStage<D, Result, P>
+pub struct BroadcastStage<Data, Result, Stage, Point>
 where
-    P: BroadcastStageProcessor<D, Result>,
+    Stage: BroadcastStageProcessor<Data, Result>,
+    Point: ECPoint,
 {
     common: CeremonyCommon,
     /// Messages collected so far
-    messages: BTreeMap<AuthorityCount, P::Message>,
+    messages: BTreeMap<AuthorityCount, Stage::Message>,
     /// Determines the actual computations before/after
     /// the data is collected
-    processor: P,
+    processor: Stage,
+    _phantom: PhantomData<Point>,
 }
 
-impl<D, Result, P> BroadcastStage<D, Result, P>
+impl<Data, Result, Stage, Point> BroadcastStage<Data, Result, Stage, Point>
 where
-    D: Clone,
-    P: BroadcastStageProcessor<D, Result>,
+    Data: Clone,
+    Point: ECPoint,
+    Stage: BroadcastStageProcessor<Data, Result>,
 {
-    pub fn new(processor: P, common: CeremonyCommon) -> Self {
+    pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
         BroadcastStage {
             common,
             messages: BTreeMap::new(),
             processor,
+            _phantom: Default::default(),
         }
     }
 }
 
-impl<D, Result, P> Display for BroadcastStage<D, Result, P>
+impl<Data, Result, Stage, Point> Display for BroadcastStage<Data, Result, Stage, Point>
 where
-    P: BroadcastStageProcessor<D, Result>,
+    Stage: BroadcastStageProcessor<Data, Result>,
+    Point: ECPoint,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BroadcastStage<{}>", &self.processor)
     }
 }
 
-impl<D, Result, P> CeremonyStage for BroadcastStage<D, Result, P>
+impl<Point, Data, Result, Stage> CeremonyStage for BroadcastStage<Data, Result, Stage, Point>
 where
-    D: Clone + Display + Into<MultisigData>,
+    Point: ECPoint,
+    Data: Clone + Display + Into<MultisigData<Point>>,
     Result: Clone,
-    P: BroadcastStageProcessor<D, Result>,
-    <P as BroadcastStageProcessor<D, Result>>::Message: TryFrom<D>,
+    Stage: BroadcastStageProcessor<Data, Result>,
+    <Stage as BroadcastStageProcessor<Data, Result>>::Message: TryFrom<Data>,
 {
-    type Message = D;
+    type Message = Data;
     type Result = Result;
 
     fn init(&mut self) {
@@ -107,7 +117,7 @@ where
 
         let (own_message, outgoing_messages) = match self.processor.init() {
             DataToSend::Broadcast(stage_data) => {
-                let ceremony_data: D = stage_data.clone().into();
+                let ceremony_data: Data = stage_data.clone().into();
                 (
                     stage_data,
                     OutgoingMultisigStageMessages::Broadcast(
@@ -133,7 +143,7 @@ where
                     messages
                         .into_iter()
                         .map(|(idx, stage_data)| {
-                            let ceremony_data: D = stage_data.into();
+                            let ceremony_data: Data = stage_data.into();
                             (
                                 idx_to_id(&idx),
                                 bincode::serialize(&MultisigMessage {
@@ -157,8 +167,8 @@ where
             .expect("Could not send p2p message.");
     }
 
-    fn process_message(&mut self, signer_idx: AuthorityCount, m: D) -> ProcessMessageResult {
-        let m: P::Message = match m.try_into() {
+    fn process_message(&mut self, signer_idx: AuthorityCount, m: Data) -> ProcessMessageResult {
+        let m: Stage::Message = match m.try_into() {
             Ok(m) => m,
             Err(_) => {
                 slog::warn!(
@@ -200,11 +210,11 @@ where
         }
     }
 
-    fn should_delay(&self, m: &D) -> bool {
+    fn should_delay(&self, m: &Data) -> bool {
         self.processor.should_delay(m)
     }
 
-    fn finalize(mut self: Box<Self>) -> StageResult<D, Result> {
+    fn finalize(mut self: Box<Self>) -> StageResult<Data, Result> {
         // Because we might want to finalize the stage before
         // all data has been received (e.g. due to a timeout),
         // we insert None for any missing data
