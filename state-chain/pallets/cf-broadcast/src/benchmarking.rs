@@ -4,32 +4,23 @@
 use super::*;
 
 use cf_chains::eth::{TransactionHash, H256};
+use cf_traits::ThresholdSigner;
 use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 use frame_system::RawOrigin;
 
 use cf_chains::benchmarking_default::BenchmarkDefault;
 
-// type TransactionHashFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
 type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
 type SignedTransactionFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignedTransaction;
+type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
+type ThresholdSignatureFor<T, I> =
+	<<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+type ChainAmountFor<T, I> = <<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
+type TransactionHashFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
 
 benchmarks_instance_pallet! {
 	on_initialize {} : {}
-	// start_broadcast {
-	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	let unsigned: SignedTransactionFor<T, I> = UnsignedTransaction {
-	// 		chain_id: 42,
-	// 		max_fee_per_gas: U256::from(1_000_000_000u32).into(),
-	// 		gas_limit: U256::from(21_000u32).into(),
-	// 		contract: [0xcf; 20].into(),
-	// 		value: 0.into(),
-	// 		data: b"do_something()".to_vec(),
-	// 		..Default::default()
-	// 	};
-	// 	let call = Call::<T, I>::start_broadcast(unsigned.into());
-	// 	let origin = T::EnsureWitnessed::successful_origin();
-	// } : { call.dispatch_bypass_filter(origin)? }
 	transaction_ready_for_transmission {
 		let caller: T::AccountId = whitelisted_caller();
 		let broadcast_attempt_id = BroadcastAttemptId {
@@ -49,12 +40,19 @@ benchmarks_instance_pallet! {
 		let tf = TransmissionFailure::TransactionRejected;
 		let call = Call::<T, I>::transmission_failure { broadcast_attempt_id: broadcast_attempt_id, failure: tf, tx_hash: transaction_hash };
 	} : { call.dispatch_bypass_filter(origin)? }
-	// on_signature_ready {
-	// 	let origin = T::EnsureThresholdSigned::successful_origin();
-	// 	let threshold_request_id = 5;
-	// 	let api_call = <T as Config<I>>::ApiCall::default();
-	// 	let transmission_failure = TransmissionFailure::TransactionRejected;
-	// 	let call = Call::<T, I>::on_signature_ready(threshold_request_id);
-	// } : { call.dispatch_bypass_filter(origin)? }
-	signature_accepted {} : {}
+	on_signature_ready {
+		let origin = T::EnsureThresholdSigned::successful_origin();
+		let threshold_request_id = <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_default();
+		let api_call = ApiCallFor::<T, I>::benchmark_default();
+		let call = Call::<T, I>::on_signature_ready{threshold_request_id, api_call};
+	} : { call.dispatch_bypass_filter(origin)? }
+	signature_accepted {
+		let origin = T::EnsureThresholdSigned::successful_origin();
+		let payload = ThresholdSignatureFor::<T, I>::benchmark_default();
+		let tx_signer = SignerIdFor::<T, I>::benchmark_default();
+		let tx_fee = ChainAmountFor::<T, I>::benchmark_default();
+		let block_number = 1;
+		let tx_hash = TransactionHashFor::<T, I>::benchmark_default();
+		let call = Call::<T, I>::signature_accepted{payload, tx_signer, tx_fee, block_number, tx_hash};
+	} : { call.dispatch_bypass_filter(origin)? }
 }

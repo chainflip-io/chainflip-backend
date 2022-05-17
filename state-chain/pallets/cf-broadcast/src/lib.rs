@@ -80,6 +80,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_chains::benchmarking_default::BenchmarkDefault;
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -154,7 +155,7 @@ pub mod pallet {
 		type TargetChain: ChainAbi;
 
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<Self::TargetChain>;
+		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkDefault;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;

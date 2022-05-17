@@ -1,18 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use crate::{
-	benchmarking::EthereumApi::SetAggKeyWithAggKey,
-	eth::{
-		api::EthereumApi, to_ethereum_address, SchnorrVerificationComponents, TransactionHash, H256,
-	},
-};
+use crate::eth::{api::EthereumApi, to_ethereum_address, SchnorrVerificationComponents, H256};
 
 use crate::benchmarking_default::BenchmarkDefault;
-
+#[cfg(not(feature = "runtime-benchmarks"))]
 use ethabi::Address;
 use libsecp256k1::{PublicKey, SecretKey};
-
-// #[cfg(not(feature = "runtime-benchmarks"))]
-// impl<T> BenchmarkDefault for T {}
 
 /// Returns a valid signature for use in benchmarks.
 impl BenchmarkDefault for SchnorrVerificationComponents {
