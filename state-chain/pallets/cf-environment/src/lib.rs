@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 pub use cf_traits::EthEnvironmentProvider;
-use cf_traits::SystemStateInfo;
+use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -140,10 +140,7 @@ pub mod pallet {
 			state: SystemState,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			if CurrentSystemState::<T>::get() != state {
-				CurrentSystemState::<T>::put(&state);
-				Self::deposit_event(Event::SystemStateHasBeenChanged(state));
-			}
+			SystemStateProvider::<T>::set_system_state(state);
 			Ok(().into())
 		}
 	}
@@ -180,6 +177,19 @@ impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
 			return Err(Error::<T>::NetworkIsInMaintenance.into())
 		}
 		Ok(())
+	}
+}
+
+impl<T: Config> SystemStateManager for SystemStateProvider<T> {
+	type SystemState = SystemState;
+	fn set_system_state(state: SystemState) {
+		if CurrentSystemState::<T>::get() != state {
+			CurrentSystemState::<T>::put(&state);
+			Pallet::<T>::deposit_event(Event::<T>::SystemStateHasBeenChanged(state));
+		}
+	}
+	fn get_maintenance_state() -> Self::SystemState {
+		SystemState::Maintenance
 	}
 }
 

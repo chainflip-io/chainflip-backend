@@ -19,7 +19,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
 		eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		system_state_info::MockSystemStateInfo,
+		system_state_info::MockSystemStateInfo, system_state_manager::MockSystemStateManager,
 	},
 	Chainflip,
 };
@@ -173,6 +173,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Broadcaster = MockBroadcaster;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
+	type SystemStateManager = MockSystemStateManager;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

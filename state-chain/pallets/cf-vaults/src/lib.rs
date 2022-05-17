@@ -7,7 +7,8 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
 	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
-	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SuccessOrFailure, VaultRotator,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SuccessOrFailure,
+	SystemStateManager, VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -310,6 +311,9 @@ pub mod pallet {
 		// Something that can give us the next nonce.
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
+		// A trait which allows us to put the chain into maintenance mode.
+		type SystemStateManager: SystemStateManager;
+
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
@@ -434,6 +438,8 @@ pub mod pallet {
 		KeygenAborted(CeremonyId),
 		/// The vault has been rotated
 		VaultsRotated,
+		/// The vault's key has been rotated externally \[new_public_key\]
+		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
 		/// The new public key witnessed externally was not the expected one \[key\]
 		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
@@ -592,6 +598,50 @@ pub mod pallet {
 			);
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+
+			Ok(().into())
+		}
+
+		/// The vault's key has been updated externally, outside of the rotation
+		/// cycle. This is an unexpected event as far as our chain is concerned, and
+		/// the only thing we can do is to halt and wait for further governance
+		/// intervention.
+		///
+		/// ## Events
+		///
+		/// - [VaultRotatedExternally](Event::VaultRotatedExternally)
+		/// - [SystemStateHasBeenChanged](Event::SystemStateHasBeenChanged)
+		///
+		/// ## Errors
+		///
+		/// - None
+		///
+		/// ## Dependencies
+		///
+		/// - [Epoch Info Trait](EpochInfo)
+		#[pallet::weight(T::WeightInfo::vault_key_rotated_externally())]
+		pub fn vault_key_rotated_externally(
+			origin: OriginFor<T>,
+			new_public_key: AggKeyFor<T, I>,
+			block_number: ChainBlockNumberFor<T, I>,
+			_tx_hash: TransactionHashFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+
+			// We set the new key as the key for the next epoch.
+			Vaults::<T, I>::insert(
+				CurrentEpochIndex::<T>::get().saturating_add(1),
+				Vault {
+					public_key: new_public_key,
+					active_from_block: block_number
+						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
+				},
+			);
+
+			// Put the system into maintenance mode.
+			T::SystemStateManager::set_system_state(T::SystemStateManager::get_maintenance_state());
+
+			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 
 			Ok(().into())
 		}
