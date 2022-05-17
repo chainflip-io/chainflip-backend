@@ -23,7 +23,6 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 use cf_traits::{
 	BlockEmissions, EmissionsTrigger, EpochTransitionHandler, Issuance, RewardsDistribution,
 };
-use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
@@ -60,7 +59,8 @@ pub mod pallet {
 
 		/// The Flip token denomination.
 		type FlipBalance: Member
-			+ FullCodec
+			+ Parameter
+			+ MaxEncodedLen
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
@@ -144,7 +144,6 @@ pub mod pallet {
 	pub(super) type MintInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
-	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Emissions have been distributed. \[block_number, amount_minted\]

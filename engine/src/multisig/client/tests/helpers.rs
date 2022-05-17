@@ -30,8 +30,8 @@ use crate::{
             keygen::{HashComm1, HashContext, SecretShare3},
             signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
-        crypto::Rng,
-        KeyId, MessageHash, SchnorrSignature,
+        crypto::{ECPoint, Rng},
+        KeyId, MessageHash,
     },
     multisig_p2p::OutgoingMultisigStageMessages,
 };
@@ -49,7 +49,9 @@ use crate::{
             keygen::{self, KeygenData},
             MultisigMessage,
         },
-        crypto::Point,
+        // This determines which crypto scheme will be used in tests
+        // (we make arbitrary choice to use eth)
+        crypto::eth::{EthSchnorrSignature, EthSigning, Point},
     },
 };
 
@@ -83,7 +85,7 @@ pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 }
 
 pub struct Node {
-    pub ceremony_manager: CeremonyManager,
+    pub ceremony_manager: CeremonyManager<EthSigning>,
     pub outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
     pub tag_cache: TagCache,
 }
@@ -113,7 +115,7 @@ pub struct SigningCeremonyDetails {
     pub ceremony_id: CeremonyId,
     pub signers: Vec<AccountId>,
     pub message_hash: MessageHash,
-    pub keygen_result_info: KeygenResultInfo,
+    pub keygen_result_info: KeygenResultInfo<Point>,
 }
 
 pub struct KeygenCeremonyDetails {
@@ -126,7 +128,7 @@ impl Node {
     pub fn request_signing(
         &mut self,
         signing_ceremony_details: SigningCeremonyDetails,
-    ) -> CeremonyResultReceiver<SchnorrSignature, SigningFailureReason> {
+    ) -> CeremonyResultReceiver<EthSchnorrSignature, SigningFailureReason> {
         let (result_sender, result_receiver) = oneshot::channel();
         self.ceremony_manager.on_request_to_sign(
             signing_ceremony_details.ceremony_id,
@@ -142,7 +144,7 @@ impl Node {
     pub fn request_keygen(
         &mut self,
         keygen_ceremony_details: KeygenCeremonyDetails,
-    ) -> CeremonyResultReceiver<KeygenResultInfo, KeygenFailureReason> {
+    ) -> CeremonyResultReceiver<KeygenResultInfo<Point>, KeygenFailureReason> {
         let (result_sender, result_receiver) = oneshot::channel();
         self.ceremony_manager.on_keygen_request(
             keygen_ceremony_details.ceremony_id,
@@ -173,8 +175,8 @@ pub fn new_nodes_allow_high_pubkey<AccountIds: IntoIterator<Item = AccountId>>(
 }
 
 pub trait CeremonyRunnerStrategy {
-    type CeremonyData: Into<MultisigData>
-        + TryFrom<MultisigData, Error = MultisigData>
+    type CeremonyData: Into<MultisigData<Point>>
+        + TryFrom<MultisigData<Point>, Error = MultisigData<Point>>
         + Clone
         + Display;
     type Output: std::fmt::Debug;
@@ -603,8 +605,8 @@ pub(crate) use run_stages;
 
 pub type KeygenCeremonyRunner = CeremonyRunner<()>;
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
-    type CeremonyData = KeygenData;
-    type Output = KeygenResultInfo;
+    type CeremonyData = KeygenData<Point>;
+    type Output = KeygenResultInfo<Point>;
     type CheckedOutput = (KeyId, HashMap<AccountId, Self::Output>);
     type InitialStageData = keygen::HashComm1;
     type FailureReason = KeygenFailureReason;
@@ -680,15 +682,15 @@ impl KeygenCeremonyRunner {
 
 pub struct SigningCeremonyRunnerData {
     pub key_id: KeyId,
-    pub key_data: HashMap<AccountId, KeygenResultInfo>,
+    pub key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
     pub message_hash: MessageHash,
 }
 pub type SigningCeremonyRunner = CeremonyRunner<SigningCeremonyRunnerData>;
 impl CeremonyRunnerStrategy for SigningCeremonyRunner {
-    type CeremonyData = SigningData;
-    type Output = SchnorrSignature;
-    type CheckedOutput = SchnorrSignature;
-    type InitialStageData = frost::Comm1;
+    type CeremonyData = SigningData<Point>;
+    type Output = EthSchnorrSignature;
+    type CheckedOutput = EthSchnorrSignature;
+    type InitialStageData = frost::Comm1<Point>;
     type FailureReason = SigningFailureReason;
     const CEREMONY_FAILED_TAG: &'static str = SIGNING_CEREMONY_FAILED;
 
@@ -738,7 +740,7 @@ impl SigningCeremonyRunner {
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
         key_id: KeyId,
-        key_data: HashMap<AccountId, KeygenResultInfo>,
+        key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
         message_hash: MessageHash,
         rng: Rng,
     ) -> Self {
@@ -758,7 +760,7 @@ impl SigningCeremonyRunner {
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
         key_id: KeyId,
-        key_data: HashMap<AccountId, KeygenResultInfo>,
+        key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
         message_hash: MessageHash,
         rng: Rng,
     ) -> (Self, HashMap<AccountId, Node>) {
@@ -904,20 +906,21 @@ fn into_generic_stage_data<CeremonyData, StageData: Into<CeremonyData>>(
 
 #[derive(Clone)]
 pub struct StandardSigningMessages {
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, frost::Comm1>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyComm2>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, frost::LocalSig3>>,
-    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyLocalSig4>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, frost::Comm1<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyComm2<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, frost::LocalSig3<Point>>>,
+    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyLocalSig4<Point>>>,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn standard_signing_coroutine<'a>(
     visitor: &'a mut CeremonyVisitor,
     ceremony: &'a mut SigningCeremonyRunner,
 ) -> BoxFuture<
     'a,
     Option<(
-        SchnorrSignature,
-        Vec<StageMessages<SigningData>>,
+        EthSchnorrSignature,
+        Vec<StageMessages<SigningData<Point>>>,
         StandardSigningMessages,
     )>,
 > {
@@ -952,7 +955,7 @@ pub fn standard_signing_coroutine<'a>(
 
 pub async fn standard_signing(
     signing_ceremony: &mut SigningCeremonyRunner,
-) -> (SchnorrSignature, StandardSigningMessages) {
+) -> (EthSchnorrSignature, StandardSigningMessages) {
     let mut visitor = CeremonyVisitor::Complete;
     let (signature, _, messages) = standard_signing_coroutine(&mut visitor, signing_ceremony)
         .await
@@ -963,9 +966,9 @@ pub async fn standard_signing(
 pub struct StandardKeygenMessages {
     pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
     pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3<Point>>>,
     pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints4>>,
     pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints5>>,
 }
@@ -974,7 +977,7 @@ pub async fn standard_keygen(
     mut keygen_ceremony: KeygenCeremonyRunner,
 ) -> (
     KeyId,
-    HashMap<AccountId, KeygenResultInfo>,
+    HashMap<AccountId, KeygenResultInfo<Point>>,
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
@@ -1009,7 +1012,7 @@ pub async fn run_keygen(
     ceremony_id: CeremonyId,
 ) -> (
     KeyId,
-    HashMap<AccountId, KeygenResultInfo>,
+    HashMap<AccountId, KeygenResultInfo<Point>>,
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
@@ -1023,7 +1026,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 ) -> Result<
     (
         KeyId,
-        HashMap<AccountId, KeygenResultInfo>,
+        HashMap<AccountId, KeygenResultInfo<Point>>,
         HashMap<AccountId, Node>,
     ),
     (),
@@ -1038,8 +1041,8 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         keygen_ceremony,
         stage_1a_messages,
         keygen::VerifyHashComm2,
-        keygen::Comm1,
-        keygen::VerifyComm2
+        keygen::Comm1<Point>,
+        keygen::VerifyComm2<Point>
     );
     keygen_ceremony.distribute_messages(stage_2_messages);
     match keygen_ceremony
@@ -1058,7 +1061,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         }
         None => {
             let stage_3_messages = keygen_ceremony
-                .gather_outgoing_messages::<keygen::SecretShare3, _>()
+                .gather_outgoing_messages::<keygen::SecretShare3<Point>, _>()
                 .await;
             let stage_5_messages = run_stages!(
                 keygen_ceremony,
@@ -1079,13 +1082,14 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 pub struct AllKeygenMessages {
     pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
     pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3<Point>>>,
     pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints4>>,
     pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints5>>,
-    pub stage_6_messages: HashMap<AccountId, HashMap<AccountId, keygen::BlameResponse6>>,
-    pub stage_7_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyBlameResponses7>>,
+    pub stage_6_messages: HashMap<AccountId, HashMap<AccountId, keygen::BlameResponse6<Point>>>,
+    pub stage_7_messages:
+        HashMap<AccountId, HashMap<AccountId, keygen::VerifyBlameResponses7<Point>>>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -1095,8 +1099,8 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
 ) -> BoxFuture<
     'a,
     Option<(
-        HashMap<AccountId, KeygenResultInfo>,
-        Vec<StageMessages<KeygenData>>,
+        HashMap<AccountId, KeygenResultInfo<Point>>,
+        Vec<StageMessages<KeygenData<Point>>>,
         AllKeygenMessages,
     )>,
 > {
@@ -1158,10 +1162,11 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
 }
 
 /// Generate an invalid local sig for stage3
-pub fn gen_invalid_local_sig(rng: &mut Rng) -> LocalSig3 {
-    use crate::multisig::crypto::Scalar;
+pub fn gen_invalid_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
+    use crate::multisig::crypto::ECScalar;
+
     frost::LocalSig3 {
-        response: Scalar::random(rng),
+        response: P::Scalar::random(rng),
     }
 }
 
@@ -1175,7 +1180,7 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
+pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment<Point> {
     let (_, fake_comm1) = generate_shares_and_commitment(
         rng,
         // The commitment is only invalid because of the invalid context
@@ -1189,7 +1194,7 @@ pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
     fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment {
+pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment<Point> {
     SigningCommitment {
         d: Point::random(rng),
         e: Point::random(rng),
@@ -1280,7 +1285,7 @@ impl Node {
 }
 
 /// Using the given key_id, verify the signature is correct
-pub fn verify_sig_with_aggkey(sig: &SchnorrSignature, key_id: &KeyId) -> Result<()> {
+pub fn verify_sig_with_aggkey(sig: &EthSchnorrSignature, key_id: &KeyId) -> Result<()> {
     // Get the aggkey
     let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
     let agg_key = AggKey::from_pubkey_compressed(*pk_ser);

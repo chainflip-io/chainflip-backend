@@ -10,21 +10,19 @@ use zeroize::Zeroize;
 
 use crate::multisig::{
     client::{common::KeygenFailureReason, ThresholdParameters},
-    crypto::{Point, Rng, Scalar},
+    crypto::{ECPoint, ECScalar, Rng},
 };
 
 use super::keygen_data::HashComm1;
 
 /// Evaluate polynomial f(x) = c0 + c1 * x + c2 * x^2 + ... (expressed as
 /// an iterator over its coefficients [c0, c1, c2, ...]) at x = index
-fn evaluate_polynomial<'a, T>(
-    coefficients: impl DoubleEndedIterator<Item = &'a T>,
-    index: AuthorityCount,
-) -> T
+fn evaluate_polynomial<'a, T, I, Scalar: ECScalar>(coefficients: I, index: AuthorityCount) -> T
 where
     T: 'a + Clone,
     T: std::ops::Mul<Scalar, Output = T>,
     T: std::ops::Add<T, Output = T>,
+    I: DoubleEndedIterator<Item = &'a T>,
 {
     coefficients
         .rev()
@@ -35,44 +33,46 @@ where
 
 #[test]
 fn test_simple_polynomial() {
+    use crate::multisig::crypto::eth::Scalar;
+
     // f(x) = 4 + 5x + 2x^2
     let secret = Scalar::from_usize(4);
     let coefficients = [Scalar::from_usize(5), Scalar::from_usize(2)];
 
     // f(3) = 4 + 15 + 18 = 37
-    let value = evaluate_polynomial([secret].iter().chain(coefficients.iter()), 3);
+    let value: Scalar =
+        evaluate_polynomial::<_, _, Scalar>([secret].iter().chain(coefficients.iter()), 3);
     assert_eq!(value, Scalar::from_usize(37));
 }
 
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Clone, Deserialize, Serialize, Zeroize)]
-#[zeroize(drop)]
-pub struct ShamirShare {
+#[derive(Debug, Default, Clone, Deserialize, Serialize, Zeroize)]
+pub struct ShamirShare<P: ECPoint> {
     /// the result of polynomial evaluation
-    pub value: Scalar,
+    pub value: P::Scalar,
 }
 
 #[cfg(test)]
-impl ShamirShare {
+impl<P: ECPoint> ShamirShare<P> {
     pub fn create_random(rng: &mut Rng) -> Self {
         ShamirShare {
-            value: Scalar::random(rng),
+            value: P::Scalar::random(rng),
         }
     }
 }
 
 /// Test-only helper function used to sanity check our sharing polynomial
 #[cfg(test)]
-fn reconstruct_secret(shares: &BTreeMap<AuthorityCount, ShamirShare>) -> Scalar {
+fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<P>>) -> P::Scalar {
     use crate::multisig::client::signing::frost;
 
     let all_idxs: BTreeSet<AuthorityCount> = shares.keys().into_iter().cloned().collect();
 
     shares
         .iter()
-        .fold(Scalar::zero(), |acc, (index, ShamirShare { value })| {
-            acc + frost::get_lagrange_coeff(*index, &all_idxs).unwrap() * value
+        .fold(P::Scalar::zero(), |acc, (index, ShamirShare { value })| {
+            acc + frost::get_lagrange_coeff::<P>(*index, &all_idxs).unwrap() * value
         })
 }
 
@@ -81,12 +81,12 @@ fn reconstruct_secret(shares: &BTreeMap<AuthorityCount, ShamirShare>) -> Scalar 
 pub struct HashContext(pub [u8; 32]);
 
 /// Generate challenge against which a ZKP of our secret will be generated
-fn generate_dkg_challenge(
+fn generate_dkg_challenge<P: ECPoint>(
     index: AuthorityCount,
     context: &HashContext,
-    public: Point,
-    commitment: Point,
-) -> Scalar {
+    public: P,
+    commitment: P,
+) -> P::Scalar {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
@@ -101,17 +101,17 @@ fn generate_dkg_challenge(
 
     let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-    Scalar::from_bytes(&x)
+    P::Scalar::from_bytes(&x)
 }
 
 /// Generate ZKP (zero-knowledge proof) of `secret`
-fn generate_zkp_of_secret(
+fn generate_zkp_of_secret<Point: ECPoint>(
     rng: &mut Rng,
-    secret: Scalar,
+    secret: Point::Scalar,
     context: &HashContext,
     index: AuthorityCount,
-) -> ZKPSignature {
-    let nonce = Scalar::random(rng);
+) -> ZKPSignature<Point> {
+    let nonce = Point::Scalar::random(rng);
     let nonce_commitment = Point::from_scalar(&nonce);
 
     let secret_commitment = Point::from_scalar(&secret);
@@ -127,19 +127,19 @@ fn generate_zkp_of_secret(
 }
 
 #[derive(Default)]
-pub struct OutgoingShares(pub BTreeMap<AuthorityCount, ShamirShare>);
+pub struct OutgoingShares<P: ECPoint>(pub BTreeMap<AuthorityCount, ShamirShare<P>>);
 
-pub struct IncomingShares(pub BTreeMap<AuthorityCount, ShamirShare>);
+pub struct IncomingShares<P: ECPoint>(pub BTreeMap<AuthorityCount, ShamirShare<P>>);
 
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
-pub fn generate_shares_and_commitment(
+pub fn generate_shares_and_commitment<P: ECPoint>(
     rng: &mut Rng,
     context: &HashContext,
     index: AuthorityCount,
     params: ThresholdParameters,
-) -> (OutgoingShares, DKGUnverifiedCommitment) {
+) -> (OutgoingShares<P>, DKGUnverifiedCommitment<P>) {
     let (secret, commitments, shares) =
         generate_secret_and_shares(rng, params.share_count, params.threshold);
 
@@ -155,27 +155,27 @@ pub fn generate_shares_and_commitment(
 }
 
 // NOTE: shares should be sent after participants have exchanged commitments
-fn generate_secret_and_shares(
+fn generate_secret_and_shares<P: ECPoint>(
     rng: &mut Rng,
     n: AuthorityCount,
     t: AuthorityCount,
 ) -> (
-    Scalar,
-    CoefficientCommitments,
-    BTreeMap<AuthorityCount, ShamirShare>,
+    P::Scalar,
+    CoefficientCommitments<P>,
+    BTreeMap<AuthorityCount, ShamirShare<P>>,
 ) {
     // Our secret contribution to the aggregate key
-    let secret = Scalar::random(rng);
+    let secret = P::Scalar::random(rng);
 
     // Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing scheme
     // (Figure 1: Round 1, Step 1)
-    let coefficients: Vec<_> = (0..t).into_iter().map(|_| Scalar::random(rng)).collect();
+    let coefficients: Vec<_> = (0..t).into_iter().map(|_| P::Scalar::random(rng)).collect();
 
     // (Figure 1: Round 1, Step 3)
     let commitments: Vec<_> = [secret.clone()]
         .iter()
         .chain(&coefficients)
-        .map(Point::from_scalar)
+        .map(P::from_scalar)
         .collect();
 
     // Generate shares
@@ -186,7 +186,7 @@ fn generate_secret_and_shares(
                 index,
                 ShamirShare {
                     // TODO: Make this work on references
-                    value: evaluate_polynomial(
+                    value: evaluate_polynomial::<_, _, P::Scalar>(
                         [secret.clone()].iter().chain(coefficients.iter()),
                         index,
                     ),
@@ -199,57 +199,71 @@ fn generate_secret_and_shares(
     (secret, CoefficientCommitments(commitments), shares)
 }
 
-fn is_valid_zkp(challenge: Scalar, zkp: &ZKPSignature, comm: &CoefficientCommitments) -> bool {
-    zkp.r + comm.0[0] * challenge == Point::from_scalar(&zkp.z)
+fn is_valid_zkp<P: ECPoint>(
+    challenge: P::Scalar,
+    zkp: &ZKPSignature<P>,
+    comm: &CoefficientCommitments<P>,
+) -> bool {
+    zkp.r + comm.0[0] * challenge == P::from_scalar(&zkp.z)
 }
 
 // (Figure 1: Round 2, Step 2)
-pub fn verify_share(share: &ShamirShare, com: &DKGCommitment, index: AuthorityCount) -> bool {
-    Point::from_scalar(&share.value) == evaluate_polynomial(com.commitments.0.iter(), index)
+pub fn verify_share<P: ECPoint>(
+    share: &ShamirShare<P>,
+    com: &DKGCommitment<P>,
+    index: AuthorityCount,
+) -> bool {
+    P::from_scalar(&share.value)
+        == evaluate_polynomial::<_, _, P::Scalar>(com.commitments.0.iter(), index)
 }
 
 /// Commitments to the sharing polynomial coefficient
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CoefficientCommitments(Vec<Point>);
+struct CoefficientCommitments<P>(Vec<P>);
 
 /// Zero-knowledge proof of us knowing the secret
 /// (in a form of a Schnorr signature)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ZKPSignature {
-    r: Point,
-    z: Scalar,
+struct ZKPSignature<P: ECPoint> {
+    #[serde(bound = "")]
+    r: P,
+    z: P::Scalar,
 }
 
 /// Commitments along with the corresponding ZKP
 /// which should be sent to other parties at the
 /// beginning of the ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DKGUnverifiedCommitment {
-    commitments: CoefficientCommitments,
-    zkp: ZKPSignature,
+pub struct DKGUnverifiedCommitment<P: ECPoint> {
+    #[serde(bound = "")]
+    commitments: CoefficientCommitments<P>,
+    #[serde(bound = "")]
+    zkp: ZKPSignature<P>,
 }
 
 /// Commitments that have already been checked against the ZKP
 #[derive(Debug)]
-pub struct DKGCommitment {
-    commitments: CoefficientCommitments,
+pub struct DKGCommitment<P: ECPoint> {
+    commitments: CoefficientCommitments<P>,
 }
 
-fn is_valid_hash_commitment(
-    public_coefficients: &DKGUnverifiedCommitment,
+fn is_valid_hash_commitment<P: ECPoint>(
+    public_coefficients: &DKGUnverifiedCommitment<P>,
     hash_commitment: &H256,
 ) -> bool {
     hash_commitment == &generate_hash_commitment(public_coefficients)
 }
 
 // (Figure 1: Round 1, Step 5)
-pub fn validate_commitments(
-    public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment>,
+pub fn validate_commitments<P: ECPoint>(
+    public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment<P>>,
     hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
     context: &HashContext,
     logger: &slog::Logger,
-) -> Result<BTreeMap<AuthorityCount, DKGCommitment>, (BTreeSet<AuthorityCount>, KeygenFailureReason)>
-{
+) -> Result<
+    BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    (BTreeSet<AuthorityCount>, KeygenFailureReason),
+> {
     let invalid_idxs: BTreeSet<_> = public_coefficients
         .iter()
         .filter_map(|(idx, c)| {
@@ -289,18 +303,20 @@ pub fn validate_commitments(
 }
 
 /// Derive aggregate pubkey from party commitments
-pub fn derive_aggregate_pubkey(commitments: &BTreeMap<AuthorityCount, DKGCommitment>) -> Point {
+pub fn derive_aggregate_pubkey<P: ECPoint>(
+    commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+) -> P {
     commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum()
 }
 
 /// Derive each party's "local" pubkey
-pub fn derive_local_pubkeys_for_parties(
+pub fn derive_local_pubkeys_for_parties<P: ECPoint>(
     ThresholdParameters {
         share_count: n,
         threshold: t,
     }: ThresholdParameters,
-    commitments: &BTreeMap<AuthorityCount, DKGCommitment>,
-) -> Vec<Point> {
+    commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+) -> Vec<P> {
     // Recall that each party i's secret key share `s` is the sum
     // of secret shares they receive from all other parties, which
     // are in turn calculated by evaluating each party's sharing
@@ -314,7 +330,7 @@ pub fn derive_local_pubkeys_for_parties(
         .map(|idx| {
             (1..=n)
                 .map(|j| {
-                    evaluate_polynomial(
+                    evaluate_polynomial::<_, _, P::Scalar>(
                         (0..=t).map(|k| &commitments[&j].commitments.0[k as usize]),
                         idx,
                     )
@@ -324,7 +340,9 @@ pub fn derive_local_pubkeys_for_parties(
         .collect()
 }
 
-pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitment) -> H256 {
+pub fn generate_hash_commitment<P: ECPoint>(
+    coefficient_commitments: &DKGUnverifiedCommitment<P>,
+) -> H256 {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
@@ -339,10 +357,10 @@ pub fn generate_hash_commitment(coefficient_commitments: &DKGUnverifiedCommitmen
 /// We don't want the coefficient commitments to add up to the "point at infinity" as this corresponds
 /// to the sum of the actual coefficient being zero, which would reduce the degree of the sharing polynomial
 /// (in Shamir Secret Sharing) and thus would reduce the effective threshold of the aggregate key
-pub fn check_high_degree_commitments(
-    commitments: &BTreeMap<AuthorityCount, DKGCommitment>,
+pub fn check_high_degree_commitments<P: ECPoint>(
+    commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
 ) -> bool {
-    let high_degree_sum: Point = commitments
+    let high_degree_sum: P = commitments
         .values()
         .map(|c| c.commitments.0.last().copied().unwrap())
         .sum();
@@ -351,15 +369,15 @@ pub fn check_high_degree_commitments(
 }
 
 #[cfg(test)]
-impl DKGUnverifiedCommitment {
+impl<P: ECPoint> DKGUnverifiedCommitment<P> {
     /// Change the lowest degree coefficient so that it fails ZKP check
     pub fn corrupt_primary_coefficient(&mut self, rng: &mut Rng) {
-        self.commitments.0[0] = Point::from_scalar(&Scalar::random(rng));
+        self.commitments.0[0] = P::from_scalar(&P::Scalar::random(rng));
     }
 
     /// Change a higher degree coefficient, so that it fails hash commitment check
     pub fn corrupt_secondary_coefficient(&mut self, rng: &mut Rng) {
-        self.commitments.0[1] = Point::from_scalar(&Scalar::random(rng));
+        self.commitments.0[1] = P::from_scalar(&P::Scalar::random(rng));
     }
 }
 
@@ -372,19 +390,24 @@ mod tests {
 
     #[test]
     fn basic_sharing() {
+        use crate::multisig::crypto::eth::Point;
+
         let n = 7;
         let threshold = 5;
 
         use rand_legacy::SeedableRng;
         let mut rng = Rng::from_seed([0; 32]);
 
-        let (secret, _commitments, shares) = generate_secret_and_shares(&mut rng, n, threshold);
+        let (secret, _commitments, shares) =
+            generate_secret_and_shares::<Point>(&mut rng, n, threshold);
 
         assert_eq!(secret, reconstruct_secret(&shares));
     }
 
     #[test]
     fn keygen_sequential() {
+        use crate::multisig::crypto::eth::{Point, Scalar};
+
         let n = 4;
         let t = 2;
 

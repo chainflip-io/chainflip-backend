@@ -23,8 +23,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Environment: pallet_cf_environment::{Pallet, Storage, Event<T>, Config},
+		System: frame_system,
+		Environment: pallet_cf_environment,
 	}
 );
 
@@ -57,6 +57,7 @@ impl system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl pallet_cf_environment::Config for Test {

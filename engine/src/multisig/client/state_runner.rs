@@ -329,4 +329,9 @@ where
     pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
         self.should_expire_at = expiry_time;
     }
+
+    #[cfg(test)]
+    pub fn get_delayed_messages_len(&self) -> usize {
+        self.delayed_messages.len()
+    }
 }

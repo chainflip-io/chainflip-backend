@@ -1,6 +1,6 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
-    eth::{EthBroadcaster, EthWsRpcClient},
+    eth::{rpc::EthWsRpcClient, EthBroadcaster},
     state_chain::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
@@ -134,7 +134,10 @@ async fn request_claim(
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
-            pallet_cf_staking::Call::claim(atomic_amount, eth_address),
+            pallet_cf_staking::Call::claim {
+                amount: atomic_amount,
+                address: eth_address,
+            },
             logger,
         )
         .await?;
@@ -263,7 +266,10 @@ async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()
 
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
-            pallet_cf_validator::Call::set_keys(new_session_key, [0; 1].to_vec()),
+            pallet_cf_validator::Call::set_keys {
+                keys: new_session_key,
+                proof: [0; 1].to_vec(),
+            },
             logger,
         )
         .await
@@ -277,7 +283,7 @@ async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result
     let (_, _, state_chain_client) =
         connect_to_state_chain(&settings.state_chain, false, logger).await?;
     let tx_hash = state_chain_client
-        .submit_signed_extrinsic(pallet_cf_staking::Call::retire_account(), logger)
+        .submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, logger)
         .await
         .expect("Could not retire account");
     println!("Account retired at tx {:#x}.", tx_hash);
@@ -288,7 +294,7 @@ async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Resu
     let (_, _, state_chain_client) =
         connect_to_state_chain(&settings.state_chain, false, logger).await?;
     let tx_hash = state_chain_client
-        .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account(), logger)
+        .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, logger)
         .await
         .expect("Could not activate account");
     println!("Account activated at tx {:#x}.", tx_hash);

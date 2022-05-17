@@ -8,9 +8,10 @@ version = "0.1.0"
 anyhow = "1.0"
 chainflip-engine = {path = "../../engine/"}
 hex = "0.4.3"
+bincode = "1.3.3"
 
 [dependencies.rocksdb]
-version = "0.17.0"
+version = "0.18.0"
 # Disabling of default features, and using lz4 compression is primarily to avoid linker issues
 # resulting from the default compression using libs that conflict with the system libs
 # https://github.com/rust-rocksdb/rust-rocksdb/pull/555

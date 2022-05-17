@@ -195,6 +195,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		None,
 		// Protocol ID
 		None,
+		// Fork ID
+		None,
 		// Properties
 		None,
 		// Extensions
@@ -267,6 +269,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		// Telemetry
 		None,
 		// Protocol ID
+		None,
+		// Fork ID
 		None,
 		// Properties
 		None,
@@ -390,6 +394,8 @@ fn chainflip_three_node_testnet_config_from_env(
 		// Telemetry
 		None,
 		// Protocol ID
+		None,
+		// Fork ID
 		None,
 		// Properties
 		Some(chainflip_properties()),
@@ -517,6 +523,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		None,
 		// Protocol ID
 		None,
+		// Fork ID
+		None,
 		// Properties
 		Some(chainflip_properties()),
 		// Extensions
@@ -542,7 +550,6 @@ fn testnet_genesis(
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
-			changes_trie_config: Default::default(),
 		},
 		validator: ValidatorConfig {
 			blocks_per_epoch: 8 * HOURS,
@@ -564,7 +571,12 @@ fn testnet_genesis(
 			minimum_stake: MIN_STAKE,
 			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 		},
-		auction: AuctionConfig { authority_set_size_range: (min_authorities, MAX_AUTHORITIES) },
+		auction: AuctionConfig {
+			min_size: min_authorities,
+			max_size: MAX_AUTHORITIES,
+			max_expansion: MAX_AUTHORITIES,
+			max_contraction: MAX_AUTHORITIES,
+		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
@@ -581,6 +593,7 @@ fn testnet_genesis(
 			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 		},
+		transaction_payment: Default::default(),
 	}
 }
 

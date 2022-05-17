@@ -18,9 +18,12 @@ use state_chain_runtime::{EthereumInstance, Header, Runtime};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
-    eth::{EthBroadcaster, EthWsRpcClient, MockEthRpcApi, ObserveInstruction},
+    eth::{
+        rpc::{EthWsRpcClient, MockEthRpcApi},
+        EthBroadcaster, ObserveInstruction,
+    },
     logging::{self, test_utils::new_test_logger},
-    multisig::client::MockMultisigClientApi,
+    multisig::client::mocks::MockMultisigClientApi,
     settings::test_utils::new_test_settings,
     state_chain::{
         client::{

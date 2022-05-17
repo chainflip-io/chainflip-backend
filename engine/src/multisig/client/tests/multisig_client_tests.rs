@@ -7,6 +7,7 @@ use crate::{
             common::{CeremonyFailureReason, SigningFailureReason},
             key_store::KeyStore,
         },
+        eth::{EthSigning, Point as EthPoint},
         KeyId, MessageHash, PersistentKeyDB,
     },
     testing::{
@@ -28,7 +29,7 @@ async fn should_ignore_rts_for_unknown_key() {
     // Create a client
     let (keygen_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
-    let client = MultisigClient::new(
+    let client = MultisigClient::<_, EthSigning>::new(
         account_id.clone(),
         PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
             .expect("Failed to open database"),
@@ -70,9 +71,9 @@ async fn should_save_key_after_keygen() {
         let (keygen_request_sender, mut keygen_request_receiver) =
             tokio::sync::mpsc::unbounded_channel();
         let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
-        let client = MultisigClient::new(
+        let client = MultisigClient::<_, EthSigning>::new(
             ACCOUNT_IDS[0].clone(),
-            PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+            PersistentKeyDB::<EthPoint>::new_and_migrate_to_latest(&db_file, &logger)
                 .expect("Failed to open database"),
             keygen_request_sender,
             signing_request_sender,
@@ -98,7 +99,7 @@ async fn should_save_key_after_keygen() {
     }
 
     // Check that the key was saved by Loading it from the same db file
-    let key_store = KeyStore::new(
+    let key_store = KeyStore::<_, EthPoint>::new(
         PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
             .expect("Failed to open database"),
     );
@@ -130,7 +131,7 @@ async fn should_load_keys_on_creation() {
     // Create the client using the existing db file
     let (keygen_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
-    let client = MultisigClient::new(
+    let client = MultisigClient::<_, EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
             .expect("Failed to open database"),

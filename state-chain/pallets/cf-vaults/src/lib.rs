@@ -34,7 +34,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum KeygenOutcome<Key, Id> {
 	/// Keygen succeeded with the enclosed public threshold key.
 	Success(Key),
@@ -58,7 +58,8 @@ pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
 /// Tracks the current state of the keygen ceremony.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[scale_info(skip_type_params(T, I))]
 pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
 	candidate_count: AuthorityCount,
@@ -66,7 +67,7 @@ pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
 	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
-	/// A map of the number of blame votes that keygen participant has received.
+	/// A map of the number of blame votes that each keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
 }
 
@@ -229,7 +230,8 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 }
 
 /// The current status of a vault rotation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, EnumVariant)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
+#[scale_info(skip_type_params(T, I))]
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T, I> },
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
@@ -247,7 +249,7 @@ impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
 }
 
 /// A single vault.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct Vault<T: ChainAbi> {
 	/// The vault's public key.
 	pub public_key: T::AggKey,
@@ -255,7 +257,7 @@ pub struct Vault<T: ChainAbi> {
 	pub active_from_block: T::ChainBlockNumber,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	/// Failing a keygen ceremony carries its own consequences.
 	ParticipateKeygenFailed,
@@ -271,6 +273,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::without_storage_info]
 	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -402,13 +405,13 @@ pub mod pallet {
 	pub type PendingVaultRotation<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultRotationStatus<T, I>>;
 
-	/// Vault rotation statuses for the current epoch rotation.
+	/// The voters who voted for success for a particular agg key rotation
 	#[pallet::storage]
 	#[pallet::getter(fn success_voters)]
 	pub type SuccessVoters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
 
-	/// Vault rotation statuses for the current epoch rotation.
+	/// The voters who voted for failure for a particular agg key rotation
 	#[pallet::storage]
 	#[pallet::getter(fn failure_voters)]
 	pub type FailureVoters<T: Config<I>, I: 'static = ()> =

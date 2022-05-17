@@ -41,11 +41,10 @@ mod tests {
 		use crate::tests::BLOCK_TIME;
 		use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
-		use frame_support::traits::HandleLifetime;
+		use codec::Encode;
 		use libsecp256k1::PublicKey;
-		use pallet_cf_staking::AccountRetired;
 		use pallet_cf_vaults::KeygenOutcome;
-		use state_chain_runtime::{Event, HeartbeatBlockInterval, Origin};
+		use state_chain_runtime::{constants::common::HEARTBEAT_BLOCK_INTERVAL, Event, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 		// TODO: Can we use the actual events here?
@@ -87,9 +86,8 @@ mod tests {
 		pub struct Cli;
 
 		impl Cli {
-			// Activates an account to become an authority in the next epoch
-			pub fn activate_account(account: NodeId) {
-				AccountRetired::<Runtime>::insert(account, false);
+			pub fn activate_account(account: &NodeId) {
+				assert_ok!(Staking::activate_account(Origin::signed(account.clone())));
 			}
 		}
 
@@ -179,7 +177,7 @@ mod tests {
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
-			pub active: bool,
+			pub live: bool,
 			// conveniently creates a threshold "signature" (not really)
 			// all engines have the same one, so they create the same sig
 			pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
@@ -190,7 +188,7 @@ mod tests {
 			fn new(node_id: NodeId, signer: Rc<RefCell<ThresholdSigner>>) -> Self {
 				Engine {
 					node_id,
-					active: true,
+					live: true,
 					threshold_signer: signer,
 					engine_state: EngineState::None,
 				}
@@ -202,19 +200,19 @@ mod tests {
 
 			// Handle events from contract
 			fn on_contract_event(&self, event: &ContractEvent) {
-				if self.state() == ChainflipAccountState::CurrentAuthority && self.active {
+				if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
 					match event {
 						ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
 							// Witness event -> send transaction to state chain
 							state_chain_runtime::Witnesser::witness_at_epoch(
 								Origin::signed(self.node_id.clone()),
 								Box::new(
-									pallet_cf_staking::Call::staked(
-										validator_id.clone(),
-										*amount,
-										ETH_ZERO_ADDRESS,
-										TX_HASH,
-									)
+									pallet_cf_staking::Call::staked {
+										account_id: validator_id.clone(),
+										amount: *amount,
+										withdrawal_address: ETH_ZERO_ADDRESS,
+										tx_hash: TX_HASH,
+									}
 									.into(),
 								),
 								*epoch,
@@ -229,7 +227,7 @@ mod tests {
 			// TODO have this abstracted out
 			fn handle_state_chain_events(&mut self, events: &[Event]) {
 				// If active handle events
-				if self.active {
+				if self.live {
 					// Being a CurrentAuthority we would respond to certain events
 					if self.state() == ChainflipAccountState::CurrentAuthority {
 						on_events!(
@@ -265,11 +263,11 @@ mod tests {
 										// If we rotating let's witness the keys being rotated on the contract
 										state_chain_runtime::Witnesser::witness(
 											Origin::signed(self.node_id.clone()),
-											Box::new(pallet_cf_vaults::Call::vault_key_rotated(
-												(&*self.threshold_signer).borrow_mut().proposed_public_key(),
-												100,
-												[1u8; 32].into(),
-											).into()),
+											Box::new(pallet_cf_vaults::Call::vault_key_rotated {
+												new_public_key: (&*self.threshold_signer).borrow_mut().proposed_public_key(),
+												block_number: 100,
+												tx_hash: [1u8; 32].into(),
+											}.into()),
 										).expect("should be able to vault key rotation for node");
 									}
 							},
@@ -303,9 +301,9 @@ mod tests {
 
 			// On block handler
 			fn on_block(&self, block_number: BlockNumber) {
-				if self.active {
+				if self.live {
 					// Heartbeat -> Send transaction to state chain twice an interval
-					if block_number % (HeartbeatBlockInterval::get() / 2) == 0 {
+					if block_number % (HEARTBEAT_BLOCK_INTERVAL / 2) == 0 {
 						// Online pallet
 						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
@@ -315,15 +313,15 @@ mod tests {
 			}
 		}
 
-		pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId, seed: &str) {
-			setup_account(node_id, seed);
-			setup_peer_mapping(node_id, seed);
+		/// Do this after staking.
+		pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId) {
+			setup_account(node_id);
+			setup_peer_mapping(node_id);
 		}
 
 		// Create an account, generate and register the session keys
-		pub(crate) fn setup_account(node_id: &NodeId, seed: &str) {
-			assert_ok!(frame_system::Provider::<Runtime>::created(node_id));
-
+		pub(crate) fn setup_account(node_id: &NodeId) {
+			let seed = &node_id.clone().to_string();
 			let key = SessionKeys {
 				aura: get_from_seed::<AuraId>(seed),
 				grandpa: get_from_seed::<GrandpaId>(seed),
@@ -336,10 +334,10 @@ mod tests {
 			));
 		}
 
-		pub(crate) fn setup_peer_mapping(node_id: &NodeId, seed: &str) {
+		pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
+			let seed = &node_id.clone().to_string();
 			let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
-			use sp_core::Encode;
 			assert_ok!(state_chain_runtime::Validator::register_peer_id(
 				state_chain_runtime::Origin::signed(node_id.clone()),
 				peer_keypair.public(),
@@ -366,6 +364,25 @@ mod tests {
 				[self.node_counter as u8; 32].into()
 			}
 
+			pub fn live_nodes(&self) -> Vec<NodeId> {
+				self.engines
+					.iter()
+					.filter_map(
+						|(node_id, engine)| {
+							if engine.live {
+								Some(node_id.clone())
+							} else {
+								None
+							}
+						},
+					)
+					.collect()
+			}
+
+			pub fn all_nodes(&self) -> Vec<NodeId> {
+				self.engines.iter().map(|(node_id, _)| node_id.clone()).collect()
+			}
+
 			// Create a network which includes the authorities in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(
@@ -379,7 +396,7 @@ mod tests {
 					network.add_engine(node);
 					// Only need to setup peer mapping as the AccountInfo is already set up if they
 					// are genesis nodes
-					setup_peer_mapping(node, &node.clone().to_string());
+					setup_peer_mapping(node);
 				}
 
 				// Create the passive nodes
@@ -387,8 +404,6 @@ mod tests {
 				for _ in 0..number_of_passive_nodes {
 					let node_id = network.next_node_id();
 					passive_nodes.push(node_id.clone());
-					let seed = node_id.clone().to_string();
-					setup_account_and_peer_mapping(&node_id, &seed);
 					network.engines.insert(
 						node_id.clone(),
 						Engine::new(node_id, network.threshold_signer.clone()),
@@ -399,7 +414,7 @@ mod tests {
 			}
 
 			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
-				self.engines.get_mut(node_id).expect("valid node_id").active = active;
+				self.engines.get_mut(node_id).expect("valid node_id").live = active;
 			}
 
 			pub fn create_engine(&mut self) -> NodeId {
@@ -425,8 +440,7 @@ mod tests {
 			pub fn move_to_next_heartbeat_interval(&mut self) {
 				let current_block_number = System::block_number();
 				self.move_forward_blocks(
-					HeartbeatBlockInterval::get() -
-						(current_block_number % HeartbeatBlockInterval::get()) +
+					HEARTBEAT_BLOCK_INTERVAL - (current_block_number % HEARTBEAT_BLOCK_INTERVAL) +
 						1,
 				);
 			}
@@ -435,19 +449,25 @@ mod tests {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
 				let current_block_number = System::block_number();
 				while System::block_number() < current_block_number + n {
-					Timestamp::set_timestamp(
-						(System::block_number() as u64 * BLOCK_TIME) + INIT_TIMESTAMP,
-					);
-					Session::on_initialize(System::block_number());
-					Online::on_initialize(System::block_number());
-					Flip::on_initialize(System::block_number());
-					Staking::on_initialize(System::block_number());
-					Auction::on_initialize(System::block_number());
-					Emissions::on_initialize(System::block_number());
-					Governance::on_initialize(System::block_number());
-					Reputation::on_initialize(System::block_number());
-					EthereumVault::on_initialize(System::block_number());
-					Validator::on_initialize(System::block_number());
+					let block_number = System::block_number() + 1;
+					let mut digest = sp_runtime::Digest::default();
+					digest.push(sp_runtime::DigestItem::PreRuntime(
+						sp_consensus_aura::AURA_ENGINE_ID,
+						sp_consensus_aura::Slot::from(block_number as u64).encode(),
+					));
+					System::initialize(&block_number, &System::block_hash(block_number), &digest);
+					System::on_initialize(block_number);
+					Session::on_initialize(block_number);
+					Online::on_initialize(block_number);
+					Flip::on_initialize(block_number);
+					Staking::on_initialize(block_number);
+					Auction::on_initialize(block_number);
+					Emissions::on_initialize(block_number);
+					Governance::on_initialize(block_number);
+					Reputation::on_initialize(block_number);
+					EthereumVault::on_initialize(block_number);
+					Validator::on_initialize(block_number);
+					Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
 
 					// Notify contract events
 					for event in self.stake_manager_contract.events() {
@@ -475,20 +495,19 @@ mod tests {
 
 					// A completed block notification
 					for engine in self.engines.values() {
-						engine.on_block(System::block_number());
+						engine.on_block(block_number);
 					}
-					System::set_block_number(System::block_number() + 1);
 				}
 			}
 		}
 	}
 
 	// TODO - remove collision of account numbers
-	pub const ALICE: [u8; 32] = [0xff; 32];
-	pub const BOB: [u8; 32] = [0xfe; 32];
-	pub const CHARLIE: [u8; 32] = [0xfd; 32];
+	pub const ALICE: [u8; 32] = [0xaa; 32];
+	pub const BOB: [u8; 32] = [0xbb; 32];
+	pub const CHARLIE: [u8; 32] = [0xcc; 32];
 	// Root and Gov member
-	pub const ERIN: [u8; 32] = [0xfc; 32];
+	pub const ERIN: [u8; 32] = [0xee; 32];
 
 	pub const BLOCK_TIME: u64 = 1000;
 	const GENESIS_EPOCH: EpochIndex = 1;
@@ -501,7 +520,7 @@ mod tests {
 
 	pub struct ExtBuilder {
 		pub accounts: Vec<(AccountId, FlipBalance)>,
-		root: AccountId,
+		root: Option<AccountId>,
 		blocks_per_epoch: BlockNumber,
 		max_authorities: AuthorityCount,
 		min_authorities: AuthorityCount,
@@ -511,7 +530,7 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				accounts: vec![],
-				root: AccountId::default(),
+				root: None,
 				blocks_per_epoch: Zero::zero(),
 				max_authorities: MAX_AUTHORITIES,
 				min_authorities: 1,
@@ -526,7 +545,7 @@ mod tests {
 		}
 
 		fn root(mut self, root: AccountId) -> Self {
-			self.root = root;
+			self.root = Some(root);
 			self
 		}
 
@@ -579,7 +598,10 @@ mod tests {
 
 			GenesisBuild::<Runtime>::assimilate_storage(
 				&pallet_cf_auction::GenesisConfig {
-					authority_set_size_range: (self.min_authorities, self.max_authorities),
+					min_size: self.min_authorities,
+					max_size: self.max_authorities,
+					max_expansion: self.max_authorities,
+					max_contraction: self.max_authorities,
 				},
 				storage,
 			)
@@ -595,7 +617,7 @@ mod tests {
 			.unwrap();
 
 			pallet_cf_governance::GenesisConfig::<Runtime> {
-				members: vec![self.root.clone()],
+				members: self.root.iter().cloned().collect(),
 				expiry_span: EXPIRY_SPAN_IN_SECONDS,
 			}
 			.assimilate_storage(storage)
@@ -645,6 +667,8 @@ mod tests {
 	}
 
 	mod genesis {
+		use sp_std::collections::btree_set::BTreeSet;
+
 		use super::*;
 		use cf_traits::{
 			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
@@ -700,9 +724,11 @@ mod tests {
 				}
 
 				assert_eq!(Validator::bond(), GENESIS_BALANCE);
-				let mut authorities = Validator::current_authorities();
-				authorities.sort();
-				assert_eq!(authorities, accounts, "the authorities are those expected at genesis");
+				assert_eq!(
+					Validator::current_authorities().iter().collect::<BTreeSet<_>>(),
+					accounts.iter().collect::<BTreeSet<_>>(),
+					"the validators are those expected at genesis"
+				);
 
 				assert_eq!(
 					Validator::epoch_number_of_blocks(),
@@ -772,14 +798,16 @@ mod tests {
 	const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
 
 	mod epoch {
+		use std::collections::BTreeSet;
+
 		use super::{genesis::GENESIS_BALANCE, *};
 		use crate::tests::network::setup_account_and_peer_mapping;
 		use cf_traits::{
-			BackupOrPassive, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
-			EpochInfo,
+			BackupOrPassive, BidderProvider, ChainflipAccount, ChainflipAccountState,
+			ChainflipAccountStore, EpochInfo,
 		};
 		use pallet_cf_validator::RotationStatus;
-		use state_chain_runtime::{HeartbeatBlockInterval, Validator};
+		use state_chain_runtime::Validator;
 
 		#[test]
 		// We have a test network which goes into the first epoch
@@ -846,7 +874,7 @@ mod tests {
 					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
 					// Move forward heartbeat to get those missing nodes online
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// The rotation can now continue to the next phase.
 					assert!(matches!(
@@ -873,26 +901,20 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					// Genesis nodes
-					let mut nodes = Validator::current_authorities();
+					let genesis_nodes = Validator::current_authorities();
 
 					let number_of_passive_nodes = MAX_SET_SIZE
-						.checked_sub(nodes.len() as AuthorityCount)
+						.checked_sub(genesis_nodes.len() as AuthorityCount)
 						.expect("Max set size must be at least the number of genesis authorities");
 
-					let (mut testnet, mut passive_nodes) =
-						network::Network::create(number_of_passive_nodes as u8, &nodes);
+					let (mut testnet, passive_nodes) =
+						network::Network::create(number_of_passive_nodes as u8, &genesis_nodes);
 
-					// Activate the passiv nodes
-					for node in &passive_nodes {
-						network::Cli::activate_account(node.clone());
-					}
-
-					nodes.append(&mut passive_nodes);
-					assert_eq!(nodes.len() as AuthorityCount, MAX_SET_SIZE);
+					assert_eq!(testnet.live_nodes().len() as AuthorityCount, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
 					let stake_amount = genesis::GENESIS_BALANCE + 1;
-					for node in &nodes {
+					for node in &testnet.live_nodes() {
 						testnet.stake_manager_contract.stake(
 							node.clone(),
 							stake_amount,
@@ -915,20 +937,34 @@ mod tests {
 					// and will do after the auction with the intention of being a backup node
 					let late_staker = testnet.create_engine();
 					testnet.set_active(&late_staker, true);
-					let seed = late_staker.to_string();
-					setup_account_and_peer_mapping(&late_staker, &seed);
+
+					// Move forward one block to register the stakes on-chain.
+					testnet.move_forward_blocks(1);
+
+					for node in &passive_nodes {
+						network::setup_account_and_peer_mapping(node);
+						network::Cli::activate_account(node);
+					}
+					for node in &keyless_nodes {
+						network::setup_peer_mapping(node);
+						network::Cli::activate_account(node);
+					}
 
 					// Run to the next epoch to start the auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
-					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
+					assert!(matches!(
+						Validator::rotation_phase(),
+						RotationStatus::AwaitingVaults(..)
+					));
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 					assert_eq!(
 						GENESIS_EPOCH + 1,
 						Validator::epoch_index(),
-						"We should be in the next epoch"
+						"We should be in the next epoch. {:?}",
+						Staking::get_bidders()
 					);
 
 					assert_eq!(
@@ -937,23 +973,10 @@ mod tests {
 						"minimum active bid should be that of the new stake"
 					);
 
-					let mut winners = Validator::current_authorities();
-					winners.sort();
-					nodes.sort();
 					assert_eq!(
-						winners,
-						nodes,
+						Validator::current_authorities().iter().collect::<BTreeSet<_>>(),
+						[genesis_nodes, passive_nodes].concat().iter().collect::<BTreeSet<_>>(),
 						"the new winners should be those genesis authorities and the passive nodes that have keys"
-					);
-
-					let mut new_authorities = Validator::current_authorities();
-					new_authorities.sort();
-
-					// This new set of winners should also be the authorities of the network
-					assert_eq!(
-						new_authorities,
-						nodes,
-						"the new authorities should be those genesis authorities and the new nodes created in test"
 					);
 
 					for account in keyless_nodes.iter() {
@@ -965,7 +988,7 @@ mod tests {
 						);
 					}
 
-					for account in new_authorities.iter() {
+					for account in &Validator::current_authorities() {
 						// TODO: Check historical epochs
 						assert_eq!(
 							ChainflipAccountState::CurrentAuthority,
@@ -981,7 +1004,15 @@ mod tests {
 						stake_amount,
 						GENESIS_EPOCH + 1,
 					);
+
+					// Register the stake.
 					testnet.move_forward_blocks(1);
+
+					setup_account_and_peer_mapping(&late_staker);
+					network::Cli::activate_account(&late_staker);
+
+					testnet.move_forward_blocks(1);
+
 					assert_eq!(
 						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
@@ -1020,7 +1051,7 @@ mod tests {
 					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
 
 					for passive_node in passive_nodes.clone() {
-						network::Cli::activate_account(passive_node);
+						network::Cli::activate_account(&passive_node);
 					}
 
 					nodes.append(&mut passive_nodes);
@@ -1105,9 +1136,10 @@ mod tests {
 		// All other accounts are normally charged and can call any extrinsic.
 		fn restriction_handling() {
 			super::genesis::default().build().execute_with(|| {
-				let call: state_chain_runtime::Call = frame_system::Call::remark(vec![]).into();
+				let call: state_chain_runtime::Call =
+					frame_system::Call::remark { remark: vec![] }.into();
 				let gov_call: state_chain_runtime::Call =
-					pallet_cf_governance::Call::approve(1).into();
+					pallet_cf_governance::Call::approve { id: 1 }.into();
 				// Expect a successful normal call to work
 				let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(
 					&ALICE.into(),
@@ -1140,15 +1172,17 @@ mod tests {
 	}
 
 	mod authorities {
-		use crate::tests::{genesis, network, NodeId, GENESIS_EPOCH, VAULT_ROTATION_BLOCKS};
+		use crate::tests::{
+			genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL,
+			VAULT_ROTATION_BLOCKS,
+		};
 		use cf_traits::{
-			AuthorityCount, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
+			AuthorityCount, BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
 		};
 		use pallet_cf_validator::PercentageRange;
 		use state_chain_runtime::{
-			Auction, EmergencyRotationPercentageRange, Flip, HeartbeatBlockInterval, Online,
-			Runtime, Validator,
+			EmergencyRotationPercentageRange, Flip, Online, Runtime, Validator,
 		};
 		use std::collections::HashMap;
 
@@ -1156,7 +1190,7 @@ mod tests {
 
 		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// We want to have at least one heartbeat within our reduced epoch
-			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_AUTHORITIES: AuthorityCount = 10;
@@ -1182,11 +1216,19 @@ mod tests {
 							INITIAL_STAKE,
 							GENESIS_EPOCH,
 						);
-						network::Cli::activate_account(node.clone());
+					}
+
+					// Allow the stakes to be registered, then initialise the account keys and peer
+					// ids.
+					testnet.move_forward_blocks(1);
+
+					for node in &init_passive_nodes {
+						network::setup_account_and_peer_mapping(node);
+						network::Cli::activate_account(node);
 					}
 
 					// Start an auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
 					assert_eq!(
 						GENESIS_EPOCH,
@@ -1221,12 +1263,9 @@ mod tests {
 						// TODO: Check historical epochs
 					});
 
-					// assert list of backup nodes as being the genesis authorities
-					let mut current_backup_nodes: Vec<NodeId> = Auction::remaining_bidders()
-						.iter()
-						.take(Auction::backup_group_size() as usize)
-						.map(|(validator_id, _)| validator_id.clone())
-						.collect();
+					// assert list of backup validators as being the genesis authorities
+					let mut current_backup_nodes: Vec<NodeId> =
+						<Validator as BackupNodes>::backup_nodes();
 
 					current_backup_nodes.sort();
 					genesis_authorities.sort();
@@ -1256,7 +1295,7 @@ mod tests {
 						.collect();
 
 					// Move forward a heartbeat, emissions should be shared to backup nodes
-					testnet.move_forward_blocks(HeartbeatBlockInterval::get());
+					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
@@ -1276,7 +1315,7 @@ mod tests {
 			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
 			// In order to do this we would want to have missed 1 heartbeat interval
 			// Blocks for our epoch, something larger than one heartbeat
-			const EPOCH_BLOCKS: u32 = HeartbeatBlockInterval::get() * 2;
+			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set to speed the test up
 			const MAX_AUTHORITIES: AuthorityCount = 10;
@@ -1285,34 +1324,30 @@ mod tests {
 				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					let mut nodes = Validator::current_authorities();
-					let (mut testnet, mut passive_nodes) =
-						network::Network::create(MAX_AUTHORITIES as u8, &nodes);
+					let genesis_nodes = Validator::current_authorities();
+					let (mut testnet, passive_nodes) =
+						network::Network::create(MAX_AUTHORITIES as u8, &genesis_nodes);
 
-					for passive_node in passive_nodes.clone() {
-						network::Cli::activate_account(passive_node);
-					}
-
-					nodes.append(&mut passive_nodes);
-					// An initial stake which is superior to the genesis stakes
-					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE + 1;
 					// Stake these nodes so that they are included in the next epoch
-					for node in &nodes {
+					for node in &passive_nodes {
 						testnet.stake_manager_contract.stake(
 							node.clone(),
-							INITIAL_STAKE,
+							genesis::GENESIS_BALANCE,
 							GENESIS_EPOCH,
 						);
 					}
 
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should still be in the first epoch"
-					);
+					// Allow the stakes to be registered.
+					testnet.move_forward_blocks(1);
+
+					// Register the passive nodes.
+					for node in &passive_nodes {
+						network::setup_account_and_peer_mapping(node);
+						network::Cli::activate_account(node);
+					}
 
 					// Start an auction and wait for rotation
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
+					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -1321,15 +1356,17 @@ mod tests {
 						Validator::epoch_index(),
 						"We should be in the next epoch"
 					);
+					assert_eq!(Validator::current_authority_count(), MAX_AUTHORITIES);
 
 					let PercentageRange { top, bottom: _ } =
 						EmergencyRotationPercentageRange::get();
 					let percentage_top_offline = 100 - top as u32;
-					let number_offline =
-						(MAX_AUTHORITIES as u32 * percentage_top_offline / 100) as usize;
+					let number_offline = 1 +
+						(Validator::current_authority_count() * percentage_top_offline / 100)
+							as usize;
 
 					let offline_nodes: Vec<_> =
-						nodes.iter().take(number_offline).cloned().collect();
+						testnet.all_nodes().iter().take(number_offline).cloned().collect();
 
 					for node in &offline_nodes {
 						testnet.set_active(node, false);
@@ -1373,14 +1410,14 @@ mod tests {
 						"we should have had the state of emergency reset"
 					);
 
-					for node in &nodes {
+					for node in &testnet.all_nodes() {
 						testnet.set_active(node, false);
 					}
 
 					testnet.move_to_next_heartbeat_interval();
 
 					// We should have a set of nodes offline
-					for node in &nodes {
+					for node in &testnet.all_nodes() {
 						assert!(!Online::is_online(node), "the node should be offline");
 					}
 
@@ -1388,269 +1425,6 @@ mod tests {
 						!Validator::emergency_rotation_requested(),
 						"we should *not* have requested an emergency rotation"
 					);
-				});
-		}
-	}
-
-	mod bond {
-		use super::*;
-		use cf_traits::{EpochInfo, HistoricalEpoch, StakeTransfer};
-		use frame_system::RawOrigin;
-		use pallet_cf_validator::EpochHistory;
-		use state_chain_runtime::Validator;
-
-		// TODO: Rename
-		// Helper function that checks the epochs of an authority against a list of expected
-		// epochs
-		fn ensure_epoch_activity(account: &AccountId, epochs: Vec<EpochIndex>) {
-			assert_eq!(
-				EpochHistory::<Runtime>::active_epochs_for_authority(account),
-				epochs,
-				"The active epochs for the authority should be {:?}",
-				epochs
-			);
-		}
-
-		// This should be the normal scenario. We define a network with a smaller active set size
-		// than nodes. During the test, the nodes bid each other out and expect an increase of the
-		// MAB.
-		#[test]
-		fn ensure_right_bond_during_epoch_tranisition() {
-			const EPOCH_BLOCKS: BlockNumber = 100;
-			const ACTIVE_SET_SIZE: AuthorityCount = 3;
-			const GENESIS_BALANCE: FlipBalance = 1;
-			const BOND_EPOCH_2: u128 = 31;
-			const BOND_EPOCH_3: u128 = 100;
-			super::genesis::default()
-				.blocks_per_epoch(EPOCH_BLOCKS)
-				.accounts(vec![
-					(AccountId::from(ALICE), GENESIS_BALANCE),
-					(AccountId::from(BOB), GENESIS_BALANCE),
-					(AccountId::from(CHARLIE), GENESIS_BALANCE),
-				])
-				.max_authorities(ACTIVE_SET_SIZE)
-				.build()
-				.execute_with(|| {
-					assert_eq!(1, Validator::epoch_index(), "We should be in the first epoch");
-					let current_authorities = Validator::current_authorities();
-					let (mut testnet, passive_nodes) =
-						network::Network::create(2, &current_authorities);
-					// Define 5 nodes
-					let genesis_node_1 = current_authorities.get(0).unwrap();
-					let genesis_node_2 = current_authorities.get(1).unwrap();
-					let genesis_node_3 = current_authorities.get(2).unwrap();
-					let init_passive_node_1 = passive_nodes.get(0).unwrap();
-					let init_passive_node_2 = passive_nodes.get(1).unwrap();
-
-					// Activate accounts
-					network::Cli::activate_account(init_passive_node_1.clone());
-					network::Cli::activate_account(init_passive_node_2.clone());
-
-					// Stake the nodes
-					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 99, GENESIS_EPOCH);
-					testnet.stake_manager_contract.stake(genesis_node_2.clone(), 50, GENESIS_EPOCH);
-					testnet.stake_manager_contract.stake(genesis_node_3.clone(), 30, GENESIS_EPOCH);
-					testnet.stake_manager_contract.stake(
-						init_passive_node_1.clone(),
-						20,
-						GENESIS_EPOCH,
-					);
-					testnet.stake_manager_contract.stake(
-						init_passive_node_2.clone(),
-						10,
-						GENESIS_EPOCH,
-					);
-
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					// TODO: Should we? we don't seem to be given we start in epoch 1
-					assert_eq!(1, Validator::epoch_index(), "We should be in the next epoch");
-					// Expect the MAB to be the genesis balance
-					assert_eq!(1, Validator::bond());
-
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					assert_eq!(2, Validator::epoch_index(), "We should be in the next epoch");
-					// Current epoch bond is 31
-					assert_eq!(BOND_EPOCH_2, Validator::bond());
-
-					let current_authorities = Validator::current_authorities();
-					// Expect the genesis nodes in the active set, and only them
-					assert!(current_authorities.contains(genesis_node_1));
-					assert!(current_authorities.contains(genesis_node_2));
-					assert!(current_authorities.contains(genesis_node_3));
-					assert_eq!(current_authorities.len(), 3);
-
-					// Stake the passive nodes
-					testnet.stake_manager_contract.stake(
-						init_passive_node_1.clone(),
-						100,
-						GENESIS_EPOCH + 1,
-					);
-					testnet.stake_manager_contract.stake(
-						init_passive_node_2.clone(),
-						100,
-						GENESIS_EPOCH + 1,
-					);
-
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
-
-					// Bond has increased to 100 after the passive nodes now have stakes of 120, and
-					// 110 the 3rd highest genesis node has a stake of 100 (99 + 1)
-					assert_eq!(BOND_EPOCH_3, Validator::bond());
-
-					let current_authorities = Validator::current_authorities();
-					// Expect 1, 4 and 5 in the active set
-					assert!(current_authorities.contains(genesis_node_1));
-					assert!(current_authorities.contains(init_passive_node_1));
-					assert!(current_authorities.contains(init_passive_node_2));
-
-					// Check activity in epochs
-					ensure_epoch_activity(genesis_node_1, vec![2, 3]);
-					ensure_epoch_activity(genesis_node_2, vec![2]);
-					ensure_epoch_activity(genesis_node_3, vec![2]);
-					ensure_epoch_activity(init_passive_node_1, vec![3]);
-					ensure_epoch_activity(init_passive_node_2, vec![3]);
-
-					// We expect genesis_node_1 to be bonded for the epoch with the higher bond
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_1));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(genesis_node_2));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(genesis_node_3));
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(init_passive_node_1));
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(init_passive_node_2));
-				});
-		}
-
-		// In this scenario, we test the case when the MAB drops from one epoch to another. We
-		// expect the authorities to be bonded for the epoch with the highest bond in which they are
-		// currently active. To simulate this scenario we have to extend the set size during the
-		// test to simulate a drop in the MAB.
-		#[test]
-		fn decreasing_mab_scenario() {
-			const EPOCH_BLOCKS: BlockNumber = 100;
-			const ACTIVE_SET_SIZE: AuthorityCount = 3;
-			const GENESIS_BALANCE: FlipBalance = 1;
-			const BOND_EPOCH_2: u128 = 31;
-			const BOND_EPOCH_3: u128 = 6;
-			super::genesis::default()
-				.blocks_per_epoch(EPOCH_BLOCKS)
-				.accounts(vec![
-					(AccountId::from(ALICE), GENESIS_BALANCE),
-					(AccountId::from(BOB), GENESIS_BALANCE),
-					(AccountId::from(CHARLIE), GENESIS_BALANCE),
-				])
-				.max_authorities(ACTIVE_SET_SIZE)
-				.build()
-				.execute_with(|| {
-					assert_eq!(
-						GENESIS_EPOCH,
-						Validator::epoch_index(),
-						"We should be in the first epoch"
-					);
-					let current_authorities = &Validator::current_authorities();
-					let (mut testnet, passive_nodes) =
-						network::Network::create(2, current_authorities);
-
-					// Define 5 nodes
-					let genesis_node_1 = current_authorities.get(0).unwrap();
-					let genesis_node_2 = current_authorities.get(1).unwrap();
-					let genesis_node_3 = current_authorities.get(2).unwrap();
-					let init_passive_node_1 = passive_nodes.get(0).unwrap();
-					let init_passive_node_2 = passive_nodes.get(1).unwrap();
-
-					// Activate accounts
-					network::Cli::activate_account(init_passive_node_1.clone());
-					network::Cli::activate_account(init_passive_node_2.clone());
-
-					// Stake a genesis node, and the passive nodes.
-					// They should have the highest stake now
-					// they are just sorted nodes from the network output function
-					testnet.stake_manager_contract.stake(genesis_node_1.clone(), 30, GENESIS_EPOCH);
-					testnet.stake_manager_contract.stake(
-						init_passive_node_1.clone(),
-						50,
-						GENESIS_EPOCH,
-					);
-					testnet.stake_manager_contract.stake(
-						init_passive_node_2.clone(),
-						100,
-						GENESIS_EPOCH,
-					);
-
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-
-					// Is this true? - Why can we move forward, epoch blocks and not have increased
-					// an epoch number
-					assert_eq!(
-						1,
-						Validator::epoch_index(),
-						"We should still be in the first epoch"
-					);
-					// Expect the MAB to be the genesis balance
-					assert_eq!(1, Validator::bond());
-
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					assert_eq!(
-						GENESIS_EPOCH + 1,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
-
-					// Current epoch bond is 31
-					assert_eq!(BOND_EPOCH_2, Validator::bond());
-					let current_authorities = Validator::current_authorities();
-					// Expect the staked nodes to be in the active set
-					assert!(current_authorities.contains(genesis_node_1));
-					assert!(current_authorities.contains(init_passive_node_1));
-					assert!(current_authorities.contains(init_passive_node_2));
-
-					// Increase the active set size to simulate an decrease of the MAB
-					assert_ok!(Auction::set_current_authority_set_size_range(
-						RawOrigin::Root.into(),
-						(4, 5),
-					));
-
-					// give the genesis nodes some extra stake (bringing their stake to 6
-					testnet.stake_manager_contract.stake(
-						genesis_node_2.clone(),
-						5,
-						GENESIS_EPOCH + 1,
-					);
-					testnet.stake_manager_contract.stake(
-						genesis_node_3.clone(),
-						5,
-						GENESIS_EPOCH + 1,
-					);
-
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					assert_eq!(3, Validator::epoch_index(), "We should be in the next epoch");
-					// Bond has decreased from 31 to 6
-					assert_eq!(BOND_EPOCH_3, Validator::bond());
-
-					let current_authorities = Validator::current_authorities();
-					// Expect all nodes to be in the active set
-					assert!(current_authorities.contains(genesis_node_1));
-					assert!(current_authorities.contains(genesis_node_2));
-					assert!(current_authorities.contains(genesis_node_3));
-					assert!(current_authorities.contains(init_passive_node_1));
-					assert!(current_authorities.contains(init_passive_node_2));
-
-					// Expect Node 1, 2 and 3 to be active in 2 epochs
-					ensure_epoch_activity(genesis_node_1, vec![2, 3]);
-					ensure_epoch_activity(init_passive_node_1, vec![2, 3]);
-					ensure_epoch_activity(init_passive_node_2, vec![2, 3]);
-
-					// Expect node 3 and 4 to be active in 1 epoch
-					ensure_epoch_activity(genesis_node_2, vec![3]);
-					ensure_epoch_activity(genesis_node_3, vec![3]);
-
-					// Expect node 1, 2 and 3 to be be bonded for epoch 2
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(genesis_node_1));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(init_passive_node_1));
-					assert_eq!(BOND_EPOCH_2, Flip::locked_balance(init_passive_node_2));
-
-					// Expect node 1 and 2 to bonded for epoch 3
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_2));
-					assert_eq!(BOND_EPOCH_3, Flip::locked_balance(genesis_node_3));
 				});
 		}
 	}
