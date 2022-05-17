@@ -20,7 +20,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use crate::{
     common::format_iterator,
     logging::CEREMONY_ID_KEY,
-    multisig::{crypto::Rng, KeyDB, KeyId},
+    multisig::{client::common::SigningFailureReason, crypto::Rng, KeyDB, KeyId},
 };
 
 use async_trait::async_trait;
@@ -47,6 +47,7 @@ pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
+    common::{CeremonyFailureReason, KeygenFailureReason},
     signing::frost::SigningData,
 };
 
@@ -109,14 +110,26 @@ pub trait MultisigClientApi<C: CryptoScheme> {
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<<C::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)>;
+    ) -> Result<
+        <C::Point as ECPoint>::Underlying,
+        (
+            BTreeSet<AccountId>,
+            CeremonyFailureReason<KeygenFailureReason>,
+        ),
+    >;
     async fn sign(
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)>;
+    ) -> Result<
+        C::Signature,
+        (
+            BTreeSet<AccountId>,
+            CeremonyFailureReason<SigningFailureReason>,
+        ),
+    >;
 }
 
 // This is constructed by hand since mockall
@@ -143,14 +156,14 @@ pub mod mocks {
                 &self,
                 _ceremony_id: CeremonyId,
                 _participants: Vec<AccountId>,
-            ) -> Result<<<C as CryptoScheme>::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)>;
+            ) -> Result<<<C as CryptoScheme>::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, CeremonyFailureReason<KeygenFailureReason>)>;
             async fn sign(
                 &self,
                 _ceremony_id: CeremonyId,
                 _key_id: KeyId,
                 _signers: Vec<AccountId>,
                 _data: MessageHash,
-            ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, anyhow::Error)>;
+            ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, CeremonyFailureReason<SigningFailureReason>)>;
         }
     }
 }
@@ -159,7 +172,7 @@ type KeygenRequestSender<P> = UnboundedSender<(
     CeremonyId,
     Vec<AccountId>,
     Rng,
-    CeremonyResultSender<KeygenResultInfo<P>>,
+    CeremonyResultSender<KeygenResultInfo<P>, KeygenFailureReason>,
 )>;
 
 type SigningRequestSender<C> = UnboundedSender<(
@@ -168,7 +181,7 @@ type SigningRequestSender<C> = UnboundedSender<(
     MessageHash,
     KeygenResultInfo<<C as CryptoScheme>::Point>,
     Rng,
-    CeremonyResultSender<<C as CryptoScheme>::Signature>,
+    CeremonyResultSender<<C as CryptoScheme>::Signature, SigningFailureReason>,
 )>;
 
 /// Multisig client acts as the frontend for the multisig functionality, delegating
@@ -185,9 +198,9 @@ where
     logger: slog::Logger,
 }
 
-enum RequestStatus<Output> {
+enum RequestStatus<Output, FailureReason> {
     Ready(Output),
-    WaitForOneshot(CeremonyResultReceiver<Output>),
+    WaitForOneshot(CeremonyResultReceiver<Output, FailureReason>),
 }
 
 impl<S, C> MultisigClient<S, C>
@@ -221,14 +234,20 @@ where
         participants: Vec<AccountId>,
     ) -> impl '_
            + Future<
-        Output = Result<<C::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)>,
+        Output = Result<
+            <C::Point as ECPoint>::Underlying,
+            (
+                BTreeSet<AccountId>,
+                CeremonyFailureReason<KeygenFailureReason>,
+            ),
+        >,
     > {
         assert!(participants.contains(&self.my_account_id));
 
         slog::info!(
             self.logger,
-            "Received a keygen request, participants: {}",
-            format_iterator(&participants);
+            "Received a keygen request";
+            "participants" => format!("{}",format_iterator(&participants)),
             CEREMONY_ID_KEY => ceremony_id
         );
 
@@ -264,10 +283,7 @@ where
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
                 Some(Err(error)) => Err(error),
-                None => Err((
-                    BTreeSet::new(),
-                    anyhow::Error::msg("Keygen request ignored"),
-                )),
+                None => panic!("Keygen result channel dropped before receiving a result"),
             }
         }
     }
@@ -282,13 +298,23 @@ where
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> impl '_ + Future<Output = Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)>> {
+    ) -> impl '_
+           + Future<
+        Output = Result<
+            C::Signature,
+            (
+                BTreeSet<AccountId>,
+                CeremonyFailureReason<SigningFailureReason>,
+            ),
+        >,
+    > {
         assert!(signers.contains(&self.my_account_id));
 
         slog::debug!(
             self.logger,
-            "Received a request to sign, message_hash: {}, signers: {}",
-            data, format_iterator(&signers);
+            "Received a request to sign";
+            "message_hash" => format!("{}",data),
+            "signers" => format!("{}",format_iterator(&signers)),
             CEREMONY_ID_KEY => ceremony_id
         );
 
@@ -327,15 +353,12 @@ where
                     if let Ok(result) = result_receiver.await {
                         result
                     } else {
-                        Err((
-                            BTreeSet::new(),
-                            anyhow::Error::msg("Signing request ignored"),
-                        ))
+                        panic!("Signing result oneshot channel dropped before receiving a result");
                     }
                 }
                 None => Err((
-                    Default::default(),
-                    anyhow::Error::msg("Signing request ignored: unknown key"),
+                    BTreeSet::new(),
+                    CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),
                 )),
             }
         })
@@ -416,7 +439,13 @@ impl<KeyDatabase: KeyDB<C::Point> + Send + Sync, C: CryptoScheme> MultisigClient
         &self,
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
-    ) -> Result<<C::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, anyhow::Error)> {
+    ) -> Result<
+        <C::Point as ECPoint>::Underlying,
+        (
+            BTreeSet<AccountId>,
+            CeremonyFailureReason<KeygenFailureReason>,
+        ),
+    > {
         self.initiate_keygen(ceremony_id, participants).await
     }
 
@@ -426,7 +455,13 @@ impl<KeyDatabase: KeyDB<C::Point> + Send + Sync, C: CryptoScheme> MultisigClient
         key_id: KeyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-    ) -> Result<C::Signature, (BTreeSet<AccountId>, anyhow::Error)> {
+    ) -> Result<
+        C::Signature,
+        (
+            BTreeSet<AccountId>,
+            CeremonyFailureReason<SigningFailureReason>,
+        ),
+    > {
         self.initiate_signing(ceremony_id, key_id, signers, data)
             .await
     }

@@ -11,23 +11,36 @@ use pallet_cf_vaults::CeremonyId;
 use crate::{
     common::format_iterator,
     constants::MAX_STAGE_DURATION,
-    logging::CEREMONY_ID_KEY,
-    multisig::client::common::{ProcessMessageResult, StageResult},
+    logging::{CEREMONY_ID_KEY, CEREMONY_REQUEST_IGNORED},
+    multisig::client::common::{ProcessMessageResult, SigningFailureReason, StageResult},
 };
 use state_chain_runtime::AccountId;
 
 use super::{
-    ceremony_manager::CeremonyResultSender, common::CeremonyStage, utils::PartyIdxMapping,
+    ceremony_manager::CeremonyResultSender,
+    common::{CeremonyFailureReason, CeremonyStage},
+    utils::PartyIdxMapping,
 };
 
-pub struct StateAuthorised<CeremonyData, CeremonyResult> {
-    pub stage: Option<Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>>,
-    pub result_sender: CeremonyResultSender<CeremonyResult>,
+type OptionalCeremonyReturn<CeremonyResult, FailureReason> =
+    Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>>;
+
+pub struct StateAuthorised<CeremonyData, CeremonyResult, FailureReason> {
+    pub stage: Option<
+        Box<
+            dyn CeremonyStage<
+                Message = CeremonyData,
+                Result = CeremonyResult,
+                FailureReason = FailureReason,
+            >,
+        >,
+    >,
+    pub result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
     pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
-pub struct StateRunner<CeremonyData, CeremonyResult> {
-    inner: Option<StateAuthorised<CeremonyData, CeremonyResult>>,
+pub struct StateRunner<CeremonyData, CeremonyResult, FailureReason> {
+    inner: Option<StateAuthorised<CeremonyData, CeremonyResult, FailureReason>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
     delayed_messages: BTreeMap<AccountId, CeremonyData>,
@@ -36,9 +49,11 @@ pub struct StateRunner<CeremonyData, CeremonyResult> {
     logger: slog::Logger,
 }
 
-impl<CeremonyData, CeremonyResult> StateRunner<CeremonyData, CeremonyResult>
+impl<CeremonyData, CeremonyResult, FailureReason>
+    StateRunner<CeremonyData, CeremonyResult, FailureReason>
 where
     CeremonyData: Display,
+    FailureReason: Display,
 {
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
@@ -56,12 +71,27 @@ where
     /// the state machine to make progress
     pub fn on_ceremony_request(
         &mut self,
-        mut stage: Box<dyn CeremonyStage<Message = CeremonyData, Result = CeremonyResult>>,
+        mut stage: Box<
+            dyn CeremonyStage<
+                Message = CeremonyData,
+                Result = CeremonyResult,
+                FailureReason = FailureReason,
+            >,
+        >,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: CeremonyResultSender<CeremonyResult>,
-    ) -> Result<Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>>> {
+        result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
+    ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         if self.inner.is_some() {
-            return Err(anyhow::Error::msg("Duplicate ceremony_id"));
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::DuplicateCeremonyId,
+            )));
+            slog::warn!(
+                self.logger, #CEREMONY_REQUEST_IGNORED,
+                "{}",
+                CeremonyFailureReason::<SigningFailureReason>::DuplicateCeremonyId
+            );
+            return None;
         }
 
         stage.init();
@@ -78,12 +108,10 @@ where
         // control when our stages time out)
         self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
 
-        Ok(self.process_delayed())
+        self.process_delayed()
     }
 
-    fn finalize_current_stage(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    fn finalize_current_stage(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -134,7 +162,7 @@ where
         &mut self,
         sender_id: AccountId,
         data: CeremonyData,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         slog::trace!(
             self.logger,
             "Received message {} from party [{}] ",
@@ -180,9 +208,7 @@ where
     }
 
     /// Process previously delayed messages (which arrived one stage too early)
-    pub fn process_delayed(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    pub fn process_delayed(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
@@ -238,9 +264,7 @@ where
 
     /// Check if the stage has timed out, and if so, proceed according to the
     /// protocol rules for the stage
-    pub fn try_expiring(
-        &mut self,
-    ) -> Option<Result<CeremonyResult, (BTreeSet<AccountId>, anyhow::Error)>> {
+    pub fn try_expiring(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         if self.should_expire_at < std::time::Instant::now() {
             match &self.inner {
                 None => {
@@ -259,7 +283,7 @@ where
 
                     Some(Err((
                         reported_ids,
-                        anyhow::Error::msg("ceremony expired before being authorized"),
+                        CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
                     )))
                 }
                 Some(_authorised_state) => {
@@ -288,7 +312,9 @@ where
         self.inner.is_some()
     }
 
-    pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<CeremonyResult>> {
+    pub fn try_into_result_sender(
+        self,
+    ) -> Option<CeremonyResultSender<CeremonyResult, FailureReason>> {
         self.inner.map(|inner| inner.result_sender)
     }
 

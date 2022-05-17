@@ -55,24 +55,19 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                         cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
                     ),
                     // Report keygen failure if we failed to sign
-                    Err((bad_account_ids, error)) => {
+                    Err((bad_account_ids, reason)) => {
                         slog::debug!(
                             logger,
-                            "Keygen ceremony {} verification failed: {:?}",
+                            "Keygen ceremony {} verification failed: {}",
                             ceremony_id,
-                            error
+                            reason
                         );
                         KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
                     }
                 }
             }
-            Err((bad_account_ids, error)) => {
-                slog::debug!(
-                    logger,
-                    "Keygen ceremony {} failed: {:?}",
-                    ceremony_id,
-                    error
-                );
+            Err((bad_account_ids, reason)) => {
+                slog::debug!(logger, "Keygen ceremony {} failed: {}", ceremony_id, reason);
                 KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
             }
         };
@@ -308,8 +303,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                     )
                                                                     .await;
                                                             }
-                                                            Err((bad_account_ids, error)) => {
-                                                                slog::debug!(logger, "Threshold signing ceremony {} failed: {:?}", ceremony_id, error);
+                                                            Err((bad_account_ids, reason)) => {
+                                                                slog::debug!(logger, "Threshold signing ceremony {} failed: {}", ceremony_id, reason);
                                                                 let _result = state_chain_client
                                                                     .submit_signed_extrinsic(
                                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded {

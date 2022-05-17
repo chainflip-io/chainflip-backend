@@ -1,7 +1,11 @@
 use std::collections::BTreeMap;
 
 use crate::multisig::{
-    client::{self, signing},
+    client::{
+        self,
+        common::{BroadcastStageName, CeremonyFailureReason, SigningFailureReason},
+        signing,
+    },
     crypto::CryptoScheme,
 };
 
@@ -17,8 +21,11 @@ use signing::frost::{
 
 use signing::SigningStateCommonInfo;
 
-type SigningStageResult<C> =
-    StageResult<SigningData<<C as CryptoScheme>::Point>, <C as CryptoScheme>::Signature>;
+type SigningStageResult<C> = StageResult<
+    SigningData<<C as CryptoScheme>::Point>,
+    <C as CryptoScheme>::Signature,
+    SigningFailureReason,
+>;
 
 macro_rules! should_delay {
     ($variant:path) => {
@@ -55,7 +62,8 @@ impl<C: CryptoScheme> AwaitCommitments1<C> {
 
 derive_display_as_type_name!(AwaitCommitments1<C: CryptoScheme>);
 
-impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+impl<C: CryptoScheme>
+    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for AwaitCommitments1<C>
 {
     type Message = Comm1<C::Point>;
@@ -102,7 +110,8 @@ struct VerifyCommitmentsBroadcast2<C: CryptoScheme> {
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2<C: CryptoScheme>);
 
-impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+impl<C: CryptoScheme>
+    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for VerifyCommitmentsBroadcast2<C>
 {
     type Message = VerifyComm2<C::Point>;
@@ -124,14 +133,21 @@ impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signatur
     ) -> SigningStageResult<C> {
         let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("initial commitments");
+            Err((reported_parties, abort_reason)) => {
+                return SigningStageResult::<C>::Error(
+                    reported_parties,
+                    CeremonyFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::InitialCommitments,
+                    ),
+                );
             }
         };
 
         slog::debug!(
             self.common.logger,
-            "Initial commitments have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::InitialCommitments
         );
 
         let processor = LocalSigStage3::<C> {
@@ -159,7 +175,8 @@ struct LocalSigStage3<C: CryptoScheme> {
 
 derive_display_as_type_name!(LocalSigStage3<C: CryptoScheme>);
 
-impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+impl<C: CryptoScheme>
+    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for LocalSigStage3<C>
 {
     type Message = LocalSig3<C::Point>;
@@ -218,7 +235,8 @@ struct VerifyLocalSigsBroadcastStage4<C: CryptoScheme> {
 
 derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<C: CryptoScheme>);
 
-impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signature>
+impl<C: CryptoScheme>
+    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for VerifyLocalSigsBroadcastStage4<C>
 {
     type Message = VerifyLocalSig4<C::Point>;
@@ -243,14 +261,21 @@ impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signatur
     ) -> SigningStageResult<C> {
         let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("local signatures");
+            Err((reported_parties, abort_reason)) => {
+                return SigningStageResult::<C>::Error(
+                    reported_parties,
+                    CeremonyFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::LocalSignatures,
+                    ),
+                );
             }
         };
 
         slog::debug!(
             self.common.logger,
-            "Local signatures have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::LocalSignatures
         );
 
         let all_idxs = &self.common.all_idxs;
@@ -276,7 +301,7 @@ impl<C: CryptoScheme> BroadcastStageProcessor<SigningData<C::Point>, C::Signatur
             Ok(sig) => StageResult::Done(sig),
             Err(failed_idxs) => StageResult::Error(
                 failed_idxs,
-                anyhow::Error::msg("Failed to aggregate signature"),
+                CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare),
             ),
         }
     }
