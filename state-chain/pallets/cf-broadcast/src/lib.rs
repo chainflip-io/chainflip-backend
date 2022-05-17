@@ -464,7 +464,7 @@ pub mod pallet {
 		///
 		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
 		/// - [InvalidSigner](Error::InvalidSigner)
-		#[pallet::weight(0)] // TODO: Weight
+		#[pallet::weight(T::WeightInfo::transaction_signing_failure())]
 		pub fn transaction_signing_failure(
 			origin: OriginFor<T>,
 			broadcast_attempt_id: BroadcastAttemptId,
