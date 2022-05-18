@@ -676,31 +676,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		let next_broadcast_attempt_id = broadcast_attempt.broadcast_attempt_id.next_attempt();
-
-		BroadcastIdToAttemptNumbers::<T, I>::append(
-			broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			next_broadcast_attempt_id.attempt_count,
-		);
-
-		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-			broadcast_attempt_id: next_broadcast_attempt_id,
-			..broadcast_attempt
-		})
-	}
-
-	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
-		let signature_re_requesetd = match ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			// Case 1: We can encapsluate the threshold data and the signature is invalid -> clean
-			// up storage and scedule a re-try
-			Some((api_call, signature))
-				if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
-					&T::KeyProvider::current_key(),
-					&api_call.threshold_signature_payload(),
-					&signature,
-				) =>
-			{
+		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+			if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+				&T::KeyProvider::current_key(),
+				&api_call.threshold_signature_payload(),
+				&signature,
+			) {
 				if Self::clean_up_storage(signature).is_err() {
 					log::error!(
 						"Failed to clean up storage for broadcast attempt {}",
@@ -709,26 +691,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 				ThresholdSignatureData::<T, I>::remove(broadcast_id);
 				Self::threshold_sign_and_broadcast(api_call);
-				true
-			},
-			// Case 2: We can encapsulate the threshold data and the signature is valid -> no need
-			// to do anything
-			Some(_) => false,
-			// Case 3: We can't encapsulate the threshold data -> we can not really do anything
-			// beside continue retrying
-			None => {
-				log::error!("No threshold signature data is available.");
-				false
-			},
+				log::info!(
+					"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
+					broadcast_attempt.broadcast_attempt_id.broadcast_id
+				);
+				return
+			} else {
+				let next_broadcast_attempt_id =
+					broadcast_attempt.broadcast_attempt_id.next_attempt();
+
+				BroadcastIdToAttemptNumbers::<T, I>::append(
+					broadcast_attempt.broadcast_attempt_id.broadcast_id,
+					next_broadcast_attempt_id.attempt_count,
+				);
+
+				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+					broadcast_attempt_id: next_broadcast_attempt_id,
+					..broadcast_attempt
+				})
+			}
+		} else {
+			log::error!("No threshold signature data is available.");
 		};
-		if signature_re_requesetd {
-			log::info!(
-				"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
-				broadcast_attempt.broadcast_attempt_id.broadcast_id
-			);
-			// Early return the function if we re-requested the signature
-			return
-		}
+	}
+
+	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();

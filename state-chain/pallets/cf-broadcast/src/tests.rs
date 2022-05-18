@@ -729,7 +729,7 @@ fn re_request_threshold_signature() {
 		);
 		// Simualte a key rotation to invalidate the signature
 		MockKeyProvider::set_valid(false);
-		MockBroadcast::on_initialize(3_u64);
+		MockBroadcast::on_initialize(SIGNING_EXPIRY_BLOCKS + 1);
 		// Expect the broadcast to be deleted
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
