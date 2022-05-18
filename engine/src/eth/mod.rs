@@ -665,18 +665,13 @@ pub trait EthObserver {
             protocol_state.last_block_pulled = block_events.block_number;
 
             let opt_block_events = if merged_has_yielded {
-                match block_events.block_number.cmp(&next_block_to_yield) {
-                    Ordering::Equal => {
-                        // yield
-                        Some(block_events)
-                    }
-                    Ordering::Less => {
-                        slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_events.block_number, next_block_to_yield);
-                        None
-                    }
-                    Ordering::Greater => {
-                        panic!("Input streams to merged stream started at different block numbers. This should not occur.");
-                    }
+                if block_events.block_number == next_block_to_yield {
+                    Some(block_events)
+                } else if block_events.block_number < next_block_to_yield {
+                    slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_events.block_number, next_block_to_yield);
+                    None
+                } else {
+                    panic!("Input streams to merged stream started at different block numbers. This should not occur.");
                 }
             } else {
                 // yield
