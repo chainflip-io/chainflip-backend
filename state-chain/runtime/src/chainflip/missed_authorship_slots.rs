@@ -29,14 +29,14 @@ impl MissedAuthorshipSlots for MissedAuraSlots {
 			.find_map(extract_slot_from_digest_item)
 			.expect("Aura is not enabled;");
 
-		let expected = if let Some(last_seen) = LastSeenSlot::get() {
-			last_seen + 1
+		let maybe_expected = LastSeenSlot::get().map(|last_seen| last_seen.saturating_add(1u64));
+		LastSeenSlot::put(authored);
+		if let Some(expected) = maybe_expected {
+			(*expected)..(*authored)
 		} else {
 			log::info!("Not expecting any current slot.");
-			authored
-		};
-		LastSeenSlot::put(authored);
-		(*expected)..(*authored)
+			Default::default()
+		}
 	}
 }
 
