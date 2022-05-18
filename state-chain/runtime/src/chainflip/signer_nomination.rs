@@ -58,8 +58,13 @@ pub struct RandomSignerNomination;
 impl cf_traits::SignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
-	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId> {
-		select_one(seed_from_hashable(seed), eligible_authorities())
+	fn nomination_with_seed<H: Hashable>(
+		seed: H,
+		exclude_ids: &[Self::SignerId],
+	) -> Option<Self::SignerId> {
+		let mut eligible_signers = eligible_authorities();
+		eligible_signers.retain(|id| !exclude_ids.contains(id));
+		select_one(seed_from_hashable(seed), eligible_signers)
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(

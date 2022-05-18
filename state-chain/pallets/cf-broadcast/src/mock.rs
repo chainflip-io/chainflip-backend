@@ -90,7 +90,10 @@ pub const RANDOM_NOMINEE: u64 = 0xc001d00d_u64;
 impl SignerNomination for MockNominator {
 	type SignerId = u64;
 
-	fn nomination_with_seed<S>(_seed: S) -> Option<Self::SignerId> {
+	fn nomination_with_seed<S>(
+		_seed: S,
+		_exclude_ids: &[Self::SignerId],
+	) -> Option<Self::SignerId> {
 		NOMINATION.with(|cell| *cell.borrow())
 	}
 

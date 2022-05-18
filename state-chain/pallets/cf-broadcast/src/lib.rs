@@ -713,7 +713,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
 		// Check if there is an nominated signer
-		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed) {
+		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed, &[]) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionSignature::<T, I>::insert(
 				broadcast_attempt.broadcast_attempt_id,
