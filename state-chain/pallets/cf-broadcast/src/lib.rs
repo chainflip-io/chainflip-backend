@@ -689,25 +689,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	fn encapsulate_threshold_signature_data(
-		broadcast_id: u32,
-	) -> Result<ThresholdSignatureInformationFor<T, I>, ()> {
-		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			let payload = api_call.threshold_signature_payload();
-			Ok((payload, signature, api_call))
-		} else {
-			Err(())
-		}
-	}
-
-	fn try_re_request_threshold_signature(broadcast_id: BroadcastId) -> bool {
-		match Self::encapsulate_threshold_signature_data(broadcast_id) {
+	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
+		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
+		let signature_re_requesetd = match ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			// Case 1: We can encapsluate the threshold data and the signature is invalid -> clean
 			// up storage and scedule a re-try
-			Ok((payload, signature, api_call))
+			Some((api_call, signature))
 				if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&T::KeyProvider::current_key(),
-					&payload,
+					&api_call.threshold_signature_payload(),
 					&signature,
 				) =>
 			{
@@ -723,21 +713,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 			// Case 2: We can encapsulate the threshold data and the signature is valid -> no need
 			// to do anything
-			Ok(_) => false,
+			Some(_) => false,
 			// Case 3: We can't encapsulate the threshold data -> we can not really do anything
 			// beside continue retrying
-			Err(_) => {
+			None => {
 				log::error!("No threshold signature data is available.");
 				false
 			},
-		}
-	}
-
-	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		// Re-requests the threshold signature if necessary
-		if Self::try_re_request_threshold_signature(
-			broadcast_attempt.broadcast_attempt_id.broadcast_id,
-		) {
+		};
+		if signature_re_requesetd {
 			log::info!(
 				"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
 				broadcast_attempt.broadcast_attempt_id.broadcast_id
