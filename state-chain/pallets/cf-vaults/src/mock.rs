@@ -31,6 +31,8 @@ pub type ValidatorId = u64;
 
 thread_local! {
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
+	pub static CURRENT_SYSTEM_STATE: RefCell<SystemState> = RefCell::new(SystemState::Normal);
+
 }
 
 construct_runtime!(
@@ -48,6 +50,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
+#[derive(Clone, Eq, PartialEq, Copy, Debug)]
 pub enum SystemState {
 	Normal,
 	Maintenance,
@@ -59,12 +62,20 @@ pub struct MockSystemStateManager;
 impl SystemStateManager for MockSystemStateManager {
 	type SystemState = SystemState;
 
-	fn set_system_state(_state: Self::SystemState) {
-		todo!()
+	fn set_system_state(state: Self::SystemState) {
+		CURRENT_SYSTEM_STATE.with(|cell| {
+			*cell.borrow_mut() = state;
+		});
 	}
 
 	fn get_maintenance_state() -> Self::SystemState {
-		todo!()
+		SystemState::Maintenance
+	}
+}
+
+impl MockSystemStateManager {
+	pub fn get_current_system_state() -> SystemState {
+		CURRENT_SYSTEM_STATE.with(|cell| *cell.borrow())
 	}
 }
 
