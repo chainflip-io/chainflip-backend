@@ -302,17 +302,32 @@ impl pallet_aura::Config for Runtime {
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
 
+parameter_types! {
+	pub storage BlocksPerEpoch: u64 = Validator::epoch_number_of_blocks().into();
+}
+
+type KeyOwnerIdentification<T, Id> =
+	<T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::IdentificationTuple;
+type KeyOwnerProof<T, Id> = <T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::Proof;
+type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReportingAdapter<
+	T,
+	pallet_grandpa::GrandpaEquivocationOffence<
+		<T as pallet_grandpa::Config>::KeyOwnerIdentification,
+	>,
+	<T as pallet_session::historical::Config>::FullIdentification,
+>;
+
 impl pallet_grandpa::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type KeyOwnerProofSystem = Historical;
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		GrandpaId,
-	)>>::IdentificationTuple;
-	type HandleEquivocation = ();
+	type KeyOwnerProof = KeyOwnerProof<Historical, GrandpaId>;
+	type KeyOwnerIdentification = KeyOwnerIdentification<Historical, GrandpaId>;
+	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
+		Self::KeyOwnerIdentification,
+		GrandpaOffenceReporter<Self>,
+		BlocksPerEpoch,
+	>;
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
