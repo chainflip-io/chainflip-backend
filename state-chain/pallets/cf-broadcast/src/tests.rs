@@ -3,7 +3,7 @@ use crate::{
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
 	SignatureToBroadcastIdLookup, SignerIdToAccountId, ThresholdSignatureData,
-	TransactionFeeDeficit, TransmissionFailure,
+	TransactionFeeDeficit,
 };
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -17,13 +17,12 @@ use frame_system::RawOrigin;
 enum Scenario {
 	HappyPath,
 	BadSigner,
-	TransmissionFailure(TransmissionFailure),
+	SigningFailure,
 	Timeout,
 }
 
 thread_local! {
 	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
-	pub static FAILED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
 	pub static EXPIRED_ATTEMPTS: std::cell::RefCell<Vec<(BroadcastAttemptId, BroadcastStage)>> = Default::default();
 	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
 }
@@ -42,24 +41,76 @@ impl MockCfe {
 	fn process_event(event: Event, scenario: Scenario) {
 		match event {
 			Event::MockBroadcast(broadcast_event) => match broadcast_event {
-				BroadcastEvent::TransactionSigningRequest(attempt_id, nominee, unsigned_tx) => {
-					if let Scenario::Timeout = scenario {
-						// Ignore the request.
-						return
+				BroadcastEvent::TransactionSigningRequest(
+					broadcast_attempt_id,
+					nominee,
+					unsigned_tx,
+				) => {
+					if let Scenario::Timeout = scenario {}
+					match scenario {
+						Scenario::SigningFailure => {
+							// only nominee can return the signed tx
+							assert_noop!(
+								MockBroadcast::transaction_signing_failure(
+									RawOrigin::Signed(nominee + 1).into(),
+									broadcast_attempt_id
+								),
+								Error::<Test, Instance1>::InvalidSigner
+							);
+							assert_ok!(MockBroadcast::transaction_signing_failure(
+								RawOrigin::Signed(nominee).into(),
+								broadcast_attempt_id,
+							));
+						},
+						Scenario::Timeout => {
+							// Ignore the request.
+						},
+						_ => {
+							assert_eq!(nominee, RANDOM_NOMINEE);
+							// Only the nominee can return the signed tx.
+							assert_noop!(
+								MockBroadcast::transaction_ready_for_transmission(
+									RawOrigin::Signed(nominee + 1).into(),
+									broadcast_attempt_id,
+									unsigned_tx.clone().signed(Validity::Valid),
+									Validity::Valid
+								),
+								Error::<Test, Instance1>::InvalidSigner
+							);
+							// Only the nominee can return the signed tx.
+							assert_ok!(MockBroadcast::transaction_ready_for_transmission(
+								RawOrigin::Signed(nominee).into(),
+								broadcast_attempt_id,
+								unsigned_tx.signed(Validity::Valid),
+								match scenario {
+									Scenario::BadSigner => Validity::Invalid,
+									_ => Validity::Valid,
+								}
+							));
+						},
 					}
-					Self::handle_transaction_signature_request(
-						attempt_id,
-						nominee,
-						unsigned_tx,
-						scenario,
-					);
 				},
-				BroadcastEvent::TransmissionRequest(attempt_id, _signed_tx) => {
-					if let Scenario::Timeout = scenario {
-						// Ignore the request.
-						return
-					}
-					Self::handle_broadcast_request(attempt_id, scenario);
+				BroadcastEvent::TransmissionRequest(_, _signed_tx) => {
+					match scenario {
+						Scenario::Timeout => {
+							// Ignore the request.
+						},
+
+						// NB: This is ok for the sake of testing, but conceptually it's slightly
+						// different to the real version, as we submit signature_accepted after
+						// *witnessing* the transaction on ETH NOT when transmit the transaction.
+						Scenario::HappyPath => {
+							assert_ok!(MockBroadcast::signature_accepted(
+								Origin::root(),
+								MockThresholdSignature::default(),
+								Validity::Valid,
+								200,
+								10,
+								[0xcf; 4],
+							));
+						},
+						_ => unimplemented!(),
+					};
 				},
 				BroadcastEvent::BroadcastComplete(broadcast_attempt_id) => {
 					COMPLETED_BROADCASTS
@@ -67,10 +118,6 @@ impl MockCfe {
 				},
 				BroadcastEvent::BroadcastRetryScheduled(_) => {
 					// Informational only. No action required by the CFE.
-				},
-				BroadcastEvent::BroadcastFailed(broadcast_attempt_id, _) => {
-					FAILED_BROADCASTS
-						.with(|cell| cell.borrow_mut().push(broadcast_attempt_id.broadcast_id));
 				},
 				BroadcastEvent::BroadcastAttemptExpired(broadcast_attempt_id, stage) =>
 					EXPIRED_ATTEMPTS
@@ -85,62 +132,6 @@ impl MockCfe {
 			},
 			_ => panic!("Unexpected event"),
 		};
-	}
-
-	// Accepts an unsigned tx, making sure the nominee has been assigned.
-	fn handle_transaction_signature_request(
-		// TODO: Use BroadcastAttempt
-		attempt_id: BroadcastAttemptId,
-		nominee: u64,
-		unsigned_tx: MockUnsignedTransaction,
-		scenario: Scenario,
-	) {
-		assert_eq!(nominee, RANDOM_NOMINEE);
-		// Only the nominee can return the signed tx.
-		assert_noop!(
-			MockBroadcast::transaction_ready_for_transmission(
-				RawOrigin::Signed(nominee + 1).into(),
-				attempt_id,
-				unsigned_tx.clone().signed(Validity::Valid),
-				Validity::Valid
-			),
-			Error::<Test, Instance1>::InvalidSigner
-		);
-		// Only the nominee can return the signed tx.
-		assert_ok!(MockBroadcast::transaction_ready_for_transmission(
-			RawOrigin::Signed(nominee).into(),
-			attempt_id,
-			unsigned_tx.signed(Validity::Valid),
-			match scenario {
-				Scenario::BadSigner => Validity::Invalid,
-				_ => Validity::Valid,
-			}
-		));
-	}
-
-	// Simulate different outcomes.
-	fn handle_broadcast_request(broadcast_attempt_id: BroadcastAttemptId, scenario: Scenario) {
-		assert_ok!(match scenario {
-			Scenario::TransmissionFailure(failure) => {
-				MockBroadcast::transmission_failure(
-					Origin::root(),
-					broadcast_attempt_id,
-					failure,
-					[0xcf; 4],
-				)
-			},
-			Scenario::HappyPath => {
-				MockBroadcast::signature_accepted(
-					Origin::root(),
-					MockThresholdSignature::default(),
-					Validity::Valid,
-					0,
-					10,
-					[0xcf; 4],
-				)
-			},
-			_ => unimplemented!(),
-		});
 	}
 }
 
@@ -212,8 +203,11 @@ fn test_broadcast_rejected() {
 		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 
-		// CFE responds that the transaction was rejected.
-		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionRejected));
+		// // CFE responds that the transaction was rejected.
+		// MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::
+		// TransactionRejected)); CFE responds with a signed transaction. This moves us to the
+		// broadcast stage.
+		MockCfe::respond(Scenario::SigningFailure);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
 		);
@@ -254,12 +248,8 @@ fn test_abort_after_max_attempt_reached() {
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
 		for _ in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
-			// CFE responds with a signed transaction. This moves us to the broadcast stage.
-			MockCfe::respond(Scenario::HappyPath);
-			// CFE responds that the transaction was rejected.
-			MockCfe::respond(Scenario::TransmissionFailure(
-				TransmissionFailure::TransactionRejected,
-			));
+			// Nominated signer responds that they can't sign the transaction.
+			MockCfe::respond(Scenario::SigningFailure);
 			// The `on_initialize` hook is called and triggers a new broadcast attempt.
 			MockBroadcast::on_initialize(0);
 		}
@@ -272,7 +262,7 @@ fn test_abort_after_max_attempt_reached() {
 }
 
 #[test]
-fn test_broadcast_failed() {
+fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
@@ -290,27 +280,26 @@ fn test_broadcast_failed() {
 		);
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
-		MockCfe::respond(Scenario::HappyPath);
-		assert!(
-			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
-		);
-		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_some());
-
-		// CFE responds that the transaction failed.
-		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionFailed));
+		MockCfe::respond(Scenario::SigningFailure);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
 		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
-
-		// We don't retry.
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 0);
-		// The broadcast has failed.
-		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionFailed));
 		assert_eq!(
-			FAILED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
-			broadcast_attempt_id.broadcast_id
+			BroadcastRetryQueue::<Test, Instance1>::get()
+				.into_iter()
+				.next()
+				.unwrap()
+				.broadcast_attempt_id,
+			broadcast_attempt_id
 		);
+
+		// initialising a new block should kick off the retry
+		MockBroadcast::on_initialize(0);
+		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(
+			broadcast_attempt_id.next_attempt()
+		)
+		.is_some());
 	})
 }
 
@@ -364,11 +353,9 @@ fn test_invalid_id_is_noop() {
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
 		assert_noop!(
-			MockBroadcast::transmission_failure(
-				Origin::root(),
+			MockBroadcast::transaction_signing_failure(
+				RawOrigin::Signed(0).into(),
 				BroadcastAttemptId::default(),
-				TransmissionFailure::TransactionFailed,
-				[0u8; 4]
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
@@ -775,7 +762,6 @@ fn no_authorities_available() {
 }
 
 // In this scenario the transmission of the transaction is not able to get through. We try
-// several times but without success. The system remains in this state until CFE witness the
 // successful emit of the SignatureAccepted event on the target chain. The broadcast of the
 // transaction gest finalized with this.
 #[test]
@@ -810,8 +796,11 @@ fn missing_transaction_transmission() {
 			vec![0]
 		);
 
-		// First retry
-		MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::TransactionRejected));
+		// // First retry
+		// MockCfe::respond(Scenario::TransmissionFailure(TransmissionFailure::
+		// TransactionRejected)); CFE responds with a signed transaction. This moves us to the
+		// broadcast stage.
+		MockCfe::respond(Scenario::SigningFailure);
 		MockBroadcast::on_initialize(0_u64);
 		// We've failed, so the first broadcast was invalidated, and we just have the retry attempt
 		assert_eq!(

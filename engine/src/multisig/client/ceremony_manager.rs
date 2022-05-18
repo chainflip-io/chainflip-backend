@@ -3,15 +3,13 @@ use std::sync::Arc;
 
 use crate::common::format_iterator;
 use crate::multisig::client;
-use crate::multisig::crypto::Rng;
+use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
+use crate::multisig::crypto::{CryptoScheme, Rng};
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
-use client::{
-    signing::frost::SigningData, state_runner::StateRunner, utils::PartyIdxMapping,
-    SchnorrSignature,
-};
+use client::{signing::frost::SigningData, state_runner::StateRunner, utils::PartyIdxMapping};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
@@ -21,7 +19,9 @@ use crate::logging::{
     SIGNING_CEREMONY_FAILED,
 };
 
-use client::common::{broadcast::BroadcastStage, CeremonyCommon, KeygenResultInfo};
+use client::common::{
+    broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
+};
 
 use crate::multisig::MessageHash;
 
@@ -29,26 +29,35 @@ use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
-pub type CeremonyResultSender<T> = oneshot::Sender<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
-pub type CeremonyResultReceiver<T> =
-    oneshot::Receiver<Result<T, (BTreeSet<AccountId>, anyhow::Error)>>;
+pub type CeremonyResultSender<T, R> =
+    oneshot::Sender<Result<T, (BTreeSet<AccountId>, CeremonyFailureReason<R>)>>;
+pub type CeremonyResultReceiver<T, R> =
+    oneshot::Receiver<Result<T, (BTreeSet<AccountId>, CeremonyFailureReason<R>)>>;
 
-type SigningStateRunner = StateRunner<SigningData, SchnorrSignature>;
-type KeygenStateRunner = StateRunner<KeygenData, KeygenResultInfo>;
+type SigningStateRunner<C> = StateRunner<
+    SigningData<<C as CryptoScheme>::Point>,
+    <C as CryptoScheme>::Signature,
+    SigningFailureReason,
+>;
+type KeygenStateRunner<C> = StateRunner<
+    KeygenData<<C as CryptoScheme>::Point>,
+    KeygenResultInfo<<C as CryptoScheme>::Point>,
+    KeygenFailureReason,
+>;
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
-pub struct CeremonyManager {
+pub struct CeremonyManager<C: CryptoScheme> {
     my_account_id: AccountId,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    signing_states: HashMap<CeremonyId, SigningStateRunner>,
-    keygen_states: HashMap<CeremonyId, KeygenStateRunner>,
+    signing_states: HashMap<CeremonyId, SigningStateRunner<C>>,
+    keygen_states: HashMap<CeremonyId, KeygenStateRunner<C>>,
     ceremony_id_tracker: CeremonyIdTracker,
     allowing_high_pubkey: bool,
     logger: slog::Logger,
 }
 
-impl CeremonyManager {
+impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn new(
         my_account_id: AccountId,
         outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
@@ -147,7 +156,13 @@ impl CeremonyManager {
     fn process_signing_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<SchnorrSignature, (BTreeSet<AccountId>, anyhow::Error)>,
+        result: Result<
+            C::Signature,
+            (
+                BTreeSet<AccountId>,
+                CeremonyFailureReason<SigningFailureReason>,
+            ),
+        >,
     ) {
         let result_sender = self
             .signing_states
@@ -160,7 +175,7 @@ impl CeremonyManager {
             slog::warn!(
                 self.logger,
                 #SIGNING_CEREMONY_FAILED,
-                "Signing ceremony failed: {}",
+                "{}",
                 reason; "reported parties" =>
                 format_iterator(blamed_parties).to_string(),
                 CEREMONY_ID_KEY => ceremony_id,
@@ -172,7 +187,13 @@ impl CeremonyManager {
     fn process_keygen_ceremony_outcome(
         &mut self,
         ceremony_id: CeremonyId,
-        result: Result<KeygenResultInfo, (BTreeSet<AccountId>, anyhow::Error)>,
+        result: Result<
+            KeygenResultInfo<C::Point>,
+            (
+                BTreeSet<AccountId>,
+                CeremonyFailureReason<KeygenFailureReason>,
+            ),
+        >,
     ) {
         let result_sender = self
             .keygen_states
@@ -185,7 +206,7 @@ impl CeremonyManager {
             slog::warn!(
                 self.logger,
                 #KEYGEN_CEREMONY_FAILED,
-                "Keygen ceremony failed: {}",
+                "{}",
                 reason; "reported parties" =>
                 format_iterator(blamed_parties).to_string(),
                 CEREMONY_ID_KEY => ceremony_id,
@@ -200,7 +221,7 @@ impl CeremonyManager {
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
         rng: Rng,
-        result_sender: CeremonyResultSender<KeygenResultInfo>,
+        result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>, KeygenFailureReason>,
     ) {
         // TODO: Consider similarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
 
@@ -213,6 +234,10 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+                let _result = result_sender.send(Err((
+                    BTreeSet::new(),
+                    CeremonyFailureReason::InvalidParticipants,
+                )));
                 return;
             }
         };
@@ -222,12 +247,16 @@ impl CeremonyManager {
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::CeremonyIdAlreadyUsed,
+            )));
             return;
         }
 
         let logger_no_ceremony_id = &self.logger;
         let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
-            KeygenStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+            KeygenStateRunner::<C>::new_unauthorised(ceremony_id, logger_no_ceremony_id)
         });
 
         let initial_stage = {
@@ -249,14 +278,9 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(initial_stage, validator_map, result_sender) {
-            Ok(Some(result)) => {
-                self.process_keygen_ceremony_outcome(ceremony_id, result);
-            }
-            Err(reason) => {
-                slog::warn!(self.logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
-            }
-            _ => { /* nothing to do */ }
+        if let Some(result) = state.on_ceremony_request(initial_stage, validator_map, result_sender)
+        {
+            self.process_keygen_ceremony_outcome(ceremony_id, result);
         };
     }
 
@@ -266,9 +290,9 @@ impl CeremonyManager {
         ceremony_id: CeremonyId,
         signers: Vec<AccountId>,
         data: MessageHash,
-        key_info: KeygenResultInfo,
+        key_info: KeygenResultInfo<C::Point>,
         rng: Rng,
-        result_sender: CeremonyResultSender<SchnorrSignature>,
+        result_sender: CeremonyResultSender<C::Signature, SigningFailureReason>,
     ) {
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
@@ -284,6 +308,10 @@ impl CeremonyManager {
                 "Request to sign ignored: not enough signers {}/{}",
                 signers.len(), minimum_signers_needed
             );
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
+            )));
             return;
         }
 
@@ -293,6 +321,10 @@ impl CeremonyManager {
             Ok(res) => res,
             Err(reason) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
+                let _result = result_sender.send(Err((
+                    BTreeSet::new(),
+                    CeremonyFailureReason::InvalidParticipants,
+                )));
                 return;
             }
         };
@@ -302,6 +334,10 @@ impl CeremonyManager {
             .is_signing_ceremony_id_used(&ceremony_id)
         {
             slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
+            let _result = result_sender.send(Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::CeremonyIdAlreadyUsed,
+            )));
             return;
         }
 
@@ -309,7 +345,7 @@ impl CeremonyManager {
         let logger_no_ceremony_id = &self.logger;
 
         let state = self.signing_states.entry(ceremony_id).or_insert_with(|| {
-            SigningStateRunner::new_unauthorised(ceremony_id, logger_no_ceremony_id)
+            SigningStateRunner::<C>::new_unauthorised(ceremony_id, logger_no_ceremony_id)
         });
 
         let initial_stage = {
@@ -325,7 +361,7 @@ impl CeremonyManager {
                 rng,
             };
 
-            let processor = AwaitCommitments1::new(
+            let processor = AwaitCommitments1::<C>::new(
                 common.clone(),
                 SigningStateCommonInfo {
                     data,
@@ -336,19 +372,19 @@ impl CeremonyManager {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        match state.on_ceremony_request(initial_stage, key_info.validator_map, result_sender) {
-            Ok(Some(result)) => {
-                self.process_signing_ceremony_outcome(ceremony_id, result);
-            }
-            Err(reason) => {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-            }
-            _ => { /* nothing to do */ }
+        if let Some(result) =
+            state.on_ceremony_request(initial_stage, key_info.validator_map, result_sender)
+        {
+            self.process_signing_ceremony_outcome(ceremony_id, result);
         };
     }
 
     /// Process message from another validator
-    pub fn process_p2p_message(&mut self, sender_id: AccountId, message: MultisigMessage) {
+    pub fn process_p2p_message(
+        &mut self,
+        sender_id: AccountId,
+        message: MultisigMessage<C::Point>,
+    ) {
         match message {
             MultisigMessage {
                 ceremony_id,
@@ -377,8 +413,9 @@ impl CeremonyManager {
         &mut self,
         sender_id: AccountId,
         ceremony_id: CeremonyId,
-        data: SigningData,
+        data: SigningData<C::Point>,
     ) {
+        use std::collections::hash_map::Entry;
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
 
@@ -396,11 +433,37 @@ impl CeremonyManager {
 
         slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
-        let logger = &self.logger;
-        let state = self
-            .signing_states
-            .entry(ceremony_id)
-            .or_insert_with(|| SigningStateRunner::new_unauthorised(ceremony_id, logger));
+        // Only stage 1 messages can create unauthorised ceremonies
+        let state = if matches!(data, SigningData::CommStage1(_)) {
+            self.signing_states.entry(ceremony_id).or_insert_with(|| {
+                SigningStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger)
+            })
+        } else {
+            match self.signing_states.entry(ceremony_id) {
+                Entry::Occupied(entry) => {
+                    let state = entry.into_mut();
+                    if state.is_authorized() {
+                        // Only first stage messages should be processed (delayed) if we're not authorized
+                        state
+                    } else {
+                        slog::debug!(
+                            self.logger,
+                            "Ignoring non-initial stage signing data for unauthorised ceremony {}",
+                            ceremony_id
+                        );
+                        return;
+                    }
+                }
+                Entry::Vacant(_) => {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage signing data for non-existent ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                }
+            }
+        };
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
@@ -412,8 +475,10 @@ impl CeremonyManager {
         &mut self,
         sender_id: AccountId,
         ceremony_id: CeremonyId,
-        data: KeygenData,
+        data: KeygenData<C::Point>,
     ) {
+        use std::collections::hash_map::Entry;
+
         if self
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
@@ -426,11 +491,37 @@ impl CeremonyManager {
             return;
         }
 
-        let logger = &self.logger;
-        let state = self
-            .keygen_states
-            .entry(ceremony_id)
-            .or_insert_with(|| KeygenStateRunner::new_unauthorised(ceremony_id, logger));
+        // Only stage 1 messages can create unauthorised ceremonies
+        let state = if matches!(data, KeygenData::HashComm1(_)) {
+            self.keygen_states.entry(ceremony_id).or_insert_with(|| {
+                KeygenStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger)
+            })
+        } else {
+            match self.keygen_states.entry(ceremony_id) {
+                Entry::Occupied(entry) => {
+                    let state = entry.into_mut();
+                    if state.is_authorized() {
+                        // Only first stage messages should be processed (delayed) if we're not authorized
+                        state
+                    } else {
+                        slog::debug!(
+                            self.logger,
+                            "Ignoring non-initial stage keygen data for unauthorised ceremony {}",
+                            ceremony_id
+                        );
+                        return;
+                    }
+                }
+                Entry::Vacant(_) => {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring non-initial stage keygen data for non-existent ceremony {}",
+                        ceremony_id
+                    );
+                    return;
+                }
+            }
+        };
 
         if let Some(result) = state.process_message(sender_id, data) {
             self.process_keygen_ceremony_outcome(ceremony_id, result);
@@ -439,7 +530,7 @@ impl CeremonyManager {
 }
 
 #[cfg(test)]
-impl CeremonyManager {
+impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn expire_all(&mut self) {
         for state in self.signing_states.values_mut() {
             state.set_expiry_time(std::time::Instant::now());
@@ -501,4 +592,135 @@ pub fn generate_keygen_context(
     }
 
     HashContext(*hasher.finalize().as_ref())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::{
+        logging::test_utils::new_test_logger,
+        multisig::{
+            client::common::BroadcastVerificationMessage,
+            eth::{EthSigning, Point},
+        },
+    };
+
+    use client::signing::frost::SigningCommitment;
+    use rand_legacy::SeedableRng;
+
+    #[test]
+    fn should_ignore_non_first_stage_keygen_data_before_request() {
+        let ceremony_id = 0_u64;
+        let account_id = AccountId::new([1; 32]);
+
+        // Create a new ceremony manager
+        let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+            account_id.clone(),
+            tokio::sync::mpsc::unbounded_channel().0,
+            &new_test_logger(),
+        );
+
+        // Process a stage 2 message
+        ceremony_manager.process_keygen_data(
+            account_id.clone(),
+            ceremony_id,
+            KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and no unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
+
+        // Process a stage 1 message
+        ceremony_manager.process_keygen_data(
+            account_id.clone(),
+            ceremony_id,
+            KeygenData::HashComm1(client::keygen::HashComm1(sp_core::H256::default())),
+        );
+
+        // Check that the message was not ignored and an unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
+
+        // Process a stage 2 message
+        ceremony_manager.process_keygen_data(
+            account_id,
+            ceremony_id,
+            KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and not added to the delayed messages of the unauthorised ceremony.
+        // Only 1 first stage message should be in the delayed messages.
+        assert_eq!(
+            ceremony_manager
+                .keygen_states
+                .get(&ceremony_id)
+                .unwrap()
+                .get_delayed_messages_len(),
+            1
+        )
+    }
+
+    #[test]
+    fn should_ignore_non_first_stage_signing_data_before_request() {
+        let ceremony_id = 0_u64;
+        let account_id = AccountId::new([1; 32]);
+
+        // Create a new ceremony manager
+        let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+            account_id.clone(),
+            tokio::sync::mpsc::unbounded_channel().0,
+            &new_test_logger(),
+        );
+
+        // Process a stage 2 message
+        ceremony_manager.process_signing_data(
+            account_id.clone(),
+            ceremony_id,
+            SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and no unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_signing_states_len(), 0);
+
+        // Process a stage 1 message
+        let mut rng = Rng::from_seed([0; 32]);
+        ceremony_manager.process_signing_data(
+            account_id.clone(),
+            ceremony_id,
+            SigningData::CommStage1(SigningCommitment {
+                d: Point::random(&mut rng),
+                e: Point::random(&mut rng),
+            }),
+        );
+
+        // Check that the message was not ignored and an unauthorised ceremony was created
+        assert_eq!(ceremony_manager.get_signing_states_len(), 1);
+
+        // Process a stage 2 message
+        ceremony_manager.process_signing_data(
+            account_id,
+            ceremony_id,
+            SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            }),
+        );
+
+        // Check that the message was ignored and not added to the delayed messages of the unauthorised ceremony.
+        // Only 1 first stage message should be in the delayed messages.
+        assert_eq!(
+            ceremony_manager
+                .signing_states
+                .get(&ceremony_id)
+                .unwrap()
+                .get_delayed_messages_len(),
+            1
+        )
+    }
 }

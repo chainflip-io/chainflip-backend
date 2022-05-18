@@ -107,13 +107,13 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
-pub fn check_balance_integrity() {
+pub fn check_balance_integrity() -> bool {
 	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
 		.map(|account| account.total())
 		.sum::<FlipBalance>();
 	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<FlipBalance>();
 
-	assert_eq!(accounts_total + reserves_total, Flip::onchain_funds());
+	(accounts_total + reserves_total) == Flip::onchain_funds()
 }
 
 // Build genesis storage according to the mock runtime.
@@ -143,4 +143,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	});
 
 	ext
+}
+#[derive(Clone, Debug)]
+pub enum FlipOperation {
+	Stake(AccountId, FlipBalance),
+	BurnFromAccount(AccountId, FlipBalance),
+	MintToAccount(AccountId, FlipBalance),
+	Claim(AccountId, FlipBalance),
 }

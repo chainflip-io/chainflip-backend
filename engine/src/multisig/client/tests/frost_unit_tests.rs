@@ -1,7 +1,11 @@
 use crate::{
-    logging::{REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED},
+    logging::{CEREMONY_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED},
     multisig::{
         client::{
+            common::{
+                BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
+                SigningFailureReason,
+            },
             signing::frost,
             tests::helpers::{
                 for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
@@ -98,17 +102,18 @@ async fn should_delay_comm1_before_rts() {
         .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
 }
 
+// We choose (arbitrarily) to use eth crypto for unit tests.
+use crate::multisig::crypto::eth::Point;
+type VerfiyComm2 = frost::VerifyComm2<Point>;
+type LocalSig3 = frost::LocalSig3<Point>;
+type VerifyLocalSig4 = frost::VerifyLocalSig4<Point>;
+
 #[tokio::test]
 async fn should_report_on_invalid_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
-    let mut messages = run_stages!(
-        signing_ceremony,
-        messages,
-        frost::VerifyComm2,
-        frost::LocalSig3
-    );
+    let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
@@ -118,16 +123,16 @@ async fn should_report_on_invalid_local_sig3() {
     }
 
     let messages = signing_ceremony
-        .run_stage::<frost::VerifyLocalSig4, _, _>(messages)
+        .run_stage::<VerifyLocalSig4, _, _>(messages)
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id], result_receivers)
+        .complete_with_error(
+            &[bad_account_id],
+            result_receivers,
+            CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare),
+        )
         .await;
-    assert!(signing_ceremony
-        .nodes
-        .values()
-        .all(|node| node.tag_cache.contains_tag(SIGNING_CEREMONY_FAILED)));
 }
 
 #[tokio::test]
@@ -143,16 +148,19 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
     }
 
     let messages = signing_ceremony
-        .run_stage::<frost::VerifyComm2, _, _>(messages)
+        .run_stage::<VerfiyComm2, _, _>(messages)
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id], result_receivers)
+        .complete_with_error(
+            &[bad_account_id],
+            result_receivers,
+            CeremonyFailureReason::BroadcastFailure(
+                BroadcastFailureReason::Inconsistency,
+                BroadcastStageName::InitialCommitments,
+            ),
+        )
         .await;
-    assert!(signing_ceremony
-        .nodes
-        .values()
-        .all(|node| node.tag_cache.contains_tag(SIGNING_CEREMONY_FAILED)));
 }
 
 #[tokio::test]
@@ -161,12 +169,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 
     let (messages, result_receivers) = signing_ceremony.request().await;
 
-    let mut messages = run_stages!(
-        signing_ceremony,
-        messages,
-        frost::VerifyComm2,
-        frost::LocalSig3
-    );
+    let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
@@ -175,16 +178,19 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
     }
 
     let messages = signing_ceremony
-        .run_stage::<frost::VerifyLocalSig4, _, _>(messages)
+        .run_stage::<VerifyLocalSig4, _, _>(messages)
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
-        .complete_with_error(&[bad_account_id], result_receivers)
+        .complete_with_error(
+            &[bad_account_id],
+            result_receivers,
+            CeremonyFailureReason::BroadcastFailure(
+                BroadcastFailureReason::Inconsistency,
+                BroadcastStageName::LocalSignatures,
+            ),
+        )
         .await;
-    assert!(signing_ceremony
-        .nodes
-        .values()
-        .all(|node| node.tag_cache.contains_tag(SIGNING_CEREMONY_FAILED)));
 }
 
 #[tokio::test]
@@ -194,20 +200,25 @@ async fn should_ignore_duplicate_rts() {
 
     let (messages, _result_receivers) = signing_ceremony.request().await;
 
-    run_stages!(signing_ceremony, messages, frost::VerifyComm2,);
+    run_stages!(signing_ceremony, messages, VerfiyComm2,);
 
     assert_ok!(signing_ceremony.nodes[&test_id]
         .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
 
-    // Send another request to sign with the same ceremony_id and key_id
-    signing_ceremony.request_without_gather();
+    // Send another request to sign with the same ceremony_id and key_id to a node
+    let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&test_id);
+    let node = &mut signing_ceremony.nodes.get_mut(&test_id).unwrap();
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
     // The request should have been rejected and the existing ceremony is unchanged
-    assert_ok!(signing_ceremony.nodes[&test_id]
-        .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
-    assert!(signing_ceremony.nodes[&test_id]
-        .tag_cache
-        .contains_tag(REQUEST_TO_SIGN_IGNORED));
+    assert_ok!(node.ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
+
+    // Check that the failure reason is correct
+    node.ensure_failure_reason(
+        result_receiver,
+        CeremonyFailureReason::DuplicateCeremonyId,
+        CEREMONY_REQUEST_IGNORED,
+    );
 }
 
 #[tokio::test]
@@ -228,14 +239,20 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     );
 
     let test_node = signing_ceremony.nodes.get_mut(&test_node_id).unwrap();
-    test_node.request_signing(signing_ceremony_details);
+    let result_receiver = test_node.request_signing(signing_ceremony_details);
 
     // The request to sign should not have triggered a ceremony
     assert_ok!(test_node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
-    assert!(test_node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+
+    // Check that the failure reason is correct
+    test_node.ensure_failure_reason(
+        result_receiver,
+        CeremonyFailureReason::InvalidParticipants,
+        REQUEST_TO_SIGN_IGNORED,
+    );
 }
 
 #[tokio::test]
@@ -272,15 +289,21 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     // Send the request to sign with insufficient signer_ids specified
     let mut signing_ceremony_details = signing_ceremony.signing_ceremony_details(test_node_id);
     signing_ceremony_details.signers.pop();
-    let node_0 = signing_ceremony.nodes.get_mut(test_node_id).unwrap();
-    node_0.request_signing(signing_ceremony_details);
+    let node = signing_ceremony.nodes.get_mut(test_node_id).unwrap();
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
     // The request to sign should not have started a ceremony
-    assert_ok!(node_0.ensure_ceremony_at_signing_stage(
+    assert_ok!(node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
-    assert!(node_0.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+
+    // Check that the failure reason is correct
+    node.ensure_failure_reason(
+        result_receiver,
+        CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
+        REQUEST_TO_SIGN_IGNORED,
+    );
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -407,18 +430,20 @@ async fn should_ignore_rts_with_duplicate_signer() {
     );
 
     let node = &mut signing_ceremony.nodes.get_mut(&node_0_id).unwrap();
-    node.request_signing(signing_ceremony_details);
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
-    // The rts should not have started a ceremony and we should see an error tag
+    // The rts should not have started a ceremony
     assert_ok!(node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
 
-    assert!(signing_ceremony
-        .get_mut_node(&node_0_id)
-        .tag_cache
-        .contains_tag(REQUEST_TO_SIGN_IGNORED));
+    // Check that the failure reason is correct
+    node.ensure_failure_reason(
+        result_receiver,
+        CeremonyFailureReason::InvalidParticipants,
+        REQUEST_TO_SIGN_IGNORED,
+    );
 }
 
 #[tokio::test]
@@ -429,9 +454,9 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     let messages = run_stages!(
         signing_ceremony,
         messages,
-        frost::VerifyComm2,
-        frost::LocalSig3,
-        frost::VerifyLocalSig4
+        VerfiyComm2,
+        LocalSig3,
+        VerifyLocalSig4
     );
     // Finish a signing ceremony
     signing_ceremony.distribute_messages(messages);
@@ -442,14 +467,20 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     // Send an rts with the same ceremony id (the default signing ceremony id for tests)
     let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&account_id);
     let node = signing_ceremony.nodes.get_mut(&account_id).unwrap();
-    node.request_signing(signing_ceremony_details);
+    let result_receiver = node.request_signing(signing_ceremony_details);
 
     // The rts should have been ignored
     assert_ok!(node.ensure_ceremony_at_signing_stage(
         STAGE_FINISHED_OR_NOT_STARTED,
         signing_ceremony.ceremony_id
     ));
-    assert!(node.tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+
+    // Check that the failure reason is correct
+    node.ensure_failure_reason(
+        result_receiver,
+        CeremonyFailureReason::CeremonyIdAlreadyUsed,
+        REQUEST_TO_SIGN_IGNORED,
+    );
 }
 
 #[tokio::test]
@@ -535,9 +566,9 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     let messages = run_stages!(
         signing_ceremony,
         messages,
-        frost::VerifyComm2,
-        frost::LocalSig3,
-        frost::VerifyLocalSig4
+        VerfiyComm2,
+        LocalSig3,
+        VerifyLocalSig4
     );
     signing_ceremony.distribute_messages(messages);
 
@@ -563,9 +594,9 @@ async fn should_sign_with_all_parties() {
     let messages = run_stages!(
         signing_ceremony,
         messages,
-        frost::VerifyComm2,
-        frost::LocalSig3,
-        frost::VerifyLocalSig4
+        VerfiyComm2,
+        LocalSig3,
+        VerifyLocalSig4
     );
     signing_ceremony.distribute_messages(messages);
     signing_ceremony.complete(result_receivers).await;
@@ -613,7 +644,7 @@ mod timeout {
 
     mod during_regular_stage {
 
-        use crate::multisig::client::signing::frost::SigningData;
+        type SigningData = crate::multisig::client::signing::frost::SigningData<Point>;
 
         use super::*;
 
@@ -647,15 +678,10 @@ mod timeout {
                 .force_stage_timeout();
 
             let messages = signing_ceremony
-                .gather_outgoing_messages::<frost::VerifyComm2, SigningData>()
+                .gather_outgoing_messages::<VerfiyComm2, SigningData>()
                 .await;
 
-            let messages = run_stages!(
-                signing_ceremony,
-                messages,
-                frost::LocalSig3,
-                frost::VerifyLocalSig4
-            );
+            let messages = run_stages!(signing_ceremony, messages, LocalSig3, VerifyLocalSig4);
             signing_ceremony.distribute_messages(messages);
             signing_ceremony.complete(result_receivers).await;
         }
@@ -666,12 +692,7 @@ mod timeout {
 
             let (messages, result_receivers) = signing_ceremony.request().await;
 
-            let mut messages = run_stages!(
-                signing_ceremony,
-                messages,
-                frost::VerifyComm2,
-                frost::LocalSig3
-            );
+            let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
 
             let [non_sending_party_id, timed_out_party_id] = signing_ceremony.select_account_ids();
 
@@ -690,7 +711,7 @@ mod timeout {
                 .force_stage_timeout();
 
             let messages = signing_ceremony
-                .gather_outgoing_messages::<frost::VerifyLocalSig4, SigningData>()
+                .gather_outgoing_messages::<VerifyLocalSig4, SigningData>()
                 .await;
 
             signing_ceremony.distribute_messages(messages);
@@ -716,17 +737,13 @@ mod timeout {
             let [bad_node_id] = &ceremony.select_account_ids();
 
             let (messages, result_receivers) = ceremony.request().await;
-            let messages = ceremony
-                .run_stage::<frost::VerifyComm2, _, _>(messages)
-                .await;
+            let messages = ceremony.run_stage::<VerfiyComm2, _, _>(messages).await;
 
             let messages = ceremony
-                .run_stage_with_non_sender::<frost::LocalSig3, _, _>(messages, bad_node_id)
+                .run_stage_with_non_sender::<LocalSig3, _, _>(messages, bad_node_id)
                 .await;
 
-            let messages = ceremony
-                .run_stage::<frost::VerifyLocalSig4, _, _>(messages)
-                .await;
+            let messages = ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
             ceremony.distribute_messages(messages);
             ceremony.complete(result_receivers).await;
         }
@@ -738,13 +755,7 @@ mod timeout {
             let [bad_node_id] = &ceremony.select_account_ids();
 
             let (messages, result_receivers) = ceremony.request().await;
-            let messages = run_stages!(
-                ceremony,
-                messages,
-                frost::VerifyComm2,
-                frost::LocalSig3,
-                frost::VerifyLocalSig4
-            );
+            let messages = run_stages!(ceremony, messages, VerfiyComm2, LocalSig3, VerifyLocalSig4);
 
             ceremony.distribute_messages_with_non_sender(messages, bad_node_id);
 
@@ -775,17 +786,21 @@ mod timeout {
 
             // bad party 1 times out here
             let messages = signing_ceremony
-                .run_stage_with_non_sender::<frost::VerifyComm2, _, _>(
-                    messages,
-                    &non_sending_party_id_1,
-                )
+                .run_stage_with_non_sender::<VerfiyComm2, _, _>(messages, &non_sending_party_id_1)
                 .await;
 
             // bad party 2 times out here (NB: They are different parties)
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id_1], result_receivers)
+                .complete_with_error(
+                    &[non_sending_party_id_1],
+                    result_receivers,
+                    CeremonyFailureReason::BroadcastFailure(
+                        BroadcastFailureReason::InsufficientMessages,
+                        BroadcastStageName::InitialCommitments,
+                    ),
+                )
                 .await
         }
 
@@ -800,16 +815,11 @@ mod timeout {
 
             let (messages, result_receivers) = signing_ceremony.request().await;
 
-            let messages = run_stages!(
-                signing_ceremony,
-                messages,
-                frost::VerifyComm2,
-                frost::LocalSig3
-            );
+            let messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
 
             // bad party 1 times out here
             let messages = signing_ceremony
-                .run_stage_with_non_sender::<frost::VerifyLocalSig4, _, _>(
+                .run_stage_with_non_sender::<VerifyLocalSig4, _, _>(
                     messages,
                     &non_sending_party_id_1,
                 )
@@ -819,7 +829,14 @@ mod timeout {
             signing_ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
 
             signing_ceremony
-                .complete_with_error(&[non_sending_party_id_1], result_receivers)
+                .complete_with_error(
+                    &[non_sending_party_id_1],
+                    result_receivers,
+                    CeremonyFailureReason::BroadcastFailure(
+                        BroadcastFailureReason::InsufficientMessages,
+                        BroadcastStageName::LocalSignatures,
+                    ),
+                )
                 .await
         }
 

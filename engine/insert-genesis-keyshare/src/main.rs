@@ -1,8 +1,7 @@
 use chainflip_engine::multisig::{
-    db::persistent::{
-        update_key, DATA_COLUMN, DB_SCHEMA_VERSION, DB_SCHEMA_VERSION_KEY, METADATA_COLUMN,
-    },
-    KeyId,
+    client::KeygenResultInfo,
+    db::persistent::{DATA_COLUMN, DB_SCHEMA_VERSION, DB_SCHEMA_VERSION_KEY, METADATA_COLUMN},
+    eth, KeyDB, KeyId, PersistentKeyDB,
 };
 use rocksdb::{Options, DB};
 use std::env;
@@ -18,8 +17,11 @@ fn main() {
     let secret_share_hex = env::var("SIGNING_SECRET_SHARE")
         .expect("SIGNING_SECRET_SHARE environment variable not set");
 
-    // Secret should be inserted as binary
     let secret_share_bytes = hex::decode(secret_share_hex).expect("Secret is not valid hex");
+
+    let keygen_result_info =
+        bincode::deserialize::<KeygenResultInfo<eth::Point>>(&*secret_share_bytes)
+            .expect("Could not deserialize KeygenResultInfo");
 
     let signing_db_path =
         env::var("SIGNING_DB_PATH").expect("SIGNING_DB_PATH environment variable not set");
@@ -39,7 +41,9 @@ fn main() {
     )
     .expect("Should write DB_SCHEMA_VERSION");
 
+    let mut p_kdb =
+        PersistentKeyDB::new_from_db(db, &chainflip_engine::logging::utils::new_discard_logger());
+
     // Write the key share to the db
-    update_key(&db, &KeyId(agg_pubkey_bytes), secret_share_bytes)
-        .expect("Should write key share to db");
+    p_kdb.update_key(&KeyId(agg_pubkey_bytes), &keygen_result_info);
 }

@@ -26,11 +26,12 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
+            common::{CeremonyFailureReason, KeygenFailureReason, SigningFailureReason},
             keygen::{HashComm1, HashContext, SecretShare3},
             signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
-        crypto::Rng,
-        KeyId, MessageHash, SchnorrSignature,
+        crypto::{ECPoint, Rng},
+        KeyId, MessageHash,
     },
     multisig_p2p::OutgoingMultisigStageMessages,
 };
@@ -48,7 +49,9 @@ use crate::{
             keygen::{self, KeygenData},
             MultisigMessage,
         },
-        crypto::Point,
+        // This determines which crypto scheme will be used in tests
+        // (we make arbitrary choice to use eth)
+        crypto::eth::{EthSchnorrSignature, EthSigning, Point},
     },
 };
 
@@ -82,7 +85,7 @@ pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 }
 
 pub struct Node {
-    pub ceremony_manager: CeremonyManager,
+    pub ceremony_manager: CeremonyManager<EthSigning>,
     pub outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
     pub tag_cache: TagCache,
 }
@@ -112,7 +115,7 @@ pub struct SigningCeremonyDetails {
     pub ceremony_id: CeremonyId,
     pub signers: Vec<AccountId>,
     pub message_hash: MessageHash,
-    pub keygen_result_info: KeygenResultInfo,
+    pub keygen_result_info: KeygenResultInfo<Point>,
 }
 
 pub struct KeygenCeremonyDetails {
@@ -125,7 +128,7 @@ impl Node {
     pub fn request_signing(
         &mut self,
         signing_ceremony_details: SigningCeremonyDetails,
-    ) -> CeremonyResultReceiver<SchnorrSignature> {
+    ) -> CeremonyResultReceiver<EthSchnorrSignature, SigningFailureReason> {
         let (result_sender, result_receiver) = oneshot::channel();
         self.ceremony_manager.on_request_to_sign(
             signing_ceremony_details.ceremony_id,
@@ -141,7 +144,7 @@ impl Node {
     pub fn request_keygen(
         &mut self,
         keygen_ceremony_details: KeygenCeremonyDetails,
-    ) -> CeremonyResultReceiver<KeygenResultInfo> {
+    ) -> CeremonyResultReceiver<KeygenResultInfo<Point>, KeygenFailureReason> {
         let (result_sender, result_receiver) = oneshot::channel();
         self.ceremony_manager.on_keygen_request(
             keygen_ceremony_details.ceremony_id,
@@ -172,8 +175,8 @@ pub fn new_nodes_allow_high_pubkey<AccountIds: IntoIterator<Item = AccountId>>(
 }
 
 pub trait CeremonyRunnerStrategy {
-    type CeremonyData: Into<MultisigData>
-        + TryFrom<MultisigData, Error = MultisigData>
+    type CeremonyData: Into<MultisigData<Point>>
+        + TryFrom<MultisigData<Point>, Error = MultisigData<Point>>
         + Clone
         + Display;
     type Output: std::fmt::Debug;
@@ -182,6 +185,7 @@ pub trait CeremonyRunnerStrategy {
             <Self as CeremonyRunnerStrategy>::CeremonyData,
             Error = <Self as CeremonyRunnerStrategy>::CeremonyData,
         > + Clone;
+    type FailureReason: std::fmt::Debug + std::cmp::Ord;
     const CEREMONY_FAILED_TAG: &'static str;
 
     fn post_successful_complete_check(
@@ -192,7 +196,10 @@ pub trait CeremonyRunnerStrategy {
     fn request_ceremony(
         &mut self,
         node_id: &AccountId,
-    ) -> CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>;
+    ) -> CeremonyResultReceiver<
+        <Self as CeremonyRunnerStrategy>::Output,
+        <Self as CeremonyRunnerStrategy>::FailureReason,
+    >;
 
     fn inner_distribute_message(
         &mut self,
@@ -377,9 +384,20 @@ where
         &mut self,
         result_receivers: &mut HashMap<
             AccountId,
-            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+            CeremonyResultReceiver<
+                <Self as CeremonyRunnerStrategy>::Output,
+                <Self as CeremonyRunnerStrategy>::FailureReason,
+            >,
         >,
-    ) -> Option<Result<<Self as CeremonyRunnerStrategy>::CheckedOutput, BTreeSet<AccountId>>> {
+    ) -> Option<
+        Result<
+            <Self as CeremonyRunnerStrategy>::CheckedOutput,
+            (
+                BTreeSet<AccountId>,
+                CeremonyFailureReason<<Self as CeremonyRunnerStrategy>::FailureReason>,
+            ),
+        >,
+    > {
         let results = self
             .nodes
             .iter_mut()
@@ -403,7 +421,10 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (BTreeSet<AccountId>, anyhow::Error),
+                        (
+                            BTreeSet<AccountId>,
+                            CeremonyFailureReason<<Self as CeremonyRunnerStrategy>::FailureReason>,
+                        ),
                     >,
                 )>,
             >>()
@@ -413,16 +434,22 @@ where
                     AccountId,
                     Result<
                         <Self as CeremonyRunnerStrategy>::Output,
-                        (BTreeSet<AccountId>, anyhow::Error),
+                        (
+                            BTreeSet<AccountId>,
+                            CeremonyFailureReason<<Self as CeremonyRunnerStrategy>::FailureReason>,
+                        ),
                     >,
                 >,
             >>()?;
 
-        let (ok_results, all_reported_parties): (HashMap<_, _>, BTreeSet<_>) = results
+        let (ok_results, (all_reported_parties, failure_reasons)): (
+            HashMap<_, _>,
+            (BTreeSet<_>, BTreeSet<_>),
+        ) = results
             .into_iter()
             .partition_map(|(account_id, result)| match result {
                 Ok(output) => Either::Left((account_id, output)),
-                Err((reported_parties, _error)) => Either::Right(reported_parties),
+                Err((reported_parties, reason)) => Either::Right((reported_parties, reason)),
             });
 
         if !ok_results.is_empty() && all_reported_parties.is_empty() {
@@ -433,7 +460,16 @@ where
                 1,
                 "Reported parties weren't the same for all nodes"
             );
-            Some(Err(all_reported_parties.into_iter().next().unwrap()))
+            assert_eq!(
+                failure_reasons.len(),
+                1,
+                "The ceremony failure reason was not the same for all nodes: {:?}",
+                failure_reasons
+            );
+            Some(Err((
+                all_reported_parties.into_iter().next().unwrap(),
+                failure_reasons.into_iter().next().unwrap(),
+            )))
         } else {
             panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
         }
@@ -443,7 +479,10 @@ where
         &mut self,
         mut result_receivers: HashMap<
             AccountId,
-            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+            CeremonyResultReceiver<
+                <Self as CeremonyRunnerStrategy>::Output,
+                <Self as CeremonyRunnerStrategy>::FailureReason,
+            >,
         >,
     ) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
         assert_ok!(self
@@ -457,10 +496,16 @@ where
         bad_account_ids: &[AccountId],
         result_receivers: &mut HashMap<
             AccountId,
-            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+            CeremonyResultReceiver<
+                <Self as CeremonyRunnerStrategy>::Output,
+                <Self as CeremonyRunnerStrategy>::FailureReason,
+            >,
+        >,
+        expected_failure_reason: CeremonyFailureReason<
+            <Self as CeremonyRunnerStrategy>::FailureReason,
         >,
     ) -> Option<()> {
-        let reported = self
+        let (reported, reason) = self
             .try_gather_outcomes(result_receivers)
             .await?
             .unwrap_err();
@@ -468,25 +513,44 @@ where
             BTreeSet::from_iter(bad_account_ids.iter()),
             reported.iter().collect()
         );
+        assert_eq!(expected_failure_reason, reason);
         Some(())
     }
 
+    /// Gathers the ceremony outcomes from all nodes,
+    /// making sure they are identical and match the expected failure reason.
     pub async fn complete_with_error(
         &mut self,
         bad_account_ids: &[AccountId],
         mut result_receivers: HashMap<
             AccountId,
-            CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>,
+            CeremonyResultReceiver<
+                <Self as CeremonyRunnerStrategy>::Output,
+                <Self as CeremonyRunnerStrategy>::FailureReason,
+            >,
+        >,
+        expected_failure_reason: CeremonyFailureReason<
+            <Self as CeremonyRunnerStrategy>::FailureReason,
         >,
     ) {
-        self.try_complete_with_error(bad_account_ids, &mut result_receivers)
-            .await
-            .expect("Failed to get all ceremony outcomes");
+        self.try_complete_with_error(
+            bad_account_ids,
+            &mut result_receivers,
+            expected_failure_reason,
+        )
+        .await
+        .expect("Failed to get all ceremony outcomes");
     }
 
     pub fn request_without_gather(
         &mut self,
-    ) -> HashMap<AccountId, CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>> {
+    ) -> HashMap<
+        AccountId,
+        CeremonyResultReceiver<
+            <Self as CeremonyRunnerStrategy>::Output,
+            <Self as CeremonyRunnerStrategy>::FailureReason,
+        >,
+    > {
         self.nodes
             .keys()
             .sorted()
@@ -510,7 +574,13 @@ where
                 <CeremonyRunner<CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
             >,
         >,
-        HashMap<AccountId, CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output>>,
+        HashMap<
+            AccountId,
+            CeremonyResultReceiver<
+                <Self as CeremonyRunnerStrategy>::Output,
+                <Self as CeremonyRunnerStrategy>::FailureReason,
+            >,
+        >,
     ) {
         let result_receivers = self.request_without_gather();
 
@@ -535,10 +605,11 @@ pub(crate) use run_stages;
 
 pub type KeygenCeremonyRunner = CeremonyRunner<()>;
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
-    type CeremonyData = KeygenData;
-    type Output = KeygenResultInfo;
+    type CeremonyData = KeygenData<Point>;
+    type Output = KeygenResultInfo<Point>;
     type CheckedOutput = (KeyId, HashMap<AccountId, Self::Output>);
     type InitialStageData = keygen::HashComm1;
+    type FailureReason = KeygenFailureReason;
     const CEREMONY_FAILED_TAG: &'static str = KEYGEN_CEREMONY_FAILED;
 
     fn post_successful_complete_check(
@@ -559,7 +630,10 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     fn request_ceremony(
         &mut self,
         node_id: &AccountId,
-    ) -> CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output> {
+    ) -> CeremonyResultReceiver<
+        <Self as CeremonyRunnerStrategy>::Output,
+        <Self as CeremonyRunnerStrategy>::FailureReason,
+    > {
         let keygen_ceremony_details = self.keygen_ceremony_details();
 
         self.nodes
@@ -608,15 +682,16 @@ impl KeygenCeremonyRunner {
 
 pub struct SigningCeremonyRunnerData {
     pub key_id: KeyId,
-    pub key_data: HashMap<AccountId, KeygenResultInfo>,
+    pub key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
     pub message_hash: MessageHash,
 }
 pub type SigningCeremonyRunner = CeremonyRunner<SigningCeremonyRunnerData>;
 impl CeremonyRunnerStrategy for SigningCeremonyRunner {
-    type CeremonyData = SigningData;
-    type Output = SchnorrSignature;
-    type CheckedOutput = SchnorrSignature;
-    type InitialStageData = frost::Comm1;
+    type CeremonyData = SigningData<Point>;
+    type Output = EthSchnorrSignature;
+    type CheckedOutput = EthSchnorrSignature;
+    type InitialStageData = frost::Comm1<Point>;
+    type FailureReason = SigningFailureReason;
     const CEREMONY_FAILED_TAG: &'static str = SIGNING_CEREMONY_FAILED;
 
     fn post_successful_complete_check(
@@ -635,7 +710,10 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
     fn request_ceremony(
         &mut self,
         node_id: &AccountId,
-    ) -> CeremonyResultReceiver<<Self as CeremonyRunnerStrategy>::Output> {
+    ) -> CeremonyResultReceiver<
+        <Self as CeremonyRunnerStrategy>::Output,
+        <Self as CeremonyRunnerStrategy>::FailureReason,
+    > {
         let signing_ceremony_details = self.signing_ceremony_details(node_id);
 
         self.nodes
@@ -662,7 +740,7 @@ impl SigningCeremonyRunner {
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
         key_id: KeyId,
-        key_data: HashMap<AccountId, KeygenResultInfo>,
+        key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
         message_hash: MessageHash,
         rng: Rng,
     ) -> Self {
@@ -682,7 +760,7 @@ impl SigningCeremonyRunner {
         nodes: HashMap<AccountId, Node>,
         ceremony_id: CeremonyId,
         key_id: KeyId,
-        key_data: HashMap<AccountId, KeygenResultInfo>,
+        key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
         message_hash: MessageHash,
         rng: Rng,
     ) -> (Self, HashMap<AccountId, Node>) {
@@ -828,20 +906,21 @@ fn into_generic_stage_data<CeremonyData, StageData: Into<CeremonyData>>(
 
 #[derive(Clone)]
 pub struct StandardSigningMessages {
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, frost::Comm1>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyComm2>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, frost::LocalSig3>>,
-    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyLocalSig4>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, frost::Comm1<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyComm2<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, frost::LocalSig3<Point>>>,
+    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, frost::VerifyLocalSig4<Point>>>,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn standard_signing_coroutine<'a>(
     visitor: &'a mut CeremonyVisitor,
     ceremony: &'a mut SigningCeremonyRunner,
 ) -> BoxFuture<
     'a,
     Option<(
-        SchnorrSignature,
-        Vec<StageMessages<SigningData>>,
+        EthSchnorrSignature,
+        Vec<StageMessages<SigningData<Point>>>,
         StandardSigningMessages,
     )>,
 > {
@@ -876,7 +955,7 @@ pub fn standard_signing_coroutine<'a>(
 
 pub async fn standard_signing(
     signing_ceremony: &mut SigningCeremonyRunner,
-) -> (SchnorrSignature, StandardSigningMessages) {
+) -> (EthSchnorrSignature, StandardSigningMessages) {
     let mut visitor = CeremonyVisitor::Complete;
     let (signature, _, messages) = standard_signing_coroutine(&mut visitor, signing_ceremony)
         .await
@@ -887,9 +966,9 @@ pub async fn standard_signing(
 pub struct StandardKeygenMessages {
     pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
     pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3<Point>>>,
     pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints4>>,
     pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints5>>,
 }
@@ -898,7 +977,7 @@ pub async fn standard_keygen(
     mut keygen_ceremony: KeygenCeremonyRunner,
 ) -> (
     KeyId,
-    HashMap<AccountId, KeygenResultInfo>,
+    HashMap<AccountId, KeygenResultInfo<Point>>,
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
@@ -933,7 +1012,7 @@ pub async fn run_keygen(
     ceremony_id: CeremonyId,
 ) -> (
     KeyId,
-    HashMap<AccountId, KeygenResultInfo>,
+    HashMap<AccountId, KeygenResultInfo<Point>>,
     StandardKeygenMessages,
     HashMap<AccountId, Node>,
 ) {
@@ -947,7 +1026,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 ) -> Result<
     (
         KeyId,
-        HashMap<AccountId, KeygenResultInfo>,
+        HashMap<AccountId, KeygenResultInfo<Point>>,
         HashMap<AccountId, Node>,
     ),
     (),
@@ -962,12 +1041,16 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         keygen_ceremony,
         stage_1a_messages,
         keygen::VerifyHashComm2,
-        keygen::Comm1,
-        keygen::VerifyComm2
+        keygen::Comm1<Point>,
+        keygen::VerifyComm2<Point>
     );
     keygen_ceremony.distribute_messages(stage_2_messages);
     match keygen_ceremony
-        .try_complete_with_error(&[], &mut result_receivers)
+        .try_complete_with_error(
+            &[],
+            &mut result_receivers,
+            CeremonyFailureReason::Other(KeygenFailureReason::NotContractCompatible),
+        )
         .await
     {
         Some(_) => {
@@ -978,7 +1061,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         }
         None => {
             let stage_3_messages = keygen_ceremony
-                .gather_outgoing_messages::<keygen::SecretShare3, _>()
+                .gather_outgoing_messages::<keygen::SecretShare3<Point>, _>()
                 .await;
             let stage_5_messages = run_stages!(
                 keygen_ceremony,
@@ -999,13 +1082,14 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 pub struct AllKeygenMessages {
     pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
     pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3<Point>>>,
     pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints4>>,
     pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints5>>,
-    pub stage_6_messages: HashMap<AccountId, HashMap<AccountId, keygen::BlameResponse6>>,
-    pub stage_7_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyBlameResponses7>>,
+    pub stage_6_messages: HashMap<AccountId, HashMap<AccountId, keygen::BlameResponse6<Point>>>,
+    pub stage_7_messages:
+        HashMap<AccountId, HashMap<AccountId, keygen::VerifyBlameResponses7<Point>>>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -1015,8 +1099,8 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
 ) -> BoxFuture<
     'a,
     Option<(
-        HashMap<AccountId, KeygenResultInfo>,
-        Vec<StageMessages<KeygenData>>,
+        HashMap<AccountId, KeygenResultInfo<Point>>,
+        Vec<StageMessages<KeygenData<Point>>>,
         AllKeygenMessages,
     )>,
 > {
@@ -1078,10 +1162,11 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
 }
 
 /// Generate an invalid local sig for stage3
-pub fn gen_invalid_local_sig(rng: &mut Rng) -> LocalSig3 {
-    use crate::multisig::crypto::Scalar;
+pub fn gen_invalid_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
+    use crate::multisig::crypto::ECScalar;
+
     frost::LocalSig3 {
-        response: Scalar::random(rng),
+        response: P::Scalar::random(rng),
     }
 }
 
@@ -1095,7 +1180,7 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
+pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment<Point> {
     let (_, fake_comm1) = generate_shares_and_commitment(
         rng,
         // The commitment is only invalid because of the invalid context
@@ -1109,7 +1194,7 @@ pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment {
     fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment {
+pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment<Point> {
     SigningCommitment {
         d: Point::random(rng),
         e: Point::random(rng),
@@ -1177,10 +1262,30 @@ impl Node {
             )))
         }
     }
+
+    /// Check the failure reason and tag are correct
+    pub fn ensure_failure_reason<CeremonyResult, FailureReason>(
+        &self,
+        mut result_receiver: CeremonyResultReceiver<CeremonyResult, FailureReason>,
+        expected_reason: CeremonyFailureReason<FailureReason>,
+        expected_tag: &str,
+    ) where
+        CeremonyResult: PartialEq + std::fmt::Debug,
+        FailureReason: PartialEq + std::fmt::Debug,
+    {
+        assert!(self.tag_cache.contains_tag(expected_tag));
+        assert_eq!(
+            result_receiver
+                .try_recv()
+                .expect("Failed to receive ceremony result")
+                .map_err(|(_, reason)| reason),
+            Err(expected_reason)
+        );
+    }
 }
 
 /// Using the given key_id, verify the signature is correct
-pub fn verify_sig_with_aggkey(sig: &SchnorrSignature, key_id: &KeyId) -> Result<()> {
+pub fn verify_sig_with_aggkey(sig: &EthSchnorrSignature, key_id: &KeyId) -> Result<()> {
     // Get the aggkey
     let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
     let agg_key = AggKey::from_pubkey_compressed(*pk_ser);

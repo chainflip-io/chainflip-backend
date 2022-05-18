@@ -31,7 +31,7 @@ pub trait WeightInfo {
 	fn on_initialize() -> Weight;
 	fn start_broadcast() -> Weight;
 	fn transaction_ready_for_transmission() -> Weight;
-	fn transmission_failure() -> Weight;
+	fn transaction_signing_failure() -> Weight;
 	fn on_signature_ready() -> Weight;
 	fn signature_accepted() -> Weight;
 }
@@ -51,7 +51,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}
-	fn transmission_failure() -> Weight {
+	fn transaction_signing_failure() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}
@@ -79,7 +79,7 @@ impl WeightInfo for () {
 		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}
-	fn transmission_failure() -> Weight {
+	fn transaction_signing_failure() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}
