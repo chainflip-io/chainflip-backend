@@ -158,18 +158,11 @@ where
 
     /// Process message from a peer, returning ceremony outcome if
     /// the ceremony stage machine cannot progress any further
-    pub fn process_message(
+    pub fn process_or_delay_message(
         &mut self,
         sender_id: AccountId,
         data: CeremonyData,
     ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
-        slog::trace!(
-            self.logger,
-            "Received message {} from party [{}] ",
-            data,
-            sender_id
-        );
-
         match &mut self.inner {
             None => {
                 self.add_delayed(sender_id, data);
@@ -219,7 +212,7 @@ where
                 id,
             );
 
-            if let Some(result) = self.process_message(id, m) {
+            if let Some(result) = self.process_or_delay_message(id, m) {
                 return Some(result);
             }
         }

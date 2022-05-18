@@ -465,7 +465,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             }
         };
 
-        if let Some(result) = state.process_message(sender_id, data) {
+        if let Some(result) = state.process_or_delay_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
         }
     }
@@ -490,6 +490,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             );
             return;
         }
+
+        slog::debug!(self.logger, "Received keygen data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         // Only stage 1 messages can create unauthorised ceremonies
         let state = if matches!(data, KeygenData::HashComm1(_)) {
@@ -523,7 +525,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             }
         };
 
-        if let Some(result) = state.process_message(sender_id, data) {
+        if let Some(result) = state.process_or_delay_message(sender_id, data) {
             self.process_keygen_ceremony_outcome(ceremony_id, result);
         }
     }
