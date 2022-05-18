@@ -19,7 +19,6 @@ pub mod reputation_resetter;
 pub mod signer_nomination;
 pub mod stake_transfer;
 pub mod system_state_info;
-pub mod system_state_manager;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod vault_rotation;

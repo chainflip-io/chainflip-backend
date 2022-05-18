@@ -19,7 +19,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
 		eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		system_state_info::MockSystemStateInfo, system_state_manager::MockSystemStateManager,
+		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip,
 };
@@ -46,6 +46,26 @@ construct_runtime!(
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+}
+
+pub enum SystemState {
+	Normal,
+	Maintenance,
+}
+
+// do not know how to solve this mock
+pub struct MockSystemStateManager;
+
+impl SystemStateManager for MockSystemStateManager {
+	type SystemState = SystemState;
+
+	fn set_system_state(_state: Self::SystemState) {
+		todo!()
+	}
+
+	fn get_maintenance_state() -> Self::SystemState {
+		todo!()
+	}
 }
 
 impl frame_system::Config for MockRuntime {
