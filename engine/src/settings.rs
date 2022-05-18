@@ -113,7 +113,7 @@ pub struct CommandLineOptions {
     #[structopt(long = "health_check.port")]
     health_check_port: Option<u16>,
 
-    // Singing Settings
+    // Signing Settings
     #[structopt(long = "signing.db_file", parse(from_os_str))]
     signing_db_file: Option<PathBuf>,
 }

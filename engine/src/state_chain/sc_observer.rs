@@ -55,24 +55,19 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                         cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
                     ),
                     // Report keygen failure if we failed to sign
-                    Err((bad_account_ids, error)) => {
+                    Err((bad_account_ids, reason)) => {
                         slog::debug!(
                             logger,
-                            "Keygen ceremony {} verification failed: {:?}",
+                            "Keygen ceremony {} verification failed: {}",
                             ceremony_id,
-                            error
+                            reason
                         );
                         KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
                     }
                 }
             }
-            Err((bad_account_ids, error)) => {
-                slog::debug!(
-                    logger,
-                    "Keygen ceremony {} failed: {:?}",
-                    ceremony_id,
-                    error
-                );
+            Err((bad_account_ids, reason)) => {
+                slog::debug!(logger, "Keygen ceremony {} failed: {}", ceremony_id, reason);
                 KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
             }
         };
@@ -308,8 +303,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                     )
                                                                     .await;
                                                             }
-                                                            Err((bad_account_ids, error)) => {
-                                                                slog::debug!(logger, "Threshold signing ceremony {} failed: {:?}", ceremony_id, error);
+                                                            Err((bad_account_ids, reason)) => {
+                                                                slog::debug!(logger, "Threshold signing ceremony {} failed: {}", ceremony_id, reason);
                                                                 let _result = state_chain_client
                                                                     .submit_signed_extrinsic(
                                                                         pallet_cf_threshold_signature::Call::report_signature_failed_unbounded {
@@ -356,18 +351,28 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             // In the long run all transaction parameters will be provided by the state
                                                             // chain and the above eth_broadcaster.sign_tx method can be made
                                                             // infallible.
+
                                                             slog::error!(
                                                                 logger,
                                                                 "TransactionSigningRequest attempt_id {} failed: {:?}",
                                                                 attempt_id,
                                                                 e
                                                             );
+
+                                                            let _result = state_chain_client.submit_signed_extrinsic(
+                                                                state_chain_runtime::Call::EthereumBroadcaster(
+                                                                    pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                        broadcast_attempt_id: attempt_id,
+                                                                    },
+                                                                ),
+                                                                &logger,
+                                                            ).await;
                                                         }
                                                     }
                                                 }
                                                 state_chain_runtime::Event::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Event::TransmissionRequest(
-                                                        attempt_id,
+                                                        broadcast_attempt_id,
                                                         signed_tx,
                                                     ),
                                                 ) => {
@@ -379,8 +384,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         Ok(tx_hash) => {
                                                             slog::debug!(
                                                                 logger,
-                                                                "Successful TransmissionRequest attempt_id {}, tx_hash: {:#x}",
-                                                                attempt_id,
+                                                                "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
+                                                                broadcast_attempt_id,
                                                                 tx_hash
                                                             );
                                                             assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
@@ -388,8 +393,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         Err(e) => {
                                                             slog::info!(
                                                                 logger,
-                                                                "TransmissionRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
+                                                                "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
+                                                                broadcast_attempt_id,
                                                                 e
                                                             );
                                                         }

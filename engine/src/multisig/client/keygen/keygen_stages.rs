@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::multisig::client::common::KeygenResultInfo;
-use crate::multisig::client::{self};
+use crate::multisig::client::common::{
+    BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
+};
+use crate::multisig::client::{self, KeygenResultInfo};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
 use cf_traits::AuthorityCount;
@@ -33,7 +35,7 @@ use super::keygen_data::{HashComm1, VerifyHashComm2};
 use super::keygen_frost::{generate_hash_commitment, ShamirShare};
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
 
-type KeygenStageResult<P> = StageResult<KeygenData<P>, KeygenResultInfo<P>>;
+type KeygenStageResult<P> = StageResult<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>;
 
 pub struct HashCommitments1<P: ECPoint> {
     common: CeremonyCommon,
@@ -69,7 +71,7 @@ impl<P: ECPoint> HashCommitments1<P> {
     }
 }
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for HashCommitments1<P>
 {
     type Message = HashComm1;
@@ -86,7 +88,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>> {
+    ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
         // Prepare for broadcast verification
         let processor = VerifyHashCommitmentsBroadcast2 {
             common: self.common.clone(),
@@ -114,7 +116,7 @@ pub struct VerifyHashCommitmentsBroadcast2<P: ECPoint> {
 
 derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<P: ECPoint>);
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyHashCommitmentsBroadcast2<P>
 {
     type Message = VerifyHashComm2;
@@ -132,17 +134,24 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>> {
+    ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
         let hash_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(hash_commitments) => hash_commitments,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("hash commitments");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::HashCommitments,
+                    ),
+                );
             }
         };
 
         slog::debug!(
             self.common.logger,
-            "Hash commitments have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::HashCommitments
         );
 
         // Just saving hash commitments for now. We will use them
@@ -178,7 +187,7 @@ pub struct AwaitCommitments1<P: ECPoint> {
 
 derive_display_as_type_name!(AwaitCommitments1<P: ECPoint>);
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for AwaitCommitments1<P>
 {
     type Message = Comm1<P>;
@@ -207,7 +216,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
             context: self.context,
         };
 
-        let stage = BroadcastStage::<_, _, _, P>::new(processor, self.common);
+        let stage = BroadcastStage::<_, _, _, P, _>::new(processor, self.common);
 
         StageResult::NextStage(Box::new(stage))
     }
@@ -225,7 +234,7 @@ struct VerifyCommitmentsBroadcast2<P: ECPoint> {
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2<P: ECPoint>);
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyCommitmentsBroadcast2<P>
 {
     type Message = VerifyComm2<P>;
@@ -246,25 +255,33 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     ) -> KeygenStageResult<P> {
         let commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("initial commitments");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::InitialCommitments,
+                    ),
+                );
             }
         };
 
-        let commitments =
-            match validate_commitments(commitments, self.hash_commitments, &self.context) {
-                Ok(comms) => comms,
-                Err(blamed_parties) => {
-                    return StageResult::Error(
-                        blamed_parties,
-                        anyhow::Error::msg("Invalid initial commitments"),
-                    )
-                }
-            };
+        let commitments = match validate_commitments(
+            commitments,
+            self.hash_commitments,
+            &self.context,
+            &self.common.logger,
+        ) {
+            Ok(comms) => comms,
+            Err((blamed_parties, reason)) => {
+                return StageResult::Error(blamed_parties, CeremonyFailureReason::Other(reason));
+            }
+        };
 
         slog::debug!(
             self.common.logger,
-            "Initial commitments have been correctly broadcast"
+            "{} have been correctly broadcast",
+            BroadcastStageName::InitialCommitments
         );
 
         // At this point we know everyone's commitments, which can already be
@@ -298,7 +315,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
             // to let the State Chain restart the ceremony
             StageResult::Error(
                 BTreeSet::new(),
-                anyhow::Error::msg("The key is not contract compatible"),
+                CeremonyFailureReason::Other(KeygenFailureReason::NotContractCompatible),
             )
         }
     }
@@ -314,7 +331,7 @@ struct SecretSharesStage3<P: ECPoint> {
 
 derive_display_as_type_name!(SecretSharesStage3<P: ECPoint>);
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for SecretSharesStage3<P>
 {
     type Message = SecretShare3<P>;
@@ -397,7 +414,7 @@ struct ComplaintsStage4<P: ECPoint> {
 
 derive_display_as_type_name!(ComplaintsStage4<P: ECPoint>);
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for ComplaintsStage4<P>
 {
     type Message = Complaints4;
@@ -438,7 +455,7 @@ struct VerifyComplaintsBroadcastStage5<P: ECPoint> {
 
 derive_display_as_type_name!(VerifyComplaintsBroadcastStage5<P: ECPoint>);
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyComplaintsBroadcastStage5<P>
 {
     type Message = VerifyComplaints5;
@@ -459,8 +476,14 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     ) -> KeygenStageResult<P> {
         let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("complaints");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::Complaints,
+                    ),
+                );
             }
         };
 
@@ -508,7 +531,10 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
 
             StageResult::NextStage(Box::new(stage))
         } else {
-            StageResult::Error(idxs_to_report, anyhow::Error::msg("Improper complaint"))
+            StageResult::Error(
+                idxs_to_report,
+                CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
+            )
         }
     }
 }
@@ -517,13 +543,13 @@ fn finalize_keygen<KeygenData, P: ECPoint>(
     common: CeremonyCommon,
     secret_shares: IncomingShares<P>,
     commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
-) -> StageResult<KeygenData, KeygenResultInfo<P>> {
+) -> StageResult<KeygenData, KeygenResultInfo<P>, KeygenFailureReason> {
     // Sanity check (failing this should not be possible due to the
     // hash commitment stage at the beginning of the ceremony)
     if check_high_degree_commitments(commitments) {
         return StageResult::Error(
             Default::default(),
-            anyhow::Error::msg("High degree coefficient is zero"),
+            CeremonyFailureReason::Other(KeygenFailureReason::HighDegreeCoefficientZero),
         );
     }
 
@@ -548,7 +574,7 @@ struct BlameResponsesStage6<P: ECPoint> {
 
 derive_display_as_type_name!(BlameResponsesStage6<P: ECPoint>);
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for BlameResponsesStage6<P>
 {
     type Message = BlameResponse6<P>;
@@ -698,7 +724,7 @@ impl<P: ECPoint> VerifyBlameResponsesBroadcastStage7<P> {
     }
 }
 
-impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
+impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyBlameResponsesBroadcastStage7<P>
 {
     type Message = VerifyBlameResponses7<P>;
@@ -719,13 +745,20 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
     ) -> KeygenStageResult<P> {
         slog::debug!(
             self.common.logger,
-            "Processing verifications for blame responses"
+            "Processing verifications for {}",
+            BroadcastStageName::BlameResponses
         );
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
-            Err(abort_reason) => {
-                return abort_reason.into_stage_result_error("blame response");
+            Err((reported_parties, abort_reason)) => {
+                return KeygenStageResult::Error(
+                    reported_parties,
+                    CeremonyFailureReason::BroadcastFailure(
+                        abort_reason,
+                        BroadcastStageName::BlameResponses,
+                    ),
+                );
             }
         };
 
@@ -739,7 +772,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>>
             }
             Err(bad_parties) => StageResult::Error(
                 bad_parties,
-                anyhow::Error::msg("Invalid secret share in a blame response"),
+                CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
             ),
         }
     }

@@ -30,7 +30,7 @@ pub enum DataToSend<T> {
 
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
-pub trait BroadcastStageProcessor<Data, Result>: Display {
+pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     /// The specific variant of D shared between parties
     /// during this stage
     type Message: Clone + Into<Data> + TryFrom<Data>;
@@ -48,14 +48,14 @@ pub trait BroadcastStageProcessor<Data, Result>: Display {
     fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<Data, Result>;
+    ) -> StageResult<Data, Result, FailureReason>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
-pub struct BroadcastStage<Data, Result, Stage, Point>
+pub struct BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
-    Stage: BroadcastStageProcessor<Data, Result>,
+    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
     Point: ECPoint,
 {
     common: CeremonyCommon,
@@ -67,11 +67,12 @@ where
     _phantom: PhantomData<Point>,
 }
 
-impl<Data, Result, Stage, Point> BroadcastStage<Data, Result, Stage, Point>
+impl<Data, Result, Stage, Point, FailureReason>
+    BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
     Data: Clone,
     Point: ECPoint,
-    Stage: BroadcastStageProcessor<Data, Result>,
+    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
 {
     pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
         BroadcastStage {
@@ -83,9 +84,10 @@ where
     }
 }
 
-impl<Data, Result, Stage, Point> Display for BroadcastStage<Data, Result, Stage, Point>
+impl<Data, Result, Stage, Point, FailureReason> Display
+    for BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
-    Stage: BroadcastStageProcessor<Data, Result>,
+    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
     Point: ECPoint,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -93,16 +95,18 @@ where
     }
 }
 
-impl<Point, Data, Result, Stage> CeremonyStage for BroadcastStage<Data, Result, Stage, Point>
+impl<Point, Data, Result, Stage, FailureReason> CeremonyStage
+    for BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
     Point: ECPoint,
     Data: Clone + Display + Into<MultisigData<Point>>,
     Result: Clone,
-    Stage: BroadcastStageProcessor<Data, Result>,
-    <Stage as BroadcastStageProcessor<Data, Result>>::Message: TryFrom<Data>,
+    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
+    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message: TryFrom<Data>,
 {
     type Message = Data;
     type Result = Result;
+    type FailureReason = FailureReason;
 
     fn init(&mut self) {
         let common = &self.common;
@@ -214,7 +218,7 @@ where
         self.processor.should_delay(m)
     }
 
-    fn finalize(mut self: Box<Self>) -> StageResult<Data, Result> {
+    fn finalize(mut self: Box<Self>) -> StageResult<Data, Result, FailureReason> {
         // Because we might want to finalize the stage before
         // all data has been received (e.g. due to a timeout),
         // we insert None for any missing data
