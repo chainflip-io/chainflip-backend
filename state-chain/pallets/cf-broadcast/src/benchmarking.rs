@@ -3,7 +3,6 @@
 
 use super::*;
 
-use cf_chains::eth::{TransactionHash, H256};
 use cf_traits::ThresholdSigner;
 use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
@@ -50,7 +49,7 @@ benchmarks_instance_pallet! {
 		let origin = T::EnsureThresholdSigned::successful_origin();
 		let payload = ThresholdSignatureFor::<T, I>::benchmark_default();
 		let tx_signer = SignerIdFor::<T, I>::benchmark_default();
-		let tx_fee = ChainAmountFor::<T, I>::benchmark_default();
+		let tx_fee = ChainAmountFor::<T, I>::default();
 		let block_number = 1;
 		let tx_hash = TransactionHashFor::<T, I>::benchmark_default();
 		let call = Call::<T, I>::signature_accepted{payload, tx_signer, tx_fee, block_number, tx_hash};

@@ -256,6 +256,11 @@ pub mod mocks {
 		}
 	}
 
+	impl_benchmark_default_for!(Validity);
+	impl_benchmark_default_for!([u8; 4]);
+	impl_benchmark_default_for!(MockThresholdSignature<[u8; 4], [u8; 4]>);
+	impl_benchmark_default_for!(MockSignedTransation<MockUnsignedTransaction>);
+
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;
 		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
