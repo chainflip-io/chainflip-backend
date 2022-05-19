@@ -189,7 +189,10 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 		}
 	}
 	fn get_maintenance_state() -> Self::SystemState {
-		SystemState::Maintenance
+		Self::SystemState::Maintenance
+	}
+	fn get_normal_state() -> Self::SystemState {
+		Self::SystemState::Normal
 	}
 }
 
