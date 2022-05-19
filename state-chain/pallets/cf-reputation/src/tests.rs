@@ -175,3 +175,87 @@ fn forgiveness() {
 		assert_eq!(GetValidatorsExcludedFor::<Test, AllOffences>::get(), [].into_iter().collect(),);
 	});
 }
+
+#[cfg(test)]
+mod reporting_adapter_test {
+	use super::*;
+	use frame_support::assert_err;
+	use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
+	use sp_staking::offence::ReportOffence;
+
+	type IdentificationTuple = (u64, ());
+
+	type GrandpaOffenceReporter =
+		ChainflipOffenceReportingAdapter<Test, GrandpaEquivocationOffence<IdentificationTuple>, ()>;
+
+	impl From<GrandpaEquivocationOffence<IdentificationTuple>> for AllOffences {
+		fn from(_: GrandpaEquivocationOffence<IdentificationTuple>) -> Self {
+			Self::UpsettingGrandpa
+		}
+	}
+
+	impl OffenceList<Test> for GrandpaEquivocationOffence<IdentificationTuple> {
+		const OFFENCES: &'static [AllOffences] = &[AllOffences::UpsettingGrandpa];
+	}
+
+	#[test]
+	fn test_with_grandpa_equivocation_offence() {
+		new_test_ext().execute_with(|| {
+			const OFFENDER: IdentificationTuple = (42, ());
+			const OFFENCE_TIME_SLOT: GrandpaTimeSlot = GrandpaTimeSlot { set_id: 0, round: 0 };
+			const OFFENCE: GrandpaEquivocationOffence<IdentificationTuple> =
+				GrandpaEquivocationOffence {
+					time_slot: OFFENCE_TIME_SLOT,
+					session_index: 0,
+					validator_set_count: 1,
+					offender: OFFENDER,
+				};
+
+			// Offence for this time slot is not known, nobody has been reported yet.
+			assert!(!GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &OFFENCE_TIME_SLOT));
+			assert!(GetValidatorsExcludedFor::<
+				Test,
+				GrandpaEquivocationOffence<IdentificationTuple>,
+			>::get()
+			.is_empty());
+
+			// Report the offence. It should now be known, and a duplicate report should not be
+			// possible.
+			assert_ok!(GrandpaOffenceReporter::report_offence(Default::default(), OFFENCE,));
+			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &OFFENCE_TIME_SLOT));
+			assert_err!(
+				GrandpaOffenceReporter::report_offence(Default::default(), OFFENCE,),
+				sp_staking::offence::OffenceError::DuplicateReport
+			);
+
+			// The offender is suspended and reputation reduced.
+			assert_eq!(
+				GetValidatorsExcludedFor::<Test, GrandpaEquivocationOffence<IdentificationTuple>>::get(),
+				[OFFENDER.0].into_iter().collect()
+			);
+			assert_eq!(
+				ReputationPallet::reputation(OFFENDER.0).reputation_points,
+				-GRANDPA_EQUIVOCATION_PENALTY_POINTS
+			);
+
+			// Once an offence has been reported, it's not possible to report an offence for a
+			// previous time slot.
+			const NEXT_TIME_SLOT: GrandpaTimeSlot =
+				GrandpaTimeSlot { set_id: OFFENCE_TIME_SLOT.set_id + 1, round: 0 };
+			const FUTURE_TIME_SLOT: GrandpaTimeSlot =
+				GrandpaTimeSlot { set_id: OFFENCE_TIME_SLOT.set_id + 2, round: 0 };
+			const FUTURE_OFFENCE: GrandpaEquivocationOffence<IdentificationTuple> =
+				GrandpaEquivocationOffence {
+					time_slot: FUTURE_TIME_SLOT,
+					session_index: 10,
+					validator_set_count: 1,
+					offender: OFFENDER,
+				};
+			assert!(!GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &NEXT_TIME_SLOT));
+			assert!(!GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &FUTURE_TIME_SLOT));
+			assert_ok!(GrandpaOffenceReporter::report_offence(Default::default(), FUTURE_OFFENCE,));
+			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &NEXT_TIME_SLOT));
+			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &FUTURE_TIME_SLOT));
+		});
+	}
+}

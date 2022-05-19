@@ -80,6 +80,8 @@ pub const ACCRUAL_RATE: (i32, u64) = (1, 10);
 pub const MAX_REPUTATION_POINT_ACCRUED: ReputationPoints = 15;
 
 pub const MISSED_HEARTBEAT_PENALTY_POINTS: ReputationPoints = 2;
+pub const GRANDPA_EQUIVOCATION_PENALTY_POINTS: ReputationPoints = 50;
+pub const GRANDPA_SUSPENSION_DURATION: u64 = HEARTBEAT_BLOCK_INTERVAL * 10;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
@@ -123,6 +125,7 @@ pub enum AllOffences {
 	MissedHeartbeat,
 	NotLockingYourComputer,
 	ForgettingYourYubiKey,
+	UpsettingGrandpa,
 }
 
 impl From<PalletOffence> for AllOffences {
@@ -153,6 +156,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 				(AllOffences::MissedHeartbeat, (MISSED_HEARTBEAT_PENALTY_POINTS, 0)),
 				(AllOffences::ForgettingYourYubiKey, (15, HEARTBEAT_BLOCK_INTERVAL)),
 				(AllOffences::NotLockingYourComputer, (15, HEARTBEAT_BLOCK_INTERVAL)),
+				(
+					AllOffences::UpsettingGrandpa,
+					(GRANDPA_EQUIVOCATION_PENALTY_POINTS, GRANDPA_SUSPENSION_DURATION),
+				),
 			],
 		},
 	};
