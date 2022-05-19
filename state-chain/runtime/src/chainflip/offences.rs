@@ -9,13 +9,13 @@ use crate::Runtime;
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum Offence {
-	/// There was a failure in participation during a signing
+	/// There was a failure in participation during a signing.
 	ParticipateSigningFailed,
-	/// There was a failure in participation during a key generation ceremony
+	/// There was a failure in participation during a key generation ceremony.
 	ParticipateKeygenFailed,
-	/// An invalid transaction was authored
+	/// An invalid transaction was authored.
 	InvalidTransactionAuthored,
-	/// A transaction failed on transmission
+	/// A transaction failed on transmission.
 	TransactionFailedOnTransmission,
 	/// An authority missed their authorship slot.
 	MissedAuthorshipSlot,
