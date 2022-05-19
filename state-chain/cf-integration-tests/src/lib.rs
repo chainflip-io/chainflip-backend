@@ -635,6 +635,7 @@ mod tests {
 				// TODO Fix this
 				bond: self.accounts[0].1,
 				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+				backup_node_percentage: 34,
 			}
 			.assimilate_storage(storage)
 			.unwrap();

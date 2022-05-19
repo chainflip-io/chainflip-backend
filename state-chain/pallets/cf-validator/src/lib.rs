@@ -697,6 +697,7 @@ pub mod pallet {
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
+		pub backup_node_percentage: Percentage,
 	}
 
 	#[cfg(feature = "std")]
@@ -706,6 +707,7 @@ pub mod pallet {
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
+				backup_node_percentage: Zero::zero(),
 			}
 		}
 	}
@@ -717,6 +719,7 @@ pub mod pallet {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
+			BackupNodePercentage::<T>::set(self.backup_node_percentage);
 			const GENESIS_EPOCH: u32 = 0;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 			CurrentEpochStartedAt::<T>::set(Default::default());
