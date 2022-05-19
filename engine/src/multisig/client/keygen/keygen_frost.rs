@@ -306,10 +306,23 @@ pub fn validate_commitments<P: ECPoint>(
 pub struct ValidAggregateKey<P: ECPoint>(pub P);
 
 /// Derive aggregate pubkey from party commitments
+/// Note that setting `allow_high_pubkey` to true lets us skip compatibility check
+/// in tests as otherwise they would be non-deterministic
 pub fn derive_aggregate_pubkey<P: ECPoint>(
     commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
-) -> ValidAggregateKey<P> {
-    ValidAggregateKey(commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum())
+    allow_high_pubkey: bool,
+) -> anyhow::Result<ValidAggregateKey<P>> {
+    let pubkey: P = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
+
+    if !allow_high_pubkey && !pubkey.is_compatible() {
+        Err(anyhow::Error::msg("pubkey is not compatible"))
+    } else if check_high_degree_commitments(commitments) {
+        // Sanity check (failing this should not be possible due to the
+        // hash commitment stage at the beginning of the ceremony)
+        Err(anyhow::Error::msg("high degree coefficient is zero"))
+    } else {
+        Ok(ValidAggregateKey(pubkey))
+    }
 }
 
 /// Derive each party's "local" pubkey
@@ -516,15 +529,7 @@ pub mod genesis {
             })
             .unzip();
 
-        let agg_pubkey = derive_aggregate_pubkey(&commitments);
-
-        if !agg_pubkey.0.is_compatible() {
-            return Err(anyhow::Error::msg("pubkey is not compatible"));
-        }
-
-        if check_high_degree_commitments(&commitments) {
-            return Err(anyhow::Error::msg("High degree coefficient is zero"));
-        }
+        let agg_pubkey = derive_aggregate_pubkey(&commitments, false /* allow high pubkey */)?;
 
         let validator_map = PartyIdxMapping::from_unsorted_signers(signers);
 

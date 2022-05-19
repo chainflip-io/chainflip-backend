@@ -26,9 +26,8 @@ use keygen::{
         VerifyComplaints5,
     },
     keygen_frost::{
-        check_high_degree_commitments, derive_aggregate_pubkey, generate_shares_and_commitment,
-        validate_commitments, verify_share, DKGCommitment, DKGUnverifiedCommitment, IncomingShares,
-        OutgoingShares,
+        derive_aggregate_pubkey, generate_shares_and_commitment, validate_commitments,
+        verify_share, DKGCommitment, DKGUnverifiedCommitment, IncomingShares, OutgoingShares,
     },
 };
 
@@ -293,35 +292,33 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         // with the ceremony, we need to make sure that the key is compatible
         // with the Key Manager contract, aborting if it isn't.
 
-        let agg_pubkey = derive_aggregate_pubkey(&commitments);
+        match derive_aggregate_pubkey(&commitments, self.allow_high_pubkey) {
+            Ok(agg_pubkey) => {
+                let processor = SecretSharesStage3 {
+                    common: self.common.clone(),
+                    commitments,
+                    shares: self.shares_to_send,
+                    agg_pubkey,
+                };
 
-        // Note that we skip this check in tests as it would make them
-        // non-deterministic (in the future, we could address this by
-        // making the signer use deterministic randomness everywhere)
-        if self.allow_high_pubkey || agg_pubkey.0.is_compatible() {
-            let processor = SecretSharesStage3 {
-                common: self.common.clone(),
-                commitments,
-                shares: self.shares_to_send,
-                agg_pubkey,
-            };
+                let stage = BroadcastStage::new(processor, self.common);
 
-            let stage = BroadcastStage::new(processor, self.common);
-
-            StageResult::NextStage(Box::new(stage))
-        } else {
-            slog::debug!(
-                self.common.logger,
-                #KEYGEN_REJECTED_INCOMPATIBLE,
-                "The key is not contract compatible, aborting..."
-            );
-            // It is nobody's fault that the key is not compatible,
-            // so we abort with an empty list of responsible nodes
-            // to let the State Chain restart the ceremony
-            StageResult::Error(
-                BTreeSet::new(),
-                CeremonyFailureReason::Other(KeygenFailureReason::NotContractCompatible),
-            )
+                StageResult::NextStage(Box::new(stage))
+            }
+            Err(err) => {
+                slog::debug!(
+                    self.common.logger,
+                    #KEYGEN_REJECTED_INCOMPATIBLE,
+                    "Aborting keygen ceremony: {}", err
+                );
+                // It is nobody's fault that the key is not compatible,
+                // so we abort with an empty list of responsible nodes
+                // to let the State Chain restart the ceremony
+                StageResult::Error(
+                    BTreeSet::new(),
+                    CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible),
+                )
+            }
         }
     }
 }
@@ -556,15 +553,6 @@ fn finalize_keygen<KeygenData, P: ECPoint>(
     secret_shares: IncomingShares<P>,
     commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
 ) -> StageResult<KeygenData, KeygenResultInfo<P>, KeygenFailureReason> {
-    // Sanity check (failing this should not be possible due to the
-    // hash commitment stage at the beginning of the ceremony)
-    if check_high_degree_commitments(commitments) {
-        return StageResult::Error(
-            Default::default(),
-            CeremonyFailureReason::Other(KeygenFailureReason::HighDegreeCoefficientZero),
-        );
-    }
-
     let params = ThresholdParameters::from_share_count(common.all_idxs.len() as AuthorityCount);
 
     let keygen_result_info = KeygenResultInfo {
