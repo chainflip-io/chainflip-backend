@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use crate::multisig::client::common::{
     BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
 };
-use crate::multisig::client::{self, KeygenResultInfo};
+use crate::multisig::client::{self, KeygenResult, KeygenResultInfo};
 use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
 use cf_traits::AuthorityCount;
@@ -17,7 +18,7 @@ use client::{
 use itertools::Itertools;
 use sp_core::H256;
 
-use crate::multisig::crypto::ECPoint;
+use crate::multisig::crypto::{ECPoint, KeyShare};
 
 use keygen::{
     keygen_data::{
@@ -25,14 +26,17 @@ use keygen::{
         VerifyComplaints5,
     },
     keygen_frost::{
-        self, check_high_degree_commitments, derive_aggregate_pubkey,
-        generate_shares_and_commitment, validate_commitments, verify_share, DKGCommitment,
-        DKGUnverifiedCommitment, IncomingShares, OutgoingShares,
+        check_high_degree_commitments, derive_aggregate_pubkey, generate_shares_and_commitment,
+        validate_commitments, verify_share, DKGCommitment, DKGUnverifiedCommitment, IncomingShares,
+        OutgoingShares,
     },
 };
 
 use super::keygen_data::{HashComm1, VerifyHashComm2};
-use super::keygen_frost::{generate_hash_commitment, ShamirShare};
+use super::keygen_frost::{
+    compute_secret_key_share, derive_local_pubkeys_for_parties, generate_hash_commitment,
+    ShamirShare, ValidAggregateKey,
+};
 use super::{keygen_data::VerifyBlameResponses7, HashContext};
 
 type KeygenStageResult<P> = StageResult<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>;
@@ -294,11 +298,12 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         // Note that we skip this check in tests as it would make them
         // non-deterministic (in the future, we could address this by
         // making the signer use deterministic randomness everywhere)
-        if self.allow_high_pubkey || agg_pubkey.is_compatible() {
+        if self.allow_high_pubkey || agg_pubkey.0.is_compatible() {
             let processor = SecretSharesStage3 {
                 common: self.common.clone(),
                 commitments,
                 shares: self.shares_to_send,
+                agg_pubkey,
             };
 
             let stage = BroadcastStage::new(processor, self.common);
@@ -327,6 +332,7 @@ struct SecretSharesStage3<P: ECPoint> {
     // commitments (verified to have been broadcast correctly)
     commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
     shares: OutgoingShares<P>,
+    agg_pubkey: ValidAggregateKey<P>,
 }
 
 derive_display_as_type_name!(SecretSharesStage3<P: ECPoint>);
@@ -389,6 +395,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         let processor = ComplaintsStage4 {
             common: self.common.clone(),
             commitments: self.commitments,
+            agg_pubkey: self.agg_pubkey,
             shares: IncomingShares(verified_shares),
             outgoing_shares: self.shares,
             complaints: bad_parties,
@@ -406,6 +413,7 @@ struct ComplaintsStage4<P: ECPoint> {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)
     commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    agg_pubkey: ValidAggregateKey<P>,
     /// Shares sent to us from other parties (secret)
     shares: IncomingShares<P>,
     outgoing_shares: OutgoingShares<P>,
@@ -433,6 +441,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     ) -> KeygenStageResult<P> {
         let processor = VerifyComplaintsBroadcastStage5 {
             common: self.common.clone(),
+            agg_pubkey: self.agg_pubkey,
             received_complaints: messages,
             commitments: self.commitments,
             shares: self.shares,
@@ -447,6 +456,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
 
 struct VerifyComplaintsBroadcastStage5<P: ECPoint> {
     common: CeremonyCommon,
+    agg_pubkey: ValidAggregateKey<P>,
     received_complaints: BTreeMap<AuthorityCount, Option<Complaints4>>,
     commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
     shares: IncomingShares<P>,
@@ -489,7 +499,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
 
         if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
             // if all complaints are empty, we can finalize the ceremony
-            return finalize_keygen(self.common, self.shares, &self.commitments);
+            return finalize_keygen(self.common, self.agg_pubkey, self.shares, &self.commitments);
         };
 
         // Some complaints have been issued, entering the blaming stage
@@ -522,6 +532,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             let processor = BlameResponsesStage6 {
                 common: self.common.clone(),
                 complaints: verified_complaints,
+                agg_pubkey: self.agg_pubkey,
                 shares: self.shares,
                 outgoing_shares: self.outgoing_shares,
                 commitments: self.commitments,
@@ -541,6 +552,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
 
 fn finalize_keygen<KeygenData, P: ECPoint>(
     common: CeremonyCommon,
+    agg_pubkey: ValidAggregateKey<P>,
     secret_shares: IncomingShares<P>,
     commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
 ) -> StageResult<KeygenData, KeygenResultInfo<P>, KeygenFailureReason> {
@@ -556,7 +568,13 @@ fn finalize_keygen<KeygenData, P: ECPoint>(
     let params = ThresholdParameters::from_share_count(common.all_idxs.len() as AuthorityCount);
 
     let keygen_result_info = KeygenResultInfo {
-        key: keygen_frost::compute_keygen_result(params, secret_shares, commitments),
+        key: Arc::new(KeygenResult {
+            key_share: KeyShare {
+                y: agg_pubkey.0,
+                x_i: compute_secret_key_share(secret_shares),
+            },
+            party_public_keys: derive_local_pubkeys_for_parties(params, commitments),
+        }),
         validator_map: common.validator_mapping,
         params,
     };
@@ -567,6 +585,7 @@ fn finalize_keygen<KeygenData, P: ECPoint>(
 struct BlameResponsesStage6<P: ECPoint> {
     common: CeremonyCommon,
     complaints: BTreeMap<AuthorityCount, Complaints4>,
+    agg_pubkey: ValidAggregateKey<P>,
     shares: IncomingShares<P>,
     outgoing_shares: OutgoingShares<P>,
     commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
@@ -628,6 +647,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         let processor = VerifyBlameResponsesBroadcastStage7 {
             common: self.common.clone(),
             complaints: self.complaints,
+            agg_pubkey: self.agg_pubkey,
             blame_responses,
             shares: self.shares,
             commitments: self.commitments,
@@ -642,6 +662,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
 struct VerifyBlameResponsesBroadcastStage7<P: ECPoint> {
     common: CeremonyCommon,
     complaints: BTreeMap<AuthorityCount, Complaints4>,
+    agg_pubkey: ValidAggregateKey<P>,
     // Blame responses received from other parties in the previous communication round
     blame_responses: BTreeMap<AuthorityCount, Option<BlameResponse6<P>>>,
     shares: IncomingShares<P>,
@@ -768,7 +789,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     self.shares.0.insert(sender_idx, share);
                 }
 
-                finalize_keygen(self.common, self.shares, &self.commitments)
+                finalize_keygen(self.common, self.agg_pubkey, self.shares, &self.commitments)
             }
             Err(bad_parties) => StageResult::Error(
                 bad_parties,
