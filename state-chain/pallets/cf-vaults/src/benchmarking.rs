@@ -133,7 +133,7 @@ benchmarks_instance_pallet! {
 	vault_key_rotated_externally {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
-		let call = Call::<T, I>::vault_key_rotated {
+		let call = Call::<T, I>::vault_key_rotated_externally {
 			new_public_key: new_public_key,
 			block_number: 5u64.into(),
 			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
