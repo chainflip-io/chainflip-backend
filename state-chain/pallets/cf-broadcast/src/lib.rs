@@ -69,6 +69,7 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 pub enum PalletOffence {
 	InvalidTransactionAuthored,
 	TransactionFailedOnTransmission,
+	FailedToSignTransaction,
 }
 
 #[frame_support::pallet]
@@ -519,6 +520,11 @@ pub mod pallet {
 
 			FailedTransactionSigners::<T, I>::append(
 				broadcast_attempt_id.broadcast_id,
+				&extrinsic_signer_validator_id,
+			);
+
+			T::OffenceReporter::report(
+				PalletOffence::InvalidTransactionAuthored,
 				extrinsic_signer_validator_id,
 			);
 
