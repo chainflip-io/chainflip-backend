@@ -12,6 +12,7 @@ mod tests;
 mod migrations;
 
 pub mod weights;
+use sp_runtime::DispatchError;
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
@@ -571,7 +572,7 @@ pub mod pallet {
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			Self::clean_up_storage(payload)?;
+			let last_broadcast_attempt_id = Self::clean_up_storage(payload)?;
 
 			// Add fee deficits only when we know everything else is ok
 			// if this has been whitelisted, we can add the fee deficit to the authority's account
@@ -582,13 +583,18 @@ pub mod pallet {
 					}
 				});
 			}
+
+			Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
+
 			Ok(().into())
 		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn clean_up_storage(payload: ThresholdSignatureFor<T, I>) -> DispatchResultWithPostInfo {
+	pub fn clean_up_storage(
+		payload: ThresholdSignatureFor<T, I>,
+	) -> Result<BroadcastAttemptId, DispatchError> {
 		let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
 			.ok_or(Error::<T, I>::InvalidPayload)?;
 
@@ -607,12 +613,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 			}
 		}
+
 		if let Some(attempt_count) = attempt_numbers.last() {
 			let last_broadcast_attempt_id =
 				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-			Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
+			Ok(last_broadcast_attempt_id)
+		} else {
+			Err(Error::<T, I>::InvalidBroadcastId.into())
 		}
-		Ok(().into())
 	}
 
 	pub fn take_and_clean_up_awaiting_transaction_signature_attempt(
