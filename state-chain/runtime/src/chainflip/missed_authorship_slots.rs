@@ -1,56 +1,41 @@
 use cf_traits::MissedAuthorshipSlots;
 use codec::Decode;
-use sp_consensus_aura::{Slot as AuraSlot, AURA_ENGINE_ID};
+use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
 use sp_runtime::DigestItem;
-use sp_std::prelude::*;
 
-use crate::{Aura, System};
+use crate::System;
 
-struct AuraSlotExtraction;
+frame_support::generate_storage_alias!(
+	AuraSlotExtraction, LastSeenSlot => Value<Slot>
+);
 
-impl AuraSlotExtraction {
-	fn expected_slot() -> Option<AuraSlot> {
-		let slot = Aura::current_slot();
-		if *slot == 0 {
-			None
+fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
+	item.as_pre_runtime().and_then(|(id, mut data)| {
+		if id == AURA_ENGINE_ID {
+			Slot::decode(&mut data).ok()
 		} else {
-			Some(slot.saturating_add(1u64))
+			None
 		}
-	}
-
-	fn extract_slot_from_digest_item(item: &DigestItem) -> Option<AuraSlot> {
-		item.as_pre_runtime().and_then(|(id, mut data)| {
-			if id == AURA_ENGINE_ID {
-				AuraSlot::decode(&mut data).ok()
-			} else {
-				None
-			}
-		})
-	}
-
-	fn current_slot_from_digests() -> Option<AuraSlot> {
-		System::digest()
-			.logs()
-			.iter()
-			.filter_map(Self::extract_slot_from_digest_item)
-			.next()
-	}
+	})
 }
 
 pub struct MissedAuraSlots;
 
 impl MissedAuthorshipSlots for MissedAuraSlots {
-	fn missed_slots() -> Vec<u64> {
-		if let Some(expected) = AuraSlotExtraction::expected_slot() {
-			if let Some(authored) = AuraSlotExtraction::current_slot_from_digests() {
-				((*expected)..(*authored)).collect()
-			} else {
-				log::error!("No Aura authorship slot passed to runtime via digests!");
-				vec![]
-			}
+	fn missed_slots() -> sp_std::ops::Range<u64> {
+		let authored = System::digest()
+			.logs()
+			.iter()
+			.find_map(extract_slot_from_digest_item)
+			.expect("Aura is not enabled;");
+
+		let maybe_expected = LastSeenSlot::get().map(|last_seen| last_seen.saturating_add(1u64));
+		LastSeenSlot::put(authored);
+		if let Some(expected) = maybe_expected {
+			(*expected)..(*authored)
 		} else {
-			log::info!("Skipping missed authorship check: aura not expecting any current slot.");
-			vec![]
+			log::info!("Not expecting any current slot.");
+			Default::default()
 		}
 	}
 }
@@ -147,26 +132,21 @@ mod test_missed_authorship_slots {
 
 	#[test]
 	fn test_slot_extraction() {
-		let slot = AuraSlot::from(42);
+		let slot = Slot::from(42);
 		assert_eq!(
 			Some(slot),
-			AuraSlotExtraction::extract_slot_from_digest_item(&DigestItem::PreRuntime(
+			extract_slot_from_digest_item(&DigestItem::PreRuntime(
 				AURA_ENGINE_ID,
 				Encode::encode(&slot)
 			))
 		);
 		assert_eq!(
 			None,
-			AuraSlotExtraction::extract_slot_from_digest_item(&DigestItem::PreRuntime(
-				*b"BORA",
-				Encode::encode(&slot)
-			))
+			extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
 		);
 		assert_eq!(
 			None,
-			AuraSlotExtraction::extract_slot_from_digest_item(&DigestItem::Other(
-				b"SomethingElse".to_vec()
-			))
+			extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec()))
 		);
 	}
 
@@ -177,7 +157,7 @@ mod test_missed_authorship_slots {
 
 		fn simulate_block_authorship<F: Fn(Vec<u64>)>(block_number: u64, assertions: F) {
 			// one slot per block, so slot == block_number
-			let author_slot = AuraSlot::from(GENESIS_SLOT + block_number);
+			let author_slot = Slot::from(GENESIS_SLOT + block_number);
 			let pre_digest =
 				Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, author_slot.encode())] };
 
@@ -185,7 +165,7 @@ mod test_missed_authorship_slots {
 			System::initialize(&block_number, &System::parent_hash(), &pre_digest);
 			System::on_initialize(block_number);
 			Timestamp::on_initialize(block_number);
-			assertions(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots());
+			assertions(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots().collect());
 			Aura::on_initialize(block_number);
 			Timestamp::set_timestamp(block_number);
 		}

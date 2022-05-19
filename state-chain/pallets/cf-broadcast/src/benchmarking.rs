@@ -29,16 +29,16 @@ benchmarks_instance_pallet! {
 		let signed_tx = SignedTransactionFor::<T, I>::benchmark_default();
 		let signer_id = SignerIdFor::<T, I>::benchmark_default();
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, signed_tx, signer_id)
-	transmission_failure {
-		let origin = T::EnsureWitnessed::successful_origin();
-		let transaction_hash = TransactionHashFor::<T, I>::benchmark_default();
-		let broadcast_attempt_id = BroadcastAttemptId {
-			broadcast_id: 1,
-			attempt_count: 1
-		};
-		let tf = TransmissionFailure::TransactionRejected;
-		let call = Call::<T, I>::transmission_failure { broadcast_attempt_id: broadcast_attempt_id, failure: tf, tx_hash: transaction_hash };
-	} : { call.dispatch_bypass_filter(origin)? }
+	// transmission_failure {
+	// 	let origin = T::EnsureWitnessed::successful_origin();
+	// 	let transaction_hash = TransactionHashFor::<T, I>::benchmark_default();
+	// 	let broadcast_attempt_id = BroadcastAttemptId {
+	// 		broadcast_id: 1,
+	// 		attempt_count: 1
+	// 	};
+	// 	let tf = TransmissionFailure::TransactionRejected;
+	// 	let call = Call::<T, I>::transmission_failure { broadcast_attempt_id: broadcast_attempt_id, failure: tf, tx_hash: transaction_hash };
+	// } : { call.dispatch_bypass_filter(origin)? }
 	on_signature_ready {
 		let origin = T::EnsureThresholdSigned::successful_origin();
 		let threshold_request_id = <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_default();

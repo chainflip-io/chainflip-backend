@@ -32,15 +32,6 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-/// The reasons for which a broadcast might fail.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum TransmissionFailure {
-	/// The transaction was rejected because of some user error, for example, insuffient funds.
-	TransactionRejected,
-	/// The transaction failed for some unknown reason and we don't know how to recover.
-	TransactionFailed,
-}
-
 /// A unique id for each broadcast.
 pub type BroadcastId = u32;
 
@@ -275,8 +266,6 @@ pub mod pallet {
 		BroadcastComplete(BroadcastAttemptId),
 		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_attempt_id\]
 		BroadcastRetryScheduled(BroadcastAttemptId),
-		/// A broadcast has failed irrecoverably. \[broadcast_attempt_id, failed_transaction\]
-		BroadcastFailed(BroadcastAttemptId, UnsignedTransactionFor<T, I>),
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
 		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
@@ -324,26 +313,13 @@ pub mod pallet {
 
 				match stage {
 					BroadcastStage::TransactionSigning => {
-						// We take here. We only allow a single transaction signature request
-						// to be valid at a time
-						if let Some(signing_attempt) =
-							AwaitingTransactionSignature::<T, I>::take(attempt_id)
-						{
-							// invalidate the old attempt count by removing it from the mapping
-							BroadcastIdToAttemptNumbers::<T, I>::mutate(
-								signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-								|attempt_numbers| {
-									if let Some(attempt_numbers) = attempt_numbers {
-										attempt_numbers.retain(|x| {
-											*x != signing_attempt
-												.broadcast_attempt
-												.broadcast_attempt_id
-												.attempt_count
-										});
-									}
-								},
-							);
-							notify_and_retry(signing_attempt.broadcast_attempt);
+						// We remove the old transaction signature  here. We only allow a single
+						// transaction signature request to be valid at a time
+						if let Some(broadcast_attempt) =
+							Self::take_and_clean_up_awaiting_transaction_signature_attempt(
+								*attempt_id,
+							) {
+							notify_and_retry(broadcast_attempt);
 						}
 					},
 					// when we retry we actually don't want to take the attempt or the count
@@ -402,12 +378,15 @@ pub mod pallet {
 			signed_tx: SignedTransactionFor<T, I>,
 			signer_id: SignerIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let signer = ensure_signed(origin)?;
+			let extrinsic_signer = ensure_signed(origin)?;
 
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
-			ensure!(signing_attempt.nominee == signer.clone().into(), Error::<T, I>::InvalidSigner);
+			ensure!(
+				signing_attempt.nominee == extrinsic_signer.clone().into(),
+				Error::<T, I>::InvalidSigner
+			);
 
 			// it's no longer being signed, it's being broadcast
 			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
@@ -420,9 +399,9 @@ pub mod pallet {
 			.is_ok()
 			{
 				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
-				if !TransactionFeeDeficit::<T, I>::contains_key(&signer) {
+				if !TransactionFeeDeficit::<T, I>::contains_key(&extrinsic_signer) {
 					TransactionFeeDeficit::<T, I>::insert(
-						&signer,
+						&extrinsic_signer,
 						ChainAmountFor::<T, I>::default(),
 					);
 				}
@@ -430,13 +409,16 @@ pub mod pallet {
 				// white list the signer id, so if we receive SignatureAccepted events from this
 				// signer id, we can refund the fee to that authority
 				if !SignerIdToAccountId::<T, I>::contains_key(&signer_id) {
-					SignerIdToAccountId::<T, I>::insert(&signer_id, &signer);
+					SignerIdToAccountId::<T, I>::insert(&signer_id, &extrinsic_signer);
 				}
 
 				// store the latest signer id used by an authority
-				if RefundSignerId::<T, I>::get(&signer) != Some(signer_id.clone()) {
-					RefundSignerId::<T, I>::insert(&signer, &signer_id);
-					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated(signer, signer_id));
+				if RefundSignerId::<T, I>::get(&extrinsic_signer) != Some(signer_id.clone()) {
+					RefundSignerId::<T, I>::insert(&extrinsic_signer, &signer_id);
+					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated(
+						extrinsic_signer,
+						signer_id,
+					));
 				}
 
 				AwaitingTransmission::<T, I>::insert(
@@ -463,82 +445,47 @@ pub mod pallet {
 					"Unable to verify tranaction signature for broadcast attempt id {}",
 					broadcast_attempt_id
 				);
-				Self::report_and_schedule_retry(
-					&signing_attempt.nominee.clone(),
-					signing_attempt.broadcast_attempt,
+				T::OffenceReporter::report(
 					PalletOffence::InvalidTransactionAuthored,
-				)
+					signing_attempt.nominee,
+				);
+				Self::schedule_retry(signing_attempt.broadcast_attempt);
 			}
 
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that something went wrong during transmission. See
-		/// [BroadcastFailed](Event::BroadcastFailed) for categories of failures that may be
-		/// reported.
-		/// If this fails
+		/// Submitted by the nominated node when they cannot sign the transaction.
+		/// This triggers a retry of the signing of the transaction
 		///
 		/// ## Events
 		///
-		/// - [BroadcastFailed](Event::BroadcastFailed)
+		/// - N/A
 		///
 		/// ## Errors
 		///
 		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
-		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
-		#[pallet::weight(T::WeightInfo::transmission_failure())]
-		pub fn transmission_failure(
+		/// - [InvalidSigner](Error::InvalidSigner)
+		#[pallet::weight(T::WeightInfo::transaction_signing_failure())]
+		pub fn transaction_signing_failure(
 			origin: OriginFor<T>,
 			broadcast_attempt_id: BroadcastAttemptId,
-			failure: TransmissionFailure,
-			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureWitnessed::ensure_origin(origin)?;
+			let extrinsic_signer = ensure_signed(origin)?;
 
-			let TransmissionAttempt { broadcast_attempt, signer, .. } =
-				AwaitingTransmission::<T, I>::take(broadcast_attempt_id)
-					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
-			// remove this broadcast attempt from the list of attempts for this broadcast
-			// and return the latest attempt number
-			let last_attempt_number = BroadcastIdToAttemptNumbers::<T, I>::try_mutate(
-				broadcast_attempt.broadcast_attempt_id.broadcast_id,
-				|attempt_numbers| {
-					attempt_numbers
-						.as_mut()
-						.and_then(|attempt_numbers| {
-							let last_attempt = attempt_numbers.last().copied();
-							attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
-							last_attempt
-						})
-						.ok_or(Error::<T, I>::InvalidBroadcastId)
-				},
-			)?;
+			// Only the nominated signer can say they failed to sign
+			ensure!(
+				signing_attempt.nominee == extrinsic_signer.into(),
+				Error::<T, I>::InvalidSigner
+			);
 
-			// if not the latest attempt id, then we should ignore it, because we've
-			// already scheduled a retry for it.
-			if broadcast_attempt_id.attempt_count != last_attempt_number {
-				log::debug!(
-					"Ignoring failure for broadcast attempt id {} because it is not the latest attempt",
-					broadcast_attempt_id
-				);
-			} else {
-				match failure {
-					TransmissionFailure::TransactionRejected => {
-						Self::report_and_schedule_retry(
-							&signer,
-							broadcast_attempt,
-							PalletOffence::TransactionFailedOnTransmission,
-						);
-					},
-					TransmissionFailure::TransactionFailed => {
-						Self::deposit_event(Event::<T, I>::BroadcastFailed(
-							broadcast_attempt.broadcast_attempt_id,
-							broadcast_attempt.unsigned_tx,
-						));
-					},
-				};
-			}
+			Self::take_and_clean_up_awaiting_transaction_signature_attempt(broadcast_attempt_id);
+
+			Self::schedule_retry(signing_attempt.broadcast_attempt);
+
 			Ok(().into())
 		}
 
@@ -640,6 +587,31 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn take_and_clean_up_awaiting_transaction_signature_attempt(
+		broadcast_attempt_id: BroadcastAttemptId,
+	) -> Option<BroadcastAttempt<T, I>> {
+		if let Some(signing_attempt) =
+			AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id)
+		{
+			assert_eq!(
+				signing_attempt.broadcast_attempt.broadcast_attempt_id,
+				broadcast_attempt_id,
+				"The broadcast attempt id of the signing attempt should match that of the broadcast attempt id of its key"
+			);
+			BroadcastIdToAttemptNumbers::<T, I>::mutate(
+				broadcast_attempt_id.broadcast_id,
+				|attempt_numbers| {
+					if let Some(attempt_numbers) = attempt_numbers {
+						attempt_numbers.retain(|x| *x != broadcast_attempt_id.attempt_count);
+					}
+				},
+			);
+			Some(signing_attempt.broadcast_attempt)
+		} else {
+			None
+		}
+	}
+
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(
@@ -723,15 +695,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			log::warn!("No online validators at the moment.");
 			Self::schedule_retry(broadcast_attempt);
 		}
-	}
-
-	fn report_and_schedule_retry(
-		signer: &T::ValidatorId,
-		failed_broadcast_attempt: BroadcastAttempt<T, I>,
-		offence: PalletOffence,
-	) {
-		T::OffenceReporter::report(offence, signer.clone());
-		Self::schedule_retry(failed_broadcast_attempt);
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
