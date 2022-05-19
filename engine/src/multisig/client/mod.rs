@@ -12,10 +12,7 @@ mod tests;
 
 pub mod ceremony_manager;
 
-#[cfg(test)]
-mod genesis;
-
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
     common::format_iterator,
