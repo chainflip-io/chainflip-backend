@@ -140,3 +140,16 @@ cargo test --lib --all-features
 ```
 
 > **_NOTE:_**  When you run your benchmark with the tests it's **NOT** running against the runtime but the mocks. If you make different assumptions in your mock it can be possible that the tests will fail.
+
+### Some benchmark reference values
+
+Benchmark weight is measured in picoseconds. Our block budget is 6 seconds, or 6_000_000_000_000 weight units.
+
+The typical order of magnitude for extrinsic and data access weights is in the millions of weight units, which is equivalent to microseconds.
+
+Typical values for runtime data access speeds for rocksdb are 25µs for a read and 100µs for a write.
+
+Typical values for extrinsic *execution*, ie. not including reads and writes, are around 30µs to 60µs.
+
+In other words, reads and writes are *expensive* and writes in particular should be kept to a minimum. A single read is as expensive as a moderately complex extrinsic. We should avoid iterating over storage maps unless the size is tightly bounded.
+

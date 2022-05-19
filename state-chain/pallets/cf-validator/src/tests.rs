@@ -530,22 +530,30 @@ fn test_setting_vanity_names_() {
 #[test]
 fn test_missing_author_punishment() {
 	new_test_ext().execute_with(|| {
-		let winners = vec![1, 2, 3, 4];
+		const SET_SIZE: u64 = 4;
+		let winners = (0..SET_SIZE).collect::<Vec<_>>();
 		register_keys(&winners[..]);
 
-		RotationPhase::<Test>::set(RotationStatus::<Test>::VaultsRotated(AuctionOutcome {
+		RotationPhase::<Test>::put(&RotationStatus::<Test>::VaultsRotated(AuctionOutcome {
 			winners,
 			..Default::default()
 		}));
 		move_forward_blocks(2);
 
 		// Use a large offset to ensure the modulo math selects the correct validators.
-		let offset = 4 * 123456;
-		MockMissedAuthorshipSlots::set(vec![1 + offset, 2 + offset]);
+		let offset: u64 = SET_SIZE * 123456;
+		let (expected_authority_index, authored_authority_index) = (1usize, 3usize);
+		MockMissedAuthorshipSlots::set(
+			expected_authority_index as u64 + offset,
+			authored_authority_index as u64 + offset,
+		);
 		move_forward_blocks(1);
 		MockOffenceReporter::assert_reported(
 			PalletOffence::MissedAuthorshipSlot,
-			ValidatorPallet::current_authorities().get(1..=2).unwrap().to_vec(),
+			ValidatorPallet::current_authorities()
+				.get(expected_authority_index..authored_authority_index)
+				.unwrap()
+				.to_vec(),
 		)
 	})
 }
