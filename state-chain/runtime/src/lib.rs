@@ -276,8 +276,11 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount =
-		(pallet_cf_flip::BurnFlipAccount<Self>, pallet_cf_validator::DeletePeerMapping<Self>);
+	type OnKilledAccount = (
+		pallet_cf_flip::BurnFlipAccount<Self>,
+		pallet_cf_validator::DeletePeerMapping<Self>,
+		GrandpaOffenceReporter<Self>,
+	);
 	/// The data to be stored in an account.
 	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
