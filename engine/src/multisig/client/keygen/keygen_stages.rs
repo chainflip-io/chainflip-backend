@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
 
 use crate::multisig::client::common::{
     BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
@@ -18,7 +17,7 @@ use client::{
 use itertools::Itertools;
 use sp_core::H256;
 
-use crate::multisig::crypto::{ECPoint, KeyShare};
+use crate::multisig::crypto::ECPoint;
 
 use keygen::{
     keygen_data::{
@@ -26,7 +25,7 @@ use keygen::{
         VerifyComplaints5,
     },
     keygen_frost::{
-        check_high_degree_commitments, derive_aggregate_pubkey, derive_local_pubkeys_for_parties,
+        self, check_high_degree_commitments, derive_aggregate_pubkey,
         generate_shares_and_commitment, validate_commitments, verify_share, DKGCommitment,
         DKGUnverifiedCommitment, IncomingShares, OutgoingShares,
     },
@@ -490,7 +489,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
 
         if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
             // if all complaints are empty, we can finalize the ceremony
-            return detail::finalize_keygen(self.common, self.shares, &self.commitments);
+            return finalize_keygen(self.common, self.shares, &self.commitments);
         };
 
         // Some complaints have been issued, entering the blaming stage
@@ -540,74 +539,29 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     }
 }
 
-mod detail {
-
-    use crate::multisig::client::common::KeygenResult;
-
-    use super::*;
-
-    pub fn finalize_keygen<KeygenData, P: ECPoint>(
-        common: CeremonyCommon,
-        secret_shares: IncomingShares<P>,
-        commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
-    ) -> StageResult<KeygenData, KeygenResultInfo<P>, KeygenFailureReason> {
-        // Sanity check (failing this should not be possible due to the
-        // hash commitment stage at the beginning of the ceremony)
-        if check_high_degree_commitments(commitments) {
-            return StageResult::Error(
-                Default::default(),
-                CeremonyFailureReason::Other(KeygenFailureReason::HighDegreeCoefficientZero),
-            );
-        }
-
-        StageResult::Done(compute_keygen_result_info(
-            common,
-            secret_shares,
-            commitments,
-        ))
+fn finalize_keygen<KeygenData, P: ECPoint>(
+    common: CeremonyCommon,
+    secret_shares: IncomingShares<P>,
+    commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+) -> StageResult<KeygenData, KeygenResultInfo<P>, KeygenFailureReason> {
+    // Sanity check (failing this should not be possible due to the
+    // hash commitment stage at the beginning of the ceremony)
+    if check_high_degree_commitments(commitments) {
+        return StageResult::Error(
+            Default::default(),
+            CeremonyFailureReason::Other(KeygenFailureReason::HighDegreeCoefficientZero),
+        );
     }
 
-    /// This is intentionally private to ensure it is not called
-    /// without additional checks in finalize keygen
-    fn compute_keygen_result_info<P: ECPoint>(
-        common: CeremonyCommon,
-        secret_shares: IncomingShares<P>,
-        commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
-    ) -> KeygenResultInfo<P> {
-        let share_count = common.all_idxs.len() as AuthorityCount;
+    let params = ThresholdParameters::from_share_count(common.all_idxs.len() as AuthorityCount);
 
-        let key_share = secret_shares
-            .0
-            .values()
-            .map(|share| share.value.clone())
-            .sum();
+    let keygen_result_info = KeygenResultInfo {
+        key: keygen_frost::compute_keygen_result(params, secret_shares, commitments),
+        validator_map: common.validator_mapping,
+        params,
+    };
 
-        // The shares are no longer needed so we zeroize them
-        drop(secret_shares);
-
-        let agg_pubkey = derive_aggregate_pubkey(commitments);
-
-        let params = ThresholdParameters::from_share_count(share_count);
-
-        let party_public_keys = derive_local_pubkeys_for_parties(params, commitments);
-
-        KeygenResultInfo {
-            params: ThresholdParameters::from_share_count(
-                party_public_keys
-                    .len()
-                    .try_into()
-                    .expect("too many parties"),
-            ),
-            key: Arc::new(KeygenResult {
-                key_share: KeyShare {
-                    y: agg_pubkey,
-                    x_i: key_share,
-                },
-                party_public_keys,
-            }),
-            validator_map: common.validator_mapping,
-        }
-    }
+    StageResult::Done(keygen_result_info)
 }
 
 struct BlameResponsesStage6<P: ECPoint> {
@@ -814,7 +768,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     self.shares.0.insert(sender_idx, share);
                 }
 
-                detail::finalize_keygen(self.common, self.shares, &self.commitments)
+                finalize_keygen(self.common, self.shares, &self.commitments)
             }
             Err(bad_parties) => StageResult::Error(
                 bad_parties,
