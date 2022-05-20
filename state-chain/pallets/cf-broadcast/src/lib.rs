@@ -12,7 +12,6 @@ mod tests;
 mod migrations;
 
 pub mod weights;
-use sp_runtime::DispatchError;
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
@@ -289,8 +288,6 @@ pub mod pallet {
 		/// A request to transmit a signed transaction to the target chain. \[broadcast_attempt_id,
 		/// signed_tx\]
 		TransmissionRequest(BroadcastAttemptId, SignedTransactionFor<T, I>),
-		/// A broadcast has successfully been completed. \[broadcast_attempt_id\]
-		BroadcastComplete(BroadcastAttemptId),
 		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_attempt_id\]
 		BroadcastRetryScheduled(BroadcastAttemptId),
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
@@ -301,6 +298,10 @@ pub mod pallet {
 		/// An account id has used a new signer id for a transaction
 		/// so we want to refund to that new signer id \[account_id, signer_id\]
 		RefundSignerIdUpdated(T::AccountId, SignerIdFor<T, I>),
+		/// A broadcast has successfully been completed. \[broadcast_id\]
+		BroadcastSuccess(BroadcastId),
+		/// A broadcast has finally failed. \[broadcast_id\]
+		BroadcastFailed(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -545,10 +546,11 @@ pub mod pallet {
 					Error::<T, I>::ThresholdSignatureUnavailable
 				})?;
 
-			let tranaction =
-				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&sig));
-
-			Self::start_broadcast(&sig, tranaction, api_call);
+			Self::start_broadcast(
+				&sig,
+				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&sig)),
+				api_call,
+			);
 
 			Ok(().into())
 		}
@@ -565,15 +567,16 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::signature_accepted())]
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
-			payload: ThresholdSignatureFor<T, I>,
+			signature: ThresholdSignatureFor<T, I>,
 			tx_signer: SignerIdFor<T, I>,
 			tx_fee: ChainAmountFor<T, I>,
 			_block_number: u64,
 			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			let last_broadcast_attempt_id = Self::clean_up_storage(payload)?;
-
+			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
+				.ok_or(Error::<T, I>::InvalidPayload)?;
+			Self::clean_up_brodcast_attempt_storage(broadcast_id);
 			// Add fee deficits only when we know everything else is ok
 			// if this has been whitelisted, we can add the fee deficit to the authority's account
 			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
@@ -583,24 +586,17 @@ pub mod pallet {
 					}
 				});
 			}
-
-			Self::deposit_event(Event::<T, I>::BroadcastComplete(last_broadcast_attempt_id));
-
+			Self::deposit_event(Event::<T, I>::BroadcastSuccess(broadcast_id));
 			Ok(().into())
 		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn clean_up_storage(
-		payload: ThresholdSignatureFor<T, I>,
-	) -> Result<BroadcastAttemptId, DispatchError> {
-		let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(payload)
-			.ok_or(Error::<T, I>::InvalidPayload)?;
-
+	pub fn clean_up_brodcast_attempt_storage(broadcast_id: BroadcastId) {
 		// Here we need to be able to get the accurate broadcast id from the payload
-		let attempt_numbers = BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id)
-			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+		let attempt_numbers =
+			BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id).unwrap_or_default();
 
 		for attempt_count in attempt_numbers.clone() {
 			let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count };
@@ -614,13 +610,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 
-		if let Some(attempt_count) = attempt_numbers.last() {
-			let last_broadcast_attempt_id =
-				BroadcastAttemptId { broadcast_id, attempt_count: *attempt_count };
-			Ok(last_broadcast_attempt_id)
-		} else {
-			Err(Error::<T, I>::InvalidBroadcastId.into())
-		}
+		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}
 
 	pub fn take_and_clean_up_awaiting_transaction_signature_attempt(
@@ -691,18 +681,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
-				if Self::clean_up_storage(signature).is_err() {
-					log::error!(
-						"Failed to clean up storage for broadcast attempt {}",
-						broadcast_id
-					);
-				}
-				ThresholdSignatureData::<T, I>::remove(broadcast_id);
+				SignatureToBroadcastIdLookup::<T, I>::remove(signature);
+				Self::clean_up_brodcast_attempt_storage(broadcast_id);
 				Self::threshold_sign_and_broadcast(api_call);
 				log::info!(
 					"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
 					broadcast_attempt.broadcast_attempt_id.broadcast_id
 				);
+				Self::deposit_event(Event::<T, I>::BroadcastFailed(broadcast_id));
 			} else {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();

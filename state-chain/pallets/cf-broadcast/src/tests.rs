@@ -112,9 +112,8 @@ impl MockCfe {
 						_ => unimplemented!(),
 					};
 				},
-				BroadcastEvent::BroadcastComplete(broadcast_attempt_id) => {
-					COMPLETED_BROADCASTS
-						.with(|cell| cell.borrow_mut().push(broadcast_attempt_id.broadcast_id));
+				BroadcastEvent::BroadcastSuccess(broadcast_id) => {
+					COMPLETED_BROADCASTS.with(|cell| cell.borrow_mut().push(broadcast_id));
 				},
 				BroadcastEvent::BroadcastRetryScheduled(_) => {
 					// Informational only. No action required by the CFE.
@@ -129,6 +128,7 @@ impl MockCfe {
 				BroadcastEvent::RefundSignerIdUpdated(_, _) => {
 					// Information only. No action required by the CFE.
 				},
+				BroadcastEvent::BroadcastFailed(_) => {},
 			},
 			_ => panic!("Unexpected event"),
 		};
