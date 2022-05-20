@@ -192,6 +192,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type EthEnvironmentProvider = Environment;
+	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
