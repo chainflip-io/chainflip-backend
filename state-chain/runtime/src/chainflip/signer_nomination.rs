@@ -2,6 +2,7 @@ use crate::{Runtime, Validator};
 use cf_traits::{Chainflip, EpochIndex, EpochInfo};
 use frame_support::{traits::Get, Hashable};
 use nanorand::{Rng, WyRand};
+use sp_runtime::AccountId32;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 use super::{ExclusionSetFor, SigningOffences};
@@ -41,13 +42,16 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 	u64::from_be_bytes(bytes)
 }
 
-fn eligible_authorities() -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	let exluded_from_signing = ExclusionSetFor::<SigningOffences>::get();
+fn eligible_authorities(exclude_ids: &[AccountId32]) -> Vec<<Runtime as Chainflip>::ValidatorId> {
+	let excluded_from_signing = ExclusionSetFor::<SigningOffences>::get();
+	let exclude_ids = exclude_ids.iter().cloned().collect::<BTreeSet<_>>();
+
+	let to_exclude = excluded_from_signing.union(&exclude_ids).cloned().collect::<BTreeSet<_>>();
 
 	<Validator as EpochInfo>::current_authorities()
 		.into_iter()
 		.collect::<BTreeSet<_>>()
-		.difference(&exluded_from_signing)
+		.difference(&to_exclude)
 		.cloned()
 		.collect()
 }
@@ -62,9 +66,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 		seed: H,
 		exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId> {
-		let mut eligible_signers = eligible_authorities();
-		eligible_signers.retain(|id| !exclude_ids.contains(id));
-		select_one(seed_from_hashable(seed), eligible_signers)
+		select_one(seed_from_hashable(seed), eligible_authorities(exclude_ids.into()))
 	}
 
 	fn threshold_nomination_with_seed<H: Hashable>(
@@ -76,7 +78,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 			cf_utilities::success_threshold_from_share_count(
 				<Validator as EpochInfo>::authority_count_at_epoch(epoch_index).unwrap_or_default(),
 			) as usize,
-			eligible_authorities(),
+			eligible_authorities(&[]),
 		)
 	}
 }
