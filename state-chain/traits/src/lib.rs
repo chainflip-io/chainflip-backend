@@ -682,8 +682,6 @@ pub trait SystemStateManager {
 	type SystemState;
 	/// Set the system state.
 	fn set_system_state(state: Self::SystemState);
-	/// Get the configured type for maintenance.
-	fn get_maintenance_state() -> Self::SystemState;
-	/// Get the configured type for normal operation.
-	fn get_normal_state() -> Self::SystemState;
+	/// Turn system maintenance on.
+	fn set_maintenance_mode();
 }

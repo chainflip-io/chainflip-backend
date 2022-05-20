@@ -61,17 +61,13 @@ pub struct MockSystemStateManager;
 
 impl SystemStateManager for MockSystemStateManager {
 	type SystemState = SystemState;
-
 	fn set_system_state(state: Self::SystemState) {
 		CURRENT_SYSTEM_STATE.with(|cell| {
 			*cell.borrow_mut() = state;
 		});
 	}
-	fn get_maintenance_state() -> Self::SystemState {
-		SystemState::Maintenance
-	}
-	fn get_normal_state() -> Self::SystemState {
-		SystemState::Normal
+	fn set_maintenance_mode() {
+		Self::set_system_state(SystemState::Maintenance);
 	}
 }
 

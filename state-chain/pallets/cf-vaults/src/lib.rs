@@ -639,7 +639,7 @@ pub mod pallet {
 			);
 
 			// Put the system into maintenance mode.
-			T::SystemStateManager::set_system_state(T::SystemStateManager::get_maintenance_state());
+			T::SystemStateManager::set_maintenance_mode();
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 

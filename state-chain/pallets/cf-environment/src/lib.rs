@@ -188,11 +188,8 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 			Pallet::<T>::deposit_event(Event::<T>::SystemStateHasBeenChanged(state));
 		}
 	}
-	fn get_maintenance_state() -> Self::SystemState {
-		Self::SystemState::Maintenance
-	}
-	fn get_normal_state() -> Self::SystemState {
-		Self::SystemState::Normal
+	fn set_maintenance_mode() {
+		Self::set_system_state(SystemState::Maintenance);
 	}
 }
 
