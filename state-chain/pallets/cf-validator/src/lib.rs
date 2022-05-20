@@ -30,7 +30,7 @@ use frame_support::{
 };
 pub use pallet::*;
 use sp_core::ed25519;
-use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
+use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, One, Saturating, Zero};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
@@ -987,15 +987,6 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
 			T::DbWeight::get().reads(2),
 		)
-	}
-}
-
-/// In this module, for simplicity, we just return the same AccountId.
-pub struct ValidatorOf<T>(sp_std::marker::PhantomData<T>);
-
-impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
-	fn convert(account: T::AccountId) -> Option<T::AccountId> {
-		Some(account)
 	}
 }
 
