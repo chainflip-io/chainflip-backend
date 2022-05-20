@@ -505,28 +505,20 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			broadcast_attempt_id: BroadcastAttemptId,
 		) -> DispatchResultWithPostInfo {
-			let extrinsic_signer = ensure_signed(origin)?;
+			let extrinsic_signer: <T as Chainflip>::ValidatorId = ensure_signed(origin)?.into();
 
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			// Only the nominated signer can say they failed to sign
-			let extrinsic_signer_validator_id: <T as Chainflip>::ValidatorId =
-				extrinsic_signer.into();
-			ensure!(
-				signing_attempt.nominee == extrinsic_signer_validator_id,
-				Error::<T, I>::InvalidSigner
-			);
+			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
 
 			FailedTransactionSigners::<T, I>::append(
 				broadcast_attempt_id.broadcast_id,
-				&extrinsic_signer_validator_id,
+				&extrinsic_signer,
 			);
 
-			T::OffenceReporter::report(
-				PalletOffence::InvalidTransactionAuthored,
-				extrinsic_signer_validator_id,
-			);
+			T::OffenceReporter::report(PalletOffence::InvalidTransactionAuthored, extrinsic_signer);
 
 			Self::take_and_clean_up_awaiting_transaction_signature_attempt(broadcast_attempt_id);
 
