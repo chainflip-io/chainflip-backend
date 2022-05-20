@@ -598,7 +598,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let attempt_numbers =
 			BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id).unwrap_or_default();
 
-		for attempt_count in attempt_numbers.clone() {
+		for attempt_count in attempt_numbers {
 			let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count };
 
 			// A particular attempt is either alive because at the signing stage
