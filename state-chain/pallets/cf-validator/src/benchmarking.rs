@@ -18,6 +18,15 @@ benchmarks! {
 	verify {
 		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
 	}
+	set_backup_node_percentage {
+		let call = Call::<T>::set_backup_node_percentage { percentage: 20 };
+		let o = T::EnsureGovernance::successful_origin();
+	}: {
+		call.dispatch_bypass_filter(o)?
+	}
+	verify {
+		assert_eq!(Pallet::<T>::backup_node_percentage(), 20u8)
+	}
 	force_rotation {
 		let call = Call::<T>::force_rotation {};
 		let o = T::EnsureGovernance::successful_origin();

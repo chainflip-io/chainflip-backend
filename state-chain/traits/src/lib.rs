@@ -676,3 +676,12 @@ pub trait SystemStateInfo {
 	/// Ensure that the network is **not** in maintenance mode.
 	fn ensure_no_maintenance() -> DispatchResult;
 }
+
+/// Something that can manipulate the system state.
+pub trait SystemStateManager {
+	type SystemState;
+	/// Set the system state.
+	fn set_system_state(state: Self::SystemState);
+	/// Turn system maintenance on.
+	fn set_maintenance_mode();
+}

@@ -518,6 +518,22 @@ fn vault_key_rotated() {
 	});
 }
 
+#[test]
+fn test_vault_key_rotated_externally() {
+	new_test_ext().execute_with(|| {
+		const TX_HASH: [u8; 4] = [0xab; 4];
+		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Normal);
+		assert_ok!(VaultsPallet::vault_key_rotated_externally(
+			Origin::root(),
+			NEW_AGG_PUB_KEY,
+			1,
+			TX_HASH,
+		));
+		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Maintenance);
+		assert_last_event!(crate::Event::VaultRotatedExternally(..));
+	});
+}
+
 mod keygen_reporting {
 	use super::*;
 	use crate::{AggKeyFor, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
