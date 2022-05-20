@@ -15,10 +15,10 @@ use cf_traits::EpochIndex;
 use regex::Regex;
 
 use crate::{
-    common::read_clean_and_decode_hex_str_file,
+    common::{make_periodic_tick, read_clean_and_decode_hex_str_file},
     constants::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_FALLING_BEHIND_MARGIN_BLOCKS,
-        ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL,
+        ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL, ETH_STILL_BEHIND_LOG_INTERVAL,
     },
     eth::{
         http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
@@ -30,7 +30,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::{stream, StreamExt};
+use futures::{stream, FutureExt, StreamExt};
 use slog::o;
 use sp_core::{H160, U256};
 use std::{
@@ -556,6 +556,7 @@ pub trait EthObserver {
         #[derive(Debug)]
         struct ProtocolState {
             last_block_pulled: u64,
+            log_ticker: tokio::time::Interval,
             protocol: TransportProtocol,
         }
         #[derive(Debug)]
@@ -575,11 +576,13 @@ pub trait EthObserver {
         let init_state = StreamState::<BlockEventsStreamWs, BlockEventsStreamHttp> {
             ws_state: ProtocolState {
                 last_block_pulled: 0,
+                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL),
                 protocol: TransportProtocol::Ws,
             },
             ws_stream: safe_ws_block_events_stream,
             http_state: ProtocolState {
                 last_block_pulled: 0,
+                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL),
                 protocol: TransportProtocol::Http,
             },
             http_stream: safe_http_block_events_stream,
@@ -665,18 +668,19 @@ pub trait EthObserver {
             protocol_state.last_block_pulled = block_events.block_number;
 
             let opt_block_events = if merged_has_yielded {
-                match block_events.block_number.cmp(&next_block_to_yield) {
-                    Ordering::Equal => {
-                        // yield
-                        Some(block_events)
-                    }
-                    Ordering::Less => {
+                if block_events.block_number == next_block_to_yield {
+                    Some(block_events)
+                    // if we're only one block "behind" we're not really "behind", we were just the second stream polled
+                } else if block_events.block_number + 1 < next_block_to_yield {
+                    None
+                } else if block_events.block_number < next_block_to_yield {
+                    // we're behind, but we only want to log once every interval
+                    if protocol_state.log_ticker.tick().now_or_never().is_some() {
                         slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_events.block_number, next_block_to_yield);
-                        None
                     }
-                    Ordering::Greater => {
-                        panic!("Input streams to merged stream started at different block numbers. This should not occur.");
-                    }
+                    None
+                } else {
+                    panic!("Input streams to merged stream started at different block numbers. This should not occur.");
                 }
             } else {
                 // yield
