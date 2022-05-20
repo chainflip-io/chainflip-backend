@@ -518,8 +518,6 @@ pub mod pallet {
 				&extrinsic_signer,
 			);
 
-			T::OffenceReporter::report(PalletOffence::InvalidTransactionAuthored, extrinsic_signer);
-
 			Self::take_and_clean_up_awaiting_transaction_signature_attempt(broadcast_attempt_id);
 
 			Self::schedule_retry(signing_attempt.broadcast_attempt);
@@ -782,6 +780,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed_broadcast_attempt.broadcast_attempt_id,
 			));
 		} else {
+			T::OffenceReporter::report_many(
+				PalletOffence::FailedToSignTransaction,
+				&FailedTransactionSigners::<T, I>::get(
+					failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				)
+				.unwrap_or_default(),
+			);
 			Self::deposit_event(Event::<T, I>::BroadcastAborted(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			));
