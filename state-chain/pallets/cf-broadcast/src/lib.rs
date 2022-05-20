@@ -780,13 +780,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed_broadcast_attempt.broadcast_attempt_id,
 			));
 		} else {
-			T::OffenceReporter::report_many(
-				PalletOffence::FailedToSignTransaction,
-				&FailedTransactionSigners::<T, I>::get(
-					failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-				)
-				.unwrap_or_default(),
-			);
+			if let Some(failed_signers) = FailedTransactionSigners::<T, I>::get(
+				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			) {
+				T::OffenceReporter::report_many(
+					PalletOffence::FailedToSignTransaction,
+					&failed_signers,
+				);
+			}
 			Self::deposit_event(Event::<T, I>::BroadcastAborted(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			));
