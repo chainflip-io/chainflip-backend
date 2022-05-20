@@ -628,6 +628,13 @@ fn test_reputation_reset() {
 	});
 }
 
+#[test]
+fn backup_set_size_calculation() {
+	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 20u8), 30);
+	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 0u8), 0);
+	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 200u8), 300);
+}
+
 #[cfg(test)]
 mod bond_expiry {
 	use super::*;

@@ -297,6 +297,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 			blocks_per_epoch: EPOCH_DURATION,
 			bond: MINIMUM_ACTIVE_BID_AT_GENESIS,
 			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
+			backup_node_percentage: 34,
 		},
 	};
 

@@ -29,6 +29,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_validator.
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
+	fn set_backup_node_percentage() -> Weight;
 	fn force_rotation() -> Weight;
 	fn cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
@@ -44,6 +45,12 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		#[allow(clippy::unnecessary_cast)]
 		(15_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: Validator BackupNodePercentage (r:0 w:1)
+	fn set_backup_node_percentage() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(13_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Validator RotationPhase (r:1 w:1)
@@ -85,6 +92,12 @@ impl WeightInfo for () {
 		#[allow(clippy::unnecessary_cast)]
 		(15_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: Validator BackupNodePercentage (r:0 w:1)
+	fn set_backup_node_percentage() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(13_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Validator RotationPhase (r:1 w:1)
