@@ -1,3 +1,4 @@
+mod ceremony_manager_tests;
 mod frost_unit_tests;
 mod helpers;
 mod keygen_unit_tests;
