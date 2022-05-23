@@ -287,6 +287,7 @@ pub mod mocks {
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
 
+	#[cfg(feature = "runtime-benchmarks")]
 	impl<C: ChainCrypto> BenchmarkDefault for MockApiCall<C> {
 		fn benchmark_default() -> Self {
 			let default_payload: <C as ChainCrypto>::Payload = C::Payload::benchmark_default();

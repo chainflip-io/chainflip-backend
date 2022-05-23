@@ -9,6 +9,7 @@ use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 use frame_system::RawOrigin;
 
 use cf_chains::benchmarking_default::BenchmarkDefault;
+use frame_benchmarking::impl_benchmark_test_suite;
 
 type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
 type SignedTransactionFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignedTransaction;
@@ -18,16 +19,27 @@ type ThresholdSignatureFor<T, I> =
 type ChainAmountFor<T, I> = <<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
 type TransactionHashFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
 
+fn setup_signature<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
+	let threshold_request_id =
+		<T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_default();
+	let api_call = ApiCallFor::<T, I>::benchmark_default();
+	let call = Call::<T, I>::on_signature_ready { threshold_request_id, api_call };
+	return call
+}
+
 benchmarks_instance_pallet! {
 	on_initialize {} : {}
 	transaction_ready_for_transmission {
 		let caller: T::AccountId = whitelisted_caller();
+		let origin = T::EnsureThresholdSigned::successful_origin();
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1
 		};
 		let signed_tx = SignedTransactionFor::<T, I>::benchmark_default();
 		let signer_id = SignerIdFor::<T, I>::benchmark_default();
+		let sd = setup_signature::<T, I>();
+		sd.dispatch_bypass_filter(origin)?;
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, signed_tx, signer_id)
 	transaction_signing_failure {
 		let caller: T::AccountId = whitelisted_caller();
@@ -42,24 +54,10 @@ benchmarks_instance_pallet! {
 		let threshold_request_id = <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_default();
 		let api_call = ApiCallFor::<T, I>::benchmark_default();
 		let call = Call::<T, I>::on_signature_ready{threshold_request_id, api_call};
-		// let unsigned_tx = T::TransactionBuilder::build_transaction(&api_call.signed(&threshold_signature));
-		// let broadcast_attempt = BroadcastAttempt::<T, I> {
-		// 	broadcast_attempt_id: broadcast_attempt_id,
-		// 	unsigned_tx,
-		// };
-		// AwaitingTransactionSignature::<T, I>::insert(
-		// 	broadcast_attempt.broadcast_attempt_id,
-		// 	TransactionSigningAttempt {
-		// 		broadcast_attempt: BroadcastAttempt::<T, I> {
-		// 			unsigned_tx: broadcast_attempt.unsigned_tx.clone(),
-		// 			..broadcast_attempt
-		// 		},
-		// 		nominee: caller.clone(),
-		// 	},
-		// );
 		call.dispatch_bypass_filter(origin)?;
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
 	verify {
+		assert!(Expiries::<T, I>::contains_key(expiry_block));
 	}
 	on_signature_ready {
 		let origin = T::EnsureThresholdSigned::successful_origin();
