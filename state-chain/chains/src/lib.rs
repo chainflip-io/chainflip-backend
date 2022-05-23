@@ -287,6 +287,15 @@ pub mod mocks {
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
 
+	impl<C: ChainCrypto> BenchmarkDefault for MockApiCall<C> {
+		fn benchmark_default() -> Self {
+			let default_payload: <C as ChainCrypto>::Payload = C::Payload::benchmark_default();
+			let threshold_signature: <C as ChainCrypto>::ThresholdSignature =
+				C::ThresholdSignature::benchmark_default();
+			Self { 0: default_payload, 1: Some(threshold_signature) }
+		}
+	}
+
 	impl<C: ChainCrypto> MaxEncodedLen for MockApiCall<C> {
 		fn max_encoded_len() -> usize {
 			<[u8; 32]>::max_encoded_len() * 3
