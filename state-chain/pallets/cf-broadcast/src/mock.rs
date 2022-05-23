@@ -104,7 +104,7 @@ impl SignerNomination for MockNominator {
 	}
 }
 
-// Removee some threadlocal + refcell complexity from test code
+// Remove some threadlocal + refcell complexity from test code
 impl MockNominator {
 	pub fn get_nominee() -> Option<u64> {
 		NOMINATION.with(|cell| *cell.borrow())
