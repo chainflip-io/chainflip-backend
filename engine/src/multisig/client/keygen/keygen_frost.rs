@@ -317,7 +317,7 @@ pub fn derive_aggregate_pubkey<P: ECPoint>(
     if !allow_high_pubkey && !pubkey.is_compatible() {
         Err(anyhow::Error::msg("pubkey is not compatible"))
     } else if check_high_degree_commitments(commitments) {
-        // Sanity check (failing this should not be possible due to the
+        // Sanity check (the chance of this failing is practically zero due to the
         // hash commitment stage at the beginning of the ceremony)
         Err(anyhow::Error::msg("high degree coefficient is zero"))
     } else {
