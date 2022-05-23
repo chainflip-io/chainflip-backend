@@ -685,7 +685,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::clean_up_brodcast_attempt_storage(broadcast_id);
 				Self::threshold_sign_and_broadcast(api_call);
 				log::info!(
-					"Signature is invalid -> reschedule threshold signature for broadcast id {}.",
+					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_attempt.broadcast_attempt_id.broadcast_id
 				);
 				Self::deposit_event(Event::<T, I>::BroadcastFailed(broadcast_id));
