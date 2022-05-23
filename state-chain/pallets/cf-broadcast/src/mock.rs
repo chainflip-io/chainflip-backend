@@ -3,7 +3,10 @@ use std::cell::RefCell;
 use crate::{
 	self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence, SignerNomination,
 };
-use cf_chains::mocks::{MockApiCall, MockEthereum, MockTransactionBuilder};
+use cf_chains::{
+	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
+	ChainCrypto, Ethereum,
+};
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
@@ -40,6 +43,7 @@ parameter_types! {
 
 thread_local! {
 	pub static NOMINATION: std::cell::RefCell<Option<u64>>  = RefCell::new(Some(RANDOM_NOMINEE));
+	pub static VALIDKEY: std::cell::RefCell<bool> = RefCell::new(true);
 }
 
 impl frame_system::Config for Test {
@@ -111,6 +115,45 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
+// Mock KeyProvider
+pub const VALID_KEY_ID: &[u8] = &[0, 0, 0, 0];
+pub const VALID_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
+
+pub const INVALID_KEY_ID: &[u8] = &[1, 1, 1, 1];
+pub const INVALID_AGG_KEY: [u8; 4] = [1, 1, 1, 1];
+
+thread_local! {
+	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+}
+
+pub struct MockKeyProvider;
+
+impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
+	type KeyId = Vec<u8>;
+
+	fn current_key_id() -> Self::KeyId {
+		if VALIDKEY.with(|cell| *cell.borrow()) {
+			VALID_KEY_ID.to_vec()
+		} else {
+			INVALID_KEY_ID.to_vec()
+		}
+	}
+
+	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
+		if VALIDKEY.with(|cell| *cell.borrow()) {
+			VALID_AGG_KEY
+		} else {
+			INVALID_AGG_KEY
+		}
+	}
+}
+
+impl MockKeyProvider {
+	pub fn set_valid(valid: bool) {
+		VALIDKEY.with(|cell| *cell.borrow_mut() = valid);
+	}
+}
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
@@ -126,6 +169,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();
 	type MaximumAttempts = MaximumAttempts;
+	type KeyProvider = MockKeyProvider;
 }
 
 // Build genesis storage according to the mock runtime.

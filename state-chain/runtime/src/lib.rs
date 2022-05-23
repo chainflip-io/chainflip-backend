@@ -456,6 +456,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type TransmissionTimeout = ConstU32<{ 10 * MINUTES }>;
 	type MaximumAttempts = ConstU32<MAXIMUM_BROADCAST_ATTEMPTS>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type KeyProvider = EthereumVault;
 }
 
 construct_runtime!(
