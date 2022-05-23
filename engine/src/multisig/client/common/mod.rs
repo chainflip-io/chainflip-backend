@@ -75,12 +75,10 @@ pub enum KeygenFailureReason {
     InvalidCommitment,
     #[error("Invalid secret share in a blame response")]
     InvalidBlameResponse,
-    #[error("The key is not contract compatible")]
-    NotContractCompatible,
+    #[error("The key is not compatible")]
+    KeyNotCompatible,
     #[error("Invalid Complaint")]
     InvalidComplaint,
-    #[error("High Degree Coefficient Zero")]
-    HighDegreeCoefficientZero,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]

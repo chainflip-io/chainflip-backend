@@ -1049,7 +1049,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         .try_complete_with_error(
             &[],
             &mut result_receivers,
-            CeremonyFailureReason::Other(KeygenFailureReason::NotContractCompatible),
+            CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible),
         )
         .await
     {
