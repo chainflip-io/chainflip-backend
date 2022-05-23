@@ -23,13 +23,16 @@ where
     R: io::Read,
 {
     // Note: The csv reader will ignore the first row by default. Make sure the first row is only used for headers.
+
+    // Used to check for duplicate names and ids in the CSV. If there are duplicates,
+    // we want to panic and have the problem in the CSV resolved rather than potentially
+    // generating unexpected results.
     let mut node_names: BTreeSet<String> = BTreeSet::new();
     let mut node_ids: BTreeSet<AccountId> = BTreeSet::new();
     reader
             .records()
             .map(|result_record| {
                 let (name, id) = result_record.expect("Error reading csv record").deserialize::<Record>(None).expect("Error reading CSV: Bad format. Could not deserialise record into (String, AccountId). Make sure it does not have spaces after/before the commas.");
-                // Check for duplicate names and ids
                 assert!(
                     node_names.insert(name.clone()),
                     "Duplicate node name {} in csv",
