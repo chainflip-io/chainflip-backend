@@ -22,7 +22,7 @@ use cf_traits::{
 };
 
 thread_local! {
-	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
+	pub static SLASHES: RefCell<Vec<(u64, u64)>> = RefCell::new(Default::default());
 }
 
 construct_runtime!(
@@ -92,15 +92,22 @@ parameter_types! {
 
 // Mocking the `Slasher` trait
 pub struct MockSlasher;
+
+impl MockSlasher {
+	pub fn slash_count(validator_id: u64) -> usize {
+		SLASHES
+			.with(|slashes| slashes.borrow().iter().filter(|(id, _)| *id == validator_id).count())
+	}
+}
+
 impl Slashing for MockSlasher {
 	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) {
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Count those slashes
-		SLASH_COUNT.with(|count| {
-			let mut c = count.borrow_mut();
-			*c += 1
+		SLASHES.with(|count| {
+			count.borrow_mut().push((*validator_id, blocks_offline));
 		});
 	}
 }

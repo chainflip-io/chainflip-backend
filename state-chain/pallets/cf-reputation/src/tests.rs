@@ -35,7 +35,7 @@ fn offline_nodes_get_slashed_if_reputation_is_negative() {
 			offline: vec![ALICE],
 			..Default::default()
 		});
-		assert_eq!(SLASH_COUNT.with(|count| *count.borrow()), 1);
+		assert_eq!(MockSlasher::slash_count(ALICE), 1);
 	});
 }
 
@@ -218,6 +218,7 @@ mod reporting_adapter_test {
 				GrandpaEquivocationOffence<IdentificationTuple>,
 			>::get()
 			.is_empty());
+			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 0);
 
 			// Report the offence. It should now be known, and a duplicate report should not be
 			// possible.
@@ -237,6 +238,7 @@ mod reporting_adapter_test {
 				ReputationPallet::reputation(OFFENDER.0).reputation_points,
 				-GRANDPA_EQUIVOCATION_PENALTY_POINTS
 			);
+			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 1);
 
 			// Once an offence has been reported, it's not possible to report an offence for a
 			// previous time slot.
@@ -256,6 +258,7 @@ mod reporting_adapter_test {
 			assert_ok!(GrandpaOffenceReporter::report_offence(Default::default(), FUTURE_OFFENCE,));
 			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &NEXT_TIME_SLOT));
 			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &FUTURE_TIME_SLOT));
+			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 2);
 		});
 	}
 }

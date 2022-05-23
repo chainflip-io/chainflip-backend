@@ -86,6 +86,9 @@ where
 
 		if !offenders.is_empty() {
 			Pallet::<T>::report_many(offence, &offenders[..]);
+			for offender in &offenders {
+				T::Slasher::slash(offender, 1u32.into());
+			}
 			Ok(())
 		} else {
 			Err(sp_staking::offence::OffenceError::DuplicateReport)
