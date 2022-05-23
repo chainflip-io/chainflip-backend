@@ -135,7 +135,7 @@ impl MockCfe {
 				BroadcastEvent::RefundSignerIdUpdated(_, _) => {
 					// Information only. No action required by the CFE.
 				},
-				BroadcastEvent::BroadcastFailed(_) => {},
+				BroadcastEvent::ThresholdSignatureInvalid(_) => {},
 			},
 			_ => panic!("Unexpected event"),
 		};

@@ -306,8 +306,9 @@ pub mod pallet {
 		RefundSignerIdUpdated(T::AccountId, SignerIdFor<T, I>),
 		/// A broadcast has successfully been completed. \[broadcast_id\]
 		BroadcastSuccess(BroadcastId),
-		/// A broadcast has finally failed. \[broadcast_id\]
-		BroadcastFailed(BroadcastId),
+		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
+		/// \[broadcast_id\]
+		ThresholdSignatureInvalid(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -700,7 +701,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_attempt.broadcast_attempt_id.broadcast_id
 				);
-				Self::deposit_event(Event::<T, I>::BroadcastFailed(broadcast_id));
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid(broadcast_id));
 			} else {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
