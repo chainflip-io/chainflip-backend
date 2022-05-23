@@ -18,7 +18,7 @@ use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
-use utilities::success_threshold_from_share_count;
+use utilities::{success_threshold_from_share_count, threshold_from_share_count};
 
 use crate::{
     common::{all_same, split_at},
@@ -1188,7 +1188,7 @@ pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment<Point>
         0,
         ThresholdParameters {
             share_count: ACCOUNT_IDS.len() as AuthorityCount,
-            threshold: ACCOUNT_IDS.len() as AuthorityCount,
+            threshold: threshold_from_share_count(ACCOUNT_IDS.len() as u32) as AuthorityCount,
         },
     );
     fake_comm1

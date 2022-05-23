@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
+use utilities::threshold_from_share_count;
 
 use crate::multisig::{client::common::BroadcastVerificationMessage, crypto::ECPoint};
 
@@ -40,6 +41,66 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
             KeygenData::VerifyBlameResponses7(verify7) => verify7.to_string(),
         };
         write!(f, "KeygenData({})", inner)
+    }
+}
+
+impl<P: ECPoint> KeygenData<P> {
+    /// Check that the number of elements in the data is correct
+    pub fn check_data_size(&self, num_of_parties: Option<AuthorityCount>) -> bool {
+        if let Some(num_of_parties) = num_of_parties {
+            let num_of_parties = num_of_parties as usize;
+            match self {
+                // For messages that don't contain a collection (eg. HashComm1), we don't need to check the size.
+                KeygenData::HashComm1(_) => true,
+                KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
+                KeygenData::Comm1(message) => {
+                    message.get_commitments_len()
+                        == threshold_from_share_count(num_of_parties as u32) as usize + 1
+                }
+                KeygenData::Verify2(message) => {
+                    for commitment in message.data.values().flatten() {
+                        if commitment.get_commitments_len()
+                            != threshold_from_share_count(num_of_parties as u32) as usize + 1
+                        {
+                            return false;
+                        }
+                    }
+
+                    message.data.len() == num_of_parties
+                }
+                KeygenData::SecretShares3(_) => true,
+                KeygenData::Complaints4(complaints) => {
+                    // The complaints are optional, so we just check the max length
+                    complaints.0.len() <= num_of_parties
+                }
+                KeygenData::VerifyComplaints5(message) => {
+                    for complaints in message.data.values().flatten() {
+                        if complaints.0.len() > num_of_parties {
+                            return false;
+                        }
+                    }
+                    message.data.len() == num_of_parties
+                }
+                KeygenData::BlameResponse6(blame_response) => {
+                    // The blame response will only contain a subset, so we just check the max length
+                    blame_response.0.len() <= num_of_parties
+                }
+                KeygenData::VerifyBlameResponses7(message) => {
+                    for blame_response in message.data.values().flatten() {
+                        if blame_response.0.len() > num_of_parties {
+                            return false;
+                        }
+                    }
+                    message.data.len() == num_of_parties
+                }
+            }
+        } else {
+            assert!(
+                matches!(self, KeygenData::HashComm1(_)),
+                "We should know the number of participants for any non-initial stage data"
+            );
+            true
+        }
     }
 }
 
@@ -96,3 +157,95 @@ derive_display_as_type_name!(Complaints4);
 derive_display_as_type_name!(VerifyComplaints5);
 derive_display_as_type_name!(BlameResponse6<P: ECPoint>);
 derive_display_as_type_name!(VerifyBlameResponses7<P: ECPoint>);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand_legacy::SeedableRng;
+
+    use crate::multisig::{
+        client::tests::{gen_invalid_keygen_comm1, get_invalid_hash_comm, ACCOUNT_IDS},
+        crypto::Rng,
+        eth::Point,
+    };
+
+    #[test]
+    fn check_data_size_verify_hash_comm2() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let data_to_check = KeygenData::<Point>::VerifyHashComm2(BroadcastVerificationMessage {
+            data: (0..ACCOUNT_IDS.len())
+                .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
+                .collect(),
+        });
+
+        // Should fail on sizes larger or smaller then expected
+        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+    }
+
+    #[test]
+    fn check_data_size_comm1() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let data_to_check = KeygenData::<Point>::Comm1(gen_invalid_keygen_comm1(&mut rng));
+
+        // Should fail on sizes larger or smaller then expected
+        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+    }
+
+    #[test]
+    fn check_data_size_verify2() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let data_to_check = KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
+            data: (0..ACCOUNT_IDS.len())
+                .map(|i| {
+                    (
+                        i as AuthorityCount,
+                        Some(gen_invalid_keygen_comm1(&mut rng)),
+                    )
+                })
+                .collect(),
+        });
+
+        // Should fail on sizes larger or smaller then expected
+        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+
+        // TODO: is there a better way of testing the nested data size?
+
+        // Create a nested collection that is too large
+        let data_to_check = KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
+            data: (0..ACCOUNT_IDS.len() - 1)
+                .map(|i| {
+                    (
+                        i as AuthorityCount,
+                        Some(gen_invalid_keygen_comm1(&mut rng)),
+                    )
+                })
+                .collect(),
+        });
+
+        // Should fail with incorrect size of nested collection
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
+
+        // Create a nested collection that is too small
+        let data_to_check = KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
+            data: (0..ACCOUNT_IDS.len() + 1)
+                .map(|i| {
+                    (
+                        i as AuthorityCount,
+                        Some(gen_invalid_keygen_comm1(&mut rng)),
+                    )
+                })
+                .collect(),
+        });
+
+        // Should fail with incorrect size of nested collection
+        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+    }
+
+    // TODO: check_data_size tests for the other KeygenData variants
+}

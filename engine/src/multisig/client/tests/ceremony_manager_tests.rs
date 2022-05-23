@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use super::*;
 use crate::{
     logging::test_utils::new_test_logger,
@@ -9,32 +7,35 @@ use crate::{
             ceremony_manager::CeremonyManager,
             common::BroadcastVerificationMessage,
             keygen::KeygenData,
-            signing::frost::{SigningCommitment, SigningData},
+            signing::frost::SigningData,
+            tests::helpers::{gen_invalid_signing_comm1, get_invalid_hash_comm},
         },
         crypto::Rng,
-        eth::{EthSigning, Point},
+        eth::EthSigning,
     },
 };
+use cf_traits::AuthorityCount;
 use rand_legacy::SeedableRng;
 
 #[test]
 fn should_ignore_non_first_stage_keygen_data_before_request() {
-    let ceremony_id = 0_u64;
-    let account_id = AccountId::new([1; 32]);
+    let mut rng = Rng::from_seed([0; 32]);
 
     // Create a new ceremony manager
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
-        account_id.clone(),
+        ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
         &new_test_logger(),
     );
 
     // Process a stage 2 message
     ceremony_manager.process_keygen_data(
-        account_id.clone(),
-        ceremony_id,
+        ACCOUNT_IDS[0].clone(),
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
-            data: BTreeMap::new(),
+            data: (0..ACCOUNT_IDS.len())
+                .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
+                .collect(),
         }),
     );
 
@@ -43,8 +44,8 @@ fn should_ignore_non_first_stage_keygen_data_before_request() {
 
     // Process a stage 1 message
     ceremony_manager.process_keygen_data(
-        account_id.clone(),
-        ceremony_id,
+        ACCOUNT_IDS[0].clone(),
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenData::HashComm1(client::keygen::HashComm1(sp_core::H256::default())),
     );
 
@@ -53,39 +54,47 @@ fn should_ignore_non_first_stage_keygen_data_before_request() {
 
     // Process a stage 2 message
     ceremony_manager.process_keygen_data(
-        account_id,
-        ceremony_id,
+        ACCOUNT_IDS[0].clone(),
+        DEFAULT_KEYGEN_CEREMONY_ID,
         KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
-            data: BTreeMap::new(),
+            data: (0..ACCOUNT_IDS.len())
+                .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
+                .collect(),
         }),
     );
 
     // Check that the message was ignored and not added to the delayed messages of the unauthorised ceremony.
     // Only 1 first stage message should be in the delayed messages.
     assert_eq!(
-        ceremony_manager.get_delayed_keygen_messages_len(&ceremony_id),
+        ceremony_manager.get_delayed_keygen_messages_len(&DEFAULT_KEYGEN_CEREMONY_ID),
         1
     )
 }
 
 #[test]
 fn should_ignore_non_first_stage_signing_data_before_request() {
-    let ceremony_id = 0_u64;
-    let account_id = AccountId::new([1; 32]);
+    let mut rng = Rng::from_seed([0; 32]);
 
     // Create a new ceremony manager
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
-        account_id.clone(),
+        ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
         &new_test_logger(),
     );
 
     // Process a stage 2 message
     ceremony_manager.process_signing_data(
-        account_id.clone(),
-        ceremony_id,
+        ACCOUNT_IDS[0].clone(),
+        DEFAULT_KEYGEN_CEREMONY_ID,
         SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
-            data: BTreeMap::new(),
+            data: (0..ACCOUNT_IDS.len())
+                .map(|i| {
+                    (
+                        i as AuthorityCount,
+                        Some(gen_invalid_signing_comm1(&mut rng)),
+                    )
+                })
+                .collect(),
         }),
     );
 
@@ -93,14 +102,10 @@ fn should_ignore_non_first_stage_signing_data_before_request() {
     assert_eq!(ceremony_manager.get_signing_states_len(), 0);
 
     // Process a stage 1 message
-    let mut rng = Rng::from_seed([0; 32]);
     ceremony_manager.process_signing_data(
-        account_id.clone(),
-        ceremony_id,
-        SigningData::CommStage1(SigningCommitment {
-            d: Point::random(&mut rng),
-            e: Point::random(&mut rng),
-        }),
+        ACCOUNT_IDS[0].clone(),
+        DEFAULT_KEYGEN_CEREMONY_ID,
+        SigningData::CommStage1(gen_invalid_signing_comm1(&mut rng)),
     );
 
     // Check that the message was not ignored and an unauthorised ceremony was created
@@ -108,17 +113,26 @@ fn should_ignore_non_first_stage_signing_data_before_request() {
 
     // Process a stage 2 message
     ceremony_manager.process_signing_data(
-        account_id,
-        ceremony_id,
+        ACCOUNT_IDS[0].clone(),
+        DEFAULT_KEYGEN_CEREMONY_ID,
         SigningData::BroadcastVerificationStage2(BroadcastVerificationMessage {
-            data: BTreeMap::new(),
+            data: (0..ACCOUNT_IDS.len())
+                .map(|i| {
+                    (
+                        i as AuthorityCount,
+                        Some(gen_invalid_signing_comm1(&mut rng)),
+                    )
+                })
+                .collect(),
         }),
     );
 
     // Check that the message was ignored and not added to the delayed messages of the unauthorised ceremony.
     // Only 1 first stage message should be in the delayed messages.
     assert_eq!(
-        ceremony_manager.get_delayed_signing_messages_len(&ceremony_id),
+        ceremony_manager.get_delayed_signing_messages_len(&DEFAULT_KEYGEN_CEREMONY_ID),
         1
     )
 }
+
+//TODO: test to see if the size check is ran on both k & s

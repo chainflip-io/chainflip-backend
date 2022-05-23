@@ -142,7 +142,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .ok_or("could not derive our idx")?;
 
         // Check that signer ids are known for this key
-        let signer_idxs = validator_map
+        let signer_idxs: BTreeSet<AuthorityCount> = validator_map
             .get_all_idxs(participants)
             .map_err(|_| "invalid participants")?;
 
@@ -242,6 +242,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             }
         };
 
+        let num_of_participants: AuthorityCount =
+            signer_idxs.len().try_into().expect("too many participants");
+
         if self
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
@@ -278,8 +281,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Some(result) = state.on_ceremony_request(initial_stage, validator_map, result_sender)
-        {
+        if let Some(result) = state.on_ceremony_request(
+            initial_stage,
+            validator_map,
+            result_sender,
+            num_of_participants,
+        ) {
             self.process_keygen_ceremony_outcome(ceremony_id, result);
         };
     }
@@ -372,9 +379,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             Box::new(BroadcastStage::new(processor, common))
         };
 
-        if let Some(result) =
-            state.on_ceremony_request(initial_stage, key_info.validator_map, result_sender)
-        {
+        if let Some(result) = state.on_ceremony_request(
+            initial_stage,
+            key_info.validator_map,
+            result_sender,
+            signers_len,
+        ) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
         };
     }
@@ -465,6 +475,16 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             }
         };
 
+        // Check that the number of elements in the data is what we expect
+        if !data.check_data_size(state.get_num_participants()) {
+            slog::debug!(
+                self.logger,
+                "Ignoring signing data: Incorrect number of elements";
+                "CeremonyId" => format!("{}",ceremony_id)
+            );
+            return;
+        }
+
         if let Some(result) = state.process_or_delay_message(sender_id, data) {
             self.process_signing_ceremony_outcome(ceremony_id, result);
         }
@@ -524,6 +544,16 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 }
             }
         };
+
+        // Check that the number of elements in the data is what we expect
+        if !data.check_data_size(state.get_num_participants()) {
+            slog::debug!(
+                self.logger,
+                "Ignoring keygen data: Incorrect number of elements";
+                "CeremonyId" => format!("{}",ceremony_id)
+            );
+            return;
+        }
 
         if let Some(result) = state.process_or_delay_message(sender_id, data) {
             self.process_keygen_ceremony_outcome(ceremony_id, result);
