@@ -3,7 +3,7 @@ use crate::{
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
 	SignatureToBroadcastIdLookup, SignerIdToAccountId, ThresholdSignatureData,
-	TransactionFeeDeficit,
+	TransactionFeeDeficit, FailedTransactionSigners,
 };
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -50,6 +50,13 @@ impl MockCfe {
 					match scenario {
 						Scenario::SigningFailure => {
 							// only nominee can return the signed tx
+							println!("The nominee the CFE is using: {}", nominee);
+							println!("Thread id: {:?}", std::thread::current().id());
+							assert_eq!(
+								nominee,
+								NOMINATION.with(|n| *n.borrow()).unwrap(),
+								"CFE using wrong nomination"
+							);
 							assert_noop!(
 								MockBroadcast::transaction_signing_failure(
 									RawOrigin::Signed(nominee + 1).into(),
@@ -66,7 +73,7 @@ impl MockCfe {
 							// Ignore the request.
 						},
 						_ => {
-							assert_eq!(nominee, RANDOM_NOMINEE);
+							assert_eq!(nominee, NOMINATION.with(|n| *n.borrow()).unwrap());
 							// Only the nominee can return the signed tx.
 							assert_noop!(
 								MockBroadcast::transaction_ready_for_transmission(
@@ -182,23 +189,48 @@ fn test_broadcast_happy_path() {
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
+		let starting_nomination = NOMINATION.with(|cell| *cell.borrow()).unwrap();
+
+		let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
+		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction, MockApiCall::default());
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
-		for _ in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
+		for i in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
+
+			let failed_signers =
+				FailedTransactionSigners::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+					.unwrap();
+			assert_eq!(failed_signers.len() as u32, i + 1);
+			let nomination = NOMINATION.with(|cell| *cell.borrow()).unwrap();
+
+			assert!(failed_signers.contains(&nomination));
+
+			// make the nomination unique, so we can test that all the authorities
+			// that failed are reported
+			NOMINATION.with(|cell| {
+				let mut nomination = cell.borrow_mut();
+				let nomination = nomination.as_mut();
+				nomination.map(|n| *n = *n + 1);
+			});
+
 			// The `on_initialize` hook is called and triggers a new broadcast attempt.
 			MockBroadcast::on_initialize(0);
+
+			broadcast_attempt_id = broadcast_attempt_id.next_attempt();
 		}
 
 		assert_eq!(
 			System::events().pop().expect("an event").event,
 			Event::MockBroadcast(crate::Event::BroadcastAborted(1))
+		);
+
+		// The nominee was reported.
+		MockOffenceReporter::assert_reported(
+			PalletOffence::FailedToSignTransaction,
+			(starting_nomination..=(starting_nomination + (MAXIMUM_BROADCAST_ATTEMPTS as u64)))
+				.collect::<Vec<_>>(),
 		);
 	})
 }
@@ -276,7 +308,7 @@ fn test_bad_signature() {
 		// The nominee was reported.
 		MockOffenceReporter::assert_reported(
 			PalletOffence::InvalidTransactionAuthored,
-			vec![RANDOM_NOMINEE],
+			vec![NOMINATION.with(|cell| *cell.borrow()).unwrap()],
 		);
 	})
 }

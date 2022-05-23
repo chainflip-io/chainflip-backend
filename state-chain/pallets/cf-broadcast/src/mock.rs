@@ -42,7 +42,7 @@ parameter_types! {
 }
 
 thread_local! {
-	pub static NOMINATION: std::cell::RefCell<Option<u64>>  = RefCell::new(Some(RANDOM_NOMINEE));
+	pub static NOMINATION: std::cell::RefCell<Option<u64>> = RefCell::new(Some(0xc001d00d_u64));
 	pub static VALIDKEY: std::cell::RefCell<bool> = RefCell::new(true);
 }
 
@@ -85,7 +85,6 @@ impl Chainflip for Test {
 }
 
 pub struct MockNominator;
-pub const RANDOM_NOMINEE: u64 = 0xc001d00d_u64;
 
 impl SignerNomination for MockNominator {
 	type SignerId = u64;
@@ -94,14 +93,14 @@ impl SignerNomination for MockNominator {
 		_seed: S,
 		_exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId> {
-		NOMINATION.with(|cell| *cell.borrow())
+		NOMINATION.with(|cell| *cell.borrow()).clone()
 	}
 
 	fn threshold_nomination_with_seed<S>(
 		_seed: S,
 		_epoch_index: EpochIndex,
 	) -> Option<Vec<Self::SignerId>> {
-		Some(vec![RANDOM_NOMINEE])
+		Some(vec![NOMINATION.with(|cell| *cell.borrow()).unwrap()])
 	}
 }
 
