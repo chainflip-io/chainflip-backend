@@ -474,9 +474,12 @@ pub trait SignerNomination {
 	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
 	type SignerId;
 
-	/// Returns a random live signer. The seed value is used as a source of randomness.
-	/// Returns None if no signers are live.
-	fn nomination_with_seed<H: Hashable>(seed: H) -> Option<Self::SignerId>;
+	/// Returns a random live signer, excluding particular provided signers. The seed value is used
+	/// as a source of randomness. Returns None if no signers are live.
+	fn nomination_with_seed<H: Hashable>(
+		seed: H,
+		exclude_ids: &[Self::SignerId],
+	) -> Option<Self::SignerId>;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
