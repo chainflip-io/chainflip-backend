@@ -1,13 +1,15 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
-	SignatureToBroadcastIdLookup, SignerIdToAccountId, TransactionFeeDeficit,
+	Event as BroadcastEvent, Expiries, FailedTransactionSigners, Instance1, PalletOffence,
+	RefundSignerId, SignatureToBroadcastIdLookup, SignerIdToAccountId, ThresholdSignatureData,
+	TransactionFeeDeficit,
 };
 use cf_chains::{
-	mocks::{MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
+	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
 	ChainAbi,
 };
+use cf_traits::{mocks::threshold_signer::MockThresholdSigner, AsyncResult, ThresholdSigner};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
 
@@ -48,6 +50,11 @@ impl MockCfe {
 					match scenario {
 						Scenario::SigningFailure => {
 							// only nominee can return the signed tx
+							assert_eq!(
+								nominee,
+								MockNominator::get_nominee().unwrap(),
+								"CFE using wrong nomination"
+							);
 							assert_noop!(
 								MockBroadcast::transaction_signing_failure(
 									RawOrigin::Signed(nominee + 1).into(),
@@ -64,7 +71,7 @@ impl MockCfe {
 							// Ignore the request.
 						},
 						_ => {
-							assert_eq!(nominee, RANDOM_NOMINEE);
+							assert_eq!(nominee, MockNominator::get_nominee().unwrap());
 							// Only the nominee can return the signed tx.
 							assert_noop!(
 								MockBroadcast::transaction_ready_for_transmission(
@@ -110,9 +117,8 @@ impl MockCfe {
 						_ => unimplemented!(),
 					};
 				},
-				BroadcastEvent::BroadcastComplete(broadcast_attempt_id) => {
-					COMPLETED_BROADCASTS
-						.with(|cell| cell.borrow_mut().push(broadcast_attempt_id.broadcast_id));
+				BroadcastEvent::BroadcastSuccess(broadcast_id) => {
+					COMPLETED_BROADCASTS.with(|cell| cell.borrow_mut().push(broadcast_id));
 				},
 				BroadcastEvent::BroadcastRetryScheduled(_) => {
 					// Informational only. No action required by the CFE.
@@ -127,6 +133,7 @@ impl MockCfe {
 				BroadcastEvent::RefundSignerIdUpdated(_, _) => {
 					// Information only. No action required by the CFE.
 				},
+				BroadcastEvent::ThresholdSignatureInvalid(_) => {},
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -136,9 +143,12 @@ impl MockCfe {
 #[test]
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_some()
 		);
@@ -176,19 +186,47 @@ fn test_broadcast_happy_path() {
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+
+		let starting_nomination = MockNominator::get_nominee().unwrap();
+
+		let mut broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
-		for _ in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
+		for i in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
+
+			let failed_signers =
+				FailedTransactionSigners::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+					.unwrap();
+			assert_eq!(failed_signers.len() as u32, i + 1);
+
+			assert!(failed_signers.contains(&MockNominator::get_nominee().unwrap()));
+
+			// make the nomination unique, so we can test that all the authorities
+			// so we can test all the failed authorities reported
+			MockNominator::increment_nominee();
+
 			// The `on_initialize` hook is called and triggers a new broadcast attempt.
 			MockBroadcast::on_initialize(0);
+
+			broadcast_attempt_id = broadcast_attempt_id.next_attempt();
 		}
 
 		assert_eq!(
 			System::events().pop().expect("an event").event,
 			Event::MockBroadcast(crate::Event::BroadcastAborted(1))
+		);
+
+		// The nominee was reported.
+		MockOffenceReporter::assert_reported(
+			PalletOffence::FailedToSignTransaction,
+			(starting_nomination..=(starting_nomination + (MAXIMUM_BROADCAST_ATTEMPTS as u64)))
+				.collect::<Vec<_>>(),
 		);
 	})
 }
@@ -196,10 +234,12 @@ fn test_abort_after_max_attempt_reached() {
 #[test]
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
@@ -235,10 +275,12 @@ fn test_transaction_signing_failed() {
 #[test]
 fn test_bad_signature() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
@@ -260,7 +302,7 @@ fn test_bad_signature() {
 		// The nominee was reported.
 		MockOffenceReporter::assert_reported(
 			PalletOffence::InvalidTransactionAuthored,
-			vec![RANDOM_NOMINEE],
+			vec![MockNominator::get_nominee().unwrap()],
 		);
 	})
 }
@@ -308,10 +350,12 @@ fn test_invalid_sigdata_is_noop() {
 #[test]
 fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
@@ -484,8 +528,12 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 #[test]
 fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_deficit() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		// Initiate broadcast
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		let tx_sig_request =
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
@@ -535,12 +583,13 @@ fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_defi
 #[test]
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
-		let broadcast_attempt_id =
-			BroadcastAttemptId { broadcast_id: BROADCAST_ID, attempt_count: 0 };
-
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
+		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
@@ -585,7 +634,7 @@ fn test_signature_request_expiry() {
 				.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
-						BROADCAST_ID
+						first_broadcast_id
 			});
 		};
 
@@ -602,11 +651,13 @@ fn test_signature_request_expiry() {
 #[test]
 fn test_transmission_request_expiry() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-
 		// Initiate broadcast and pass the signing stage;
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
+		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		MockCfe::respond(Scenario::HappyPath);
 
 		// Simulate the expiry hook for the next block.
@@ -643,7 +694,7 @@ fn test_transmission_request_expiry() {
 				.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
-						BROADCAST_ID
+						first_broadcast_id
 			});
 		};
 
@@ -661,9 +712,57 @@ fn test_transmission_request_expiry() {
 fn no_authorities_available() {
 	new_test_ext().execute_with(|| {
 		// Simulate that no authority is currently online
-		NOMINATION.with(|cell| *cell.borrow_mut() = None);
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction);
+		MockNominator::set_nominee(None);
+		MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		// Check the retry queue
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
+	});
+}
+
+#[test]
+fn re_request_threshold_signature() {
+	new_test_ext().execute_with(|| {
+		// Initiate broadcast
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
+		// Expect the threshold signature pipeline to be empty
+		assert_eq!(
+			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
+			AsyncResult::Void
+		);
+		assert!(
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_some()
+		);
+		assert_eq!(
+			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+				.unwrap(),
+			vec![0]
+		);
+		// Simualte a key rotation to invalidate the signature
+		MockKeyProvider::set_valid(false);
+		MockBroadcast::on_initialize(SIGNING_EXPIRY_BLOCKS + 1);
+		// Expect the broadcast to be deleted
+		assert!(
+			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
+		);
+		// Verify storage has been deleted
+		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
+			MockThresholdSignature::default()
+		)
+		.is_none());
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(1).is_none());
+		assert!(ThresholdSignatureData::<Test, Instance1>::get(1).is_none());
+		// Verify that we have a new signature request in the pipeline
+		assert_eq!(
+			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
+			AsyncResult::Pending
+		);
 	});
 }

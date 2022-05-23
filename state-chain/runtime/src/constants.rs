@@ -60,4 +60,13 @@ pub mod common {
 	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
 	/// equivalent to 15 minutes.
 	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
+
+	/// The mutliplier used to convert transaction weight into fees paid by the validators.
+	///
+	/// This can be used to estimate the value we put on our block execution times. We have 6
+	/// seconds, and 1_000_000_000_000 weight units per block. We can extrapolate this to an epoch,
+	/// and compare this to the rewards earned by validators over this period.
+	///
+	/// See https://github.com/chainflip-io/chainflip-backend/issues/1629
+	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
 }

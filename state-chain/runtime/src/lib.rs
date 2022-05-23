@@ -33,7 +33,8 @@ use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
+	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+	OpaqueKeys, Verify,
 };
 
 use cf_traits::EpochInfo;
@@ -192,6 +193,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type EthEnvironmentProvider = Environment;
+	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -210,7 +212,7 @@ impl pallet_session::Config for Runtime {
 	type Keys = opaque::SessionKeys;
 	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
+	type ValidatorIdOf = ConvertInto;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
 
@@ -397,7 +399,8 @@ impl pallet_cf_emissions::Config for Runtime {
 impl pallet_transaction_payment::Config for Runtime {
 	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
 	type OperationalFeeMultiplier = ConstU8<5>;
-	type WeightToFee = IdentityFee<FlipBalance>;
+	type WeightToFee =
+		ConstantMultiplier<FlipBalance, ConstU128<{ constants::common::TX_FEE_MULTIPLIER }>>;
 	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
 	type FeeMultiplierUpdate = ();
 }
@@ -455,6 +458,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type TransmissionTimeout = ConstU32<{ 10 * MINUTES }>;
 	type MaximumAttempts = ConstU32<MAXIMUM_BROADCAST_ATTEMPTS>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type KeyProvider = EthereumVault;
 }
 
 construct_runtime!(
@@ -773,5 +777,37 @@ impl_runtime_apis! {
 
 			Ok(batches)
 		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	const CALL_ENUM_MAX_SIZE: usize = 320;
+
+	// Introduced from polkdadot
+	#[test]
+	fn call_size() {
+		assert!(
+			core::mem::size_of::<Call>() <= CALL_ENUM_MAX_SIZE,
+			r"
+			Polkadot suggests a 230 byte limit for the size of the Call type. We use {} but this runtime's call size
+			is {}. If this test fails then you have just added a call variant that exceed the limit.
+
+			Congratulations!
+
+			Maybe consider boxing some calls to reduce their size. Otherwise, increasing the CALL_ENUM_MAX_SIZE is
+			acceptable (within reason). The issue is that the enum always uses max(enum_size) of memory, even if your
+			are using a smaller variant. Note this is irrelevant from a SCALE-encoding POV, it only affects the size of
+			the enum on the stack.
+			Context:
+			  - https://github.com/paritytech/substrate/pull/9418
+			  - https://rust-lang.github.io/rust-clippy/master/#large_enum_variant
+			  - https://fasterthanli.me/articles/peeking-inside-a-rust-enum
+			",
+			CALL_ENUM_MAX_SIZE,
+			core::mem::size_of::<Call>(),
+		);
 	}
 }

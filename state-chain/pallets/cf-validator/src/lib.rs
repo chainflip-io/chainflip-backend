@@ -30,7 +30,7 @@ use frame_support::{
 };
 pub use pallet::*;
 use sp_core::ed25519;
-use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, Convert, One, Saturating, Zero};
+use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, One, Saturating, Zero};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
@@ -206,6 +206,8 @@ pub mod pallet {
 		ClaimPeriodUpdated(Percentage),
 		/// Vanity Name for a node has been set \[account_id, vanity_name\]
 		VanityNameSet(T::AccountId, VanityName),
+		/// The backup node percentage has been updated \[percentage\].
+		BackupNodePercentageUpdated(Percentage),
 	}
 
 	#[pallet::error]
@@ -551,6 +553,19 @@ pub mod pallet {
 			Self::deposit_event(Event::VanityNameSet(account_id, name));
 			Ok(().into())
 		}
+
+		#[pallet::weight(T::ValidatorWeightInfo::set_backup_node_percentage())]
+		pub fn set_backup_node_percentage(
+			origin: OriginFor<T>,
+			percentage: Percentage,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			BackupNodePercentage::<T>::put(percentage);
+
+			Self::deposit_event(Event::BackupNodePercentageUpdated(percentage));
+			Ok(().into())
+		}
 	}
 
 	/// Percentage of epoch we allow claims
@@ -671,11 +686,18 @@ pub mod pallet {
 	#[pallet::getter(fn backup_validator_triage)]
 	pub type BackupValidatorTriage<T> = StorageValue<_, RuntimeBackupTriage<T>, ValueQuery>;
 
+	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
+	/// authority set size.
+	#[pallet::storage]
+	#[pallet::getter(fn backup_node_percentage)]
+	pub type BackupNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
+		pub backup_node_percentage: Percentage,
 	}
 
 	#[cfg(feature = "std")]
@@ -685,6 +707,7 @@ pub mod pallet {
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
+				backup_node_percentage: Zero::zero(),
 			}
 		}
 	}
@@ -696,6 +719,7 @@ pub mod pallet {
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			RotationPhase::<T>::set(RotationStatus::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
+			BackupNodePercentage::<T>::set(self.backup_node_percentage);
 			const GENESIS_EPOCH: u32 = 0;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 			CurrentEpochStartedAt::<T>::set(Default::default());
@@ -784,10 +808,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 /// Indicates to the session module if the session should be rotated.
 ///
 /// Note: We need to rotate the session pallet twice in order to rotate in the new set of
-///       validators due to a limitation in the design of the session pallet. See the
-///       substrate issue https://github.com/paritytech/substrate/issues/8650 for context.
+/// validators due to a limitation in the design of the session pallet. See the
+/// substrate issue https://github.com/paritytech/substrate/issues/8650 for context.
 ///
-///       Also see `SessionManager::new_session` impl below.
+/// Also see [SessionManager::new_session] impl below.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
 		matches!(
@@ -858,11 +882,10 @@ impl<T: Config> Pallet<T> {
 			ChainflipAccountStore::<T>::set_historical_authority(authority.into_ref());
 		});
 
-		// We've got new validators, which means the backups and passives may have changed
-		// TODO configurable parameter to replace '3'.
+		// We've got new validators, which means the backups and passives may have changed.
 		BackupValidatorTriage::<T>::put(RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
 			backup_candidates,
-			epoch_authorities.len() / 3,
+			Self::backup_set_target_size(&epoch_authorities, BackupNodePercentage::<T>::get()),
 		));
 
 		// Handler for a new epoch
@@ -888,6 +911,10 @@ impl<T: Config> Pallet<T> {
 	fn set_rotation_status(new_status: RotationStatus<T>) {
 		RotationPhase::<T>::put(new_status.clone());
 		Self::deposit_event(Event::RotationStatusUpdated(new_status));
+	}
+
+	fn backup_set_target_size<A>(authorites: &[A], backup_node_percentage: Percentage) -> usize {
+		authorites.len() * backup_node_percentage as usize / 100usize
 	}
 }
 
@@ -987,15 +1014,6 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
 			T::DbWeight::get().reads(2),
 		)
-	}
-}
-
-/// In this module, for simplicity, we just return the same AccountId.
-pub struct ValidatorOf<T>(sp_std::marker::PhantomData<T>);
-
-impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
-	fn convert(account: T::AccountId) -> Option<T::AccountId> {
-		Some(account)
 	}
 }
 

@@ -267,12 +267,14 @@ where
 
         async move {
             let result = match request_status {
-                RequestStatus::Ready(keygen_result_info) => Some(Ok(keygen_result_info)),
-                RequestStatus::WaitForOneshot(result_receiver) => result_receiver.await.ok(),
+                RequestStatus::Ready(keygen_result_info) => Ok(keygen_result_info),
+                RequestStatus::WaitForOneshot(result_receiver) => result_receiver
+                    .await
+                    .expect("Keygen result channel dropped before receiving a result"),
             };
 
             match result {
-                Some(Ok(keygen_result_info)) => {
+                Ok(keygen_result_info) => {
                     let key_id = KeyId(keygen_result_info.key.get_public_key_bytes());
 
                     self.key_store
@@ -282,8 +284,7 @@ where
 
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
-                Some(Err(error)) => Err(error),
-                None => panic!("Keygen result channel dropped before receiving a result"),
+                Err(error) => Err(error),
             }
         }
     }
@@ -349,13 +350,9 @@ where
         Box::pin(async move {
             match request {
                 Some(RequestStatus::Ready(signature)) => Ok(signature),
-                Some(RequestStatus::WaitForOneshot(result_receiver)) => {
-                    if let Ok(result) = result_receiver.await {
-                        result
-                    } else {
-                        panic!("Signing result oneshot channel dropped before receiving a result");
-                    }
-                }
+                Some(RequestStatus::WaitForOneshot(result_receiver)) => result_receiver
+                    .await
+                    .expect("Signing result oneshot channel dropped before receiving a result"),
                 None => Err((
                     BTreeSet::new(),
                     CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),

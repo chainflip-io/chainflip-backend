@@ -160,3 +160,11 @@ We should always convince ourselves that our runtime code _can't_ panic at runti
 Anywhere we know we can't panic, but the compiler can't guarantee it, it's acceptable to follow parity's conventions of using `expect("reason why this can't panic")`.
 
 There are grey areas. For example, it's acceptable to panic on any condition that indicates that a block has been faultily or maliciously authored. As a concrete example, if the digest is invalid, this indicates a problem with the node, not the runtime, so it's acceptable for the runtime to panic in response - presumably the author has been tampering with their node software.
+
+### Benchmark whitelist
+
+When writing benchmarks, storage keys can be •whitelisted• for reads and/or writes, meaning reading/writing to the
+whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting _account_
+storage, which is easy to confuse with whitelisting the actual account.
+
+See [this PR](https://github.com/paritytech/substrate/pull/6815) for a decent explanation.

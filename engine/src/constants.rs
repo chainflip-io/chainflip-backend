@@ -29,5 +29,8 @@ pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 /// Number of blocks one of the protocols needs to fall behind before we sound the alarms
 pub const ETH_FALLING_BEHIND_MARGIN_BLOCKS: u64 = 10;
 
+/// Duration between intervals before we emit a log that one the ETH streams is behind
+pub const ETH_STILL_BEHIND_LOG_INTERVAL: Duration = Duration::from_secs(180);
+
 /// Number of blocks before logging that a stream is behind again
 pub const ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL: u64 = 10;

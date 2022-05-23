@@ -202,13 +202,31 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
-            KeyManagerEvent::AggKeySetByAggKey { new_key, .. }
-            | KeyManagerEvent::AggKeySetByGovKey { new_key, .. } => {
+            KeyManagerEvent::AggKeySetByAggKey { new_key, .. } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_witnesser::Call::witness {
                             call: Box::new(
                                 pallet_cf_vaults::Call::vault_key_rotated {
+                                    new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
+                                        new_key.serialize(),
+                                    ),
+                                    block_number: event.block_number,
+                                    tx_hash: event.tx_hash,
+                                }
+                                .into(),
+                            ),
+                        },
+                        logger,
+                    )
+                    .await;
+            }
+            KeyManagerEvent::AggKeySetByGovKey { new_key, .. } => {
+                let _result = state_chain_client
+                    .submit_signed_extrinsic(
+                        pallet_cf_witnesser::Call::witness {
+                            call: Box::new(
+                                pallet_cf_vaults::Call::vault_key_rotated_externally {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
                                         new_key.serialize(),
                                     ),
@@ -239,7 +257,7 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                         pallet_cf_witnesser::Call::witness {
                             call: Box::new(
                                 pallet_cf_broadcast::Call::signature_accepted {
-                                    payload: SchnorrVerificationComponents {
+                                    signature: SchnorrVerificationComponents {
                                         s: sig_data.sig.into(),
                                         k_times_g_address: sig_data.k_times_g_address.into(),
                                     },

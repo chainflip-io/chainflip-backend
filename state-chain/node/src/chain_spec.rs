@@ -129,6 +129,9 @@ const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::InvalidTransactionAuthored, (15, 0)),
 	(Offence::TransactionFailedOnTransmission, (15, 0)),
+	// they get excluded from signing the same broadcast attempt again anyway
+	// but we want them to be included in the nomination of next broadcast attempt
+	(Offence::FailedToSignTransaction, (10, 0)),
 ];
 
 /// Generate an Aura authority key.
@@ -554,6 +557,7 @@ fn testnet_genesis(
 		validator: ValidatorConfig {
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+			backup_node_percentage: 20,
 			bond: genesis_stake_amount,
 		},
 		session: SessionConfig {
