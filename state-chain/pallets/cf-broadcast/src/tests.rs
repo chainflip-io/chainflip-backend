@@ -1,9 +1,9 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
-	SignatureToBroadcastIdLookup, SignerIdToAccountId, ThresholdSignatureData,
-	TransactionFeeDeficit, FailedTransactionSigners,
+	Event as BroadcastEvent, Expiries, FailedTransactionSigners, Instance1, PalletOffence,
+	RefundSignerId, SignatureToBroadcastIdLookup, SignerIdToAccountId, ThresholdSignatureData,
+	TransactionFeeDeficit,
 };
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
@@ -145,9 +145,8 @@ impl MockCfe {
 #[test]
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
@@ -191,8 +190,11 @@ fn test_abort_after_max_attempt_reached() {
 		// Initiate broadcast
 		let starting_nomination = NOMINATION.with(|cell| *cell.borrow()).unwrap();
 
-		let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-		MockBroadcast::start_broadcast(&MockThresholdSignature::default(), MockUnsignedTransaction, MockApiCall::default());
+		let mut broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
 		for i in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
@@ -238,9 +240,8 @@ fn test_abort_after_max_attempt_reached() {
 #[test]
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
@@ -280,9 +281,8 @@ fn test_transaction_signing_failed() {
 #[test]
 fn test_bad_signature() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
@@ -356,9 +356,8 @@ fn test_invalid_sigdata_is_noop() {
 #[test]
 fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
@@ -535,9 +534,8 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 #[test]
 fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_deficit() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
@@ -591,15 +589,13 @@ fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_defi
 #[test]
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
-		let broadcast_attempt_id =
-			BroadcastAttemptId { broadcast_id: BROADCAST_ID, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
+		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		assert!(
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
@@ -644,7 +640,7 @@ fn test_signature_request_expiry() {
 				.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
-						BROADCAST_ID
+						first_broadcast_id
 			});
 		};
 
@@ -661,15 +657,13 @@ fn test_signature_request_expiry() {
 #[test]
 fn test_transmission_request_expiry() {
 	new_test_ext().execute_with(|| {
-		const BROADCAST_ID: BroadcastId = 1;
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
-
 		// Initiate broadcast and pass the signing stage;
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
+		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		MockCfe::respond(Scenario::HappyPath);
 
 		// Simulate the expiry hook for the next block.
@@ -706,7 +700,7 @@ fn test_transmission_request_expiry() {
 				.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
-						BROADCAST_ID
+						first_broadcast_id
 			});
 		};
 
@@ -738,10 +732,8 @@ fn no_authorities_available() {
 #[test]
 fn re_request_threshold_signature() {
 	new_test_ext().execute_with(|| {
-		// Simualte a key rotation to invalidate the signature
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 };
 		// Initiate broadcast
-		MockBroadcast::start_broadcast(
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),

@@ -664,7 +664,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature: &ThresholdSignatureFor<T, I>,
 		unsigned_tx: UnsignedTransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
-	) {
+	) -> BroadcastAttemptId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
@@ -676,14 +676,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Save the payload and the coresponinding signature to the lookup table
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 		Self::start_broadcast_attempt(
-            BroadcastAttempt::<T, I> {
-			    broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
-			    unsigned_tx,
-		    },
-            // First broadcast, we don't have anyone to exclude
-            &[],
-        );
+			BroadcastAttempt::<T, I> { broadcast_attempt_id, unsigned_tx },
+			// First broadcast, we don't have anyone to exclude
+			&[],
+		);
+		broadcast_attempt_id
 	}
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
@@ -712,15 +711,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 
 				Self::start_broadcast_attempt(
-                    BroadcastAttempt::<T, I> {
-					    broadcast_attempt_id: next_broadcast_attempt_id,
-					    ..broadcast_attempt
-				    },
-                    &FailedTransactionSigners::<T, I>::get(
-                        broadcast_attempt.broadcast_attempt_id.broadcast_id,
-                    )
-                    .unwrap_or_default(),
-                )
+					BroadcastAttempt::<T, I> {
+						broadcast_attempt_id: next_broadcast_attempt_id,
+						..broadcast_attempt
+					},
+					&FailedTransactionSigners::<T, I>::get(
+						broadcast_attempt.broadcast_attempt_id.broadcast_id,
+					)
+					.unwrap_or_default(),
+				)
 			}
 		} else {
 			log::error!("No threshold signature data is available.");
