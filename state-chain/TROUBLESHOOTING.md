@@ -149,7 +149,14 @@ The typical order of magnitude for extrinsic and data access weights is in the m
 
 Typical values for runtime data access speeds for rocksdb are 25µs for a read and 100µs for a write.
 
-Typical values for extrinsic *execution*, ie. not including reads and writes, are around 30µs to 60µs.
+Typical values for extrinsic _execution_, ie. not including reads and writes, are around 30µs to 60µs.
 
-In other words, reads and writes are *expensive* and writes in particular should be kept to a minimum. A single read is as expensive as a moderately complex extrinsic. We should avoid iterating over storage maps unless the size is tightly bounded.
+In other words, reads and writes are _expensive_ and writes in particular should be kept to a minimum. A single read is as expensive as a moderately complex extrinsic. We should avoid iterating over storage maps unless the size is tightly bounded.
 
+### Benchmark whitelist
+
+When writing benchmarks, storage keys can be •whitelisted• for reads and/or writes, meaning reading/writing to the
+whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting _account_
+storage, which is easy to confuse with whitelisting the actual account.
+
+See [this PR](https://github.com/paritytech/substrate/pull/6815) for a decent explanation.

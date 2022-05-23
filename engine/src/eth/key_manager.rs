@@ -257,7 +257,7 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                         pallet_cf_witnesser::Call::witness {
                             call: Box::new(
                                 pallet_cf_broadcast::Call::signature_accepted {
-                                    payload: SchnorrVerificationComponents {
+                                    signature: SchnorrVerificationComponents {
                                         s: sig_data.sig.into(),
                                         k_times_g_address: sig_data.k_times_g_address.into(),
                                     },

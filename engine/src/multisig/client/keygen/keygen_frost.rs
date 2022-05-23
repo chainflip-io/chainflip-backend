@@ -303,11 +303,26 @@ pub fn validate_commitments<P: ECPoint>(
     }
 }
 
+pub struct ValidAggregateKey<P: ECPoint>(pub P);
+
 /// Derive aggregate pubkey from party commitments
+/// Note that setting `allow_high_pubkey` to true lets us skip compatibility check
+/// in tests as otherwise they would be non-deterministic
 pub fn derive_aggregate_pubkey<P: ECPoint>(
     commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
-) -> P {
-    commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum()
+    allow_high_pubkey: bool,
+) -> anyhow::Result<ValidAggregateKey<P>> {
+    let pubkey: P = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
+
+    if !allow_high_pubkey && !pubkey.is_compatible() {
+        Err(anyhow::Error::msg("pubkey is not compatible"))
+    } else if check_high_degree_commitments(commitments) {
+        // Sanity check (the chance of this failing is practically zero due to the
+        // hash commitment stage at the beginning of the ceremony)
+        Err(anyhow::Error::msg("high degree coefficient is zero"))
+    } else {
+        Ok(ValidAggregateKey(pubkey))
+    }
 }
 
 /// Derive each party's "local" pubkey
@@ -369,31 +384,13 @@ pub fn check_high_degree_commitments<P: ECPoint>(
     high_degree_sum.is_point_at_infinity()
 }
 
-pub fn compute_keygen_result<P: ECPoint>(
-    params: ThresholdParameters,
-    secret_shares: IncomingShares<P>,
-    commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
-) -> Arc<KeygenResult<P>> {
-    let key_share = secret_shares
+pub fn compute_secret_key_share<P: ECPoint>(secret_shares: IncomingShares<P>) -> P::Scalar {
+    // Note: the shares in secret_shares will be zeroized on drop here
+    secret_shares
         .0
         .values()
         .map(|share| share.value.clone())
-        .sum();
-
-    // The shares are no longer needed so we zeroize them
-    drop(secret_shares);
-
-    let agg_pubkey = derive_aggregate_pubkey(commitments);
-
-    let party_public_keys = derive_local_pubkeys_for_parties(params, commitments);
-
-    Arc::new(KeygenResult {
-        key_share: KeyShare {
-            y: agg_pubkey,
-            x_i: key_share,
-        },
-        party_public_keys,
-    })
+        .sum()
 }
 
 #[cfg(test)]
@@ -532,15 +529,7 @@ pub mod genesis {
             })
             .unzip();
 
-        let agg_pubkey = derive_aggregate_pubkey(&commitments);
-
-        if !agg_pubkey.is_compatible() {
-            return Err(anyhow::Error::msg("pubkey is not compatible"));
-        }
-
-        if check_high_degree_commitments(&commitments) {
-            return Err(anyhow::Error::msg("High degree coefficient is zero"));
-        }
+        let agg_pubkey = derive_aggregate_pubkey(&commitments, false /* allow high pubkey */)?;
 
         let validator_map = PartyIdxMapping::from_unsorted_signers(signers);
 
@@ -555,11 +544,16 @@ pub mod genesis {
                 (
                     validator_map.get_id(idx).unwrap().clone(),
                     KeygenResultInfo {
-                        key: compute_keygen_result(
-                            params,
-                            IncomingShares(incoming_shares),
-                            &commitments,
-                        ),
+                        key: Arc::new(KeygenResult {
+                            key_share: KeyShare {
+                                y: agg_pubkey.0,
+                                x_i: compute_secret_key_share(IncomingShares(incoming_shares)),
+                            },
+                            party_public_keys: derive_local_pubkeys_for_parties(
+                                params,
+                                &commitments,
+                            ),
+                        }),
                         validator_map: Arc::new(validator_map.clone()),
                         params,
                     },
@@ -567,6 +561,6 @@ pub mod genesis {
             })
             .collect();
 
-        Ok((KeyId(agg_pubkey.as_bytes().to_vec()), keygen_result_infos))
+        Ok((KeyId(agg_pubkey.0.as_bytes().to_vec()), keygen_result_infos))
     }
 }

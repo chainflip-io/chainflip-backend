@@ -379,10 +379,6 @@ mod tests {
 					.collect()
 			}
 
-			pub fn all_nodes(&self) -> Vec<NodeId> {
-				self.engines.iter().map(|(node_id, _)| node_id.clone()).collect()
-			}
-
 			// Create a network which includes the authorities in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(
@@ -435,14 +431,6 @@ mod tests {
 			pub fn move_to_next_epoch(&mut self, epoch: u32) {
 				let current_block_number = System::block_number();
 				self.move_forward_blocks(epoch - (current_block_number % epoch));
-			}
-
-			pub fn move_to_next_heartbeat_interval(&mut self) {
-				let current_block_number = System::block_number();
-				self.move_forward_blocks(
-					HEARTBEAT_BLOCK_INTERVAL - (current_block_number % HEARTBEAT_BLOCK_INTERVAL) +
-						1,
-				);
 			}
 
 			pub fn move_forward_blocks(&mut self, n: u32) {
@@ -1019,15 +1007,6 @@ mod tests {
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
 						"late staker should be a backup node"
 					);
-
-					// Run to the next epoch to start the auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS);
-					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(
-						GENESIS_EPOCH + 2,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
 				});
 		}
 	}
@@ -1179,16 +1158,12 @@ mod tests {
 		};
 		use cf_traits::{
 			AuthorityCount, BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
-			ChainflipAccountStore, EpochInfo, FlipBalance, IsOnline, StakeTransfer,
+			ChainflipAccountStore, EpochInfo, FlipBalance, StakeTransfer,
 		};
-		use pallet_cf_validator::PercentageRange;
-		use state_chain_runtime::{
-			EmergencyRotationPercentageRange, Flip, Online, Runtime, Validator,
-		};
+		use state_chain_runtime::{Flip, Runtime, Validator};
 		use std::collections::HashMap;
 
 		#[test]
-
 		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// We want to have at least one heartbeat within our reduced epoch
 			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
@@ -1303,129 +1278,6 @@ mod tests {
 					for (backup_node, pre_balance) in backup_node_balances {
 						assert!(pre_balance < Flip::stakeable_balance(&backup_node));
 					}
-				});
-		}
-
-		#[test]
-		// A network is created with a set of authorities and backup nodes.
-		// EmergencyRotationPercentageTrigger(80%) of the authorities continue to submit heartbeats
-		// with 20% going offline and forcing an emergency rotation in which a new set of
-		// authorities start to validate the network which includes live authorities and previous
-		// backup nodes
-		fn emergency_rotations() {
-			// We want to be able to miss heartbeats to be offline and provoke an emergency rotation
-			// In order to do this we would want to have missed 1 heartbeat interval
-			// Blocks for our epoch, something larger than one heartbeat
-			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
-			// Reduce our validating set and hence the number of nodes we need to have a backup
-			// set to speed the test up
-			const MAX_AUTHORITIES: AuthorityCount = 10;
-			super::genesis::default()
-				.blocks_per_epoch(EPOCH_BLOCKS)
-				.max_authorities(MAX_AUTHORITIES)
-				.build()
-				.execute_with(|| {
-					let genesis_nodes = Validator::current_authorities();
-					let (mut testnet, passive_nodes) =
-						network::Network::create(MAX_AUTHORITIES as u8, &genesis_nodes);
-
-					// Stake these nodes so that they are included in the next epoch
-					for node in &passive_nodes {
-						testnet.stake_manager_contract.stake(
-							node.clone(),
-							genesis::GENESIS_BALANCE,
-							GENESIS_EPOCH,
-						);
-					}
-
-					// Allow the stakes to be registered.
-					testnet.move_forward_blocks(1);
-
-					// Register the passive nodes.
-					for node in &passive_nodes {
-						network::setup_account_and_peer_mapping(node);
-						network::Cli::activate_account(node);
-					}
-
-					// Start an auction and wait for rotation
-					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
-
-					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-
-					assert_eq!(
-						GENESIS_EPOCH + 1,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
-					assert_eq!(Validator::current_authority_count(), MAX_AUTHORITIES);
-
-					let PercentageRange { top, bottom: _ } =
-						EmergencyRotationPercentageRange::get();
-					let percentage_top_offline = 100 - top as u32;
-					let number_offline = 1 +
-						(Validator::current_authority_count() * percentage_top_offline / 100)
-							as usize;
-
-					let offline_nodes: Vec<_> =
-						testnet.all_nodes().iter().take(number_offline).cloned().collect();
-
-					for node in &offline_nodes {
-						testnet.set_active(node, false);
-					}
-
-					// We need to move forward one heartbeat interval to be regarded as offline
-					testnet.move_to_next_heartbeat_interval();
-
-					// We should have a set of nodes offline
-					for node in &offline_nodes {
-						assert!(!Online::is_online(node), "the node should be offline");
-					}
-
-					// The network state should now be in an emergency and that the validator
-					// pallet has been requested to start an emergency rotation
-					assert!(
-						Validator::emergency_rotation_requested(),
-						"we should have requested an emergency rotation"
-					);
-
-					assert_eq!(
-						GENESIS_EPOCH + 1,
-						Validator::epoch_index(),
-						"We should be in the same epoch"
-					);
-
-					// The next block should see an auction started
-					testnet.move_forward_blocks(1);
-
-					// Run things to a successful vault rotation
-					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-					assert_eq!(
-						GENESIS_EPOCH + 2,
-						Validator::epoch_index(),
-						"We should be in the next epoch"
-					);
-
-					// Emergency state reset
-					assert!(
-						!Validator::emergency_rotation_requested(),
-						"we should have had the state of emergency reset"
-					);
-
-					for node in &testnet.all_nodes() {
-						testnet.set_active(node, false);
-					}
-
-					testnet.move_to_next_heartbeat_interval();
-
-					// We should have a set of nodes offline
-					for node in &testnet.all_nodes() {
-						assert!(!Online::is_online(node), "the node should be offline");
-					}
-
-					assert!(
-						!Validator::emergency_rotation_requested(),
-						"we should *not* have requested an emergency rotation"
-					);
 				});
 		}
 	}
