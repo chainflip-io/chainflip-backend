@@ -93,14 +93,36 @@ impl SignerNomination for MockNominator {
 		_seed: S,
 		_exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId> {
-		NOMINATION.with(|cell| *cell.borrow()).clone()
+		Self::get_nominee()
 	}
 
 	fn threshold_nomination_with_seed<S>(
 		_seed: S,
 		_epoch_index: EpochIndex,
 	) -> Option<Vec<Self::SignerId>> {
-		Some(vec![NOMINATION.with(|cell| *cell.borrow()).unwrap()])
+		Some(vec![Self::get_nominee().unwrap()])
+	}
+}
+
+// Removee some threadlocal + refcell complexity from test code
+impl MockNominator {
+	pub fn get_nominee() -> Option<u64> {
+		NOMINATION.with(|cell| *cell.borrow())
+	}
+
+	pub fn set_nominee(nominee: Option<u64>) {
+		NOMINATION.with(|cell| *cell.borrow_mut() = nominee);
+	}
+
+	/// Increments nominee, if it's a Some
+	pub fn increment_nominee() {
+		NOMINATION.with(|cell| {
+			let mut nomination = cell.borrow_mut();
+			let nomination = nomination.as_mut();
+			if let Some(n) = nomination {
+				*n += 1;
+			}
+		});
 	}
 }
 

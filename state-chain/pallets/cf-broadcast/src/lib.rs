@@ -586,7 +586,6 @@ pub mod pallet {
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
 			Self::clean_up_brodcast_attempt_storage(broadcast_id);
-			FailedTransactionSigners::<T, I>::remove(broadcast_id);
 			// Add fee deficits only when we know everything else is ok
 			// if this has been whitelisted, we can add the fee deficit to the authority's account
 			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
@@ -619,6 +618,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 			}
 		}
+		FailedTransactionSigners::<T, I>::remove(broadcast_id);
 
 		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}
@@ -678,11 +678,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
-		Self::start_broadcast_attempt(
-			BroadcastAttempt::<T, I> { broadcast_attempt_id, unsigned_tx },
-			// First broadcast, we don't have anyone to exclude
-			&[],
-		);
+		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+			broadcast_attempt_id,
+			unsigned_tx,
+		});
 		broadcast_attempt_id
 	}
 
@@ -711,33 +710,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					next_broadcast_attempt_id.attempt_count,
 				);
 
-				Self::start_broadcast_attempt(
-					BroadcastAttempt::<T, I> {
-						broadcast_attempt_id: next_broadcast_attempt_id,
-						..broadcast_attempt
-					},
-					&FailedTransactionSigners::<T, I>::get(
-						broadcast_attempt.broadcast_attempt_id.broadcast_id,
-					)
-					.unwrap_or_default(),
-				)
+				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+					broadcast_attempt_id: next_broadcast_attempt_id,
+					..broadcast_attempt
+				})
 			}
 		} else {
 			log::error!("No threshold signature data is available.");
 		};
 	}
 
-	fn start_broadcast_attempt(
-		broadcast_attempt: BroadcastAttempt<T, I>,
-		exclude_signers: &[<T as Chainflip>::ValidatorId],
-	) {
+	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
 		// Check if there is an nominated signer
-		if let Some(nominated_signer) =
-			T::SignerNomination::nomination_with_seed(seed, exclude_signers)
-		{
+		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(
+			seed,
+			&FailedTransactionSigners::<T, I>::get(
+				broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			)
+			.unwrap_or_default(),
+		) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionSignature::<T, I>::insert(
 				broadcast_attempt.broadcast_attempt_id,

@@ -50,11 +50,9 @@ impl MockCfe {
 					match scenario {
 						Scenario::SigningFailure => {
 							// only nominee can return the signed tx
-							println!("The nominee the CFE is using: {}", nominee);
-							println!("Thread id: {:?}", std::thread::current().id());
 							assert_eq!(
 								nominee,
-								NOMINATION.with(|n| *n.borrow()).unwrap(),
+								MockNominator::get_nominee().unwrap(),
 								"CFE using wrong nomination"
 							);
 							assert_noop!(
@@ -73,7 +71,7 @@ impl MockCfe {
 							// Ignore the request.
 						},
 						_ => {
-							assert_eq!(nominee, NOMINATION.with(|n| *n.borrow()).unwrap());
+							assert_eq!(nominee, MockNominator::get_nominee().unwrap());
 							// Only the nominee can return the signed tx.
 							assert_noop!(
 								MockBroadcast::transaction_ready_for_transmission(
@@ -188,7 +186,8 @@ fn test_broadcast_happy_path() {
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
-		let starting_nomination = NOMINATION.with(|cell| *cell.borrow()).unwrap();
+
+		let starting_nomination = MockNominator::get_nominee().unwrap();
 
 		let mut broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
@@ -205,17 +204,12 @@ fn test_abort_after_max_attempt_reached() {
 				FailedTransactionSigners::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
 					.unwrap();
 			assert_eq!(failed_signers.len() as u32, i + 1);
-			let nomination = NOMINATION.with(|cell| *cell.borrow()).unwrap();
 
-			assert!(failed_signers.contains(&nomination));
+			assert!(failed_signers.contains(&MockNominator::get_nominee().unwrap()));
 
 			// make the nomination unique, so we can test that all the authorities
-			// that failed are reported
-			NOMINATION.with(|cell| {
-				let mut nomination = cell.borrow_mut();
-				let nomination = nomination.as_mut();
-				nomination.map(|n| *n = *n + 1);
-			});
+			// so we can test all the failed authorities reported
+			MockNominator::increment_nominee();
 
 			// The `on_initialize` hook is called and triggers a new broadcast attempt.
 			MockBroadcast::on_initialize(0);
@@ -308,7 +302,7 @@ fn test_bad_signature() {
 		// The nominee was reported.
 		MockOffenceReporter::assert_reported(
 			PalletOffence::InvalidTransactionAuthored,
-			vec![NOMINATION.with(|cell| *cell.borrow()).unwrap()],
+			vec![MockNominator::get_nominee().unwrap()],
 		);
 	})
 }
@@ -718,7 +712,7 @@ fn test_transmission_request_expiry() {
 fn no_authorities_available() {
 	new_test_ext().execute_with(|| {
 		// Simulate that no authority is currently online
-		NOMINATION.with(|cell| *cell.borrow_mut() = None);
+		MockNominator::set_nominee(None);
 		MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
