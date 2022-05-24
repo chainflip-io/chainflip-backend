@@ -11,7 +11,7 @@ use std::{
 
 const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
 
-const DB_NAME_SUFFIX: &str = ".db";
+const DB_EXTENSION: &str = "db";
 
 type Record = (String, AccountId);
 
@@ -75,17 +75,19 @@ fn main() {
 
     // Open a db for each key share:=
     for (node_id, key_share) in key_shares {
-        let db_path = format!(
-            "{}{}",
-            node_id_to_name_map
-                .get(&node_id)
-                .unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id)),
-            DB_NAME_SUFFIX
-        );
-
-        PersistentKeyDB::new_and_migrate_to_latest(Path::new(&db_path), &new_discard_logger())
-            .expect("Should create database at latest version")
-            .update_key(&eth_key_id, &key_share);
+        PersistentKeyDB::new_and_migrate_to_latest(
+            Path::new(
+                &Path::new(
+                    node_id_to_name_map
+                        .get(&node_id)
+                        .unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id)),
+                )
+                .with_extension(DB_EXTENSION),
+            ),
+            &new_discard_logger(),
+        )
+        .expect("Should create database at latest version")
+        .update_key(&eth_key_id, &key_share);
     }
 
     println!("Done!");
