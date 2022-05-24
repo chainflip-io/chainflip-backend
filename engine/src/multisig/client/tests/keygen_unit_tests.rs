@@ -1446,6 +1446,10 @@ async fn genesis_keys_can_sign() {
         .map(|i| AccountId::new([*i; 32]))
         .collect();
 
+    use rand_legacy::FromEntropy;
+
+    let mut rng = Rng::from_entropy();
+
     // Limit iteration count so we don't loop forever
     // in case there is a bug
     const MAX_KEYGEN_ATTEMPTS: usize = 20;
@@ -1454,7 +1458,7 @@ async fn genesis_keys_can_sign() {
 
     let (key_id, key_data) = loop {
         attempt_counter += 1;
-        match keygen::generate_key_data::<Point>(&account_ids) {
+        match keygen::generate_key_data::<Point>(&account_ids, &mut rng) {
             Ok(result) => break result,
             Err(_) => {
                 if attempt_counter >= MAX_KEYGEN_ATTEMPTS {
