@@ -5,11 +5,13 @@ use super::*;
 
 use cf_traits::ThresholdSigner;
 use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, OnInitialize},
+};
 use frame_system::RawOrigin;
 
 use cf_chains::benchmarking_default::BenchmarkDefault;
-use frame_benchmarking::impl_benchmark_test_suite;
 
 type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
 type SignedTransactionFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignedTransaction;
@@ -22,6 +24,7 @@ type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 type UnsignedTransactionFor<T, I> =
 	<<T as Config<I>>::TargetChain as ChainAbi>::UnsignedTransaction;
 
+// Inserts a new signing´attempt into the storage.
 fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(
 	nominee: <T as Chainflip>::ValidatorId,
 	broadcast_attempt_id: BroadcastAttemptId,
@@ -38,19 +41,46 @@ fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(
 	);
 }
 
-fn setup_signature<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
+fn generate_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
+	broadcast_attempt_id: BroadcastAttemptId,
+) -> BroadcastAttempt<T, I> {
+	BroadcastAttempt::<T, I> {
+		unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
+		broadcast_attempt_id,
+	}
+}
+
+// Generates a new signature ready call.
+fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
 	let threshold_request_id =
 		<T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_default();
-	let api_call = ApiCallFor::<T, I>::benchmark_default();
-	let payload = PayloadFor::<T, I>::benchmark_default();
-	let signature = ThresholdSignatureFor::<T, I>::benchmark_default();
-	T::ThresholdSigner::insert_signature(threshold_request_id, signature);
-	let call = Call::<T, I>::on_signature_ready { threshold_request_id, api_call };
-	return call
+	T::ThresholdSigner::insert_signature(
+		threshold_request_id,
+		ThresholdSignatureFor::<T, I>::benchmark_default(),
+	);
+	Call::<T, I>::on_signature_ready {
+		threshold_request_id,
+		api_call: ApiCallFor::<T, I>::benchmark_default(),
+	}
 }
 
 benchmarks_instance_pallet! {
-	on_initialize {} : {}
+	on_initialize {
+		let expiry_block = T::BlockNumber::from(6u32);
+		let b in 1 .. 1000u32;
+		for i in 1 .. b {
+			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
+			BroadcastRetryQueue::<T, I>::append(&BroadcastAttempt::<T, I> {
+				unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
+				broadcast_attempt_id,
+			});
+			Expiries::<T, I>::mutate(expiry_block, |entries| {
+				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
+			});
+		}
+	} : {
+		Pallet::<T, I>::on_initialize(expiry_block);
+	}
 	transaction_ready_for_transmission {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureThresholdSigned::successful_origin();
@@ -61,9 +91,13 @@ benchmarks_instance_pallet! {
 		let signed_tx = SignedTransactionFor::<T, I>::benchmark_default();
 		let signer_id = SignerIdFor::<T, I>::benchmark_default();
 		insert_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
-		let sd = setup_signature::<T, I>();
+		let sd = generate_on_signature_ready_call::<T, I>();
 		sd.dispatch_bypass_filter(origin)?;
+		// TODO: at the moment we verify the case were the signature is valid - thats wrong
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, signed_tx, signer_id)
+	verify {
+		// TODO: verify the case if we're done with the verification
+	}
 	transaction_signing_failure {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureThresholdSigned::successful_origin();
@@ -72,7 +106,7 @@ benchmarks_instance_pallet! {
 			attempt_count: 1
 		};
 		insert_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
-		let sd = setup_signature::<T, I>();
+		let sd = generate_on_signature_ready_call::<T, I>();
 		sd.dispatch_bypass_filter(origin.clone())?;
 		let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
@@ -88,7 +122,7 @@ benchmarks_instance_pallet! {
 			attempt_count: 1
 		};
 		insert_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
-		let call = setup_signature::<T, I>();
+		let call = generate_on_signature_ready_call::<T, I>();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
@@ -107,4 +141,8 @@ benchmarks_instance_pallet! {
 		let tx_hash = TransactionHashFor::<T, I>::benchmark_default();
 		let call = Call::<T, I>::signature_accepted{signature, tx_signer, tx_fee, block_number, tx_hash};
 	} : { call.dispatch_bypass_filter(origin)? }
+	verify {
+		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic
+		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the signature_accepted extrinsic").event;
+	}
 }
