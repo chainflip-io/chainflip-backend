@@ -476,7 +476,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         };
 
         // Check that the number of elements in the data is what we expect
-        if !data.check_data_size(state.get_num_participants()) {
+        if !data.check_data_size(state.get_participant_count()) {
             slog::debug!(
                 self.logger,
                 "Ignoring signing data: Incorrect number of elements";
@@ -546,7 +546,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         };
 
         // Check that the number of elements in the data is what we expect
-        if !data.check_data_size(state.get_num_participants()) {
+        if !data.check_data_size(state.get_participant_count()) {
             slog::debug!(
                 self.logger,
                 "Ignoring keygen data: Incorrect number of elements";

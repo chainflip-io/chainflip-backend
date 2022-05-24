@@ -310,7 +310,7 @@ where
     }
 
     /// Returns the number of participants in the current ceremony
-    pub fn get_num_participants(&self) -> Option<AuthorityCount> {
+    pub fn get_participant_count(&self) -> Option<AuthorityCount> {
         self.inner
             .as_ref()
             .map(|authorised_state| authorised_state.num_of_participants)

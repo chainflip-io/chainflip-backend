@@ -54,16 +54,21 @@ impl<P: ECPoint> KeygenData<P> {
                 KeygenData::HashComm1(_) => true,
                 KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
                 KeygenData::Comm1(message) => {
-                    message.get_commitments_len()
-                        == threshold_from_share_count(num_of_parties as u32) as usize + 1
+                    let coefficient_count =
+                        threshold_from_share_count(num_of_parties as u32) as usize + 1;
+                    message.get_commitments_len() == coefficient_count
                 }
                 KeygenData::Verify2(message) => {
-                    for commitment in message.data.values().flatten() {
-                        if commitment.get_commitments_len()
-                            != threshold_from_share_count(num_of_parties as u32) as usize + 1
-                        {
-                            return false;
-                        }
+                    let coefficient_count =
+                        threshold_from_share_count(num_of_parties as u32) as usize + 1;
+
+                    if message
+                        .data
+                        .values()
+                        .flatten()
+                        .any(|commitments| commitments.get_commitments_len() != coefficient_count)
+                    {
+                        return false;
                     }
 
                     message.data.len() == num_of_parties
@@ -86,10 +91,13 @@ impl<P: ECPoint> KeygenData<P> {
                     blame_response.0.len() <= num_of_parties
                 }
                 KeygenData::VerifyBlameResponses7(message) => {
-                    for blame_response in message.data.values().flatten() {
-                        if blame_response.0.len() > num_of_parties {
-                            return false;
-                        }
+                    if message
+                        .data
+                        .values()
+                        .flatten()
+                        .any(|blame_response| blame_response.0.len() > num_of_parties)
+                    {
+                        return false;
                     }
                     message.data.len() == num_of_parties
                 }
