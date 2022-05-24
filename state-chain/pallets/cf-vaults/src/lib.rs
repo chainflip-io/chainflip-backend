@@ -43,6 +43,14 @@ pub enum KeygenOutcome<Key, Id> {
 	Failure(BTreeSet<Id>),
 }
 
+// CFE reports the keygen outcome, with the extra signature item
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+pub enum ReportedKeygenOutcome<Key, Payload, Signature, Id> {
+	Success(Key, Payload, Signature),
+
+	Failure(BTreeSet<Id>),
+}
+
 impl<Key, Id: Ord> Default for KeygenOutcome<Key, Id> {
 	fn default() -> Self {
 		Self::Failure(BTreeSet::new())
@@ -50,6 +58,12 @@ impl<Key, Id: Ord> Default for KeygenOutcome<Key, Id> {
 }
 
 pub type CeremonyId = u64;
+pub type ReportedKeygenOutcomeFor<T, I = ()> = ReportedKeygenOutcome<
+	AggKeyFor<T, I>,
+	<<T as Config<I>>::Chain as ChainCrypto>::Payload,
+	ThresholdSignatureFor<T, I>,
+	<T as Chainflip>::ValidatorId,
+>;
 pub type KeygenOutcomeFor<T, I = ()> =
 	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
@@ -450,6 +464,8 @@ pub mod pallet {
 		KeygenSuccess(CeremonyId),
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
+		/// KeygenSignatureVerificationFailed \[validator_id\]
+		KeygenSignatureVerificationFailed(T::ValidatorId),
 		/// Keygen grace period has elapsed \[ceremony_id\]
 		KeygenGracePeriodElapsed(CeremonyId),
 	}
@@ -500,7 +516,7 @@ pub mod pallet {
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			reported_outcome: KeygenOutcomeFor<T, I>,
+			reported_outcome: ReportedKeygenOutcomeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?.into();
 
@@ -524,11 +540,17 @@ pub mod pallet {
 			// -- Tally the votes.
 
 			match reported_outcome {
-				KeygenOutcome::Success(key) => {
-					keygen_status.add_success_vote(&reporter, key)?;
-					Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
-				},
-				KeygenOutcome::Failure(blamed) => {
+				ReportedKeygenOutcome::Success(key, payload, sig) =>
+					if <T::Chain as ChainCrypto>::verify_threshold_signature(&key, &payload, &sig) {
+						keygen_status.add_success_vote(&reporter, key)?;
+						Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
+					} else {
+						keygen_status.add_failure_vote(&reporter, Default::default())?;
+						Self::deposit_event(Event::<T, I>::KeygenSignatureVerificationFailed(
+							reporter,
+						));
+					},
+				ReportedKeygenOutcome::Failure(blamed) => {
 					keygen_status.add_failure_vote(&reporter, blamed)?;
 					Self::deposit_event(Event::<T, I>::KeygenFailureReported(reporter));
 				},
