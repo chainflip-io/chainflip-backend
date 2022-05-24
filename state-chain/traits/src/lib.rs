@@ -539,6 +539,10 @@ where
 		});
 		id
 	}
+
+	/// Helper function to enable benchmarking of the brodcast pallet
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_signature(request_id: Self::RequestId, signature: C::ThresholdSignature);
 }
 
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
