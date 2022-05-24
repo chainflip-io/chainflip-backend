@@ -51,15 +51,15 @@ where
 
 fn main() {
     println!("Starting...");
-    let input_file_path = env::var(ENV_VAR_INPUT_FILE).unwrap_or_else(|_| {
-        panic!(
-            "No genesis node id csv file defined with {}",
-            ENV_VAR_INPUT_FILE
-        )
-    });
 
     let node_id_to_name_map = load_node_ids_from_csv(
-        csv::Reader::from_path(&input_file_path).expect("Should read from csv file"),
+        csv::Reader::from_path(&env::var(ENV_VAR_INPUT_FILE).unwrap_or_else(|_| {
+            panic!(
+                "No genesis node id csv file defined with {}",
+                ENV_VAR_INPUT_FILE
+            )
+        }))
+        .expect("Should read from csv file"),
     );
 
     println!(
@@ -67,12 +67,10 @@ fn main() {
         node_id_to_name_map.len()
     );
 
-    let rng = Rng::from_entropy();
-
     let (eth_key_id, key_shares) = generate_key_data_until_compatible::<eth::Point>(
         &node_id_to_name_map.keys().cloned().collect::<Vec<_>>(),
         20,
-        rng,
+        Rng::from_entropy(),
     );
 
     // Open a db for each key share:=
