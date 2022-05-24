@@ -73,7 +73,7 @@ fn main() {
         Rng::from_entropy(),
     );
 
-    // Open a db for each key share:=
+    // Create a db for each key share, giving the db the name of the node it is for.
     for (node_id, key_share) in key_shares {
         PersistentKeyDB::new_and_migrate_to_latest(
             Path::new(
