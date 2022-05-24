@@ -2754,6 +2754,7 @@ dependencies = [
  "chainflip-engine",
  "csv",
  "hex",
+ "rand 0.6.5",
  "rocksdb",
  "state-chain-runtime",
 ]

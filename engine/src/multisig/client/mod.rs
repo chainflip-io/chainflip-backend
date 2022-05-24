@@ -12,12 +12,12 @@ mod tests;
 
 pub mod ceremony_manager;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
 
 use crate::{
     common::format_iterator,
     logging::CEREMONY_ID_KEY,
-    multisig::{client::common::SigningFailureReason, crypto::Rng, KeyDB, KeyId},
+    multisig::{client::common::SigningFailureReason, KeyDB, KeyId},
 };
 
 use async_trait::async_trait;
@@ -50,7 +50,7 @@ use self::{
 
 use super::{
     crypto::{CryptoScheme, ECPoint},
-    MessageHash,
+    MessageHash, Rng,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -361,7 +361,9 @@ where
     fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
         slog::info!(self.logger, "Performing solo keygen");
 
-        single_party_keygen(self.my_account_id.clone(), rng)
+        let (_key_id, key_data) =
+            keygen::generate_key_data_until_compatible(&[self.my_account_id.clone()], 30, rng);
+        key_data[&self.my_account_id].clone()
     }
 
     fn single_party_signing(
@@ -384,19 +386,6 @@ where
             signing::frost::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
 
         C::build_signature(sigma, r)
-    }
-}
-
-pub fn single_party_keygen<Point: ECPoint>(
-    my_account_id: AccountId,
-    mut rng: Rng,
-) -> KeygenResultInfo<Point> {
-    loop {
-        if let Ok((_key_id, key_data)) =
-            keygen::generate_key_data::<Point>(&[my_account_id.clone()], &mut rng)
-        {
-            return key_data[&my_account_id].clone();
-        }
     }
 }
 

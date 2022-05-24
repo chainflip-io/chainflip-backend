@@ -351,7 +351,7 @@ fn migrate_db_to_latest<P: ECPoint>(
 #[cfg(test)]
 mod tests {
 
-    use crate::multisig::crypto::Rng;
+    use crate::multisig::{client::keygen::generate_key_data_until_compatible, crypto::Rng};
     use sp_runtime::AccountId32;
 
     use super::*;
@@ -360,9 +360,18 @@ mod tests {
 
     use crate::{
         logging::test_utils::new_test_logger,
-        multisig::{client::single_party_keygen, db::PersistentKeyDB},
+        multisig::db::PersistentKeyDB,
         testing::{assert_ok, new_temp_directory_with_nonexistent_file},
     };
+
+    fn generate_secret_share_for_test() -> KeygenResultInfo<Point> {
+        use rand_legacy::FromEntropy;
+        let rng = Rng::from_entropy();
+        let account_id = AccountId32::new([0; 32]);
+        let (_key_id, key_shares) =
+            generate_key_data_until_compatible(&[account_id.clone()], 20, rng);
+        key_shares[&account_id].clone()
+    }
 
     const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
@@ -498,10 +507,8 @@ mod tests {
     #[test]
     fn can_load_keys_with_current_keygen_info() {
         // doesn't really matter if it's random, we won't be using the exact values
-        use rand_legacy::FromEntropy;
-        let rng = Rng::from_entropy();
-        let bashful_secret = single_party_keygen::<Point>(AccountId32::new([0; 32]), rng);
 
+        let secret_share = generate_secret_share_for_test();
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
@@ -510,7 +517,7 @@ mod tests {
             let mut p_db =
                 PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
-            p_db.update_key(&key_id, &bashful_secret);
+            p_db.update_key(&key_id, &secret_share);
         }
 
         {
@@ -536,9 +543,7 @@ mod tests {
         // there should be no key [0; 33] yet
         assert!(keys_before.get(&key_id).is_none());
 
-        use rand_legacy::FromEntropy;
-        let rng = Rng::from_entropy();
-        let keygen_result_info = single_party_keygen(AccountId32::new([0; 32]), rng);
+        let keygen_result_info = generate_secret_share_for_test();
         p_db.update_key(&key_id, &keygen_result_info);
 
         let keys_before = p_db.load_keys();

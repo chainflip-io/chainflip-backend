@@ -515,7 +515,6 @@ pub mod genesis {
     use super::*;
     use crate::multisig::client::PartyIdxMapping;
     use crate::multisig::KeyId;
-    use rand_legacy::FromEntropy;
     use state_chain_runtime::AccountId;
 
     /// Attempts to generate key data until we generate a key that is contract
@@ -523,11 +522,13 @@ pub mod genesis {
     pub fn generate_key_data_until_compatible<P: ECPoint>(
         account_ids: &[AccountId],
         max_attempts: usize,
+        mut rng: Rng,
     ) -> (KeyId, HashMap<AccountId, KeygenResultInfo<P>>) {
         let mut attempt_counter = 0;
+
         loop {
             attempt_counter += 1;
-            match generate_key_data::<P>(account_ids) {
+            match generate_key_data::<P>(account_ids, &mut rng) {
                 Ok(result) => break result,
                 Err(_) => {
                     // limit iteration so we don't loop forever
@@ -546,9 +547,6 @@ pub mod genesis {
         let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
         let n = params.share_count;
         let t = params.threshold;
-
-        use crate::multisig::client::PartyIdxMapping;
-        let mut rng = Rng::from_entropy();
 
         let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
             .map(|idx| {

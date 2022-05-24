@@ -1,7 +1,10 @@
 use chainflip_engine::{
     logging::utils::new_discard_logger,
-    multisig::{client::keygen::generate_key_data_until_compatible, eth, KeyDB, PersistentKeyDB},
+    multisig::{
+        client::keygen::generate_key_data_until_compatible, eth, KeyDB, PersistentKeyDB, Rng,
+    },
 };
+use rand_legacy::FromEntropy;
 use state_chain_runtime::AccountId;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -59,18 +62,17 @@ fn main() {
         csv::Reader::from_path(&input_file_path).expect("Should read from csv file"),
     );
 
-    let num_nodes = node_id_to_name_map.len();
-
-    assert!(
-        num_nodes > 1,
-        "Must have more than one node to run genesis key share generation"
+    println!(
+        "Creating genesis databases for {} nodes...",
+        node_id_to_name_map.len()
     );
 
-    println!("Creating genesis databases for {} nodes...", num_nodes);
+    let rng = Rng::from_entropy();
 
     let (eth_key_id, key_shares) = generate_key_data_until_compatible::<eth::Point>(
         &node_id_to_name_map.keys().cloned().collect::<Vec<_>>(),
         20,
+        rng,
     );
 
     // Open a db for each key share:=
