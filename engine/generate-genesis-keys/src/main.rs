@@ -1,16 +1,13 @@
-use chainflip_engine::multisig::{
-    client::keygen::generate_key_data_until_compatible,
-    db::persistent::{DATA_COLUMN, DB_SCHEMA_VERSION, DB_SCHEMA_VERSION_KEY, METADATA_COLUMN},
-    eth, KeyDB, PersistentKeyDB,
+use chainflip_engine::{
+    logging::utils::new_discard_logger,
+    multisig::{client::keygen::generate_key_data_until_compatible, eth, KeyDB, PersistentKeyDB},
 };
-use rocksdb::{Options, DB};
 use state_chain_runtime::AccountId;
 use std::{
     collections::{BTreeSet, HashMap},
     env, io,
+    path::Path,
 };
-
-const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
 const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
 
@@ -71,40 +68,24 @@ fn main() {
 
     println!("Creating genesis databases for {} nodes...", num_nodes);
 
-    let account_ids = node_id_to_name_map.keys().cloned().collect::<Vec<_>>();
-
-    let (eth_key_id, key_shares) =
-        generate_key_data_until_compatible::<eth::Point>(&account_ids, 20);
-
-    let mut opts = Options::default();
-    opts.create_missing_column_families(true);
-    opts.create_if_missing(true);
+    let (eth_key_id, key_shares) = generate_key_data_until_compatible::<eth::Point>(
+        &node_id_to_name_map.keys().cloned().collect::<Vec<_>>(),
+        20,
+    );
 
     // Open a db for each key share:=
     for (node_id, key_share) in key_shares {
-        let node_name = node_id_to_name_map
-            .get(&node_id)
-            .unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id));
-        let db_path = format!("{}{}", node_name, DB_NAME_SUFFIX);
-        let db = DB::open_cf(&opts, &db_path, COLUMN_FAMILIES).expect("Should open db file");
-
-        // Write the schema version
-        db.put_cf(
-            db.cf_handle(METADATA_COLUMN).unwrap_or_else(|| {
-                panic!("Should get column family handle for {}", METADATA_COLUMN)
-            }),
-            DB_SCHEMA_VERSION_KEY,
-            DB_SCHEMA_VERSION.to_be_bytes(),
-        )
-        .expect("Should write DB_SCHEMA_VERSION");
-
-        let mut p_kdb = PersistentKeyDB::new_from_db(
-            db,
-            &chainflip_engine::logging::utils::new_discard_logger(),
+        let db_path = format!(
+            "{}{}",
+            node_id_to_name_map
+                .get(&node_id)
+                .unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id)),
+            DB_NAME_SUFFIX
         );
 
-        // Write the key share to the db
-        p_kdb.update_key(&eth_key_id, &key_share);
+        PersistentKeyDB::new_and_migrate_to_latest(Path::new(&db_path), &new_discard_logger())
+            .expect("Should create database at latest version")
+            .update_key(&eth_key_id, &key_share);
     }
 
     println!("Done!");
