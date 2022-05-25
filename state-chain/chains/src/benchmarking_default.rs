@@ -7,16 +7,6 @@ pub trait BenchmarkDefault {
 	fn benchmark_default() -> Self;
 }
 
-// #[cfg(feature = "runtime-benchmarks")]
-// impl<T> BenchmarkDefault for T
-// where
-// 	T: sp_std::default::Default,
-// {
-// 	fn benchmark_default() -> Self {
-// 		T::default()
-// 	}
-// }
-
 #[cfg(not(feature = "runtime-benchmarks"))]
 impl<T> BenchmarkDefault for T {}
 

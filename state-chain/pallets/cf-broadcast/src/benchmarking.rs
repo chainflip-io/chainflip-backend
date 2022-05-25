@@ -64,10 +64,13 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 	}
 }
 
+// TODO: check if we really reach the expensive parts of the code.
+
 benchmarks_instance_pallet! {
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
 		let b in 1 .. 1000u32;
+		// TODO: Seperate between expires and the broadcast queue.
 		for i in 1 .. b {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			BroadcastRetryQueue::<T, I>::append(&BroadcastAttempt::<T, I> {
