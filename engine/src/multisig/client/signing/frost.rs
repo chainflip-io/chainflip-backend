@@ -391,9 +391,10 @@ mod tests {
     #[test]
     fn check_data_size_stage2() {
         let mut rng = Rng::from_seed([0; 32]);
+        let test_size = 4;
         let data_to_check =
             SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
-                data: (0..ACCOUNT_IDS.len())
+                data: (0..test_size)
                     .map(|i| {
                         (
                             i as AuthorityCount,
@@ -404,25 +405,26 @@ mod tests {
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
     }
 
     #[test]
     fn check_data_size_stage4() {
         let mut rng = Rng::from_seed([0; 32]);
+        let test_size = 4;
         let data_to_check =
             SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
-                data: (0..ACCOUNT_IDS.len())
+                data: (0..test_size)
                     .map(|i| (i as AuthorityCount, Some(gen_invalid_local_sig(&mut rng))))
                     .collect(),
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
     }
 
     #[test]
