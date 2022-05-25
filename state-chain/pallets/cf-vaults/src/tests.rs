@@ -1,8 +1,9 @@
 use crate::{
 	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenOutcome,
-	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
-	VaultRotationStatus, Vaults,
+	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, ReportedKeygenOutcome,
+	SuccessVoters, Vault, VaultRotationStatus, Vaults,
 };
+use cf_chains::mocks::MockThresholdSignature;
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
@@ -124,7 +125,11 @@ fn no_active_rotation() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				1,
-				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+				ReportedKeygenOutcome::Success(
+					NEW_AGG_PUB_KEY,
+					Default::default(),
+					Default::default()
+				)
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
@@ -133,7 +138,7 @@ fn no_active_rotation() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				1,
-				KeygenOutcome::Failure(Default::default())
+				ReportedKeygenOutcome::Failure(Default::default())
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
@@ -151,7 +156,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
 		));
 
 		// Can't report twice.
@@ -159,7 +164,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+				ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -173,7 +178,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				KeygenOutcome::Failure(BTreeSet::from_iter([BOB, CHARLIE]))
+				ReportedKeygenOutcome::Failure(BTreeSet::from_iter([BOB, CHARLIE]))
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -187,7 +192,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(u64::MAX),
 				ceremony_id,
-				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+				ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -201,7 +206,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id + 1,
-				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+				ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -227,7 +232,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
 		));
 
 		// A resolution is still pending - we 100% response rate.
@@ -247,7 +252,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
 		));
 
 		// This time we should have enough votes for consensus.
@@ -287,7 +292,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
@@ -299,7 +304,7 @@ fn keygen_report_failure() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+				ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -313,7 +318,11 @@ fn keygen_report_failure() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				KeygenOutcome::Success(NEW_AGG_PUB_KEY)
+				ReportedKeygenOutcome::Success(
+					NEW_AGG_PUB_KEY,
+					Default::default(),
+					Default::default()
+				)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -327,7 +336,7 @@ fn keygen_report_failure() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(u64::MAX),
 				ceremony_id,
-				KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+				ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -341,7 +350,7 @@ fn keygen_report_failure() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id + 1,
-				KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+				ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -367,7 +376,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 
 		// A resolution is still pending - we expect 100% response rate.
@@ -387,7 +396,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 
 		// This time we should have enough votes for consensus.
@@ -425,7 +434,7 @@ fn test_grace_period() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			KeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
 		));
 
 		// > 25 blocks later we should resolve an error.
