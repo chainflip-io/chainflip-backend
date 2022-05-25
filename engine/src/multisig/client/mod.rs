@@ -15,7 +15,7 @@ pub mod ceremony_manager;
 #[cfg(test)]
 mod genesis;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
 
 use crate::{
     common::format_iterator,
@@ -394,37 +394,12 @@ pub fn single_party_keygen<Point: ECPoint>(
     my_account_id: AccountId,
     mut rng: Rng,
 ) -> KeygenResultInfo<Point> {
-    use crate::multisig::crypto::{ECScalar, KeyShare};
-
-    let params = ThresholdParameters::from_share_count(1);
-
-    // By default this will have a 50/50 chance of generating
-    // a contract incompatible signature to match the behavior
-    // of multi-party ceremonies. Toggle this off to always
-    // generate a contract compatible signature.
-    const ALLOWING_HIGH_PUBKEY: bool = true;
-
-    let (secret_key, public_key) = loop {
-        let secret_key = Point::Scalar::random(&mut rng);
-
-        let public_key = Point::from_scalar(&secret_key);
-
-        if public_key.is_compatible() || ALLOWING_HIGH_PUBKEY {
-            break (secret_key, public_key);
+    loop {
+        if let Ok((_key_id, key_data)) =
+            keygen::generate_key_data::<Point>(&[my_account_id.clone()], &mut rng)
+        {
+            return key_data[&my_account_id].clone();
         }
-    };
-
-    KeygenResultInfo {
-        key: Arc::new(KeygenResult {
-            key_share: KeyShare {
-                y: public_key,
-                x_i: secret_key,
-            },
-            // This is not going to be used in solo ceremonies
-            party_public_keys: vec![public_key],
-        }),
-        validator_map: Arc::new(PartyIdxMapping::from_unsorted_signers(&[my_account_id])),
-        params,
     }
 }
 
