@@ -172,7 +172,7 @@ mod tests {
     use rand_legacy::SeedableRng;
 
     use crate::multisig::{
-        client::tests::{gen_invalid_keygen_comm1, get_invalid_hash_comm, ACCOUNT_IDS},
+        client::tests::{gen_invalid_keygen_comm1, get_invalid_hash_comm},
         crypto::Rng,
         eth::Point,
     };
@@ -180,80 +180,173 @@ mod tests {
     #[test]
     fn check_data_size_verify_hash_comm2() {
         let mut rng = Rng::from_seed([0; 32]);
+        let test_size: AuthorityCount = 4;
         let data_to_check = KeygenData::<Point>::VerifyHashComm2(BroadcastVerificationMessage {
-            data: (0..ACCOUNT_IDS.len())
+            data: (0..test_size)
                 .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
                 .collect(),
         });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
     }
 
     #[test]
     fn check_data_size_comm1() {
         let mut rng = Rng::from_seed([0; 32]);
-        let data_to_check = KeygenData::<Point>::Comm1(gen_invalid_keygen_comm1(&mut rng));
+        let test_size: AuthorityCount = 4;
+        let data_to_check =
+            KeygenData::<Point>::Comm1(gen_invalid_keygen_comm1(&mut rng, test_size));
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
     }
 
     #[test]
     fn check_data_size_verify2() {
         let mut rng = Rng::from_seed([0; 32]);
-        let data_to_check = KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
-            data: (0..ACCOUNT_IDS.len())
-                .map(|i| {
-                    (
-                        i as AuthorityCount,
-                        Some(gen_invalid_keygen_comm1(&mut rng)),
-                    )
-                })
-                .collect(),
-        });
+        let test_size: AuthorityCount = 4;
 
-        // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.check_data_size(Some(ACCOUNT_IDS.len() as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+        // Test that a nested collection will cause the check to fail with sizes larger or smaller then expected
+        for size_adjustment in -1_i32..=1_i32 {
+            let data_to_check = KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
+                data: (0..test_size)
+                    .map(|i| {
+                        (
+                            i as AuthorityCount,
+                            // Create a nested collection with a changing size
+                            Some(gen_invalid_keygen_comm1(
+                                &mut rng,
+                                ((test_size as i32) + size_adjustment).try_into().unwrap(),
+                            )),
+                        )
+                    })
+                    .collect(),
+            });
 
-        // TODO: is there a better way of testing the nested data size?
-
-        // Create a nested collection that is too large
-        let data_to_check = KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
-            data: (0..ACCOUNT_IDS.len() - 1)
-                .map(|i| {
-                    (
-                        i as AuthorityCount,
-                        Some(gen_invalid_keygen_comm1(&mut rng)),
-                    )
-                })
-                .collect(),
-        });
-
-        // Should fail with incorrect size of nested collection
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() - 1) as AuthorityCount)));
-
-        // Create a nested collection that is too small
-        let data_to_check = KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
-            data: (0..ACCOUNT_IDS.len() + 1)
-                .map(|i| {
-                    (
-                        i as AuthorityCount,
-                        Some(gen_invalid_keygen_comm1(&mut rng)),
-                    )
-                })
-                .collect(),
-        });
-
-        // Should fail with incorrect size of nested collection
-        assert!(!data_to_check.check_data_size(Some((ACCOUNT_IDS.len() + 1) as AuthorityCount)));
+            if size_adjustment == 0 {
+                // The nested collection is the correct size, so test that the outer collection size
+                assert!(data_to_check.check_data_size(Some(test_size)));
+                assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+                assert!(!data_to_check.check_data_size(Some(test_size + 1)));
+            } else {
+                // The nested collection is the incorrect size, so the check will fail even with the correct test_size
+                assert!(!data_to_check.check_data_size(Some(test_size)));
+            }
+        }
     }
 
-    // TODO: check_data_size tests for the other KeygenData variants
+    #[test]
+    fn check_data_size_complaints4() {
+        let test_size: AuthorityCount = 4;
+        let data_to_check =
+            KeygenData::<Point>::Complaints4(Complaints4(BTreeSet::from_iter(0..test_size)));
+
+        // Should fail on sizes larger then expected
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+    }
+
+    #[test]
+    fn check_data_size_verify_complaints5() {
+        let test_size: AuthorityCount = 4;
+
+        // Test that a nested collection will cause the check to fail with sizes larger then expected
+        for size_adjustment in 0_i32..=1_i32 {
+            let data_to_check =
+                KeygenData::<Point>::VerifyComplaints5(BroadcastVerificationMessage {
+                    data: (0..test_size)
+                        .map(|i| {
+                            (
+                                i as AuthorityCount,
+                                // Create a nested collection with a changing size
+                                Some(Complaints4(BTreeSet::from_iter(
+                                    0..((test_size as i32) + size_adjustment).try_into().unwrap(),
+                                ))),
+                            )
+                        })
+                        .collect(),
+                });
+
+            // The complaints are optional, so we just check exceeding the max length causes failure
+            if size_adjustment == 0 {
+                // The nested collection is the correct size, so test the outer collection size
+                assert!(data_to_check.check_data_size(Some(test_size)));
+                assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+            } else {
+                // The nested collection is too large, so the check will fail even with the correct test_size
+                assert!(!data_to_check.check_data_size(Some(test_size)));
+            }
+        }
+    }
+
+    #[test]
+    fn check_data_size_blame_response6() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let test_size: AuthorityCount = 4;
+
+        let data_to_check = KeygenData::<Point>::BlameResponse6(BlameResponse6(
+            (0..test_size)
+                .map(|i| (i, SecretShare3::create_random(&mut rng)))
+                .collect(),
+        ));
+
+        // Should fail on sizes that are larger then expected
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+    }
+
+    #[test]
+    fn check_data_size_verify_verify_blame_responses7() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let test_size: AuthorityCount = 4;
+
+        // Test that a nested collection will cause the check to fail with sizes larger then expected
+        for size_adjustment in 0_i32..=1_i32 {
+            let data_to_check =
+                KeygenData::<Point>::VerifyBlameResponses7(BroadcastVerificationMessage {
+                    data: (0..test_size)
+                        .map(|i| {
+                            (
+                                i as AuthorityCount,
+                                // Create a nested collection with a changing size
+                                Some(BlameResponse6(
+                                    (0..((test_size as i32) + size_adjustment).try_into().unwrap())
+                                        .map(|i| (i, SecretShare3::create_random(&mut rng)))
+                                        .collect(),
+                                )),
+                            )
+                        })
+                        .collect(),
+                });
+
+            // The blame responses are optional, so we just check exceeding the max length causes failure
+            if size_adjustment == 0 {
+                // The nested collection is the correct size, so test the outer collection size
+                assert!(data_to_check.check_data_size(Some(test_size)));
+                assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+            } else {
+                // The nested collection is too large, so the check will fail even with the correct test_size
+                assert!(!data_to_check.check_data_size(Some(test_size)));
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_data_size_should_panic_with_none_on_non_initial_stage() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let test_size: AuthorityCount = 4;
+        let data_to_check = KeygenData::<Point>::VerifyHashComm2(BroadcastVerificationMessage {
+            data: (0..test_size)
+                .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
+                .collect(),
+        });
+
+        data_to_check.check_data_size(None);
+    }
 }

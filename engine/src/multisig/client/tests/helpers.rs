@@ -1180,15 +1180,18 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment<Point> {
+pub fn gen_invalid_keygen_comm1(
+    rng: &mut Rng,
+    share_count: AuthorityCount,
+) -> DKGUnverifiedCommitment<Point> {
     let (_, fake_comm1) = generate_shares_and_commitment(
         rng,
         // The commitment is only invalid because of the invalid context
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
-            share_count: ACCOUNT_IDS.len() as AuthorityCount,
-            threshold: threshold_from_share_count(ACCOUNT_IDS.len() as u32) as AuthorityCount,
+            share_count,
+            threshold: threshold_from_share_count(share_count as u32) as AuthorityCount,
         },
     );
     fake_comm1

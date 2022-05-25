@@ -546,7 +546,8 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 
     // Make one of the nodes send a different commitment to half of the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
-    let commitment = gen_invalid_keygen_comm1(&mut ceremony.rng);
+    let commitment =
+        gen_invalid_keygen_comm1(&mut ceremony.rng, ACCOUNT_IDS.len() as AuthorityCount);
     for message in messages
         .get_mut(bad_account_id)
         .unwrap()
