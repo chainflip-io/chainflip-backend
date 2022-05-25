@@ -50,8 +50,6 @@ where
 }
 
 fn main() {
-    println!("Starting...");
-
     let node_id_to_name_map = load_node_ids_from_csv(
         csv::Reader::from_path(&env::var(ENV_VAR_INPUT_FILE).unwrap_or_else(|_| {
             panic!(
@@ -60,11 +58,6 @@ fn main() {
             )
         }))
         .expect("Should read from csv file"),
-    );
-
-    println!(
-        "Creating genesis databases for {} nodes...",
-        node_id_to_name_map.len()
     );
 
     let (eth_key_id, key_shares) = generate_key_data_until_compatible::<eth::Point>(
@@ -90,5 +83,12 @@ fn main() {
         .update_key(&eth_key_id, &key_share);
     }
 
-    println!("Done!");
+    // output to stdout - CI can read the json from stdout
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "eth_agg_key": format!("{}", eth_key_id)
+        }))
+        .expect("Should prettify_json")
+    );
 }
