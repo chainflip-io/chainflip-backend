@@ -31,11 +31,11 @@ use super::*;
 use crate::logging::KEYGEN_REQUEST_IGNORED;
 
 use crate::multisig::crypto::eth::Point;
-type Comm1 = keygen::CoeffComm3<Point>;
-type VerifyComm2 = keygen::VerifyCoeffComm4<Point>;
-type SecretShare3 = keygen::SecretShare5<Point>;
-type BlameResponse6 = keygen::BlameResponse8<Point>;
-type VerifyBlameResponses7 = keygen::VerifyBlameResponses9<Point>;
+type CoeffComm3 = keygen::CoeffComm3<Point>;
+type VerifyCoeffComm4 = keygen::VerifyCoeffComm4<Point>;
+type SecretShare5 = keygen::SecretShare5<Point>;
+type BlameResponse8 = keygen::BlameResponse8<Point>;
+type VerifyBlameResponses9 = keygen::VerifyBlameResponses9<Point>;
 type KeygenData = keygen::KeygenData<Point>;
 
 /// If all nodes are honest and behave as expected we should
@@ -175,9 +175,9 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         ceremony,
         messages,
         keygen::VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5
     );
 
     // One party sends another a bad secret share to cause entering the blaming stage
@@ -186,15 +186,15 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         .get_mut(bad_share_sender_id)
         .unwrap()
         .get_mut(bad_share_receiver_id)
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+        .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
     let messages = run_stages!(
         ceremony,
         messages,
         keygen::Complaints6,
         keygen::VerifyComplaints7,
-        BlameResponse6,
-        VerifyBlameResponses7
+        BlameResponse8,
+        VerifyBlameResponses9
     );
     ceremony.distribute_messages(messages);
     ceremony.complete(result_receivers).await;
@@ -210,9 +210,9 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
         ceremony,
         messages,
         keygen::VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5
     );
 
     // One party fails to send a secret share to another causing everyone to later enter the blaming stage
@@ -237,8 +237,8 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
         ceremony,
         messages,
         VerifyComplaints7,
-        BlameResponse6,
-        VerifyBlameResponses7
+        BlameResponse8,
+        VerifyBlameResponses9
     );
     ceremony.distribute_messages(messages);
     ceremony.complete(result_receivers).await;
@@ -262,9 +262,9 @@ async fn should_report_on_invalid_blame_response6() {
         ceremony,
         messages,
         VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5
     );
 
     // stage 3 - with bad_node_id_1, and bad_node_id_2 sending a bad secret share
@@ -272,24 +272,24 @@ async fn should_report_on_invalid_blame_response6() {
         .get_mut(&bad_node_id_1)
         .unwrap()
         .get_mut(&target_node_id)
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+        .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
     *messages
         .get_mut(&bad_node_id_2)
         .unwrap()
         .get_mut(&target_node_id)
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+        .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
     let mut messages = run_stages!(
         ceremony,
         messages,
         Complaints6,
         VerifyComplaints7,
-        BlameResponse6
+        BlameResponse8
     );
 
     // stage 7 - bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
-    let secret_share = SecretShare3::create_random(&mut ceremony.rng);
+    let secret_share = SecretShare5::create_random(&mut ceremony.rng);
     for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
         *message = keygen::BlameResponse8(
             std::iter::once((
@@ -301,7 +301,7 @@ async fn should_report_on_invalid_blame_response6() {
     }
 
     let messages = ceremony
-        .run_stage::<VerifyBlameResponses7, _, _>(messages)
+        .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
     ceremony.distribute_messages(messages);
     ceremony
@@ -330,9 +330,9 @@ async fn should_report_on_incomplete_blame_response() {
         ceremony,
         messages,
         VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5
     );
 
     // stage 3 - with bad_node_id_1 sending a bad secret share
@@ -340,14 +340,14 @@ async fn should_report_on_incomplete_blame_response() {
         .get_mut(&bad_node_id_1)
         .unwrap()
         .get_mut(&target_node_id)
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+        .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
     let mut messages = run_stages!(
         ceremony,
         messages,
         Complaints6,
         VerifyComplaints7,
-        BlameResponse6
+        BlameResponse8
     );
 
     // stage 7 - bad_node_id_1 sends an empty BlameResponse
@@ -356,7 +356,7 @@ async fn should_report_on_incomplete_blame_response() {
     }
 
     let messages = ceremony
-        .run_stage::<VerifyBlameResponses7, _, _>(messages)
+        .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
     ceremony.distribute_messages(messages);
     ceremony
@@ -377,9 +377,9 @@ async fn should_abort_on_blames_at_invalid_indexes() {
         keygen_ceremony,
         messages,
         keygen::VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3,
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5,
         Complaints6
     );
 
@@ -540,7 +540,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
-    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
+    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
     let [bad_account_id] = &ceremony.select_account_ids();
 
@@ -556,7 +556,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
         *message = commitment.clone();
     }
 
-    let messages = ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
+    let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
     ceremony.distribute_messages(messages);
     ceremony
         .complete_with_error(
@@ -613,7 +613,7 @@ async fn should_report_on_invalid_hash_comm1a() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
-    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
+    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
     let [bad_account_id] = ceremony.select_account_ids();
 
@@ -635,7 +635,7 @@ async fn should_report_on_invalid_hash_comm1a() {
         *message = corrupted_message.clone();
     }
 
-    let messages = ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
+    let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
     ceremony.distribute_messages(messages);
 
     ceremony
@@ -657,9 +657,9 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
         ceremony,
         messages,
         VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3,
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5,
         Complaints6
     );
 
@@ -709,9 +709,9 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
         ceremony,
         messages,
         VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5
     );
 
     let [bad_node_id, blamed_node_id] = &ceremony.select_account_ids();
@@ -722,21 +722,21 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
         .get_mut(bad_share_sender_id)
         .unwrap()
         .get_mut(bad_share_receiver_id)
-        .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+        .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
     let mut messages = run_stages!(
         ceremony,
         messages,
         Complaints6,
         VerifyComplaints7,
-        BlameResponse6
+        BlameResponse8
     );
 
     let [bad_account_id] = &ceremony.select_account_ids();
 
     // Make one of the nodes send 2 different blame responses evenly to the others
     // Note: the bad node must send different blame response to more than 1/3 of the participants
-    let secret_share = SecretShare3::create_random(&mut ceremony.rng);
+    let secret_share = SecretShare5::create_random(&mut ceremony.rng);
     for message in messages
         .get_mut(bad_node_id)
         .unwrap()
@@ -753,7 +753,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
     }
 
     let messages = ceremony
-        .run_stage::<VerifyBlameResponses7, _, _>(messages)
+        .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
     ceremony.distribute_messages(messages);
     ceremony
@@ -775,7 +775,7 @@ async fn should_report_on_invalid_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
     let (messages, result_receivers) = ceremony.request().await;
-    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
+    let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
     let [bad_account_id] = ceremony.select_account_ids();
 
@@ -797,7 +797,7 @@ async fn should_report_on_invalid_comm1() {
         *message = corrupted_message.clone();
     }
 
-    let messages = ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
+    let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
     ceremony.distribute_messages(messages);
 
     ceremony
@@ -819,9 +819,9 @@ async fn should_report_on_invalid_complaints4() {
         ceremony,
         messages,
         VerifyHashComm2,
-        Comm1,
-        VerifyComm2,
-        SecretShare3,
+        CoeffComm3,
+        VerifyCoeffComm4,
+        SecretShare5,
         Complaints6
     );
 
@@ -1027,9 +1027,9 @@ mod timeout {
             let messages = run_stages!(
                 ceremony,
                 messages,
-                Comm1,
-                VerifyComm2,
-                SecretShare3,
+                CoeffComm3,
+                VerifyCoeffComm4,
+                SecretShare5,
                 Complaints6,
                 VerifyComplaints7
             );
@@ -1043,7 +1043,7 @@ mod timeout {
 
             let (messages, result_receivers) = ceremony.request().await;
 
-            let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
+            let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
@@ -1060,13 +1060,13 @@ mod timeout {
                 .force_stage_timeout();
 
             let messages = ceremony
-                .gather_outgoing_messages::<VerifyComm2, KeygenData>()
+                .gather_outgoing_messages::<VerifyCoeffComm4, KeygenData>()
                 .await;
 
             let messages = run_stages!(
                 ceremony,
                 messages,
-                SecretShare3,
+                SecretShare5,
                 Complaints6,
                 VerifyComplaints7
             );
@@ -1084,9 +1084,9 @@ mod timeout {
                 ceremony,
                 messages,
                 VerifyHashComm2,
-                Comm1,
-                VerifyComm2,
-                SecretShare3,
+                CoeffComm3,
+                VerifyCoeffComm4,
+                SecretShare5,
                 Complaints6
             );
 
@@ -1122,9 +1122,9 @@ mod timeout {
                 ceremony,
                 messages,
                 VerifyHashComm2,
-                Comm1,
-                VerifyComm2,
-                SecretShare3
+                CoeffComm3,
+                VerifyCoeffComm4,
+                SecretShare5
             );
 
             // One party sends another a bad secret share to cause entering the blaming stage
@@ -1133,7 +1133,7 @@ mod timeout {
                 .get_mut(bad_share_sender_id)
                 .unwrap()
                 .get_mut(bad_share_receiver_id)
-                .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+                .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
@@ -1142,7 +1142,7 @@ mod timeout {
                 messages,
                 Complaints6,
                 VerifyComplaints7,
-                BlameResponse6
+                BlameResponse8
             );
 
             messages
@@ -1158,7 +1158,7 @@ mod timeout {
                 .force_stage_timeout();
 
             let messages = ceremony
-                .gather_outgoing_messages::<VerifyBlameResponses7, KeygenData>()
+                .gather_outgoing_messages::<VerifyBlameResponses9, KeygenData>()
                 .await;
 
             ceremony.distribute_messages(messages);
@@ -1180,14 +1180,14 @@ mod timeout {
 
             let [non_sender_id] = &ceremony.select_account_ids();
             let messages = ceremony
-                .run_stage_with_non_sender::<Comm1, _, _>(messages, non_sender_id)
+                .run_stage_with_non_sender::<CoeffComm3, _, _>(messages, non_sender_id)
                 .await;
 
             let messages = run_stages!(
                 ceremony,
                 messages,
-                VerifyComm2,
-                SecretShare3,
+                VerifyCoeffComm4,
+                SecretShare5,
                 Complaints6,
                 VerifyComplaints7
             );
@@ -1202,11 +1202,17 @@ mod timeout {
 
             let (messages, result_receivers) = ceremony.request().await;
 
-            let messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1, VerifyComm2);
+            let messages = run_stages!(
+                ceremony,
+                messages,
+                VerifyHashComm2,
+                CoeffComm3,
+                VerifyCoeffComm4
+            );
 
             let [non_sender_id] = &ceremony.select_account_ids();
             let messages = ceremony
-                .run_stage_with_non_sender::<SecretShare3, _, _>(messages, non_sender_id)
+                .run_stage_with_non_sender::<SecretShare5, _, _>(messages, non_sender_id)
                 .await;
 
             let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
@@ -1225,9 +1231,9 @@ mod timeout {
                 ceremony,
                 messages,
                 VerifyHashComm2,
-                Comm1,
-                VerifyComm2,
-                SecretShare3,
+                CoeffComm3,
+                VerifyCoeffComm4,
+                SecretShare5,
                 Complaints6,
                 VerifyComplaints7
             );
@@ -1248,9 +1254,9 @@ mod timeout {
                 ceremony,
                 messages,
                 VerifyHashComm2,
-                Comm1,
-                VerifyComm2,
-                SecretShare3
+                CoeffComm3,
+                VerifyCoeffComm4,
+                SecretShare5
             );
 
             // One party sends another a bad secret share to cause entering the blaming stage
@@ -1259,15 +1265,15 @@ mod timeout {
                 .get_mut(bad_share_sender_id)
                 .unwrap()
                 .get_mut(bad_share_receiver_id)
-                .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+                .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
             let messages = run_stages!(
                 ceremony,
                 messages,
                 Complaints6,
                 VerifyComplaints7,
-                BlameResponse6,
-                VerifyBlameResponses7
+                BlameResponse8,
+                VerifyBlameResponses9
             );
 
             let [non_sender_id] = ceremony.select_account_ids();
@@ -1315,11 +1321,14 @@ mod timeout {
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
-            let messages = run_stages!(ceremony, messages, VerifyHashComm2, Comm1);
+            let messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
             // bad party 1 times out during a broadcast stage. It should be reported
             let messages = ceremony
-                .run_stage_with_non_sender::<VerifyComm2, _, _>(messages, &non_sending_party_id_1)
+                .run_stage_with_non_sender::<VerifyCoeffComm4, _, _>(
+                    messages,
+                    &non_sending_party_id_1,
+                )
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
@@ -1347,9 +1356,9 @@ mod timeout {
                 ceremony,
                 messages,
                 VerifyHashComm2,
-                Comm1,
-                VerifyComm2,
-                SecretShare3,
+                CoeffComm3,
+                VerifyCoeffComm4,
+                SecretShare5,
                 Complaints6
             );
 
@@ -1388,9 +1397,9 @@ mod timeout {
                 ceremony,
                 messages,
                 VerifyHashComm2,
-                Comm1,
-                VerifyComm2,
-                SecretShare3
+                CoeffComm3,
+                VerifyCoeffComm4,
+                SecretShare5
             );
 
             // One party sends another a bad secret share to cause entering the blaming stage
@@ -1399,21 +1408,21 @@ mod timeout {
                 .get_mut(bad_share_sender_id)
                 .unwrap()
                 .get_mut(bad_share_receiver_id)
-                .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+                .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
             let messages = run_stages!(
                 ceremony,
                 messages,
                 Complaints6,
                 VerifyComplaints7,
-                BlameResponse6
+                BlameResponse8
             );
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
             // bad party 1 times out during a broadcast stage. It should be reported
             let messages = ceremony
-                .run_stage_with_non_sender::<VerifyBlameResponses7, _, _>(
+                .run_stage_with_non_sender::<VerifyBlameResponses9, _, _>(
                     messages,
                     &non_sending_party_id_1,
                 )
