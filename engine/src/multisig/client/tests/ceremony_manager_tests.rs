@@ -134,5 +134,3 @@ fn should_ignore_non_first_stage_signing_data_before_request() {
         1
     )
 }
-
-//TODO: test to see if the size check is ran on both k & s

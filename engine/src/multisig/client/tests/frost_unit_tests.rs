@@ -536,6 +536,57 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
 }
 
 #[tokio::test]
+async fn should_ignore_stage_data_with_incorrect_size() {
+    let (key_id, key_data, _, nodes) = helpers::run_keygen(
+        helpers::new_nodes(ACCOUNT_IDS.clone()),
+        DEFAULT_KEYGEN_CEREMONY_ID,
+    )
+    .await;
+
+    let (mut signing_ceremony, _) = SigningCeremonyRunner::new_with_threshold_subset_of_signers(
+        nodes,
+        DEFAULT_SIGNING_CEREMONY_ID,
+        key_id,
+        key_data,
+        MESSAGE_HASH.clone(),
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
+    );
+
+    let (messages, _) = signing_ceremony.request().await;
+
+    // This test will not work on stage 1 messages, so we must progress to stage 2
+    let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2,);
+
+    let [sending_node_id, receiving_node_id] = signing_ceremony.select_account_ids();
+
+    // Add one extra commitment to a message so it is the incorrect size
+    assert!(
+        messages
+            .get_mut(&sending_node_id)
+            .unwrap()
+            .get_mut(&receiving_node_id)
+            .unwrap()
+            .data
+            .insert(
+                (signing_ceremony.nodes.len() + 1) as cf_traits::AuthorityCount,
+                Some(gen_invalid_signing_comm1(&mut signing_ceremony.rng)),
+            )
+            .is_none(),
+        "Failed to add an extra commitment to message"
+    );
+
+    signing_ceremony.distribute_messages(messages);
+
+    // Check that the receiver of the oversized message did not progress to the next stage but the sender did
+    assert_ok!(signing_ceremony
+        .get_mut_node(&receiving_node_id)
+        .ensure_ceremony_at_signing_stage(2, DEFAULT_SIGNING_CEREMONY_ID));
+    assert_ok!(signing_ceremony
+        .get_mut_node(&sending_node_id)
+        .ensure_ceremony_at_signing_stage(3, DEFAULT_SIGNING_CEREMONY_ID));
+}
+
+#[tokio::test]
 async fn should_not_consume_ceremony_id_if_unauthorised() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 

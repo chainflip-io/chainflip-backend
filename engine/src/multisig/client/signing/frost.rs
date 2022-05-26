@@ -335,7 +335,7 @@ mod tests {
     use super::*;
 
     use crate::multisig::{
-        client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1, ACCOUNT_IDS},
+        client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1},
         crypto::eth::{EthSigning, Point, Scalar},
     };
 

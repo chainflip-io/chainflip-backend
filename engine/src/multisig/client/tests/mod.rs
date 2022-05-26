@@ -27,7 +27,7 @@ pub const DEFAULT_KEYGEN_CEREMONY_ID: u64 = 1;
 pub const DEFAULT_SIGNING_CEREMONY_ID: u64 = 2;
 
 lazy_static! {
-    pub static ref ACCOUNT_IDS: Vec<AccountId> = [1, 2, 3, 4]
+    static ref ACCOUNT_IDS: Vec<AccountId> = [1, 2, 3, 4]
         .iter()
         .map(|i| AccountId::new([*i; 32]))
         .collect();
