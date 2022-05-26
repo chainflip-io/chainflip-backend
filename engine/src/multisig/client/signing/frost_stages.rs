@@ -138,7 +138,7 @@ impl<C: CryptoScheme>
                     reported_parties,
                     CeremonyFailureReason::BroadcastFailure(
                         abort_reason,
-                        BroadcastStageName::InitialCommitments,
+                        BroadcastStageName::CoefficientCommitments,
                     ),
                 );
             }
@@ -147,7 +147,7 @@ impl<C: CryptoScheme>
         slog::debug!(
             self.common.logger,
             "{} have been correctly broadcast",
-            BroadcastStageName::InitialCommitments
+            BroadcastStageName::CoefficientCommitments
         );
 
         let processor = LocalSigStage3::<C> {

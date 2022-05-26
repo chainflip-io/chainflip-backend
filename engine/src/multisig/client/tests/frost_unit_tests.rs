@@ -157,7 +157,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
             result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                BroadcastStageName::InitialCommitments,
+                BroadcastStageName::CoefficientCommitments,
             ),
         )
         .await;
@@ -798,7 +798,7 @@ mod timeout {
                     result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        BroadcastStageName::InitialCommitments,
+                        BroadcastStageName::CoefficientCommitments,
                     ),
                 )
                 .await
