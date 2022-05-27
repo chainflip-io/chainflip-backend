@@ -19,7 +19,7 @@ use super::helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm};
 
 fn gen_keygen_data_verify_hash_comm2(length: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::<Point>::VerifyHashComm2(BroadcastVerificationMessage {
+    KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
         data: (0..length)
             .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
             .collect(),
@@ -28,7 +28,7 @@ fn gen_keygen_data_verify_hash_comm2(length: AuthorityCount) -> KeygenData<Point
 
 fn gen_keygen_data_comm1(length: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::<Point>::Comm1(gen_invalid_keygen_comm1(&mut rng, length))
+    KeygenData::Comm1(gen_invalid_keygen_comm1(&mut rng, length))
 }
 
 fn gen_keygen_data_verify2(
@@ -36,7 +36,7 @@ fn gen_keygen_data_verify2(
     inner_len: AuthorityCount,
 ) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::<Point>::Verify2(BroadcastVerificationMessage {
+    KeygenData::Verify2(BroadcastVerificationMessage {
         data: (0..outer_len)
             .map(|i| {
                 (
@@ -49,14 +49,14 @@ fn gen_keygen_data_verify2(
 }
 
 fn gen_keygen_data_complaints4(length: AuthorityCount) -> KeygenData<Point> {
-    KeygenData::<Point>::Complaints4(Complaints4(BTreeSet::from_iter(0..length)))
+    KeygenData::Complaints4(Complaints4(BTreeSet::from_iter(0..length)))
 }
 
 fn gen_keygen_data_verify_complaints5(
     outer_len: AuthorityCount,
     inner_len: AuthorityCount,
 ) -> KeygenData<Point> {
-    KeygenData::<Point>::VerifyComplaints5(BroadcastVerificationMessage {
+    KeygenData::VerifyComplaints5(BroadcastVerificationMessage {
         data: (0..outer_len)
             .map(|i| {
                 (
@@ -70,7 +70,7 @@ fn gen_keygen_data_verify_complaints5(
 
 fn gen_keygen_data_blame_response6(length: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::<Point>::BlameResponse6(BlameResponse6(
+    KeygenData::BlameResponse6(BlameResponse6(
         (0..length)
             .map(|i| (i, SecretShare3::create_random(&mut rng)))
             .collect(),
@@ -82,7 +82,7 @@ fn gen_keygen_data_verify_blame_response7(
     inner_len: AuthorityCount,
 ) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::<Point>::VerifyBlameResponses7(BroadcastVerificationMessage {
+    KeygenData::VerifyBlameResponses7(BroadcastVerificationMessage {
         data: (0..outer_len)
             .map(|i| {
                 (
