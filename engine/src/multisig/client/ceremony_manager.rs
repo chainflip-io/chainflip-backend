@@ -142,7 +142,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .ok_or("could not derive our idx")?;
 
         // Check that signer ids are known for this key
-        let signer_idxs: BTreeSet<AuthorityCount> = validator_map
+        let signer_idxs = validator_map
             .get_all_idxs(participants)
             .map_err(|_| "invalid participants")?;
 
@@ -479,8 +479,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         if !data.check_data_size(state.get_participant_count()) {
             slog::debug!(
                 self.logger,
-                "Ignoring signing data: Incorrect number of elements";
-                "CeremonyId" => format!("{}",ceremony_id)
+                "Ignoring signing data: incorrect number of elements";
+                CEREMONY_ID_KEY => format!("{}",ceremony_id)
             );
             return;
         }
