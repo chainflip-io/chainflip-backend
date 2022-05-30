@@ -364,7 +364,7 @@ mod tests {
         testing::{assert_ok, new_temp_directory_with_nonexistent_file},
     };
 
-    fn generate_secret_share_for_test() -> KeygenResultInfo<Point> {
+    fn generate_key_share_for_test() -> KeygenResultInfo<Point> {
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
         let account_id = AccountId32::new([0; 32]);
@@ -508,7 +508,7 @@ mod tests {
     fn can_load_keys_with_current_keygen_info() {
         // doesn't really matter if it's random, we won't be using the exact values
 
-        let secret_share = generate_secret_share_for_test();
+        let secret_share = generate_key_share_for_test();
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
@@ -543,7 +543,7 @@ mod tests {
         // there should be no key [0; 33] yet
         assert!(keys_before.get(&key_id).is_none());
 
-        let keygen_result_info = generate_secret_share_for_test();
+        let keygen_result_info = generate_key_share_for_test();
         p_db.update_key(&key_id, &keygen_result_info);
 
         let keys_before = p_db.load_keys();
