@@ -16,6 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-chains = {path = '../../chains', default-features = false}
 cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false, features = ['derive'] }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-runtime-benchmark-utilities = { path = '../../runtime-benchmark-utilities', default-features = false }
 cf-traits = {path = '../../traits', default-features = false}
 utilities = {path = '../../../utilities', default-features = false}
 
@@ -80,6 +81,7 @@ std = [
   'cf-chains/std',
   'cf-runtime-utilities/std',
   'cf-runtime-upgrade-utilities/std',
+  'cf-runtime-benchmark-utilities/std',
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
@@ -95,6 +97,7 @@ runtime-benchmarks = [
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
     'cf-traits/runtime-benchmarks',
+    'cf-runtime-benchmark-utilities/runtime-benchmarks',
 ]
 try-runtime = [
   'frame-support/try-runtime',

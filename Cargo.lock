@@ -5428,6 +5428,7 @@ name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-benchmark-utilities",
  "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",

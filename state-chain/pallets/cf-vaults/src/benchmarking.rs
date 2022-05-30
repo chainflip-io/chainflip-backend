@@ -3,6 +3,7 @@
 
 use super::*;
 
+use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use cf_traits::EpochInfo;
 use codec::{Decode, Encode};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
@@ -95,17 +96,18 @@ benchmarks_instance_pallet! {
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
-		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
 
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
-				response_status: keygen_response_status
+				response_status: KeygenResponseStatus::<T, I>::new(generate_authority_set::<T, I>(150, caller.clone().into()))
 			},
 		);
-		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&[0xbb; 33][..]));
-	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
+
+		// Submit a key that doesn't verify the signature. This is approximately the same cost as success at time of writing.
+		// But is much easier to write, and we might add slashing, which would increase the cost of the failure. Making this test the more
+		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
+	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&[0xbb; 33][..]), <<T as pallet::Config<I>>::Chain as cf_chains::ChainCrypto>::Payload::benchmark_default(), ThresholdSignatureFor::<T, I>::benchmark_default()))
 	verify {
 		let rotation = PendingVaultRotation::<T, I>::get().unwrap();
 		assert!(matches!(
