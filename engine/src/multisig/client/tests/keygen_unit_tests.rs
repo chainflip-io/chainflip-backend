@@ -267,7 +267,7 @@ async fn should_report_on_invalid_blame_response6() {
         SecretShare5
     );
 
-    // stage 3 - with bad_node_id_1, and bad_node_id_2 sending a bad secret share
+    // stage 5 - with bad_node_id_1, and bad_node_id_2 sending a bad secret share
     *messages
         .get_mut(&bad_node_id_1)
         .unwrap()
@@ -335,7 +335,7 @@ async fn should_report_on_incomplete_blame_response() {
         SecretShare5
     );
 
-    // stage 3 - with bad_node_id_1 sending a bad secret share
+    // stage 5 - with bad_node_id_1 sending a bad secret share
     *messages
         .get_mut(&bad_node_id_1)
         .unwrap()
@@ -968,7 +968,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
             0
         );
 
-        // Receive stage 1a message with the default keygen ceremony id
+        // Receive stage 1 message with the default keygen ceremony id
         ceremony.distribute_message(
             &sender_id,
             &test_id,
