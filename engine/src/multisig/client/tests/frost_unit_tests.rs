@@ -104,7 +104,7 @@ async fn should_delay_comm1_before_rts() {
 
 // We choose (arbitrarily) to use eth crypto for unit tests.
 use crate::multisig::crypto::eth::Point;
-type VerfiyComm2 = frost::VerifyComm2<Point>;
+type VerifyComm2 = frost::VerifyComm2<Point>;
 type LocalSig3 = frost::LocalSig3<Point>;
 type VerifyLocalSig4 = frost::VerifyLocalSig4<Point>;
 
@@ -113,7 +113,7 @@ async fn should_report_on_invalid_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
     let (messages, result_receivers) = signing_ceremony.request().await;
-    let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
+    let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
@@ -148,7 +148,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
     }
 
     let messages = signing_ceremony
-        .run_stage::<VerfiyComm2, _, _>(messages)
+        .run_stage::<VerifyComm2, _, _>(messages)
         .await;
     signing_ceremony.distribute_messages(messages);
     signing_ceremony
@@ -169,7 +169,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 
     let (messages, result_receivers) = signing_ceremony.request().await;
 
-    let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
+    let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
@@ -200,7 +200,7 @@ async fn should_ignore_duplicate_rts() {
 
     let (messages, _result_receivers) = signing_ceremony.request().await;
 
-    run_stages!(signing_ceremony, messages, VerfiyComm2,);
+    run_stages!(signing_ceremony, messages, VerifyComm2,);
 
     assert_ok!(signing_ceremony.nodes[&test_id]
         .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
@@ -454,7 +454,7 @@ async fn should_ignore_rts_with_used_ceremony_id() {
     let messages = run_stages!(
         signing_ceremony,
         messages,
-        VerfiyComm2,
+        VerifyComm2,
         LocalSig3,
         VerifyLocalSig4
     );
@@ -566,7 +566,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
     let messages = run_stages!(
         signing_ceremony,
         messages,
-        VerfiyComm2,
+        VerifyComm2,
         LocalSig3,
         VerifyLocalSig4
     );
@@ -594,7 +594,7 @@ async fn should_sign_with_all_parties() {
     let messages = run_stages!(
         signing_ceremony,
         messages,
-        VerfiyComm2,
+        VerifyComm2,
         LocalSig3,
         VerifyLocalSig4
     );
@@ -678,7 +678,7 @@ mod timeout {
                 .force_stage_timeout();
 
             let messages = signing_ceremony
-                .gather_outgoing_messages::<VerfiyComm2, SigningData>()
+                .gather_outgoing_messages::<VerifyComm2, SigningData>()
                 .await;
 
             let messages = run_stages!(signing_ceremony, messages, LocalSig3, VerifyLocalSig4);
@@ -692,7 +692,7 @@ mod timeout {
 
             let (messages, result_receivers) = signing_ceremony.request().await;
 
-            let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
+            let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
             let [non_sending_party_id, timed_out_party_id] = signing_ceremony.select_account_ids();
 
@@ -737,7 +737,7 @@ mod timeout {
             let [bad_node_id] = &ceremony.select_account_ids();
 
             let (messages, result_receivers) = ceremony.request().await;
-            let messages = ceremony.run_stage::<VerfiyComm2, _, _>(messages).await;
+            let messages = ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
 
             let messages = ceremony
                 .run_stage_with_non_sender::<LocalSig3, _, _>(messages, bad_node_id)
@@ -755,7 +755,7 @@ mod timeout {
             let [bad_node_id] = &ceremony.select_account_ids();
 
             let (messages, result_receivers) = ceremony.request().await;
-            let messages = run_stages!(ceremony, messages, VerfiyComm2, LocalSig3, VerifyLocalSig4);
+            let messages = run_stages!(ceremony, messages, VerifyComm2, LocalSig3, VerifyLocalSig4);
 
             ceremony.distribute_messages_with_non_sender(messages, bad_node_id);
 
@@ -786,7 +786,7 @@ mod timeout {
 
             // bad party 1 times out here
             let messages = signing_ceremony
-                .run_stage_with_non_sender::<VerfiyComm2, _, _>(messages, &non_sending_party_id_1)
+                .run_stage_with_non_sender::<VerifyComm2, _, _>(messages, &non_sending_party_id_1)
                 .await;
 
             // bad party 2 times out here (NB: They are different parties)
@@ -815,7 +815,7 @@ mod timeout {
 
             let (messages, result_receivers) = signing_ceremony.request().await;
 
-            let messages = run_stages!(signing_ceremony, messages, VerfiyComm2, LocalSig3);
+            let messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
             // bad party 1 times out here
             let messages = signing_ceremony
