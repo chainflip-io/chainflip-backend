@@ -288,6 +288,77 @@ fn keygen_report_success() {
 }
 
 #[test]
+fn keygen_report_success_but_bad_sig_results_in_failure() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		let ceremony_id = current_ceremony_id();
+
+		let payload = Default::default();
+		let mock_threshold_sig = MockThresholdSignature::<[u8; 4], [u8; 4]> {
+			signing_key: NEW_AGG_PUB_KEY,
+			signed_payload: payload,
+		};
+
+		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
+
+		// Alice reports success.
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(ALICE),
+			ceremony_id,
+			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+		));
+
+		// Bob agrees.
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(BOB),
+			ceremony_id,
+			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+		));
+
+		// Charlie responds success but with an invalid sig, so the vote should fail.
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			Origin::signed(CHARLIE),
+			ceremony_id,
+			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
+		));
+
+		assert!(FailureVoters::<MockRuntime, _>::get().contains(&CHARLIE));
+
+		let success_voters = SuccessVoters::<MockRuntime, _>::get(NEW_AGG_PUB_KEY);
+		assert!(success_voters.contains(&ALICE));
+		assert!(success_voters.contains(&BOB));
+		// Charlie is not a success voter
+		assert!(!success_voters.contains(&CHARLIE));
+
+		// We're pending until we initialize the block
+		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert_eq!(
+			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			AsyncResult::Pending
+		);
+
+		// The resolution occurs in the on_initialize hook
+		VaultsPallet::on_initialize(1);
+		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
+		assert_eq!(
+			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			AsyncResult::Ready(SuccessOrFailure::Failure)
+		);
+
+		assert!(matches!(
+			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+			VaultRotationStatus::<MockRuntime, _>::Failed
+		));
+
+		assert_last_event!(crate::Event::KeygenFailure(..));
+
+		// Voting has been cleared.
+		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
+		assert!(!FailureVoters::<MockRuntime, _>::exists());
+	})
+}
+
+#[test]
 fn keygen_report_failure() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
