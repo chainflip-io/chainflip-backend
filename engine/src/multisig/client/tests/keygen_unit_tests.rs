@@ -288,7 +288,7 @@ async fn should_report_on_invalid_blame_response6() {
         BlameResponse8
     );
 
-    // stage 7 - bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
+    // stage 8 - bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
     let secret_share = SecretShare5::create_random(&mut ceremony.rng);
     for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
         *message = keygen::BlameResponse8(
@@ -350,7 +350,7 @@ async fn should_report_on_incomplete_blame_response() {
         BlameResponse8
     );
 
-    // stage 7 - bad_node_id_1 sends an empty BlameResponse
+    // stage 8 - bad_node_id_1 sends an empty BlameResponse
     for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
         *message = keygen::BlameResponse8::<Point>(std::collections::BTreeMap::default())
     }
