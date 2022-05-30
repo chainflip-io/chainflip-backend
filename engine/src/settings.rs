@@ -10,7 +10,7 @@ use serde::{de, Deserialize, Deserializer};
 pub use anyhow::Result;
 use url::Url;
 
-use structopt::StructOpt;
+use clap::Parser;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct P2P {
@@ -69,52 +69,52 @@ pub struct Settings {
     pub log: Log,
 }
 
-#[derive(StructOpt, Debug, Clone, Default)]
+#[derive(Parser, Debug, Clone, Default)]
 pub struct StateChainOptions {
-    #[structopt(long = "state_chain.ws_endpoint")]
+    #[clap(long = "state_chain.ws_endpoint")]
     pub state_chain_ws_endpoint: Option<String>,
-    #[structopt(long = "state_chain.signing_key_file")]
+    #[clap(long = "state_chain.signing_key_file")]
     pub state_chain_signing_key_file: Option<PathBuf>,
 }
 
-#[derive(StructOpt, Debug, Clone, Default)]
+#[derive(Parser, Debug, Clone, Default)]
 pub struct EthSharedOptions {
-    #[structopt(long = "eth.ws_node_endpoint")]
+    #[clap(long = "eth.ws_node_endpoint")]
     pub eth_ws_node_endpoint: Option<String>,
-    #[structopt(long = "eth.http_node_endpoint")]
+    #[clap(long = "eth.http_node_endpoint")]
     pub eth_http_node_endpoint: Option<String>,
-    #[structopt(long = "eth.private_key_file")]
+    #[clap(long = "eth.private_key_file")]
     pub eth_private_key_file: Option<PathBuf>,
 }
 
-#[derive(StructOpt, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 pub struct CommandLineOptions {
     // Misc Options
-    #[structopt(short = "c", long = "config-path")]
+    #[clap(short = 'c', long = "config-path")]
     config_path: Option<String>,
-    #[structopt(short = "w", long = "log-whitelist")]
+    #[clap(short = 'w', long = "log-whitelist")]
     log_whitelist: Option<Vec<String>>,
-    #[structopt(short = "b", long = "log-blacklist")]
+    #[clap(short = 'b', long = "log-blacklist")]
     log_blacklist: Option<Vec<String>>,
 
     // P2P Settings
-    #[structopt(long = "p2p.node_key_file", parse(from_os_str))]
+    #[clap(long = "p2p.node_key_file", parse(from_os_str))]
     node_key_file: Option<PathBuf>,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     state_chain_opts: StateChainOptions,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     eth_opts: EthSharedOptions,
 
     // Health Check Settings
-    #[structopt(long = "health_check.hostname")]
+    #[clap(long = "health_check.hostname")]
     health_check_hostname: Option<String>,
-    #[structopt(long = "health_check.port")]
+    #[clap(long = "health_check.port")]
     health_check_port: Option<u16>,
 
     // Signing Settings
-    #[structopt(long = "signing.db_file", parse(from_os_str))]
+    #[clap(long = "signing.db_file", parse(from_os_str))]
     signing_db_file: Option<PathBuf>,
 }
 
