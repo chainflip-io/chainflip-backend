@@ -43,16 +43,12 @@ pub async fn test_all_key_manager_events() {
 }
 
 fn test_settings_from_file_and_env() -> Result<Settings> {
-    let mut s = Config::new();
-
-    // merging in the configuration file
-    s.merge(File::with_name("config/Testing.toml"))?;
-
-    // merge in the environment, overwrite anything that matches
-    s.merge(Environment::new().separator("__"))?;
-
-    // You can deserialize (and thus freeze) the entire configuration as
-    let s: Settings = s.try_into()?;
+    // Merge the configuration file and then the environment, overwrite anything that matches
+    let s: Settings = Config::builder()
+        .add_source(File::with_name("config/Testing.toml"))
+        .add_source(Environment::default().separator("__"))
+        .build()?
+        .try_deserialize()?;
 
     // make sure the settings are clean
     s.validate_settings()?;
