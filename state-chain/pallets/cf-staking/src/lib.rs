@@ -34,7 +34,7 @@ use cf_traits::SystemStateInfo;
 ///
 /// TODO: Replace this with just a u64 for the seconds. We don't care about nanos. Will do this in
 /// another PR since it requires a storage migration.
-type DurationParts = (u64, u32);
+type DurationParts = u64;
 
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
@@ -505,7 +505,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
-			ClaimTTL::<T>::set((self.claim_ttl.as_secs(), 0));
+			ClaimTTL::<T>::set(self.claim_ttl.as_secs());
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 				match Pallet::<T>::activate(staker) {
@@ -631,8 +631,8 @@ impl<T: Config> Pallet<T> {
 		T::Flip::try_claim(account_id, amount)?;
 
 		// Set expiry and build the claim parameters.
-		let expiry = T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get().0);
-		Self::register_claim_expiry(account_id.clone(), (expiry.as_secs(), 0));
+		let expiry = T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get());
+		Self::register_claim_expiry(account_id.clone(), expiry.as_secs());
 
 		let call = T::RegisterClaim::new_unsigned(
 			T::ReplayProtectionProvider::replay_protection(),
@@ -736,7 +736,7 @@ impl<T: Config> Pallet<T> {
 		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
 		let expiry_cutoff =
-			expiries.partition_point(|(expiry, _)| expiry.0 < T::TimeSource::now().as_secs());
+			expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs());
 
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
 
