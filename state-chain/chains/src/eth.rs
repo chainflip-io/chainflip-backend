@@ -276,6 +276,7 @@ impl AggKey {
 		.into()
 	}
 
+	/// Sign a message, using a secret key, and a signature nonce
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(nonce));
@@ -758,7 +759,6 @@ mod verification_tests {
 		// Signature nonce
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
-
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
 
 		// Public agg key
