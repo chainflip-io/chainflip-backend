@@ -277,9 +277,9 @@ impl AggKey {
 	}
 
 	/// Sign a message, using a secret key, and a signature nonce
-	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
+	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, sig_nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
 		let e = {
 			let challenge = self.message_challenge(msg_hash, &k_times_g_address);
 			let mut s = Scalar::default();
@@ -290,7 +290,7 @@ impl AggKey {
 		};
 
 		let d: Scalar = (*secret).into();
-		let k: Scalar = (*nonce).into();
+		let k: Scalar = (*sig_nonce).into();
 		let signature: Scalar = k + (e * d).neg();
 
 		signature.b32()
