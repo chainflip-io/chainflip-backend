@@ -37,13 +37,14 @@ mod tests;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum KeygenOutcome<Key, Id> {
-	/// Keygen succeeded with the enclosed public threshold key.
+	/// We have reached keygen consensus, and the key is now available.
 	Success(Key),
 	/// Keygen failed with the enclosed guilty parties.
 	Failure(BTreeSet<Id>),
 }
 
-// CFE reports the keygen outcome, with the extra signature item
+/// CFE reports the keygen outcome, on success it will report the signature and the payload it
+/// signed.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum ReportedKeygenOutcome<Key, Payload, Signature, Id> {
 	Success(Key, Payload, Signature),
