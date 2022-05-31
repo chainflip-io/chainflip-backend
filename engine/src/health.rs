@@ -7,8 +7,6 @@ use slog::o;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
-    select,
-    sync::oneshot::Sender,
 };
 
 use crate::{logging::COMPONENT_KEY, settings};
@@ -34,7 +32,7 @@ impl HealthMonitor {
     }
 
     /// Start the health monitoring server
-    pub async fn run(&self) -> Sender<()> {
+    pub async fn run(&self) {
         slog::info!(self.logger, "Starting");
         let listener = TcpListener::bind(self.bind_address.clone())
             .await
@@ -45,59 +43,52 @@ impl HealthMonitor {
                 )
             });
 
-        let (shutdown_sender, mut shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
         let logger = self.logger.clone();
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    Ok(()) = &mut shutdown_receiver => {
-                        slog::info!(logger, "Shutting down health check gracefully");
-                        break;
-                    },
-                    result = listener.accept() => match result {
-                        Ok((mut stream, _address)) => {
-                            let mut buffer = [0; 1024];
-                            stream
-                                .read(&mut buffer)
-                                .await
-                                .expect("Couldn't read stream into buffer");
+        loop {
+            match listener.accept().await {
+                Ok((mut stream, _address)) => {
+                    let mut buffer = [0; 1024];
+                    stream
+                        .read(&mut buffer)
+                        .await
+                        .expect("Couldn't read stream into buffer");
 
-                            let mut headers = [httparse::EMPTY_HEADER; 16];
-                            let mut request = httparse::Request::new(&mut headers);
-                            match request.parse(&buffer) /* Iff returns Ok, fills request with the parsed request */ {
-                                Ok(_) => {
-                                    if request.path.eq(&Some("/health")) {
-                                        let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
-                                        stream
-                                            .write(http_200_response.as_bytes())
-                                            .await
-                                            .expect("Could not write to health check stream");
-                                        stream
-                                            .flush()
-                                            .await
-                                            .expect("Could not flush health check TCP stream");
-                                    } else {
-                                        slog::warn!(logger, "Requested health at invalid path: {:?}", request.path);
-                                    }
-                                },
-                                Err(error) => {
-                                    slog::warn!(
-                                        logger,
-                                        "Invalid health check request, could not parse: {}",
-                                        error,
-                                    );
-                                }
+                    let mut headers = [httparse::EMPTY_HEADER; 16];
+                    let mut request = httparse::Request::new(&mut headers);
+                    match request.parse(&buffer) /* Iff returns Ok, fills request with the parsed request */ {
+                        Ok(_) => {
+                            if request.path.eq(&Some("/health")) {
+                                let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
+                                stream
+                                    .write(http_200_response.as_bytes())
+                                    .await
+                                    .expect("Could not write to health check stream");
+                                stream
+                                    .flush()
+                                    .await
+                                    .expect("Could not flush health check TCP stream");
+                            } else {
+                                slog::warn!(logger, "Requested health at invalid path: {:?}", request.path);
                             }
                         },
                         Err(error) => {
-                            slog::error!(logger, "Could not open CFE health check TCP stream: {}", error);
+                            slog::warn!(
+                                logger,
+                                "Invalid health check request, could not parse: {}",
+                                error,
+                            );
                         }
-                    },
-                };
+                    }
+                }
+                Err(error) => {
+                    slog::error!(
+                        logger,
+                        "Could not open CFE health check TCP stream: {}",
+                        error
+                    );
+                }
             }
-        });
-
-        shutdown_sender
+        }
     }
 }
 
@@ -113,7 +104,7 @@ mod tests {
         let health_check = Settings::new_test().unwrap().health_check.unwrap();
         let logger = logging::test_utils::new_test_logger();
         let health_monitor = HealthMonitor::new(&health_check, &logger);
-        let sender = health_monitor.run().await;
+        health_monitor.run().await;
 
         let request_test = |path: &'static str, expected_status: Option<reqwest::StatusCode>| {
             let health_check = health_check.clone();
@@ -133,7 +124,5 @@ mod tests {
 
         request_test("health", Some(reqwest::StatusCode::from_u16(200).unwrap())).await;
         request_test("invalid", None).await;
-
-        sender.send(()).unwrap();
     }
 }
