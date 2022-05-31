@@ -106,6 +106,31 @@ impl<P: ECPoint> Display for SigningData<P> {
     }
 }
 
+impl<P: ECPoint> SigningData<P> {
+    /// Check that the number of elements and indexes in the data is correct
+    pub fn check_data_size(&self, num_of_parties: Option<AuthorityCount>) -> bool {
+        if let Some(num_of_parties) = num_of_parties {
+            match self {
+                // For messages that don't contain a collection (eg. CommStage1), we don't need to check the size.
+                SigningData::CommStage1(_) => true,
+                SigningData::BroadcastVerificationStage2(message) => {
+                    message.data.len() == num_of_parties as usize
+                }
+                SigningData::LocalSigStage3(_) => true,
+                SigningData::VerifyLocalSigsStage4(message) => {
+                    message.data.len() == num_of_parties as usize
+                }
+            }
+        } else {
+            assert!(
+                matches!(self, SigningData::CommStage1(_)),
+                "We should know the number of participants for any non-initial stage data"
+            );
+            true
+        }
+    }
+}
+
 /// Combine individual commitments into group (schnorr) commitment.
 /// See "Signing Protocol" in Section 5.2 (page 14).
 fn gen_group_commitment<P: ECPoint>(
@@ -309,7 +334,12 @@ mod tests {
 
     use super::*;
 
-    use crate::multisig::crypto::eth::{EthSigning, Point, Scalar};
+    use crate::multisig::{
+        client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1},
+        crypto::eth::{EthSigning, Point, Scalar},
+    };
+
+    use rand_legacy::SeedableRng;
 
     const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
     const NONCE_KEY: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
@@ -359,5 +389,55 @@ mod tests {
             &challenge,
             &response,
         ));
+    }
+
+    #[test]
+    fn check_data_size_stage2() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let test_size = 4;
+        let data_to_check =
+            SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
+                data: (0..test_size)
+                    .map(|i| {
+                        (
+                            i as AuthorityCount,
+                            Some(gen_invalid_signing_comm1(&mut rng)),
+                        )
+                    })
+                    .collect(),
+            });
+
+        // Should fail on sizes larger or smaller then expected
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
+    }
+
+    #[test]
+    fn check_data_size_stage4() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let test_size = 4;
+        let data_to_check =
+            SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
+                data: (0..test_size)
+                    .map(|i| (i as AuthorityCount, Some(gen_invalid_local_sig(&mut rng))))
+                    .collect(),
+            });
+
+        // Should fail on sizes larger or smaller then expected
+        assert!(data_to_check.check_data_size(Some(test_size)));
+        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
+        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_data_size_should_panic_with_none_on_non_initial_stage() {
+        let data_to_check =
+            SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
+                data: BTreeMap::new(),
+            });
+
+        data_to_check.check_data_size(None);
     }
 }

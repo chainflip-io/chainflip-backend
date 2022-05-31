@@ -544,7 +544,8 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 
     // Make one of the nodes send a different commitment to half of the others
     // Note: the bad node must send different comm1 to more than 1/3 of the participants
-    let commitment = gen_invalid_keygen_comm1(&mut ceremony.rng);
+    let commitment =
+        gen_invalid_keygen_comm1(&mut ceremony.rng, ACCOUNT_IDS.len() as AuthorityCount);
     for message in messages
         .get_mut(bad_account_id)
         .unwrap()
@@ -950,6 +951,44 @@ async fn should_ignore_stage_data_with_used_ceremony_id() {
     // In this case, the ceremony would be unauthorised, so we must check how many keygen states exist
     // to see if a unauthorised state was created.
     assert_eq!(node.ceremony_manager.get_keygen_states_len(), 0);
+}
+
+#[tokio::test]
+async fn should_ignore_stage_data_with_incorrect_size() {
+    let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+    let (messages, _) = ceremony.request().await;
+
+    // This test will not work on stage 1 messages, so we must progress to stage 2
+    let mut messages = run_stages!(ceremony, messages, VerifyHashComm2,);
+
+    let [sending_node_id, receiving_node_id] = ceremony.select_account_ids();
+
+    // Add one extra commitment to a message so it is the incorrect size
+    assert!(
+        messages
+            .get_mut(&sending_node_id)
+            .unwrap()
+            .get_mut(&receiving_node_id)
+            .unwrap()
+            .data
+            .insert(
+                (ceremony.nodes.len() + 1) as cf_traits::AuthorityCount,
+                Some(get_invalid_hash_comm(&mut ceremony.rng)),
+            )
+            .is_none(),
+        "Failed to add an extra hash commitment to message"
+    );
+
+    ceremony.distribute_messages(messages);
+
+    // Check that the receiver of the oversized message did not progress to the next stage but the sender did
+    assert_ok!(ceremony
+        .get_mut_node(&receiving_node_id)
+        .ensure_ceremony_at_keygen_stage(2, DEFAULT_KEYGEN_CEREMONY_ID));
+    assert_ok!(ceremony
+        .get_mut_node(&sending_node_id)
+        .ensure_ceremony_at_keygen_stage(3, DEFAULT_KEYGEN_CEREMONY_ID));
 }
 
 #[tokio::test]

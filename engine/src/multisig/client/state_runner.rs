@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
+use cf_traits::AuthorityCount;
 use pallet_cf_vaults::CeremonyId;
 
 use crate::{
@@ -37,6 +38,7 @@ pub struct StateAuthorised<CeremonyData, CeremonyResult, FailureReason> {
     >,
     pub result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
     pub idx_mapping: Arc<PartyIdxMapping>,
+    pub num_of_participants: AuthorityCount,
 }
 
 pub struct StateRunner<CeremonyData, CeremonyResult, FailureReason> {
@@ -80,6 +82,7 @@ where
         >,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
+        num_of_participants: AuthorityCount,
     ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
         if self.inner.is_some() {
             let _result = result_sender.send(Err((
@@ -100,6 +103,7 @@ where
             stage: Some(stage),
             idx_mapping,
             result_sender,
+            num_of_participants,
         });
 
         // Unlike other state transitions, we don't take into account
@@ -303,6 +307,13 @@ where
     /// returns true if the ceremony is authorized (has received a ceremony request)
     pub fn is_authorized(&self) -> bool {
         self.inner.is_some()
+    }
+
+    /// Returns the number of participants in the current ceremony
+    pub fn get_participant_count(&self) -> Option<AuthorityCount> {
+        self.inner
+            .as_ref()
+            .map(|authorised_state| authorised_state.num_of_participants)
     }
 
     pub fn try_into_result_sender(

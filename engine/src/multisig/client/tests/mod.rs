@@ -1,10 +1,13 @@
+mod ceremony_manager_tests;
 mod frost_unit_tests;
 mod helpers;
+mod keygen_data_tests;
 mod keygen_unit_tests;
 mod multisig_client_tests;
 
 pub use helpers::{
-    new_nodes, run_keygen_with_err_on_high_pubkey, standard_signing, KeygenCeremonyRunner,
+    gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
+    run_keygen_with_err_on_high_pubkey, standard_signing, KeygenCeremonyRunner,
     SigningCeremonyRunner,
 };
 

@@ -393,6 +393,13 @@ pub fn compute_secret_key_share<P: ECPoint>(secret_shares: IncomingShares<P>) ->
         .sum()
 }
 
+impl<P: ECPoint> DKGUnverifiedCommitment<P> {
+    /// Get the number of commitments
+    pub fn get_commitments_len(&self) -> usize {
+        self.commitments.0.len()
+    }
+}
+
 #[cfg(test)]
 impl<P: ECPoint> DKGUnverifiedCommitment<P> {
     /// Change the lowest degree coefficient so that it fails ZKP check
