@@ -61,10 +61,11 @@ impl<Key, Id: Ord> Default for KeygenOutcome<Key, Id> {
 pub type CeremonyId = u64;
 pub type ReportedKeygenOutcomeFor<T, I = ()> = ReportedKeygenOutcome<
 	AggKeyFor<T, I>,
-	<<T as Config<I>>::Chain as ChainCrypto>::Payload,
+	PayloadFor<T, I>,
 	ThresholdSignatureFor<T, I>,
 	<T as Chainflip>::ValidatorId,
 >;
+pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
 	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;

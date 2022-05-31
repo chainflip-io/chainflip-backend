@@ -3,7 +3,6 @@
 
 use super::*;
 
-use cf_runtime_benchmark_utilities::BenchmarkDefault;
 use cf_traits::EpochInfo;
 use codec::{Decode, Encode};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
@@ -31,10 +30,25 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	authority_set
 }
 
+// ======================================================================================
+//            Helper methods to convert bytes to an associated type
+
 fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
 	let encoded = key.encode();
 	AggKeyFor::<T, I>::decode(&mut &encoded[..]).unwrap()
 }
+
+fn payload_from_slice<T: Config<I>, I: 'static>(payload: &[u8]) -> PayloadFor<T, I> {
+	let encoded = payload.encode();
+	PayloadFor::<T, I>::decode(&mut &encoded[..]).unwrap()
+}
+
+fn threshold_sig_from_slice<T: Config<I>, I: 'static>(sig: &[u8]) -> ThresholdSignatureFor<T, I> {
+	let encoded = sig.encode();
+	ThresholdSignatureFor::<T, I>::decode(&mut &encoded[..]).unwrap()
+}
+
+// ======================================================================================
 
 benchmarks_instance_pallet! {
 	on_initialize_failure {
@@ -103,11 +117,12 @@ benchmarks_instance_pallet! {
 				response_status: KeygenResponseStatus::<T, I>::new(generate_authority_set::<T, I>(150, caller.clone().into()))
 			},
 		);
+		use cf_chains::eth::sig_constants::{AGG_KEY_PUB, MSG_HASH, SIG};
 
 		// Submit a key that doesn't verify the signature. This is approximately the same cost as success at time of writing.
 		// But is much easier to write, and we might add slashing, which would increase the cost of the failure. Making this test the more
 		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
-	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&[0xbb; 33][..]), <<T as pallet::Config<I>>::Chain as cf_chains::ChainCrypto>::Payload::benchmark_default(), ThresholdSignatureFor::<T, I>::benchmark_default()))
+	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&AGG_KEY_PUB), payload_from_slice::<T, I>(&MSG_HASH), threshold_sig_from_slice::<T, I>(&SIG)))
 	verify {
 		let rotation = PendingVaultRotation::<T, I>::get().unwrap();
 		assert!(matches!(
