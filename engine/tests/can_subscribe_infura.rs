@@ -43,7 +43,7 @@ pub async fn test_all_key_manager_events() {
 }
 
 fn test_settings_from_file_and_env() -> Result<Settings> {
-    // Merge the configuration file and then the environment, overwrite anything that matches
+    // Load settings from environment, and fill in any missing settings using the configuration file.
     let s: Settings = Config::builder()
         .add_source(File::with_name("config/Testing.toml"))
         .add_source(Environment::default().separator("__"))
