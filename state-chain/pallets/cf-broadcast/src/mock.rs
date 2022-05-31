@@ -141,16 +141,19 @@ pub type MockOffenceReporter =
 
 // Mock KeyProvider
 pub const VALID_KEY_ID: &[u8] = &[0, 0, 0, 0];
-pub const VALID_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
+pub const VALID_AGG_KEY: [u8; 33] = [0x2; 33];
 
 pub const INVALID_KEY_ID: &[u8] = &[1, 1, 1, 1];
-pub const INVALID_AGG_KEY: [u8; 4] = [1, 1, 1, 1];
+pub const INVALID_AGG_KEY: [u8; 33] = [0x3; 33];
 
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 }
-
 pub struct MockKeyProvider;
+
+pub fn valid_key() -> <MockEthereum as ChainCrypto>::AggKey {
+	<MockEthereum as ChainCrypto>::AggKey::from_pubkey_compressed(VALID_AGG_KEY)
+}
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	type KeyId = Vec<u8>;
@@ -165,9 +168,9 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 
 	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
 		if VALIDKEY.with(|cell| *cell.borrow()) {
-			VALID_AGG_KEY
+			valid_key()
 		} else {
-			INVALID_AGG_KEY
+			<MockEthereum as ChainCrypto>::AggKey::from_pubkey_compressed(INVALID_AGG_KEY)
 		}
 	}
 }

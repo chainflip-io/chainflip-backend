@@ -164,7 +164,11 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 
 // Mock KeyProvider
 pub const MOCK_KEY_ID: &[u8] = b"K-ID";
-pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
+pub const MOCK_AGG_KEY: [u8; 33] = [0x3; 33];
+
+fn mock_agg_key() -> <MockEthereum as ChainCrypto>::AggKey {
+	<MockEthereum as ChainCrypto>::AggKey::from_pubkey_compressed(MOCK_AGG_KEY)
+}
 
 pub struct MockKeyProvider;
 
@@ -176,7 +180,7 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	}
 
 	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
-		MOCK_AGG_KEY
+		mock_agg_key()
 	}
 }
 
@@ -186,11 +190,15 @@ pub fn sign(
 	<MockEthereum as ChainCrypto>::AggKey,
 	<MockEthereum as ChainCrypto>::Payload,
 > {
-	MockThresholdSignature::<_, _> { signing_key: MOCK_AGG_KEY, signed_payload: payload }
+	MockThresholdSignature::<_, _> { signing_key: mock_agg_key(), signed_payload: payload }
 }
 
-pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
-	MockThresholdSignature::<_, _> { signing_key: *b"BAD!", signed_payload: *b"BAD!" };
+pub fn invalid_signature() -> <MockEthereum as ChainCrypto>::ThresholdSignature {
+	MockThresholdSignature::<_, _> {
+		signing_key: <MockEthereum as ChainCrypto>::AggKey::from_pubkey_compressed([0x2; 33]),
+		signed_payload: *b"BAD!",
+	}
+}
 
 parameter_types! {
 	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;

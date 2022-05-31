@@ -376,7 +376,7 @@ mod unsigned_validation {
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,
-					&PalletCall::signature_success { ceremony_id, signature: INVALID_SIGNATURE }
+					&PalletCall::signature_success { ceremony_id, signature: invalid_signature() }
 						.into()
 				)
 				.unwrap_err(),

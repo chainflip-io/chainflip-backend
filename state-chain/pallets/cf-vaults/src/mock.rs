@@ -131,7 +131,7 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
 	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
@@ -208,8 +208,11 @@ impl pallet_cf_vaults::Config for MockRuntime {
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
-pub const GENESIS_AGG_PUB_KEY: [u8; 4] = *b"genk";
-pub const NEW_AGG_PUB_KEY: [u8; 4] = *b"next";
+pub const GENESIS_AGG_PUB_KEY: [u8; 33] = [0x2; 33];
+
+pub fn new_agg_pub_key() -> <MockEthereum as ChainCrypto>::AggKey {
+	<MockEthereum as ChainCrypto>::AggKey::from_pubkey_compressed([0x3; 33])
+}
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {

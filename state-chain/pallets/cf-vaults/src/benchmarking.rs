@@ -34,8 +34,7 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 //            Helper methods to convert bytes to an associated type
 
 fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
-	let encoded = key.encode();
-	AggKeyFor::<T, I>::decode(&mut &encoded[..]).unwrap()
+	AggKeyFor::<T, I>::try_from(key.to_vec()).unwrap_or_else(|_| panic!("NO"))
 }
 
 fn payload_from_slice<T: Config<I>, I: 'static>(payload: &[u8]) -> PayloadFor<T, I> {
@@ -135,7 +134,7 @@ benchmarks_instance_pallet! {
 	}
 	vault_key_rotated {
 		let caller: T::AccountId = whitelisted_caller();
-		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
+		let new_public_key = aggkey_from_slice::<T, I>(&[0x3; 33][..]);
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
@@ -151,7 +150,7 @@ benchmarks_instance_pallet! {
 	}
 	vault_key_rotated_externally {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
-		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
+		let new_public_key = aggkey_from_slice::<T, I>(&[0x3; 33][..]);
 		let call = Call::<T, I>::vault_key_rotated_externally {
 			new_public_key: new_public_key,
 			block_number: 5u64.into(),

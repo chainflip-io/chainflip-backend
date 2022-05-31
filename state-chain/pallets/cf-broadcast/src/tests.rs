@@ -27,6 +27,8 @@ thread_local! {
 	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
 }
 
+const VALID_PAYLOAD: [u8; 4] = [0x0; 4];
+
 struct MockCfe;
 
 impl MockCfe {
@@ -186,11 +188,12 @@ fn test_broadcast_happy_path() {
 fn test_abort_after_max_attempt_reached() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
+		let mock_threshold_sig = MockThresholdSignature::new(valid_key(), VALID_PAYLOAD);
 
 		let starting_nomination = MockNominator::get_nominee().unwrap();
 
 		let mut broadcast_attempt_id = MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
+			&mock_threshold_sig,
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
@@ -234,9 +237,10 @@ fn test_abort_after_max_attempt_reached() {
 #[test]
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
+		let mock_threshold_sig = MockThresholdSignature::new(valid_key(), VALID_PAYLOAD);
 		// Initiate broadcast
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
+			&mock_threshold_sig,
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
@@ -351,8 +355,9 @@ fn test_invalid_sigdata_is_noop() {
 fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
+		let mock_threshold_sig = MockThresholdSignature::new(valid_key(), VALID_PAYLOAD);
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
+			&mock_threshold_sig,
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
@@ -496,7 +501,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 		// We submit that the signature was accepted
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
-			MockThresholdSignature::default(),
+			mock_threshold_sig,
 			Validity::Valid,
 			FEE_PAID,
 			10,
@@ -583,9 +588,10 @@ fn signature_accepted_signed_by_non_whitelisted_signer_id_does_not_increase_defi
 #[test]
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
+		let mock_threshold_sig = MockThresholdSignature::new(valid_key(), VALID_PAYLOAD);
 		// Initiate broadcast
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
+			&mock_threshold_sig,
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
@@ -651,9 +657,11 @@ fn test_signature_request_expiry() {
 #[test]
 fn test_transmission_request_expiry() {
 	new_test_ext().execute_with(|| {
+		let mock_threshold_sig = MockThresholdSignature::new(valid_key(), VALID_PAYLOAD);
+
 		// Initiate broadcast and pass the signing stage;
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
+			&mock_threshold_sig,
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);

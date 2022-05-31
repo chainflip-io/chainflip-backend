@@ -3,7 +3,11 @@ use crate::{
 	PalletOffence, PendingVaultRotation, ReportedKeygenOutcome, SuccessVoters, Vault,
 	VaultRotationStatus, Vaults,
 };
-use cf_chains::mocks::MockThresholdSignature;
+use cf_chains::{
+	eth,
+	mocks::{MockEthereum, MockThresholdSignature},
+	ChainCrypto,
+};
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
@@ -77,11 +81,11 @@ fn keygen_success() {
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = current_ceremony_id();
 
-		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
+		VaultsPallet::on_keygen_success(ceremony_id, new_agg_pub_key());
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
+			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_pub_key()
 		));
 	});
 }
@@ -126,7 +130,7 @@ fn no_active_rotation() {
 				Origin::signed(ALICE),
 				1,
 				ReportedKeygenOutcome::Success(
-					NEW_AGG_PUB_KEY,
+					new_agg_pub_key(),
 					Default::default(),
 					Default::default()
 				)
@@ -152,8 +156,8 @@ fn keygen_report_success() {
 		let ceremony_id = current_ceremony_id();
 
 		let payload = Default::default();
-		let mock_threshold_sig = MockThresholdSignature::<[u8; 4], [u8; 4]> {
-			signing_key: NEW_AGG_PUB_KEY,
+		let mock_threshold_sig = MockThresholdSignature::<eth::AggKey, [u8; 4]> {
+			signing_key: new_agg_pub_key(),
 			signed_payload: payload
 		};
 
@@ -162,7 +166,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+			ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 		));
 
 		// Can't report twice.
@@ -170,7 +174,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+				ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -198,7 +202,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(u64::MAX),
 				ceremony_id,
-				ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+				ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -212,7 +216,7 @@ fn keygen_report_success() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id + 1,
-				ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+				ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -238,7 +242,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+			ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 		));
 
 		// A resolution is still pending - we 100% response rate.
@@ -258,7 +262,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+			ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 		));
 
 		// This time we should have enough votes for consensus.
@@ -276,7 +280,7 @@ fn keygen_report_success() {
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
+			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == new_agg_pub_key()
 		));
 
 		assert_last_event!(crate::Event::KeygenSuccess(..));
@@ -294,8 +298,8 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 		let ceremony_id = current_ceremony_id();
 
 		let payload = Default::default();
-		let mock_threshold_sig = MockThresholdSignature::<[u8; 4], [u8; 4]> {
-			signing_key: NEW_AGG_PUB_KEY,
+		let mock_threshold_sig = MockThresholdSignature::<eth::AggKey, [u8; 4]> {
+			signing_key: new_agg_pub_key(),
 			signed_payload: payload,
 		};
 
@@ -305,26 +309,30 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+			ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 		));
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, payload, mock_threshold_sig)
+			ReportedKeygenOutcome::Success(new_agg_pub_key(), payload, mock_threshold_sig)
 		));
 
 		// Charlie responds success but with an invalid sig, so the vote should fail.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
+			ReportedKeygenOutcome::Success(
+				new_agg_pub_key(),
+				Default::default(),
+				Default::default()
+			)
 		));
 
 		assert!(FailureVoters::<MockRuntime, _>::get().contains(&CHARLIE));
 
-		let success_voters = SuccessVoters::<MockRuntime, _>::get(NEW_AGG_PUB_KEY);
+		let success_voters = SuccessVoters::<MockRuntime, _>::get(new_agg_pub_key());
 		assert!(success_voters.contains(&ALICE));
 		assert!(success_voters.contains(&BOB));
 		// Charlie is not a success voter
@@ -396,7 +404,7 @@ fn keygen_report_failure() {
 				Origin::signed(ALICE),
 				ceremony_id,
 				ReportedKeygenOutcome::Success(
-					NEW_AGG_PUB_KEY,
+					new_agg_pub_key(),
 					Default::default(),
 					Default::default()
 				)
@@ -538,7 +546,7 @@ fn vault_key_rotated() {
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
 				Origin::root(),
-				NEW_AGG_PUB_KEY,
+				new_agg_pub_key(),
 				ROTATION_BLOCK_NUMBER,
 				TX_HASH,
 			),
@@ -547,11 +555,11 @@ fn vault_key_rotated() {
 
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = current_ceremony_id();
-		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
+		VaultsPallet::on_keygen_success(ceremony_id, new_agg_pub_key());
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
-			NEW_AGG_PUB_KEY,
+			new_agg_pub_key(),
 			ROTATION_BLOCK_NUMBER,
 			TX_HASH,
 		));
@@ -560,7 +568,7 @@ fn vault_key_rotated() {
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
 				Origin::root(),
-				NEW_AGG_PUB_KEY,
+				new_agg_pub_key(),
 				ROTATION_BLOCK_NUMBER,
 				TX_HASH,
 			),
@@ -573,7 +581,8 @@ fn vault_key_rotated() {
 		let Vault { public_key, active_from_block } =
 			Vaults::<MockRuntime, _>::get(current_epoch).expect("Ethereum Vault should exist");
 		assert_eq!(
-			public_key, GENESIS_AGG_PUB_KEY,
+			public_key,
+			<MockEthereum as ChainCrypto>::AggKey::from_pubkey_compressed(GENESIS_AGG_PUB_KEY),
 			"we should have the old agg key in the genesis vault"
 		);
 		assert_eq!(
@@ -586,7 +595,8 @@ fn vault_key_rotated() {
 		let Vault { public_key, active_from_block } = Vaults::<MockRuntime, _>::get(next_epoch)
 			.expect("Ethereum Vault should exist in the next epoch");
 		assert_eq!(
-			public_key, NEW_AGG_PUB_KEY,
+			public_key,
+			new_agg_pub_key(),
 			"we should have the new public key in the new vault for the next epoch"
 		);
 		assert_eq!(
@@ -611,7 +621,7 @@ fn test_vault_key_rotated_externally() {
 		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Normal);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
 			Origin::root(),
-			NEW_AGG_PUB_KEY,
+			new_agg_pub_key(),
 			1,
 			TX_HASH,
 		));
@@ -623,6 +633,7 @@ fn test_vault_key_rotated_externally() {
 mod keygen_reporting {
 	use super::*;
 	use crate::{AggKeyFor, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
+	use cf_chains::{mocks::MockEthereum, ChainCrypto};
 	use frame_support::assert_err;
 	use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
 
@@ -771,9 +782,13 @@ mod keygen_reporting {
 			let id = 1 + index as u64;
 			match outcome {
 				ReportedOutcome::Success =>
-					assert_ok_no_repeat!(status.add_success_vote(&id, NEW_AGG_PUB_KEY)),
-				ReportedOutcome::BadKey =>
-					assert_ok_no_repeat!(status.add_success_vote(&id, *b"bad!")),
+					assert_ok_no_repeat!(status.add_success_vote(&id, new_agg_pub_key())),
+				ReportedOutcome::BadKey => {
+					let mut key = new_agg_pub_key();
+					// change some byte so it doesn't match
+					key.pub_key_x[4] = 0xbb;
+					assert_ok_no_repeat!(status.add_success_vote(&id, key))
+				},
 				ReportedOutcome::Failure => assert_ok_no_repeat!(
 					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)))
 				),

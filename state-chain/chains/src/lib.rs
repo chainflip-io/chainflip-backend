@@ -231,8 +231,14 @@ pub mod mocks {
 		pub signed_payload: P,
 	}
 
+	impl<K, P> MockThresholdSignature<K, P> {
+		pub fn new(signing_key: K, signed_payload: P) -> Self {
+			Self { signing_key, signed_payload }
+		}
+	}
+
 	impl ChainCrypto for MockEthereum {
-		type AggKey = [u8; 4];
+		type AggKey = eth::AggKey;
 		type Payload = [u8; 4];
 		type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 		type TransactionHash = [u8; 4];

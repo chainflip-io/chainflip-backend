@@ -218,6 +218,15 @@ pub fn to_ethereum_address(pubkey: PublicKey) -> [u8; 20] {
 	res
 }
 
+// We can't make this cfg(test) because it needs to be Default from the mocks. The mocks are in
+// cf-chains require Default on AggKey because they are imported into another crate, these mocks
+// *cannot* be cfg(test) :(
+impl Default for AggKey {
+	fn default() -> Self {
+		Self { pub_key_x: [0x02; 32], pub_key_y_parity: ParityBit::Odd }
+	}
+}
+
 impl AggKey {
 	/// Convert from compressed `[y, x]` coordinates where y==2 means "even" and y==3 means "odd".
 	///
