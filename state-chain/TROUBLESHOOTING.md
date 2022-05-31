@@ -153,6 +153,14 @@ Typical values for extrinsic _execution_, ie. not including reads and writes, ar
 
 In other words, reads and writes are _expensive_ and writes in particular should be kept to a minimum. A single read is as expensive as a moderately complex extrinsic. We should avoid iterating over storage maps unless the size is tightly bounded.
 
+## Runtime Panics
+
+We should always convince ourselves that our runtime code _can't_ panic at runtime. This means thorough testing of the full range of possible inputs to any function that _might_ panic according to the compiler.
+
+Anywhere we know we can't panic, but the compiler can't guarantee it, it's acceptable to follow parity's conventions of using `expect("reason why this can't panic")`.
+
+There are grey areas. For example, it's acceptable to panic on any condition that indicates that a block has been faultily or maliciously authored. As a concrete example, if the digest is invalid, this indicates a problem with the node, not the runtime, so it's acceptable for the runtime to panic in response - presumably the author has been tampering with their node software.
+
 ### Benchmark whitelist
 
 When writing benchmarks, storage keys can be •whitelisted• for reads and/or writes, meaning reading/writing to the
