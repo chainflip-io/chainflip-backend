@@ -255,7 +255,6 @@ async fn should_report_on_invalid_blame_response6() {
     );
     let [bad_node_id_1, bad_node_id_2, target_node_id] = ceremony.select_account_ids();
 
-    // stage 1
     let (messages, result_receivers) = ceremony.request().await;
 
     let mut messages = run_stages!(
@@ -267,7 +266,7 @@ async fn should_report_on_invalid_blame_response6() {
         SecretShare5
     );
 
-    // stage 5 - with bad_node_id_1, and bad_node_id_2 sending a bad secret share
+    // bad_node_id_1 and bad_node_id_2 send a bad secret share
     *messages
         .get_mut(&bad_node_id_1)
         .unwrap()
@@ -288,7 +287,7 @@ async fn should_report_on_invalid_blame_response6() {
         BlameResponse8
     );
 
-    // stage 8 - bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
+    // bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
     let secret_share = SecretShare5::create_random(&mut ceremony.rng);
     for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
         *message = keygen::BlameResponse8(
@@ -323,7 +322,6 @@ async fn should_report_on_incomplete_blame_response() {
 
     let [bad_node_id_1, target_node_id] = ceremony.select_account_ids();
 
-    // stage 1
     let (messages, result_receivers) = ceremony.request().await;
 
     let mut messages = run_stages!(
@@ -335,7 +333,7 @@ async fn should_report_on_incomplete_blame_response() {
         SecretShare5
     );
 
-    // stage 5 - with bad_node_id_1 sending a bad secret share
+    // bad_node_id_1 sends a bad secret share
     *messages
         .get_mut(&bad_node_id_1)
         .unwrap()
@@ -350,7 +348,7 @@ async fn should_report_on_incomplete_blame_response() {
         BlameResponse8
     );
 
-    // stage 8 - bad_node_id_1 sends an empty BlameResponse
+    // bad_node_id_1 sends an empty BlameResponse
     for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
         *message = keygen::BlameResponse8::<Point>(std::collections::BTreeMap::default())
     }
@@ -968,7 +966,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
             0
         );
 
-        // Receive stage 1 message with the default keygen ceremony id
+        // Receive initial stage message with the default keygen ceremony id
         ceremony.distribute_message(
             &sender_id,
             &test_id,

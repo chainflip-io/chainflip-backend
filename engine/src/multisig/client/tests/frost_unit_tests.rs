@@ -325,7 +325,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                 split_messages_for(messages[stage_index].clone(), test_node_id, &ACCOUNT_IDS[1])
             };
 
-            // Get the messagess from all but one client for the previous stage
+            // Get the messages from all but one client for the previous stage
             let (msg_from_1, other_msgs) = get_messages_for_stage(previous_stage);
             ceremony.distribute_messages(other_msgs.clone());
 
@@ -541,7 +541,7 @@ async fn should_not_consume_ceremony_id_if_unauthorised() {
 
     let [node_0_id, node_1_id] = signing_ceremony.select_account_ids();
 
-    // Receive comm1 messages for an unauthorised signing_ceremony
+    // Receive initial stage messages for an unauthorised signing_ceremony
     let message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
     signing_ceremony.distribute_message(&node_1_id, &node_0_id, message);
 
