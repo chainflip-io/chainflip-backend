@@ -5,6 +5,7 @@ use chainflip_engine::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
 };
+use clap::Parser;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -13,7 +14,6 @@ use sp_core::sr25519::Public as SrPublic;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use std::convert::TryInto;
-use structopt::StructOpt;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
@@ -34,7 +34,7 @@ async fn main() {
 }
 
 async fn run_cli() -> Result<()> {
-    let command_line_opts = CLICommandLineOptions::from_args();
+    let command_line_opts = CLICommandLineOptions::parse();
     let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow::Error::msg(format!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err)))?;
 
     let logger = chainflip_engine::logging::utils::new_discard_logger();

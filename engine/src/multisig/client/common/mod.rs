@@ -96,8 +96,8 @@ pub enum BroadcastFailureReason {
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BroadcastStageName {
-    #[error("Initial Commitments")]
-    InitialCommitments,
+    #[error("Coefficient Commitments")]
+    CoefficientCommitments,
     #[error("Local Signatures")]
     LocalSignatures,
     #[error("Hash Commitments")]

@@ -356,17 +356,13 @@ impl CryptoScheme for EthSigning {
     fn build_challenge(
         pubkey: Self::Point,
         nonce_commitment: Self::Point,
-        message: &[u8],
+        msg_hash: &[u8; 32],
     ) -> Scalar {
         use crate::eth::utils::pubkey_to_eth_addr;
         use cf_chains::eth::AggKey;
 
-        let msg_hash: [u8; 32] = message
-            .try_into()
-            .expect("Should never fail, the `message` argument should always be a valid hash");
-
         let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize()).message_challenge(
-            &msg_hash,
+            msg_hash,
             &pubkey_to_eth_addr(nonce_commitment.get_element()),
         );
 

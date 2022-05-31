@@ -220,14 +220,14 @@ fn generate_bindings<P: ECPoint>(
 
 /// Generate local signature/response (shard). See step 5 in Figure 3 (page 15).
 pub fn generate_local_sig<C: CryptoScheme>(
-    msg: &[u8],
+    msg_hash: &[u8; 32],
     key: &KeyShare<C::Point>,
     nonces: &SecretNoncePair<C::Point>,
     commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
     own_idx: AuthorityCount,
     all_idxs: &BTreeSet<AuthorityCount>,
 ) -> SigningResponse<C::Point> {
-    let bindings = generate_bindings(msg, commitments, all_idxs);
+    let bindings = generate_bindings(msg_hash, commitments, all_idxs);
 
     // This is `R` in a Schnorr signature
     let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -243,7 +243,7 @@ pub fn generate_local_sig<C: CryptoScheme>(
     let key_share = lambda_i * &key.x_i;
 
     let response =
-        generate_schnorr_response::<C>(&key_share, key.y, group_commitment, nonce_share, msg);
+        generate_schnorr_response::<C>(&key_share, key.y, group_commitment, nonce_share, msg_hash);
 
     SigningResponse { response }
 }
@@ -253,9 +253,9 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
     pubkey: C::Point,
     nonce_commitment: C::Point,
     nonce: <C::Point as ECPoint>::Scalar,
-    message: &[u8],
+    msg_hash: &[u8; 32],
 ) -> <C::Point as ECPoint>::Scalar {
-    let challenge = C::build_challenge(pubkey, nonce_commitment, message);
+    let challenge = C::build_challenge(pubkey, nonce_commitment, msg_hash);
 
     C::build_response(nonce, private_key, challenge)
 }
@@ -278,18 +278,18 @@ fn is_party_response_valid<Point: ECPoint>(
 /// (aggregate) signature given that no party misbehaved. Otherwise
 /// return the misbehaving parties.
 pub fn aggregate_signature<C: CryptoScheme>(
-    msg: &[u8],
+    msg_hash: &[u8; 32],
     signer_idxs: &BTreeSet<AuthorityCount>,
     agg_pubkey: C::Point,
     pubkeys: &BTreeMap<AuthorityCount, C::Point>,
     commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
     responses: &BTreeMap<AuthorityCount, SigningResponse<C::Point>>,
 ) -> Result<C::Signature, BTreeSet<AuthorityCount>> {
-    let bindings = generate_bindings(msg, commitments, signer_idxs);
+    let bindings = generate_bindings(msg_hash, commitments, signer_idxs);
 
     let group_commitment = gen_group_commitment(commitments, &bindings);
 
-    let challenge = C::build_challenge(agg_pubkey, group_commitment, msg);
+    let challenge = C::build_challenge(agg_pubkey, group_commitment, msg_hash);
 
     let invalid_idxs: BTreeSet<AuthorityCount> = signer_idxs
         .iter()
@@ -354,7 +354,10 @@ mod tests {
         // Given the signing key, nonce and message hash, check that
         // sigma (signature response) is correct and matches the expected
         // (by the KeyManager contract) value
-        let message = hex::decode(MESSAGE_HASH).unwrap();
+        let msg_hash: [u8; 32] = hex::decode(MESSAGE_HASH)
+            .unwrap()
+            .try_into()
+            .expect("invalid hash size");
 
         let nonce = Scalar::from_hex(NONCE_KEY);
         let commitment = Point::from_scalar(&nonce);
@@ -367,13 +370,13 @@ mod tests {
             public_key,
             commitment,
             nonce,
-            &message,
+            &msg_hash,
         );
 
         assert_eq!(hex::encode(response.as_bytes()), EXPECTED_SIGMA);
 
         // Build the challenge again to match how it is done on the receiving side
-        let challenge = EthSigning::build_challenge(public_key, commitment, &message);
+        let challenge = EthSigning::build_challenge(public_key, commitment, &msg_hash);
 
         // A lambda that has no effect on the computation (as a way to adapt multi-party
         // signing to work for a single party)

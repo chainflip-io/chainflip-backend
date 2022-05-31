@@ -80,7 +80,7 @@ pub trait CryptoScheme: 'static {
     fn build_challenge(
         pubkey: Self::Point,
         nonce_commitment: Self::Point,
-        message: &[u8],
+        msg_hash: &[u8; 32],
     ) -> <Self::Point as ECPoint>::Scalar;
 
     fn build_response(
