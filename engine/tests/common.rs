@@ -24,9 +24,11 @@ pub struct Eth {
 impl IntegrationTestSettings {
     /// Load integration test settings from a TOML file
     pub fn from_file(file: &str) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-        s.merge(File::with_name(file))?;
-        let s: Self = s.try_into()?;
+        let s = Config::builder()
+            .add_source(File::with_name(file))
+            .build()?
+            .try_deserialize()?;
+
         Ok(s)
     }
 }

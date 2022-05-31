@@ -201,9 +201,10 @@ impl Settings {
     /// Load settings from a TOML file
     /// If opts contains another file name, it'll use that as the default
     pub fn from_default_file(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-        s.merge(File::with_name(file))?;
-        let mut settings: Settings = s.try_into()?;
+        let mut settings: Settings = Config::builder()
+            .add_source(File::with_name(file))
+            .build()?
+            .try_deserialize()?;
 
         if let Some(opt) = opts.node_key_file {
             settings.node_p2p.node_key_file = opt

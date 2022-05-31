@@ -94,15 +94,13 @@ impl CLISettings {
     }
 
     pub fn from_file(file: &str) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
+        // Load the settings from the file and deserialize (and thus freeze) the entire config
+        let s: Self = Config::builder()
+            .add_source(File::with_name(file))
+            .build()?
+            .try_deserialize()?;
 
-        // merging in the configuration file
-        s.merge(File::with_name(file))?;
-
-        // You can deserialize (and thus freeze) the entire configuration as
-        let s: Self = s.try_into()?;
-
-        // make sure the settings are clean
+        // Make sure the settings are clean
         s.validate_settings()?;
 
         Ok(s)
