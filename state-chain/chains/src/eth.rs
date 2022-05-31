@@ -277,6 +277,7 @@ impl AggKey {
 	}
 
 	/// Sign a message, using a secret key, and a signature nonce
+	#[cfg(feature = "integration-tests")]
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, sig_nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));

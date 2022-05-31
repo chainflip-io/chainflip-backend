@@ -18,7 +18,7 @@ rand = {version='0.8.4'}
 # Chainflip local dependencies
 state-chain-runtime = { path = "../runtime"}
 cf-traits = { path = "../traits"}
-cf-chains = { path = "../chains"}
+cf-chains = { path = "../chains", features = ['integration-tests']}
 pallet-cf-validator = { path = "../pallets/cf-validator"}
 pallet-cf-staking = { path = "../pallets/cf-staking"}
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
