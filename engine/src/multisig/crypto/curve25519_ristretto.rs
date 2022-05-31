@@ -1,4 +1,3 @@
-use curve25519_dalek::traits::Identity;
 use serde::{Deserialize, Serialize};
 
 use super::{ECPoint, ECScalar};
@@ -13,6 +12,8 @@ pub struct Point(PK);
 pub struct Scalar(SK);
 
 mod point_impls {
+
+    use curve25519_dalek::traits::Identity;
 
     use super::*;
 
@@ -136,25 +137,13 @@ mod scalar_impls {
         }
     }
 
-    impl Default for Scalar {
-        fn default() -> Self {
-            Scalar::zero()
-        }
-    }
+    derive_scalar_impls!(Scalar);
 
     impl Zeroize for Scalar {
         fn zeroize(&mut self) {
             self.0.zeroize();
         }
     }
-
-    impl Drop for Scalar {
-        fn drop(&mut self) {
-            self.zeroize();
-        }
-    }
-
-    impl ZeroizeOnDrop for Scalar {}
 
     impl std::ops::Add for &Scalar {
         type Output = Scalar;
@@ -164,41 +153,11 @@ mod scalar_impls {
         }
     }
 
-    impl std::ops::Add for Scalar {
-        type Output = Scalar;
-
-        fn add(self, rhs: Self) -> Self::Output {
-            &self + &rhs
-        }
-    }
-
-    impl std::ops::Add<&Scalar> for Scalar {
-        type Output = Scalar;
-
-        fn add(self, rhs: &Scalar) -> Self::Output {
-            &self + rhs
-        }
-    }
-
     impl std::ops::Sub for &Scalar {
         type Output = Scalar;
 
         fn sub(self, rhs: Self) -> Self::Output {
-            Scalar(self.0.sub(&rhs.0))
-        }
-    }
-
-    impl std::ops::Sub for Scalar {
-        type Output = Scalar;
-
-        fn sub(self, rhs: Self) -> Self::Output {
-            &self - &rhs
-        }
-    }
-
-    impl std::iter::Sum for Scalar {
-        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-            iter.fold(Scalar::zero(), |a, b| a + b)
+            Scalar(self.0 - &rhs.0)
         }
     }
 
@@ -207,22 +166,6 @@ mod scalar_impls {
 
         fn mul(self, rhs: Self) -> Self::Output {
             Scalar(self.0 * &rhs.0)
-        }
-    }
-
-    impl std::ops::Mul for Scalar {
-        type Output = Scalar;
-
-        fn mul(self, rhs: Self) -> Self::Output {
-            &self * &rhs
-        }
-    }
-
-    impl std::ops::Mul<&Scalar> for Scalar {
-        type Output = Scalar;
-
-        fn mul(self, rhs: &Scalar) -> Self::Output {
-            &self * rhs
         }
     }
 }

@@ -1,3 +1,5 @@
+#[macro_use]
+mod helpers;
 pub mod curve25519_ristretto;
 pub mod eth;
 
@@ -114,6 +116,7 @@ pub trait ECScalar:
 
     fn from_bytes(x: &[u8; 32]) -> Self;
 
+    // MAXIM: consider using u32 (aka Authority count), call it `from_index`?
     fn from_usize(x: usize) -> Self;
 
     fn zero() -> Self;
