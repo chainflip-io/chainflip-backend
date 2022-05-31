@@ -53,12 +53,12 @@ impl<P: ECPoint> KeygenData<P> {
                 // For messages that don't contain a collection (eg. HashComm1), we don't need to check the size.
                 KeygenData::HashComm1(_) => true,
                 KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
-                KeygenData::Comm1(message) => {
+                KeygenData::CoeffComm3(message) => {
                     let coefficient_count =
                         threshold_from_share_count(num_of_parties as u32) as usize + 1;
                     message.get_commitments_len() == coefficient_count
                 }
-                KeygenData::Verify2(message) => {
+                KeygenData::VerifyCoeffComm4(message) => {
                     let coefficient_count =
                         threshold_from_share_count(num_of_parties as u32) as usize + 1;
 
@@ -73,12 +73,12 @@ impl<P: ECPoint> KeygenData<P> {
 
                     message.data.len() == num_of_parties
                 }
-                KeygenData::SecretShares3(_) => true,
-                KeygenData::Complaints4(complaints) => {
+                KeygenData::SecretShares5(_) => true,
+                KeygenData::Complaints6(complaints) => {
                     // The complaints are optional, so we just check the max length
                     complaints.0.len() <= num_of_parties
                 }
-                KeygenData::VerifyComplaints5(message) => {
+                KeygenData::VerifyComplaints7(message) => {
                     for complaints in message.data.values().flatten() {
                         if complaints.0.len() > num_of_parties {
                             return false;
@@ -86,11 +86,11 @@ impl<P: ECPoint> KeygenData<P> {
                     }
                     message.data.len() == num_of_parties
                 }
-                KeygenData::BlameResponse6(blame_response) => {
+                KeygenData::BlameResponse8(blame_response) => {
                     // The blame response will only contain a subset, so we just check the max length
                     blame_response.0.len() <= num_of_parties
                 }
-                KeygenData::VerifyBlameResponses7(message) => {
+                KeygenData::VerifyBlameResponses9(message) => {
                     if message
                         .data
                         .values()

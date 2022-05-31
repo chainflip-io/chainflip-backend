@@ -6,7 +6,7 @@ use rand_legacy::SeedableRng;
 use crate::multisig::{
     client::{
         common::BroadcastVerificationMessage,
-        keygen::{BlameResponse6, Complaints4, KeygenData, SecretShare3},
+        keygen::{BlameResponse8, Complaints6, KeygenData, SecretShare5},
     },
     crypto::Rng,
     eth::Point,
@@ -26,17 +26,17 @@ fn gen_keygen_data_verify_hash_comm2(length: AuthorityCount) -> KeygenData<Point
     })
 }
 
-fn gen_keygen_data_comm1(length: AuthorityCount) -> KeygenData<Point> {
+fn gen_keygen_data_coeff_comm3(length: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::Comm1(gen_invalid_keygen_comm1(&mut rng, length))
+    KeygenData::CoeffComm3(gen_invalid_keygen_comm1(&mut rng, length))
 }
 
-fn gen_keygen_data_verify2(
+fn gen_keygen_data_verify_coeff_comm4(
     outer_len: AuthorityCount,
     inner_len: AuthorityCount,
 ) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::Verify2(BroadcastVerificationMessage {
+    KeygenData::VerifyCoeffComm4(BroadcastVerificationMessage {
         data: (0..outer_len)
             .map(|i| {
                 (
@@ -48,49 +48,49 @@ fn gen_keygen_data_verify2(
     })
 }
 
-fn gen_keygen_data_complaints4(length: AuthorityCount) -> KeygenData<Point> {
-    KeygenData::Complaints4(Complaints4(BTreeSet::from_iter(0..length)))
+fn gen_keygen_data_complaints6(length: AuthorityCount) -> KeygenData<Point> {
+    KeygenData::Complaints6(Complaints6(BTreeSet::from_iter(0..length)))
 }
 
-fn gen_keygen_data_verify_complaints5(
+fn gen_keygen_data_verify_complaints7(
     outer_len: AuthorityCount,
     inner_len: AuthorityCount,
 ) -> KeygenData<Point> {
-    KeygenData::VerifyComplaints5(BroadcastVerificationMessage {
+    KeygenData::VerifyComplaints7(BroadcastVerificationMessage {
         data: (0..outer_len)
             .map(|i| {
                 (
                     i as AuthorityCount,
-                    Some(Complaints4(BTreeSet::from_iter(0..inner_len))),
+                    Some(Complaints6(BTreeSet::from_iter(0..inner_len))),
                 )
             })
             .collect(),
     })
 }
 
-fn gen_keygen_data_blame_response6(length: AuthorityCount) -> KeygenData<Point> {
+fn gen_keygen_data_blame_response8(length: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::BlameResponse6(BlameResponse6(
+    KeygenData::BlameResponse8(BlameResponse8(
         (0..length)
-            .map(|i| (i, SecretShare3::create_random(&mut rng)))
+            .map(|i| (i, SecretShare5::create_random(&mut rng)))
             .collect(),
     ))
 }
 
-fn gen_keygen_data_verify_blame_response7(
+fn gen_keygen_data_verify_blame_response9(
     outer_len: AuthorityCount,
     inner_len: AuthorityCount,
 ) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
-    KeygenData::VerifyBlameResponses7(BroadcastVerificationMessage {
+    KeygenData::VerifyBlameResponses9(BroadcastVerificationMessage {
         data: (0..outer_len)
             .map(|i| {
                 (
                     i as AuthorityCount,
                     // Create a nested collection with a changing size
-                    Some(BlameResponse6(
+                    Some(BlameResponse8(
                         (0..inner_len)
-                            .map(|i| (i, SecretShare3::create_random(&mut rng)))
+                            .map(|i| (i, SecretShare5::create_random(&mut rng)))
                             .collect(),
                     )),
                 )
@@ -118,112 +118,123 @@ fn check_data_size_verify_hash_comm2() {
 }
 
 #[test]
-fn check_data_size_comm1() {
+fn check_data_size_coeff_comm3() {
     let expected_len: AuthorityCount = 4;
 
-    assert!(gen_keygen_data_comm1(expected_len).check_data_size(Some(expected_len)));
+    assert!(gen_keygen_data_coeff_comm3(expected_len).check_data_size(Some(expected_len)));
 
     // Should fail on sizes larger or smaller then expected
-    assert!(!gen_keygen_data_comm1(expected_len + 1).check_data_size(Some(expected_len)));
-    assert!(!gen_keygen_data_comm1(expected_len - 1).check_data_size(Some(expected_len)));
+    assert!(!gen_keygen_data_coeff_comm3(expected_len + 1).check_data_size(Some(expected_len)));
+    assert!(!gen_keygen_data_coeff_comm3(expected_len - 1).check_data_size(Some(expected_len)));
 }
 
 #[test]
-fn check_data_size_verify2() {
+fn check_data_size_verify_coeff_comm4() {
     let expected_len: AuthorityCount = 4;
 
     // Should pass when both collections are the correct size
-    assert!(gen_keygen_data_verify2(expected_len, expected_len).check_data_size(Some(expected_len)));
+    assert!(
+        gen_keygen_data_verify_coeff_comm4(expected_len, expected_len)
+            .check_data_size(Some(expected_len))
+    );
 
     // The outer collection should fail if larger or smaller than expected
-    assert!(!gen_keygen_data_verify2(expected_len + 1, expected_len)
-        .check_data_size(Some(expected_len)));
-    assert!(!gen_keygen_data_verify2(expected_len - 1, expected_len)
-        .check_data_size(Some(expected_len)));
+    assert!(
+        !gen_keygen_data_verify_coeff_comm4(expected_len + 1, expected_len)
+            .check_data_size(Some(expected_len))
+    );
+    assert!(
+        !gen_keygen_data_verify_coeff_comm4(expected_len - 1, expected_len)
+            .check_data_size(Some(expected_len))
+    );
 
     // The nested collection should fail if larger or smaller than expected
-    assert!(!gen_keygen_data_verify2(expected_len, expected_len + 1)
-        .check_data_size(Some(expected_len)));
-    assert!(!gen_keygen_data_verify2(expected_len, expected_len - 1)
-        .check_data_size(Some(expected_len)));
+    assert!(
+        !gen_keygen_data_verify_coeff_comm4(expected_len, expected_len + 1)
+            .check_data_size(Some(expected_len))
+    );
+    assert!(
+        !gen_keygen_data_verify_coeff_comm4(expected_len, expected_len - 1)
+            .check_data_size(Some(expected_len))
+    );
 }
 
 #[test]
-fn check_data_size_complaints4() {
+fn check_data_size_complaints6() {
     let expected_len: AuthorityCount = 4;
 
-    assert!(gen_keygen_data_complaints4(expected_len).check_data_size(Some(expected_len)));
-    assert!(gen_keygen_data_complaints4(0).check_data_size(Some(expected_len)));
+    assert!(gen_keygen_data_complaints6(expected_len).check_data_size(Some(expected_len)));
+    assert!(gen_keygen_data_complaints6(0).check_data_size(Some(expected_len)));
 
     // Should fail on sizes larger then expected
-    assert!(!gen_keygen_data_complaints4(expected_len + 1).check_data_size(Some(expected_len)));
+    assert!(!gen_keygen_data_complaints6(expected_len + 1).check_data_size(Some(expected_len)));
 }
 
 #[test]
-fn check_data_size_verify_complaints5() {
+fn check_data_size_verify_complaints7() {
     let expected_len: AuthorityCount = 4;
 
     // Should pass when both collections are the correct size
     assert!(
-        gen_keygen_data_verify_complaints5(expected_len, expected_len)
+        gen_keygen_data_verify_complaints7(expected_len, expected_len)
             .check_data_size(Some(expected_len))
     );
-    assert!(gen_keygen_data_verify_complaints5(expected_len, 0).check_data_size(Some(expected_len)));
+    assert!(gen_keygen_data_verify_complaints7(expected_len, 0).check_data_size(Some(expected_len)));
 
     // The outer collection should fail if larger or smaller than expected
     assert!(
-        !gen_keygen_data_verify_complaints5(expected_len + 1, expected_len)
+        !gen_keygen_data_verify_complaints7(expected_len + 1, expected_len)
             .check_data_size(Some(expected_len))
     );
     assert!(
-        !gen_keygen_data_verify_complaints5(expected_len - 1, expected_len)
+        !gen_keygen_data_verify_complaints7(expected_len - 1, expected_len)
             .check_data_size(Some(expected_len))
     );
 
     // The nested collection should fail if larger than expected
     assert!(
-        !gen_keygen_data_verify_complaints5(expected_len, expected_len + 1)
+        !gen_keygen_data_verify_complaints7(expected_len, expected_len + 1)
             .check_data_size(Some(expected_len))
     );
 }
 
 #[test]
-fn check_data_size_blame_response6() {
+fn check_data_size_blame_response8() {
     let expected_len: AuthorityCount = 4;
 
-    assert!(gen_keygen_data_blame_response6(expected_len).check_data_size(Some(expected_len)));
-    assert!(gen_keygen_data_blame_response6(0).check_data_size(Some(expected_len)));
+    assert!(gen_keygen_data_blame_response8(expected_len).check_data_size(Some(expected_len)));
+    assert!(gen_keygen_data_blame_response8(0).check_data_size(Some(expected_len)));
 
     // Should fail on sizes larger then expected
-    assert!(!gen_keygen_data_blame_response6(expected_len + 1).check_data_size(Some(expected_len)));
+    assert!(!gen_keygen_data_blame_response8(expected_len + 1).check_data_size(Some(expected_len)));
 }
 
 #[test]
-fn check_data_size_verify_blame_responses7() {
+fn check_data_size_verify_blame_responses9() {
     let expected_len: AuthorityCount = 4;
 
     // Should pass when both collections are the correct size
     assert!(
-        gen_keygen_data_verify_blame_response7(expected_len, expected_len)
+        gen_keygen_data_verify_blame_response9(expected_len, expected_len)
             .check_data_size(Some(expected_len))
     );
     assert!(
-        gen_keygen_data_verify_blame_response7(expected_len, 0).check_data_size(Some(expected_len))
+        gen_keygen_data_verify_blame_response9(expected_len, 0).check_data_size(Some(expected_len))
     );
 
     // The outer collection should fail if larger or smaller than expected
     assert!(
-        !gen_keygen_data_verify_blame_response7(expected_len + 1, expected_len)
+        !gen_keygen_data_verify_blame_response9(expected_len + 1, expected_len)
             .check_data_size(Some(expected_len))
     );
     assert!(
-        !gen_keygen_data_verify_blame_response7(expected_len - 1, expected_len)
+        !gen_keygen_data_verify_blame_response9(expected_len - 1, expected_len)
             .check_data_size(Some(expected_len))
     );
 
     // The nested collection should fail if larger than expected
     assert!(
-        !gen_keygen_data_verify_blame_response7(expected_len, expected_len + 1)
+        !gen_keygen_data_verify_blame_response9(expected_len, expected_len + 1)
             .check_data_size(Some(expected_len))
     );
 }
@@ -231,5 +242,5 @@ fn check_data_size_verify_blame_responses7() {
 #[test]
 #[should_panic]
 fn check_data_size_should_panic_with_none_on_non_initial_stage() {
-    gen_keygen_data_verify2(1, 1).check_data_size(None);
+    gen_keygen_data_verify_hash_comm2(1).check_data_size(None);
 }

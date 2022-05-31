@@ -555,7 +555,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
     let (messages, _) = signing_ceremony.request().await;
 
     // This test will not work on stage 1 messages, so we must progress to stage 2
-    let mut messages = run_stages!(signing_ceremony, messages, VerfiyComm2,);
+    let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2,);
 
     let [sending_node_id, receiving_node_id] = signing_ceremony.select_account_ids();
 
