@@ -977,7 +977,6 @@ dependencies = [
  "jsonrpc-http-server",
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
- "kvdb-rocksdb",
  "lazy_format",
  "lazy_static",
  "libp2p",
