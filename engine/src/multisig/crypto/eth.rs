@@ -254,7 +254,7 @@ impl std::ops::Add for Scalar {
     type Output = Scalar;
 
     fn add(self, rhs: Self) -> Self::Output {
-        <&Scalar>::add(&self, &rhs)
+        &self + &rhs
     }
 }
 

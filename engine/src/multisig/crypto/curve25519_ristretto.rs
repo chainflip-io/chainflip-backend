@@ -1,0 +1,228 @@
+use curve25519_dalek::traits::Identity;
+use serde::{Deserialize, Serialize};
+
+use super::{ECPoint, ECScalar};
+
+type SK = curve25519_dalek::scalar::Scalar;
+type PK = curve25519_dalek::ristretto::RistrettoPoint;
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Point(PK);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Scalar(SK);
+
+mod point_impls {
+
+    use super::*;
+
+    impl ECPoint for Point {
+        type Scalar = Scalar;
+
+        type Underlying = PK;
+
+        type CompressedPointLength = typenum::U32;
+
+        fn from_scalar(scalar: &Self::Scalar) -> Self {
+            Point(curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT * scalar.0)
+        }
+
+        fn get_element(&self) -> Self::Underlying {
+            self.0
+        }
+
+        fn as_bytes(&self) -> generic_array::GenericArray<u8, Self::CompressedPointLength> {
+            self.0.compress().to_bytes().into()
+        }
+
+        fn is_point_at_infinity(&self) -> bool {
+            self.0 == PK::identity()
+        }
+    }
+
+    impl Default for Point {
+        fn default() -> Self {
+            Point(PK::identity())
+        }
+    }
+
+    impl zeroize::DefaultIsZeroes for Point {}
+
+    impl std::ops::Add for Point {
+        type Output = Point;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            &self + &rhs
+        }
+    }
+
+    impl std::ops::Add for &Point {
+        type Output = Point;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            Point(self.0 + rhs.0)
+        }
+    }
+
+    impl std::iter::Sum for Point {
+        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+            iter.fold(Point(PK::identity()), |a, b| a + b)
+        }
+    }
+
+    impl std::ops::Sub for Point {
+        type Output = Point;
+
+        fn sub(self, rhs: Self) -> Self::Output {
+            Point(self.0 - rhs.0)
+        }
+    }
+
+    impl std::ops::Mul<&Scalar> for Point {
+        type Output = Point;
+
+        fn mul(self, rhs: &Scalar) -> Self::Output {
+            Point(self.0 * rhs.0)
+        }
+    }
+
+    impl std::ops::Mul<Scalar> for Point {
+        type Output = Point;
+
+        fn mul(self, rhs: Scalar) -> Self::Output {
+            self * &rhs
+        }
+    }
+}
+
+mod scalar_impls {
+
+    use zeroize::{Zeroize, ZeroizeOnDrop};
+
+    use super::*;
+
+    impl ECScalar for Scalar {
+        fn random(rng: &mut crate::multisig::crypto::Rng) -> Self {
+            use rand_legacy::RngCore;
+
+            // Instead of calling SK::random() directly, we copy its
+            // implementation so we can use our own (version of) Rng
+            // TODO: might as well use a more recent version of Rng
+            // and apply this trick where an older version is expected
+            // (instead of the other way around)
+            let mut scalar_bytes = [0u8; 64];
+            rng.fill_bytes(&mut scalar_bytes);
+            Scalar(SK::from_bytes_mod_order_wide(&scalar_bytes))
+        }
+
+        fn from_bytes(x: &[u8; 32]) -> Self {
+            Scalar(SK::from_bytes_mod_order(x.clone()))
+        }
+
+        fn from_usize(x: usize) -> Self {
+            Scalar(SK::from(x as u64))
+        }
+
+        fn zero() -> Self {
+            Scalar(SK::zero())
+        }
+
+        fn invert(&self) -> Option<Self> {
+            if self.0 != SK::zero() {
+                Some(Scalar(self.0.invert()))
+            } else {
+                None
+            }
+        }
+    }
+
+    impl Default for Scalar {
+        fn default() -> Self {
+            Scalar::zero()
+        }
+    }
+
+    impl Zeroize for Scalar {
+        fn zeroize(&mut self) {
+            self.0.zeroize();
+        }
+    }
+
+    impl Drop for Scalar {
+        fn drop(&mut self) {
+            self.zeroize();
+        }
+    }
+
+    impl ZeroizeOnDrop for Scalar {}
+
+    impl std::ops::Add for &Scalar {
+        type Output = Scalar;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            Scalar(self.0 + rhs.0)
+        }
+    }
+
+    impl std::ops::Add for Scalar {
+        type Output = Scalar;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            &self + &rhs
+        }
+    }
+
+    impl std::ops::Add<&Scalar> for Scalar {
+        type Output = Scalar;
+
+        fn add(self, rhs: &Scalar) -> Self::Output {
+            &self + rhs
+        }
+    }
+
+    impl std::ops::Sub for &Scalar {
+        type Output = Scalar;
+
+        fn sub(self, rhs: Self) -> Self::Output {
+            Scalar(self.0.sub(&rhs.0))
+        }
+    }
+
+    impl std::ops::Sub for Scalar {
+        type Output = Scalar;
+
+        fn sub(self, rhs: Self) -> Self::Output {
+            &self - &rhs
+        }
+    }
+
+    impl std::iter::Sum for Scalar {
+        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+            iter.fold(Scalar::zero(), |a, b| a + b)
+        }
+    }
+
+    impl std::ops::Mul for &Scalar {
+        type Output = Scalar;
+
+        fn mul(self, rhs: Self) -> Self::Output {
+            Scalar(self.0 * &rhs.0)
+        }
+    }
+
+    impl std::ops::Mul for Scalar {
+        type Output = Scalar;
+
+        fn mul(self, rhs: Self) -> Self::Output {
+            &self * &rhs
+        }
+    }
+
+    impl std::ops::Mul<&Scalar> for Scalar {
+        type Output = Scalar;
+
+        fn mul(self, rhs: &Scalar) -> Self::Output {
+            &self * rhs
+        }
+    }
+}

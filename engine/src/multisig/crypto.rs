@@ -1,3 +1,4 @@
+pub mod curve25519_ristretto;
 pub mod eth;
 
 use generic_array::{typenum::Unsigned, ArrayLength};
