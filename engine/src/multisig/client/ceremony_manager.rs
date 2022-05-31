@@ -550,7 +550,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             slog::debug!(
                 self.logger,
                 "Ignoring keygen data: Incorrect number of elements";
-                "CeremonyId" => format!("{}",ceremony_id)
+                CEREMONY_ID_KEY => format!("{}",ceremony_id)
             );
             return;
         }
