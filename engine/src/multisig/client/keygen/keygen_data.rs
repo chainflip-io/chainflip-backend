@@ -13,31 +13,31 @@ pub enum KeygenData<P: ECPoint> {
     HashComm1(HashComm1),
     VerifyHashComm2(VerifyHashComm2),
     #[serde(bound = "")] // see https://github.com/serde-rs/serde/issues/1296
-    Comm1(Comm1<P>),
+    CoeffComm3(CoeffComm3<P>),
     #[serde(bound = "")]
-    Verify2(VerifyComm2<P>),
+    VerifyCoeffComm4(VerifyCoeffComm4<P>),
     #[serde(bound = "")]
-    SecretShares3(SecretShare3<P>),
-    Complaints4(Complaints4),
-    VerifyComplaints5(VerifyComplaints5),
+    SecretShares5(SecretShare5<P>),
+    Complaints6(Complaints6),
+    VerifyComplaints7(VerifyComplaints7),
     #[serde(bound = "")]
-    BlameResponse6(BlameResponse6<P>),
+    BlameResponse8(BlameResponse8<P>),
     #[serde(bound = "")]
-    VerifyBlameResponses7(VerifyBlameResponses7<P>),
+    VerifyBlameResponses9(VerifyBlameResponses9<P>),
 }
 
 impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner = match self {
-            KeygenData::HashComm1(hash_comm1) => hash_comm1.to_string(),
-            KeygenData::VerifyHashComm2(verify2) => verify2.to_string(),
-            KeygenData::Comm1(comm1) => comm1.to_string(),
-            KeygenData::Verify2(verify2) => verify2.to_string(),
-            KeygenData::SecretShares3(share3) => share3.to_string(),
-            KeygenData::Complaints4(complaints4) => complaints4.to_string(),
-            KeygenData::VerifyComplaints5(verify5) => verify5.to_string(),
-            KeygenData::BlameResponse6(blame_response) => blame_response.to_string(),
-            KeygenData::VerifyBlameResponses7(verify7) => verify7.to_string(),
+            KeygenData::HashComm1(inner) => inner.to_string(),
+            KeygenData::VerifyHashComm2(inner) => inner.to_string(),
+            KeygenData::CoeffComm3(inner) => inner.to_string(),
+            KeygenData::VerifyCoeffComm4(inner) => inner.to_string(),
+            KeygenData::SecretShares5(inner) => inner.to_string(),
+            KeygenData::Complaints6(inner) => inner.to_string(),
+            KeygenData::VerifyComplaints7(inner) => inner.to_string(),
+            KeygenData::BlameResponse8(inner) => inner.to_string(),
+            KeygenData::VerifyBlameResponses9(inner) => inner.to_string(),
         };
         write!(f, "KeygenData({})", inner)
     }
@@ -48,20 +48,20 @@ pub struct HashComm1(pub sp_core::H256);
 
 pub type VerifyHashComm2 = BroadcastVerificationMessage<HashComm1>;
 
-pub type Comm1<P> = super::keygen_frost::DKGUnverifiedCommitment<P>;
+pub type CoeffComm3<P> = super::keygen_frost::DKGUnverifiedCommitment<P>;
 
-pub type VerifyComm2<P> = BroadcastVerificationMessage<Comm1<P>>;
+pub type VerifyCoeffComm4<P> = BroadcastVerificationMessage<CoeffComm3<P>>;
 
 /// Secret share of our locally generated secret calculated separately
 /// for each party as the result of evaluating sharing polynomial (generated
 /// during stage 1) at the corresponding signer's index
-pub type SecretShare3<P> = ShamirShare<P>;
+pub type SecretShare5<P> = ShamirShare<P>;
 
 /// List of parties blamed for sending invalid secret shares
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Complaints4(pub BTreeSet<AuthorityCount>);
+pub struct Complaints6(pub BTreeSet<AuthorityCount>);
 
-pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
+pub type VerifyComplaints7 = BroadcastVerificationMessage<Complaints6>;
 
 /// For each party blaming a node, it responds with the corresponding (valid)
 /// secret share. Unlike secret shares sent at the earlier stage, these shares
@@ -71,28 +71,28 @@ pub type VerifyComplaints5 = BroadcastVerificationMessage<Complaints4>;
 /// only be recovered by collecting shares from all (N-1) nodes, which would
 /// require collusion of N-1 nodes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlameResponse6<P: ECPoint>(
+pub struct BlameResponse8<P: ECPoint>(
     #[serde(bound = "")] pub BTreeMap<AuthorityCount, ShamirShare<P>>,
 );
 
-pub type VerifyBlameResponses7<P> = BroadcastVerificationMessage<BlameResponse6<P>>;
+pub type VerifyBlameResponses9<P> = BroadcastVerificationMessage<BlameResponse8<P>>;
 
 derive_impls_for_enum_variants!(impl<P: ECPoint> for HashComm1, KeygenData::HashComm1, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyHashComm2, KeygenData::VerifyHashComm2, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for Comm1<P>, KeygenData::Comm1, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComm2<P>, KeygenData::Verify2, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for ShamirShare<P>, KeygenData::SecretShares3, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for Complaints4, KeygenData::Complaints4, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComplaints5, KeygenData::VerifyComplaints5, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for BlameResponse6<P>, KeygenData::BlameResponse6, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyBlameResponses7<P>, KeygenData::VerifyBlameResponses7, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for CoeffComm3<P>, KeygenData::CoeffComm3, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyCoeffComm4<P>, KeygenData::VerifyCoeffComm4, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for SecretShare5<P>, KeygenData::SecretShares5, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for Complaints6, KeygenData::Complaints6, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComplaints7, KeygenData::VerifyComplaints7, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for BlameResponse8<P>, KeygenData::BlameResponse8, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyBlameResponses9<P>, KeygenData::VerifyBlameResponses9, KeygenData<P>);
 
 derive_display_as_type_name!(HashComm1);
 derive_display_as_type_name!(VerifyHashComm2);
-derive_display_as_type_name!(Comm1<P: ECPoint>);
-derive_display_as_type_name!(VerifyComm2<P: ECPoint>);
-derive_display_as_type_name!(ShamirShare<P: ECPoint>);
-derive_display_as_type_name!(Complaints4);
-derive_display_as_type_name!(VerifyComplaints5);
-derive_display_as_type_name!(BlameResponse6<P: ECPoint>);
-derive_display_as_type_name!(VerifyBlameResponses7<P: ECPoint>);
+derive_display_as_type_name!(CoeffComm3<P: ECPoint>);
+derive_display_as_type_name!(VerifyCoeffComm4<P: ECPoint>);
+derive_display_as_type_name!(SecretShare5<P: ECPoint>);
+derive_display_as_type_name!(Complaints6);
+derive_display_as_type_name!(VerifyComplaints7);
+derive_display_as_type_name!(BlameResponse8<P: ECPoint>);
+derive_display_as_type_name!(VerifyBlameResponses9<P: ECPoint>);

@@ -6,8 +6,8 @@ mod keygen_stages;
 pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 pub use keygen_data::{
-    BlameResponse6, Comm1, Complaints4, HashComm1, KeygenData, SecretShare3, VerifyBlameResponses7,
-    VerifyComm2, VerifyComplaints5, VerifyHashComm2,
+    BlameResponse8, CoeffComm3, Complaints6, HashComm1, KeygenData, SecretShare5,
+    VerifyBlameResponses9, VerifyCoeffComm4, VerifyComplaints7, VerifyHashComm2,
 };
 
 pub use keygen_frost::genesis::generate_key_data;
