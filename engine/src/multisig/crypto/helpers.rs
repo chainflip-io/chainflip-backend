@@ -2,7 +2,7 @@ macro_rules! derive_scalar_impls {
     ($scalar: path) => {
         impl Default for $scalar {
             fn default() -> Self {
-                <$scalar>::zero()
+                Self::zero()
             }
         }
 
@@ -57,6 +57,42 @@ macro_rules! derive_scalar_impls {
 
             fn mul(self, rhs: &Scalar) -> Self::Output {
                 &self * rhs
+            }
+        }
+    };
+}
+
+macro_rules! derive_point_impls {
+    ($point: path, $scalar: path) => {
+        impl Default for $point {
+            fn default() -> Self {
+                Self::point_at_infinity()
+            }
+        }
+
+        impl zeroize::DefaultIsZeroes for $point {}
+
+        impl std::ops::Add for $point {
+            type Output = $point;
+
+            fn add(self, rhs: Self) -> Self::Output {
+                &self + &rhs
+            }
+        }
+
+        impl std::iter::Sum for $point {
+            fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+                // "Point at infinity" corresponds to "zero" on
+                // an elliptic curve
+                iter.fold(Self::point_at_infinity(), |a, b| a + b)
+            }
+        }
+
+        impl std::ops::Mul<$scalar> for $point {
+            type Output = $point;
+
+            fn mul(self, rhs: $scalar) -> Self::Output {
+                self * &rhs
             }
         }
     };

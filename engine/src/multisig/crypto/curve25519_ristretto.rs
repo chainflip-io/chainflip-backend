@@ -41,33 +41,13 @@ mod point_impls {
         }
     }
 
-    impl Default for Point {
-        fn default() -> Self {
-            Point(PK::identity())
-        }
-    }
-
-    impl zeroize::DefaultIsZeroes for Point {}
-
-    impl std::ops::Add for Point {
-        type Output = Point;
-
-        fn add(self, rhs: Self) -> Self::Output {
-            &self + &rhs
-        }
-    }
+    derive_point_impls!(Point, Scalar);
 
     impl std::ops::Add for &Point {
         type Output = Point;
 
         fn add(self, rhs: Self) -> Self::Output {
             Point(self.0 + rhs.0)
-        }
-    }
-
-    impl std::iter::Sum for Point {
-        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-            iter.fold(Point(PK::identity()), |a, b| a + b)
         }
     }
 
@@ -84,14 +64,6 @@ mod point_impls {
 
         fn mul(self, rhs: &Scalar) -> Self::Output {
             Point(self.0 * rhs.0)
-        }
-    }
-
-    impl std::ops::Mul<Scalar> for Point {
-        type Output = Point;
-
-        fn mul(self, rhs: Scalar) -> Self::Output {
-            self * &rhs
         }
     }
 }
