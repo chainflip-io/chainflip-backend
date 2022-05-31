@@ -81,7 +81,7 @@ derive_impls_for_enum_variants!(impl<P: ECPoint> for HashComm1, KeygenData::Hash
 derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyHashComm2, KeygenData::VerifyHashComm2, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for CoeffComm3<P>, KeygenData::CoeffComm3, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyCoeffComm4<P>, KeygenData::VerifyCoeffComm4, KeygenData<P>);
-derive_impls_for_enum_variants!(impl<P: ECPoint> for ShamirShare<P>, KeygenData::SecretShares5, KeygenData<P>);
+derive_impls_for_enum_variants!(impl<P: ECPoint> for SecretShare5<P>, KeygenData::SecretShares5, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for Complaints6, KeygenData::Complaints6, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComplaints7, KeygenData::VerifyComplaints7, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for BlameResponse8<P>, KeygenData::BlameResponse8, KeygenData<P>);
@@ -91,7 +91,7 @@ derive_display_as_type_name!(HashComm1);
 derive_display_as_type_name!(VerifyHashComm2);
 derive_display_as_type_name!(CoeffComm3<P: ECPoint>);
 derive_display_as_type_name!(VerifyCoeffComm4<P: ECPoint>);
-derive_display_as_type_name!(ShamirShare<P: ECPoint>);
+derive_display_as_type_name!(SecretShare5<P: ECPoint>);
 derive_display_as_type_name!(Complaints6);
 derive_display_as_type_name!(VerifyComplaints7);
 derive_display_as_type_name!(BlameResponse8<P: ECPoint>);
