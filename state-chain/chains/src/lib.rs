@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use crate::benchmarking_value::BenchmarkValue;
-use codec::{FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	Parameter,
+	Parameter, RuntimeDebug,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{One, Saturating};
@@ -25,7 +25,8 @@ pub trait Chain: Member + Parameter {
 		+ Default
 		+ One
 		+ Saturating
-		+ From<u64>;
+		+ From<u64>
+		+ MaxEncodedLen;
 
 	type ChainAmount: Member
 		+ Parameter
@@ -34,7 +35,10 @@ pub trait Chain: Member + Parameter {
 		+ Into<u128>
 		+ From<u128>
 		+ Saturating
-		+ FullCodec;
+		+ FullCodec
+		+ MaxEncodedLen;
+
+	type TrackedData: Member + Parameter + MaxEncodedLen;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -129,29 +133,13 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
-macro_rules! impl_chains {
-	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; type ChainAmount = $chain_amount:ty; }, ),+ $(,)? ) => {
-		use codec::{Decode, Encode};
-		use sp_runtime::RuntimeDebug;
+#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct Ethereum;
 
-		$(
-			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-			pub struct $chain;
-
-			impl Chain for $chain {
-				type ChainBlockNumber = $chain_block_number;
-				type ChainAmount = $chain_amount;
-			}
-		)+
-	};
-}
-
-impl_chains! {
-	Ethereum {
-		type ChainBlockNumber = u64;
-		// TODO: Review the choice of u128 for the ChainAmount.
-		type ChainAmount = u128;
-	},
+impl Chain for Ethereum {
+	type ChainBlockNumber = u64;
+	type ChainAmount = u128;
+	type TrackedData = eth::TrackedData<Self>;
 }
 
 impl ChainCrypto for Ethereum {
@@ -177,12 +165,14 @@ pub mod mocks {
 
 	use crate::{eth::api::EthereumReplayProtection, *};
 
+	#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct MockEthereum;
+
 	// Chain implementation used for testing.
-	impl_chains! {
-		MockEthereum {
-			type ChainBlockNumber = u64;
-			type ChainAmount = u128;
-		},
+	impl Chain for MockEthereum {
+		type ChainBlockNumber = u64;
+		type ChainAmount = u128;
+		type TrackedData = eth::TrackedData<Self>;
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
