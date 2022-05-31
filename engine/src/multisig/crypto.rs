@@ -56,7 +56,11 @@ pub trait ECPoint:
 
     fn as_bytes(&self) -> GenericArray<u8, Self::CompressedPointLength>;
 
-    fn is_point_at_infinity(&self) -> bool;
+    fn point_at_infinity() -> Self;
+
+    fn is_point_at_infinity(&self) -> bool {
+        self == &Self::point_at_infinity()
+    }
 
     // Only relevant for ETH contract keys
     fn is_compatible(&self) -> bool {

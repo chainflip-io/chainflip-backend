@@ -36,8 +36,8 @@ mod point_impls {
             self.0.compress().to_bytes().into()
         }
 
-        fn is_point_at_infinity(&self) -> bool {
-            self.0 == PK::identity()
+        fn point_at_infinity() -> Self {
+            Point(PK::identity())
         }
     }
 
@@ -168,4 +168,14 @@ mod scalar_impls {
             Scalar(self.0 * &rhs.0)
         }
     }
+}
+
+#[test]
+fn sanity_check_point_at_infinity() {
+    // Sanity check: point at infinity should correspond
+    // to "zero" on the elliptic curve
+    assert_eq!(
+        Point::point_at_infinity(),
+        Point::from_scalar(&Scalar::zero())
+    );
 }

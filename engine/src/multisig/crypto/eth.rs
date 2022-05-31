@@ -108,8 +108,8 @@ impl ECPoint for Point {
         self.0.serialize_compressed()
     }
 
-    fn is_point_at_infinity(&self) -> bool {
-        self.0.is_zero()
+    fn point_at_infinity() -> Self {
+        Self(Secp256k1Point::zero())
     }
 
     fn is_compatible(&self) -> bool {
@@ -380,4 +380,14 @@ impl CryptoScheme for EthSigning {
     ) -> <Self::Point as ECPoint>::Scalar {
         nonce - challenge * private_key
     }
+}
+
+#[test]
+fn sanity_check_point_at_infinity() {
+    // Sanity check: point at infinity should correspond
+    // to "zero" on the elliptic curve
+    assert_eq!(
+        Point::point_at_infinity(),
+        Point::from_scalar(&Scalar::zero())
+    );
 }
