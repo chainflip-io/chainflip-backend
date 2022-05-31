@@ -175,7 +175,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     }
 }
 
-/// Stage 1: Sample a secret, generate sharing polynomial coefficients for it
+/// Stage 3: Sample a secret, generate sharing polynomial coefficients for it
 /// and a ZKP of the secret. Broadcast commitments to the coefficients and the ZKP.
 pub struct CoefficientCommitments3<P: ECPoint> {
     common: CeremonyCommon,
@@ -225,7 +225,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     }
 }
 
-/// Stage 2: verify broadcasts of Stage 1 data
+/// Stage 4: verify broadcasts of Stage 3 data
 struct VerifyCommitmentsBroadcast4<P: ECPoint> {
     common: CeremonyCommon,
     hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
@@ -323,7 +323,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     }
 }
 
-/// Stage 3: distribute (distinct) secret shares of our secret to each party
+/// Stage 5: distribute (distinct) secret shares of our secret to each party
 struct SecretSharesStage5<P: ECPoint> {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)

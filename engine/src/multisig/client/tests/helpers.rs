@@ -1233,7 +1233,7 @@ impl Node {
         }
     }
 
-    /// Check is the ceremony is at the specified keygen BroadcastStage (0-5).
+    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9).
     pub fn ensure_ceremony_at_keygen_stage(
         &self,
         stage_number: usize,
