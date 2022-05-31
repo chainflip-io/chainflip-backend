@@ -147,12 +147,10 @@ mod tests {
 				)
 			}
 
-			// The public key proposed
 			pub fn proposed_public_key(&self) -> AggKey {
 				self.proposed_key_components.as_ref().expect("should have proposed key").agg_key
 			}
 
-			// Propose a new public key
 			pub fn propose_new_public_key(&mut self) -> AggKey {
 				let proposed_seed = self.key_seed + 1;
 				let (secret, k_times_g, agg_key) = Self::generate_keypair(proposed_seed);
