@@ -1,44 +1,44 @@
 use chainflip_engine::settings::{Eth, EthSharedOptions, StateChain, StateChainOptions};
+use clap::Parser;
 use config::{Config, ConfigError, File};
 use serde::Deserialize;
-use structopt::StructOpt;
 
-#[derive(StructOpt, Clone)]
+#[derive(Parser, Clone)]
 pub struct CLICommandLineOptions {
-    #[structopt(short = "c", long = "config-path")]
+    #[clap(short = 'c', long = "config-path")]
     config_path: Option<String>,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     state_chain_opts: StateChainOptions,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     eth_opts: EthSharedOptions,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub cmd: CFCommand,
 }
 
-#[derive(StructOpt, Clone)]
+#[derive(Parser, Clone)]
 pub enum CFCommand {
-    #[structopt(about = "Submit an extrinsic to request generation of a claim certificate")]
+    #[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
     Claim {
-        #[structopt(help = "Amount to claim in FLIP")]
+        #[clap(help = "Amount to claim in FLIP")]
         amount: f64,
-        #[structopt(help = "The Ethereum address you wish to claim your FLIP to")]
+        #[clap(help = "The Ethereum address you wish to claim your FLIP to")]
         eth_address: String,
 
-        #[structopt(long = "register", hidden = true)]
+        #[clap(long = "register", hide = true)]
         should_register_claim: bool,
     },
-    #[structopt(about = "Rotate your session keys")]
+    #[clap(about = "Rotate your session keys")]
     Rotate {},
-    #[structopt(about = "Retire from Auction participation")]
+    #[clap(about = "Retire from Auction participation")]
     Retire {},
-    #[structopt(about = "Activates an account for all future Auctions")]
+    #[clap(about = "Activates an account for all future Auctions")]
     Activate {},
-    #[structopt(about = "Submit a query to the State Chain")]
+    #[clap(about = "Submit a query to the State Chain")]
     Query {
-        #[structopt(help = "Block hash to be queried")]
+        #[clap(help = "Block hash to be queried")]
         block_hash: state_chain_runtime::Hash,
     },
 }
