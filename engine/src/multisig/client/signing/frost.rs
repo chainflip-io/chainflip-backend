@@ -129,16 +129,16 @@ pub fn get_lagrange_coeff<P: ECPoint>(
 ) -> anyhow::Result<P::Scalar> {
     use anyhow::Context;
 
-    let mut num = P::Scalar::from_usize(1);
-    let mut den = P::Scalar::from_usize(1);
+    let mut num = P::Scalar::from(1);
+    let mut den = P::Scalar::from(1);
 
     for j in all_signer_indices {
         if *j == signer_index {
             continue;
         }
-        let j: usize = (*j).try_into().expect("too many signers");
-        let j = P::Scalar::from_usize(j);
-        let signer_index = P::Scalar::from_usize(signer_index as usize);
+
+        let j = P::Scalar::from(*j);
+        let signer_index = P::Scalar::from(signer_index);
         num = num * j.clone();
         den = den * (j - signer_index);
     }
@@ -347,7 +347,7 @@ mod tests {
 
         // A lambda that has no effect on the computation (as a way to adapt multi-party
         // signing to work for a single party)
-        let dummy_lambda = Scalar::from_usize(1);
+        let dummy_lambda = Scalar::from(1);
 
         assert!(is_party_response_valid(
             &public_key,

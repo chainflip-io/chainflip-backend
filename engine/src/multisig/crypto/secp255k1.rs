@@ -154,10 +154,6 @@ mod scalar_impls {
             Scalar(CurvECScalar::from_bigint(&BigInt::from_bytes(x)))
         }
 
-        fn from_usize(x: usize) -> Self {
-            Scalar(CurvECScalar::from_bigint(&BigInt::from(x as u64)))
-        }
-
         fn zero() -> Self {
             Scalar(Secp256k1Scalar::zero())
         }
@@ -175,6 +171,12 @@ mod scalar_impls {
             use core::sync::atomic;
             unsafe { std::ptr::write_volatile(&mut self.0, Secp256k1Scalar::zero()) };
             atomic::compiler_fence(atomic::Ordering::SeqCst);
+        }
+    }
+
+    impl From<u32> for Scalar {
+        fn from(x: u32) -> Self {
+            Scalar(CurvECScalar::from_bigint(&BigInt::from(x)))
         }
     }
 

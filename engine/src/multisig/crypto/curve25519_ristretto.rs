@@ -92,10 +92,6 @@ mod scalar_impls {
             Scalar(SK::from_bytes_mod_order(x.clone()))
         }
 
-        fn from_usize(x: usize) -> Self {
-            Scalar(SK::from(x as u64))
-        }
-
         fn zero() -> Self {
             Scalar(SK::zero())
         }
@@ -106,6 +102,12 @@ mod scalar_impls {
             } else {
                 None
             }
+        }
+    }
+
+    impl From<u32> for Scalar {
+        fn from(x: u32) -> Self {
+            Scalar(SK::from(x))
         }
     }
 
