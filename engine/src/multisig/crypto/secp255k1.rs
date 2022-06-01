@@ -1,5 +1,5 @@
 use generic_array::GenericArray;
-use zeroize::{DefaultIsZeroes, Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::{ECPoint, ECScalar, Rng};
 use serde::{Deserialize, Serialize};
@@ -23,23 +23,9 @@ mod point_impls {
 
     use super::*;
 
-    impl std::ops::Mul<Scalar> for Point {
-        type Output = Point;
-
-        fn mul(self, rhs: Scalar) -> Self::Output {
-            Point(self.0.scalar_mul(&rhs.0))
-        }
-    }
+    derive_point_impls!(Point, Scalar);
 
     impl std::ops::Mul<&Scalar> for Point {
-        type Output = Point;
-
-        fn mul(self, rhs: &Scalar) -> Self::Output {
-            Point(self.0.scalar_mul(&rhs.0))
-        }
-    }
-
-    impl std::ops::Mul<&Scalar> for &Point {
         type Output = Point;
 
         fn mul(self, rhs: &Scalar) -> Self::Output {
@@ -55,14 +41,6 @@ mod point_impls {
         }
     }
 
-    impl std::ops::Add for Point {
-        type Output = Point;
-
-        fn add(self, rhs: Self) -> Self::Output {
-            <&Point>::add(&self, &rhs)
-        }
-    }
-
     impl std::ops::Sub for Point {
         type Output = Point;
 
@@ -70,28 +48,6 @@ mod point_impls {
             Point(self.0.sub_point(&rhs.0))
         }
     }
-
-    impl std::ops::Sub<Point> for &Point {
-        type Output = Point;
-
-        fn sub(self, rhs: Point) -> Self::Output {
-            *self - rhs
-        }
-    }
-
-    impl std::iter::Sum for Point {
-        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-            iter.fold(Point(Secp256k1Point::zero()), |a, b| a + b)
-        }
-    }
-
-    impl Default for Point {
-        fn default() -> Self {
-            Point(Secp256k1Point::zero())
-        }
-    }
-
-    impl DefaultIsZeroes for Point {}
 
     impl ECPoint for Point {
         type Scalar = Scalar;
@@ -166,11 +122,8 @@ mod scalar_impls {
 
     use super::*;
 
-    impl Default for Scalar {
-        fn default() -> Self {
-            Scalar::zero()
-        }
-    }
+    derive_scalar_impls!(Scalar);
+
     impl Scalar {
         #[cfg(test)]
         pub fn from_hex(sk_hex: &str) -> Self {
@@ -214,14 +167,6 @@ mod scalar_impls {
         }
     }
 
-    impl ZeroizeOnDrop for Scalar {}
-
-    impl Drop for Scalar {
-        fn drop(&mut self) {
-            self.zeroize();
-        }
-    }
-
     impl zeroize::Zeroize for Scalar {
         fn zeroize(&mut self) {
             // Secp256k1Scalar doesn't expose a way to "zeroize" it apart from dropping, so have
@@ -233,35 +178,11 @@ mod scalar_impls {
         }
     }
 
-    impl std::ops::Sub for Scalar {
-        type Output = Scalar;
-
-        fn sub(self, rhs: Self) -> Self::Output {
-            &self - &rhs
-        }
-    }
-
     impl std::ops::Sub for &Scalar {
         type Output = Scalar;
 
         fn sub(self, rhs: Self) -> Self::Output {
             Scalar(self.0.sub(&rhs.0))
-        }
-    }
-
-    impl std::ops::Mul<&Scalar> for Scalar {
-        type Output = Scalar;
-
-        fn mul(self, rhs: &Scalar) -> Self::Output {
-            &self * rhs
-        }
-    }
-
-    impl std::ops::Mul for Scalar {
-        type Output = Scalar;
-
-        fn mul(self, rhs: Self) -> Self::Output {
-            &self * &rhs
         }
     }
 
@@ -273,33 +194,11 @@ mod scalar_impls {
         }
     }
 
-    impl std::ops::Add for Scalar {
-        type Output = Scalar;
-
-        fn add(self, rhs: Self) -> Self::Output {
-            &self + &rhs
-        }
-    }
-
     impl std::ops::Add for &Scalar {
         type Output = Scalar;
 
         fn add(self, rhs: Self) -> Self::Output {
             Scalar(self.0.add(&rhs.0))
-        }
-    }
-
-    impl std::ops::Add<&Scalar> for Scalar {
-        type Output = Scalar;
-
-        fn add(self, rhs: &Scalar) -> Self::Output {
-            &self + rhs
-        }
-    }
-
-    impl std::iter::Sum for Scalar {
-        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-            iter.fold(Scalar::zero(), |a, b| a + b)
         }
     }
 
