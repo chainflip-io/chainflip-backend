@@ -69,6 +69,7 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 pub enum PalletOffence {
 	InvalidTransactionAuthored,
 	TransactionFailedOnTransmission,
+	FailedToSignTransaction,
 }
 
 #[frame_support::pallet]
@@ -218,6 +219,11 @@ pub mod pallet {
 	pub type BroadcastIdToAttemptNumbers<T, I = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, Vec<AttemptCount>, OptionQuery>;
 
+	/// Contains a list of the authorities that have failed to sign a particular broadcast.
+	#[pallet::storage]
+	pub type FailedTransactionSigners<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, Vec<T::ValidatorId>>;
+
 	/// Live transaction signing requests.
 	#[pallet::storage]
 	pub type AwaitingTransactionSignature<T: Config<I>, I: 'static = ()> = StorageMap<
@@ -301,8 +307,9 @@ pub mod pallet {
 		RefundSignerIdUpdated(T::AccountId, SignerIdFor<T, I>),
 		/// A broadcast has successfully been completed. \[broadcast_id\]
 		BroadcastSuccess(BroadcastId),
-		/// A broadcast has finally failed. \[broadcast_id\]
-		BroadcastFailed(BroadcastId),
+		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
+		/// \[broadcast_id\]
+		ThresholdSignatureInvalid(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -500,15 +507,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			broadcast_attempt_id: BroadcastAttemptId,
 		) -> DispatchResultWithPostInfo {
-			let extrinsic_signer = ensure_signed(origin)?;
+			let extrinsic_signer: <T as Chainflip>::ValidatorId = ensure_signed(origin)?.into();
 
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			// Only the nominated signer can say they failed to sign
-			ensure!(
-				signing_attempt.nominee == extrinsic_signer.into(),
-				Error::<T, I>::InvalidSigner
+			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
+
+			FailedTransactionSigners::<T, I>::append(
+				broadcast_attempt_id.broadcast_id,
+				&extrinsic_signer,
 			);
 
 			Self::take_and_clean_up_awaiting_transaction_signature_attempt(broadcast_attempt_id);
@@ -610,6 +619,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
 			}
 		}
+		FailedTransactionSigners::<T, I>::remove(broadcast_id);
 
 		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}
@@ -656,7 +666,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature: &ThresholdSignatureFor<T, I>,
 		unsigned_tx: UnsignedTransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
-	) {
+	) -> BroadcastAttemptId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
@@ -668,10 +678,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Save the payload and the coresponinding signature to the lookup table
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-			broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
+			broadcast_attempt_id,
 			unsigned_tx,
 		});
+		broadcast_attempt_id
 	}
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
@@ -689,7 +701,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_attempt.broadcast_attempt_id.broadcast_id
 				);
-				Self::deposit_event(Event::<T, I>::BroadcastFailed(broadcast_id));
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid(broadcast_id));
 			} else {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
@@ -714,7 +726,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
 		// Check if there is an nominated signer
-		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(seed) {
+		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(
+			seed,
+			&FailedTransactionSigners::<T, I>::get(
+				broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			)
+			.unwrap_or_default(),
+		) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionSignature::<T, I>::insert(
 				broadcast_attempt.broadcast_attempt_id,
@@ -757,6 +775,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed_broadcast_attempt.broadcast_attempt_id,
 			));
 		} else {
+			if let Some(failed_signers) = FailedTransactionSigners::<T, I>::get(
+				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			) {
+				T::OffenceReporter::report_many(
+					PalletOffence::FailedToSignTransaction,
+					&failed_signers,
+				);
+			}
 			Self::deposit_event(Event::<T, I>::BroadcastAborted(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			));

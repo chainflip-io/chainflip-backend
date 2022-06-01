@@ -317,7 +317,7 @@ pub fn derive_aggregate_pubkey<P: ECPoint>(
     if !allow_high_pubkey && !pubkey.is_compatible() {
         Err(anyhow::Error::msg("pubkey is not compatible"))
     } else if check_high_degree_commitments(commitments) {
-        // Sanity check (the chance of this failing is practically zero due to the
+        // Sanity check (the chance of this failing is infinitesimal due to the
         // hash commitment stage at the beginning of the ceremony)
         Err(anyhow::Error::msg("high degree coefficient is zero"))
     } else {
@@ -391,6 +391,13 @@ pub fn compute_secret_key_share<P: ECPoint>(secret_shares: IncomingShares<P>) ->
         .values()
         .map(|share| share.value.clone())
         .sum()
+}
+
+impl<P: ECPoint> DKGUnverifiedCommitment<P> {
+    /// Get the number of commitments
+    pub fn get_commitments_len(&self) -> usize {
+        self.commitments.0.len()
+    }
 }
 
 #[cfg(test)]
@@ -511,20 +518,17 @@ pub mod genesis {
 
     pub fn generate_key_data<P: ECPoint>(
         signers: &[AccountId],
+        rng: &mut Rng,
     ) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<P>>)> {
         let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
         let n = params.share_count;
         let t = params.threshold;
 
         use crate::multisig::client::PartyIdxMapping;
-        use rand_legacy::FromEntropy;
-
-        let mut rng = Rng::from_entropy();
 
         let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
             .map(|idx| {
-                let (_secret, commitments, shares) =
-                    generate_secret_and_shares::<P>(&mut rng, n, t);
+                let (_secret, commitments, shares) = generate_secret_and_shares::<P>(rng, n, t);
                 ((idx, DKGCommitment { commitments }), (idx, shares))
             })
             .unzip();

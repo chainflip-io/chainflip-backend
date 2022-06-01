@@ -25,7 +25,7 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    use pallet_cf_vaults::KeygenOutcome;
+    use pallet_cf_vaults::ReportedKeygenOutcome;
 
     tokio::spawn(async move {
         let keygen_outcome = multisig_client
@@ -51,8 +51,10 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                     .await
                 {
                     // Report keygen success if we are able to sign
-                    Ok(_signature) => KeygenOutcome::Success(
+                    Ok(signature) => ReportedKeygenOutcome::Success(
                         cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
+                        data_to_sign.into(),
+                        signature.into(),
                     ),
                     // Report keygen failure if we failed to sign
                     Err((bad_account_ids, reason)) => {
@@ -62,13 +64,13 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                             ceremony_id,
                             reason
                         );
-                        KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                        ReportedKeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
                     }
                 }
             }
             Err((bad_account_ids, reason)) => {
                 slog::debug!(logger, "Keygen ceremony {} failed: {}", ceremony_id, reason);
-                KeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                ReportedKeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
             }
         };
 

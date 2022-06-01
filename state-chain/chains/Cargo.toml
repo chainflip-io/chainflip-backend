@@ -83,3 +83,4 @@ runtime-benchmarks = [
     'frame-system/runtime-benchmarks',
     'hex-literal',
 ]
+runtime-integration-tests = []

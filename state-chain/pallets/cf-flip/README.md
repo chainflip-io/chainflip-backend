@@ -41,6 +41,17 @@ by minting some tokens, or by bridging them from outside (aka. staking).
 A `Surplus` is (unsurprisingly) the opposite: it means there is an excess of funds *outside of the accounts*. Maybe
 an account has been debited some amount, or we have minted some tokens. These need to be allocated somewhere.
 
+#### Reverting an imbalance
+
+The approach taken when creating an imbalance is to saturate on underflow and revert on overflow.
+
+Concretely:
+- if we create an imbalance that saturates to zero, the result will be an imbalance of the maximum available amount. 
+- if we create an imbalance that saturates to u128::MAX, the result is an imbalance of zero.
+
+For example, trying to mint funds to the point where the total emissions exceed `u128::MAX` has no effect and creates a
+surplus of zero. However burning `u128::MAX` funds would create a deficit equal to the total issuance. 
+
 #### Example
 
 A `burn` creates a `Deficit`: the total issuance has been reduced so we need a `Surplus` from

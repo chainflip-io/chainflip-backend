@@ -9,14 +9,16 @@ use crate::Runtime;
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum Offence {
-	/// There was a failure in participation during a signing
+	/// There was a failure in participation during a signing.
 	ParticipateSigningFailed,
-	/// There was a failure in participation during a key generation ceremony
+	/// There was a failure in participation during a key generation ceremony.
 	ParticipateKeygenFailed,
-	/// An invalid transaction was authored
+	/// An invalid transaction was authored.
 	InvalidTransactionAuthored,
-	/// A transaction failed on transmission
+	/// A transaction failed on transmission.
 	TransactionFailedOnTransmission,
+	/// Authority reported they could not sign an ethereum transaction.
+	FailedToSignTransaction,
 	/// An authority missed their authorship slot.
 	MissedAuthorshipSlot,
 	/// A node has missed a heartbeat submission.
@@ -49,6 +51,8 @@ impl From<pallet_cf_broadcast::PalletOffence> for Offence {
 				Self::InvalidTransactionAuthored,
 			pallet_cf_broadcast::PalletOffence::TransactionFailedOnTransmission =>
 				Self::TransactionFailedOnTransmission,
+			pallet_cf_broadcast::PalletOffence::FailedToSignTransaction =>
+				Self::FailedToSignTransaction,
 		}
 	}
 }

@@ -18,7 +18,7 @@ use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
-use utilities::success_threshold_from_share_count;
+use utilities::{success_threshold_from_share_count, threshold_from_share_count};
 
 use crate::{
     common::{all_same, split_at},
@@ -27,7 +27,7 @@ use crate::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
             common::{CeremonyFailureReason, KeygenFailureReason, SigningFailureReason},
-            keygen::{HashComm1, HashContext, SecretShare3},
+            keygen::{HashComm1, HashContext, SecretShare5},
             signing, KeygenResultInfo, MultisigData, ThresholdParameters,
         },
         crypto::{ECPoint, Rng},
@@ -966,11 +966,11 @@ pub async fn standard_signing(
 pub struct StandardKeygenMessages {
     pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
     pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1<Point>>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2<Point>>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3<Point>>>,
-    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints4>>,
-    pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints5>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::CoeffComm3<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyCoeffComm4<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare5<Point>>>,
+    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints6>>,
+    pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints7>>,
 }
 
 pub async fn standard_keygen(
@@ -1041,8 +1041,8 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         keygen_ceremony,
         stage_1a_messages,
         keygen::VerifyHashComm2,
-        keygen::Comm1<Point>,
-        keygen::VerifyComm2<Point>
+        keygen::CoeffComm3<Point>,
+        keygen::VerifyCoeffComm4<Point>
     );
     keygen_ceremony.distribute_messages(stage_2_messages);
     match keygen_ceremony
@@ -1061,13 +1061,13 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         }
         None => {
             let stage_3_messages = keygen_ceremony
-                .gather_outgoing_messages::<keygen::SecretShare3<Point>, _>()
+                .gather_outgoing_messages::<keygen::SecretShare5<Point>, _>()
                 .await;
             let stage_5_messages = run_stages!(
                 keygen_ceremony,
                 stage_3_messages,
-                keygen::Complaints4,
-                keygen::VerifyComplaints5
+                keygen::Complaints6,
+                keygen::VerifyComplaints7
             );
             keygen_ceremony.distribute_messages(stage_5_messages);
 
@@ -1082,14 +1082,14 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 pub struct AllKeygenMessages {
     pub stage_1a_messages: HashMap<AccountId, HashMap<AccountId, keygen::HashComm1>>,
     pub stage_2a_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyHashComm2>>,
-    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::Comm1<Point>>>,
-    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComm2<Point>>>,
-    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare3<Point>>>,
-    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints4>>,
-    pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints5>>,
-    pub stage_6_messages: HashMap<AccountId, HashMap<AccountId, keygen::BlameResponse6<Point>>>,
+    pub stage_1_messages: HashMap<AccountId, HashMap<AccountId, keygen::CoeffComm3<Point>>>,
+    pub stage_2_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyCoeffComm4<Point>>>,
+    pub stage_3_messages: HashMap<AccountId, HashMap<AccountId, keygen::SecretShare5<Point>>>,
+    pub stage_4_messages: HashMap<AccountId, HashMap<AccountId, keygen::Complaints6>>,
+    pub stage_5_messages: HashMap<AccountId, HashMap<AccountId, keygen::VerifyComplaints7>>,
+    pub stage_6_messages: HashMap<AccountId, HashMap<AccountId, keygen::BlameResponse8<Point>>>,
     pub stage_7_messages:
-        HashMap<AccountId, HashMap<AccountId, keygen::VerifyBlameResponses7<Point>>>,
+        HashMap<AccountId, HashMap<AccountId, keygen::VerifyBlameResponses9<Point>>>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -1120,7 +1120,7 @@ pub fn all_stages_with_single_invalid_share_keygen_coroutine<'a>(
             .get_mut(&node_id_0)
             .unwrap()
             .get_mut(&node_id_1)
-            .unwrap() = SecretShare3::create_random(&mut ceremony.rng);
+            .unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
         let stage_4_messages = ceremony.run_stage(stage_3_messages.clone()).await;
         visitor.yield_ceremony(&stage_4_messages)?;
@@ -1180,15 +1180,18 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(rng: &mut Rng) -> DKGUnverifiedCommitment<Point> {
+pub fn gen_invalid_keygen_comm1(
+    rng: &mut Rng,
+    share_count: AuthorityCount,
+) -> DKGUnverifiedCommitment<Point> {
     let (_, fake_comm1) = generate_shares_and_commitment(
         rng,
         // The commitment is only invalid because of the invalid context
         &HashContext([0; 32]),
         0,
         ThresholdParameters {
-            share_count: ACCOUNT_IDS.len() as AuthorityCount,
-            threshold: ACCOUNT_IDS.len() as AuthorityCount,
+            share_count,
+            threshold: threshold_from_share_count(share_count as u32) as AuthorityCount,
         },
     );
     fake_comm1
@@ -1233,7 +1236,7 @@ impl Node {
         }
     }
 
-    /// Check is the ceremony is at the specified keygen BroadcastStage (0-5).
+    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9).
     pub fn ensure_ceremony_at_keygen_stage(
         &self,
         stage_number: usize,
@@ -1244,13 +1247,13 @@ impl Node {
             STAGE_FINISHED_OR_NOT_STARTED => stage == None,
             1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
             2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
-            3 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
-            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
-            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage3>"),
-            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage4>"),
-            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage5>"),
-            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage6>"),
-            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage7>"),
+            3 => stage.as_deref() == Some("BroadcastStage<CoefficientCommitments3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast4>"),
+            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage5>"),
+            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage6>"),
+            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage7>"),
+            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage8>"),
+            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage9>"),
             _ => false,
         };
         if is_at_stage {

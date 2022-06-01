@@ -42,7 +42,7 @@ parameter_types! {
 }
 
 thread_local! {
-	pub static NOMINATION: std::cell::RefCell<Option<u64>>  = RefCell::new(Some(RANDOM_NOMINEE));
+	pub static NOMINATION: std::cell::RefCell<Option<u64>> = RefCell::new(Some(0xc001d00d_u64));
 	pub static VALIDKEY: std::cell::RefCell<bool> = RefCell::new(true);
 }
 
@@ -85,20 +85,44 @@ impl Chainflip for Test {
 }
 
 pub struct MockNominator;
-pub const RANDOM_NOMINEE: u64 = 0xc001d00d_u64;
 
 impl SignerNomination for MockNominator {
 	type SignerId = u64;
 
-	fn nomination_with_seed<S>(_seed: S) -> Option<Self::SignerId> {
-		NOMINATION.with(|cell| *cell.borrow())
+	fn nomination_with_seed<S>(
+		_seed: S,
+		_exclude_ids: &[Self::SignerId],
+	) -> Option<Self::SignerId> {
+		Self::get_nominee()
 	}
 
 	fn threshold_nomination_with_seed<S>(
 		_seed: S,
 		_epoch_index: EpochIndex,
 	) -> Option<Vec<Self::SignerId>> {
-		Some(vec![RANDOM_NOMINEE])
+		Some(vec![Self::get_nominee().unwrap()])
+	}
+}
+
+// Remove some threadlocal + refcell complexity from test code
+impl MockNominator {
+	pub fn get_nominee() -> Option<u64> {
+		NOMINATION.with(|cell| *cell.borrow())
+	}
+
+	pub fn set_nominee(nominee: Option<u64>) {
+		NOMINATION.with(|cell| *cell.borrow_mut() = nominee);
+	}
+
+	/// Increments nominee, if it's a Some
+	pub fn increment_nominee() {
+		NOMINATION.with(|cell| {
+			let mut nomination = cell.borrow_mut();
+			let nomination = nomination.as_mut();
+			if let Some(n) = nomination {
+				*n += 1;
+			}
+		});
 	}
 }
 

@@ -144,10 +144,29 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext
 }
+
+pub type SlashingRateType = u128;
+pub type Bond = u128;
+pub type BlocksOffline = u64;
+pub type Mint = u128;
+
 #[derive(Clone, Debug)]
 pub enum FlipOperation {
-	Stake(AccountId, FlipBalance),
+	MintExternal(FlipBalance, FlipBalance),
+	BurnExternal(FlipBalance, FlipBalance),
+	BurnReverts(FlipBalance),
+	MintReverts(FlipBalance),
+	CreditReverts(FlipBalance),
+	DebitReverts(FlipBalance),
+	BridgeInReverts(FlipBalance),
+	BridgeOutReverts(FlipBalance),
+	MintToReserve(FlipBalance),
+	BurnFromReserve(FlipBalance),
 	BurnFromAccount(AccountId, FlipBalance),
 	MintToAccount(AccountId, FlipBalance),
-	Claim(AccountId, FlipBalance),
+	ExternalTransferOut(AccountId, FlipBalance),
+	ExternalTransferIn(AccountId, FlipBalance),
+	UpdateStakeAndBond(AccountId, FlipBalance, FlipBalance),
+	SlashAccount(AccountId, SlashingRateType, Bond, BlocksOffline, Mint),
+	AccountToAccount(AccountId, AccountId, FlipBalance, FlipBalance),
 }

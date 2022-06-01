@@ -8,7 +8,7 @@ use codec::{Decode, Encode};
 use frame_support::traits::{Imbalance, SameOrOther, TryDrop};
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedSub, Saturating, Zero},
+	traits::{CheckedAdd, CheckedSub, Saturating, Zero},
 	RuntimeDebug,
 };
 use sp_std::{mem, result};
@@ -61,17 +61,21 @@ impl<T: Config> Surplus<T> {
 
 	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the
 	/// mint will be [reverted](RevertImbalance).
-	pub(super) fn from_mint(mut amount: T::Balance) -> Self {
-		if amount.is_zero() {
-			return Self::new(Zero::zero(), ImbalanceSource::Emissions)
-		}
-		Flip::TotalIssuance::<T>::mutate(|total| {
-			*total = total.checked_add(&amount).unwrap_or_else(|| {
-				amount = T::Balance::max_value() - *total;
-				T::Balance::max_value()
-			})
-		});
-		Self::new(amount, ImbalanceSource::Emissions)
+	pub(super) fn from_mint(amount: T::Balance) -> Self {
+		Self::new(
+			if amount.is_zero() {
+				Zero::zero()
+			} else {
+				Flip::TotalIssuance::<T>::mutate(|total| match total.checked_add(&amount) {
+					Some(new_total) => {
+						*total = new_total;
+						amount
+					},
+					None => Zero::zero(),
+				})
+			},
+			ImbalanceSource::Emissions,
+		)
 	}
 
 	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has

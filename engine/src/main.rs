@@ -13,14 +13,14 @@ use chainflip_engine::{
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
+use clap::Parser;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
-use structopt::StructOpt;
 
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
-    let settings = match Settings::new(CommandLineOptions::from_args()) {
+    let settings = match Settings::new(CommandLineOptions::parse()) {
         Ok(settings) => settings,
         Err(error) => {
             eprintln!("Error reading settings: {}", error);
