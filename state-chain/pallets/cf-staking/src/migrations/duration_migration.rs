@@ -1,6 +1,6 @@
 use crate::*;
 use frame_support::{
-	migration::{put_storage_value, take_storage_value},
+	storage::migration::{put_storage_value, take_storage_value},
 	traits::Get,
 };
 use sp_std::marker::PhantomData;
@@ -33,6 +33,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
+		use frame_support::storage::migration::get_storage_value;
 		assert!(get_storage_value::<OldDuration>(b"Staking", b"ClaimTTL", b"").is_some());
 		assert!(
 			get_storage_value::<OldClaimExpiries<T>>(b"Staking", b"ClaimExpiries", b"").is_some()
@@ -42,6 +43,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
+		use frame_support::storage::migration::get_storage_value;
 		assert!(get_storage_value::<NewDuration>(b"Staking", b"ClaimTTL", b"").is_some());
 		assert!(
 			get_storage_value::<NewClaimExpiries<T>>(b"Staking", b"ClaimExpiries", b"").is_some()
