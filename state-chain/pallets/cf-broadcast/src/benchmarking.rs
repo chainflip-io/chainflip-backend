@@ -70,13 +70,16 @@ benchmarks_instance_pallet! {
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
 		let b in 1 .. 1000u32;
-		// TODO: Seperate between expires and the broadcast queue.
+		let x in 1000 .. 2000u32;
 		for i in 1 .. b {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			BroadcastRetryQueue::<T, I>::append(&BroadcastAttempt::<T, I> {
 				unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
 				broadcast_attempt_id,
 			});
+		}
+		for i in 1 .. x {
+			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
 			});
