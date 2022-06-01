@@ -8,6 +8,8 @@ mod mock;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+mod migrations;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -22,13 +24,15 @@ use cf_traits::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnRuntimeUpgrade, StorageVersion, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{prelude::*, time::Duration};
 
 use cf_traits::SystemStateInfo;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 /// Temporary alias to work around `Duration` not supporting TypeInfo.
 ///
@@ -115,7 +119,9 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
+	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Store the list of staked accounts and whether or not they are retired
@@ -150,6 +156,20 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			Self::expire_pending_claims()
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
