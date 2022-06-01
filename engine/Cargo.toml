@@ -85,6 +85,7 @@ multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
+pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 pallet-cf-online = {path = "../state-chain/pallets/cf-online"}

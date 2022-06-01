@@ -462,6 +462,12 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type KeyProvider = EthereumVault;
 }
 
+impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Ethereum;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -490,6 +496,7 @@ construct_runtime!(
 		Reputation: pallet_cf_reputation,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
+		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 	}
 );
 

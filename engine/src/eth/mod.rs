@@ -1,3 +1,4 @@
+mod http_block_stream;
 mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;

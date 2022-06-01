@@ -3,8 +3,8 @@ use web3::{
     api::SubscriptionStream,
     signing::SecretKeyRef,
     types::{
-        Block, BlockHeader, BlockNumber, Bytes, CallRequest, Filter, Log, SignedTransaction,
-        SyncState, Transaction, TransactionId, TransactionParameters, U64,
+        Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
+        SignedTransaction, SyncState, Transaction, TransactionId, TransactionParameters, U64,
     },
     Web3,
 };
@@ -77,6 +77,13 @@ pub trait EthRpcApi: Send + Sync {
     /// - Request fails
     /// - Request succeeds, but doesn't return a block
     async fn block(&self, block_number: U64) -> Result<Block<H256>>;
+
+    async fn fee_history(
+        &self,
+        block_count: U256,
+        newest_block: BlockNumber,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> Result<FeeHistory>;
 }
 
 #[async_trait]
@@ -185,6 +192,25 @@ where
                     ))
                 })
             })
+    }
+
+    async fn fee_history(
+        &self,
+        block_count: U256,
+        newest_block: BlockNumber,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> Result<FeeHistory> {
+        self.web3
+            .eth()
+            .fee_history(block_count, newest_block, reward_percentiles.clone())
+            .await
+            .context(format!(
+                "{} client: Call failed: fee_history({:?}, {:?}, {:?})",
+                T::transport_protocol(),
+                block_count,
+                newest_block,
+                reward_percentiles,
+            ))
     }
 }
 
@@ -350,6 +376,21 @@ impl EthRpcApi for EthDualRpcClient {
     async fn block(&self, block_number: U64) -> Result<Block<H256>> {
         dual_call_rpc!(self, block, block_number)
     }
+
+    async fn fee_history(
+        &self,
+        block_count: U256,
+        newest_block: BlockNumber,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> Result<FeeHistory> {
+        dual_call_rpc!(
+            self,
+            fee_history,
+            block_count,
+            newest_block,
+            reward_percentiles
+        )
+    }
 }
 
 #[cfg(test)]
@@ -389,6 +430,13 @@ pub mod mocks {
             async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>>;
+
+            async fn fee_history(
+                &self,
+                block_count: U256,
+                newest_block: BlockNumber,
+                reward_percentiles: Option<Vec<f64>>,
+            ) -> Result<FeeHistory>;
         }
     );
 }
