@@ -95,8 +95,6 @@ mod tests {
 		#[derive(Clone)]
 		pub struct KeyComponents {
 			pub secret: SecretKey,
-			// nonce
-			pub k_times_g: PublicKey,
 			// agg key
 			pub agg_key: AggKey,
 		}
@@ -124,10 +122,10 @@ mod tests {
 
 		impl Default for ThresholdSigner {
 			fn default() -> Self {
-				let (secret, k_times_g, agg_key) = Self::generate_keypair(GENESIS_KEY);
+				let (secret, _pub_key, agg_key) = Self::generate_keypair(GENESIS_KEY);
 				ThresholdSigner {
 					key_seed: GENESIS_KEY,
-					key_components: KeyComponents { secret, k_times_g, agg_key },
+					key_components: KeyComponents { secret, agg_key },
 					proposed_seed: None,
 					proposed_key_components: None,
 				}
@@ -139,11 +137,11 @@ mod tests {
 			pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey, AggKey) {
 				let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 				let secret_key = SecretKey::parse(&agg_key_priv).unwrap();
-				let k_times_g = PublicKey::from_secret_key(&secret_key);
+				let pub_key = PublicKey::from_secret_key(&secret_key);
 				(
 					secret_key,
-					k_times_g,
-					AggKey::from_pubkey_compressed(k_times_g.serialize_compressed()),
+					pub_key,
+					AggKey::from_pubkey_compressed(pub_key.serialize_compressed()),
 				)
 			}
 
@@ -153,9 +151,9 @@ mod tests {
 
 			pub fn propose_new_public_key(&mut self) -> AggKey {
 				let proposed_seed = self.key_seed + 1;
-				let (secret, k_times_g, agg_key) = Self::generate_keypair(proposed_seed);
+				let (secret, _pub_key, agg_key) = Self::generate_keypair(proposed_seed);
 				self.proposed_seed = Some(proposed_seed);
-				self.proposed_key_components = Some(KeyComponents { secret, k_times_g, agg_key });
+				self.proposed_key_components = Some(KeyComponents { secret, agg_key });
 				self.proposed_public_key()
 			}
 
