@@ -89,7 +89,7 @@ mod scalar_impls {
         }
 
         fn from_bytes(x: &[u8; 32]) -> Self {
-            Scalar(SK::from_bytes_mod_order(x.clone()))
+            Scalar(SK::from_bytes_mod_order(*x))
         }
 
         fn zero() -> Self {
@@ -131,7 +131,7 @@ mod scalar_impls {
         type Output = Scalar;
 
         fn sub(self, rhs: Self) -> Self::Output {
-            Scalar(self.0 - &rhs.0)
+            Scalar(self.0 - rhs.0)
         }
     }
 
@@ -139,7 +139,7 @@ mod scalar_impls {
         type Output = Scalar;
 
         fn mul(self, rhs: Self) -> Self::Output {
-            Scalar(self.0 * &rhs.0)
+            Scalar(self.0 * rhs.0)
         }
     }
 }
