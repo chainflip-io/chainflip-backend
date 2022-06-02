@@ -34,12 +34,6 @@ use cf_traits::SystemStateInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-/// Temporary alias to work around `Duration` not supporting TypeInfo.
-///
-/// TODO: Replace this with just a u64 for the seconds. We don't care about nanos. Will do this in
-/// another PR since it requires a storage migration.
-type DurationParts = u64;
-
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
 	DispatchError,
@@ -143,14 +137,14 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
-		StorageValue<_, Vec<(DurationParts, AccountId<T>)>, ValueQuery>;
+		StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// TTL for a claim from the moment of issue.
 	#[pallet::storage]
-	pub type ClaimTTL<T: Config> = StorageValue<_, DurationParts, ValueQuery>;
+	pub type ClaimTTL<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -729,7 +723,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
 	/// claims for the account are expired.
-	fn register_claim_expiry(account_id: AccountId<T>, expiry: DurationParts) {
+	fn register_claim_expiry(account_id: AccountId<T>, expiry: u64) {
 		ClaimExpiries::<T>::mutate(|expiries| {
 			// We want to ensure this list remains sorted such that the head of the list contains
 			// the oldest pending claim (ie. the first to be expired). This means we put the new
