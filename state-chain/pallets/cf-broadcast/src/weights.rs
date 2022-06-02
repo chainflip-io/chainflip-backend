@@ -41,39 +41,52 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:0)
 	// Storage: EthereumBroadcaster Expiries (r:1 w:1)
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1999 w:0)
-	// Storage: EthereumBroadcaster ThresholdSignatureData (r:49 w:0)
+	// Storage: EthereumBroadcaster ThresholdSignatureData (r:49 w:49)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:49 w:49)
-	// Storage: EthereumBroadcaster FailedTransactionSigners (r:49 w:0)
+	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:49 w:0)
+	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
+	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: Validator EpochAuthorityCount (r:1 w:0)
 	// Storage: Reputation Suspensions (r:3 w:0)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
+	// Storage: EthereumThresholdSigner RetryQueues (r:1 w:1)
+	// Storage: EthereumThresholdSigner OpenRequests (r:0 w:49)
+	// Storage: EthereumThresholdSigner Signatures (r:0 w:49)
+	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:49)
+	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:49)
+	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:49)
+	// Storage: EthereumBroadcaster FailedTransactionSigners (r:0 w:49)
+	// Storage: EthereumBroadcaster SignatureToBroadcastIdLookup (r:0 w:1)
 	fn on_initialize(b: u32, x: u32, ) -> Weight {
-		(25_760_109_000 as Weight)
-			// Standard Error: 805_000
-			.saturating_add((504_832_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
+		#[allow(clippy::unnecessary_cast)]
+		(0 as Weight)
+			// Standard Error: 399_000
+			.saturating_add((287_751_000 as Weight).saturating_mul(b as Weight))
+			// Standard Error: 400_000
+			.saturating_add((5_263_000 as Weight).saturating_mul(x as Weight))
+			.saturating_add(T::DbWeight::get().reads(6 as Weight))
+			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(b as Weight)))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(x as Weight)))
-			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(T::DbWeight::get().writes((7 as Weight).saturating_mul(b as Weight)))
 	}
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
-	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
-	// Storage: EthereumBroadcaster SignerIdToAccountId (r:1 w:1)
-	// Storage: EthereumBroadcaster RefundSignerId (r:1 w:1)
-	// Storage: EthereumBroadcaster Expiries (r:1 w:1)
-	// Storage: EthereumBroadcaster AwaitingTransmission (r:0 w:1)
+	// Storage: Reputation Penalties (r:1 w:0)
+	// Storage: Reputation Reputations (r:1 w:1)
+	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_ready_for_transmission() -> Weight {
-		(58_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+		#[allow(clippy::unnecessary_cast)]
+		(49_000_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedTransactionSigners (r:1 w:1)
 	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:1 w:1)
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_signing_failure() -> Weight {
-		(41_000_000 as Weight)
+		#[allow(clippy::unnecessary_cast)]
+		(40_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -90,7 +103,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:0 w:1)
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:0 w:1)
 	fn on_signature_ready() -> Weight {
-		(87_000_000 as Weight)
+		#[allow(clippy::unnecessary_cast)]
+		(85_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(10 as Weight))
 			.saturating_add(T::DbWeight::get().writes(7 as Weight))
 	}
@@ -101,7 +115,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster FailedTransactionSigners (r:0 w:1)
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:0 w:1)
 	fn signature_accepted() -> Weight {
-		(36_000_000 as Weight)
+		#[allow(clippy::unnecessary_cast)]
+		(37_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -112,34 +127,44 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:0)
 	// Storage: EthereumBroadcaster Expiries (r:1 w:1)
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1999 w:0)
-	// Storage: EthereumBroadcaster ThresholdSignatureData (r:49 w:0)
+	// Storage: EthereumBroadcaster ThresholdSignatureData (r:49 w:49)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:49 w:49)
-	// Storage: EthereumBroadcaster FailedTransactionSigners (r:49 w:0)
+	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:49 w:0)
+	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
+	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: Validator EpochAuthorityCount (r:1 w:0)
 	// Storage: Reputation Suspensions (r:3 w:0)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
+	// Storage: EthereumThresholdSigner RetryQueues (r:1 w:1)
+	// Storage: EthereumThresholdSigner OpenRequests (r:0 w:49)
+	// Storage: EthereumThresholdSigner Signatures (r:0 w:49)
+	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:49)
+	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:49)
+	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:49)
+	// Storage: EthereumBroadcaster FailedTransactionSigners (r:0 w:49)
+	// Storage: EthereumBroadcaster SignatureToBroadcastIdLookup (r:0 w:1)
 	fn on_initialize(b: u32, x: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(25_760_109_000 as Weight)
-			// Standard Error: 805_000
-			.saturating_add((504_832_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
+		(0 as Weight)
+			// Standard Error: 399_000
+			.saturating_add((287_751_000 as Weight).saturating_mul(b as Weight))
+			// Standard Error: 400_000
+			.saturating_add((5_263_000 as Weight).saturating_mul(x as Weight))
+			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(b as Weight)))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(x as Weight)))
-			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((7 as Weight).saturating_mul(b as Weight)))
 	}
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
-	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
-	// Storage: EthereumBroadcaster SignerIdToAccountId (r:1 w:1)
-	// Storage: EthereumBroadcaster RefundSignerId (r:1 w:1)
-	// Storage: EthereumBroadcaster Expiries (r:1 w:1)
-	// Storage: EthereumBroadcaster AwaitingTransmission (r:0 w:1)
+	// Storage: Reputation Penalties (r:1 w:0)
+	// Storage: Reputation Reputations (r:1 w:1)
+	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_ready_for_transmission() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(58_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+		(49_000_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedTransactionSigners (r:1 w:1)
@@ -147,7 +172,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_signing_failure() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(41_000_000 as Weight)
+		(40_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
@@ -165,7 +190,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:0 w:1)
 	fn on_signature_ready() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(87_000_000 as Weight)
+		(85_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(7 as Weight))
 	}
@@ -177,7 +202,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:0 w:1)
 	fn signature_accepted() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(36_000_000 as Weight)
+		(37_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}

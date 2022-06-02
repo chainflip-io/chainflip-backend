@@ -43,6 +43,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
+		#[allow(clippy::unnecessary_cast)]
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
