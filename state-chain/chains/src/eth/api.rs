@@ -1,4 +1,6 @@
+#[cfg(feature = "runtime-benchmarks")]
 use crate::eth::{AggKey, SigData};
+
 use sp_runtime::traits::UniqueSaturatedInto;
 
 use crate::*;
