@@ -72,27 +72,11 @@ macro_rules! derive_point_impls {
 
         impl zeroize::DefaultIsZeroes for $point {}
 
-        impl std::ops::Add for $point {
-            type Output = $point;
-
-            fn add(self, rhs: Self) -> Self::Output {
-                &self + &rhs
-            }
-        }
-
         impl std::iter::Sum for $point {
             fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
                 // "Point at infinity" corresponds to "zero" on
                 // an elliptic curve
                 iter.fold(Self::point_at_infinity(), |a, b| a + b)
-            }
-        }
-
-        impl std::ops::Mul<$scalar> for $point {
-            type Output = $point;
-
-            fn mul(self, rhs: $scalar) -> Self::Output {
-                self * &rhs
             }
         }
     };
