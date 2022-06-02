@@ -14,10 +14,7 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
-use crate::logging::{
-    CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED,
-    SIGNING_CEREMONY_FAILED,
-};
+use crate::logging::{CEREMONY_ID_KEY, REPORTED_PARTIES_KEY};
 
 use client::common::{
     broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
@@ -171,13 +168,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .try_into_result_sender()
             .unwrap();
         self.ceremony_id_tracker.consume_signing_id(&ceremony_id);
-        if let Err((blamed_parties, reason)) = &result {
-            slog::warn!(
+        if let Err((reported_parties, reason)) = &result {
+            slog::debug!(
                 self.logger,
-                #SIGNING_CEREMONY_FAILED,
-                "{}",
-                reason; "reported parties" =>
-                format_iterator(blamed_parties).to_string(),
+                "{}", reason;
+                REPORTED_PARTIES_KEY => format_iterator(reported_parties).to_string(),
                 CEREMONY_ID_KEY => ceremony_id,
             );
         }
@@ -203,12 +198,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .unwrap();
         self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
-            slog::warn!(
+            slog::debug!(
                 self.logger,
-                #KEYGEN_CEREMONY_FAILED,
-                "{}",
-                reason; "reported parties" =>
-                format_iterator(blamed_parties).to_string(),
+                "{}", reason;
+                REPORTED_PARTIES_KEY => format_iterator(blamed_parties).to_string(),
                 CEREMONY_ID_KEY => ceremony_id,
             );
         }
@@ -233,7 +226,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         {
             Ok(res) => res,
             Err(reason) => {
-                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+                slog::debug!(logger, "Keygen request invalid: {}", reason);
                 let _result = result_sender.send(Err((
                     BTreeSet::new(),
                     CeremonyFailureReason::InvalidParticipants,
@@ -249,7 +242,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .ceremony_id_tracker
             .is_keygen_ceremony_id_used(&ceremony_id)
         {
-            slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
+            slog::debug!(
+                logger,
+                "Keygen request invalid: ceremony id {} has already been used",
+                ceremony_id
+            );
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
                 CeremonyFailureReason::CeremonyIdAlreadyUsed,
@@ -309,11 +306,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         let minimum_signers_needed = key_info.params.threshold + 1;
         let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
         if signers_len < minimum_signers_needed {
-            slog::warn!(
+            slog::debug!(
                 logger,
-                #REQUEST_TO_SIGN_IGNORED,
-                "Request to sign ignored: not enough signers {}/{}",
-                signers.len(), minimum_signers_needed
+                "Request to sign invalid: not enough signers ({}/{})",
+                signers.len(),
+                minimum_signers_needed
             );
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
@@ -322,25 +319,28 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             return;
         }
 
-        let (own_idx, signer_idxs) = match self
-            .map_ceremony_parties(&signers, &key_info.validator_map)
-        {
-            Ok(res) => res,
-            Err(reason) => {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-                let _result = result_sender.send(Err((
-                    BTreeSet::new(),
-                    CeremonyFailureReason::InvalidParticipants,
-                )));
-                return;
-            }
-        };
+        let (own_idx, signer_idxs) =
+            match self.map_ceremony_parties(&signers, &key_info.validator_map) {
+                Ok(res) => res,
+                Err(reason) => {
+                    slog::debug!(logger, "Request to sign invalid: {}", reason);
+                    let _result = result_sender.send(Err((
+                        BTreeSet::new(),
+                        CeremonyFailureReason::InvalidParticipants,
+                    )));
+                    return;
+                }
+            };
 
         if self
             .ceremony_id_tracker
             .is_signing_ceremony_id_used(&ceremony_id)
         {
-            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
+            slog::debug!(
+                logger,
+                "Request to sign invalid: ceremony id {} has already been used",
+                ceremony_id
+            );
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
                 CeremonyFailureReason::CeremonyIdAlreadyUsed,
