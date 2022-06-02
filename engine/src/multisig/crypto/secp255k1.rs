@@ -14,7 +14,7 @@ use curv::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Point(pub Secp256k1Point);
+pub struct Point(Secp256k1Point);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Scalar(Secp256k1Scalar);
