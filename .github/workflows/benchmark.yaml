@@ -20,7 +20,8 @@ jobs:
 
       - name: Download binary to benchmark
         run: |
-          wget -O chainflip-node $CIRCLE_CI_ARTIFACT_URL
+          curl -sLO -H "Circle-Token: $CIRCLE_TOKEN" $CIRCLE_CI_ARTIFACT_URL
+          chmod +x chainflip-node
 
       - name: Run benchmarks
         run: |
