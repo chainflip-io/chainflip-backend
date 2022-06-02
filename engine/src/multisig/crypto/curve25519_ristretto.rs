@@ -45,7 +45,7 @@ mod point_impls {
     derive_point_impls!(Point, Scalar);
 
     impl std::ops::Add for Point {
-        type Output = Point;
+        type Output = Self;
 
         fn add(self, rhs: Self) -> Self::Output {
             Point(self.0 + rhs.0)
@@ -53,7 +53,7 @@ mod point_impls {
     }
 
     impl std::ops::Sub for Point {
-        type Output = Point;
+        type Output = Self;
 
         fn sub(self, rhs: Self) -> Self::Output {
             Point(self.0 - rhs.0)
@@ -61,7 +61,7 @@ mod point_impls {
     }
 
     impl<B: std::borrow::Borrow<Scalar>> std::ops::Mul<B> for Point {
-        type Output = Point;
+        type Output = Self;
 
         fn mul(self, rhs: B) -> Self::Output {
             Point(self.0 * rhs.borrow().0)
