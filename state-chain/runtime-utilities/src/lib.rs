@@ -29,6 +29,8 @@ pub trait EnumVariant {
 	fn from_discriminant(d: u8) -> Option<Self::Variant>;
 }
 
+/// Allows us to just decode the variant when that is all we care about.
+/// This is useful when it may be extensive to decode the whole variant type.
 pub trait StorageDecodeVariant<V: EnumVariant> {
 	fn decode_variant() -> Option<V::Variant>;
 }
