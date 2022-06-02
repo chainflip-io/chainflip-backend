@@ -68,7 +68,7 @@ generic-array= "0.14"
 public-ip = "0.2.2"
 lazy_format = "1.10.0"
 curve25519-dalek = {version = "3.2", features = ["serde"]}
-typenum = "1"
+typenum = "1.15"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
