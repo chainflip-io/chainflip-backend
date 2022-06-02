@@ -1,4 +1,4 @@
-mod http_block_stream;
+mod chain_data_witnessing;
 mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;
@@ -12,6 +12,7 @@ pub mod rpc;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use cf_chains::{eth::TrackedData, Ethereum};
 use cf_traits::EpochIndex;
 use regex::Regex;
 
@@ -31,7 +32,10 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::{stream, FutureExt, StreamExt};
+use futures::{
+    stream::{self, BoxStream},
+    FutureExt, StreamExt,
+};
 use slog::o;
 use sp_core::{H160, U256};
 use std::{
@@ -40,9 +44,13 @@ use std::{
     pin::Pin,
     str::FromStr,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use thiserror::Error;
-use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
+use tokio::{
+    sync::{mpsc::UnboundedReceiver, watch},
+    task::JoinHandle,
+};
 use web3::{
     ethabi::{self, Address, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -67,6 +75,8 @@ pub struct EthNumberBloom {
 }
 
 use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
+
+pub const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 // TODO: Not possible to fix the clippy warning here. At the moment we
 // need to ignore it on a global level.
@@ -182,6 +192,127 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
                         task_end_at_block_c,
                     )
                 })
+            }
+        }
+    }
+}
+
+pub async fn start_chain_data_witnesser<
+    EthRpcClient: EthRpcApi + Send + Sync,
+    ScRpcClient: StateChainRpcApi + Send + Sync + 'static,
+>(
+    eth_ws_rpc: &'static EthWsRpcClient,
+    eth_http_rpc: &'static EthHttpRpcClient,
+    state_chain_client: Arc<StateChainClient<ScRpcClient>>,
+    mut instruction_receiver: UnboundedReceiver<ObserveInstruction>,
+    logger: &'static slog::Logger,
+) where
+    ScRpcClient: 'static + StateChainRpcApi + Sync + Send,
+{
+    enum Protocol {
+        Ws,
+        Http,
+    }
+
+    impl Protocol {
+        pub fn toggle(&mut self) {
+            match self {
+                Protocol::Ws => *self = Protocol::Http,
+                Protocol::Http => *self = Protocol::Ws,
+            }
+        }
+    }
+
+    let mut eth_protocol = Protocol::Ws;
+
+    let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
+    slog::info!(logger, "Starting");
+
+    let (to_block_sender, to_block_receiver) = watch::channel::<Option<u64>>(None);
+    std::mem::drop(to_block_receiver);
+
+    while let Some(observe_instruction) = instruction_receiver.recv().await {
+        match observe_instruction {
+            ObserveInstruction::End(end_block) => {
+                assert!(
+                    to_block_sender.receiver_count() == 1,
+                    "There should be exactly one receiver."
+                );
+                to_block_sender.send(Some(end_block)).unwrap();
+            }
+            ObserveInstruction::Start(from_block, _epoch) => {
+                assert!(
+                    to_block_sender.receiver_count() == 0,
+                    "Receiver still waiting on start. Should not be possible."
+                );
+                let to_block_receiver = to_block_sender.subscribe();
+                to_block_sender.send(None).unwrap();
+                let logger = logger.clone();
+                let mut chain_data_stream: BoxStream<anyhow::Result<TrackedData<Ethereum>>> =
+                    match eth_protocol {
+                        Protocol::Ws => Box::pin(
+                            chain_data_witnessing::ws_chain_data_witnesser(
+                                from_block,
+                                to_block_receiver,
+                                eth_ws_rpc,
+                                &logger,
+                            )
+                            .await
+                            .expect("Failed to initialise WS chain data witnesser"),
+                        ),
+                        Protocol::Http => Box::pin(
+                            chain_data_witnessing::http_chain_data_witnesser(
+                                from_block,
+                                to_block_receiver,
+                                ETH_CHAIN_TRACKING_POLL_INTERVAL,
+                                eth_http_rpc,
+                                &logger,
+                            )
+                            .await,
+                        ),
+                    };
+
+                let state_chain_client_c = state_chain_client.clone();
+
+                let _: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+                    while let Some(tracked_data) = chain_data_stream.next().await {
+                        state_chain_client_c
+                            .submit_signed_extrinsic(
+                                state_chain_runtime::Call::Witnesser(
+                                    pallet_cf_witnesser::Call::witness {
+                                        call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                            pallet_cf_chain_tracking::Call::update_chain_state {
+                                                state: tracked_data?,
+                                            },
+                                        ))
+                                    },
+                                ),
+                                &logger,
+                            )
+                            .await?;
+                    }
+                    Ok(())
+                    // let state_chain_client_sink = sink::unfold::<_, _, _, _, anyhow::Error>(
+                    //     state_chain_client,
+                    //     |client, tracked_data| async move {
+                    //         client
+                    //             .submit_signed_extrinsic(
+                    //                 state_chain_runtime::Call::EthereumChainTracking(
+                    //                     pallet_cf_chain_tracking::Call::update_chain_state {
+                    //                         state: tracked_data,
+                    //                     },
+                    //                 ),
+                    //                 logger,
+                    //             )
+                    //             .await?;
+                    //         Ok(client)
+                    //     },
+                    // );
+
+                    // chain_data_stream.forward(state_chain_client_sink)
+                });
+
+                eth_protocol.toggle();
             }
         }
     }
