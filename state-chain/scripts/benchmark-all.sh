@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 binary=./target/release/chainflip-node
 steps=20
 repeat=10
