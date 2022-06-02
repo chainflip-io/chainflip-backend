@@ -18,9 +18,6 @@ pub mod benchmarking_default;
 
 pub mod eth;
 
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
-
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {

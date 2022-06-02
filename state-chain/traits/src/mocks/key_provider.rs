@@ -21,7 +21,4 @@ impl<C: cf_chains::ChainCrypto, K: std::default::Default> crate::KeyProvider<C>
 	fn current_key() -> C::AggKey {
 		unimplemented!("Implement a custom mock if `current_key()` is required.")
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(key: C::AggKey) {}
 }

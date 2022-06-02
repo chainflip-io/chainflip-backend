@@ -13,17 +13,6 @@ use frame_system::RawOrigin;
 
 use cf_chains::benchmarking_default::BenchmarkDefault;
 
-type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
-type SignedTransactionFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignedTransaction;
-type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
-type ThresholdSignatureFor<T, I> =
-	<<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
-type ChainAmountFor<T, I> = <<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
-type TransactionHashFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
-type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
-type UnsignedTransactionFor<T, I> =
-	<<T as Config<I>>::TargetChain as ChainAbi>::UnsignedTransaction;
-
 // Inserts a new signing´attempt into the storage.
 fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(
 	nominee: <T as Chainflip>::ValidatorId,
@@ -41,15 +30,6 @@ fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(
 	);
 }
 
-fn generate_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
-	broadcast_attempt_id: BroadcastAttemptId,
-) -> BroadcastAttempt<T, I> {
-	BroadcastAttempt::<T, I> {
-		unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
-		broadcast_attempt_id,
-	}
-}
-
 // Generates a new signature ready call.
 fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
 	let threshold_request_id =
@@ -65,11 +45,10 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 }
 
 // TODO: check if we really reach the expensive parts of the code.
-
 benchmarks_instance_pallet! {
-	// TODO: we meassuere the case in which the signautre is invalid ->
+	// TODO: we measure the case in which the signature is invalid ->
 	// this is a really rare and more expensive case. We should create a benchmark for this.
-	// As long as we use this benchmark for the default case we will waste computaional power.
+	// As long as we use this benchmark for the default case we will waste computational power!
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
 		let b in 1 .. 1000u32;
@@ -94,7 +73,7 @@ benchmarks_instance_pallet! {
 	}
 	transaction_ready_for_transmission {
 		// Add the moment we benchmark the fail case which is
-		// not the expensive case and not the the default case.
+		// not the expensive case and not the default case.
 		// TODO: we should measure the case in which the transaction is valid.
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureThresholdSigned::successful_origin();
@@ -111,9 +90,8 @@ benchmarks_instance_pallet! {
 	}
 	// TODO: add a benchmark for the failure case
 	transaction_signing_failure {
-		// Attention: This benchmark is the success case. The failure case is not yet implemented and
-		// can be quite expensiv in the worst case. Unfortenetly with the current implementation there is
-		// no good way to dtermine this before we execute the benchmark.
+		// Attention: This benchmark is the success case. The failure case is not yet implemented and can be quite expensive in the worst case.
+		// Unfortunately with the current implementation, there is no good way to determine this before we execute the benchmark.
 		let caller: T::AccountId = whitelisted_caller();
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
