@@ -26,4 +26,5 @@ jobs:
 
       - name: Run benchmarks
         run: |
+          ./chainflip-node --help
           ./state-chain/scripts/benchmark-all.sh ./chainflip-node
