@@ -287,6 +287,7 @@ where
                 Err((reported_parties, failure_reason)) => {
                     // Log the failure reason
                     failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+
                     Err((reported_parties, failure_reason))
                 }
             }
@@ -361,12 +362,19 @@ where
                         // Log the failure reason
                         failure_reason
                             .log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+
                         (reported_parties, failure_reason)
                     }),
-                None => Err((
-                    BTreeSet::new(),
-                    CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),
-                )),
+                None => {
+                    // No key was found for the given key_id
+                    let failure_reason =
+                        CeremonyFailureReason::Other(SigningFailureReason::UnknownKey);
+
+                    // Log the failure reason
+                    failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+
+                    Err((BTreeSet::new(), failure_reason))
+                }
             }
         })
     }

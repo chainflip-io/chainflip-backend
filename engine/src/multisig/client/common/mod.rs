@@ -139,10 +139,10 @@ impl CeremonyFailureReason<SigningFailureReason> {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
             }
             CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare) => {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
             }
             CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners) => {
-                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
             }
             CeremonyFailureReason::Other(SigningFailureReason::UnknownKey) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
@@ -155,7 +155,7 @@ impl CeremonyFailureReason<KeygenFailureReason> {
     pub fn log(&self, logger: &slog::Logger) {
         match self {
             CeremonyFailureReason::DuplicateCeremonyId => {
-                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
             }
             CeremonyFailureReason::BroadcastFailure(_, _) => {
                 slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
@@ -185,12 +185,25 @@ impl CeremonyFailureReason<KeygenFailureReason> {
     }
 }
 
+// Test that a few of the failure reasons are logging the correct tags
 #[test]
-fn test_failure_reason_log_tag() {
-    let (logger, tag_cache) = crate::logging::test_utils::new_test_logger_with_tag_cache();
+fn test_failure_reason_logs_with_tag() {
+    let (logger, mut tag_cache) = crate::logging::test_utils::new_test_logger_with_tag_cache();
 
     CeremonyFailureReason::DuplicateCeremonyId::<SigningFailureReason>.log(&logger);
     assert!(tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+
+    tag_cache.clear();
+
+    CeremonyFailureReason::CeremonyIdAlreadyUsed::<KeygenFailureReason>.log(&logger);
+    assert!(tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
+
+    tag_cache.clear();
+
+    CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare).log(&logger);
+    assert!(tag_cache.contains_tag(SIGNING_CEREMONY_FAILED));
+
+    tag_cache.clear();
 
     CeremonyFailureReason::BroadcastFailure::<KeygenFailureReason>(
         BroadcastFailureReason::InsufficientMessages,
