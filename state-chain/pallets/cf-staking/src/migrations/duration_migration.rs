@@ -35,6 +35,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		use frame_support::storage::migration::get_storage_value;
+		type NewClaimExpiries<T> = Vec<(u64, AccountId<T>)>;
 		assert!(get_storage_value::<u64>(b"Staking", b"ClaimTTL", b"").is_some());
 		assert!(
 			get_storage_value::<NewClaimExpiries<T>>(b"Staking", b"ClaimExpiries", b"").is_some()
