@@ -22,7 +22,6 @@ use utilities::{success_threshold_from_share_count, threshold_from_share_count};
 
 use crate::{
     common::{all_same, split_at},
-    logging::{KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, SIGNING_CEREMONY_FAILED},
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
@@ -186,7 +185,6 @@ pub trait CeremonyRunnerStrategy {
             Error = <Self as CeremonyRunnerStrategy>::CeremonyData,
         > + Clone;
     type FailureReason: std::fmt::Debug + std::cmp::Ord;
-    const CEREMONY_FAILED_TAG: &'static str;
 
     fn post_successful_complete_check(
         &self,
@@ -401,7 +399,7 @@ where
         let results = self
             .nodes
             .iter_mut()
-            .map(|(account_id, node)| {
+            .map(|(account_id, _)| {
                 let result = result_receivers
                     .get_mut(account_id)
                     .unwrap()
@@ -609,7 +607,6 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     type CheckedOutput = (KeyId, HashMap<AccountId, Self::Output>);
     type InitialStageData = keygen::HashComm1;
     type FailureReason = KeygenFailureReason;
-    const CEREMONY_FAILED_TAG: &'static str = KEYGEN_CEREMONY_FAILED;
 
     fn post_successful_complete_check(
         &self,
@@ -691,7 +688,6 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
     type CheckedOutput = EthSchnorrSignature;
     type InitialStageData = frost::Comm1<Point>;
     type FailureReason = SigningFailureReason;
-    const CEREMONY_FAILED_TAG: &'static str = SIGNING_CEREMONY_FAILED;
 
     fn post_successful_complete_check(
         &self,
@@ -1052,12 +1048,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
         )
         .await
     {
-        Some(_) => {
-            for node in keygen_ceremony.nodes.values() {
-                assert!(node.tag_cache.contains_tag(KEYGEN_REJECTED_INCOMPATIBLE));
-            }
-            Err(())
-        }
+        Some(_) => Err(()),
         None => {
             let stage_3_messages = keygen_ceremony
                 .gather_outgoing_messages::<keygen::SecretShare5<Point>, _>()
@@ -1270,7 +1261,6 @@ impl Node {
         &self,
         mut result_receiver: CeremonyResultReceiver<CeremonyResult, FailureReason>,
         expected_reason: CeremonyFailureReason<FailureReason>,
-        expected_tag: &str, // TODO: remove tag argument
     ) where
         CeremonyResult: PartialEq + std::fmt::Debug,
         FailureReason: PartialEq + std::fmt::Debug + std::fmt::Display, //+ crate::multisig::client::common::LogWithTag,

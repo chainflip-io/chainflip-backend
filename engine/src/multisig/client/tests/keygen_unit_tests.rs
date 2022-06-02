@@ -24,8 +24,6 @@ use crate::testing::assert_ok;
 
 use super::*;
 
-use crate::logging::KEYGEN_REQUEST_IGNORED;
-
 use crate::multisig::crypto::eth::Point;
 type CoeffComm3 = keygen::CoeffComm3<Point>;
 type VerifyCoeffComm4 = keygen::VerifyCoeffComm4<Point>;
@@ -439,11 +437,7 @@ async fn should_ignore_duplicate_keygen_request() {
     assert_ok!(node.ensure_ceremony_at_keygen_stage(2, ceremony_id));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::DuplicateCeremonyId,
-        KEYGEN_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -885,11 +879,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        KEYGEN_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]
@@ -921,7 +911,6 @@ async fn should_ignore_keygen_request_with_used_ceremony_id() {
     node.ensure_failure_reason(
         result_receiver,
         CeremonyFailureReason::CeremonyIdAlreadyUsed,
-        KEYGEN_REQUEST_IGNORED,
     );
 }
 
