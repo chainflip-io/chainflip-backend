@@ -47,13 +47,9 @@ pub trait ECPoint:
 {
     type Scalar: ECScalar;
 
-    type Underlying;
-
     type CompressedPointLength: ArrayLength<u8> + Unsigned;
 
     fn from_scalar(scalar: &Self::Scalar) -> Self;
-
-    fn get_element(&self) -> Self::Underlying;
 
     fn as_bytes(&self) -> GenericArray<u8, Self::CompressedPointLength>;
 

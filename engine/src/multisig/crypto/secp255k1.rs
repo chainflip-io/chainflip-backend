@@ -51,20 +51,10 @@ mod point_impls {
 
     impl ECPoint for Point {
         type Scalar = Scalar;
-        type Underlying = secp256k1::PublicKey;
         type CompressedPointLength = <Secp256k1Point as CurvECPoint>::CompressedPointLength;
 
         fn from_scalar(scalar: &Scalar) -> Self {
             Point(Secp256k1Point::generator().scalar_mul(&scalar.0))
-        }
-
-        fn get_element(&self) -> Self::Underlying {
-            // TODO: ensure that we don't create points at infinity
-            // (we might want to sanitize p2p data)
-            self.0
-                .underlying_ref()
-                .expect("unexpected point at infinity")
-                .0
         }
 
         fn as_bytes(&self) -> GenericArray<u8, Self::CompressedPointLength> {
@@ -107,6 +97,17 @@ mod point_impls {
             Secp256k1Point::deserialize(&bytes)
                 .map(Point)
                 .map_err(serde::de::Error::custom)
+        }
+    }
+
+    impl Point {
+        pub fn get_element(&self) -> secp256k1::PublicKey {
+            // TODO: ensure that we don't create points at infinity
+            // (we might want to sanitize p2p data)
+            self.0
+                .underlying_ref()
+                .expect("unexpected point at infinity")
+                .0
         }
     }
 

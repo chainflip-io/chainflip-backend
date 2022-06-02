@@ -17,19 +17,20 @@ mod point_impls {
 
     use super::*;
 
+    impl Point {
+        #[allow(dead_code)]
+        fn get_element(&self) -> PK {
+            self.0
+        }
+    }
+
     impl ECPoint for Point {
         type Scalar = Scalar;
-
-        type Underlying = PK;
 
         type CompressedPointLength = typenum::U32;
 
         fn from_scalar(scalar: &Self::Scalar) -> Self {
             Point(curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT * scalar.0)
-        }
-
-        fn get_element(&self) -> Self::Underlying {
-            self.0
         }
 
         fn as_bytes(&self) -> generic_array::GenericArray<u8, Self::CompressedPointLength> {
