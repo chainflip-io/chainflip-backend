@@ -6,6 +6,16 @@ on:
         description: 'Which CircleCI job should we get the binaries from?'
         required: true
         type: string
+      steps:
+        description: 'How many steps should we run?'
+        required: false
+        type: number
+        default: 20
+      repetitions:
+        description: 'How many times should we repeat each step?'
+        required: false
+        type: number
+        default: 10
 
 jobs:
   run_benchmarks:
@@ -22,9 +32,8 @@ jobs:
         run: |
           wget --header="Circle-Token: $CIRCLE_TOKEN" $CIRCLE_CI_ARTIFACT_URL
           chmod +x chainflip-node
-          ls -al
 
       - name: Run benchmarks
         run: |
-          ./chainflip-node --help
-          ./state-chain/scripts/benchmark-all.sh ./chainflip-node
+          ./state-chain/scripts/benchmark-all.sh --binary ./chainflip-node --steps ${{ github.event.inputs.steps }} --repetitions ${{ github.event.inputs.repetitions }}
+          git status

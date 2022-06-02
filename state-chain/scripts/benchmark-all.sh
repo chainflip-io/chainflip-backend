@@ -1,15 +1,26 @@
 #!/bin/sh
+binary=./target/release/chainflip-node
+steps=20
+repeat=10
+
+while [ $# -gt 0 ]; do
+    if [[ $1 == "--"* ]]; then
+        v="${1/--/}"
+        declare "$v"="$2"
+        shift
+    fi
+    shift
+done
+
 # Binary location
-if [[ -z "$1" ]];
-then
-  BINARY=./target/release/chainflip-node
-else
-  BINARY=$1
-fi
+BINARY=$binary
 # Number of steps across component ranges
-STEPS=20
+STEPS=$steps
 # Number of times we repeat a benchmark
-REPEAT=10
+REPEAT=$repeat
+
+echo "Benchmarking $BINARY with $STEPS steps and $REPEAT repetitions"
+
 # Template file by which we genreate the weight files
 TEMPLATE=state-chain/chainflip-weight-template.hbs
 echo "Executing benchmarks..."
