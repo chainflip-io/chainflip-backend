@@ -67,6 +67,9 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 // TODO: check if we really reach the expensive parts of the code.
 
 benchmarks_instance_pallet! {
+	// TODO: we meassuere the case in which the signautre is invalid ->
+	// this is a really rare and more expensive case. We should create a benchmark for this.
+	// As long as we use this benchmark for the default case we will waste computaional power.
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
 		let b in 1 .. 1000u32;
@@ -77,17 +80,22 @@ benchmarks_instance_pallet! {
 				unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
 				broadcast_attempt_id,
 			});
+			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_default(), ThresholdSignatureFor::<T, I>::benchmark_default()));
 		}
 		for i in 1 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
 			});
+			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_default(), ThresholdSignatureFor::<T, I>::benchmark_default()));
 		}
 	} : {
 		Pallet::<T, I>::on_initialize(expiry_block);
 	}
 	transaction_ready_for_transmission {
+		// Add the moment we benchmark the fail case which is
+		// not the expensive case and not the the default case.
+		// TODO: we should measure the case in which the transaction is valid.
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureThresholdSigned::successful_origin();
 		let broadcast_attempt_id = BroadcastAttemptId {
@@ -96,12 +104,16 @@ benchmarks_instance_pallet! {
 		};
 		insert_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(origin)?;
-		// TODO: at the moment we verify the case were the signature is valid - thats wrong
+		// TODO: at the moment we verify the case were the signature is invalid - thats wrong
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_default(), SignerIdFor::<T, I>::benchmark_default())
 	verify {
 		// TODO: verify the case if we're done with the verification
 	}
+	// TODO: add a benchmark for the failure case
 	transaction_signing_failure {
+		// Attention: This benchmark is the success case. The failure case is not yet implemented and
+		// can be quite expensiv in the worst case. Unfortenetly with the current implementation there is
+		// no good way to dtermine this before we execute the benchmark.
 		let caller: T::AccountId = whitelisted_caller();
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
