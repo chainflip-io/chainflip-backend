@@ -104,7 +104,7 @@ impl<P: ECPoint> PersistentKeyDB<P> {
                 .map_err(anyhow::Error::msg)
                 .context(format!("Failed to open database at: {}", db_path.display()))?;
 
-        // Preform migrations and write the schema version
+        // Perform migrations and write the schema version
         let p_kdb = migrate_db_to_latest(db, logger, db_path)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
