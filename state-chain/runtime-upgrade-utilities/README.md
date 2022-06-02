@@ -39,8 +39,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
         // [...]
 
         #[pallet::pallet]
-        // Add this if not already present.
-        #[pallet::storage_version(PALLET_VERSION)]
+        #[pallet::storage_version(PALLET_VERSION)] // <-- Add this if not already present.
         #[pallet::generate_store(pub (super) trait Store)]
         // [...]
         pub struct Pallet<T>(_);
