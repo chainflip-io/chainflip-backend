@@ -1,6 +1,6 @@
 name: "Run Benchmarks"
 on:
-  workflow_dispatch:
+  push:
     inputs:
       circleCiArtifactUrl:
         description: 'Which CircleCI job should we get the binaries from?'
