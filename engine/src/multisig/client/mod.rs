@@ -284,7 +284,11 @@ where
 
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
-                Err(error) => Err(error),
+                Err((reported_parties, failure_reason)) => {
+                    // Log the failure reason
+                    failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+                    Err((reported_parties, failure_reason))
+                }
             }
         }
     }
@@ -352,7 +356,13 @@ where
                 Some(RequestStatus::Ready(signature)) => Ok(signature),
                 Some(RequestStatus::WaitForOneshot(result_receiver)) => result_receiver
                     .await
-                    .expect("Signing result oneshot channel dropped before receiving a result"),
+                    .expect("Signing result oneshot channel dropped before receiving a result")
+                    .map_err(|(reported_parties, failure_reason)| {
+                        // Log the failure reason
+                        failure_reason
+                            .log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+                        (reported_parties, failure_reason)
+                    }),
                 None => Err((
                     BTreeSet::new(),
                     CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),

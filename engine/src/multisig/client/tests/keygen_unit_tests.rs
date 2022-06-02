@@ -3,25 +3,21 @@ use rand_legacy::{FromEntropy, SeedableRng};
 use std::{collections::BTreeSet, iter::FromIterator};
 use tokio::sync::oneshot;
 
-use crate::{
-    logging::CEREMONY_REQUEST_IGNORED,
-    multisig::{
-        client::{
-            common::{
-                BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
-                KeygenFailureReason,
-            },
-            keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
-            tests::helpers::{
-                all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
-                gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
-                run_stages, split_messages_for, standard_keygen, switch_out_participant,
-                KeygenCeremonyRunner,
-            },
-            utils::PartyIdxMapping,
+use crate::multisig::{
+    client::{
+        common::{
+            BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
         },
-        crypto::Rng,
+        keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
+        tests::helpers::{
+            all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
+            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
+            run_stages, split_messages_for, standard_keygen, switch_out_participant,
+            KeygenCeremonyRunner,
+        },
+        utils::PartyIdxMapping,
     },
+    crypto::Rng,
 };
 
 use crate::testing::assert_ok;
@@ -446,7 +442,7 @@ async fn should_ignore_duplicate_keygen_request() {
     node.ensure_failure_reason(
         result_receiver,
         CeremonyFailureReason::DuplicateCeremonyId,
-        CEREMONY_REQUEST_IGNORED,
+        KEYGEN_REQUEST_IGNORED,
     );
 }
 

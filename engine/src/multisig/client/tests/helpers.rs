@@ -406,13 +406,12 @@ where
                     .get_mut(account_id)
                     .unwrap()
                     .try_recv()
-                    .ok()?;
-
-                if result.is_err() {
-                    assert!(node
-                        .tag_cache
-                        .contains_tag(<Self as CeremonyRunnerStrategy>::CEREMONY_FAILED_TAG));
-                }
+                    .ok()?
+                    .map_err(|error| {
+                        // Log the failure reason for help with debugging
+                        println!("Ceremony failure reason: {:?}", error.1);
+                        error
+                    });
 
                 Some((account_id.clone(), result))
             })
@@ -1271,17 +1270,20 @@ impl Node {
         &self,
         mut result_receiver: CeremonyResultReceiver<CeremonyResult, FailureReason>,
         expected_reason: CeremonyFailureReason<FailureReason>,
-        expected_tag: &str,
+        expected_tag: &str, // TODO: remove tag argument
     ) where
         CeremonyResult: PartialEq + std::fmt::Debug,
-        FailureReason: PartialEq + std::fmt::Debug,
+        FailureReason: PartialEq + std::fmt::Debug + std::fmt::Display, //+ crate::multisig::client::common::LogWithTag,
     {
-        assert!(self.tag_cache.contains_tag(expected_tag));
         assert_eq!(
             result_receiver
                 .try_recv()
                 .expect("Failed to receive ceremony result")
-                .map_err(|(_, reason)| reason),
+                .map_err(|(_, reason)| {
+                    // Log the failure reason for help with debugging
+                    println!("Ceremony failure reason: {}", reason);
+                    reason
+                }),
             Err(expected_reason)
         );
     }

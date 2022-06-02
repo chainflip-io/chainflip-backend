@@ -10,7 +10,14 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::multisig::crypto::{ECPoint, KeyShare};
+use crate::{
+    logging::{
+        KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED,
+        REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED, UNAUTHORIZED_KEYGEN_EXPIRED,
+        UNAUTHORIZED_SIGNING_EXPIRED,
+    },
+    multisig::crypto::{ECPoint, KeyShare},
+};
 
 use super::{utils::PartyIdxMapping, ThresholdParameters};
 
@@ -45,13 +52,13 @@ pub struct KeygenResultInfo<P: ECPoint> {
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CeremonyFailureReason<T> {
-    #[error("Request Ignored (Duplicate Ceremony Id)")]
+    #[error("Duplicate Ceremony Id")]
     DuplicateCeremonyId,
     #[error("Expired before being authorized")]
     ExpiredBeforeBeingAuthorized,
-    #[error("Request Ignored (Invalid Participants)")]
+    #[error("Invalid Participants")]
     InvalidParticipants,
-    #[error("Request Ignored (Ceremony Id already used)")]
+    #[error("Ceremony Id already used")]
     CeremonyIdAlreadyUsed,
     #[error("Broadcast Failure ({0}) during {1} stage")]
     BroadcastFailure(BroadcastFailureReason, BroadcastStageName),
@@ -63,9 +70,9 @@ pub enum CeremonyFailureReason<T> {
 pub enum SigningFailureReason {
     #[error("Invalid Sig Share")]
     InvalidSigShare,
-    #[error("Request Ignored (Not Enough Signers)")]
+    #[error("Not Enough Signers")]
     NotEnoughSigners,
-    #[error("Request Ignored (Unknown Key)")]
+    #[error("Unknown Key")]
     UnknownKey,
 }
 
@@ -106,4 +113,89 @@ pub enum BroadcastStageName {
     Complaints,
     #[error("Blame Responses")]
     BlameResponses,
+}
+
+const SIGNING_CEREMONY_FAILED_PREFIX: &str = "Signing ceremony failed";
+const KEYGEN_CEREMONY_FAILED_PREFIX: &str = "Keygen ceremony failed";
+const REQUEST_TO_SIGN_IGNORED_PREFIX: &str = "Signing request ignored";
+const KEYGEN_REQUEST_IGNORED_PREFIX: &str = "Keygen request ignored";
+
+impl CeremonyFailureReason<SigningFailureReason> {
+    pub fn log(&self, logger: &slog::Logger) {
+        match self {
+            CeremonyFailureReason::BroadcastFailure(_, _) => {
+                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::DuplicateCeremonyId => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::ExpiredBeforeBeingAuthorized => {
+                slog::warn!(logger,#UNAUTHORIZED_SIGNING_EXPIRED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::InvalidParticipants => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::CeremonyIdAlreadyUsed => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners) => {
+                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(SigningFailureReason::UnknownKey) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+        }
+    }
+}
+
+impl CeremonyFailureReason<KeygenFailureReason> {
+    pub fn log(&self, logger: &slog::Logger) {
+        match self {
+            CeremonyFailureReason::DuplicateCeremonyId => {
+                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::BroadcastFailure(_, _) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::ExpiredBeforeBeingAuthorized => {
+                slog::warn!(logger,#UNAUTHORIZED_KEYGEN_EXPIRED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::InvalidParticipants => {
+                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::CeremonyIdAlreadyUsed => {
+                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible) => {
+                slog::warn!(logger, #KEYGEN_REJECTED_INCOMPATIBLE, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_failure_reason_log_tag() {
+    let (logger, tag_cache) = crate::logging::test_utils::new_test_logger_with_tag_cache();
+
+    CeremonyFailureReason::DuplicateCeremonyId::<SigningFailureReason>.log(&logger);
+    assert!(tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
+
+    CeremonyFailureReason::BroadcastFailure::<KeygenFailureReason>(
+        BroadcastFailureReason::InsufficientMessages,
+        BroadcastStageName::BlameResponses,
+    )
+    .log(&logger);
+    assert!(tag_cache.contains_tag(KEYGEN_CEREMONY_FAILED));
 }

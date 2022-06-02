@@ -10,6 +10,8 @@ pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 pub const CEREMONY_REQUEST_IGNORED: &str = "E7";
+pub const UNAUTHORIZED_SIGNING_EXPIRED: &str = "E8";
+pub const UNAUTHORIZED_KEYGEN_EXPIRED: &str = "E9";
 
 // ==== Logging Eth Observer constants ====
 pub const ETH_HTTP_STREAM_YIELDED: &str = "eth-observer-http-yielded";
