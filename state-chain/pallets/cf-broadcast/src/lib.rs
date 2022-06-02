@@ -369,11 +369,7 @@ pub mod pallet {
 				}
 			}
 
-			// TODO: replace this with benchmark results.
-			retry_count as u64 *
-				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3) +
-				expiries.len() as u64 *
-					frame_support::weights::RuntimeDbWeight::default().reads_writes(1, 1)
+			T::WeightInfo::on_initialize(retry_count as u32, expiries.len() as u32)
 		}
 
 		fn on_runtime_upgrade() -> Weight {
