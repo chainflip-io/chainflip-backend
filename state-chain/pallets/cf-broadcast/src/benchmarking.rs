@@ -25,4 +25,5 @@ benchmarks_instance_pallet! {
 	transaction_signing_failure {} : {}
 	on_signature_ready {} : {}
 	signature_accepted {} : {}
+	start_next_broadcast_attempt {} : {}
 }

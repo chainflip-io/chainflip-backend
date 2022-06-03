@@ -34,6 +34,7 @@ pub trait WeightInfo {
 	fn transaction_signing_failure() -> Weight;
 	fn on_signature_ready() -> Weight;
 	fn signature_accepted() -> Weight;
+	fn start_next_broadcast_attempt() -> Weight;
 }
 
 /// Weights for pallet_cf_broadcast using the Substrate node and recommended hardware.
@@ -63,6 +64,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}
+	fn start_next_broadcast_attempt() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(1_000_000 as Weight)
+	}
 }
 
 // For backwards compatibility and tests
@@ -88,6 +93,11 @@ impl WeightInfo for () {
 		(1_000_000 as Weight)
 	}
 	fn signature_accepted() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(1_000_000 as Weight)
+	}
+	
+	fn start_next_broadcast_attempt() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(1_000_000 as Weight)
 	}

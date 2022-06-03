@@ -329,12 +329,6 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// The `on_initialize` hook for this pallet handles scheduled retries and expiries.
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
-			let retries = BroadcastRetryQueue::<T, I>::take();
-			let retry_count = retries.len();
-			for failed in retries {
-				Self::start_next_broadcast_attempt(failed);
-			}
-
 			let expiries = Expiries::<T, I>::take(block_number);
 			for (stage, attempt_id) in expiries.iter() {
 				let notify_and_retry = |attempt: BroadcastAttempt<T, I>| {
@@ -369,10 +363,28 @@ pub mod pallet {
 			}
 
 			// TODO: replace this with benchmark results.
-			retry_count as u64 *
-				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3) +
-				expiries.len() as u64 *
-					frame_support::weights::RuntimeDbWeight::default().reads_writes(1, 1)
+			expiries.len() as u64 *
+				frame_support::weights::RuntimeDbWeight::default().reads_writes(1, 1)
+		}
+
+		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			// We want to retry any broadcasts that exceeded the maximum if we have block space
+			let mut retries = BroadcastRetryQueue::<T, I>::take();
+
+			let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
+
+			let num_retries_that_fit = remaining_weight / next_broadcast_weight;
+
+			if retries.len() >= num_retries_that_fit as usize {
+				BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit as usize));
+			}
+
+			let retries_len = retries.len();
+
+			for retry in retries {
+				Self::start_next_broadcast_attempt(retry);
+			}
+			next_broadcast_weight * retries_len as u64
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -685,6 +697,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		broadcast_attempt_id
 	}
 
+	// TODO: A weight here. Can we reduce duplication in benchmarks by doing this?
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
