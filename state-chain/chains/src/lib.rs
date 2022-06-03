@@ -199,8 +199,9 @@ pub mod mocks {
 		}
 	}
 
-	impl Default for MockSignedTransation<MockUnsignedTransaction> {
-		fn default() -> Self {
+	#[cfg(feature = "runtime-benchmarks")]
+	impl BenchmarkValue for MockSignedTransation<MockUnsignedTransaction> {
+		fn benchmark_value() -> Self {
 			MockSignedTransation {
 				transaction: MockUnsignedTransaction::default(),
 				signature: Validity::Valid,
@@ -256,7 +257,6 @@ pub mod mocks {
 	impl_benchmark_value_for!(Validity);
 	impl_benchmark_value_for!([u8; 4]);
 	impl_benchmark_value_for!(MockThresholdSignature<[u8; 4], [u8; 4]>);
-	impl_benchmark_value_for!(MockSignedTransation<MockUnsignedTransaction>);
 	impl_benchmark_value_for!(u32);
 
 	impl ChainAbi for MockEthereum {

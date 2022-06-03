@@ -163,12 +163,12 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 		AsyncResult::Ready(ETH_DUMMY_SIG)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(
-		_request_id: Self::RequestId,
-		_signature: <Ethereum as ChainCrypto>::ThresholdSignature,
-	) {
-	}
+	// #[cfg(feature = "runtime-benchmarks")]
+	// fn insert_signature(
+	// 	_request_id: Self::RequestId,
+	// 	_signature: <Ethereum as ChainCrypto>::ThresholdSignature,
+	// ) {
+	// }
 }
 
 // The dummy signature can't be Default - this would be interpreted as no signature.

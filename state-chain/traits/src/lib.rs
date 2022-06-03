@@ -545,7 +545,9 @@ where
 
 	/// Helper function to enable benchmarking of the brodcast pallet
 	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(request_id: Self::RequestId, signature: C::ThresholdSignature);
+	fn insert_signature(_request_id: Self::RequestId, _signature: C::ThresholdSignature) {
+		unimplemented!();
+	}
 }
 
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external

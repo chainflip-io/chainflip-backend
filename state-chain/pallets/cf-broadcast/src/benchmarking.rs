@@ -13,8 +13,8 @@ use frame_system::RawOrigin;
 
 use cf_chains::benchmarking_value::BenchmarkValue;
 
-// Inserts a new signing´attempt into the storage.
-fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(
+// Inserts a new transaction signing attempt into the storage.
+fn insert_transaction_signing_attempt<T: pallet::Config<I>, I: 'static>(
 	nominee: <T as Chainflip>::ValidatorId,
 	broadcast_attempt_id: BroadcastAttemptId,
 ) {
@@ -76,13 +76,12 @@ benchmarks_instance_pallet! {
 		// not the expensive case and not the default case.
 		// TODO: we should measure the case in which the transaction is valid.
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureThresholdSigned::successful_origin();
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1
 		};
-		insert_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
-		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(origin)?;
+		insert_transaction_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
+		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
 		// TODO: at the moment we verify the case were the signature is invalid - thats wrong
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_value(), SignerIdFor::<T, I>::benchmark_value())
 	verify {
@@ -97,7 +96,7 @@ benchmarks_instance_pallet! {
 			broadcast_id: 1,
 			attempt_count: 1
 		};
-		insert_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
+		insert_transaction_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
 		let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
@@ -105,15 +104,14 @@ benchmarks_instance_pallet! {
 		assert!(Expiries::<T, I>::contains_key(expiry_block));
 	}
 	on_signature_ready {
-		let origin = T::EnsureThresholdSigned::successful_origin();
 		let should_expire_in = T::BlockNumber::from(6u32);
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1
 		};
-		insert_signing_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
+		insert_transaction_signing_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = generate_on_signature_ready_call::<T, I>();
-	} : { call.dispatch_bypass_filter(origin)? }
+	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
 		assert!(BroadcastIdToAttemptNumbers::<T, I>::contains_key(1));
