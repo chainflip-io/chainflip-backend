@@ -2,14 +2,13 @@ use std::time::Duration;
 
 use super::tick_stream;
 
-use crate::eth::rpc::EthHttpRpcApi;
-use crate::logging::COMPONENT_KEY;
+use crate::{eth::rpc::EthRpcApi, logging::COMPONENT_KEY};
 
 use futures::{future, stream::BoxStream, StreamExt};
 use slog::o;
 
-/// Returns a stream of latest eth block numbers.
-pub fn latest_block_numbers<'a, HttpRpc: EthHttpRpcApi + Send + Sync>(
+/// Returns a stream of latest eth block numbers by polling at regular intervals.
+pub fn latest_block_numbers<'a, HttpRpc: EthRpcApi + Send + Sync>(
     eth_http_rpc: &'a HttpRpc,
     polling_interval: Duration,
     logger: &slog::Logger,
@@ -40,6 +39,6 @@ pub fn latest_block_numbers<'a, HttpRpc: EthHttpRpcApi + Send + Sync>(
                 }))
             })
             // Unwrap, ignoring None values.
-            .filter_map(|x| future::ready(x)),
+            .filter_map(future::ready),
     )
 }
