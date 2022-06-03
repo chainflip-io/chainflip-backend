@@ -37,3 +37,14 @@ jobs:
         run: |
           ./state-chain/scripts/benchmark-all.sh --binary ./chainflip-node --steps ${{ github.event.inputs.steps }} --repetitions ${{ github.event.inputs.repetitions }}
           git status
+
+      - name: Make a pull request with the changed weight files
+        uses: peter-evans/create-pull-request@v4
+        with:
+          base: develop
+          title: Benchmark results
+          commit-message: "[AUTOMATED] Benchmarking results."
+          body: "This pull request was opened automatically. Close it if you think it was opened in error."
+          branch: auto/benchmark-results
+          delete-branch: true
+
