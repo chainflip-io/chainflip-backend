@@ -189,7 +189,7 @@ fn cannot_report_keygen_success_twice() {
 }
 
 #[test]
-fn cannot_report_two_different_keygen_outcomes_() {
+fn cannot_report_two_different_keygen_outcomes() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = current_ceremony_id();
