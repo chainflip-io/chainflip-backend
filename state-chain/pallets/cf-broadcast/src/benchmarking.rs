@@ -11,7 +11,7 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
-use cf_chains::benchmarking_default::BenchmarkValue;
+use cf_chains::benchmarking_value::BenchmarkValue;
 
 // Inserts a new signing´attempt into the storage.
 fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(

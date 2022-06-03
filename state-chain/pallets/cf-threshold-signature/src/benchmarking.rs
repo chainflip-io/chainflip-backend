@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::benchmarking_default::BenchmarkValue;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use frame_system::RawOrigin;

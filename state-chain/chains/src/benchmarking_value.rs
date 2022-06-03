@@ -11,7 +11,7 @@ pub trait BenchmarkValue {
 impl<T> BenchmarkValue for T {}
 
 #[macro_export]
-macro_rules! impl_benchmark_default_for {
+macro_rules! impl_benchmark_value_for {
 	($element:ty) => {
 		#[cfg(feature = "runtime-benchmarks")]
 		impl BenchmarkValue for $element {

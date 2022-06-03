@@ -6,7 +6,7 @@ pub mod offence_reporting;
 
 pub use async_result::AsyncResult;
 
-use cf_chains::{benchmarking_default::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},

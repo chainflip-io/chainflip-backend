@@ -5,7 +5,8 @@ use crate::eth::{
 
 use sp_std::vec;
 
-use crate::benchmarking_default::BenchmarkValue;
+use crate::benchmarking_value::BenchmarkValue;
+
 use libsecp256k1::{PublicKey, SecretKey};
 
 /// Returns a valid signature for use in benchmarks.
@@ -41,17 +42,5 @@ impl BenchmarkValue for H256 {
 impl BenchmarkValue for RawSignedTransaction {
 	fn benchmark_value() -> Self {
 		vec![0u8; 32]
-	}
-}
-
-impl BenchmarkValue for u32 {
-	fn benchmark_value() -> Self {
-		0
-	}
-}
-
-impl BenchmarkValue for u128 {
-	fn benchmark_value() -> Self {
-		0
 	}
 }

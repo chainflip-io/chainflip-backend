@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use crate::benchmarking_default::BenchmarkValue;
+use crate::benchmarking_value::BenchmarkValue;
 use codec::{FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use frame_support::{
@@ -14,7 +14,7 @@ use sp_std::{
 	prelude::*,
 };
 
-pub mod benchmarking_default;
+pub mod benchmarking_value;
 
 pub mod eth;
 
@@ -253,10 +253,11 @@ pub mod mocks {
 		}
 	}
 
-	impl_benchmark_default_for!(Validity);
-	impl_benchmark_default_for!([u8; 4]);
-	impl_benchmark_default_for!(MockThresholdSignature<[u8; 4], [u8; 4]>);
-	impl_benchmark_default_for!(MockSignedTransation<MockUnsignedTransaction>);
+	impl_benchmark_value_for!(Validity);
+	impl_benchmark_value_for!([u8; 4]);
+	impl_benchmark_value_for!(MockThresholdSignature<[u8; 4], [u8; 4]>);
+	impl_benchmark_value_for!(MockSignedTransation<MockUnsignedTransaction>);
+	impl_benchmark_value_for!(u32);
 
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;
