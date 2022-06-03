@@ -25,7 +25,6 @@ use client::common::{
 
 use crate::multisig::MessageHash;
 
-use super::ceremony_id_tracker::CeremonyIdTracker;
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
@@ -52,7 +51,6 @@ pub struct CeremonyManager<C: CryptoScheme> {
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     signing_states: HashMap<CeremonyId, SigningStateRunner<C>>,
     keygen_states: HashMap<CeremonyId, KeygenStateRunner<C>>,
-    ceremony_id_tracker: CeremonyIdTracker,
     allowing_high_pubkey: bool,
     logger: slog::Logger,
 }
@@ -68,7 +66,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             outgoing_p2p_message_sender,
             signing_states: HashMap::new(),
             keygen_states: HashMap::new(),
-            ceremony_id_tracker: CeremonyIdTracker::new(),
             allowing_high_pubkey: false,
             logger: logger.clone(),
         }
@@ -170,7 +167,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        self.ceremony_id_tracker.consume_signing_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
             slog::warn!(
                 self.logger,
@@ -201,7 +197,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        self.ceremony_id_tracker.consume_keygen_id(&ceremony_id);
         if let Err((blamed_parties, reason)) = &result {
             slog::warn!(
                 self.logger,
@@ -244,18 +239,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
         let num_of_participants: AuthorityCount =
             signer_idxs.len().try_into().expect("too many participants");
-
-        if self
-            .ceremony_id_tracker
-            .is_keygen_ceremony_id_used(&ceremony_id)
-        {
-            slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: ceremony id {} has already been used", ceremony_id);
-            let _result = result_sender.send(Err((
-                BTreeSet::new(),
-                CeremonyFailureReason::CeremonyIdAlreadyUsed,
-            )));
-            return;
-        }
 
         let logger_no_ceremony_id = &self.logger;
         let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
@@ -335,18 +318,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 return;
             }
         };
-
-        if self
-            .ceremony_id_tracker
-            .is_signing_ceremony_id_used(&ceremony_id)
-        {
-            slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: ceremony id {} has already been used", ceremony_id);
-            let _result = result_sender.send(Err((
-                BTreeSet::new(),
-                CeremonyFailureReason::CeremonyIdAlreadyUsed,
-            )));
-            return;
-        }
 
         // We have the key and have received a request to sign
         let logger_no_ceremony_id = &self.logger;
@@ -429,18 +400,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
 
-        if self
-            .ceremony_id_tracker
-            .is_signing_ceremony_id_used(&ceremony_id)
-        {
-            slog::debug!(
-                self.logger,
-                "Ignoring signing data from old ceremony id {}",
-                ceremony_id
-            );
-            return;
-        }
-
         slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
         // Only stage 1 messages can create unauthorised ceremonies
@@ -498,18 +457,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         data: KeygenData<C::Point>,
     ) {
         use std::collections::hash_map::Entry;
-
-        if self
-            .ceremony_id_tracker
-            .is_keygen_ceremony_id_used(&ceremony_id)
-        {
-            slog::debug!(
-                self.logger,
-                "Ignoring keygen data from old ceremony id {}",
-                ceremony_id
-            );
-            return;
-        }
 
         slog::debug!(self.logger, "Received keygen data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
