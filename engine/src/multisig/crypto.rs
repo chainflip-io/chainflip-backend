@@ -1,4 +1,8 @@
+#[macro_use]
+mod helpers;
+pub mod curve25519_ristretto;
 pub mod eth;
+pub mod secp255k1;
 
 use generic_array::{typenum::Unsigned, ArrayLength};
 
@@ -43,17 +47,17 @@ pub trait ECPoint:
 {
     type Scalar: ECScalar;
 
-    type Underlying;
-
     type CompressedPointLength: ArrayLength<u8> + Unsigned;
 
     fn from_scalar(scalar: &Self::Scalar) -> Self;
 
-    fn get_element(&self) -> Self::Underlying;
-
     fn as_bytes(&self) -> GenericArray<u8, Self::CompressedPointLength>;
 
-    fn is_point_at_infinity(&self) -> bool;
+    fn point_at_infinity() -> Self;
+
+    fn is_point_at_infinity(&self) -> bool {
+        self == &Self::point_at_infinity()
+    }
 
     // Only relevant for ETH contract keys
     fn is_compatible(&self) -> bool {
@@ -108,12 +112,11 @@ pub trait ECScalar:
     + Sync
     + Send
     + ZeroizeOnDrop
+    + std::convert::From<u32>
 {
     fn random(rng: &mut Rng) -> Self;
 
     fn from_bytes(x: &[u8; 32]) -> Self;
-
-    fn from_usize(x: usize) -> Self;
 
     fn zero() -> Self;
 
