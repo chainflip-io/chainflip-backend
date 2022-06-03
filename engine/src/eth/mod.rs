@@ -12,7 +12,6 @@ pub mod rpc;
 pub mod utils;
 
 use anyhow::{Context, Result};
-use cf_chains::{eth::TrackedData, Ethereum};
 use cf_traits::EpochIndex;
 use regex::Regex;
 
@@ -32,10 +31,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::{
-    stream::{self, BoxStream},
-    FutureExt, StreamExt,
-};
+use futures::{stream, FutureExt, StreamExt};
 use slog::o;
 use sp_core::{H160, U256};
 use std::{
@@ -197,6 +193,7 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     }
 }
 
+#[allow(unused_assignments)] // The compiler thinks to_block_sender_and_task_handle is never read.
 pub async fn start_chain_data_witnesser<
     EthRpcClient: EthRpcApi + Send + Sync,
     ScRpcClient: StateChainRpcApi + Send + Sync + 'static,
@@ -209,74 +206,48 @@ pub async fn start_chain_data_witnesser<
 ) where
     ScRpcClient: 'static + StateChainRpcApi + Sync + Send,
 {
-    enum Protocol {
-        Ws,
-        Http,
-    }
-
-    impl Protocol {
-        pub fn toggle(&mut self) {
-            match self {
-                Protocol::Ws => *self = Protocol::Http,
-                Protocol::Http => *self = Protocol::Ws,
-            }
-        }
-    }
-
-    let mut eth_protocol = Protocol::Ws;
-
     let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
     slog::info!(logger, "Starting");
 
-    let (to_block_sender, to_block_receiver) = watch::channel::<Option<u64>>(None);
-    std::mem::drop(to_block_receiver);
-
     while let Some(observe_instruction) = instruction_receiver.recv().await {
+        let mut to_block_sender_and_task_handle: Option<(
+            watch::Sender<Option<u64>>,
+            JoinHandle<anyhow::Result<()>>,
+        )> = None;
+
         match observe_instruction {
+            // TODO try passing this directly to the tokio task.
             ObserveInstruction::End(end_block) => {
-                assert!(
-                    to_block_sender.receiver_count() == 1,
-                    "There should be exactly one receiver."
-                );
+                let (to_block_sender, handle) = to_block_sender_and_task_handle
+                    .take()
+                    .expect("End instruction cannot be received before start.");
+
                 to_block_sender.send(Some(end_block)).unwrap();
+                let task_result = handle.await.unwrap();
+                task_result.unwrap();
             }
             ObserveInstruction::Start(from_block, _epoch) => {
                 assert!(
-                    to_block_sender.receiver_count() == 0,
-                    "Receiver still waiting on start. Should not be possible."
+                    to_block_sender_and_task_handle.is_none(),
+                    "Start instruction received but already started"
                 );
-                let to_block_receiver = to_block_sender.subscribe();
-                to_block_sender.send(None).unwrap();
                 let logger = logger.clone();
-                let mut chain_data_stream: BoxStream<anyhow::Result<TrackedData<Ethereum>>> =
-                    match eth_protocol {
-                        Protocol::Ws => Box::pin(
-                            chain_data_witnessing::ws_chain_data_witnesser(
-                                from_block,
-                                to_block_receiver,
-                                eth_ws_rpc,
-                                &logger,
-                            )
-                            .await
-                            .expect("Failed to initialise WS chain data witnesser"),
-                        ),
-                        Protocol::Http => Box::pin(
-                            chain_data_witnessing::http_chain_data_witnesser(
-                                from_block,
-                                to_block_receiver,
-                                ETH_CHAIN_TRACKING_POLL_INTERVAL,
-                                eth_http_rpc,
-                                &logger,
-                            )
-                            .await,
-                        ),
-                    };
+                let (mut chain_data_stream, new_to_block_sender) =
+                    chain_data_witnessing::chain_data_witnesser(
+                        from_block,
+                        ETH_CHAIN_TRACKING_POLL_INTERVAL,
+                        eth_ws_rpc,
+                        eth_http_rpc,
+                        &logger,
+                    )
+                    .await
+                    .expect("Failed to initialise chain data witnesser");
 
-                let state_chain_client_c = state_chain_client.clone();
+                let state_chain_client = state_chain_client.clone();
 
-                let _: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+                let handle: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
                     while let Some(tracked_data) = chain_data_stream.next().await {
-                        state_chain_client_c
+                        state_chain_client
                             .submit_signed_extrinsic(
                                 state_chain_runtime::Call::Witnesser(
                                     pallet_cf_witnesser::Call::witness {
@@ -292,27 +263,9 @@ pub async fn start_chain_data_witnesser<
                             .await?;
                     }
                     Ok(())
-                    // let state_chain_client_sink = sink::unfold::<_, _, _, _, anyhow::Error>(
-                    //     state_chain_client,
-                    //     |client, tracked_data| async move {
-                    //         client
-                    //             .submit_signed_extrinsic(
-                    //                 state_chain_runtime::Call::EthereumChainTracking(
-                    //                     pallet_cf_chain_tracking::Call::update_chain_state {
-                    //                         state: tracked_data,
-                    //                     },
-                    //                 ),
-                    //                 logger,
-                    //             )
-                    //             .await?;
-                    //         Ok(client)
-                    //     },
-                    // );
-
-                    // chain_data_stream.forward(state_chain_client_sink)
                 });
 
-                eth_protocol.toggle();
+                to_block_sender_and_task_handle = Some((new_to_block_sender, handle));
             }
         }
     }

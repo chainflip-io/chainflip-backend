@@ -2,7 +2,7 @@ use crate::{eth::rpc::EthWsRpcApi, logging::COMPONENT_KEY};
 use futures::{future, stream::BoxStream, StreamExt};
 use slog::o;
 
-/// Returns a stream of latest eth block numbers.
+/// Returns a stream of latest eth block numbers using ethereum's subscription api.
 pub async fn latest_block_numbers<'a, WsRpc: EthWsRpcApi + Send + Sync>(
     eth_ws_rpc: &'a WsRpc,
     logger: &slog::Logger,
