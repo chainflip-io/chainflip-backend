@@ -111,7 +111,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
     ) -> Result<
-        <C::Point as ECPoint>::Underlying,
+        C::Point,
         (
             BTreeSet<AccountId>,
             CeremonyFailureReason<KeygenFailureReason>,
@@ -156,7 +156,7 @@ pub mod mocks {
                 &self,
                 _ceremony_id: CeremonyId,
                 _participants: Vec<AccountId>,
-            ) -> Result<<<C as CryptoScheme>::Point as ECPoint>::Underlying, (BTreeSet<AccountId>, CeremonyFailureReason<KeygenFailureReason>)>;
+            ) -> Result<C::Point, (BTreeSet<AccountId>, CeremonyFailureReason<KeygenFailureReason>)>;
             async fn sign(
                 &self,
                 _ceremony_id: CeremonyId,
@@ -235,7 +235,7 @@ where
     ) -> impl '_
            + Future<
         Output = Result<
-            <C::Point as ECPoint>::Underlying,
+            C::Point,
             (
                 BTreeSet<AccountId>,
                 CeremonyFailureReason<KeygenFailureReason>,
@@ -282,7 +282,7 @@ where
                         .unwrap()
                         .set_key(key_id, keygen_result_info.clone());
 
-                    Ok(keygen_result_info.key.get_public_key().get_element())
+                    Ok(keygen_result_info.key.get_public_key())
                 }
                 Err(error) => Err(error),
             }
@@ -412,7 +412,7 @@ impl<KeyDatabase: KeyDB<C::Point> + Send + Sync, C: CryptoScheme> MultisigClient
         ceremony_id: CeremonyId,
         participants: Vec<AccountId>,
     ) -> Result<
-        <C::Point as ECPoint>::Underlying,
+        C::Point,
         (
             BTreeSet<AccountId>,
             CeremonyFailureReason<KeygenFailureReason>,

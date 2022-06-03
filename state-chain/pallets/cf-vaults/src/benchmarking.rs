@@ -30,10 +30,25 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	authority_set
 }
 
+// ======================================================================================
+//            Helper methods to convert bytes to an associated type
+
 fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
 	let encoded = key.encode();
 	AggKeyFor::<T, I>::decode(&mut &encoded[..]).unwrap()
 }
+
+fn payload_from_slice<T: Config<I>, I: 'static>(payload: &[u8]) -> PayloadFor<T, I> {
+	let encoded = payload.encode();
+	PayloadFor::<T, I>::decode(&mut &encoded[..]).unwrap()
+}
+
+fn threshold_sig_from_slice<T: Config<I>, I: 'static>(sig: &[u8]) -> ThresholdSignatureFor<T, I> {
+	let encoded = sig.encode();
+	ThresholdSignatureFor::<T, I>::decode(&mut &encoded[..]).unwrap()
+}
+
+// ======================================================================================
 
 benchmarks_instance_pallet! {
 	on_initialize_failure {
@@ -95,17 +110,21 @@ benchmarks_instance_pallet! {
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
-		let keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates);
 
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
-				response_status: keygen_response_status
+				response_status: KeygenResponseStatus::<T, I>::new(generate_authority_set::<T, I>(150, caller.clone().into()))
 			},
 		);
-		let reported_outcome = KeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&[0xbb; 33][..]));
-	} : _(RawOrigin::Signed(caller), CEREMONY_ID, reported_outcome)
+		use cf_chains::eth::sig_constants::{AGG_KEY_PUB, MSG_HASH, SIG};
+		let bad_sig_byte = (SIG[SIG.len() - 1] + 1) % u8::MAX;
+		let bad_sig = [SIG[..SIG.len() - 1].to_vec(), vec![bad_sig_byte]].concat();
+
+		// Submit a key that doesn't verify the signature. This is approximately the same cost as success at time of writing.
+		// But is much easier to write, and we might add slashing, which would increase the cost of the failure. Making this test the more
+		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
+	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&AGG_KEY_PUB), payload_from_slice::<T, I>(&MSG_HASH), threshold_sig_from_slice::<T, I>(&bad_sig)))
 	verify {
 		let rotation = PendingVaultRotation::<T, I>::get().unwrap();
 		assert!(matches!(

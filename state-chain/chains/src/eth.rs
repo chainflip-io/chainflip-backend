@@ -276,9 +276,11 @@ impl AggKey {
 		.into()
 	}
 
-	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, nonce: &SecretKey) -> [u8; 32] {
+	/// Sign a message, using a secret key, and a signature nonce
+	#[cfg(feature = "runtime-integration-tests")]
+	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, sig_nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
 		let e = {
 			let challenge = self.message_challenge(msg_hash, &k_times_g_address);
 			let mut s = Scalar::default();
@@ -289,7 +291,7 @@ impl AggKey {
 		};
 
 		let d: Scalar = (*secret).into();
-		let k: Scalar = (*nonce).into();
+		let k: Scalar = (*sig_nonce).into();
 		let signature: Scalar = k + (e * d).neg();
 
 		signature.b32()
@@ -734,8 +736,30 @@ mod tests {
 	}
 }
 
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+pub mod sig_constants {
+	/*
+		The below constants have been derived from integration tests with the KeyManager contract.
+
+		In order to check if verification works, we need to use this to construct the AggKey and `SigData` as we
+		normally would when submitting a function call to a threshold-signature-protected smart contract.
+	*/
+	pub const AGG_KEY_PRIV: [u8; 32] =
+		hex_literal::hex!("fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba");
+	pub const AGG_KEY_PUB: [u8; 33] =
+		hex_literal::hex!("0331b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae");
+	pub const MSG_HASH: [u8; 32] =
+		hex_literal::hex!("2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e");
+	pub const SIG: [u8; 32] =
+		hex_literal::hex!("beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538");
+	pub const SIG_NONCE: [u8; 32] =
+		hex_literal::hex!("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285");
+}
+
 #[cfg(test)]
 mod verification_tests {
+	use crate::eth::sig_constants::{AGG_KEY_PRIV, AGG_KEY_PUB, MSG_HASH, SIG, SIG_NONCE};
+
 	use super::*;
 	use ethereum::{LegacyTransaction, LegacyTransactionMessage, TransactionV2};
 	use frame_support::{assert_err, assert_ok};
@@ -758,7 +782,6 @@ mod verification_tests {
 		// Signature nonce
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
-
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
 
 		// Public agg key
@@ -776,23 +799,6 @@ mod verification_tests {
 
 	#[test]
 	fn test_schnorr_signature_verification() {
-		/*
-			The below constants have been derived from integration tests with the KeyManager contract.
-
-			In order to check if verification works, we need to use this to construct the AggKey and `SigData` as we
-			normally would when submitting a function call to a threshold-signature-protected smart contract.
-		*/
-		const AGG_KEY_PRIV: [u8; 32] =
-			hex_literal::hex!("fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba");
-		const AGG_KEY_PUB: [u8; 33] =
-			hex_literal::hex!("0331b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae");
-		const MSG_HASH: [u8; 32] =
-			hex_literal::hex!("2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e");
-		const SIG: [u8; 32] =
-			hex_literal::hex!("beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538");
-		const SIG_NONCE: [u8; 32] =
-			hex_literal::hex!("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285");
-
 		let agg_key = AggKey::from_private_key_bytes(AGG_KEY_PRIV);
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 

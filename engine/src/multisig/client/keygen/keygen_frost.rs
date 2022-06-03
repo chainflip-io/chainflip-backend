@@ -28,7 +28,7 @@ where
     coefficients
         .rev()
         .cloned()
-        .reduce(|acc, coefficient| acc * Scalar::from_usize(index as usize) + coefficient)
+        .reduce(|acc, coefficient| acc * Scalar::from(index) + coefficient)
         .unwrap()
 }
 
@@ -37,13 +37,13 @@ fn test_simple_polynomial() {
     use crate::multisig::crypto::eth::Scalar;
 
     // f(x) = 4 + 5x + 2x^2
-    let secret = Scalar::from_usize(4);
-    let coefficients = [Scalar::from_usize(5), Scalar::from_usize(2)];
+    let secret = Scalar::from(4);
+    let coefficients = [Scalar::from(5), Scalar::from(2)];
 
     // f(3) = 4 + 15 + 18 = 37
     let value: Scalar =
         evaluate_polynomial::<_, _, Scalar>([secret].iter().chain(coefficients.iter()), 3);
-    assert_eq!(value, Scalar::from_usize(37));
+    assert_eq!(value, Scalar::from(37));
 }
 
 /// Evaluation of a sharing polynomial for a given party index

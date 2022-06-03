@@ -43,7 +43,8 @@ mod tests {
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use codec::Encode;
 		use libsecp256k1::PublicKey;
-		use pallet_cf_vaults::KeygenOutcome;
+		use pallet_cf_vaults::ReportedKeygenOutcome;
+		use sp_core::H256;
 		use state_chain_runtime::{constants::common::HEARTBEAT_BLOCK_INTERVAL, Event, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -91,80 +92,82 @@ mod tests {
 			}
 		}
 
+		#[derive(Clone)]
+		pub struct KeyComponents {
+			pub secret: SecretKey,
+			// agg key
+			pub agg_key: AggKey,
+		}
+
+		impl KeyComponents {
+			fn sign(&self, message: &cf_chains::eth::H256) -> SchnorrVerificationComponents {
+				assert_eq!(self.agg_key, AggKey::from_private_key_bytes(self.secret.serialize()));
+
+				// just use the same signature nonce for every ceremony in tests
+				let k: [u8; 32] = StdRng::seed_from_u64(200).gen();
+				let k = SecretKey::parse(&k).unwrap();
+				let signature = self.agg_key.sign(&(*message).into(), &self.secret, &k);
+
+				let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
+				SchnorrVerificationComponents { s: signature, k_times_g_address }
+			}
+		}
+
 		pub struct ThresholdSigner {
-			agg_secret_key: SecretKey,
-			signatures: HashMap<cf_chains::eth::H256, [u8; 32]>,
 			key_seed: u64,
+			key_components: KeyComponents,
 			proposed_seed: Option<u64>,
+			proposed_key_components: Option<KeyComponents>,
 		}
 
 		impl Default for ThresholdSigner {
 			fn default() -> Self {
-				let key_seed = GENESIS_KEY;
-				let (agg_secret_key, _) = Self::generate_keypair(key_seed);
+				let (secret, _pub_key, agg_key) = Self::generate_keypair(GENESIS_KEY);
 				ThresholdSigner {
-					agg_secret_key,
-					signatures: HashMap::new(),
-					key_seed,
+					key_seed: GENESIS_KEY,
+					key_components: KeyComponents { secret, agg_key },
 					proposed_seed: None,
+					proposed_key_components: None,
 				}
 			}
 		}
 
 		impl ThresholdSigner {
-			// Sign message with current key, caches signatures
-			pub fn sign(
-				&mut self,
-				message: &cf_chains::eth::H256,
-			) -> SchnorrVerificationComponents {
-				// A nonce, k
-				let (k, k_times_g) = Self::generate_keypair(self.key_seed * 2);
-				// k.G
-				let k_times_g_address = to_ethereum_address(k_times_g);
-				// If this message has been signed before return from cache else sign and cache
-				return match self.signatures.get(message) {
-					Some(signature) =>
-						SchnorrVerificationComponents { s: *signature, k_times_g_address },
-					None => {
-						let agg_key =
-							AggKey::from_private_key_bytes(self.agg_secret_key.serialize());
-						let signature = agg_key.sign(&(*message).into(), &self.agg_secret_key, &k);
-
-						self.signatures.insert(*message, signature);
-
-						SchnorrVerificationComponents { s: signature, k_times_g_address }
-					},
-				}
-			}
-
 			// Generate a keypair with seed
-			pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey) {
+			pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey, AggKey) {
 				let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 				let secret_key = SecretKey::parse(&agg_key_priv).unwrap();
-				(secret_key, PublicKey::from_secret_key(&secret_key))
+				let pub_key = PublicKey::from_secret_key(&secret_key);
+				(
+					secret_key,
+					pub_key,
+					AggKey::from_pubkey_compressed(pub_key.serialize_compressed()),
+				)
 			}
 
-			// The public key proposed
-			pub fn proposed_public_key(&mut self) -> AggKey {
-				let (_, public) =
-					Self::generate_keypair(self.proposed_seed.expect("No key has been proposed"));
-				AggKey::from_pubkey_compressed(public.serialize_compressed())
+			pub fn proposed_public_key(&self) -> AggKey {
+				self.proposed_key_components.as_ref().expect("should have proposed key").agg_key
 			}
 
-			// Propose a new public key
 			pub fn propose_new_public_key(&mut self) -> AggKey {
-				self.proposed_seed = Some(self.key_seed + 1);
+				let proposed_seed = self.key_seed + 1;
+				let (secret, _pub_key, agg_key) = Self::generate_keypair(proposed_seed);
+				self.proposed_seed = Some(proposed_seed);
+				self.proposed_key_components = Some(KeyComponents { secret, agg_key });
 				self.proposed_public_key()
 			}
 
-			// Rotate to the current proposed key and clear cache
-			pub fn rotate_keys(&mut self) {
+			// Rotate to the current proposed key and clear the proposed key
+			pub fn use_proposed_key(&mut self) {
 				if self.proposed_seed.is_some() {
-					self.key_seed += self.proposed_seed.expect("No key has been proposed");
-					let (secret_key, _) = Self::generate_keypair(self.key_seed);
-					self.agg_secret_key = secret_key;
-					self.signatures.clear();
+					self.key_seed = self.proposed_seed.expect("No key has been proposed");
+					self.key_components = self
+						.proposed_key_components
+						.as_ref()
+						.expect("No key has been proposed")
+						.clone();
 					self.proposed_seed = None;
+					self.proposed_key_components = None;
 				}
 			}
 		}
@@ -235,7 +238,7 @@ mod tests {
 							Event::Validator(
 								// A new epoch
 								pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-									(&*self.threshold_signer).borrow_mut().rotate_keys();
+									(&*self.threshold_signer).borrow_mut().use_proposed_key();
 							},
 							Event::EthereumThresholdSigner(
 								// A signature request
@@ -252,7 +255,7 @@ mod tests {
 										Origin::none(),
 										*ceremony_id,
 										// Sign with current key
-										(&*self.threshold_signer).borrow_mut().sign(payload),
+										(&*self.threshold_signer).borrow().key_components.sign(payload),
 									).expect("should be able to submit threshold signature for Ethereum");
 								} };
 							},
@@ -287,11 +290,16 @@ mod tests {
 							// A keygen request has been made
 							pallet_cf_vaults::Event::KeygenRequest(ceremony_id, authorities)) => {
 								if authorities.contains(&self.node_id) {
+									(&*self.threshold_signer).borrow_mut().propose_new_public_key();
+									let threshold_signer = (&*self.threshold_signer).borrow();
+									let proposed_key_components = threshold_signer.proposed_key_components.as_ref().expect("should have propposed key");
+									let payload: H256 = proposed_key_components.agg_key.pub_key_x.into();
+									let sig = proposed_key_components.sign(&payload);
 									state_chain_runtime::EthereumVault::report_keygen_outcome(
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
 										// Propose a new key
-										KeygenOutcome::Success((&*self.threshold_signer).borrow_mut().propose_new_public_key()),
+										ReportedKeygenOutcome::Success(proposed_key_components.agg_key, payload, sig),
 									).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 								}
 						},
@@ -628,7 +636,7 @@ mod tests {
 			.assimilate_storage(storage)
 			.unwrap();
 
-			let (_, public_key) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
+			let (_, public_key, _) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
 			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 			GenesisBuild::<Runtime, _>::assimilate_storage(
