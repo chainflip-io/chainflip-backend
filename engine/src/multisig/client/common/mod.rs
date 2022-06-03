@@ -51,8 +51,6 @@ pub enum CeremonyFailureReason<T> {
     ExpiredBeforeBeingAuthorized,
     #[error("Request Ignored (Invalid Participants)")]
     InvalidParticipants,
-    #[error("Request Ignored (Ceremony Id already used)")]
-    CeremonyIdAlreadyUsed,
     #[error("Broadcast Failure ({0}) during {1} stage")]
     BroadcastFailure(BroadcastFailureReason, BroadcastStageName),
     #[error("{0}")]
