@@ -179,7 +179,7 @@ impl CeremonyFailureReason<KeygenFailureReason> {
                 slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
             }
             CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible) => {
-                slog::warn!(logger, #KEYGEN_REJECTED_INCOMPATIBLE, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+                slog::debug!(logger, #KEYGEN_REJECTED_INCOMPATIBLE, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
             }
         }
     }
