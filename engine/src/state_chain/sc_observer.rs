@@ -10,7 +10,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     eth::{rpc::EthRpcApi, EthBroadcaster, ObserveInstruction},
     logging::COMPONENT_KEY,
-    multisig::{client::MultisigClientApi, KeyId, MessageHash},
+    multisig::{
+        client::{CeremonyFailureReason, KeygenFailureReason, MultisigClientApi},
+        KeyId, MessageHash,
+    },
     multisig_p2p::AccountPeerMappingChange,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
@@ -70,7 +73,14 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
             }
             Err((bad_account_ids, reason)) => {
                 slog::debug!(logger, "Keygen ceremony {} failed: {}", ceremony_id, reason);
-                ReportedKeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                if let CeremonyFailureReason::<KeygenFailureReason>::Other(
+                    KeygenFailureReason::KeyNotCompatible,
+                ) = reason
+                {
+                    ReportedKeygenOutcome::Incompatible
+                } else {
+                    ReportedKeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                }
             }
         };
 
