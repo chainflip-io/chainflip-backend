@@ -8,6 +8,8 @@ mod mock;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+mod migrations;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -22,7 +24,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnRuntimeUpgrade, StorageVersion, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -30,11 +32,7 @@ use sp_std::{prelude::*, time::Duration};
 
 use cf_traits::SystemStateInfo;
 
-/// Temporary alias to work around `Duration` not supporting TypeInfo.
-///
-/// TODO: Replace this with just a u64 for the seconds. We don't care about nanos. Will do this in
-/// another PR since it requires a storage migration.
-type DurationParts = (u64, u32);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
@@ -115,7 +113,9 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
+	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Store the list of staked accounts and whether or not they are retired
@@ -137,19 +137,33 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
-		StorageValue<_, Vec<(DurationParts, AccountId<T>)>, ValueQuery>;
+		StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// TTL for a claim from the moment of issue.
 	#[pallet::storage]
-	pub type ClaimTTL<T: Config> = StorageValue<_, DurationParts, ValueQuery>;
+	pub type ClaimTTL<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			Self::expire_pending_claims()
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
@@ -505,7 +519,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
-			ClaimTTL::<T>::set((self.claim_ttl.as_secs(), 0));
+			ClaimTTL::<T>::set(self.claim_ttl.as_secs());
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 				match Pallet::<T>::activate(staker) {
@@ -631,8 +645,8 @@ impl<T: Config> Pallet<T> {
 		T::Flip::try_claim(account_id, amount)?;
 
 		// Set expiry and build the claim parameters.
-		let expiry = T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get().0);
-		Self::register_claim_expiry(account_id.clone(), (expiry.as_secs(), 0));
+		let expiry = T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get());
+		Self::register_claim_expiry(account_id.clone(), expiry.as_secs());
 
 		let call = T::RegisterClaim::new_unsigned(
 			T::ReplayProtectionProvider::replay_protection(),
@@ -709,7 +723,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
 	/// claims for the account are expired.
-	fn register_claim_expiry(account_id: AccountId<T>, expiry: DurationParts) {
+	fn register_claim_expiry(account_id: AccountId<T>, expiry: u64) {
 		ClaimExpiries::<T>::mutate(|expiries| {
 			// We want to ensure this list remains sorted such that the head of the list contains
 			// the oldest pending claim (ie. the first to be expired). This means we put the new
@@ -736,7 +750,7 @@ impl<T: Config> Pallet<T> {
 		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
 		let expiry_cutoff =
-			expiries.partition_point(|(expiry, _)| expiry.0 < T::TimeSource::now().as_secs());
+			expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs());
 
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
 

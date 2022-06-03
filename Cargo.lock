@@ -949,6 +949,7 @@ dependencies = [
  "crossbeam-channel",
  "csv",
  "curv-kzen",
+ "curve25519-dalek 3.2.0",
  "custom-rpc",
  "dyn-clone",
  "env_logger 0.9.0",
@@ -969,7 +970,6 @@ dependencies = [
  "jsonrpc-http-server",
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
- "kvdb-rocksdb",
  "lazy_format",
  "lazy_static",
  "libp2p",
@@ -1015,6 +1015,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "typenum",
  "url 1.7.2",
  "utilities",
  "web3",
@@ -1598,6 +1599,7 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.5.1",
+ "serde",
  "subtle",
  "zeroize",
 ]
@@ -5340,6 +5342,7 @@ name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
