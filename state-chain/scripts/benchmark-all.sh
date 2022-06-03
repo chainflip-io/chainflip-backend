@@ -41,4 +41,4 @@ for pallet in $pallets ; do
     --template="$TEMPLATE"
 done
 
-echo "Benchmarking was succesful! - Don't forget to commit your accepted changes ;-)"
+echo "Benchmarking was successful!"
