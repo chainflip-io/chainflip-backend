@@ -406,7 +406,6 @@ where
                     .try_recv()
                     .ok()?
                     .map_err(|error| {
-                        // Log the failure reason for help with debugging
                         println!("Ceremony failure reason: {:?}", error.1);
                         error
                     });
@@ -1270,7 +1269,6 @@ impl Node {
                 .try_recv()
                 .expect("Failed to receive ceremony result")
                 .map_err(|(_, reason)| {
-                    // Log the failure reason for help with debugging
                     println!("Ceremony failure reason: {}", reason);
                     reason
                 }),

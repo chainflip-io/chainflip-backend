@@ -285,7 +285,6 @@ where
                     Ok(keygen_result_info.key.get_public_key().get_element())
                 }
                 Err((reported_parties, failure_reason)) => {
-                    // Log the failure reason
                     failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
 
                     Err((reported_parties, failure_reason))
@@ -359,7 +358,6 @@ where
                     .await
                     .expect("Signing result oneshot channel dropped before receiving a result")
                     .map_err(|(reported_parties, failure_reason)| {
-                        // Log the failure reason
                         failure_reason
                             .log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
 
@@ -370,7 +368,6 @@ where
                     let failure_reason =
                         CeremonyFailureReason::Other(SigningFailureReason::UnknownKey);
 
-                    // Log the failure reason
                     failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
 
                     Err((BTreeSet::new(), failure_reason))
