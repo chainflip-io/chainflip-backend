@@ -11,7 +11,7 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
-use cf_chains::benchmarking_default::BenchmarkDefault;
+use cf_chains::benchmarking_default::BenchmarkValue;
 
 // Inserts a new signing´attempt into the storage.
 fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(
@@ -33,14 +33,14 @@ fn insert_signing_attempt<T: pallet::Config<I>, I: 'static>(
 // Generates a new signature ready call.
 fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
 	let threshold_request_id =
-		<T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_default();
+		<T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_value();
 	T::ThresholdSigner::insert_signature(
 		threshold_request_id,
-		ThresholdSignatureFor::<T, I>::benchmark_default(),
+		ThresholdSignatureFor::<T, I>::benchmark_value(),
 	);
 	Call::<T, I>::on_signature_ready {
 		threshold_request_id,
-		api_call: ApiCallFor::<T, I>::benchmark_default(),
+		api_call: ApiCallFor::<T, I>::benchmark_value(),
 	}
 }
 
@@ -59,14 +59,14 @@ benchmarks_instance_pallet! {
 				unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
 				broadcast_attempt_id,
 			});
-			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_default(), ThresholdSignatureFor::<T, I>::benchmark_default()));
+			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()));
 		}
 		for i in 1 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
 			});
-			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_default(), ThresholdSignatureFor::<T, I>::benchmark_default()));
+			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()));
 		}
 	} : {
 		Pallet::<T, I>::on_initialize(expiry_block);
@@ -84,7 +84,7 @@ benchmarks_instance_pallet! {
 		insert_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(origin)?;
 		// TODO: at the moment we verify the case were the signature is invalid - thats wrong
-	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_default(), SignerIdFor::<T, I>::benchmark_default())
+	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_value(), SignerIdFor::<T, I>::benchmark_value())
 	verify {
 		// TODO: verify the case if we're done with the verification
 	}
@@ -121,14 +121,14 @@ benchmarks_instance_pallet! {
 	}
 	signature_accepted {
 		let caller: T::AccountId = whitelisted_caller();
-		SignerIdToAccountId::<T, I>::insert(SignerIdFor::<T, I>::benchmark_default(), caller);
-		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_default(), 1);
+		SignerIdToAccountId::<T, I>::insert(SignerIdFor::<T, I>::benchmark_value(), caller);
+		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_value(), 1);
 		let call = Call::<T, I>::signature_accepted{
-			signature: ThresholdSignatureFor::<T, I>::benchmark_default(),
-			tx_signer: SignerIdFor::<T, I>::benchmark_default(),
+			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
+			tx_signer: SignerIdFor::<T, I>::benchmark_value(),
 			tx_fee: ChainAmountFor::<T, I>::default(),
 			block_number: 1,
-			tx_hash: TransactionHashFor::<T, I>::benchmark_default()
+			tx_hash: TransactionHashFor::<T, I>::benchmark_value()
 		};
 	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::successful_origin())? }
 	verify {

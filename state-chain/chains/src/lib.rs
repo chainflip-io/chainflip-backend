@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use crate::benchmarking_default::BenchmarkDefault;
+use crate::benchmarking_default::BenchmarkValue;
 use codec::{FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use frame_support::{
@@ -46,9 +46,9 @@ pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
 	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord;
-	type Payload: Member + Parameter + BenchmarkDefault;
-	type ThresholdSignature: Member + Parameter + BenchmarkDefault;
-	type TransactionHash: Member + Parameter + BenchmarkDefault;
+	type Payload: Member + Parameter + BenchmarkValue;
+	type ThresholdSignature: Member + Parameter + BenchmarkValue;
+	type TransactionHash: Member + Parameter + BenchmarkValue;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -60,8 +60,8 @@ pub trait ChainCrypto: Chain {
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
 	type UnsignedTransaction: Member + Parameter + Default;
-	type SignedTransaction: Member + Parameter + BenchmarkDefault;
-	type SignerCredential: Member + Parameter + BenchmarkDefault;
+	type SignedTransaction: Member + Parameter + BenchmarkValue;
+	type SignerCredential: Member + Parameter + BenchmarkValue;
 	type ReplayProtection: Member + Parameter + Default;
 	type ValidationError;
 
@@ -285,11 +285,11 @@ pub mod mocks {
 	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	impl<C: ChainCrypto> BenchmarkDefault for MockApiCall<C> {
-		fn benchmark_default() -> Self {
-			let default_payload: <C as ChainCrypto>::Payload = C::Payload::benchmark_default();
+	impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
+		fn benchmark_value() -> Self {
+			let default_payload: <C as ChainCrypto>::Payload = C::Payload::benchmark_value();
 			let threshold_signature: <C as ChainCrypto>::ThresholdSignature =
-				C::ThresholdSignature::benchmark_default();
+				C::ThresholdSignature::benchmark_value();
 			Self { 0: default_payload, 1: Some(threshold_signature) }
 		}
 	}

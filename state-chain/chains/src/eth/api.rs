@@ -25,9 +25,9 @@ pub struct EthereumReplayProtection {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkDefault for EthereumApi {
+impl BenchmarkValue for EthereumApi {
 	#[cfg(feature = "runtime-benchmarks")]
-	fn benchmark_default() -> Self {
+	fn benchmark_value() -> Self {
 		let key = AggKey::from_pubkey_compressed(hex_literal::hex!(
 			"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
 		));
