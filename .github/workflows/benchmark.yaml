@@ -42,7 +42,7 @@ jobs:
         uses: peter-evans/create-pull-request@v4
         with:
           base: develop
-          title: Benchmark results
+          title: "[AUTOMATED] Benchmark results"
           commit-message: "[AUTOMATED] Benchmarking results."
           body: "This pull request was opened automatically. Close it if you think it was opened in error."
           branch: auto/benchmark-results
