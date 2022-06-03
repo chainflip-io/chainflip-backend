@@ -53,20 +53,21 @@ benchmarks_instance_pallet! {
 		let expiry_block = T::BlockNumber::from(6u32);
 		let b in 1 .. 1000u32;
 		let x in 1000 .. 2000u32;
+		let insert_sig = |i| ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()));
 		for i in 1 .. b {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			BroadcastRetryQueue::<T, I>::append(&BroadcastAttempt::<T, I> {
 				unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
 				broadcast_attempt_id,
 			});
-			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()));
+			insert_sig(i);
 		}
 		for i in 1 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
 			});
-			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()));
+			insert_sig(i);
 		}
 	} : {
 		Pallet::<T, I>::on_initialize(expiry_block);
