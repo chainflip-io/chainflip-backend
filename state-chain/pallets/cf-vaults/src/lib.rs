@@ -241,9 +241,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			return Some(KeygenOutcome::Incompatible)
 		}
 
-		if FailureVoters::<T, I>::decode_len().unwrap_or_default() < success_threshold {
-			None
-		} else {
+		if FailureVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
 			Some(KeygenOutcome::Failure(
 				self.blame_votes
 					.iter()
@@ -259,6 +257,8 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 					.cloned()
 					.collect(),
 			))
+		} else {
+			None
 		}
 	}
 }
