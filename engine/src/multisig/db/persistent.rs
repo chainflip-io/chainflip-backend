@@ -336,7 +336,7 @@ fn migrate_db_to_latest<P: ECPoint>(
     }
 }
 
-// Adding the latest schema version to the metadata column of a new db
+// Adding or updating the latest schema version in the metadata column of a db
 pub fn update_db_schema_version_to_latest(db: DB) -> Result<DB, anyhow::Error> {
     // Update version data
     let mut batch = WriteBatch::default();
@@ -344,7 +344,7 @@ pub fn update_db_schema_version_to_latest(db: DB) -> Result<DB, anyhow::Error> {
 
     // Write the batch
     db.write(batch)
-        .context("Failed to write to db during initialization")?;
+        .context("Failed to write schema version to db")?;
 
     Ok(db)
 }
@@ -443,7 +443,7 @@ mod tests {
             open_db_and_write_version_data(&db_path, LATEST_SCHEMA_VERSION + 1);
         }
 
-        // Open the db and make sure the `init_or_migrate_db_to_latest` errors
+        // Open the db and make sure the migration errors
         {
             let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
