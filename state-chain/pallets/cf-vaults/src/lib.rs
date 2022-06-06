@@ -154,11 +154,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		self.remaining_candidates.len() as AuthorityCount
 	}
 
-	/// How many responses have we received so far?
-	fn response_count(&self) -> AuthorityCount {
-		self.candidate_count.saturating_sub(self.remaining_candidate_count())
-	}
-
 	/// Resolves the keygen outcome as follows:
 	///
 	/// If and only if *all* candidates agree on the same key, return Success.
@@ -230,7 +225,9 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	/// votes.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
 		let success_threshold = self.success_threshold() as usize;
-		if (self.response_count() as usize) < success_threshold {
+		if (self.candidate_count.saturating_sub(self.remaining_candidate_count()) as usize) <
+			success_threshold
+		{
 			return None
 		}
 
