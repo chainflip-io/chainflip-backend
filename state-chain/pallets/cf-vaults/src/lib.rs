@@ -115,9 +115,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		self.success_threshold()
 	}
 
-	/// Accumulate a success vote into the keygen status.
-	///
-	/// Does not mutate on the error case.
 	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
 		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
 
@@ -128,9 +125,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		Ok(())
 	}
 
-	/// Accumulate a failure vote into the keygen status.
-	///
-	/// Does not mutate on the error case.
 	fn add_failure_vote(
 		&mut self,
 		voter: &T::ValidatorId,
@@ -147,9 +141,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		Ok(())
 	}
 
-	/// Accumulate an incompatible vote into the keygen status.
-	///
-	/// Does not mutate on the error case.
 	fn add_incompatible_vote(&mut self, voter: &T::ValidatorId) -> DispatchResult {
 		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
 
