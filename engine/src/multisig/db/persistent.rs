@@ -6,10 +6,7 @@ use slog::o;
 
 use crate::{
     logging::COMPONENT_KEY,
-    multisig::{
-        client::KeygenResultInfo, crypto::ECPoint, db::migrations::v0_to_v1::migration_0_to_1,
-        KeyId,
-    },
+    multisig::{client::KeygenResultInfo, crypto::ECPoint, KeyId},
 };
 
 use anyhow::{Context, Result};
@@ -17,10 +14,12 @@ use anyhow::{Context, Result};
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
+#[cfg(test)]
+pub const DB_SCHEMA_VERSION: u32 = 2; // TODO: rename to LATEST_SCHEMA_VERSION ?
+/// We use a schema version of 2 in tests because we want to test migrations.
+/// Once a real migration exists, we can use the same schema version for both.
+#[cfg(not(test))]
 pub const DB_SCHEMA_VERSION: u32 = 1;
-
-/// The default schema version used if a database exists but no schema version is found
-const DEFAULT_DB_SCHEMA_VERSION: u32 = 0;
 
 /// Key used to store the `DB_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
@@ -68,7 +67,8 @@ impl<P: ECPoint> PersistentKeyDB<P> {
             ),
         ]);
 
-        if db_path.exists() {
+        let is_existing_db = db_path.exists();
+        if is_existing_db {
             // Add the column families found in the existing db, they might be needed for migration.
             DB::list_cf(&Options::default(), db_path)
                 .map_err(anyhow::Error::msg)
@@ -104,9 +104,14 @@ impl<P: ECPoint> PersistentKeyDB<P> {
                 .map_err(anyhow::Error::msg)
                 .context(format!("Failed to open database at: {}", db_path.display()))?;
 
-        // Perform migrations and write the schema version
-        let p_kdb = migrate_db_to_latest(db, logger, db_path)
-                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
+        let p_kdb = if is_existing_db {
+            // Perform migrations and update schema version
+            migrate_db_to_latest(db, db_path, logger)
+                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?
+        } else {
+            // Its a new db, so just write the latest schema version
+            PersistentKeyDB::new_from_db(update_db_schema_version_to_latest(db)?, logger)
+        };
 
         Ok(p_kdb)
     }
@@ -250,79 +255,98 @@ pub fn add_schema_version_to_batch_write(db: &DB, db_schema_version: u32, batch:
 }
 
 /// Get the schema version from the metadata column in the db.
-/// If no `DB_SCHEMA_VERSION_KEY` exists, it will return 0.
-fn read_schema_version(db: &DB, logger: &slog::Logger) -> u32 {
-    match db
-        .get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
+fn read_schema_version(db: &DB, logger: &slog::Logger) -> Option<u32> {
+    db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
         .expect("Should querying for db_schema_version")
-    {
-        Some(version) => {
+        .map(|version| {
             let version: [u8; 4] = version.try_into().expect("Version should be a u32");
             let version = u32::from_be_bytes(version);
             slog::info!(logger, "Found db_schema_version of {}", version);
             version
+        })
+}
+
+/// Reads the schema version and migrates the db to the latest schema version if required
+fn migrate_db_to_latest<P: ECPoint>(
+    db: DB,
+    path: &Path,
+    logger: &slog::Logger,
+) -> Result<PersistentKeyDB<P>, anyhow::Error> {
+    match read_schema_version(&db, logger) {
+        None => Err(anyhow::Error::msg(
+            "No schema version found in existing database",
+        )),
+        Some(0) => {
+            // We start the schema version at 1, so 0 is always invalid.
+            Err(anyhow::Error::msg(
+                "Invalid schema version 0 found in existing database".to_string(),
+            ))
         }
-        // If we can't find a db_schema_version, we assume it's the first one
-        None => {
-            slog::warn!(
+        Some(DB_SCHEMA_VERSION) => {
+            // The db is at the latest version, no action needed
+            slog::info!(
                 logger,
-                "Did not find schema version in database. Assuming schema version of {}",
-                DEFAULT_DB_SCHEMA_VERSION
+                "Database already at latest version of: {}",
+                DB_SCHEMA_VERSION
             );
-            DEFAULT_DB_SCHEMA_VERSION
+            Ok(PersistentKeyDB::new_from_db(db, logger))
+        }
+        Some(version) if version > DB_SCHEMA_VERSION => {
+            // We do not support backwards migrations
+            Err(anyhow::Error::msg(
+                    format!("Database schema version {} is ahead of the current schema version {}. Is your Chianflip Engine up to date?",
+                    version,
+                    DB_SCHEMA_VERSION)
+                ))
+        }
+        Some(version) => {
+            slog::info!(
+                logger,
+                "Database is migrating from version {} to {}",
+                version,
+                DB_SCHEMA_VERSION
+            );
+
+            // Backup the database before migrating it
+            slog::info!(
+                logger,
+                "Database backup created at {}",
+                create_backup(path, version)
+                    .map_err(anyhow::Error::msg)
+                    .context("Failed to create database backup before migration")?
+            );
+
+            // Future migrations can be added here
+
+            if cfg!(test) {
+                if DB_SCHEMA_VERSION == 2 {
+                    // For tests we just update the schema version as if it where a migration
+                    Ok(PersistentKeyDB::new_from_db(
+                        update_db_schema_version_to_latest(db)?,
+                        logger,
+                    ))
+                } else {
+                    panic!("Invalid migration to {}", version);
+                }
+            } else {
+                // No migrations exist yet for non-test builds
+                panic!("Invalid migration to {}", version);
+            }
         }
     }
 }
 
-/// Returning a PersistentKeyDB
-fn migrate_db_to_latest<P: ECPoint>(
-    db: DB,
-    logger: &slog::Logger,
-    path: &Path,
-) -> Result<PersistentKeyDB<P>, anyhow::Error> {
-    let db_schema_version = read_schema_version(&db, logger);
+// Adding the latest schema version to the metadata column of a new db
+pub fn update_db_schema_version_to_latest(db: DB) -> Result<DB, anyhow::Error> {
+    // Update version data
+    let mut batch = WriteBatch::default();
+    add_schema_version_to_batch_write(&db, DB_SCHEMA_VERSION, &mut batch);
 
-    if db_schema_version > DB_SCHEMA_VERSION {
-        return Err(anyhow::Error::msg(
-        format!("Database is at schema version {} but needs to be {}. Manual backwards migration is required",
-        db_schema_version,
-        DB_SCHEMA_VERSION)
-    ));
-    }
+    // Write the batch
+    db.write(batch)
+        .context("Failed to write to db during initialization")?;
 
-    if db_schema_version != DB_SCHEMA_VERSION {
-        slog::info!(
-            logger,
-            "Database is migrating from version {} to {}",
-            db_schema_version,
-            DB_SCHEMA_VERSION
-        );
-
-        // Backup the database before migrating it
-        slog::info!(
-            logger,
-            "Database backup created at {}",
-            create_backup(path, db_schema_version)
-                .map_err(anyhow::Error::msg)
-                .context("Failed to create database backup before migration")?
-        );
-
-        if db_schema_version == 0 {
-            Ok(migration_0_to_1(db)?)
-        } else {
-            Err(anyhow::Error::msg(format!(
-                "Invalid migration to schema version {}",
-                db_schema_version
-            )))
-        }
-    } else {
-        slog::info!(
-            logger,
-            "Database already at latest version of: {}",
-            DB_SCHEMA_VERSION
-        );
-        Ok(PersistentKeyDB::new_from_db(db, logger))
-    }
+    Ok(db)
 }
 
 #[cfg(test)]
@@ -415,13 +439,15 @@ mod tests {
     fn should_not_migrate_backwards() {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a db with schema version + 1
-        open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION + 1);
+        {
+            open_db_and_write_version_data(&db_path, DB_SCHEMA_VERSION + 1);
+        }
 
-        // Open the db and make sure the `migrate_db_to_latest` errors
+        // Open the db and make sure the `init_or_migrate_db_to_latest` errors
         {
             let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest::<Point>(db, &new_test_logger(), &db_path).is_err());
+            assert!(migrate_db_to_latest::<Point>(db, &db_path, &new_test_logger()).is_err());
         }
     }
 
@@ -477,21 +503,24 @@ mod tests {
 
     #[test]
     fn backup_is_created_when_migrating() {
+        // This test requires a schema version > 1
+
         let logger = new_test_logger();
         let (directory, db_path) = new_temp_directory_with_nonexistent_file();
-        // Create a db that has no schema version, so it will use DEFAULT_DB_SCHEMA_VERSION
+        // Create a db that has an old schema version
+        let old_db_version = 1;
         {
-            let mut opts = Options::default();
-            opts.create_missing_column_families(true);
-            opts.create_if_missing(true);
-            let _db = DB::open_cf(&opts, &db_path, COLUMN_FAMILIES).expect("Should open db file");
+            let _db = open_db_and_write_version_data(&db_path, old_db_version);
         }
 
         // Load the db and trigger the migration and therefore the backup
         {
             let p_db =
                 PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-            assert_eq!(read_schema_version(&p_db.db, &logger), DB_SCHEMA_VERSION);
+            assert_eq!(
+                read_schema_version(&p_db.db, &logger),
+                Some(DB_SCHEMA_VERSION)
+            );
         }
 
         // Try and open the backup to make sure it still works
@@ -526,9 +555,22 @@ mod tests {
             .expect("Should open db backup");
             assert_eq!(
                 read_schema_version(&backup_db, &logger),
-                DEFAULT_DB_SCHEMA_VERSION
+                Some(old_db_version)
             );
         }
+    }
+
+    #[test]
+    fn should_error_if_at_schema_version_0() {
+        let logger = new_test_logger();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+        // Create a db that is at schema version 0
+        {
+            let _db = open_db_and_write_version_data(&db_path, 0);
+        }
+
+        // Load the db, it should read the schema version fo 0 and return an error
+        assert!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).is_err());
     }
 
     #[test]
@@ -560,6 +602,9 @@ mod tests {
         assert_ok!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(
             &db_path, &logger
         ));
+        // Do a backup of the db,
+        // so we don't rely on `new_and_migrate_to_latest` to create the backup
+        assert_ok!(create_backup(&db_path, DB_SCHEMA_VERSION));
 
         // Change the backups folder to readonly
         let backups_path = directory.path().join(BACKUPS_DIRECTORY);
@@ -572,7 +617,7 @@ mod tests {
             "Readonly permissions were not set"
         );
 
-        // Try and backup the db, it should fail with permissions denied due to readonly
+        // Try and backup the db again, it should fail with permissions denied due to readonly
         assert!(create_backup(&db_path, DB_SCHEMA_VERSION).is_err());
     }
 }
