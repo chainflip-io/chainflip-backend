@@ -183,16 +183,20 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			}
 		}
 
+		let punish_bad_success_voters = |to_punish: &mut BTreeSet<T::ValidatorId>| {
+			for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
+				for dissenter in key_dissenters {
+					to_punish.insert(dissenter);
+				}
+			}
+		};
+
 		let mut to_punish = self.remaining_candidates.clone();
 		match self.consensus_outcome() {
 			Some(KeygenOutcome::Success(consensus_key)) => {
 				// all nodes that reported failure *and* all nodes that reported another success.
 				SuccessVoters::<T, I>::remove(consensus_key);
-				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
-					for dissenter in key_dissenters {
-						to_punish.insert(dissenter);
-					}
-				}
+				punish_bad_success_voters(&mut to_punish);
 				for failure_voter in FailureVoters::<T, I>::take() {
 					to_punish.insert(failure_voter);
 				}
@@ -206,20 +210,12 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				for failure_voter in FailureVoters::<T, I>::take() {
 					to_punish.insert(failure_voter);
 				}
-				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
-					for dissenter in key_dissenters {
-						to_punish.insert(dissenter);
-					}
-				}
+				punish_bad_success_voters(&mut to_punish);
 			},
 			Some(KeygenOutcome::Failure(mut blamed)) => {
 				to_punish.append(&mut blamed);
 				FailureVoters::<T, I>::kill();
-				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
-					for dissenter in key_dissenters {
-						to_punish.insert(dissenter);
-					}
-				}
+				punish_bad_success_voters(&mut to_punish);
 				for incompatible_voter in IncompatibleVoters::<T, I>::take() {
 					to_punish.insert(incompatible_voter);
 				}
