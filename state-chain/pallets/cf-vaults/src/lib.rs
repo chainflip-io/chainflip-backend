@@ -250,9 +250,13 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
+	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T, I> },
+	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
+	/// The key has been successfully updated on the contract.
 	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionHash },
+	/// The rotation has failed at one of the above stages.
 	Failed,
 }
 

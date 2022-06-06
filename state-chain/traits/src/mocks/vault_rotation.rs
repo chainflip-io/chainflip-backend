@@ -8,37 +8,41 @@ impl MockPallet for MockVaultRotator {
 	const PREFIX: &'static [u8] = b"MockVaultRotator::";
 }
 
+const BEHAVIOUR: &[u8] = b"BEHAVIOUR";
+const ROTATION_OUTCOME: &[u8] = b"ROTATION_OUTCOME";
+const ERROR_ON_START: &[u8] = b"ERROR_ON_START";
+
 impl MockVaultRotator {
 	pub fn set_error_on_start(e: bool) {
-		Self::put_storage(b"ERROR_ON_START", b"", e);
+		Self::put_storage(ERROR_ON_START, b"", e);
 	}
 
 	pub fn succeeding() {
-		Self::put_storage(b"BEHAVIOUR", b"", SuccessOrFailure::Success);
+		Self::put_storage(BEHAVIOUR, b"", SuccessOrFailure::Success);
 	}
 
 	pub fn failing() {
-		Self::put_storage(b"BEHAVIOUR", b"", SuccessOrFailure::Failure);
+		Self::put_storage(BEHAVIOUR, b"", SuccessOrFailure::Failure);
 	}
 
 	fn get_error_on_start() -> bool {
-		Self::get_storage(b"ERROR_ON_START", b"").unwrap_or(false)
+		Self::get_storage(ERROR_ON_START, b"").unwrap_or(false)
 	}
 
 	fn initialise() {
-		Self::put_storage(b"ROTATION_OUTCOME", b"", AsyncResult::<SuccessOrFailure>::Pending);
+		Self::put_storage(ROTATION_OUTCOME, b"", AsyncResult::<SuccessOrFailure>::Pending);
 	}
 
 	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure> {
-		Self::get_storage(b"ROTATION_OUTCOME", b"").unwrap_or_default()
+		Self::get_storage(ROTATION_OUTCOME, b"").unwrap_or_default()
 	}
 
 	/// Call this to simulate the on_initialise pallet hook.
 	pub fn on_initialise() {
 		// default to success
-		let s = Self::get_storage(b"BEHAVIOUR", b"").unwrap_or(SuccessOrFailure::Success);
+		let s = Self::get_storage(BEHAVIOUR, b"").unwrap_or(SuccessOrFailure::Success);
 		Self::put_storage(
-			b"ROTATION_OUTCOME",
+			ROTATION_OUTCOME,
 			b"",
 			match Self::get_vault_rotation_outcome() {
 				AsyncResult::Pending => AsyncResult::Ready(s),
