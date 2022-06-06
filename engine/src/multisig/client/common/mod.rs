@@ -133,9 +133,6 @@ impl CeremonyFailureReason<SigningFailureReason> {
             CeremonyFailureReason::InvalidParticipants => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
             }
-            CeremonyFailureReason::CeremonyIdAlreadyUsed => {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
-            }
             CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare) => {
                 slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
             }
@@ -164,9 +161,6 @@ impl CeremonyFailureReason<KeygenFailureReason> {
             CeremonyFailureReason::InvalidParticipants => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
             }
-            CeremonyFailureReason::CeremonyIdAlreadyUsed => {
-                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
-            }
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse) => {
                 slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
             }
@@ -193,7 +187,7 @@ fn test_failure_reason_logs_with_tag() {
 
     tag_cache.clear();
 
-    CeremonyFailureReason::CeremonyIdAlreadyUsed::<KeygenFailureReason>.log(&logger);
+    CeremonyFailureReason::InvalidParticipants::<KeygenFailureReason>.log(&logger);
     assert!(tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 
     tag_cache.clear();
