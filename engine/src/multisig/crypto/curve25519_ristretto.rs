@@ -9,7 +9,7 @@ type PK = curve25519_dalek::ristretto::RistrettoPoint;
 pub struct Point(PK);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Scalar(SK);
+pub struct Scalar(pub(super) SK);
 
 mod point_impls {
 
@@ -19,7 +19,7 @@ mod point_impls {
 
     impl Point {
         #[allow(dead_code)]
-        fn get_element(&self) -> PK {
+        pub fn get_element(&self) -> PK {
             self.0
         }
     }

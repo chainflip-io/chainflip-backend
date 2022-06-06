@@ -66,8 +66,15 @@ web3-secp256k1 = {package = 'secp256k1', version = '0.21'}
 generic-array= "0.14"
 public-ip = "0.2.2"
 lazy_format = "1.10.0"
-curve25519-dalek = {version = "3.2", features = ["serde"]}
+# We will update curve25519-dalek when we can update schnorrkel
+curve25519-dalek = {version = "2.1", features = ["serde"]}
 typenum = "1.15"
+# Note: we don't use the most recent version of schnorrkel since 0.10 switches
+# to curve25519-dalek-ng which seems to be a somewhat controversial fork of
+# curve25519-dalek. We might eventually update, but for now let's just
+# use the same version as polkadot. 
+schnorrkel = "0.9.1"
+
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
