@@ -352,27 +352,25 @@ where
             });
 
         Box::pin(async move {
-            match request {
+            let result = match request {
                 Some(RequestStatus::Ready(signature)) => Ok(signature),
                 Some(RequestStatus::WaitForOneshot(result_receiver)) => result_receiver
                     .await
-                    .expect("Signing result oneshot channel dropped before receiving a result")
-                    .map_err(|(reported_parties, failure_reason)| {
-                        failure_reason
-                            .log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
-
-                        (reported_parties, failure_reason)
-                    }),
+                    .expect("Signing result oneshot channel dropped before receiving a result"),
                 None => {
                     // No key was found for the given key_id
-                    let failure_reason =
-                        CeremonyFailureReason::Other(SigningFailureReason::UnknownKey);
-
-                    failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
-
-                    Err((BTreeSet::new(), failure_reason))
+                    Err((
+                        BTreeSet::new(),
+                        CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),
+                    ))
                 }
-            }
+            };
+
+            result.map_err(|(reported_parties, failure_reason)| {
+                failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+
+                (reported_parties, failure_reason)
+            })
         })
     }
 
