@@ -142,7 +142,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
-// FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
 	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
