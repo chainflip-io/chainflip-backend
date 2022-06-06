@@ -883,62 +883,6 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
 }
 
 #[tokio::test]
-async fn should_ignore_keygen_request_with_used_ceremony_id() {
-    let (_, _, _messages, mut nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.iter().cloned()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-    )
-    .await;
-
-    let node = nodes.get_mut(&ACCOUNT_IDS[0]).unwrap();
-
-    // Use the same ceremony id as was used in the previous ceremony
-    let (result_sender, result_receiver) = oneshot::channel();
-    node.ceremony_manager.on_keygen_request(
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        ACCOUNT_IDS.clone(),
-        Rng::from_entropy(),
-        result_sender,
-    );
-
-    // Check that the request did not start a ceremony
-    assert_ok!(node.ensure_ceremony_at_keygen_stage(
-        STAGE_FINISHED_OR_NOT_STARTED,
-        DEFAULT_KEYGEN_CEREMONY_ID
-    ));
-
-    // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::CeremonyIdAlreadyUsed,
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_stage_data_with_used_ceremony_id() {
-    let (_, _, messages, mut nodes) =
-        run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
-
-    let node = nodes.get_mut(&ACCOUNT_IDS[0]).unwrap();
-
-    assert_eq!(node.ceremony_manager.get_keygen_states_len(), 0);
-
-    // Receive a comm1 with a used ceremony id (same default keygen ceremony id)
-    node.ceremony_manager.process_keygen_data(
-        ACCOUNT_IDS[1].clone(),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        messages.stage_3_messages[&ACCOUNT_IDS[1]][&ACCOUNT_IDS[0]]
-            .clone()
-            .into(),
-    );
-
-    // The message should have been ignored and no ceremony was started
-    // In this case, the ceremony would be unauthorised, so we must check how many keygen states exist
-    // to see if a unauthorised state was created.
-    assert_eq!(node.ceremony_manager.get_keygen_states_len(), 0);
-}
-
-#[tokio::test]
 async fn should_ignore_stage_data_with_incorrect_size() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 

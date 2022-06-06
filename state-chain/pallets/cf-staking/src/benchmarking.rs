@@ -210,7 +210,7 @@ benchmarks! {
 			// Submit a claim
 			let claimable = T::Flip::claimable_balance(staker);
 			Pallet::<T>::do_claim(staker, claimable, withdrawal_address)?;
-			Pallet::<T>::register_claim_expiry(staker.clone(), (now.as_secs(), 0));
+			Pallet::<T>::register_claim_expiry(staker.clone(), now.as_secs());
 		}
 	}: {
 		Pallet::<T>::expire_pending_claims();
