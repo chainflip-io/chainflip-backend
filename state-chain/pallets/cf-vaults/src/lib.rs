@@ -185,7 +185,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		let mut to_punish = self.remaining_candidates.clone();
 		match self.consensus_outcome() {
 			Some(KeygenOutcome::Success(consensus_key)) => {
-				// all nodes that reported failure *and* all nodes that reported another success.
 				SuccessVoters::<T, I>::remove(consensus_key);
 				punish_bad_success_voters(&mut to_punish);
 				for failure_voter in FailureVoters::<T, I>::take() {
@@ -196,7 +195,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				}
 			},
 			Some(KeygenOutcome::Incompatible) => {
-				// all nodes that reported incompatible, don't report anyone
 				IncompatibleVoters::<T, I>::kill();
 				for failure_voter in FailureVoters::<T, I>::take() {
 					to_punish.insert(failure_voter);
