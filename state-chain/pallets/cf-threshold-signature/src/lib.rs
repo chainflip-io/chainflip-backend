@@ -52,6 +52,8 @@ type AttemptCount = u32;
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
 
+const THRESHOLD_SIGNATURE_TAG_PREFIX: &'static str = "ThresholdSignature";
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	ParticipateSigningFailed,
@@ -324,7 +326,7 @@ pub mod pallet {
 					&payload,
 					signature,
 				) {
-					ValidTransaction::with_tag_prefix("ThresholdSignature")
+					ValidTransaction::with_tag_prefix(THRESHOLD_SIGNATURE_TAG_PREFIX)
 						// We only expect one success per ceremony.
 						.and_provides(ceremony_id)
 						.build()
