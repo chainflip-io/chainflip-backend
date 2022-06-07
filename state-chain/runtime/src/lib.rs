@@ -572,6 +572,18 @@ impl_runtime_apis! {
 		fn is_auction_phase() -> bool {
 			Validator::is_auction_phase()
 		}
+		fn environment_flip_token_address() -> [u8; 20] {
+			Environment::flip_token_address()
+		}
+		fn environment_stake_manager_address() -> [u8; 20] {
+			Environment::stake_manager_address()
+		}
+		fn environment_key_manager_address() -> [u8; 20] {
+			Environment::key_manager_address()
+		}
+		fn environment_ethereum_chain_id() -> u64 {
+			Environment::ethereum_chain_id()
+		}
 	}
 	// END custom runtime APIs
 
