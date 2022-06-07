@@ -485,8 +485,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		payload: PayloadFor<T, I>,
 		attempt: AttemptCount,
 	) -> CeremonyId {
-		// Get a new ceremony id.
-		// Get a new id.
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 		OpenRequests::<T, I>::insert(ceremony_id, (request_id, attempt, payload.clone()));
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
