@@ -279,7 +279,6 @@ pub mod pallet {
 				if let Some(failed_ceremony_context) = PendingCeremonies::<T, I>::take(ceremony_id)
 				{
 					num_retries += 1;
-					// Report the offenders.
 					T::OffenceReporter::report_many(
 						PalletOffence::ParticipateSigningFailed,
 						failed_ceremony_context.offenders().as_slice(),
@@ -289,7 +288,6 @@ pub mod pallet {
 					if let Some((request_id, attempt, payload)) =
 						OpenRequests::<T, I>::take(ceremony_id)
 					{
-						// Initiate a new attempt.
 						Self::new_ceremony_attempt(request_id, payload, attempt.wrapping_add(1));
 
 						Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
