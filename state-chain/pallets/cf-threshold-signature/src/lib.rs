@@ -199,7 +199,8 @@ pub mod pallet {
 	pub type PendingCeremonies<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, CeremonyContext<T, I>>;
 
-	/// A mapping from ceremony_id to its current ceremony_id.
+	/// A mapping from ceremony_id to its respective request. There can be several ceremonies for a
+	/// single request
 	///
 	/// Technically a payload is associated with an entire request, however since it's accessed on
 	/// every unsigned transaction validation, it makes sense to optimise this by indexing against
@@ -209,7 +210,8 @@ pub mod pallet {
 	pub type OpenRequests<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, (RequestId, AttemptCount, PayloadFor<T, I>)>;
 
-	/// A mapping from ceremony_id to its associated request_id.
+	/// A mapping from request id to to the live ceremony id for that request and what
+	/// and how many times we have attempted to sign this request.
 	#[pallet::storage]
 	#[pallet::getter(fn live_ceremonies)]
 	pub type LiveCeremonies<T: Config<I>, I: 'static = ()> =
