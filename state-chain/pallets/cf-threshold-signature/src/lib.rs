@@ -239,6 +239,9 @@ pub mod pallet {
 		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
 		/// \[ceremony_id, key_id, offenders\]
 		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
+		/// The threshold signature posted back to the chain was verified.
+		ThresholdSignatureSuccess(CeremonyId),
+		/// We have had a signature success and we have dispatched the associated callback
 		/// \[ceremony_id, result\]
 		ThresholdDispatchComplete(CeremonyId, DispatchResult),
 		/// \[ceremony_id\]
@@ -346,6 +349,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
+		/// - [ThresholdSignatureSuccess](Event::ThresholdSignatureSuccess)
 		/// - [ThresholdDispatchComplete](Event::ThresholdDispatchComplete)
 		///
 		/// ## Errors
@@ -368,8 +372,12 @@ pub mod pallet {
 					log::error!("Invalid ceremony_id received {}.", ceremony_id);
 					Error::<T, I>::InvalidCeremonyId
 				})?;
+
 			PendingCeremonies::<T, I>::remove(ceremony_id);
 			LiveCeremonies::<T, I>::remove(request_id);
+
+			// Report the success once we know the CeremonyId is valid
+			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(ceremony_id));
 
 			log::debug!(
 				"Threshold signature request {} suceeded at ceremony {} after {} attempts.",
@@ -378,7 +386,6 @@ pub mod pallet {
 				attempts
 			);
 
-			// Store the signature.
 			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
 
 			// Dispatch the callback if one has been registered.
