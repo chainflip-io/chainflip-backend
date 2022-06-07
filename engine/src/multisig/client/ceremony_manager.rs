@@ -1,7 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
-use crate::common::format_iterator;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::crypto::{CryptoScheme, Rng};
@@ -14,7 +13,7 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
-use crate::logging::{CEREMONY_ID_KEY, REPORTED_PARTIES_KEY};
+use crate::logging::CEREMONY_ID_KEY;
 
 use client::common::{
     broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
@@ -164,14 +163,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        if let Err((reported_parties, reason)) = &result {
-            slog::warn!(
-                self.logger,
-                "{}", reason;
-                REPORTED_PARTIES_KEY => format_iterator(reported_parties).to_string(),
-                CEREMONY_ID_KEY => ceremony_id,
-            );
-        }
         let _result = result_sender.send(result);
     }
 
@@ -192,14 +183,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        if let Err((blamed_parties, reason)) = &result {
-            slog::debug!(
-                self.logger,
-                "{}", reason;
-                REPORTED_PARTIES_KEY => format_iterator(blamed_parties).to_string(),
-                CEREMONY_ID_KEY => ceremony_id,
-            );
-        }
         let _result = result_sender.send(result);
     }
 

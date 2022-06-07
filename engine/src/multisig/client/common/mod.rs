@@ -5,16 +5,18 @@ mod ceremony_stage;
 pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
 pub use broadcast_verification::BroadcastVerificationMessage;
+use state_chain_runtime::AccountId;
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    common::format_iterator,
     logging::{
         KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED,
-        REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED, UNAUTHORIZED_KEYGEN_EXPIRED,
-        UNAUTHORIZED_SIGNING_EXPIRED,
+        REPORTED_PARTIES_KEY, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
+        UNAUTHORIZED_KEYGEN_EXPIRED, UNAUTHORIZED_SIGNING_EXPIRED,
     },
     multisig::crypto::{ECPoint, KeyShare},
 };
@@ -119,10 +121,11 @@ const REQUEST_TO_SIGN_IGNORED_PREFIX: &str = "Signing request ignored";
 const KEYGEN_REQUEST_IGNORED_PREFIX: &str = "Keygen request ignored";
 
 impl CeremonyFailureReason<SigningFailureReason> {
-    pub fn log(&self, logger: &slog::Logger) {
+    pub fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
+        let reported_parties = format_iterator(reported_parties).to_string();
         match self {
             CeremonyFailureReason::BroadcastFailure(_, _) => {
-                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
+                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }
             CeremonyFailureReason::DuplicateCeremonyId => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
@@ -134,7 +137,7 @@ impl CeremonyFailureReason<SigningFailureReason> {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
             }
             CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare) => {
-                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
+                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }
             CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners) => {
                 slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
@@ -147,13 +150,14 @@ impl CeremonyFailureReason<SigningFailureReason> {
 }
 
 impl CeremonyFailureReason<KeygenFailureReason> {
-    pub fn log(&self, logger: &slog::Logger) {
+    pub fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
+        let reported_parties = format_iterator(reported_parties).to_string();
         match self {
             CeremonyFailureReason::DuplicateCeremonyId => {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
             }
             CeremonyFailureReason::BroadcastFailure(_, _) => {
-                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }
             CeremonyFailureReason::ExpiredBeforeBeingAuthorized => {
                 slog::warn!(logger,#UNAUTHORIZED_KEYGEN_EXPIRED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
@@ -162,13 +166,13 @@ impl CeremonyFailureReason<KeygenFailureReason> {
                 slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
             }
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse) => {
-                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment) => {
-                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint) => {
-                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }
             CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible) => {
                 slog::debug!(logger, #KEYGEN_REJECTED_INCOMPATIBLE, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
@@ -181,18 +185,22 @@ impl CeremonyFailureReason<KeygenFailureReason> {
 #[test]
 fn test_failure_reason_logs_with_tag() {
     let (logger, mut tag_cache) = crate::logging::test_utils::new_test_logger_with_tag_cache();
+    let reported_parties = BTreeSet::new();
 
-    CeremonyFailureReason::DuplicateCeremonyId::<SigningFailureReason>.log(&logger);
+    CeremonyFailureReason::DuplicateCeremonyId::<SigningFailureReason>
+        .log(&reported_parties, &logger);
     assert!(tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 
     tag_cache.clear();
 
-    CeremonyFailureReason::InvalidParticipants::<KeygenFailureReason>.log(&logger);
+    CeremonyFailureReason::InvalidParticipants::<KeygenFailureReason>
+        .log(&reported_parties, &logger);
     assert!(tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
 
     tag_cache.clear();
 
-    CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare).log(&logger);
+    CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare)
+        .log(&reported_parties, &logger);
     assert!(tag_cache.contains_tag(SIGNING_CEREMONY_FAILED));
 
     tag_cache.clear();
@@ -201,6 +209,6 @@ fn test_failure_reason_logs_with_tag() {
         BroadcastFailureReason::InsufficientMessages,
         BroadcastStageName::BlameResponses,
     )
-    .log(&logger);
+    .log(&reported_parties, &logger);
     assert!(tag_cache.contains_tag(KEYGEN_CEREMONY_FAILED));
 }

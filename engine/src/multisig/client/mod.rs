@@ -284,7 +284,10 @@ where
                     Ok(keygen_result_info.key.get_public_key())
                 }
                 Err((reported_parties, failure_reason)) => {
-                    failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+                    failure_reason.log(
+                        &reported_parties,
+                        &self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+                    );
 
                     Err((reported_parties, failure_reason))
                 }
@@ -366,7 +369,10 @@ where
             };
 
             result.map_err(|(reported_parties, failure_reason)| {
-                failure_reason.log(&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)));
+                failure_reason.log(
+                    &reported_parties,
+                    &self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+                );
 
                 (reported_parties, failure_reason)
             })

@@ -1262,7 +1262,7 @@ impl Node {
         expected_reason: CeremonyFailureReason<FailureReason>,
     ) where
         CeremonyResult: PartialEq + std::fmt::Debug,
-        FailureReason: PartialEq + std::fmt::Debug + std::fmt::Display, //+ crate::multisig::client::common::LogWithTag,
+        FailureReason: PartialEq + std::fmt::Debug + std::fmt::Display,
     {
         assert_eq!(
             result_receiver
