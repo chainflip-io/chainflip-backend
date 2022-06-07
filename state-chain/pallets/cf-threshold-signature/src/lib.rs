@@ -442,8 +442,8 @@ pub mod pallet {
 						}
 
 						if context.remaining_respondents.is_empty() {
-							// No more respondents waiting: we can retry on the next block.
-							Self::schedule_retry(id, 1u32.into());
+							// No more respondents waiting: we can retry
+							Self::schedule_retry(id, T::CeremonyRetryDelay::get());
 						}
 
 						Ok(())
@@ -528,7 +528,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 
 			Self::deposit_event(Event::<T, I>::SignersUnavailable(ceremony_id));
-			// Schedule the retry for the next block.
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
 		}
 
