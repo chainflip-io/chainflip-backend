@@ -169,40 +169,31 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			}
 		}
 
-		let punish_bad_success_voters = |to_punish: &mut BTreeSet<T::ValidatorId>| {
-			for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
-				for dissenter in key_dissenters {
-					to_punish.insert(dissenter);
-				}
-			}
+		let remaining_success_voters = || {
+			SuccessVoters::<T, I>::drain()
+				.map(|(_k, dissenters)| dissenters)
+				.flatten()
+				.collect()
 		};
 
 		let mut to_punish = self.remaining_candidates.clone();
 		match self.consensus_outcome() {
 			Some(KeygenOutcome::Success(consensus_key)) => {
 				SuccessVoters::<T, I>::remove(consensus_key);
-				punish_bad_success_voters(&mut to_punish);
-				for failure_voter in FailureVoters::<T, I>::take() {
-					to_punish.insert(failure_voter);
-				}
-				for incompatible_voter in IncompatibleVoters::<T, I>::take() {
-					to_punish.insert(incompatible_voter);
-				}
+				to_punish.append(&mut remaining_success_voters());
+				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
+				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
 			},
 			Some(KeygenOutcome::Incompatible) => {
 				IncompatibleVoters::<T, I>::kill();
-				for failure_voter in FailureVoters::<T, I>::take() {
-					to_punish.insert(failure_voter);
-				}
-				punish_bad_success_voters(&mut to_punish);
+				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
+				to_punish.append(&mut remaining_success_voters());
 			},
 			Some(KeygenOutcome::Failure(mut blamed)) => {
-				to_punish.append(&mut blamed);
 				FailureVoters::<T, I>::kill();
-				punish_bad_success_voters(&mut to_punish);
-				for incompatible_voter in IncompatibleVoters::<T, I>::take() {
-					to_punish.insert(incompatible_voter);
-				}
+				to_punish.append(&mut blamed);
+				to_punish.append(&mut remaining_success_voters());
+				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
 			},
 			None => {
 				SuccessVoters::<T, I>::remove_all(None);
