@@ -453,28 +453,6 @@ pub mod pallet {
 
 			Ok(().into())
 		}
-
-		/// Same as [Self::report_signature_failed] except accepts an unbounded [BTreeSet] as an
-		/// input argument.
-		///
-		/// ## Events
-		///
-		/// - [FailureReportProcessed](Event::FailureReportProcessed)
-		///
-		/// ## Errors
-		///
-		/// - [ToManyOffenders](Error::ToManyOffenders)
-		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
-		/// - [InvalidRespondent](Error::InvalidRespondent)
-
-		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
-		pub fn report_signature_failed_unbounded(
-			origin: OriginFor<T>,
-			id: CeremonyId,
-			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
-		) -> DispatchResultWithPostInfo {
-			Call::<T, I>::report_signature_failed { id, offenders }.dispatch_bypass_filter(origin)
-		}
 	}
 }
 
