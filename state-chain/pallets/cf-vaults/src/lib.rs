@@ -370,7 +370,9 @@ pub mod pallet {
 				let resolve = if response_status.remaining_candidate_count() == 0 {
 					log::debug!("All keygen candidates have reported, resolving outcome...");
 					true
-				} else if Self::has_grace_period_elapsed(current_block) {
+				} else if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
+					T::KeygenResponseGracePeriod::get()
+				{
 					log::debug!(
 						"Keygen response grace period has elapsed, reporting keygen failure."
 					);
@@ -763,11 +765,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
-	}
-
-	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {
-		block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
-			T::KeygenResponseGracePeriod::get()
 	}
 }
 
