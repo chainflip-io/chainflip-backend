@@ -396,7 +396,6 @@ pub mod pallet {
 				let dispatch_result =
 					call.dispatch_bypass_filter(Origin(Default::default()).into());
 
-				// Emit the result in an event.
 				Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
 					ceremony_id,
 					dispatch_result.map(|_| ()).map_err(|e| {
