@@ -198,6 +198,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			None => {
 				SuccessVoters::<T, I>::remove_all(None);
 				FailureVoters::<T, I>::kill();
+				IncompatibleVoters::<T, I>::kill();
 				log::warn!("Unable to determine a consensus outcome for keygen.")
 			},
 		};
