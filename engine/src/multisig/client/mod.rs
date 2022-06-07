@@ -43,9 +43,10 @@ pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
-    common::{CeremonyFailureReason, KeygenFailureReason},
     signing::frost::SigningData,
 };
+
+pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
 
 use super::{
     crypto::{CryptoScheme, ECPoint},
