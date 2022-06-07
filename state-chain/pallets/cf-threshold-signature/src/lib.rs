@@ -246,8 +246,9 @@ pub mod pallet {
 		ThresholdDispatchComplete(CeremonyId, DispatchResult),
 		/// \[ceremony_id\]
 		RetryRequested(CeremonyId),
-		/// \[ceremony_id\]
-		RetryStale(CeremonyId),
+		/// The threshold signature has already succeeded or failed, so this retry is no longer
+		/// valid \[ceremony_id\]
+		StaleRetryDiscarded(CeremonyId),
 		/// \[ceremony_id, reporter_id\]
 		FailureReportProcessed(CeremonyId, T::ValidatorId),
 		/// Not enough signers were available to reach threshold. Ceremony will be retried.
@@ -296,7 +297,7 @@ pub mod pallet {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
 					}
 				} else {
-					Self::deposit_event(Event::<T, I>::RetryStale(ceremony_id))
+					Self::deposit_event(Event::<T, I>::StaleRetryDiscarded(ceremony_id))
 				}
 			}
 
