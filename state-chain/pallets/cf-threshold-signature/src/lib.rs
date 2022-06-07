@@ -548,7 +548,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			);
 
-			// Emit the request to the CFE.
 			Self::deposit_event(Event::<T, I>::SignersUnavailable(ceremony_id));
 			// Schedule the retry for the next block.
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
