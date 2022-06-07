@@ -5,6 +5,7 @@ pub mod chainflip;
 pub mod constants;
 mod migrations;
 pub mod runtime_apis;
+use cf_utilities::constants::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
@@ -174,12 +175,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 }
 
-parameter_types! {
-	pub const KeygenResponseGracePeriod: BlockNumber =
-		constants::common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS +
-		constants::common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
-}
-
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
@@ -190,7 +185,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
-	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type EthEnvironmentProvider = Environment;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }

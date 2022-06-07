@@ -10,7 +10,7 @@ use state_chain_runtime::{
 	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env};
-use utilities::clean_eth_address;
+use utilities::{clean_eth_address, constants::KEYGEN_CEREMONY_TIMEOUT_BLOCKS};
 
 mod network_env;
 
@@ -592,6 +592,7 @@ fn testnet_genesis(
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),
 			deployment_block: ethereum_deployment_block,
+			keygen_response_timeout: KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 		},
 		emissions: EmissionsConfig {
 			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,

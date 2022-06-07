@@ -2,18 +2,21 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
 use cf_traits::AuthorityCount;
 use pallet_cf_vaults::CeremonyId;
+use utilities::constants::MAX_STAGE_DURATION_SECONDS;
+
+const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
 use crate::{
     common::format_iterator,
     constants::MAX_STAGE_DURATION,
-    logging::CEREMONY_ID_KEY,
-    multisig::client::common::{ProcessMessageResult, StageResult},
+    logging::{CEREMONY_ID_KEY, CEREMONY_REQUEST_IGNORED},
+    multisig::client::common::{ProcessMessageResult, SigningFailureReason, StageResult},
 };
 use state_chain_runtime::AccountId;
 

@@ -198,7 +198,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();
-	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type Broadcaster = MockBroadcaster;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
@@ -217,6 +216,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		vaults_pallet: VaultsPalletConfig {
 			vault_key: GENESIS_AGG_PUB_KEY.to_vec(),
 			deployment_block: 0,
+			keygen_response_timeout: 5,
 		},
 	};
 

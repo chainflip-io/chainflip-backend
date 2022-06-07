@@ -299,6 +299,8 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
+	use utilities::constants::KEYGEN_CEREMONY_TIMEOUT_BLOCKS;
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -345,10 +347,6 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
-
-		/// The maximum number of blocks to wait after the first keygen response comes in.
-		#[pallet::constant]
-		type KeygenResponseGracePeriod: Get<BlockNumberFor<Self>>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -371,12 +369,12 @@ pub mod pallet {
 					log::debug!("All keygen candidates have reported, resolving outcome...");
 					true
 				} else if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
-					T::KeygenResponseGracePeriod::get()
+					KeygenResponseTimeout::<T, I>::get()
 				{
 					log::debug!(
-						"Keygen response grace period has elapsed, reporting keygen failure."
+						"Keygen response timeout has elapsed, reporting keygen failure."
 					);
-					Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
+					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(
 						keygen_ceremony_id,
 					));
 					true
@@ -468,6 +466,10 @@ pub mod pallet {
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
+	#[pallet::storage]
+	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -498,8 +500,8 @@ pub mod pallet {
 		KeygenFailure(CeremonyId),
 		/// KeygenSignatureVerificationFailed \[validator_id\]
 		KeygenSignatureVerificationFailed(T::ValidatorId),
-		/// Keygen grace period has elapsed \[ceremony_id\]
-		KeygenGracePeriodElapsed(CeremonyId),
+		/// Keygen response timeout has occurred \[ceremony_id\]
+		KeygenResponseTimeout(CeremonyId),
 	}
 
 	#[pallet::error]
@@ -713,12 +715,17 @@ pub mod pallet {
 		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
 		pub vault_key: Vec<u8>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
+		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { vault_key: Default::default(), deployment_block: Default::default() }
+			Self {
+				vault_key: Default::default(),
+				deployment_block: Default::default(),
+				keygen_response_timeout: KEYGEN_CEREMONY_TIMEOUT_BLOCKS.into(),
+			}
 		}
 	}
 
@@ -731,6 +738,8 @@ pub mod pallet {
 				// Note: Can't use expect() here without some type shenanigans, but would give
 				// clearer error messages.
 				.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."));
+
+			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 
 			Vaults::<T, I>::insert(
 				CurrentEpochIndex::<T>::get(),

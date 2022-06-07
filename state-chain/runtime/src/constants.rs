@@ -42,12 +42,6 @@ pub mod common {
 	pub const CURRENT_AUTHORITY_EMISSION_INFLATION_BPS: u32 = 1000;
 	pub const BACKUP_NODE_EMISSION_INFLATION_BPS: u32 = 100;
 
-	/// The number of blocks to wait for a threshold signature ceremony to complete.
-	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 = 15;
-
-	/// The maximum number of blocks to wait for a keygen to complete.
-	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = 150; // 150 * 6 == 900 seconds(15 minutes)
-
 	/// The maximum number of broadcast attempts
 	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
 

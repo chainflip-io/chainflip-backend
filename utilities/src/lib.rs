@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod constants;
+
 /// Note that the resulting `threshold` is the maximum number
 /// of parties *not* enough to generate a signature,
 /// i.e. at least `t+1` parties are required.
