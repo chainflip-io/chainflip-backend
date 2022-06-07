@@ -180,35 +180,3 @@ impl CeremonyFailureReason<KeygenFailureReason> {
         }
     }
 }
-
-// Test that a few of the failure reasons are logging the correct tags
-#[test]
-fn test_failure_reason_logs_with_tag() {
-    let (logger, mut tag_cache) = crate::logging::test_utils::new_test_logger_with_tag_cache();
-    let reported_parties = BTreeSet::new();
-
-    CeremonyFailureReason::DuplicateCeremonyId::<SigningFailureReason>
-        .log(&reported_parties, &logger);
-    assert!(tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
-
-    tag_cache.clear();
-
-    CeremonyFailureReason::InvalidParticipants::<KeygenFailureReason>
-        .log(&reported_parties, &logger);
-    assert!(tag_cache.contains_tag(KEYGEN_REQUEST_IGNORED));
-
-    tag_cache.clear();
-
-    CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare)
-        .log(&reported_parties, &logger);
-    assert!(tag_cache.contains_tag(SIGNING_CEREMONY_FAILED));
-
-    tag_cache.clear();
-
-    CeremonyFailureReason::BroadcastFailure::<KeygenFailureReason>(
-        BroadcastFailureReason::InsufficientMessages,
-        BroadcastStageName::BlameResponses,
-    )
-    .log(&reported_parties, &logger);
-    assert!(tag_cache.contains_tag(KEYGEN_CEREMONY_FAILED));
-}
