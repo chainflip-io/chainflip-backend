@@ -499,6 +499,11 @@ pub trait KeyProvider<C: ChainCrypto> {
 
 	/// Get the chain's current agg key.
 	fn current_key() -> C::AggKey;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_key(key: C::AggKey) {
+		unimplemented!()
+	}
 }
 
 /// Api trait for pallets that need to sign things.

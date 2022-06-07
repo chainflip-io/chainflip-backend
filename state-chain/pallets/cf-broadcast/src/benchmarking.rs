@@ -46,6 +46,16 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 
 // TODO: check if we really reach the expensive parts of the code.
 benchmarks_instance_pallet! {
+	check_if_sig_verify_is_working {
+		let key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		let payload = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload::benchmark_value();
+		let signature = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature::benchmark_value();
+		let mut is_valid = false;
+	}: {
+		is_valid = <T::TargetChain as ChainCrypto>::verify_threshold_signature(&key, &payload, &signature);
+	} verify {
+		assert!(is_valid, "Signature verification should work");
+	}
 	// TODO: we measure the case in which the signature is invalid ->
 	// this is a really rare and more expensive case. We should create a benchmark for this.
 	// As long as we use this benchmark for the default case we will waste computational power!
@@ -69,6 +79,8 @@ benchmarks_instance_pallet! {
 			});
 			insert_sig(i);
 		}
+		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		T::KeyProvider::set_key(valid_key);
 	} : {
 		Pallet::<T, I>::on_initialize(expiry_block);
 	}
@@ -83,6 +95,8 @@ benchmarks_instance_pallet! {
 		};
 		insert_transaction_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
+		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		T::KeyProvider::set_key(valid_key);
 		// TODO: at the moment we verify the case were the signature is invalid - thats wrong
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_value(), SignerIdFor::<T, I>::benchmark_value())
 	verify {
@@ -100,6 +114,8 @@ benchmarks_instance_pallet! {
 		insert_transaction_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
 		let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
+		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		T::KeyProvider::set_key(valid_key);
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
 	verify {
 		assert!(Expiries::<T, I>::contains_key(expiry_block));
@@ -112,6 +128,8 @@ benchmarks_instance_pallet! {
 		};
 		insert_transaction_signing_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = generate_on_signature_ready_call::<T, I>();
+		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		T::KeyProvider::set_key(valid_key);
 	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
@@ -129,6 +147,8 @@ benchmarks_instance_pallet! {
 			block_number: 1,
 			tx_hash: TransactionHashFor::<T, I>::benchmark_value()
 		};
+		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		T::KeyProvider::set_key(valid_key);
 	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::successful_origin())? }
 	verify {
 		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic
