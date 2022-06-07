@@ -513,18 +513,40 @@ pub mod genesis {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::multisig::client::PartyIdxMapping;
     use crate::multisig::KeyId;
     use state_chain_runtime::AccountId;
 
-    pub fn generate_key_data<P: ECPoint>(
+    /// Attempts to generate key data until we generate a key that is contract
+    /// compatible. It will try `max_attempts` before failing.
+    pub fn generate_key_data_until_compatible<P: ECPoint>(
+        account_ids: &[AccountId],
+        max_attempts: usize,
+        mut rng: Rng,
+    ) -> (KeyId, HashMap<AccountId, KeygenResultInfo<P>>) {
+        let mut attempt_counter = 0;
+
+        loop {
+            attempt_counter += 1;
+            match generate_key_data::<P>(account_ids, &mut rng) {
+                Ok(result) => break result,
+                Err(_) => {
+                    // limit iteration so we don't loop forever
+                    if attempt_counter >= max_attempts {
+                        panic!("too many keygen attempts");
+                    }
+                }
+            }
+        }
+    }
+
+    fn generate_key_data<P: ECPoint>(
         signers: &[AccountId],
         rng: &mut Rng,
     ) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<P>>)> {
         let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
         let n = params.share_count;
         let t = params.threshold;
-
-        use crate::multisig::client::PartyIdxMapping;
 
         let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
             .map(|idx| {

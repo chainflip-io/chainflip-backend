@@ -11,7 +11,10 @@ use crate::{
                 BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
                 KeygenFailureReason,
             },
-            keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
+            keygen::{
+                self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
+                VerifyHashComm2,
+            },
             tests::helpers::{
                 all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
                 gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
@@ -1435,27 +1438,8 @@ async fn genesis_keys_can_sign() {
         .map(|i| AccountId::new([*i; 32]))
         .collect();
 
-    use rand_legacy::FromEntropy;
-
-    let mut rng = Rng::from_entropy();
-
-    // Limit iteration count so we don't loop forever
-    // in case there is a bug
-    const MAX_KEYGEN_ATTEMPTS: usize = 20;
-
-    let mut attempt_counter = 0;
-
-    let (key_id, key_data) = loop {
-        attempt_counter += 1;
-        match keygen::generate_key_data::<Point>(&account_ids, &mut rng) {
-            Ok(result) => break result,
-            Err(_) => {
-                if attempt_counter >= MAX_KEYGEN_ATTEMPTS {
-                    panic!("too many keygen attempts");
-                }
-            }
-        }
-    };
+    let rng = Rng::from_entropy();
+    let (key_id, key_data) = generate_key_data_until_compatible::<Point>(&account_ids, 20, rng);
 
     let (mut signing_ceremony, _non_signing_nodes) =
         SigningCeremonyRunner::new_with_threshold_subset_of_signers(
