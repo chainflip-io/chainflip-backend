@@ -58,11 +58,13 @@ impl BenchmarkValue for EthereumApi {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		let key = AggKey::from_pubkey_compressed(AGG_KEY_PUB);
-		let sig_data = SigData::new_empty(EthereumReplayProtection {
+		let mut sig_data = SigData::new_empty(EthereumReplayProtection {
 			key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
 			chain_id: 31337,
 			nonce: 15,
 		});
+		sig_data.insert_signature(&SchnorrVerificationComponents::benchmark_value());
+		sig_data.insert_msg_hash_from(&MSG_HASH);
 		EthereumApi::SetAggKeyWithAggKey(SetAggKeyWithAggKey { sig_data, new_key: key })
 	}
 }
