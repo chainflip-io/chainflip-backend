@@ -28,7 +28,7 @@ impl OnRuntimeUpgrade for Migration {
 		let backup_group_size_target = BackupGroupSize::take().unwrap_or_default();
 		if let Some(remaining_bidders) = RemainingBidders::take() {
 			let triage = RuntimeBackupTriage::<Runtime>::new::<ChainflipAccountStore<Runtime>>(
-				remaining_bidders,
+				remaining_bidders.into_iter().map(Into::into).collect(),
 				backup_group_size_target as usize,
 			);
 			BackupValidatorTriage::<Runtime>::put(triage);

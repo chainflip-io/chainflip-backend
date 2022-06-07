@@ -102,7 +102,7 @@ impl DynamicSetSizeAuctionResolver {
 
 		let (winning_bids, losing_bids) = auction_candidates.split_at(index + 1);
 		let winners = winning_bids.iter().map(|(id, _)| id).cloned().collect();
-		let losers = losing_bids.iter().map(|(id, amount)| (id.clone(), *amount)).collect();
+		let losers = losing_bids.iter().cloned().map(Into::into).collect();
 
 		Ok(AuctionOutcome { winners, losers, bond: *bond })
 	}
@@ -111,6 +111,8 @@ impl DynamicSetSizeAuctionResolver {
 #[cfg(test)]
 mod test_auction_resolution {
 	use super::*;
+
+	use cf_traits::Bid;
 
 	#[test]
 	fn test_parameter_validation() {
@@ -200,7 +202,7 @@ mod test_auction_resolution {
 			assert_eq!(
 				winners
 					.iter()
-					.chain(losers.iter().map(|(id, _)| id))
+					.chain(losers.iter().map(|bid| &bid.bidder_id))
 					.cloned()
 					.collect::<BTreeSet<_>>(),
 				$candidates.iter().map(|(id, _)| id).cloned().collect::<BTreeSet<_>>()
@@ -216,8 +218,8 @@ mod test_auction_resolution {
 				winners.len() as u32 <= $resolver.current_size + $resolver.parameters.max_expansion
 			);
 
-			for (_, bid_amount) in losers.iter() {
-				assert!(*bid_amount <= bond);
+			for Bid { amount, .. } in losers.iter() {
+				assert!(*amount <= bond);
 			}
 		};
 	}

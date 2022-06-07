@@ -827,7 +827,6 @@ impl<T: Config> Pallet<T> {
 	fn start_new_epoch(auction_outcome: RuntimeAuctionOutcome<T>) {
 		let epoch_authorities = auction_outcome.winners;
 		let new_bond = auction_outcome.bond;
-		let backup_candidates = auction_outcome.losers;
 
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
@@ -884,7 +883,7 @@ impl<T: Config> Pallet<T> {
 
 		// We've got new validators, which means the backups and passives may have changed.
 		BackupValidatorTriage::<T>::put(RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
-			backup_candidates,
+			auction_outcome.losers,
 			Self::backup_set_target_size(&epoch_authorities, BackupNodePercentage::<T>::get()),
 		));
 
