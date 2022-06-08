@@ -287,12 +287,6 @@ fn migrate_db_to_latest<P: ECPoint>(
     match read_schema_version(&db, logger)
         .context("Failed to read schema version on existing db")?
     {
-        0 => {
-            // We start the schema version at 1, so 0 is always invalid.
-            Err(anyhow::Error::msg(
-                "Invalid schema version 0 found in existing database".to_string(),
-            ))
-        }
         LATEST_SCHEMA_VERSION => {
             // The db is at the latest version, no action needed
             slog::info!(
@@ -328,9 +322,15 @@ fn migrate_db_to_latest<P: ECPoint>(
             );
 
             // Future migrations can be added here
-
-            // No migrations exist yet for non-test builds
-            panic!("Invalid migration to {}", version);
+            if version == 0 {
+                // We start the schema version at 1, so 0 is always invalid.
+                Err(anyhow::Error::msg(
+                    "Invalid migration from schema version 0 on existing database".to_string(),
+                ))
+            } else {
+                // No migrations exist yet for non-test builds
+                panic!("Invalid migration from schema version {}", version);
+            }
         }
     }
 }
@@ -338,8 +338,11 @@ fn migrate_db_to_latest<P: ECPoint>(
 #[cfg(test)]
 mod tests {
 
+    use std::path::PathBuf;
+
     use crate::multisig::{client::keygen::generate_key_data_until_compatible, crypto::Rng};
     use sp_runtime::AccountId32;
+    use tempfile::TempDir;
 
     use super::*;
 
@@ -375,6 +378,24 @@ mod tests {
             schema_version.to_be_bytes(),
         )
         .expect("Should write DB_SCHEMA_VERSION");
+    }
+
+    fn find_backups(temp_dir: &TempDir, db_path: &PathBuf) -> Vec<PathBuf> {
+        let backups_path = temp_dir.path().join(BACKUPS_DIRECTORY);
+        let backups: Vec<PathBuf> = fs::read_dir(&backups_path)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.expect("File should exist");
+                let file_path = entry.path();
+                if file_path.is_dir() && file_path != *db_path {
+                    Some(file_path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        backups
     }
 
     // Just a random key
@@ -506,6 +527,47 @@ mod tests {
     }
 
     #[test]
+    fn should_create_backup_when_migrating() {
+        let logger = new_test_logger();
+        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
+        // Create a db that has an old schema version
+        let old_db_version = 0;
+        {
+            assert!(
+                old_db_version < LATEST_SCHEMA_VERSION,
+                "Old db version should be less than latest"
+            );
+            let _db = open_db_and_write_version_data(&db_path, old_db_version);
+        }
+
+        // Load the db at version 0 and trigger the migration and therefore the backup
+        // This will error because version 0 is invalid
+        assert!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).is_err());
+
+        // Try and open the backup to make sure it still works
+        {
+            let backups = find_backups(&directory, &db_path);
+            assert!(
+                backups.len() == 1,
+                "Incorrect number of backups found in {}",
+                BACKUPS_DIRECTORY
+            );
+
+            // Make sure the schema version is the same as the pre-migration
+            let backup_db = DB::open_cf(
+                &Options::default(),
+                &backups.first().unwrap(),
+                COLUMN_FAMILIES,
+            )
+            .expect("Should open db backup");
+            assert_eq!(
+                read_schema_version(&backup_db, &logger).unwrap(),
+                old_db_version
+            );
+        }
+    }
+
+    #[test]
     fn backup_should_fail_if_already_exists() {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
@@ -572,21 +634,7 @@ mod tests {
 
         // Try and open the backup to make sure it still works
         {
-            // Find the backup db
-            let backups_path = directory.path().join(BACKUPS_DIRECTORY);
-            let backups: Vec<std::path::PathBuf> = fs::read_dir(&backups_path)
-                .unwrap()
-                .filter_map(|entry| {
-                    let entry = entry.expect("File should exist");
-                    let file_path = entry.path();
-                    if file_path.is_dir() && file_path != db_path {
-                        Some(file_path)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
+            let backups = find_backups(&directory, &db_path);
             assert!(
                 backups.len() == 1,
                 "Incorrect number of backups found in {}",
