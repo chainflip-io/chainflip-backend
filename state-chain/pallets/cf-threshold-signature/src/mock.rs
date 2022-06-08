@@ -210,7 +210,6 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
-	type ThresholdFailureTimeout = ThresholdFailureTimeout;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();
 }

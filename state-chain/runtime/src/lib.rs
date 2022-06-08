@@ -5,7 +5,6 @@ pub mod chainflip;
 pub mod constants;
 mod migrations;
 pub mod runtime_apis;
-use cf_utilities::constants::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
@@ -430,7 +429,6 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
-	type ThresholdFailureTimeout = ConstU32<THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS>;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
