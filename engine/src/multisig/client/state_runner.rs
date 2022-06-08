@@ -12,8 +12,8 @@ use pallet_cf_vaults::CeremonyId;
 use crate::{
     common::format_iterator,
     constants::MAX_STAGE_DURATION,
-    logging::{CEREMONY_ID_KEY, CEREMONY_REQUEST_IGNORED},
-    multisig::client::common::{ProcessMessageResult, SigningFailureReason, StageResult},
+    logging::CEREMONY_ID_KEY,
+    multisig::client::common::{ProcessMessageResult, StageResult},
 };
 use state_chain_runtime::AccountId;
 
@@ -89,11 +89,6 @@ where
                 BTreeSet::new(),
                 CeremonyFailureReason::DuplicateCeremonyId,
             )));
-            slog::warn!(
-                self.logger, #CEREMONY_REQUEST_IGNORED,
-                "{}",
-                CeremonyFailureReason::<SigningFailureReason>::DuplicateCeremonyId
-            );
             return None;
         }
 
