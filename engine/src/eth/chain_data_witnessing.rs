@@ -11,6 +11,7 @@ use futures::{
     stream::{self, select_all, BoxStream},
     Stream, StreamExt,
 };
+use sp_runtime::traits::Bounded;
 use tokio::sync::watch;
 
 use sp_core::U256;
@@ -51,6 +52,21 @@ fn bounded<'a, Item: 'a + Ord + Send + Sync>(
     )
 }
 
+fn strictly_increasing<Item: Bounded + Ord + Clone + Send + Sync>(
+    stream: impl Stream<Item = Item> + Send,
+) -> impl Stream<Item = Item> {
+    stream
+        .scan(Bounded::min_value(), |max, next| {
+            future::ready(Some(if next > *max {
+                *max = next.clone();
+                Some(next)
+            } else {
+                None
+            }))
+        })
+        .filter_map(future::ready)
+}
+
 /// Returns a stream that yields the latest known fee data.
 ///
 /// Collects the data from the websocket and http protocols in parallel and yields whichever has the
@@ -71,19 +87,10 @@ where
 {
     let (combined_stream, end_block_sender) = bounded(
         from_block,
-        select_all([
+        strictly_increasing(select_all([
             ws::latest_block_numbers(eth_ws_rpc, logger).await?,
             http::latest_block_numbers(eth_http_rpc, http_polling_interval, logger),
-        ])
-        .scan(0, |highest, block_number| {
-            future::ready(Some(if block_number > *highest {
-                *highest = block_number;
-                Some(block_number)
-            } else {
-                None
-            }))
-        })
-        .filter_map(future::ready),
+        ])),
     );
 
     Ok((
@@ -167,5 +174,21 @@ mod tests {
         let result = handle.await.unwrap();
 
         assert_eq!(result, (START..=END).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn test_strictly_increasing() {
+        assert_eq!(
+            strictly_increasing(stream::iter(vec![2, 2, 1, 3, 4, 2, 5]))
+                .collect::<Vec<u64>>()
+                .await,
+            (2..=5).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            strictly_increasing(stream::iter(vec![2, 2, 1, 0]))
+                .collect::<Vec<u64>>()
+                .await,
+            vec![2]
+        );
     }
 }
