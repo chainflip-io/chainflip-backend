@@ -275,7 +275,7 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
             slog::info!(logger, "Found db_schema_version of {}", version);
             version
         })
-        .ok_or(anyhow::Error::msg("Could not find db schema version"))
+        .ok_or_else(|| anyhow::Error::msg("Could not find db schema version"))
 }
 
 /// Reads the schema version and migrates the db to the latest schema version if required
@@ -380,7 +380,7 @@ mod tests {
         .expect("Should write DB_SCHEMA_VERSION");
     }
 
-    fn find_backups(temp_dir: &TempDir, db_path: &PathBuf) -> Vec<PathBuf> {
+    fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Vec<PathBuf> {
         let backups_path = temp_dir.path().join(BACKUPS_DIRECTORY);
         let backups: Vec<PathBuf> = fs::read_dir(&backups_path)
             .unwrap()
@@ -546,7 +546,7 @@ mod tests {
 
         // Try and open the backup to make sure it still works
         {
-            let backups = find_backups(&directory, &db_path);
+            let backups = find_backups(&directory, db_path);
             assert!(
                 backups.len() == 1,
                 "Incorrect number of backups found in {}",
@@ -556,7 +556,7 @@ mod tests {
             // Make sure the schema version is the same as the pre-migration
             let backup_db = DB::open_cf(
                 &Options::default(),
-                &backups.first().unwrap(),
+                backups.first().unwrap(),
                 COLUMN_FAMILIES,
             )
             .expect("Should open db backup");
@@ -634,7 +634,7 @@ mod tests {
 
         // Try and open the backup to make sure it still works
         {
-            let backups = find_backups(&directory, &db_path);
+            let backups = find_backups(&directory, db_path);
             assert!(
                 backups.len() == 1,
                 "Incorrect number of backups found in {}",
@@ -643,7 +643,7 @@ mod tests {
 
             // Should be able to open the backup and load the key
             let p_db = PersistentKeyDB::<Point>::new_and_migrate_to_latest(
-                &backups.first().unwrap(),
+                backups.first().unwrap(),
                 &logger,
             )
             .unwrap();
