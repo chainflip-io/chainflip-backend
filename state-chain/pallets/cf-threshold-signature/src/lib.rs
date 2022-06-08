@@ -241,7 +241,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		pub threshold_signature_response_timeout: T::BlockNumber,
+		pub threshold_signature_response_timeout: BlockNumberFor<T>,
 		pub _instance: PhantomData<I>,
 	}
 
@@ -287,6 +287,8 @@ pub mod pallet {
 		/// Not enough signers were available to reach threshold. Ceremony will be retried.
 		/// \[ceremony_id\]
 		SignersUnavailable(CeremonyId),
+		/// The threshold signature response timeout has been updated. \[new_timeout\]
+		ThresholdSignatureResponseTimeoutUpdated(BlockNumberFor<T>),
 	}
 
 	#[pallet::error]
@@ -487,9 +489,16 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn set_threshold_signature_timeout(
 			origin: OriginFor<T>,
-			new_timeout: T::BlockNumber,
+			new_timeout: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
+
+			if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
+				ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureResponseTimeoutUpdated(
+					new_timeout,
+				));
+			}
 
 			ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
 			Ok(().into())

@@ -504,6 +504,8 @@ pub mod pallet {
 		KeygenSignatureVerificationFailed(T::ValidatorId),
 		/// Keygen response timeout has occurred \[ceremony_id\]
 		KeygenResponseTimeout(CeremonyId),
+		/// Keygen response timeout was updated \[new_timeout\]
+		KeygenResponseTimeoutUpdated(BlockNumberFor<T>),
 	}
 
 	#[pallet::error]
@@ -715,7 +717,11 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			KeygenResponseTimeout::<T, I>::put(new_timeout);
+			if new_timeout != KeygenResponseTimeout::<T, I>::get() {
+				KeygenResponseTimeout::<T, I>::put(new_timeout);
+				Pallet::<T, I>::deposit_event(Event::KeygenResponseTimeoutUpdated(new_timeout));
+			}
+
 			Ok(().into())
 		}
 	}
