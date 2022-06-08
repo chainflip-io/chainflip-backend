@@ -1,6 +1,6 @@
 use chainflip_engine::multisig::{
     client::KeygenResultInfo,
-    db::persistent::{update_db_schema_version_to_latest, DATA_COLUMN, METADATA_COLUMN},
+    db::persistent::{DATA_COLUMN, METADATA_COLUMN},
     eth, KeyDB, KeyId, PersistentKeyDB,
 };
 use rocksdb::{Options, DB};
@@ -32,11 +32,11 @@ fn main() {
     opts.create_if_missing(true);
     let db = DB::open_cf(&opts, &signing_db_path, COLUMN_FAMILIES).expect("Should open db file");
 
-    // Write the schema version
-    let db = update_db_schema_version_to_latest(db).expect("Should write schema version");
-
-    let mut p_kdb =
-        PersistentKeyDB::new_from_db(db, &chainflip_engine::logging::utils::new_discard_logger());
+    let mut p_kdb = PersistentKeyDB::new_from_db_and_set_schema_version_to_latest(
+        db,
+        &chainflip_engine::logging::utils::new_discard_logger(),
+    )
+    .unwrap();
 
     // Write the key share to the db
     p_kdb.update_key(&KeyId(agg_pubkey_bytes), &keygen_result_info);
