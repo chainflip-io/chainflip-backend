@@ -268,7 +268,7 @@ pub fn add_schema_version_to_batch_write(db: &DB, db_schema_version: u32, batch:
 /// Get the schema version from the metadata column in the db.
 fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
     db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
-        .expect("Should querying for db_schema_version")
+        .expect("Should get db_schema_version")
         .map(|version| {
             let version: [u8; 4] = version.try_into().expect("Version should be a u32");
             let version = u32::from_be_bytes(version);
