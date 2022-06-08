@@ -70,9 +70,10 @@ lazy_format = "1.10.0"
 curve25519-dalek = {version = "2.1", features = ["serde"]}
 typenum = "1.15"
 # Note: we don't use the most recent version of schnorrkel since 0.10 switches
-# to curve25519-dalek-ng which seems to be a somewhat controversial fork of
-# curve25519-dalek. (There is little public information on this, but some mentions
-# can be found in https://github.com/dalek-cryptography/curve25519-dalek/pull/338#issuecomment-772059572)
+# to curve25519-dalek-ng, but it is not clear at all why that fork of
+# curve25519-dalek was created, so we are not willing to trust it just yet.
+# (There is little public information on this, but some mentions can be found
+# in https://github.com/dalek-cryptography/curve25519-dalek/pull/338#issuecomment-772059572)
 # We might eventually update, but for now let's just
 # use the same version as polkadot. 
 schnorrkel = "0.9.1"
