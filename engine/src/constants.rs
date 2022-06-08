@@ -3,11 +3,6 @@ use std::time::Duration;
 /// Number of blocks we wait until we deem it safe (from reorgs)
 pub const ETH_BLOCK_SAFETY_MARGIN: u64 = 4;
 
-// ======= Keygen and signing =======
-
-/// Maximum duration a ceremony stage can last
-pub const MAX_STAGE_DURATION: Duration = Duration::from_secs(300); // TODO Look at this value
-
 // ======= State chain client =======
 
 /// Number of times to retry after incrementing the nonce on a nonce error

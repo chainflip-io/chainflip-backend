@@ -1,4 +1,5 @@
 pub mod common {
+	use cf_common::constants::MILLISECONDS_PER_BLOCK;
 	use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
 	use pallet_cf_broadcast::AttemptCount;
 
@@ -20,13 +21,6 @@ pub mod common {
 	// This should be the same as the `CLAIM_DELAY` in:
 	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
 	pub const CLAIM_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
-	/// This determines the average expected block time that we are targeting.
-	/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
-	/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
-	/// up by `pallet_aura` to implement `fn slot_duration()`.
-	///
-	/// Change this to adjust the block time.
-	pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.

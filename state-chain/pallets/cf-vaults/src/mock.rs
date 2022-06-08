@@ -211,13 +211,15 @@ pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 pub const GENESIS_AGG_PUB_KEY: [u8; 4] = *b"genk";
 pub const NEW_AGG_PUB_KEY: [u8; 4] = *b"next";
 
+pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
+
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
 			vault_key: GENESIS_AGG_PUB_KEY.to_vec(),
 			deployment_block: 0,
-			keygen_response_timeout: 5,
+			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
 	};
 

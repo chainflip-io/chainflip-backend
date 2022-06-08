@@ -24,6 +24,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -193,7 +194,6 @@ pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
 	MockThresholdSignature::<_, _> { signing_key: *b"BAD!", signed_payload: *b"BAD!" };
 
 parameter_types! {
-	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
 }
 
@@ -337,7 +337,7 @@ impl TestExternalitiesWithCheck {
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
+		GenesisConfig::default().build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
