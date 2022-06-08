@@ -30,6 +30,6 @@ members = [
   'engine',
   'engine/cli',
   'engine/generate-genesis-keys',
-  'utilities',
+  'common',
   'state-chain/custom-rpc',
 ]

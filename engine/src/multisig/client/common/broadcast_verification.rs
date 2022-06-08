@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use cf_common::threshold_from_share_count;
 use cf_traits::AuthorityCount;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use utilities::threshold_from_share_count;
 
 use super::BroadcastFailureReason;
 

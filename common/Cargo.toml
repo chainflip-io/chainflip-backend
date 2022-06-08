@@ -1,10 +1,10 @@
 [package]
 authors = ['Chainflip <https://chainflip.io>']
-description = 'Common utilities used by the State Chain and the Chain Flip Engine'
+description = 'Common utilities and constants used by the State Chain and the Chainflip Engine'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = 'TBC'
-name = 'utilities'
+name = 'cf-common'
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
 

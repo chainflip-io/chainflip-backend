@@ -18,7 +18,7 @@ hex = { version = "0.4", default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
 # Local deps
-utilities = { path = '../../../utilities', default-features = false }
+cf-common = { path = '../../../common', default-features = false }
 
 # Non-substrate external deps
 bitvec = { default-features = false, version = '0.20', features = ["alloc"] }

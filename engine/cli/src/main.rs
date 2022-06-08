@@ -18,7 +18,7 @@ use web3::types::H160;
 
 use crate::settings::CFCommand::*;
 use anyhow::Result;
-use utilities::clean_eth_address;
+use cf_common::clean_eth_address;
 
 mod settings;
 

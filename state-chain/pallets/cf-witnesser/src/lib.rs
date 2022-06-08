@@ -30,7 +30,7 @@ use frame_support::{
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
-use utilities::success_threshold_from_share_count;
+use cf_common::success_threshold_from_share_count;
 
 #[frame_support::pallet]
 pub mod pallet {

@@ -16,7 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = { path = '../../traits', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
 cf-runtime-benchmark-utilities = { path = '../../runtime-benchmark-utilities', default-features = false }
-cf-utilities = { package = "utilities", path = "../../../utilities", default-features = false }
+cf-common = { path = "../../../common", default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 

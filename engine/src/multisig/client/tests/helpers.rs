@@ -16,9 +16,9 @@ use itertools::{Either, Itertools};
 
 use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
+use cf_common::{success_threshold_from_share_count, threshold_from_share_count};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
-use utilities::{success_threshold_from_share_count, threshold_from_share_count};
 
 use crate::{
     common::{all_same, split_at},

@@ -6,9 +6,9 @@ use std::{
 };
 
 use anyhow::Result;
+use cf_common::constants::MAX_STAGE_DURATION_SECONDS;
 use cf_traits::AuthorityCount;
 use pallet_cf_vaults::CeremonyId;
-use utilities::constants::MAX_STAGE_DURATION_SECONDS;
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 

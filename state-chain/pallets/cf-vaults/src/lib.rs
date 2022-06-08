@@ -107,7 +107,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
 	fn success_threshold(&self) -> AuthorityCount {
-		utilities::success_threshold_from_share_count(self.candidate_count)
+		cf_common::success_threshold_from_share_count(self.candidate_count)
 	}
 
 	/// The blame threshold is the number of blame votes that result in punishment.
@@ -299,7 +299,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use utilities::constants::KEYGEN_CEREMONY_TIMEOUT_BLOCKS;
+	use cf_common::constants::KEYGEN_CEREMONY_TIMEOUT_BLOCKS;
 
 	use super::*;
 
@@ -398,7 +398,7 @@ pub mod pallet {
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							let offenders = if (offenders.len() as AuthorityCount) <
-								utilities::success_threshold_from_share_count(candidate_count)
+								cf_common::success_threshold_from_share_count(candidate_count)
 							{
 								offenders
 							} else {
