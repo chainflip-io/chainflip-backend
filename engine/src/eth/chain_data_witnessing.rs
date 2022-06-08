@@ -118,3 +118,49 @@ where
         end_block_sender,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_tick_stream() {
+        const INTERVAL_MS: u64 = 10;
+        const REPETITIONS: usize = 10;
+        // 10 ticks is equivalent to 9 intervals.
+        const EXPECTED_DURATION_MS: u64 = INTERVAL_MS * (REPETITIONS - 1) as u64;
+
+        let start = std::time::Instant::now();
+        let result = tick_stream(Duration::from_millis(INTERVAL_MS))
+            .scan(0, |count, _| {
+                *count += 1;
+                future::ready(Some(*count))
+            })
+            .take(REPETITIONS)
+            .collect::<Vec<_>>()
+            .await;
+        let end = std::time::Instant::now();
+        assert!(
+            end - start >= Duration::from_millis(EXPECTED_DURATION_MS),
+            "Expected {:?} >= {:?} ms.",
+            (end - start).as_millis(),
+            EXPECTED_DURATION_MS,
+        );
+        assert_eq!(result, (1..=REPETITIONS).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn test_bounded() {
+        const START: u64 = 10;
+        const END: u64 = 20;
+
+        let (stream, end_block_sender) = bounded(START, stream::iter(0..));
+
+        let handle = tokio::spawn(async move { stream.collect::<Vec<_>>().await });
+        end_block_sender.send(Some(END)).unwrap();
+
+        let result = handle.await.unwrap();
+
+        assert_eq!(result, (START..=END).collect::<Vec<_>>());
+    }
+}
