@@ -29,7 +29,7 @@ members = [
   'state-chain/traits',
   'engine',
   'engine/cli',
-  'engine/insert-genesis-keyshare',
+  'engine/generate-genesis-keys',
   'utilities',
   'state-chain/custom-rpc',
 ]

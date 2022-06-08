@@ -197,7 +197,8 @@ pub mod pallet {
 	pub type PendingCeremonies<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, CeremonyContext<T, I>>;
 
-	/// A mapping from ceremony_id to its current ceremony_id.
+	/// A mapping from ceremony_id to its respective request. There can be several ceremonies for a
+	/// single request
 	///
 	/// Technically a payload is associated with an entire request, however since it's accessed on
 	/// every unsigned transaction validation, it makes sense to optimise this by indexing against
@@ -207,7 +208,8 @@ pub mod pallet {
 	pub type OpenRequests<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, (RequestId, AttemptCount, PayloadFor<T, I>)>;
 
-	/// A mapping from ceremony_id to its associated request_id.
+	/// A mapping from request id to to the live ceremony id for that request and what
+	/// and how many times we have attempted to sign this request.
 	#[pallet::storage]
 	#[pallet::getter(fn live_ceremonies)]
 	pub type LiveCeremonies<T: Config<I>, I: 'static = ()> =
@@ -239,12 +241,16 @@ pub mod pallet {
 		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
 		/// \[ceremony_id, key_id, offenders\]
 		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
+		/// The threshold signature posted back to the chain was verified.
+		ThresholdSignatureSuccess(CeremonyId),
+		/// We have had a signature success and we have dispatched the associated callback
 		/// \[ceremony_id, result\]
 		ThresholdDispatchComplete(CeremonyId, DispatchResult),
 		/// \[ceremony_id\]
 		RetryRequested(CeremonyId),
-		/// \[ceremony_id\]
-		RetryStale(CeremonyId),
+		/// The threshold signature has already succeeded or failed, so this retry is no longer
+		/// valid \[ceremony_id\]
+		StaleRetryDiscarded(CeremonyId),
 		/// \[ceremony_id, reporter_id\]
 		FailureReportProcessed(CeremonyId, T::ValidatorId),
 		/// Not enough signers were available to reach threshold. Ceremony will be retried.
@@ -275,7 +281,6 @@ pub mod pallet {
 				if let Some(failed_ceremony_context) = PendingCeremonies::<T, I>::take(ceremony_id)
 				{
 					num_retries += 1;
-					// Report the offenders.
 					T::OffenceReporter::report_many(
 						PalletOffence::ParticipateSigningFailed,
 						failed_ceremony_context.offenders().as_slice(),
@@ -285,7 +290,6 @@ pub mod pallet {
 					if let Some((request_id, attempt, payload)) =
 						OpenRequests::<T, I>::take(ceremony_id)
 					{
-						// Initiate a new attempt.
 						Self::new_ceremony_attempt(request_id, payload, attempt.wrapping_add(1));
 
 						Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
@@ -293,7 +297,7 @@ pub mod pallet {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
 					}
 				} else {
-					Self::deposit_event(Event::<T, I>::RetryStale(ceremony_id))
+					Self::deposit_event(Event::<T, I>::StaleRetryDiscarded(ceremony_id))
 				}
 			}
 
@@ -322,7 +326,7 @@ pub mod pallet {
 					&payload,
 					signature,
 				) {
-					ValidTransaction::with_tag_prefix("ThresholdSignature")
+					ValidTransaction::with_tag_prefix(Self::name())
 						// We only expect one success per ceremony.
 						.and_provides(ceremony_id)
 						.build()
@@ -346,6 +350,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
+		/// - [ThresholdSignatureSuccess](Event::ThresholdSignatureSuccess)
 		/// - [ThresholdDispatchComplete](Event::ThresholdDispatchComplete)
 		///
 		/// ## Errors
@@ -368,8 +373,12 @@ pub mod pallet {
 					log::error!("Invalid ceremony_id received {}.", ceremony_id);
 					Error::<T, I>::InvalidCeremonyId
 				})?;
+
 			PendingCeremonies::<T, I>::remove(ceremony_id);
 			LiveCeremonies::<T, I>::remove(request_id);
+
+			// Report the success once we know the CeremonyId is valid
+			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(ceremony_id));
 
 			log::debug!(
 				"Threshold signature request {} suceeded at ceremony {} after {} attempts.",
@@ -378,7 +387,6 @@ pub mod pallet {
 				attempts
 			);
 
-			// Store the signature.
 			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
 
 			// Dispatch the callback if one has been registered.
@@ -386,7 +394,6 @@ pub mod pallet {
 				let dispatch_result =
 					call.dispatch_bypass_filter(Origin(Default::default()).into());
 
-				// Emit the result in an event.
 				Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
 					ceremony_id,
 					dispatch_result.map(|_| ()).map_err(|e| {
@@ -434,8 +441,8 @@ pub mod pallet {
 						}
 
 						if context.remaining_respondents.is_empty() {
-							// No more respondents waiting: we can retry on the next block.
-							Self::schedule_retry(id, 1u32.into());
+							// No more respondents waiting: we can retry
+							Self::schedule_retry(id, T::CeremonyRetryDelay::get());
 						}
 
 						Ok(())
@@ -445,28 +452,6 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::FailureReportProcessed(id, reporter_id));
 
 			Ok(().into())
-		}
-
-		/// Same as [Self::report_signature_failed] except accepts an unbounded [BTreeSet] as an
-		/// input argument.
-		///
-		/// ## Events
-		///
-		/// - [FailureReportProcessed](Event::FailureReportProcessed)
-		///
-		/// ## Errors
-		///
-		/// - [ToManyOffenders](Error::ToManyOffenders)
-		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
-		/// - [InvalidRespondent](Error::InvalidRespondent)
-
-		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
-		pub fn report_signature_failed_unbounded(
-			origin: OriginFor<T>,
-			id: CeremonyId,
-			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
-		) -> DispatchResultWithPostInfo {
-			Call::<T, I>::report_signature_failed { id, offenders }.dispatch_bypass_filter(origin)
 		}
 	}
 }
@@ -497,8 +482,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		payload: PayloadFor<T, I>,
 		attempt: AttemptCount,
 	) -> CeremonyId {
-		// Get a new ceremony id.
-		// Get a new id.
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 		OpenRequests::<T, I>::insert(ceremony_id, (request_id, attempt, payload.clone()));
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
@@ -541,9 +524,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			);
 
-			// Emit the request to the CFE.
 			Self::deposit_event(Event::<T, I>::SignersUnavailable(ceremony_id));
-			// Schedule the retry for the next block.
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
 		}
 

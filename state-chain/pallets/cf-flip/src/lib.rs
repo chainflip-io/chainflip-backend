@@ -385,7 +385,6 @@ impl<T: Config> Bonding for Bonder<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	// Inline set_bond
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount) {
 		Account::<T>::mutate_exists(authority, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {

@@ -568,7 +568,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BroadcastComplete](Event::BroadcastComplete)
+		/// - [BroadcastSuccess](Event::BroadcastSuccess)
 		///
 		/// ## Errors
 		///
