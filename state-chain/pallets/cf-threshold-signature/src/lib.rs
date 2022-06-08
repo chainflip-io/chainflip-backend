@@ -486,7 +486,7 @@ pub mod pallet {
 
 			Ok(().into())
 		}
-		#[pallet::weight(T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_threshold_signature_timeout(
 			origin: OriginFor<T>,
 			new_timeout: BlockNumberFor<T>,

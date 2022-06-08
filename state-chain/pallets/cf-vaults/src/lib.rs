@@ -710,7 +710,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_keygen_timeout(
 			origin: OriginFor<T>,
 			new_timeout: T::BlockNumber,
