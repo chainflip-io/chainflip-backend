@@ -501,7 +501,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	fn current_key() -> C::AggKey;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(key: C::AggKey) {
+	fn set_key(_key: C::AggKey) {
 		unimplemented!()
 	}
 }

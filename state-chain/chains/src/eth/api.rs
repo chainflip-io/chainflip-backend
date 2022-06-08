@@ -1,6 +1,3 @@
-#[cfg(feature = "runtime-benchmarks")]
-use crate::eth::{AggKey, SigData};
-
 use sp_runtime::traits::UniqueSaturatedInto;
 
 use crate::*;
@@ -23,25 +20,6 @@ pub struct EthereumReplayProtection {
 	pub chain_id: u64,
 	pub nonce: u64,
 }
-
-// #[cfg(feature = "runtime-benchmarks")]
-// impl BenchmarkValue for EthereumApi {
-// 	#[cfg(feature = "runtime-benchmarks")]
-// 	fn benchmark_value() -> Self {
-
-// 		let key = AggKey::from_pubkey_compressed(hex_literal::hex!(
-// 			"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
-// 		));
-// 		EthereumApi::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey {
-// 			sig_data: SigData::new_empty(EthereumReplayProtection {
-// 				key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
-// 				chain_id: 31337,
-// 				nonce: 15,
-// 			}),
-// 			new_key: key,
-// 		})
-// 	}
-// }
 
 impl ChainAbi for Ethereum {
 	type UnsignedTransaction = eth::UnsignedTransaction;

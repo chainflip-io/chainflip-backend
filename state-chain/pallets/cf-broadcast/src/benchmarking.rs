@@ -46,19 +46,6 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 
 // TODO: check if we really reach the expensive parts of the code.
 benchmarks_instance_pallet! {
-	check_if_sig_verify_is_working {
-		let key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
-		let payload = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload::benchmark_value();
-		let signature = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature::benchmark_value();
-		let mut is_valid = false;
-	}: {
-		is_valid = <T::TargetChain as ChainCrypto>::verify_threshold_signature(&key, &payload, &signature);
-	} verify {
-		assert!(is_valid, "Signature verification should work");
-	}
-	// TODO: we measure the case in which the signature is invalid ->
-	// this is a really rare and more expensive case. We should create a benchmark for this.
-	// As long as we use this benchmark for the default case we will waste computational power!
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
 		let b in 1 .. 1000u32;
