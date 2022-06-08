@@ -24,25 +24,30 @@ fn tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
     })
 }
 
-fn bounded<'a>(
-    from_block: u64,
-    block_numbers: impl Stream<Item = u64> + Send + 'a,
-) -> (BoxStream<'a, u64>, watch::Sender<Option<u64>>) {
-    let (to_block_sender, to_block_receiver) = watch::channel(None);
+/// Bounds a stream of ordered items such that the first item is greater than `start`. Returns another stream and a
+/// Sender that can be used to push an `end` item. The stream will continue yielding so long as:
+/// 1. No `end` item has been received.
+/// 2. The next item to be yielded is less than or equal to the `end` item.
+fn bounded<'a, Item: 'a + Ord + Send + Sync>(
+    start: Item,
+    stream: impl Stream<Item = Item> + Send + 'a,
+) -> (BoxStream<'a, Item>, watch::Sender<Option<Item>>) {
+    let (sender, receiver) = watch::channel::<Option<Item>>(None);
     (
         Box::pin(
-            block_numbers
-                .skip_while(move |block_number| future::ready(*block_number < from_block))
-                .take_while(move |block_number| {
+            stream
+                .skip_while(move |item| future::ready(*item < start))
+                .take_while(move |item| {
                     future::ready(
-                        to_block_receiver
+                        receiver
                             .borrow()
-                            .map(|to_block| *block_number <= to_block)
+                            .as_ref()
+                            .map(|end| item <= &end)
                             .unwrap_or(true),
                     )
                 }),
         ),
-        to_block_sender,
+        sender,
     )
 }
 
