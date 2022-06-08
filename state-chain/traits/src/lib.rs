@@ -547,8 +547,8 @@ where
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
 	) -> Self::RequestId {
-
-		// We request a signature, storing the data required to execute anything when the callback is registered
+		// We request a signature, storing the data required to execute anything when the callback
+		// is registered
 		let id = Self::request_signature(payload);
 		Self::register_callback(id, callback_generator(id)).unwrap_or_else(|e| {
 			log::error!(
