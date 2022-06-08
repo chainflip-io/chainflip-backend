@@ -1,4 +1,4 @@
-use super::curve25519_ristretto::{Point, Scalar};
+use super::curve25519_ristretto::Point;
 use super::CryptoScheme;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
@@ -46,7 +46,7 @@ impl CryptoScheme for PolkadotSigning {
         let mut bytes: [u8; 64] = [0u8; 64];
 
         bytes[..32].copy_from_slice(&group_commitment.get_element().compress().to_bytes());
-        bytes[32..].copy_from_slice(&z.0.to_bytes());
+        bytes[32..].copy_from_slice(&z.to_bytes());
         bytes[63] |= 128;
 
         // Then parse the bytes into the schnorrkel type
@@ -71,7 +71,7 @@ impl CryptoScheme for PolkadotSigning {
         t.commit_point(b"sign:pk", &pubkey.get_element().compress());
         t.commit_point(b"sign:R", &nonce_commitment.get_element().compress());
 
-        Scalar(t.challenge_scalar(b"sign:c"))
+        t.challenge_scalar(b"sign:c").into()
     }
 
     fn build_response(
@@ -88,6 +88,7 @@ impl CryptoScheme for PolkadotSigning {
 // signatures deemed valid by schnorrkel verification code
 #[test]
 fn signature_should_be_valid() {
+    use super::curve25519_ristretto::Scalar;
     use super::{ECPoint, ECScalar};
     use crate::multisig::crypto::Rng;
     use crate::testing::assert_ok;

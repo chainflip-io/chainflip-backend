@@ -9,7 +9,7 @@ type PK = curve25519_dalek::ristretto::RistrettoPoint;
 pub struct Point(PK);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Scalar(pub(super) SK);
+pub struct Scalar(SK);
 
 mod point_impls {
 
@@ -108,6 +108,18 @@ mod scalar_impls {
     impl From<u32> for Scalar {
         fn from(x: u32) -> Self {
             Scalar(SK::from(x))
+        }
+    }
+
+    impl From<SK> for Scalar {
+        fn from(sk: SK) -> Self {
+            Scalar(sk)
+        }
+    }
+
+    impl Scalar {
+        pub fn to_bytes(&self) -> [u8; 32] {
+            self.0.to_bytes()
         }
     }
 
