@@ -208,6 +208,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type TargetChain = MockEthereum;
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type CeremonyRetryDelay = CeremonyRetryDelay;

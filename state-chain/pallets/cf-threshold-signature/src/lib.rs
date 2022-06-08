@@ -138,6 +138,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
 
@@ -479,6 +482,16 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T, I>::FailureReportProcessed(id, reporter_id));
 
+			Ok(().into())
+		}
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn set_threshold_signature_timeout(
+			origin: OriginFor<T>,
+			new_timeout: T::BlockNumber,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
 			Ok(().into())
 		}
 	}
