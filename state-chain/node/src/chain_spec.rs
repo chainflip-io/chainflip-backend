@@ -1,7 +1,4 @@
-use cf_common::{
-	clean_eth_address,
-	constants::{KEYGEN_CEREMONY_TIMEOUT_BLOCKS, THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS},
-};
+use cf_common::clean_eth_address;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};

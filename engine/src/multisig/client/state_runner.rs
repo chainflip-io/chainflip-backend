@@ -6,11 +6,8 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_common::constants::MAX_STAGE_DURATION_SECONDS;
 use cf_traits::AuthorityCount;
 use pallet_cf_vaults::CeremonyId;
-
-const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
 use crate::{
     common::format_iterator,
@@ -18,13 +15,15 @@ use crate::{
     logging::{CEREMONY_ID_KEY, CEREMONY_REQUEST_IGNORED},
     multisig::client::common::{ProcessMessageResult, SigningFailureReason, StageResult},
 };
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
     ceremony_manager::CeremonyResultSender,
     common::{CeremonyFailureReason, CeremonyStage},
     utils::PartyIdxMapping,
 };
+
+const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
 type OptionalCeremonyReturn<CeremonyResult, FailureReason> =
     Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>>;

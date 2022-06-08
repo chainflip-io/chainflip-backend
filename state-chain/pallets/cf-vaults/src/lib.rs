@@ -35,6 +35,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum KeygenOutcome<Key, Id> {
 	/// We have reached keygen consensus, and the key is now available.
@@ -299,7 +301,6 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_common::constants::KEYGEN_CEREMONY_TIMEOUT_BLOCKS;
 
 	use super::*;
 
@@ -739,7 +740,7 @@ pub mod pallet {
 			Self {
 				vault_key: Default::default(),
 				deployment_block: Default::default(),
-				keygen_response_timeout: KEYGEN_CEREMONY_TIMEOUT_BLOCKS.into(),
+				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into(),
 			}
 		}
 	}

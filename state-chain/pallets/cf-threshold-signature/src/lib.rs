@@ -57,10 +57,11 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
+const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_common::constants::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
 	use cf_traits::AsyncResult;
 	use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
@@ -249,8 +250,8 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self {
-				threshold_signature_response_timeout: THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS
-					.into(),
+				threshold_signature_response_timeout:
+					THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into(),
 				_instance: PhantomData,
 			}
 		}

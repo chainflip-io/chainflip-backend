@@ -5,10 +5,9 @@ use std::{
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, PalletOffence, RequestId,
+	Error, PalletOffence, RequestId, THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT,
 };
 use cf_chains::mocks::MockEthereum;
-use cf_common::constants::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
 use cf_traits::{AsyncResult, Chainflip};
 use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -222,7 +221,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 1)]));
 
 			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS.into();
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			// Callback has *not* executed but is scheduled for a retry after the timeout has
 			// elapsed.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
@@ -289,7 +288,7 @@ fn fail_path_no_timeout() {
 			let ceremony_retry_delay =
 				<Test as crate::Config<Instance1>>::CeremonyRetryDelay::get();
 			let init_timeout_delay: <Test as frame_system::Config>::BlockNumber =
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS.into();
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			let retry_block =
 				frame_system::Pallet::<Test>::current_block_number() + ceremony_retry_delay;
 			let retry_block_redundant =
