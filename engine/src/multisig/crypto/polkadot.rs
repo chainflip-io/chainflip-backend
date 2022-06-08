@@ -9,7 +9,7 @@ pub struct PolkadotSigning {}
 const SIGNING_CTX: &[u8] = b"substrate";
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PolkadotSignature(pub schnorrkel::Signature);
+pub struct PolkadotSignature(schnorrkel::Signature);
 
 impl Serialize for PolkadotSignature {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -61,6 +61,7 @@ impl CryptoScheme for PolkadotSigning {
     ) -> <Self::Point as super::ECPoint>::Scalar {
         // NOTE: This computation is copied from schnorrkel's
         // source code (since it is the "source of truth")
+        // (see https://docs.rs/schnorrkel/0.9.1/src/schnorrkel/sign.rs.html#171)
 
         // Is the message not expected to be already hashed?
         let mut t = SigningContext::new(SIGNING_CTX).bytes(msg_hash);

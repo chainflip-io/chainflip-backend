@@ -18,7 +18,6 @@ mod point_impls {
     use super::*;
 
     impl Point {
-        #[allow(dead_code)]
         pub fn get_element(&self) -> PK {
             self.0
         }
