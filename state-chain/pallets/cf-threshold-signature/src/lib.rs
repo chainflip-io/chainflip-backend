@@ -60,8 +60,8 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AsyncResult;
 	use cf_common::constants::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
+	use cf_traits::AsyncResult;
 	use frame_support::{
 		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 		pallet_prelude::*,

@@ -17,6 +17,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use bitvec::prelude::*;
+use cf_common::success_threshold_from_share_count;
 use cf_traits::{EpochIndex, EpochInfo};
 use codec::FullCodec;
 use frame_support::{
@@ -30,7 +31,6 @@ use frame_support::{
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
-use cf_common::success_threshold_from_share_count;
 
 #[frame_support::pallet]
 pub mod pallet {
