@@ -563,10 +563,7 @@ mod tests {
         {
             let mut p_db =
                 PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-
-            use rand_legacy::FromEntropy;
-            let rng = Rng::from_entropy();
-            let keygen_result_info = single_party_keygen(AccountId32::new([0; 32]), rng);
+            let keygen_result_info = generate_key_share_for_test();
             p_db.update_key(&key_id, &keygen_result_info);
         }
 
