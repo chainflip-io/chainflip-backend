@@ -16,8 +16,8 @@ use super::*;
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
-		eth_environment_provider::MockEthEnvironmentProvider,
+		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
+		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
@@ -194,6 +194,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;

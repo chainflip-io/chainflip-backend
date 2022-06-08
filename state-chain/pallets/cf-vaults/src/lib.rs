@@ -315,6 +315,8 @@ pub mod pallet {
 		/// The event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// Offences supported in this runtime.
 		type Offence: From<PalletOffence>;
 
@@ -703,6 +705,17 @@ pub mod pallet {
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 
+			Ok(().into())
+		}
+
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn set_keygen_timeout(
+			origin: OriginFor<T>,
+			new_timeout: T::BlockNumber,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			KeygenResponseTimeout::<T, I>::put(new_timeout);
 			Ok(().into())
 		}
 	}
