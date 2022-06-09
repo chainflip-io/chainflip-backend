@@ -30,8 +30,8 @@ use pallet_cf_vaults::CeremonyId;
 
 use key_store::KeyStore;
 
-use cf_common::threshold_from_share_count;
 use tokio::sync::mpsc::UnboundedSender;
+use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
 

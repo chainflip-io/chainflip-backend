@@ -1,4 +1,3 @@
-use cf_common::clean_eth_address;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
@@ -12,6 +11,7 @@ use state_chain_runtime::{
 	SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{convert::TryInto, env, marker::PhantomData};
+use utilities::clean_eth_address;
 
 mod network_env;
 

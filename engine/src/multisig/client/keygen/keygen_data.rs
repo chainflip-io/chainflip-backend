@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use cf_common::threshold_from_share_count;
 use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
+use utilities::threshold_from_share_count;
 
 use crate::multisig::{client::common::BroadcastVerificationMessage, crypto::ECPoint};
 

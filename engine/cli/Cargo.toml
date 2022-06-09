@@ -14,7 +14,7 @@ hex = "0.4.3"
 serde = {version = "1.0", features = ["derive", "rc"]}
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 tokio = {version = "1.13.1", features = ["full"]}
-cf-common = {path = "../../common"}
+utilities = {path = "../../utilities"}
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88'}
 
 # State chain

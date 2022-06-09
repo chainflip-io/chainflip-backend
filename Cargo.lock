@@ -766,13 +766,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-common"
-version = "0.1.0"
-dependencies = [
- "hex",
-]
-
-[[package]]
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
@@ -927,7 +920,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cf-chains",
- "cf-common",
  "chainflip-engine",
  "chainflip-node",
  "clap",
@@ -945,6 +937,7 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "tokio",
+ "utilities",
  "web3",
 ]
 
@@ -957,7 +950,6 @@ dependencies = [
  "bincode",
  "bs58",
  "cf-chains",
- "cf-common",
  "cf-traits",
  "chrono",
  "clap",
@@ -1034,6 +1026,7 @@ dependencies = [
  "tokio-stream",
  "typenum",
  "url 1.7.2",
+ "utilities",
  "web3",
  "websocket",
  "zeroize",
@@ -1044,7 +1037,6 @@ name = "chainflip-node"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "cf-common",
  "clap",
  "custom-rpc",
  "frame-benchmarking",
@@ -1089,6 +1081,7 @@ dependencies = [
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
  "try-runtime-cli",
+ "utilities",
 ]
 
 [[package]]
@@ -5383,7 +5376,6 @@ name = "pallet-cf-threshold-signature"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "cf-common",
  "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -5426,7 +5418,6 @@ name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "cf-common",
  "cf-runtime-benchmark-utilities",
  "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
@@ -5443,6 +5434,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]
@@ -5450,7 +5442,6 @@ name = "pallet-cf-witnesser"
 version = "0.1.0"
 dependencies = [
  "bitvec 0.20.4",
- "cf-common",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -5463,6 +5454,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "utilities",
 ]
 
 [[package]]
@@ -9065,7 +9057,6 @@ name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "cf-common",
  "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -9115,6 +9106,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "utilities",
 ]
 
 [[package]]
@@ -10050,6 +10042,13 @@ dependencies = [
  "idna 0.2.3",
  "matches",
  "percent-encoding 2.1.0",
+]
+
+[[package]]
+name = "utilities"
+version = "0.1.0"
+dependencies = [
+ "hex",
 ]
 
 [[package]]

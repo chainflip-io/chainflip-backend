@@ -109,7 +109,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	///
 	/// Note this is not the same as the threshold defined in the signing literature.
 	fn success_threshold(&self) -> AuthorityCount {
-		cf_common::success_threshold_from_share_count(self.candidate_count)
+		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
 	/// The blame threshold is the number of blame votes that result in punishment.
@@ -395,7 +395,7 @@ pub mod pallet {
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							let offenders = if (offenders.len() as AuthorityCount) <
-								cf_common::success_threshold_from_share_count(candidate_count)
+								utilities::success_threshold_from_share_count(candidate_count)
 							{
 								offenders
 							} else {

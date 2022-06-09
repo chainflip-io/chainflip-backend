@@ -24,7 +24,7 @@ path = '../runtime'
 # Local dependencies
 cf-chains = {path = "../chains"}
 multisig-p2p-transport = {path = '../multisig-p2p-transport'}
-cf-common = {path = '../../common'}
+utilities = {path = '../../utilities'}
 custom-rpc = {path = '../custom-rpc'}
 
 # Added by Chainflip
