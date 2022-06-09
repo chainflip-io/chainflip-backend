@@ -182,6 +182,11 @@ impl Settings {
         Ok(settings)
     }
 
+    #[cfg(test)]
+    pub fn new_test() -> Result<Self, ConfigError> {
+        Settings::from_default_file("config/Testing.toml", CommandLineOptions::default())
+    }
+
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
         parse_websocket_endpoint(&self.eth.ws_node_endpoint)
@@ -302,16 +307,6 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-pub mod test_utils {
-    use super::*;
-
-    /// Loads the settings from the "config/Testing.toml" file
-    pub fn new_test_settings() -> Result<Settings, ConfigError> {
-        Settings::from_default_file("config/Testing.toml", CommandLineOptions::default())
-    }
-}
-
-#[cfg(test)]
 mod tests {
 
     use crate::testing::assert_ok;
@@ -329,7 +324,7 @@ mod tests {
 
     #[test]
     fn test_init_config_with_testing_config() {
-        let test_settings = test_utils::new_test_settings().unwrap();
+        let test_settings = Settings::new_test().unwrap();
 
         assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
