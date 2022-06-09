@@ -5,11 +5,9 @@ use chainflip_engine::{
         EthObserver,
     },
     logging::utils,
-    settings::{CfSettings, Settings},
+    settings::{CommandLineOptions, Settings},
 };
 
-use anyhow::Result;
-use config::{Config, Environment, File};
 use futures::stream::StreamExt;
 use sp_core::H160;
 
@@ -18,7 +16,8 @@ use sp_core::H160;
 pub async fn test_all_key_manager_events() {
     let root_logger = utils::new_cli_logger();
 
-    let settings = test_settings_from_file_and_env().unwrap();
+    let settings =
+        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
     let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
@@ -40,37 +39,4 @@ pub async fn test_all_key_manager_events() {
         .await
         .into_iter()
         .collect::<Vec<_>>();
-}
-
-fn test_settings_from_file_and_env() -> Result<Settings> {
-    // Load settings from environment, and fill in any missing settings using the configuration file.
-    let s: Settings = Config::builder()
-        .add_source(File::with_name("config/Testing.toml"))
-        .add_source(Environment::default().separator("__"))
-        .build()?
-        .try_deserialize()?;
-
-    // make sure the settings are clean
-    s.validate_settings()?;
-
-    Ok(s)
-}
-
-mod test {
-    use crate::test_settings_from_file_and_env;
-
-    #[test]
-    fn test_init_config_from_file_and_env() {
-        let eth_node_key = "ETH__NODE_ENDPOINT";
-        let fake_endpoint = "ws://fake.rinkeby.endpoint/flippy1234";
-        std::env::set_var(eth_node_key, fake_endpoint);
-
-        let settings_with_env = test_settings_from_file_and_env().unwrap();
-
-        // ensure the file and env settings *does* read environment vars
-        assert_eq!(settings_with_env.eth.ws_node_endpoint, fake_endpoint);
-
-        // clean up
-        std::env::remove_var(eth_node_key);
-    }
 }
