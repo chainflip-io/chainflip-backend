@@ -41,6 +41,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
+		use frame_support::assert_ok;
 		assert_ok!(SupplyUpdateInterval::<T>::try_get());
 		assert_ok!(LastSupplyUpdateBlock::<T>::try_get());
 		log::info!(
