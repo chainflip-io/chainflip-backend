@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
+use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::multisig::client;
@@ -21,6 +22,7 @@ use client::common::{
 
 use crate::multisig::MessageHash;
 
+use super::common::PreProcessStageDataCheck;
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
@@ -371,56 +373,24 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         ceremony_id: CeremonyId,
         data: SigningData<C::Point>,
     ) {
-        use std::collections::hash_map::Entry;
-        // Check if we have state for this data and delegate message to that state
-        // Delay message otherwise
-
         slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
-        // Only stage 1 messages can create unauthorised ceremonies
-        let state = if matches!(data, SigningData::CommStage1(_)) {
-            self.signing_states.entry(ceremony_id).or_insert_with(|| {
-                SigningStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger)
-            })
-        } else {
-            match self.signing_states.entry(ceremony_id) {
-                Entry::Occupied(entry) => {
-                    let state = entry.into_mut();
-                    if state.is_authorized() {
-                        // Only first stage messages should be processed (delayed) if we're not authorized
-                        state
-                    } else {
-                        slog::debug!(
-                            self.logger,
-                            "Ignoring non-initial stage signing data for unauthorised ceremony {}",
-                            ceremony_id
-                        );
-                        return;
-                    }
-                }
-                Entry::Vacant(_) => {
+        // Check if we have state for this data and delegate message to that state
+        // Delay message otherwise
+        if let Ok(state) =
+            check_data_and_get_state(&mut self.signing_states, &data, ceremony_id, &self.logger)
+                .map_err(|e| {
                     slog::debug!(
                         self.logger,
-                        "Ignoring non-initial stage signing data for non-existent ceremony {}",
-                        ceremony_id
+                        "Ignoring signing data: {}", e;
+                        CEREMONY_ID_KEY => format!("{}",ceremony_id)
                     );
-                    return;
-                }
+                    e
+                })
+        {
+            if let Some(result) = state.process_or_delay_message(sender_id, data) {
+                self.process_signing_ceremony_outcome(ceremony_id, result);
             }
-        };
-
-        // Check that the number of elements in the data is what we expect
-        if !data.check_data_size(state.get_participant_count()) {
-            slog::debug!(
-                self.logger,
-                "Ignoring signing data: incorrect number of elements";
-                CEREMONY_ID_KEY => format!("{}",ceremony_id)
-            );
-            return;
-        }
-
-        if let Some(result) = state.process_or_delay_message(sender_id, data) {
-            self.process_signing_ceremony_outcome(ceremony_id, result);
         }
     }
 
@@ -431,54 +401,22 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         ceremony_id: CeremonyId,
         data: KeygenData<C::Point>,
     ) {
-        use std::collections::hash_map::Entry;
-
         slog::debug!(self.logger, "Received keygen data {}", &data; CEREMONY_ID_KEY => ceremony_id);
 
-        // Only stage 1 messages can create unauthorised ceremonies
-        let state = if matches!(data, KeygenData::HashComm1(_)) {
-            self.keygen_states.entry(ceremony_id).or_insert_with(|| {
-                KeygenStateRunner::<C>::new_unauthorised(ceremony_id, &self.logger)
-            })
-        } else {
-            match self.keygen_states.entry(ceremony_id) {
-                Entry::Occupied(entry) => {
-                    let state = entry.into_mut();
-                    if state.is_authorized() {
-                        // Only first stage messages should be processed (delayed) if we're not authorized
-                        state
-                    } else {
-                        slog::debug!(
-                            self.logger,
-                            "Ignoring non-initial stage keygen data for unauthorised ceremony {}",
-                            ceremony_id
-                        );
-                        return;
-                    }
-                }
-                Entry::Vacant(_) => {
+        if let Ok(state) =
+            check_data_and_get_state(&mut self.keygen_states, &data, ceremony_id, &self.logger)
+                .map_err(|e| {
                     slog::debug!(
                         self.logger,
-                        "Ignoring non-initial stage keygen data for non-existent ceremony {}",
-                        ceremony_id
+                        "Ignoring keygen data: {}", e;
+                        CEREMONY_ID_KEY => format!("{}",ceremony_id)
                     );
-                    return;
-                }
+                    e
+                })
+        {
+            if let Some(result) = state.process_or_delay_message(sender_id, data) {
+                self.process_keygen_ceremony_outcome(ceremony_id, result);
             }
-        };
-
-        // Check that the number of elements in the data is what we expect
-        if !data.check_data_size(state.get_participant_count()) {
-            slog::debug!(
-                self.logger,
-                "Ignoring keygen data: Incorrect number of elements";
-                CEREMONY_ID_KEY => format!("{}",ceremony_id)
-            );
-            return;
-        }
-
-        if let Some(result) = state.process_or_delay_message(sender_id, data) {
-            self.process_keygen_ceremony_outcome(ceremony_id, result);
         }
     }
 }
@@ -561,3 +499,56 @@ pub fn generate_keygen_context(
 
     HashContext(*hasher.finalize().as_ref())
 }
+
+fn check_data_and_get_state<'a, CeremonyData, CeremonyResult, FailureReason, StageData>(
+    states: &'a mut HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
+    data: &StageData,
+    ceremony_id: CeremonyId,
+    logger: &slog::Logger,
+) -> Result<&'a mut StateRunner<CeremonyData, CeremonyResult, FailureReason>, anyhow::Error>
+where
+    CeremonyData: Display,
+    FailureReason: Display,
+    StageData: PreProcessStageDataCheck,
+{
+    use std::collections::hash_map::Entry;
+
+    // Only stage 1 messages can create unauthorised ceremonies
+    let state = if data.is_first_stage() {
+        states
+            .entry(ceremony_id)
+            .or_insert_with(|| StateRunner::new_unauthorised(ceremony_id, logger))
+    } else {
+        match states.entry(ceremony_id) {
+            Entry::Occupied(entry) => {
+                let state = entry.into_mut();
+                if state.is_authorized() {
+                    // Only first stage messages should be processed (delayed) if we're not authorized
+                    state
+                } else {
+                    return Err(anyhow::Error::msg(
+                        "non-initial stage data for unauthorised ceremony",
+                    ));
+                }
+            }
+            Entry::Vacant(_) => {
+                return Err(anyhow::Error::msg(
+                    "non-initial stage data for non-existent ceremony",
+                ));
+            }
+        }
+    };
+
+    // Check that the number of elements in the data is what we expect
+    if !data.check_data_size(state.get_participant_count()) {
+        return Err(anyhow::Error::msg("incorrect number of elements"));
+    }
+
+    Ok(state)
+}
+
+// TODO: test `check_data_and_get_state` directly instead of these tests:
+// - should_ignore_non_first_stage_keygen_data_before_request
+// - should_ignore_non_first_stage_signing_data_before_request
+// - singing - should_ignore_stage_data_with_incorrect_size
+// - keygen - should_ignore_stage_data_with_incorrect_size

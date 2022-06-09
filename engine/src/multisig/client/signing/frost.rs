@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use crate::multisig::{
-    client::common::BroadcastVerificationMessage,
+    client::common::{BroadcastVerificationMessage, PreProcessStageDataCheck},
     crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
 };
 
@@ -128,6 +128,15 @@ impl<P: ECPoint> SigningData<P> {
             );
             true
         }
+    }
+}
+
+impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
+    fn check_data_size(&self, num_of_parties: Option<AuthorityCount>) -> bool {
+        self.check_data_size(num_of_parties)
+    }
+    fn is_first_stage(&self) -> bool {
+        matches!(self, SigningData::CommStage1(_))
     }
 }
 

@@ -4,7 +4,10 @@ use cf_traits::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
 
-use crate::multisig::{client::common::BroadcastVerificationMessage, crypto::ECPoint};
+use crate::multisig::{
+    client::common::{BroadcastVerificationMessage, PreProcessStageDataCheck},
+    crypto::ECPoint,
+};
 
 use super::keygen_frost::ShamirShare;
 
@@ -109,6 +112,15 @@ impl<P: ECPoint> KeygenData<P> {
             );
             true
         }
+    }
+}
+
+impl<P: ECPoint> PreProcessStageDataCheck for KeygenData<P> {
+    fn check_data_size(&self, num_of_parties: Option<AuthorityCount>) -> bool {
+        self.check_data_size(num_of_parties)
+    }
+    fn is_first_stage(&self) -> bool {
+        matches!(self, KeygenData::HashComm1(_))
     }
 }
 
