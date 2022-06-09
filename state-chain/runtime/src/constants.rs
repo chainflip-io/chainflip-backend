@@ -30,13 +30,15 @@ pub mod common {
 	/// Maximum duration a ceremony stage can last
 	pub const MAX_STAGE_DURATION_SECONDS: u32 = 300;
 
+	const TIMEOUT_BUFFER_SECONDS: u32 = 10;
+
 	/// The number of blocks to wait for a threshold signature ceremony to complete.
 	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		(MAX_STAGE_DURATION_SECONDS * 5) / SECONDS_PER_BLOCK as u32;
+		((MAX_STAGE_DURATION_SECONDS * 4) + TIMEOUT_BUFFER_SECONDS) / SECONDS_PER_BLOCK as u32;
 
 	/// The maximum number of blocks to wait for a keygen to complete.
 	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		(MAX_STAGE_DURATION_SECONDS * 9) / SECONDS_PER_BLOCK as u32;
+		((MAX_STAGE_DURATION_SECONDS * 9) + TIMEOUT_BUFFER_SECONDS) / SECONDS_PER_BLOCK as u32;
 
 	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
 	pub const SECS_IN_AN_HOUR: u64 = 3600;
