@@ -87,6 +87,11 @@ git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
 tag = 'chainflip-monthly-2022-05'
 
+[dependencies.pallet-session-benchmarking]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+optional = true
+tag = 'chainflip-monthly-2022-05'
 
 [dependencies.hex-literal]
 optional = true
@@ -217,6 +222,7 @@ runtime-benchmarks = [
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-environment/runtime-benchmarks',
+  "pallet-session-benchmarking",
 ]
 std = [
   'frame-try-runtime/std',
