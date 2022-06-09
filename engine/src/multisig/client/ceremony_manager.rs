@@ -88,7 +88,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 // SC (i.e. the ceremony is "authorized")
                 // Only consume the ceremony id if it has been authorized
                 if state.is_authorized() {
-                    self.process_signing_ceremony_outcome(*ceremony_id, result);
+                    process_ceremony_outcome(&mut self.signing_states, *ceremony_id, result);
                 } else {
                     // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
@@ -109,7 +109,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 // if we have received a ceremony request from
                 // SC (i.e. the ceremony is "authorised")
                 if state.is_authorized() {
-                    self.process_keygen_ceremony_outcome(*ceremony_id, result);
+                    process_ceremony_outcome(&mut self.keygen_states, *ceremony_id, result);
                 } else {
                     // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
@@ -148,46 +148,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         Ok((our_idx, signer_idxs))
     }
 
-    fn process_signing_ceremony_outcome(
-        &mut self,
-        ceremony_id: CeremonyId,
-        result: Result<
-            C::Signature,
-            (
-                BTreeSet<AccountId>,
-                CeremonyFailureReason<SigningFailureReason>,
-            ),
-        >,
-    ) {
-        let result_sender = self
-            .signing_states
-            .remove(&ceremony_id)
-            .unwrap()
-            .try_into_result_sender()
-            .unwrap();
-        let _result = result_sender.send(result);
-    }
-
-    fn process_keygen_ceremony_outcome(
-        &mut self,
-        ceremony_id: CeremonyId,
-        result: Result<
-            KeygenResultInfo<C::Point>,
-            (
-                BTreeSet<AccountId>,
-                CeremonyFailureReason<KeygenFailureReason>,
-            ),
-        >,
-    ) {
-        let result_sender = self
-            .keygen_states
-            .remove(&ceremony_id)
-            .unwrap()
-            .try_into_result_sender()
-            .unwrap();
-        let _result = result_sender.send(result);
-    }
-
     /// Process a keygen request
     pub fn on_keygen_request(
         &mut self,
@@ -196,8 +156,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         rng: Rng,
         result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>, KeygenFailureReason>,
     ) {
-        // TODO: Consider similarity in structure to on_request_to_sign(). Maybe possible to factor some commonality
-
         let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
@@ -248,7 +206,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             result_sender,
             num_of_participants,
         ) {
-            self.process_keygen_ceremony_outcome(ceremony_id, result);
+            process_ceremony_outcome(&mut self.keygen_states, ceremony_id, result);
         };
     }
 
@@ -333,7 +291,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             result_sender,
             signers_len,
         ) {
-            self.process_signing_ceremony_outcome(ceremony_id, result);
+            process_ceremony_outcome(&mut self.signing_states, ceremony_id, result);
         };
     }
 
@@ -389,7 +347,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 })
         {
             if let Some(result) = state.process_or_delay_message(sender_id, data) {
-                self.process_signing_ceremony_outcome(ceremony_id, result);
+                process_ceremony_outcome(&mut self.signing_states, ceremony_id, result);
             }
         }
     }
@@ -415,7 +373,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 })
         {
             if let Some(result) = state.process_or_delay_message(sender_id, data) {
-                self.process_keygen_ceremony_outcome(ceremony_id, result);
+                process_ceremony_outcome(&mut self.keygen_states, ceremony_id, result);
             }
         }
     }
@@ -547,8 +505,19 @@ where
     Ok(state)
 }
 
-// TODO: test `check_data_and_get_state` directly instead of these tests:
-// - should_ignore_non_first_stage_keygen_data_before_request
-// - should_ignore_non_first_stage_signing_data_before_request
-// - singing - should_ignore_stage_data_with_incorrect_size
-// - keygen - should_ignore_stage_data_with_incorrect_size
+// Send the ceremony outcome through the result channel
+fn process_ceremony_outcome<CeremonyData, CeremonyResult, FailureReason>(
+    states: &mut HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
+    ceremony_id: CeremonyId,
+    result: Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>,
+) where
+    CeremonyData: Display,
+    FailureReason: Display,
+{
+    let result_sender = states
+        .remove(&ceremony_id)
+        .unwrap()
+        .try_into_result_sender()
+        .unwrap();
+    let _result = result_sender.send(result);
+}
