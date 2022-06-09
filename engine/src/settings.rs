@@ -224,12 +224,7 @@ impl Settings {
 
     #[cfg(test)]
     pub fn new_test() -> Result<Self, ConfigError> {
-        use std::env;
-
-        use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT};
-
-        env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
-        env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+        tests::set_test_env();
         Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
     }
 
@@ -339,12 +334,18 @@ mod tests {
 
     use super::*;
 
+    pub fn set_test_env() {
+        use std::env;
+
+        use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT};
+
+        env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
+        env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+    }
+
     #[test]
     fn init_default_config() {
-        let settings =
-            Settings::from_file_and_env("config/Default.toml", CommandLineOptions::default())
-                .unwrap();
-
+        let settings = Settings::new(CommandLineOptions::default()).unwrap();
         assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 

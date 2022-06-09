@@ -20,6 +20,18 @@ pub struct CLICommandLineOptions {
     pub cmd: CFCommand,
 }
 
+impl Default for CLICommandLineOptions {
+    fn default() -> Self {
+        Self {
+            config_path: None,
+            state_chain_opts: StateChainOptions::default(),
+            eth_opts: EthSharedOptions::default(),
+            // an arbitrary simple command
+            cmd: CFCommand::Retire {},
+        }
+    }
+}
+
 #[derive(Parser, Clone)]
 pub enum CFCommand {
     #[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
@@ -114,5 +126,34 @@ impl CLISettings {
         cli_settings.validate_settings()?;
 
         Ok(cli_settings)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use chainflip_engine::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT};
+
+    pub fn set_test_env() {
+        use std::env;
+
+        env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
+        env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+    }
+
+    #[test]
+    fn init_default_config() {
+        set_test_env();
+
+        let settings = CLISettings::from_file_and_env(
+            "../config/Default.toml",
+            CLICommandLineOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
+        assert_eq!(settings.eth.ws_node_endpoint, "ws://localhost:8545");
     }
 }
