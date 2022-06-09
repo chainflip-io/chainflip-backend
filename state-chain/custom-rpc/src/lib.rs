@@ -9,16 +9,16 @@ pub use self::gen_client::Client as CustomClient;
 /// The custom RPC endoints for the state chain node.
 pub trait CustomApi {
 	/// Returns true if the current phase is the auction phase.
-	#[rpc(name = "is_auction_phase")]
-	fn is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error>;
-	#[rpc(name = "eth_key_manager_address")]
-	fn eth_key_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
-	#[rpc(name = "eth_stake_manager_address")]
-	fn eth_stake_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
-	#[rpc(name = "eth_flip_token_address")]
-	fn eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
-	#[rpc(name = "eth_chain_id")]
-	fn eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
+	#[rpc(name = "cf_is_auction_phase")]
+	fn cf_is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error>;
+	#[rpc(name = "cf_eth_key_manager_address")]
+	fn cf_eth_key_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
+	#[rpc(name = "cf_eth_stake_manager_address")]
+	fn cf_eth_stake_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
+	#[rpc(name = "cf_eth_flip_token_address")]
+	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
+	#[rpc(name = "cf_eth_chain_id")]
+	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -33,39 +33,39 @@ where
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	fn is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error> {
+	fn cf_is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
 			.runtime_api()
-			.is_auction_phase(&at)
+			.cf_is_auction_phase(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
+	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
 			.runtime_api()
-			.eth_flip_token_address(&at)
+			.cf_eth_flip_token_address(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn eth_stake_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
+	fn cf_eth_stake_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
 			.runtime_api()
-			.eth_stake_manager_address(&at)
+			.cf_eth_stake_manager_address(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn eth_key_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
+	fn cf_eth_key_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
 			.runtime_api()
-			.eth_key_manager_address(&at)
+			.cf_eth_key_manager_address(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error> {
+	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
 			.runtime_api()
-			.eth_chain_id(&at)
+			.cf_eth_chain_id(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 }
