@@ -54,7 +54,10 @@ pub fn start_client<C>(
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     logger: &slog::Logger,
-) -> (Arc<MultisigClient<C>>, impl futures::Future)
+) -> (
+    Arc<MultisigClient<C>>,
+    impl futures::Future<Output = ()> + Send,
+)
 where
     C: CryptoScheme,
 {
