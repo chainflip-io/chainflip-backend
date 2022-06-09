@@ -64,9 +64,9 @@ impl CfSettings for CLISettings {
 
 impl CLISettings {
     pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-        let mut cli_config = CLISettings::default();
+        let mut cli_settings = CLISettings::default();
 
-        // check we have all the cli args. If we do, don't bother with the config file
+        // check we have all the cli args. If we do, don't bother reading from the config file + env
         let all_cl_args_set = opts.state_chain_opts.state_chain_ws_endpoint.is_some()
             && opts.state_chain_opts.state_chain_signing_key_file.is_some()
             // eth options present
@@ -75,43 +75,46 @@ impl CLISettings {
             && opts.eth_opts.eth_private_key_file.is_some();
 
         if !all_cl_args_set {
-            cli_config = match opts.config_path {
-                Some(path) => Self::from_file(&path)?,
-                None => Self::from_file("./engine/config/Default.toml")?,
-            }
+            cli_settings = Self::from_file_and_env(
+                match &opts.config_path.clone() {
+                    Some(path) => path,
+                    None => "./engine/config/Default.toml",
+                },
+                opts,
+            )?;
         }
+
+        Ok(cli_settings)
+    }
+
+    fn from_file_and_env(file: &str, opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
+        // Load the settings from the file and deserialize (and thus freeze) the entire config
+        let mut cli_settings = Self::settings_from_file_and_env(file)?;
 
         // Override State Chain settings with the cmd line options
         if let Some(ws_endpoint) = opts.state_chain_opts.state_chain_ws_endpoint {
-            cli_config.state_chain.ws_endpoint = ws_endpoint
+            cli_settings.state_chain.ws_endpoint = ws_endpoint
         };
         if let Some(signing_key_file) = opts.state_chain_opts.state_chain_signing_key_file {
-            cli_config.state_chain.signing_key_file = signing_key_file
+            cli_settings.state_chain.signing_key_file = signing_key_file
         };
 
         // Override Eth settings
         if let Some(private_key_file) = opts.eth_opts.eth_private_key_file {
-            cli_config.eth.private_key_file = private_key_file
+            cli_settings.eth.private_key_file = private_key_file
         };
 
         if let Some(ws_node_endpoint) = opts.eth_opts.eth_ws_node_endpoint {
-            cli_config.eth.ws_node_endpoint = ws_node_endpoint
+            cli_settings.eth.ws_node_endpoint = ws_node_endpoint
         };
 
         if let Some(http_node_endpoint) = opts.eth_opts.eth_http_node_endpoint {
-            cli_config.eth.http_node_endpoint = http_node_endpoint
+            cli_settings.eth.http_node_endpoint = http_node_endpoint
         };
 
-        Ok(cli_config)
-    }
-
-    pub fn from_file(file: &str) -> Result<Self, ConfigError> {
-        // Load the settings from the file and deserialize (and thus freeze) the entire config
-        let s = Self::settings_from_file_and_env(file)?;
-
         // Make sure the settings are clean
-        s.validate_settings()?;
+        cli_settings.validate_settings()?;
 
-        Ok(s)
+        Ok(cli_settings)
     }
 }
