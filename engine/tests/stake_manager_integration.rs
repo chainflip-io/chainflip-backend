@@ -28,7 +28,7 @@ pub async fn test_all_stake_manager_events() {
     let integration_test_settings =
         IntegrationTestSettings::from_file("tests/config.toml").unwrap();
     let settings =
-        Settings::from_default_file("config/Testing.toml", CommandLineOptions::default()).unwrap();
+        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
     let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await

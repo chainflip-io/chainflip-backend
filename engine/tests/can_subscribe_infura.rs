@@ -5,7 +5,7 @@ use chainflip_engine::{
         EthObserver,
     },
     logging::utils,
-    settings::Settings,
+    settings::{CfSettings, Settings},
 };
 
 use anyhow::Result;

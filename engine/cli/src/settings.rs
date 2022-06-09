@@ -1,6 +1,8 @@
-use chainflip_engine::settings::{Eth, EthSharedOptions, StateChain, StateChainOptions};
+use chainflip_engine::settings::{
+    CfSettings, Eth, EthSharedOptions, StateChain, StateChainOptions,
+};
 use clap::Parser;
-use config::{Config, ConfigError, File};
+use config::ConfigError;
 use serde::Deserialize;
 
 #[derive(Parser, Clone)]
@@ -50,6 +52,16 @@ pub struct CLISettings {
     pub eth: Eth,
 }
 
+impl CfSettings for CLISettings {
+    type Settings = Self;
+
+    fn validate_settings(&self) -> Result<(), ConfigError> {
+        self.eth.validate_settings()?;
+
+        self.state_chain.validate_settings()
+    }
+}
+
 impl CLISettings {
     pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
         let mut cli_config = CLISettings::default();
@@ -95,18 +107,11 @@ impl CLISettings {
 
     pub fn from_file(file: &str) -> Result<Self, ConfigError> {
         // Load the settings from the file and deserialize (and thus freeze) the entire config
-        let s: Self = Config::builder()
-            .add_source(File::with_name(file))
-            .build()?
-            .try_deserialize()?;
+        let s = Self::settings_from_file_and_env(file)?;
 
         // Make sure the settings are clean
         s.validate_settings()?;
 
         Ok(s)
-    }
-
-    pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        self.state_chain.validate_settings()
     }
 }

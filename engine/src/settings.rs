@@ -8,6 +8,7 @@ use config::{Config, ConfigError, Environment, File};
 use serde::{de, Deserialize, Deserializer};
 
 pub use anyhow::Result;
+use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
@@ -40,6 +41,17 @@ pub struct Eth {
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }
+
+impl Eth {
+    pub fn validate_settings(&self) -> Result<(), ConfigError> {
+        parse_websocket_endpoint(&self.ws_node_endpoint)
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
+        parse_http_endpoint(&self.http_node_endpoint)
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, Clone, Default, PartialEq)]
 pub struct HealthCheck {
     pub hostname: String,
@@ -167,11 +179,39 @@ where
     deserializer.deserialize_any(PathVisitor)
 }
 
+pub trait CfSettings {
+    type Settings: DeserializeOwned;
+
+    fn settings_from_file_and_env(file: &str) -> Result<Self::Settings, ConfigError> {
+        Ok(Config::builder()
+            .add_source(File::with_name(file))
+            .add_source(Environment::default().separator("__"))
+            .build()?
+            .try_deserialize()?)
+    }
+
+    fn validate_settings(&self) -> Result<(), ConfigError>;
+}
+
+impl CfSettings for Settings {
+    type Settings = Self;
+
+    /// Validates the formatting of some settings
+    fn validate_settings(&self) -> Result<(), ConfigError> {
+        self.eth.validate_settings()?;
+
+        self.state_chain.validate_settings()?;
+
+        is_valid_db_path(self.signing.db_file.as_path())
+            .map_err(|e| ConfigError::Message(e.to_string()))
+    }
+}
+
 impl Settings {
     /// New settings loaded from "config/Default.toml" with overridden values from the `CommandLineOptions`
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
         // Load settings from the default file or from the path specified from cmd line options
-        let settings = Self::from_default_file(
+        let settings = Self::from_file_and_env(
             match &opts.config_path.clone() {
                 Some(path) => path,
                 None => "config/Default.toml",
@@ -190,33 +230,13 @@ impl Settings {
 
         env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
         env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
-        Settings::from_default_file("config/Testing.toml", CommandLineOptions::default())
-    }
-
-    /// Validates the formatting of some settings
-    pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        parse_websocket_endpoint(&self.eth.ws_node_endpoint)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        parse_http_endpoint(&self.eth.http_node_endpoint)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        self.state_chain.validate_settings()?;
-
-        is_valid_db_path(self.signing.db_file.as_path())
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        Ok(())
+        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
     }
 
     /// Load settings from a TOML file
     /// If opts contains another file name, it'll use that as the default
-    pub fn from_default_file(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
-        let mut settings: Settings = Config::builder()
-            .add_source(File::with_name(file))
-            .add_source(Environment::default().separator("__"))
-            .build()?
-            .try_deserialize()?;
+    pub fn from_file_and_env(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
+        let mut settings = Self::settings_from_file_and_env(file)?;
 
         if let Some(opt) = opts.node_key_file {
             settings.node_p2p.node_key_file = opt
@@ -269,7 +289,6 @@ impl Settings {
             settings.log.blacklist = opt;
         };
 
-        // Run the validation again
         settings.validate_settings()?;
 
         Ok(settings)
@@ -323,7 +342,7 @@ mod tests {
     #[test]
     fn init_default_config() {
         let settings =
-            Settings::from_default_file("config/Default.toml", CommandLineOptions::default())
+            Settings::from_file_and_env("config/Default.toml", CommandLineOptions::default())
                 .unwrap();
 
         assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
