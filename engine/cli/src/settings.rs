@@ -94,6 +94,8 @@ impl CLISettings {
                 },
                 opts,
             )?;
+        } else {
+            cli_settings.validate_settings()?;
         }
 
         Ok(cli_settings)
