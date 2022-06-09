@@ -38,7 +38,7 @@ pub const ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL: u64 = 10;
 // ======= Settings environment variables =======
 
 /// A HTTP node endpoint for Ethereum
-pub const ETH_HTTP_NODE_ENDPOINT: &'static str = "ETH__HTTP_NODE_ENDPOINT";
+pub const ETH_HTTP_NODE_ENDPOINT: &str = "ETH__HTTP_NODE_ENDPOINT";
 
 /// A WebSocket node endpoint for Ethereum
-pub const ETH_WS_NODE_ENDPOINT: &'static str = "ETH__WS_NODE_ENDPOINT";
+pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__WS_NODE_ENDPOINT";

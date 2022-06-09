@@ -184,11 +184,11 @@ pub trait CfSettings {
 
     /// Deserialize the TOML file pointed to by `path` into a `Settings` struct
     fn settings_from_file_and_env(file: &str) -> Result<Self::Settings, ConfigError> {
-        Ok(Config::builder()
+        Config::builder()
             .add_source(File::with_name(file))
             .add_source(Environment::default().separator("__"))
             .build()?
-            .try_deserialize()?)
+            .try_deserialize()
     }
 
     /// Validate the formatting of some settings
