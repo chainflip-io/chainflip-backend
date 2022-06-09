@@ -183,6 +183,7 @@ pub trait CfSettings {
     type Settings: DeserializeOwned;
 
     /// Deserialize the TOML file pointed to by `path` into a `Settings` struct
+    /// If an item exists in the file *and* the environment, the environment overrides the file.
     fn settings_from_file_and_env(file: &str) -> Result<Self::Settings, ConfigError> {
         Config::builder()
             .add_source(File::with_name(file))
@@ -345,8 +346,10 @@ mod tests {
 
     #[test]
     fn init_default_config() {
+        set_test_env();
         let settings = Settings::new(CommandLineOptions::default()).unwrap();
         assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
+        assert_eq!(settings.eth.http_node_endpoint, "http://localhost:8545");
     }
 
     #[test]
