@@ -569,8 +569,20 @@ mod benches {
 impl_runtime_apis! {
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
-		fn is_auction_phase() -> bool {
+		fn cf_is_auction_phase() -> bool {
 			Validator::is_auction_phase()
+		}
+		fn cf_eth_flip_token_address() -> [u8; 20] {
+			Environment::flip_token_address()
+		}
+		fn cf_eth_stake_manager_address() -> [u8; 20] {
+			Environment::stake_manager_address()
+		}
+		fn cf_eth_key_manager_address() -> [u8; 20] {
+			Environment::key_manager_address()
+		}
+		fn cf_eth_chain_id() -> u64 {
+			Environment::ethereum_chain_id()
 		}
 	}
 	// END custom runtime APIs

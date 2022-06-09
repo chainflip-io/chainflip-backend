@@ -224,10 +224,10 @@ impl StateChainRpcApi for StateChainRpcClient {
 
     async fn is_auction_phase(&self) -> Result<bool> {
         self.custom_rpc_client
-            .is_auction_phase()
+            .cf_is_auction_phase()
             .await
             .map_err(rpc_error_into_anyhow_error)
-            .context("is_auction_phase RPC API failed")
+            .context("cf_is_auction_phase RPC API failed")
     }
 }
 
