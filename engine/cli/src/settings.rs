@@ -88,7 +88,6 @@ impl CLISettings {
     }
 
     fn from_file_and_env(file: &str, opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-        // Load the settings from the file and deserialize (and thus freeze) the entire config
         let mut cli_settings = Self::settings_from_file_and_env(file)?;
 
         // Override State Chain settings with the cmd line options
@@ -112,7 +111,6 @@ impl CLISettings {
             cli_settings.eth.http_node_endpoint = http_node_endpoint
         };
 
-        // Make sure the settings are clean
         cli_settings.validate_settings()?;
 
         Ok(cli_settings)

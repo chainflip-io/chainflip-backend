@@ -182,6 +182,7 @@ where
 pub trait CfSettings {
     type Settings: DeserializeOwned;
 
+    /// Deserialize the TOML file pointed to by `path` into a `Settings` struct
     fn settings_from_file_and_env(file: &str) -> Result<Self::Settings, ConfigError> {
         Ok(Config::builder()
             .add_source(File::with_name(file))
@@ -190,13 +191,13 @@ pub trait CfSettings {
             .try_deserialize()?)
     }
 
+    /// Validate the formatting of some settings
     fn validate_settings(&self) -> Result<(), ConfigError>;
 }
 
 impl CfSettings for Settings {
     type Settings = Self;
 
-    /// Validates the formatting of some settings
     fn validate_settings(&self) -> Result<(), ConfigError> {
         self.eth.validate_settings()?;
 
@@ -208,9 +209,8 @@ impl CfSettings for Settings {
 }
 
 impl Settings {
-    /// New settings loaded from "config/Default.toml" with overridden values from the `CommandLineOptions`
+    /// New settings loaded from the provided path or "config/Default.toml" with overridden values from the `CommandLineOptions`
     pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
-        // Load settings from the default file or from the path specified from cmd line options
         let settings = Self::from_file_and_env(
             match &opts.config_path.clone() {
                 Some(path) => path,
