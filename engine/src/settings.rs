@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use config::{Config, ConfigError, File};
+use config::{Config, ConfigError, Environment, File};
 use serde::{de, Deserialize, Deserializer};
 
 pub use anyhow::Result;
@@ -184,6 +184,12 @@ impl Settings {
 
     #[cfg(test)]
     pub fn new_test() -> Result<Self, ConfigError> {
+        use std::env;
+
+        use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT};
+
+        env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
+        env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
         Settings::from_default_file("config/Testing.toml", CommandLineOptions::default())
     }
 
@@ -208,6 +214,7 @@ impl Settings {
     pub fn from_default_file(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
         let mut settings: Settings = Config::builder()
             .add_source(File::with_name(file))
+            .add_source(Environment::default().separator("__"))
             .build()?
             .try_deserialize()?;
 

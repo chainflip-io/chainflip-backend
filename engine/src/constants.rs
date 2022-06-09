@@ -34,3 +34,11 @@ pub const ETH_STILL_BEHIND_LOG_INTERVAL: Duration = Duration::from_secs(180);
 
 /// Number of blocks before logging that a stream is behind again
 pub const ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL: u64 = 10;
+
+// ======= Settings environment variables =======
+
+/// A HTTP node endpoint for Ethereum
+pub const ETH_HTTP_NODE_ENDPOINT: &'static str = "ETH__HTTP_NODE_ENDPOINT";
+
+/// A WebSocket node endpoint for Ethereum
+pub const ETH_WS_NODE_ENDPOINT: &'static str = "ETH__WS_NODE_ENDPOINT";
