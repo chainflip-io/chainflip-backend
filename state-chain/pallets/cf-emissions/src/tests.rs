@@ -1,4 +1,6 @@
-use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
+use crate::{
+	mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet, SUPPLY_UPDATE_INTERVAL_DEFAULT,
+};
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Issuance, RewardsDistribution};
 use frame_support::traits::{Imbalance, OnInitialize};
 use pallet_cf_flip::{FlipIssuance, Pallet as Flip};
@@ -21,11 +23,11 @@ fn test_should_mint() {
 fn test_should_mint_at() {
 	new_test_ext(vec![], None).execute_with(|| {
 		// It has been `SUPPLY_UPDATE_INTERVAL` blocks since the last broadcast.
-		assert!(Emissions::should_update_supply_at(SUPPLY_UPDATE_INTERVAL));
+		assert!(Emissions::should_update_supply_at(SUPPLY_UPDATE_INTERVAL_DEFAULT));
 		// It hasn't yet been `SUPPLY_UPDATE_INTERVAL` blocks since the last broadcast.
-		assert!(!Emissions::should_update_supply_at(SUPPLY_UPDATE_INTERVAL - 1));
+		assert!(!Emissions::should_update_supply_at(SUPPLY_UPDATE_INTERVAL_DEFAULT - 1));
 		// It has been more than `SUPPLY_UPDATE_INTERVAL` blocks since the last broadcast.
-		assert!(Emissions::should_update_supply_at(SUPPLY_UPDATE_INTERVAL + 1));
+		assert!(Emissions::should_update_supply_at(SUPPLY_UPDATE_INTERVAL_DEFAULT + 1));
 		// We have literally *just* broadcasted.
 		assert!(!Emissions::should_update_supply_at(0));
 	});
@@ -99,11 +101,9 @@ fn should_calculate_block_emissions() {
 #[test]
 fn should_mint_but_not_broadcast() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
-		let before = Flip::<Test>::total_issuance();
 		let prev_supply_update_block = LastSupplyUpdateBlock::<Test>::get();
 		Emissions::mint_rewards_for_block();
 		assert_eq!(prev_supply_update_block, LastSupplyUpdateBlock::<Test>::get());
-		assert_eq!(before, Flip::<Test>::total_issuance());
 	});
 }
 
@@ -123,7 +123,7 @@ fn test_reward_distribution() {
 fn should_mint_and_initiate_broadcast() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		let before = Flip::<Test>::total_issuance();
-		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL);
+		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL_DEFAULT);
 		let after = Flip::<Test>::total_issuance();
 		assert!(after > before, "Expected {:?} > {:?}", after, before);
 		assert_eq!(
@@ -139,13 +139,13 @@ fn no_update_of_update_total_supply_during_maintanance() {
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
 		// Try send a broadcast to update the total supply
-		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL);
+		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL_DEFAULT);
 		// Expect nothing to be sent
 		assert!(MockBroadcast::get_called().is_none());
 		// Deactivate maintenance mode
 		MockSystemStateInfo::set_maintenance(false);
 		// Try send a broadcast to update the total supply
-		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL * 2);
+		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL_DEFAULT * 2);
 		// Expect the broadcast to be sendt
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,

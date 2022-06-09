@@ -144,12 +144,6 @@ impl ReplayProtectionProvider<MockEthereum> for Test {
 	}
 }
 
-pub const SUPPLY_UPDATE_INTERVAL: u64 = 100;
-
-parameter_types! {
-	pub const SupplyUpdateInterval: u64 = SUPPLY_UPDATE_INTERVAL;
-}
-
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
 
 pub struct MockRewardsDistribution;

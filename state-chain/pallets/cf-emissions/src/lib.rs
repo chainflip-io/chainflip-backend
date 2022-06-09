@@ -19,10 +19,9 @@ mod mock;
 mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u64 = 100;
 
-use cf_traits::{
-	BlockEmissions, EmissionsTrigger, EpochTransitionHandler, Issuance, RewardsDistribution,
-};
+use cf_traits::{BlockEmissions, EpochTransitionHandler, Issuance, RewardsDistribution};
 use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
@@ -285,7 +284,9 @@ pub mod pallet {
 		fn build(&self) {
 			CurrentAuthorityEmissionInflation::<T>::put(self.current_authority_emission_inflation);
 			BackupNodeEmissionInflation::<T>::put(self.backup_node_emission_inflation);
-			SupplyUpdateInterval::<T>::put(T::BlockNumber::from(100_u32));
+			SupplyUpdateInterval::<T>::put(T::BlockNumber::from(
+				SUPPLY_UPDATE_INTERVAL_DEFAULT as u32,
+			));
 			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
 	}
@@ -367,19 +368,11 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	}
 }
 
-impl<T: Config> EmissionsTrigger for Pallet<T> {
-	fn trigger_emissions() {
-		Self::mint_rewards_for_block();
-	}
-}
-
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = <T as frame_system::Config>::AccountId;
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		// Calculate block emissions on every epoch
 		Self::calculate_block_emissions();
-		// Process any outstanding emissions.
-		Self::trigger_emissions();
 	}
 }
