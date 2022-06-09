@@ -72,7 +72,7 @@ benchmarks_instance_pallet! {
 		Pallet::<T, I>::on_initialize(expiry_block);
 	}
 	transaction_ready_for_transmission {
-		// Add the moment we benchmark the fail case which is
+		// At the moment we benchmark the fail case which is
 		// not the expensive case and not the default case.
 		// TODO: we should measure the case in which the transaction is valid.
 		let caller: T::AccountId = whitelisted_caller();

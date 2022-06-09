@@ -1,31 +1,29 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use crate::eth::{
-	to_ethereum_address, Address, AggKey, RawSignedTransaction, SchnorrVerificationComponents, H256,
+use crate::{
+	benchmarking_value::BenchmarkValue,
+	eth::{
+		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
+		to_ethereum_address, Address, AggKey, EthereumReplayProtection, RawSignedTransaction,
+		SchnorrVerificationComponents, UnsignedTransaction, H256, U256,
+	},
+	ApiCall,
 };
 
-use crate::eth::{api::EthereumApi, EthereumReplayProtection};
-
-use crate::eth::api::update_flip_supply::UpdateFlipSupply;
-
-use crate::ApiCall;
-
-use crate::benchmarking_value::BenchmarkValue;
-
-use crate::eth::{UnsignedTransaction, U256};
-
-const SECRET: [u8; 32] = [1u8; 32];
+const SIG_NONCE: [u8; 32] = [1u8; 32];
+const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 
 use libsecp256k1::{PublicKey, SecretKey};
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
-		let k = SecretKey::parse(&SECRET).expect("Valid signature nonce");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
+		let sig_nonce = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
+		let private_key = SecretKey::parse(&PRIVATE_KEY).expect("Valid private key");
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
 
-		let secret_key = AggKey::from_private_key_bytes(k.serialize());
+		let agg_key = AggKey::benchmark_value();
 
 		let payload: [u8; 32] = EthereumApi::benchmark_value().threshold_signature_payload().into();
-		let signature = secret_key.sign(&payload, &k, &k);
+		let signature = agg_key.sign(&payload, &private_key, &sig_nonce);
 
 		Self { s: signature, k_times_g_address }
 	}
@@ -33,9 +31,10 @@ impl BenchmarkValue for SchnorrVerificationComponents {
 
 impl BenchmarkValue for Address {
 	fn benchmark_value() -> Self {
-		let k = SecretKey::parse(&SECRET).expect("Valid signature nonce");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
-		k_times_g_address.into()
+		to_ethereum_address(PublicKey::from_secret_key(
+			&SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce"),
+		))
+		.into()
 	}
 }
 
@@ -53,8 +52,9 @@ impl BenchmarkValue for RawSignedTransaction {
 
 impl BenchmarkValue for AggKey {
 	fn benchmark_value() -> Self {
-		let k = SecretKey::parse(&SECRET).expect("Valid signature nonce");
-		AggKey::from_private_key_bytes(k.serialize())
+		AggKey::from_private_key_bytes(
+			SecretKey::parse(&PRIVATE_KEY).expect("Valid signature nonce").serialize(),
+		)
 	}
 }
 
