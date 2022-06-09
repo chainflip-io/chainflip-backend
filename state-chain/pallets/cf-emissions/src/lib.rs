@@ -18,7 +18,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u64 = 100;
 
 use cf_traits::{BlockEmissions, EpochTransitionHandler, Issuance, RewardsDistribution};
