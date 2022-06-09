@@ -30,8 +30,9 @@ use crate::{
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
+use chain_data_witnessing::*;
 use ethbloom::{Bloom, Input};
-use futures::{stream, FutureExt, StreamExt};
+use futures::{sink, stream, FutureExt, StreamExt};
 use slog::o;
 use sp_core::{H160, U256};
 use std::{
@@ -194,17 +195,14 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
 }
 
 #[allow(unused_assignments)] // The compiler thinks to_block_sender_and_task_handle is never read.
-pub async fn start_chain_data_witnesser<
-    EthRpcClient: EthRpcApi + Send + Sync,
-    ScRpcClient: StateChainRpcApi + Send + Sync + 'static,
->(
-    eth_ws_rpc: &'static EthWsRpcClient,
-    eth_http_rpc: &'static EthHttpRpcClient,
+pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
+    eth_rpc: &'static EthRpcClient,
     state_chain_client: Arc<StateChainClient<ScRpcClient>>,
     mut instruction_receiver: UnboundedReceiver<ObserveInstruction>,
     logger: &'static slog::Logger,
 ) where
-    ScRpcClient: 'static + StateChainRpcApi + Sync + Send,
+    EthRpcClient: EthRpcApi + Send + Sync,
+    ScRpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
     slog::info!(logger, "Starting");
@@ -232,28 +230,26 @@ pub async fn start_chain_data_witnesser<
                     "Start instruction received but already started"
                 );
                 let logger = logger.clone();
-                let (mut chain_data_stream, new_to_block_sender) =
-                    chain_data_witnessing::chain_data_witnesser(
-                        from_block,
+
+                let (latest_block_stream, new_to_block_sender) = util::bounded(
+                    from_block,
+                    util::strictly_increasing(chain_data_witnessing::poll_latest_block_numbers(
+                        eth_rpc,
                         ETH_CHAIN_TRACKING_POLL_INTERVAL,
-                        eth_ws_rpc,
-                        eth_http_rpc,
                         &logger,
-                    )
-                    .await
-                    .expect("Failed to initialise chain data witnesser");
+                    )),
+                );
 
-                let state_chain_client = state_chain_client.clone();
-
-                let handle: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
-                    while let Some(tracked_data) = chain_data_stream.next().await {
-                        state_chain_client
+                let handle = tokio::spawn(latest_block_stream
+                    .then(move |block_number| get_tracked_data(eth_rpc, block_number))
+                    .forward(sink::unfold((state_chain_client.clone(), logger.clone()), |(sc_client, logger), tracked_data| async move {
+                        sc_client
                             .submit_signed_extrinsic(
                                 state_chain_runtime::Call::Witnesser(
                                     pallet_cf_witnesser::Call::witness {
                                         call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
                                             pallet_cf_chain_tracking::Call::update_chain_state {
-                                                state: tracked_data?,
+                                                state: tracked_data,
                                             },
                                         ))
                                     },
@@ -261,9 +257,8 @@ pub async fn start_chain_data_witnesser<
                                 &logger,
                             )
                             .await?;
-                    }
-                    Ok(())
-                });
+                            Ok((sc_client, logger))
+                    })));
 
                 to_block_sender_and_task_handle = Some((new_to_block_sender, handle));
             }

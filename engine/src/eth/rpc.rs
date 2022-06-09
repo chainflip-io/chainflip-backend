@@ -306,13 +306,13 @@ impl EthHttpRpcClient {
 }
 
 #[derive(Clone)]
-pub struct EthDualRpcClient {
-    ws_client: EthWsRpcClient,
-    http_client: EthHttpRpcClient,
+pub struct EthDualRpcClient<Ws, Http> {
+    ws_client: Ws,
+    http_client: Http,
 }
 
-impl EthDualRpcClient {
-    pub fn new(ws_client: EthWsRpcClient, http_client: EthHttpRpcClient) -> Self {
+impl<Ws: EthRpcApi, Http: EthRpcApi> EthDualRpcClient<Ws, Http> {
+    pub fn new(ws_client: Ws, http_client: Http) -> Self {
         Self {
             ws_client,
             http_client,
@@ -337,7 +337,7 @@ macro_rules! dual_call_rpc {
 }
 
 #[async_trait]
-impl EthRpcApi for EthDualRpcClient {
+impl<Ws: EthRpcApi, Http: EthRpcApi> EthRpcApi for EthDualRpcClient<Ws, Http> {
     async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
         dual_call_rpc!(self, estimate_gas, req, block)
     }
