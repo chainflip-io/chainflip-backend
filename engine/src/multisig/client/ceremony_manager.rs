@@ -73,50 +73,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     // ceremony should be aborted, reporting responsible parties
     // and cleaning up any relevant data
     pub fn check_timeouts(&mut self) {
-        // Copy the keys so we can iterate over them while at the same time
-        // removing the elements as we go
-        let signing_ids: Vec<_> = self.signing_states.keys().copied().collect();
-
-        for ceremony_id in &signing_ids {
-            let state = self
-                .signing_states
-                .get_mut(ceremony_id)
-                .expect("state must exist");
-            if let Some(result) = state.try_expiring() {
-                // NOTE: we only respond (and consume the ceremony id)
-                //  if we have received a ceremony request from
-                // SC (i.e. the ceremony is "authorized")
-                // Only consume the ceremony id if it has been authorized
-                if state.is_authorized() {
-                    process_ceremony_outcome(&mut self.signing_states, *ceremony_id, result);
-                } else {
-                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
-                    slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
-                    self.signing_states.remove(ceremony_id);
-                }
-            }
-        }
-
-        let keygen_ids: Vec<_> = self.keygen_states.keys().copied().collect();
-
-        for ceremony_id in &keygen_ids {
-            let state = self
-                .keygen_states
-                .get_mut(ceremony_id)
-                .expect("state must exist");
-            if let Some(result) = state.try_expiring() {
-                // NOTE: we only respond (and consume the ceremony id)
-                // if we have received a ceremony request from
-                // SC (i.e. the ceremony is "authorised")
-                if state.is_authorized() {
-                    process_ceremony_outcome(&mut self.keygen_states, *ceremony_id, result);
-                } else {
-                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
-                    slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
-                    self.keygen_states.remove(ceremony_id);
-                }
-            }
-        }
+        try_expiring_states(&mut self.signing_states, &self.logger);
+        try_expiring_states(&mut self.keygen_states, &self.logger);
     }
 
     fn map_ceremony_parties(
@@ -520,4 +478,34 @@ fn process_ceremony_outcome<CeremonyData, CeremonyResult, FailureReason>(
         .try_into_result_sender()
         .unwrap();
     let _result = result_sender.send(result);
+}
+
+// Iterate over the gives states and resolve any that are expired
+fn try_expiring_states<CeremonyData, CeremonyResult, FailureReason>(
+    states: &mut HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
+    logger: &slog::Logger,
+) where
+    CeremonyData: Display,
+    FailureReason: Display,
+{
+    // Copy the keys so we can iterate over them while at the same time
+    // removing the elements as we go
+    let signing_ids: Vec<_> = states.keys().copied().collect();
+
+    for ceremony_id in &signing_ids {
+        let state = states.get_mut(ceremony_id).expect("state must exist");
+        if let Some(result) = state.try_expiring() {
+            // NOTE: we only respond (and consume the ceremony id)
+            //  if we have received a ceremony request from
+            // SC (i.e. the ceremony is "authorized")
+            // Only consume the ceremony id if it has been authorized
+            if state.is_authorized() {
+                process_ceremony_outcome(states, *ceremony_id, result);
+            } else {
+                // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
+                slog::warn!(logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
+                states.remove(ceremony_id);
+            }
+        }
+    }
 }
