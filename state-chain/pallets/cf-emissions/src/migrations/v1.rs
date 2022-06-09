@@ -1,11 +1,12 @@
 use crate::*;
+//use frame_support::generate_storage_alias;
 
 use frame_support::{migration::get_storage_value, weights::RuntimeDbWeight};
 use sp_std::marker::PhantomData;
 
 // The value for the MintInterval
 // runtime constant in pallet version V0
-const MINT_INTERVAL_V0: u32 = 100;
+//const MINT_INTERVAL_V0: u32 = 100;
 const EMISSIONS_PALLET_NAME: &[u8] = b"Emissions";
 const VALIDATOR_EMISSION_INFLATION: &[u8] = b"ValidatorEmissionInflation";
 const VALIDATOR_EMISSION_PER_BLOCK: &[u8] = b"ValidatorEmissionPerBlock";
@@ -16,7 +17,8 @@ pub struct Migration<T>(PhantomData<T>);
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		MintInterval::<T>::put(T::BlockNumber::from(MINT_INTERVAL_V0));
+		//generate_storage_alias!(Emissions, MintInterval => Value<T::BlockNumber>);
+		//MintInterval::<T>::put(T::BlockNumber::from(MINT_INTERVAL_V0));
 
 		let current_authority_emission_inflation = get_storage_value::<BasisPoints>(
 			EMISSIONS_PALLET_NAME,
@@ -90,7 +92,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade() -> Result<(), &'static str> {
 		use frame_support::assert_ok;
 
-		assert_eq!(T::BlockNumber::from(100 as u32), MintInterval::<T>::get());
+		//assert_eq!(T::BlockNumber::from(100 as u32), MintInterval::<T>::get());
 		assert_ok!(BackupNodeEmissionInflation::<T>::try_get());
 		assert_ok!(CurrentAuthorityEmissionInflation::<T>::try_get());
 		assert_ok!(BackupNodeEmissionPerBlock::<T>::try_get());

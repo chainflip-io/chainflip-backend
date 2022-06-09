@@ -144,10 +144,10 @@ impl ReplayProtectionProvider<MockEthereum> for Test {
 	}
 }
 
-pub const MINT_INTERVAL: u64 = 100;
+pub const SUPPLY_UPDATE_INTERVAL: u64 = 100;
 
 parameter_types! {
-	pub const MintInterval: u64 = MINT_INTERVAL;
+	pub const SupplyUpdateInterval: u64 = SUPPLY_UPDATE_INTERVAL;
 }
 
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
@@ -240,6 +240,7 @@ impl pallet_cf_emissions::Config for Test {
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 // Build genesis storage according to the mock runtime.

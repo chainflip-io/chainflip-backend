@@ -7,7 +7,7 @@ use frame_benchmarking::benchmarks;
 use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
 
-const MINT_INTERVAL: u32 = 100;
+const SUPPLY_UPDATE_INTERVAL: u32 = 100;
 
 benchmarks! {
 	// Benchmark for the backup node emission inflation update extrinsic
@@ -26,20 +26,20 @@ benchmarks! {
 		Pallet::<T>::on_initialize(5u32.into());
 	}
 	verify {
-		assert_eq!(LastMintBlock::<T>::get(), 0u32.into());
+		assert_eq!(LastSupplyUpdateBlock::<T>::get(), 0u32.into());
 	}
 	// Benchmark for the rewards minted case in the on init hook
 	rewards_minted {
 	}: {
-		Pallet::<T>::on_initialize((MINT_INTERVAL).into());
+		Pallet::<T>::on_initialize((SUPPLY_UPDATE_INTERVAL).into());
 	}
 	verify {
-		assert_eq!(LastMintBlock::<T>::get(), MINT_INTERVAL.into());
+		assert_eq!(LastSupplyUpdateBlock::<T>::get(), SUPPLY_UPDATE_INTERVAL.into());
 	}
-	update_mint_interval {
+	update_supply_update_interval {
 	}: _(RawOrigin::Root, (50 as u32).into())
 	verify {
-		 let mint_interval = Pallet::<T>::mint_interval();
+		 let mint_interval = Pallet::<T>::supply_update_interval();
 		 assert_eq!(mint_interval, (50 as u32).into());
 	}
 

@@ -746,7 +746,7 @@ mod tests {
 					assert!(!Online::is_online(account), "node should have not sent a heartbeat");
 				}
 
-				assert_eq!(Emissions::last_mint_block(), 0, "no emissions");
+				assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
 
 				assert_eq!(Validator::ceremony_id_counter(), 0, "no key generation requests");
 
