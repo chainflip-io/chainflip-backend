@@ -1,3 +1,5 @@
+#![feature(int_abs_diff)]
+
 use chainflip_engine::{
     eth::{
         self,
@@ -17,6 +19,103 @@ use clap::Parser;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 
+#[global_allocator]
+static GLOBAL: TracingAllocator = TracingAllocator {};
+
+static MEMORY_USAGE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+lazy_static::lazy_static! {
+    static ref HISTORICAL_MEMORY_USAGE: std::sync::Mutex<(std::time::Instant, usize)> = std::sync::Mutex::new((std::time::Instant::now(), 0));
+}
+
+struct TracingAllocator {}
+
+impl TracingAllocator {
+    fn trace(prefix: &str, layout: std::alloc::Layout) {
+        thread_local! {
+            static TRACING_ACTIVE: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
+        }
+
+        if TRACING_ACTIVE.with(|f| *f.borrow()) {
+            TRACING_ACTIVE.with(|f| {
+                *f.borrow_mut() = false;
+            });
+
+            let (new_usage, old_usage) = {
+                let mut memory_usage = HISTORICAL_MEMORY_USAGE.lock().unwrap();
+                let old_usage = memory_usage.1;
+                let now = std::time::Instant::now();
+                let new_usage = MEMORY_USAGE.load(std::sync::atomic::Ordering::Relaxed);
+                if now.duration_since(memory_usage.0).as_millis() > 500 {
+                    *memory_usage = (now, MEMORY_USAGE.load(std::sync::atomic::Ordering::Relaxed));
+                }
+                (new_usage, old_usage)
+            };
+
+            let mut messages = vec![];
+
+            backtrace::trace(|frame| {
+                backtrace::resolve_frame(frame, |symbol| {
+                    if let Some(name) = symbol.name() {
+                        let name = format!("{}", name);
+                        if !name.starts_with("std::")
+                            && !name.starts_with("core::")
+                            && !name.starts_with("alloc::")
+                            && !name.starts_with("serde::")
+                            && !name.starts_with("serde_json::")
+                            && !name.starts_with("tokio::")
+                            && !name.starts_with("backtrace::")
+                            && !name.starts_with("<futures_util::")
+                        {
+                            if let Some(filename) = symbol.filename() {
+                                if !filename.starts_with("/rustc") {
+                                    if let Some(lineno) = symbol.lineno() {
+                                        messages.push(format!(
+                                            "{} at {}:{}",
+                                            name,
+                                            filename.display(),
+                                            lineno
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                true
+            });
+
+            println!(
+                "{}: {}/{} (OLD: {}): {}",
+                prefix,
+                layout.size(),
+                new_usage,
+                old_usage,
+                chainflip_engine::common::format_iterator(messages)
+            );
+
+            TRACING_ACTIVE.with(|f| {
+                *f.borrow_mut() = true;
+            });
+        }
+    }
+}
+
+unsafe impl std::alloc::GlobalAlloc for TracingAllocator {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        MEMORY_USAGE.fetch_add(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        Self::trace("traced alloc", layout);
+        std::alloc::System.alloc(layout)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        MEMORY_USAGE.fetch_sub(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        Self::trace("traced free", layout);
+        std::alloc::System.dealloc(ptr, layout)
+    }
+}
+
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
@@ -28,10 +127,7 @@ async fn main() {
         }
     };
 
-    let root_logger = logging::utils::new_json_logger_with_tag_filter(
-        settings.log.whitelist.clone(),
-        settings.log.blacklist.clone(),
-    );
+    let root_logger = logging::utils::new_discard_logger();
 
     slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 

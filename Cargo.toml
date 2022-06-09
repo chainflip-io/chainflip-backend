@@ -1,5 +1,6 @@
 [profile.release]
 panic = 'unwind'
+debug = true
 
 [workspace]
 members = [

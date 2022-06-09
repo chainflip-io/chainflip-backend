@@ -40,6 +40,8 @@ jsonrpc-core-client = {version = "18.0.0", default-features = false, features = 
 jsonrpc-http-server = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 
+backtrace = "0.3.65"
+
 websocket = "0.24"
 ethbloom = "0.12.1"
 dyn-clone = "1.0.4"

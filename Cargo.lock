@@ -947,6 +947,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backtrace",
  "bincode",
  "bs58",
  "cf-chains",
