@@ -111,7 +111,7 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Generate Terraform Variables File
+      - name: Generate Terraform Variables
         id: tfvars
         run: |
           runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
@@ -135,13 +135,13 @@ jobs:
         working-directory: ./benchmarks-runner
 
       - name: Terraform Validate
-        if: ${{ github.event.inputs.command }} != 'destroy'
+        if: ${{ github.event.inputs.command }} == apply
         id: validate
         run: terraform validate -no-color
         working-directory: ./benchmarks-runner
 
       - name: Terraform Plan
-        if: ${{ github.event.inputs.command }} != 'destroy'
+        if: ${{ github.event.inputs.command }} == apply
         id: plan
         run: >
           terraform plan
@@ -151,7 +151,7 @@ jobs:
 
       - name: Terraform Apply
         id: apply
-        if: ${{ github.event.inputs.command }} != 'destroy'
+        if: ${{ github.event.inputs.command }} == apply
         run: >
           terraform apply
           -no-color
@@ -160,7 +160,8 @@ jobs:
         working-directory: ./benchmarks-runner
 
       - name: Terraform Destroy
-        if: ${{ github.event.inputs.command }} == 'destroy'
+        id: destroy
+        if: ${{ github.event.inputs.command }} == destroy
         run: >
           terraform destroy
           -no-color
@@ -168,7 +169,8 @@ jobs:
         working-directory: ./benchmarks-runner
 
       - name: Terraform Workspace
-        if: ${{ github.event.inputs.command }} == 'destroy'
+        id: destroy-workspace
+        if: ${{ github.event.inputs.command }} == destroy
         run: |
           terraform workspace select default
           terraform workspace delete ${{ github.event.inputs.benchmark_machine_spec }}
