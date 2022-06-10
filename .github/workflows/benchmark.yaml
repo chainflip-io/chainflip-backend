@@ -20,9 +20,8 @@ on:
         description: "What machine Spec the benchmark will run on?"
         required: true
         type: choice
-        default: Linux, X64
         options:
-          - 4vCPUs-8GB, Linux, X64
+          - 4vCPUs-8GB
           - Linux, X64
 
 jobs:
@@ -31,7 +30,7 @@ jobs:
       CIRCLE_TOKEN: ${{ secrets.CIRCLE_TOKEN }}
       CIRCLE_CI_ARTIFACT_URL: ${{ github.event.inputs.circleCiArtifactUrl }}
 
-    runs-on: [self-hosted, ${{  github.event.inputs.benchmark_machine_spec }}]
+    runs-on: [self-hosted, "${{  github.event.inputs.benchmark_machine_spec }}"]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
