@@ -19,10 +19,10 @@ on:
       benchmark_machine_spec:
         description: "What machine Spec the benchmark will run on?"
         # required: true
-        default: null
+        default: ""
         type: choice
         options:
-          - null
+          - ""
           - 4vcpu-8gb
 
 jobs:
