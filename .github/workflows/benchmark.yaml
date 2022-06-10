@@ -3,16 +3,16 @@ on:
   workflow_dispatch:
     inputs:
       circleCiArtifactUrl:
-        description: 'Which CircleCI job should we get the binaries from?'
+        description: "Which CircleCI job should we get the binaries from?"
         required: true
         type: string
       steps:
-        description: 'How many steps should we run?'
+        description: "How many steps should we run?"
         required: false
         type: number
         default: 20
       repetitions:
-        description: 'How many times should we repeat each step?'
+        description: "How many times should we repeat each step?"
         required: false
         type: number
         default: 10
@@ -23,7 +23,7 @@ jobs:
       CIRCLE_TOKEN: ${{ secrets.CIRCLE_TOKEN }}
       CIRCLE_CI_ARTIFACT_URL: ${{ github.event.inputs.circleCiArtifactUrl }}
 
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -52,4 +52,3 @@ jobs:
           body: "This pull request was opened automatically. Close it if you think it was opened in error."
           branch: auto/benchmark-results
           delete-branch: true
-
