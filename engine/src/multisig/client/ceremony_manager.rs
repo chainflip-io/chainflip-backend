@@ -31,24 +31,21 @@ pub type CeremonyResultSender<T, R> =
 pub type CeremonyResultReceiver<T, R> =
     oneshot::Receiver<Result<T, (BTreeSet<AccountId>, CeremonyFailureReason<R>)>>;
 
-type SigningStateRunner<C> = StateRunner<
-    SigningData<<C as CryptoScheme>::Point>,
-    <C as CryptoScheme>::Signature,
-    SigningFailureReason,
->;
-type KeygenStateRunner<C> = StateRunner<
-    KeygenData<<C as CryptoScheme>::Point>,
-    KeygenResultInfo<<C as CryptoScheme>::Point>,
-    KeygenFailureReason,
->;
-
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
 pub struct CeremonyManager<C: CryptoScheme> {
     my_account_id: AccountId,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    signing_states: HashMap<CeremonyId, SigningStateRunner<C>>,
-    keygen_states: HashMap<CeremonyId, KeygenStateRunner<C>>,
+    signing_states: CeremonyStates<
+        SigningData<<C as CryptoScheme>::Point>,
+        <C as CryptoScheme>::Signature,
+        SigningFailureReason,
+    >,
+    keygen_states: CeremonyStates<
+        KeygenData<<C as CryptoScheme>::Point>,
+        KeygenResultInfo<<C as CryptoScheme>::Point>,
+        KeygenFailureReason,
+    >,
     allowing_high_pubkey: bool,
     logger: slog::Logger,
 }
@@ -62,8 +59,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         CeremonyManager {
             my_account_id,
             outgoing_p2p_message_sender,
-            signing_states: HashMap::new(),
-            keygen_states: HashMap::new(),
+            signing_states: CeremonyStates::new(),
+            keygen_states: CeremonyStates::new(),
             allowing_high_pubkey: false,
             logger: logger.clone(),
         }
@@ -73,8 +70,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     // ceremony should be aborted, reporting responsible parties
     // and cleaning up any relevant data
     pub fn check_timeouts(&mut self) {
-        try_expiring_states(&mut self.signing_states, &self.logger);
-        try_expiring_states(&mut self.keygen_states, &self.logger);
+        self.signing_states.try_expiring_all(&self.logger);
+        self.keygen_states.try_expiring_all(&self.logger);
     }
 
     fn map_ceremony_parties(
@@ -135,9 +132,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             signer_idxs.len().try_into().expect("too many participants");
 
         let logger_no_ceremony_id = &self.logger;
-        let state = self.keygen_states.entry(ceremony_id).or_insert_with(|| {
-            KeygenStateRunner::<C>::new_unauthorised(ceremony_id, logger_no_ceremony_id)
-        });
+        let state = self
+            .keygen_states
+            .get_state_or_new_unauthorized(ceremony_id, logger_no_ceremony_id);
 
         let initial_stage = {
             let context = generate_keygen_context(ceremony_id, participants);
@@ -164,7 +161,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             result_sender,
             num_of_participants,
         ) {
-            process_ceremony_outcome(&mut self.keygen_states, ceremony_id, result);
+            self.keygen_states
+                .process_ceremony_outcome(ceremony_id, result);
         };
     }
 
@@ -214,10 +212,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
         // We have the key and have received a request to sign
         let logger_no_ceremony_id = &self.logger;
-
-        let state = self.signing_states.entry(ceremony_id).or_insert_with(|| {
-            SigningStateRunner::<C>::new_unauthorised(ceremony_id, logger_no_ceremony_id)
-        });
+        let state = self
+            .signing_states
+            .get_state_or_new_unauthorized(ceremony_id, logger_no_ceremony_id);
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -249,7 +246,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             result_sender,
             signers_len,
         ) {
-            process_ceremony_outcome(&mut self.signing_states, ceremony_id, result);
+            self.signing_states
+                .process_ceremony_outcome(ceremony_id, result);
         };
     }
 
@@ -267,7 +265,17 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
-                self.process_keygen_data(sender_id, ceremony_id, data);
+                slog::debug!(self.logger, "Received keygen data {}", &data; CEREMONY_ID_KEY => ceremony_id);
+                if let Err(reason) =
+                    self.keygen_states
+                        .process_data(sender_id, ceremony_id, data, &self.logger)
+                {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring keygen data: {}", reason;
+                        CEREMONY_ID_KEY => format!("{}",ceremony_id)
+                    );
+                }
             }
             MultisigMessage {
                 ceremony_id,
@@ -277,61 +285,17 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
-                self.process_signing_data(sender_id, ceremony_id, data);
-            }
-        }
-    }
-
-    /// Process data for a signing ceremony arriving from a peer
-    pub fn process_signing_data(
-        &mut self,
-        sender_id: AccountId,
-        ceremony_id: CeremonyId,
-        data: SigningData<C::Point>,
-    ) {
-        slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
-
-        // Check if we have state for this data and delegate message to that state
-        // Delay message otherwise
-        if let Ok(state) =
-            check_data_and_get_state(&mut self.signing_states, &data, ceremony_id, &self.logger)
-                .map_err(|e| {
+                slog::debug!(self.logger, "Received signing data {}", &data; CEREMONY_ID_KEY => ceremony_id);
+                if let Err(reason) =
+                    self.signing_states
+                        .process_data(sender_id, ceremony_id, data, &self.logger)
+                {
                     slog::debug!(
                         self.logger,
-                        "Ignoring signing data: {}", e;
+                        "Ignoring signing data: {}", reason;
                         CEREMONY_ID_KEY => format!("{}",ceremony_id)
                     );
-                    e
-                })
-        {
-            if let Some(result) = state.process_or_delay_message(sender_id, data) {
-                process_ceremony_outcome(&mut self.signing_states, ceremony_id, result);
-            }
-        }
-    }
-
-    /// Process data for a keygen ceremony arriving from a peer
-    pub fn process_keygen_data(
-        &mut self,
-        sender_id: AccountId,
-        ceremony_id: CeremonyId,
-        data: KeygenData<C::Point>,
-    ) {
-        slog::debug!(self.logger, "Received keygen data {}", &data; CEREMONY_ID_KEY => ceremony_id);
-
-        if let Ok(state) =
-            check_data_and_get_state(&mut self.keygen_states, &data, ceremony_id, &self.logger)
-                .map_err(|e| {
-                    slog::debug!(
-                        self.logger,
-                        "Ignoring keygen data: {}", e;
-                        CEREMONY_ID_KEY => format!("{}",ceremony_id)
-                    );
-                    e
-                })
-        {
-            if let Some(result) = state.process_or_delay_message(sender_id, data) {
-                process_ceremony_outcome(&mut self.keygen_states, ceremony_id, result);
+                }
             }
         }
     }
@@ -340,19 +304,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 #[cfg(test)]
 impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn expire_all(&mut self) {
-        for state in self.signing_states.values_mut() {
-            state.set_expiry_time(std::time::Instant::now());
-        }
-
-        for state in self.keygen_states.values_mut() {
-            state.set_expiry_time(std::time::Instant::now());
-        }
+        self.signing_states.expire_all();
+        self.keygen_states.expire_all();
     }
 
     pub fn get_signing_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
-        self.signing_states
-            .get(&ceremony_id)
-            .and_then(|s| s.get_stage())
+        self.signing_states.get_stage_for(&ceremony_id)
     }
 
     pub fn get_signing_states_len(&self) -> usize {
@@ -360,13 +317,34 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     }
 
     pub fn get_keygen_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
-        self.keygen_states
-            .get(&ceremony_id)
-            .and_then(|s| s.get_stage())
+        self.keygen_states.get_stage_for(&ceremony_id)
     }
 
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
+    }
+
+    // TODO: remove these functions once the ceremony manager unit tests are refactored
+    pub fn process_keygen_data(
+        &mut self,
+        sender_id: AccountId,
+        ceremony_id: CeremonyId,
+        data: KeygenData<<C as CryptoScheme>::Point>,
+    ) {
+        let _res = self
+            .keygen_states
+            .process_data(sender_id, ceremony_id, data, &self.logger);
+    }
+
+    pub fn process_signing_data(
+        &mut self,
+        sender_id: AccountId,
+        ceremony_id: CeremonyId,
+        data: SigningData<<C as CryptoScheme>::Point>,
+    ) {
+        let _res = self
+            .signing_states
+            .process_data(sender_id, ceremony_id, data, &self.logger);
     }
 
     /// This should not be used in production as it could
@@ -379,16 +357,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
     pub fn get_delayed_keygen_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
         self.keygen_states
-            .get(ceremony_id)
-            .unwrap()
-            .get_delayed_messages_len()
+            .get_delayed_signing_messages_len(ceremony_id)
     }
 
     pub fn get_delayed_signing_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
         self.signing_states
-            .get(ceremony_id)
-            .unwrap()
-            .get_delayed_messages_len()
+            .get_delayed_signing_messages_len(ceremony_id)
     }
 }
 
@@ -416,96 +390,147 @@ pub fn generate_keygen_context(
     HashContext(*hasher.finalize().as_ref())
 }
 
-fn check_data_and_get_state<'a, CeremonyData, CeremonyResult, FailureReason, StageData>(
-    states: &'a mut HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
-    data: &StageData,
-    ceremony_id: CeremonyId,
-    logger: &slog::Logger,
-) -> Result<&'a mut StateRunner<CeremonyData, CeremonyResult, FailureReason>, anyhow::Error>
+struct CeremonyStates<CeremonyData, CeremonyResult, FailureReason> {
+    inner: HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
+}
+
+impl<CeremonyData, CeremonyResult, FailureReason>
+    CeremonyStates<CeremonyData, CeremonyResult, FailureReason>
 where
     CeremonyData: Display,
     FailureReason: Display,
-    StageData: PreProcessStageDataCheck,
 {
-    use std::collections::hash_map::Entry;
-
-    // Only stage 1 messages can create unauthorised ceremonies
-    let state = if data.is_first_stage() {
-        states
-            .entry(ceremony_id)
-            .or_insert_with(|| StateRunner::new_unauthorised(ceremony_id, logger))
-    } else {
-        match states.entry(ceremony_id) {
-            Entry::Occupied(entry) => {
-                let state = entry.into_mut();
-                if state.is_authorized() {
-                    // Only first stage messages should be processed (delayed) if we're not authorized
-                    state
-                } else {
-                    return Err(anyhow::Error::msg(
-                        "non-initial stage data for unauthorised ceremony",
-                    ));
-                }
-            }
-            Entry::Vacant(_) => {
-                return Err(anyhow::Error::msg(
-                    "non-initial stage data for non-existent ceremony",
-                ));
-            }
+    fn new() -> Self {
+        Self {
+            inner: HashMap::new(),
         }
-    };
-
-    // Check that the number of elements in the data is what we expect
-    if !data.check_data_size(state.get_participant_count()) {
-        return Err(anyhow::Error::msg("incorrect number of elements"));
     }
 
-    Ok(state)
-}
+    /// Process ceremony data arriving from a peer,
+    /// returns an error if the data is rejected before being processed
+    fn process_data(
+        &mut self,
+        sender_id: AccountId,
+        ceremony_id: CeremonyId,
+        data: CeremonyData,
+        logger: &slog::Logger,
+    ) -> Result<(), &'static str>
+    where
+        CeremonyData: Display,
+        FailureReason: Display,
+        CeremonyData: PreProcessStageDataCheck,
+    {
+        use std::collections::hash_map::Entry;
 
-// Send the ceremony outcome through the result channel
-fn process_ceremony_outcome<CeremonyData, CeremonyResult, FailureReason>(
-    states: &mut HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
-    ceremony_id: CeremonyId,
-    result: Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>,
-) where
-    CeremonyData: Display,
-    FailureReason: Display,
-{
-    let result_sender = states
-        .remove(&ceremony_id)
-        .unwrap()
-        .try_into_result_sender()
-        .unwrap();
-    let _result = result_sender.send(result);
-}
+        // Only stage 1 messages can create unauthorised ceremonies
+        let state = if data.is_first_stage() {
+            self.get_state_or_new_unauthorized(ceremony_id, logger)
+        } else {
+            match self.inner.entry(ceremony_id) {
+                Entry::Occupied(entry) => {
+                    let state = entry.into_mut();
+                    if state.is_authorized() {
+                        // Only first stage messages should be processed (delayed) if we're not authorized
+                        state
+                    } else {
+                        return Err("non-initial stage data for unauthorised ceremony");
+                    }
+                }
+                Entry::Vacant(_) => {
+                    return Err("non-initial stage data for non-existent ceremony");
+                }
+            }
+        };
 
-// Iterate over the gives states and resolve any that are expired
-fn try_expiring_states<CeremonyData, CeremonyResult, FailureReason>(
-    states: &mut HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
-    logger: &slog::Logger,
-) where
-    CeremonyData: Display,
-    FailureReason: Display,
-{
-    // Copy the keys so we can iterate over them while at the same time
-    // removing the elements as we go
-    let signing_ids: Vec<_> = states.keys().copied().collect();
+        // Check that the number of elements in the data is what we expect
+        if !data.check_data_size(state.get_participant_count()) {
+            return Err("incorrect number of elements");
+        }
 
-    for ceremony_id in &signing_ids {
-        let state = states.get_mut(ceremony_id).expect("state must exist");
-        if let Some(result) = state.try_expiring() {
-            // NOTE: we only respond (and consume the ceremony id)
-            //  if we have received a ceremony request from
-            // SC (i.e. the ceremony is "authorized")
-            // Only consume the ceremony id if it has been authorized
-            if state.is_authorized() {
-                process_ceremony_outcome(states, *ceremony_id, result);
-            } else {
-                // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
-                slog::warn!(logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
-                states.remove(ceremony_id);
+        if let Some(result) = state.process_or_delay_message(sender_id, data) {
+            self.process_ceremony_outcome(ceremony_id, result);
+        }
+
+        Ok(())
+    }
+
+    /// Send the ceremony outcome through the result channel
+    fn process_ceremony_outcome(
+        &mut self,
+        ceremony_id: CeremonyId,
+        result: Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>,
+    ) where
+        CeremonyData: Display,
+        FailureReason: Display,
+    {
+        let result_sender = self
+            .inner
+            .remove(&ceremony_id)
+            .unwrap()
+            .try_into_result_sender()
+            .unwrap();
+        let _result = result_sender.send(result);
+    }
+
+    /// Iterate over all of the states and resolve any that are expired
+    fn try_expiring_all(&mut self, logger: &slog::Logger)
+    where
+        CeremonyData: Display,
+        FailureReason: Display,
+    {
+        // Copy the keys so we can iterate over them while at the same time
+        // removing the elements as we go
+        let ceremony_ids: Vec<_> = self.inner.keys().copied().collect();
+
+        for ceremony_id in &ceremony_ids {
+            let state = self.inner.get_mut(ceremony_id).expect("state must exist");
+            if let Some(result) = state.try_expiring() {
+                // NOTE: we only respond if we have received a ceremony request from the SC
+                // (i.e. the ceremony is "authorized")
+                if state.is_authorized() {
+                    self.process_ceremony_outcome(*ceremony_id, result);
+                } else {
+                    slog::warn!(logger, "Removing expired unauthorised ceremony"; CEREMONY_ID_KEY => ceremony_id);
+                    self.inner.remove(ceremony_id);
+                }
             }
         }
+    }
+
+    /// Returns the state for the given ceremony id if it exists,
+    /// otherwise creates a new unauthorized one
+    fn get_state_or_new_unauthorized(
+        &mut self,
+        ceremony_id: CeremonyId,
+        logger: &slog::Logger,
+    ) -> &mut StateRunner<CeremonyData, CeremonyResult, FailureReason> {
+        self.inner
+            .entry(ceremony_id)
+            .or_insert_with(|| StateRunner::new_unauthorised(ceremony_id, logger))
+    }
+
+    #[cfg(test)]
+    fn expire_all(&mut self) {
+        for state in self.inner.values_mut() {
+            state.set_expiry_time(std::time::Instant::now());
+        }
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[cfg(test)]
+    pub fn get_stage_for(&self, ceremony_id: &CeremonyId) -> Option<String> {
+        self.inner.get(&ceremony_id).and_then(|s| s.get_stage())
+    }
+
+    #[cfg(test)]
+    pub fn get_delayed_signing_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
+        self.inner
+            .get(ceremony_id)
+            .unwrap()
+            .get_delayed_messages_len()
     }
 }
