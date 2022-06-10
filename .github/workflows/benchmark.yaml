@@ -86,6 +86,10 @@ on:
           - apply
           - destroy
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy-benchmarks-runner:
     runs-on: ubuntu-latest
