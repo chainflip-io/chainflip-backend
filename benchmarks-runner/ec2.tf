@@ -3,9 +3,9 @@ module "ec2_instance" {
   version = "~> 3.0"
 
   name                        = "benchmark-github-runner"
-  ami                         = "ami-09d56f8956ab235b3"
+  ami                         = "ami-015c25ad8763b2f11"
   instance_type               = lookup(local.instace_types, "${var.instance_spec}")
-  key_name                    = "workloads_global_key_us-east-1"
+  key_name                    = "workloads_global_key_eu-central-1"
   monitoring                  = true
   vpc_security_group_ids      = [aws_security_group.chartmuseum-ec2.id]
   subnet_id                   = data.aws_subnets.default_subnets.ids[0]

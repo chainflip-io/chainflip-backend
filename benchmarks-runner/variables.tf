@@ -1,7 +1,7 @@
 variable "region" {
   type        = string
   description = "The AWS region to deploy to"
-  default     = "us-east-1"
+  default     = "eu-central-1"
 }
 variable "tags" {
   type        = map(string)
