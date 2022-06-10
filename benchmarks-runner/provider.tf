@@ -1,6 +1,10 @@
 provider "aws" {
   region = var.region
 }
+provider "aws" {
+  region = "eu-central-1"
+  alias = "eu-central-1"
+}
 
 terraform {
   required_providers {
