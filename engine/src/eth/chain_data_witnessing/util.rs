@@ -18,23 +18,20 @@ pub fn tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
 /// 2. The next item to be yielded is less than or equal to the `end` item.
 pub fn bounded<'a, Item: 'a + Ord + Send + Sync>(
     start: Item,
+    end_receiver: watch::Receiver<Option<Item>>,
     stream: impl Stream<Item = Item> + Send + 'a,
-) -> (impl Stream<Item = Item>, watch::Sender<Option<Item>>) {
-    let (sender, receiver) = watch::channel::<Option<Item>>(None);
-    (
-        stream
-            .skip_while(move |item| future::ready(*item < start))
-            .take_while(move |item| {
-                future::ready(
-                    receiver
-                        .borrow()
-                        .as_ref()
-                        .map(|end| item <= end)
-                        .unwrap_or(true),
-                )
-            }),
-        sender,
-    )
+) -> impl Stream<Item = Item> + 'a {
+    stream
+        .skip_while(move |item| future::ready(*item < start))
+        .take_while(move |item| {
+            future::ready(
+                end_receiver
+                    .borrow()
+                    .as_ref()
+                    .map(|end| item <= end)
+                    .unwrap_or(true),
+            )
+        })
 }
 
 /// Takes a stream of items and ensures that they are strictly increasing according to some ordering, meaning that
@@ -90,10 +87,14 @@ mod test {
         const START: u64 = 10;
         const END: u64 = 20;
 
-        let (stream, end_block_sender) = bounded(START, stream::iter(0..));
+        let (end_sender, end_receiver) = watch::channel(None);
 
-        let handle = tokio::spawn(async move { stream.collect::<Vec<_>>().await });
-        end_block_sender.send(Some(END)).unwrap();
+        let handle = tokio::spawn(async move {
+            bounded(START, end_receiver, stream::iter(0..))
+                .collect::<Vec<_>>()
+                .await
+        });
+        end_sender.send(Some(END)).unwrap();
 
         let result = handle.await.unwrap();
 

@@ -5,7 +5,7 @@ use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, sync::Arc};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{broadcast, mpsc::UnboundedSender};
 
 use crate::{
     eth::{rpc::EthRpcApi, EthBroadcaster, ObserveInstruction},
@@ -107,9 +107,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         AccountPeerMappingChange,
     )>,
 
-    // TODO: we should be able to factor this out into a single ETH window sender
-    sm_instruction_sender: UnboundedSender<ObserveInstruction>,
-    km_instruction_sender: UnboundedSender<ObserveInstruction>,
+    witnessing_instruction_sender: broadcast::Sender<ObserveInstruction>,
     initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
@@ -134,10 +132,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .expect("Should be able to submit first heartbeat");
 
     let send_instruction = |observe_instruction: ObserveInstruction| {
-        km_instruction_sender
+        witnessing_instruction_sender
             .send(observe_instruction.clone())
             .unwrap();
-        sm_instruction_sender.send(observe_instruction).unwrap();
     };
 
     macro_rules! start_epoch_observation {

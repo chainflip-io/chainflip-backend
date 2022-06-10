@@ -16,7 +16,7 @@ use web3::types::{BlockNumber, U64};
 /// Returns a stream of latest eth block numbers by polling at regular intervals.
 ///
 /// Uses polling.
-pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync>(
+pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync + 'a>(
     eth_rpc: &'a EthRpc,
     polling_interval: Duration,
     logger: &slog::Logger,
@@ -25,7 +25,7 @@ pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync>(
 
     util::tick_stream(polling_interval)
         // Get the latest block number.
-        .then(move |_| async move { eth_rpc.block_number().await })
+        .then(move |_| eth_rpc.block_number())
         // Warn on error.
         .filter_map(move |rpc_result| {
             future::ready(match rpc_result {
@@ -38,7 +38,7 @@ pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync>(
         })
 }
 
-pub async fn get_tracked_data<EthRpcClient: EthRpcApi>(
+pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
     rpc: &EthRpcClient,
     block_number: u64,
 ) -> anyhow::Result<TrackedData<Ethereum>> {
@@ -128,7 +128,6 @@ mod tests {
 
         assert_eq!(
             poll_latest_block_numbers(&rpc, Duration::from_millis(10), &logger)
-                .take(BLOCK_COUNT as usize)
                 .collect::<Vec<_>>()
                 .await,
             (0..BLOCK_COUNT).collect::<Vec<_>>()
@@ -136,7 +135,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_poll_latest_block_numbers_with_errors() {
+    async fn test_poll_latest_block_numbers_skips_errors() {
         use crate::eth::rpc::MockEthRpcApi;
 
         const BLOCK_COUNT: u64 = 10;
@@ -151,19 +150,16 @@ mod tests {
             .returning(move || {
                 block_numbers
                     .next()
-                    .and_then(
-                        |n: web3::types::U64| if n.as_usize() % 3 == 0 { None } else { Some(n) },
-                    )
+                    .and_then(|n: web3::types::U64| if n.as_usize() < 5 { None } else { Some(n) })
                     .ok_or_else(|| anyhow::anyhow!("No more block numbers"))
             });
         // ** Rpc Api Assumptions **
 
         assert_eq!(
             poll_latest_block_numbers(&rpc, Duration::from_millis(10), &logger)
-                .take(BLOCK_COUNT as usize)
                 .collect::<Vec<_>>()
                 .await,
-            (0..BLOCK_COUNT).filter(|n| n % 3 != 0).collect::<Vec<_>>()
+            (0..BLOCK_COUNT).filter(|n| *n >= 5).collect::<Vec<_>>()
         );
     }
 }

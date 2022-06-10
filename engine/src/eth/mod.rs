@@ -23,7 +23,7 @@ use crate::{
     },
     eth::{
         http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
-        rpc::EthWsRpcApi,
+        rpc::{EthDualRpcClient, EthWsRpcApi},
         ws_safe_stream::safe_ws_head_stream,
     },
     logging::{COMPONENT_KEY, ETH_HTTP_STREAM_YIELDED, ETH_STREAM_BEHIND, ETH_WS_STREAM_YIELDED},
@@ -32,7 +32,7 @@ use crate::{
 };
 use chain_data_witnessing::*;
 use ethbloom::{Bloom, Input};
-use futures::{sink, stream, FutureExt, StreamExt};
+use futures::{stream, FutureExt, StreamExt};
 use slog::o;
 use sp_core::{H160, U256};
 use std::{
@@ -45,7 +45,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::{mpsc::UnboundedReceiver, watch},
+    sync::{broadcast, watch},
     task::JoinHandle,
 };
 use web3::{
@@ -100,7 +100,7 @@ impl SignatureAndEvent {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ObserveInstruction {
     Start(
         <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
@@ -114,7 +114,7 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     contract_observer: ContractObserver,
     eth_ws_rpc: &EthWsRpcClient,
     eth_http_rpc: &EthHttpRpcClient,
-    mut instruction_receiver: UnboundedReceiver<ObserveInstruction>,
+    mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) where
@@ -131,7 +131,12 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
 
     let contract_observer = Arc::new(contract_observer);
 
-    while let Some(observe_instruction) = instruction_receiver.recv().await {
+    while let Some(observe_instruction) = instruction_receiver
+        .recv()
+        .await
+        .map_err(|e| slog::error!(logger, "Witnessing instruction receiver failed: {:?}", e))
+        .ok()
+    {
         match observe_instruction {
             ObserveInstruction::End(to_block) => {
                 let (handle, end_at_block) = option_handle_end_block
@@ -201,76 +206,139 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     }
 }
 
-#[allow(unused_assignments)] // The compiler thinks to_block_sender_and_task_handle is never read.
 pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
-    eth_rpc: &'static EthRpcClient,
+    eth_rpc: &EthRpcClient,
     state_chain_client: Arc<StateChainClient<ScRpcClient>>,
-    mut instruction_receiver: UnboundedReceiver<ObserveInstruction>,
-    logger: &'static slog::Logger,
+    mut instruction_receiver: watch::Receiver<Option<ObserveInstruction>>,
+    logger: &slog::Logger,
 ) where
-    EthRpcClient: EthRpcApi + Send + Sync,
-    ScRpcClient: StateChainRpcApi + Send + Sync + 'static,
+    EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
+    ScRpcClient: 'static + StateChainRpcApi + Send + Sync,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
     slog::info!(logger, "Starting");
 
-    while let Some(observe_instruction) = instruction_receiver.recv().await {
-        let mut to_block_sender_and_task_handle: Option<(
-            watch::Sender<Option<u64>>,
-            JoinHandle<anyhow::Result<()>>,
-        )> = None;
+    assert!(
+        !instruction_receiver.has_changed().unwrap() && instruction_receiver.borrow().is_none(),
+        "Instruction receiver should be fresh."
+    );
 
-        match observe_instruction {
-            // TODO try passing this directly to the tokio task.
-            ObserveInstruction::End(end_block) => {
-                let (to_block_sender, handle) = to_block_sender_and_task_handle
-                    .take()
-                    .expect("End instruction cannot be received before start.");
+    let (tracked_data_sender, mut tracked_data_receiver) = tokio::sync::mpsc::channel(10);
+    let (to_block_sender, _) = watch::channel(None);
 
-                to_block_sender.send(Some(end_block)).unwrap();
-                let task_result = handle.await.unwrap();
-                task_result.unwrap();
-            }
-            ObserveInstruction::Start(from_block, _epoch) => {
-                assert!(
-                    to_block_sender_and_task_handle.is_none(),
-                    "Start instruction received but already started"
-                );
-                let logger = logger.clone();
+    let state_chain_task_handle = tokio::spawn({
+        let logger = logger.clone();
 
-                let (latest_block_stream, new_to_block_sender) = util::bounded(
-                    from_block,
-                    util::strictly_increasing(chain_data_witnessing::poll_latest_block_numbers(
-                        eth_rpc,
-                        ETH_CHAIN_TRACKING_POLL_INTERVAL,
+        async move {
+            while let Some(tracked_data) = tracked_data_receiver.recv().await {
+                match state_chain_client
+                    .submit_signed_extrinsic(
+                        state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
+                            call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                pallet_cf_chain_tracking::Call::update_chain_state {
+                                    state: tracked_data,
+                                },
+                            )),
+                        }),
                         &logger,
-                    )),
-                );
-
-                let handle = tokio::spawn(latest_block_stream
-                    .then(move |block_number| get_tracked_data(eth_rpc, block_number))
-                    .forward(sink::unfold((state_chain_client.clone(), logger.clone()), |(sc_client, logger), tracked_data| async move {
-                        sc_client
-                            .submit_signed_extrinsic(
-                                state_chain_runtime::Call::Witnesser(
-                                    pallet_cf_witnesser::Call::witness {
-                                        call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
-                                            pallet_cf_chain_tracking::Call::update_chain_state {
-                                                state: tracked_data,
-                                            },
-                                        ))
-                                    },
-                                ),
-                                &logger,
-                            )
-                            .await?;
-                            Ok((sc_client, logger))
-                    })));
-
-                to_block_sender_and_task_handle = Some((new_to_block_sender, handle));
+                    )
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(e) => {
+                        slog::error!(logger, "Failed to submit signed extrinsic: {:?}", e);
+                        break;
+                    }
+                }
             }
         }
-    }
+    });
+
+    let instruction_task_handle = tokio::spawn({
+        let eth_rpc = eth_rpc.clone();
+        let logger = logger.clone();
+        let mut witnesser_task_handle: Option<_> = None;
+
+        async move {
+            while instruction_receiver.changed().await.is_ok() {
+                let instruction = instruction_receiver
+                    .borrow()
+                    .as_ref()
+                    .expect("Expected Some instruction, got None.")
+                    .to_owned();
+
+                match instruction {
+                    ObserveInstruction::Start(start_block, _) => {
+                        slog::info!(logger, "Start observing from ETH block: {}", start_block);
+                        assert!(
+                            witnesser_task_handle.is_none(),
+                            "Duplicate start event received."
+                        );
+
+                        let _ = witnesser_task_handle.insert(tokio::spawn({
+                            let eth_rpc = eth_rpc.clone();
+                            let eth_rpc_1 = eth_rpc.clone();
+                            let logger = logger.clone();
+                            let to_block_receiver = to_block_sender.subscribe();
+                            let tracked_data_sender = tracked_data_sender.clone();
+
+                            async move {
+                                util::bounded(
+                                    start_block,
+                                    to_block_receiver,
+                                    util::strictly_increasing(
+                                        chain_data_witnessing::poll_latest_block_numbers(
+                                            &eth_rpc,
+                                            ETH_CHAIN_TRACKING_POLL_INTERVAL,
+                                            &logger,
+                                        ),
+                                    ),
+                                )
+                                .for_each(move |block_number| {
+                                    let eth_rpc = eth_rpc_1.clone();
+                                    let logger = logger.clone();
+                                    let tracked_data_sender = tracked_data_sender.clone();
+
+                                    async move {
+                                        match get_tracked_data(&eth_rpc, block_number).await {
+                                            Ok(tracked_data) => tracked_data_sender
+                                                .send(tracked_data)
+                                                .await
+                                                .unwrap(),
+                                            Err(e) => {
+                                                slog::error!(
+                                                    logger,
+                                                    "Failed to get tracked data: {:?}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                })
+                                .await
+                            }
+                        }));
+                    }
+                    ObserveInstruction::End(end_block) => {
+                        slog::info!(logger, "End observing at ETH block: {}", end_block);
+                        assert!(
+                            witnesser_task_handle.is_some(),
+                            "Duplicate end event received, or end received before start."
+                        );
+
+                        to_block_sender.send(Some(end_block)).unwrap();
+                        witnesser_task_handle
+                            .take()
+                            .expect("is_some asserted above")
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        }
+    });
+
+    tokio::try_join!(instruction_task_handle, state_chain_task_handle).unwrap();
 }
 
 impl TryFrom<Block<H256>> for EthNumberBloom {
@@ -881,14 +949,16 @@ pub trait EthObserver {
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-    async fn handle_event<RpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
+        eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
-        RpcClient: 'static + StateChainRpcApi + Sync + Send;
+        RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        EthRpcClient: EthRpcApi + Sync + Send;
 
     fn get_contract_address(&self) -> H160;
 }
@@ -969,17 +1039,16 @@ mod merged_stream_tests {
     use crate::logging::test_utils::new_test_logger_with_tag_cache;
     use crate::logging::ETH_WS_STREAM_YIELDED;
 
+    use super::key_manager::ChainflipKey;
     use super::key_manager::KeyManagerEvent;
-    use super::{key_manager::ChainflipKey, rpc::mocks::MockEthHttpRpcClient};
 
     use super::key_manager::KeyManager;
 
     use super::*;
 
     // Arbitrariily chosen one of the EthRpc's for these tests
-    fn test_km_contract() -> KeyManager<MockEthHttpRpcClient> {
-        let mock_eth_http_rpc_client = MockEthHttpRpcClient::new();
-        KeyManager::new(H160::default(), mock_eth_http_rpc_client).unwrap()
+    fn test_km_contract() -> KeyManager {
+        KeyManager::new(H160::default()).unwrap()
     }
 
     fn key_change(block_number: u64, log_index: u8) -> EventWithCommon<KeyManagerEvent> {
