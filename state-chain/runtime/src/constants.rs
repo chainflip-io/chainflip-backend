@@ -30,7 +30,9 @@ pub mod common {
 	/// Maximum duration a ceremony stage can last
 	pub const MAX_STAGE_DURATION_SECONDS: u32 = 300;
 
-	const TIMEOUT_BUFFER_SECONDS: u32 = 10;
+	// Allow for the CFE to receive the finalised block (~3.5*6) for initiation, and some extra time
+	// (~9) for networking / other latency
+	const TIMEOUT_BUFFER_SECONDS: u32 = 30;
 
 	/// The number of blocks to wait for a threshold signature ceremony to complete.
 	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 =
