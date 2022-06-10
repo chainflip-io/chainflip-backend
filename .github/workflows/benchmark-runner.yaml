@@ -90,6 +90,12 @@ jobs:
           "tfplan"
         working-directory: ./benchmarks-runner
 
+      - name: Get EC2 Instance ID
+        if: github.event.inputs.command == 'destroy'
+        run: |
+          echo "INSTANCE_ID=$(echo $(terraform output -raw ec2_id))" >> $GITHUB_ENV
+        working-directory: ./benchmarks-runner
+
       - name: Terraform Destroy
         id: destroy
         if: github.event.inputs.command == 'destroy'
@@ -105,4 +111,11 @@ jobs:
         run: |
           terraform workspace select default
           terraform workspace delete ${{ github.event.inputs.benchmark_machine_spec }}
+        working-directory: ./benchmarks-runner
+
+      - name: Remove Runner from GitHub
+        if: github.event.inputs.command == 'destroy'
+        run: |
+          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r '.runners[] | select(.name=="$INSTANCE_ID").id')
+          curl -X DELETE -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
         working-directory: ./benchmarks-runner
