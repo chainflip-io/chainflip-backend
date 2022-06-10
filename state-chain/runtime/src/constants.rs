@@ -15,8 +15,6 @@ pub mod common {
 	// Number of accrual points
 	pub const ACCRUAL_POINTS: i32 = 1;
 
-	// ======= Keygen and signing =======
-
 	/// This determines the average expected block time that we are targeting.
 	/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
 	/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
@@ -27,6 +25,8 @@ pub mod common {
 
 	const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
+	// ======= Keygen and signing =======
+
 	/// Maximum duration a ceremony stage can last
 	pub const MAX_STAGE_DURATION_SECONDS: u32 = 300;
 
@@ -34,13 +34,19 @@ pub mod common {
 	// (~9) for networking / other latency
 	const TIMEOUT_BUFFER_SECONDS: u32 = 30;
 
+	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
+
+	const NUM_KEYGEN_STAGES: u32 = 9;
+
 	/// The number of blocks to wait for a threshold signature ceremony to complete.
 	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		((MAX_STAGE_DURATION_SECONDS * 4) + TIMEOUT_BUFFER_SECONDS) / SECONDS_PER_BLOCK as u32;
+		((MAX_STAGE_DURATION_SECONDS * NUM_THRESHOLD_SIGNING_STAGES) + TIMEOUT_BUFFER_SECONDS) /
+			SECONDS_PER_BLOCK as u32;
 
 	/// The maximum number of blocks to wait for a keygen to complete.
 	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		((MAX_STAGE_DURATION_SECONDS * 9) + TIMEOUT_BUFFER_SECONDS) / SECONDS_PER_BLOCK as u32;
+		((MAX_STAGE_DURATION_SECONDS * NUM_KEYGEN_STAGES) + TIMEOUT_BUFFER_SECONDS) /
+			SECONDS_PER_BLOCK as u32;
 
 	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
 	pub const SECS_IN_AN_HOUR: u64 = 3600;
