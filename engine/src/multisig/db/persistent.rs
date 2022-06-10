@@ -322,15 +322,9 @@ fn migrate_db_to_latest<P: ECPoint>(
             );
 
             // Future migrations can be added here
-            if version == 0 {
-                // We start the schema version at 1, so 0 is always invalid.
-                Err(anyhow::Error::msg(
-                    "Invalid migration from schema version 0 on existing database".to_string(),
-                ))
-            } else {
-                // No migrations exist yet for non-test builds
-                panic!("Invalid migration from schema version {}", version);
-            }
+
+            // No migrations exist yet so just panic
+            panic!("Invalid migration from schema version {}", version);
         }
     }
 }
@@ -514,57 +508,22 @@ mod tests {
     }
 
     #[test]
-    fn should_error_if_at_schema_version_0() {
+    #[should_panic]
+    fn should_panic_when_trying_to_migrate() {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        // Create a db that is at schema version 0
+        assert!(
+            LATEST_SCHEMA_VERSION > 0,
+            "This test only works if LATEST_SCHEMA_VERSION > 0"
+        );
+
+        // Create a db that is at schema version 0,
         {
             let _db = open_db_and_write_version_data(&db_path, 0);
         }
 
-        // Load the db, it should read the schema version fo 0 and return an error
+        // Try and open the db, but no migrations exist yet, so we expect this to panic
         assert!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).is_err());
-    }
-
-    #[test]
-    fn should_create_backup_when_migrating() {
-        let logger = new_test_logger();
-        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
-        // Create a db that has an old schema version
-        let old_db_version = 0;
-        {
-            assert!(
-                old_db_version < LATEST_SCHEMA_VERSION,
-                "Old db version should be less than latest"
-            );
-            let _db = open_db_and_write_version_data(&db_path, old_db_version);
-        }
-
-        // Load the db at version 0 and trigger the migration and therefore the backup
-        // This will error because version 0 is invalid
-        assert!(PersistentKeyDB::<Point>::new_and_migrate_to_latest(&db_path, &logger).is_err());
-
-        // Try and open the backup to make sure it still works
-        {
-            let backups = find_backups(&directory, db_path);
-            assert!(
-                backups.len() == 1,
-                "Incorrect number of backups found in {}",
-                BACKUPS_DIRECTORY
-            );
-
-            // Make sure the schema version is the same as the pre-migration
-            let backup_db = DB::open_cf(
-                &Options::default(),
-                backups.first().unwrap(),
-                COLUMN_FAMILIES,
-            )
-            .expect("Should open db backup");
-            assert_eq!(
-                read_schema_version(&backup_db, &logger).unwrap(),
-                old_db_version
-            );
-        }
     }
 
     #[test]
