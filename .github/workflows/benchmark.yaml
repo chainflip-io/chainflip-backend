@@ -114,9 +114,13 @@ jobs:
       - name: Generate Terraform Variables File
         id: tfvars
         run: |
-          echo TF_VAR_runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output) >> >> $GITHUB_ENV
-          echo TF_VAR_instance_spec=${{ github.event.inputs.benchmark_machine_spec }} >> >> $GITHUB_ENV
-          echo TF_VAR_runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }} >> >> $GITHUB_ENV
+          runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
+          instance_spec=${{ github.event.inputs.benchmark_machine_spec }}
+          runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }}
+
+          echo "TF_VAR_runner_registration_token=$runner_registration_token" >> $GITHUB_ENV
+          echo "TF_VAR_instance_spec=$instance_spec" >> $GITHUB_ENV
+          echo "TF_VAR_runner_custom_labels=$runner_custom_labels" >> $GITHUB_ENV
         working-directory: ./benchmarks-runner
 
       - name: Terraform Init
