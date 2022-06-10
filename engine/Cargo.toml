@@ -36,7 +36,7 @@ rand_legacy = { package = "rand", version = "0.6" }
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
-jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
+jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws", "ipc"]}
 jsonrpc-http-server = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 

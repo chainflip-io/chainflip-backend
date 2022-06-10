@@ -222,14 +222,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 ) -> Result<()> {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 
-    // Use StateChainClient's RpcChannel
-    let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(
-        &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| {
-            format!(
-                "Should be valid ws endpoint: {}",
-                settings.state_chain.ws_endpoint
-            )
-        })?,
+    let client = jsonrpc_core_client::transports::ipc::connect::<_, P2PRpcClient>(
+        &std::path::PathBuf::from("/home/flip/state-chain.ipc"),
     )
     .await
     .map_err(rpc_error_into_anyhow_error)?;
