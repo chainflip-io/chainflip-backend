@@ -98,9 +98,9 @@ impl CLISettings {
                 },
                 opts,
             )?;
-        } else {
-            cli_settings.validate_settings()?;
         }
+
+        cli_settings.validate_settings()?;
 
         Ok(cli_settings)
     }
@@ -128,8 +128,6 @@ impl CLISettings {
         if let Some(http_node_endpoint) = opts.eth_opts.eth_http_node_endpoint {
             cli_settings.eth.http_node_endpoint = http_node_endpoint
         };
-
-        cli_settings.validate_settings()?;
 
         Ok(cli_settings)
     }
