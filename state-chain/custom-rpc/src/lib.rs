@@ -1,6 +1,6 @@
 use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
-use state_chain_runtime::runtime_apis::CustomRuntimeApi;
+use state_chain_runtime::{constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi};
 use std::{marker::PhantomData, sync::Arc};
 
 pub use self::gen_client::Client as CustomClient;
@@ -19,6 +19,8 @@ pub trait CustomApi {
 	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_chain_id")]
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
+	#[rpc(name = "cf_tx_fee_multiplier")]
+	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -67,5 +69,8 @@ where
 			.runtime_api()
 			.cf_eth_chain_id(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error> {
+		Ok(TX_FEE_MULTIPLIER.try_into().unwrap())
 	}
 }
