@@ -1,4 +1,6 @@
-use std::{collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path};
+use std::{
+    cmp::Ordering, collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path,
+};
 
 use super::KeyDB;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
@@ -284,10 +286,13 @@ fn migrate_db_to_latest<P: ECPoint>(
     path: &Path,
     logger: &slog::Logger,
 ) -> Result<PersistentKeyDB<P>, anyhow::Error> {
-    match read_schema_version(&db, logger)
-        .context("Failed to read schema version on existing db")?
-    {
-        LATEST_SCHEMA_VERSION => {
+    // Read the schema version from the db
+    let version =
+        read_schema_version(&db, logger).context("Failed to read schema version on existing db")?;
+
+    // Check if the db version is up-to-date or we need to do migrations
+    match version.cmp(&LATEST_SCHEMA_VERSION) {
+        Ordering::Equal => {
             // The db is at the latest version, no action needed
             slog::info!(
                 logger,
@@ -296,7 +301,7 @@ fn migrate_db_to_latest<P: ECPoint>(
             );
             Ok(PersistentKeyDB::new_from_db(db, logger))
         }
-        version if version > LATEST_SCHEMA_VERSION => {
+        Ordering::Greater => {
             // We do not support backwards migrations
             Err(anyhow::Error::msg(
                     format!("Database schema version {} is ahead of the current schema version {}. Is your Chainflip Engine up to date?",
@@ -304,7 +309,7 @@ fn migrate_db_to_latest<P: ECPoint>(
                     LATEST_SCHEMA_VERSION)
                 ))
         }
-        version => {
+        Ordering::Less => {
             slog::info!(
                 logger,
                 "Database is migrating from version {} to {}",
