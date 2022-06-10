@@ -90,6 +90,9 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  CHAINFLIP_BOT_GITHUB_TOKEN: ${{ secrets.CHAINFLIP_BOT_GITHUB_TOKEN }}
+
 jobs:
   deploy-benchmarks-runner:
     runs-on: ubuntu-latest
@@ -112,11 +115,9 @@ jobs:
         id: tfvars
         run: |
           echo runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output) >> .tfvars
-          echo "\n" >> .tfvars
           echo instance_spec=${{ github.event.inputs.benchmark_machine_spec }} >> .tfvars
-          echo "\n" >> .tfvars
           echo runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }} >> .tfvars
-          echo "\n" >> .tfvars
+          cat .tfvars
         working-directory: ./benchmarks-runner
 
       - name: Terraform Init
