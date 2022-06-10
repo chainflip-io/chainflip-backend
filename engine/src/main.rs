@@ -23,6 +23,8 @@ use sp_core::U256;
 static GLOBAL: TracingAllocator = TracingAllocator {};
 
 static MEMORY_USAGE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static MEMORY_USAGE_JSONRPC: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
 
 lazy_static::lazy_static! {
     static ref HISTORICAL_MEMORY_USAGE: std::sync::Mutex<(std::time::Instant, usize)> = std::sync::Mutex::new((std::time::Instant::now(), 0));
@@ -31,7 +33,7 @@ lazy_static::lazy_static! {
 struct TracingAllocator {}
 
 impl TracingAllocator {
-    fn trace(prefix: &str, layout: std::alloc::Layout) {
+    fn trace(prefix: &str, layout: std::alloc::Layout) -> bool {
         thread_local! {
             static TRACING_ACTIVE: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
         }
@@ -46,18 +48,28 @@ impl TracingAllocator {
                 let old_usage = memory_usage.1;
                 let now = std::time::Instant::now();
                 let new_usage = MEMORY_USAGE.load(std::sync::atomic::Ordering::Relaxed);
-                if now.duration_since(memory_usage.0).as_millis() > 500 {
+                if now.duration_since(memory_usage.0).as_millis() > 2000 {
                     *memory_usage = (now, MEMORY_USAGE.load(std::sync::atomic::Ordering::Relaxed));
                 }
                 (new_usage, old_usage)
             };
 
-            let mut messages = vec![];
+            let diff = new_usage.abs_diff(old_usage);
+            let big_changes = new_usage.abs_diff(old_usage) > 10000000;
+            if big_changes {
+                println!(
+                    "BIG CHANGES DIFF:{} CURRENT:{} PREVIOUS:{}",
+                    diff, new_usage, old_usage
+                );
+            }
 
+            let mut jsonrpc = false;
+            let mut messages = vec![];
             backtrace::trace(|frame| {
                 backtrace::resolve_frame(frame, |symbol| {
                     if let Some(name) = symbol.name() {
                         let name = format!("{}", name);
+                        jsonrpc = jsonrpc || name.contains("jsonrpc");
                         if !name.starts_with("std::")
                             && !name.starts_with("core::")
                             && !name.starts_with("alloc::")
@@ -71,7 +83,7 @@ impl TracingAllocator {
                                 if !filename.starts_with("/rustc") {
                                     if let Some(lineno) = symbol.lineno() {
                                         messages.push(format!(
-                                            "{} at {}:{}",
+                                            "{} at {}:{}\n",
                                             name,
                                             filename.display(),
                                             lineno
@@ -87,17 +99,32 @@ impl TracingAllocator {
             });
 
             println!(
-                "{}: {}/{} (OLD: {}): {}",
+                "{} {}: {}/{} JSONRPC: {} OLD: {}: {}",
                 prefix,
+                if layout.size() > 1024 * 1024 {
+                    "LARGE"
+                } else if layout.size() >= 1024 {
+                    "MEDIUM"
+                } else {
+                    "SMALL"
+                },
                 layout.size(),
                 new_usage,
+                MEMORY_USAGE_JSONRPC.load(std::sync::atomic::Ordering::Relaxed),
                 old_usage,
-                chainflip_engine::common::format_iterator(messages)
+                lazy_format::lazy_format!(
+                    if big_changes && layout.size() >= 1024 => ("{}", chainflip_engine::common::format_iterator(&messages))
+                    else ("")
+                )
             );
 
             TRACING_ACTIVE.with(|f| {
                 *f.borrow_mut() = true;
             });
+
+            jsonrpc
+        } else {
+            false
         }
     }
 }
@@ -105,13 +132,17 @@ impl TracingAllocator {
 unsafe impl std::alloc::GlobalAlloc for TracingAllocator {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
         MEMORY_USAGE.fetch_add(layout.size(), std::sync::atomic::Ordering::Relaxed);
-        Self::trace("traced alloc", layout);
+        if Self::trace("traced alloc", layout) {
+            MEMORY_USAGE_JSONRPC.fetch_add(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        }
         std::alloc::System.alloc(layout)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
         MEMORY_USAGE.fetch_sub(layout.size(), std::sync::atomic::Ordering::Relaxed);
-        Self::trace("traced free", layout);
+        if Self::trace("traced free", layout) {
+            MEMORY_USAGE_JSONRPC.fetch_sub(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        }
         std::alloc::System.dealloc(ptr, layout)
     }
 }
