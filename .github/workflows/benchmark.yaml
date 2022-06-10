@@ -22,6 +22,7 @@ on:
         default: null
         type: choice
         options:
+          - null
           - 4vcpu-8gb
 
 jobs:
