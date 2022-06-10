@@ -20,6 +20,17 @@ pub struct CLICommandLineOptions {
     pub cmd: CFCommand,
 }
 
+impl CLICommandLineOptions {
+    pub fn all_options_are_set(&self) -> bool {
+        self.state_chain_opts.state_chain_ws_endpoint.is_some()
+            && self.state_chain_opts.state_chain_signing_key_file.is_some()
+            // eth options present
+            && self.eth_opts.eth_ws_node_endpoint.is_some()
+            && self.eth_opts.eth_http_node_endpoint.is_some()
+            && self.eth_opts.eth_private_key_file.is_some()
+    }
+}
+
 #[cfg(test)]
 impl Default for CLICommandLineOptions {
     fn default() -> Self {
@@ -79,15 +90,7 @@ impl CLISettings {
     pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
         let mut cli_settings = CLISettings::default();
 
-        // check we have all the cli args. If we do, don't bother reading from the config file + env
-        let all_cl_args_set = opts.state_chain_opts.state_chain_ws_endpoint.is_some()
-            && opts.state_chain_opts.state_chain_signing_key_file.is_some()
-            // eth options present
-            && opts.eth_opts.eth_ws_node_endpoint.is_some()
-            && opts.eth_opts.eth_http_node_endpoint.is_some()
-            && opts.eth_opts.eth_private_key_file.is_some();
-
-        if !all_cl_args_set {
+        if !opts.all_options_are_set() {
             cli_settings = Self::from_file_and_env(
                 match &opts.config_path.clone() {
                     Some(path) => path,
