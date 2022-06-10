@@ -20,6 +20,7 @@ pub struct CLICommandLineOptions {
     pub cmd: CFCommand,
 }
 
+#[cfg(test)]
 impl Default for CLICommandLineOptions {
     fn default() -> Self {
         Self {
