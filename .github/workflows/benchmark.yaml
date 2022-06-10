@@ -18,12 +18,12 @@ on:
         default: 10
       benchmark_machine_spec:
         description: "What machine Spec the benchmark will run on?"
-        # required: true
-        default: ""
+        required: true
+        default: 2vCPU-8GB
         type: choice
         options:
-          - ""
-          - 4vcpu-8gb
+          - 2vCPU-8GB
+          - 4vCPU-8GB
 
 jobs:
   run_benchmarks:
