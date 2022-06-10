@@ -179,6 +179,7 @@ where
     deserializer.deserialize_any(PathVisitor)
 }
 
+/// Describes behaviour required by a struct to be used for as settings/configuration
 pub trait CfSettings {
     type Settings: DeserializeOwned;
 
