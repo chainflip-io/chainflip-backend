@@ -18,7 +18,7 @@ on:
         default: 10
       benchmark_machine_spec:
         description: "What machine Spec the benchmark will run on?"
-        required: true
+        # required: true
         default: null
         type: choice
         options:
