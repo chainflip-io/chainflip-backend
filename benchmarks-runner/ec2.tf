@@ -19,8 +19,8 @@ module "ec2_instance" {
     curl -o actions-runner-linux-x64-2.292.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.292.0/actions-runner-linux-x64-2.292.0.tar.gz
     tar xzf ./actions-runner-linux-x64-2.292.0.tar.gz
     chown -R ubuntu:ubuntu /home/ubuntu/actions-runner
-    export RUNNER_ALLOW_RUNASROOT=1 
-    sudo --preserve-env=RUNNER_ALLOW_RUNASROOT -u ubuntu ./config.sh --url https://github.com/chainflip-io --token ${var.runner_registration_token} --labels "self-hosted,${var.runner_custom_labels}" --unattended
+    export RUNNER_ALLOW_RUNASROOT=1
+    sudo --preserve-env=RUNNER_ALLOW_RUNASROOT -u ubuntu ./config.sh --url https://github.com/chainflip-io --token ${var.runner_registration_token} --labels "self-hosted,${var.runner_custom_labels}" --name $(curl -f -H "X-aws-ec2-metadata-token: $token" -v http://169.254.169.254/latest/meta-data/instance-id) --unattended
     ./svc.sh install ubuntu
     ./svc.sh start
   EOT
