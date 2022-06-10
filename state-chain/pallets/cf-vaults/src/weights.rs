@@ -33,6 +33,7 @@ pub trait WeightInfo {
 	fn report_keygen_outcome() -> Weight;
 	fn vault_key_rotated() -> Weight;
 	fn vault_key_rotated_externally() -> Weight;
+	fn set_keygen_timeout() -> Weight;
 }
 
 /// Weights for pallet_cf_vaults using the Substrate node and recommended hardware.
@@ -92,6 +93,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+
+	// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
+	fn set_keygen_timeout() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(8_000_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
 }
 
 // For backwards compatibility and tests
@@ -147,6 +156,14 @@ impl WeightInfo for () {
 	fn vault_key_rotated_externally() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(41_000_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+
+	// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
+	fn set_keygen_timeout() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(8_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
