@@ -1,7 +1,7 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
-use crate::eth::{rpc::EthRpcApi, EventParseError};
+use crate::eth::{EthRpcApi, EventParseError};
 use crate::state_chain::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
@@ -28,10 +28,9 @@ use super::DecodeLogClosure;
 use super::EthObserver;
 
 /// A wrapper for the KeyManager Ethereum contract.
-pub struct KeyManager<EthRpc: EthRpcApi> {
+pub struct KeyManager {
     pub deployed_address: H160,
     pub contract: ethabi::Contract,
-    pub eth_rpc: EthRpc,
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]
@@ -212,21 +211,23 @@ pub enum KeyManagerEvent {
 }
 
 #[async_trait]
-impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
+impl EthObserver for KeyManager {
     type EventParameters = KeyManagerEvent;
 
     fn contract_name(&self) -> &'static str {
         "KeyManager"
     }
 
-    async fn handle_event<RpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         _epoch_index: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
+        eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        EthRpcClient: EthRpcApi + Sync + Send,
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
@@ -270,15 +271,14 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
             }
             KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
                 let tx_fee = {
-                    let Transaction { gas_price, gas, .. } = self
-                        .eth_rpc
+                    // TODO: get gas paid from receipt instead of transaction.
+                    let Transaction { gas_price, gas, .. } = eth_rpc
                         .transaction(event.tx_hash)
                         .await
                         .expect("Failed to get transaction");
                     let gas_price =
                         gas_price.expect("Could not get ETH gas price from transaction");
-                    let priority_fee = gas_price - event.base_fee_per_gas;
-                    (gas * event.base_fee_per_gas) + (gas * priority_fee)
+                    gas * gas_price
                 };
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
@@ -412,12 +412,11 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
     }
 }
 
-impl<EthRpc: EthRpcApi> KeyManager<EthRpc> {
+impl KeyManager {
     /// Loads the contract abi to get the event definitions
-    pub fn new(deployed_address: H160, eth_rpc: EthRpc) -> Result<Self> {
+    pub fn new(deployed_address: H160) -> Result<Self> {
         Ok(Self {
             deployed_address,
-            eth_rpc,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
     }
@@ -460,7 +459,7 @@ fn generate_signatures() {
 #[cfg(test)]
 mod tests {
 
-    use crate::eth::{rpc::mocks::MockEthHttpRpcClient, EventParseError};
+    use crate::eth::EventParseError;
 
     use super::*;
     use hex;
@@ -473,8 +472,8 @@ mod tests {
     // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
 
-    fn new_test_key_manager() -> KeyManager<MockEthHttpRpcClient> {
-        KeyManager::new(H160::default(), MockEthHttpRpcClient::new()).unwrap()
+    fn new_test_key_manager() -> KeyManager {
+        KeyManager::new(H160::default()).unwrap()
     }
 
     // 🔑 Aggregate Key sets the new Aggregate Key 🔑
