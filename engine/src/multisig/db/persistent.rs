@@ -127,12 +127,12 @@ impl<P: ECPoint> PersistentKeyDB<P> {
         logger: &slog::Logger,
     ) -> Result<Self, anyhow::Error> {
         // Update version data
-        let mut batch = WriteBatch::default();
-        add_schema_version_to_batch_write(&db, LATEST_SCHEMA_VERSION, &mut batch);
-
-        // Write the batch
-        db.write(batch)
-            .context("Failed to write schema version to db")?;
+        db.put_cf(
+            get_metadata_column_handle(&db),
+            DB_SCHEMA_VERSION_KEY,
+            LATEST_SCHEMA_VERSION.to_be_bytes(),
+        )
+        .context("Failed to write schema version to db")?;
 
         Ok(PersistentKeyDB::new_from_db(db, logger))
     }
@@ -258,19 +258,10 @@ fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
         .unwrap_or_else(|| panic!("Should get column family handle for {}", column_name))
 }
 
-/// Used is every migration to update the db data version in the same batch write as the migration operation
-pub fn add_schema_version_to_batch_write(db: &DB, db_schema_version: u32, batch: &mut WriteBatch) {
-    batch.put_cf(
-        get_metadata_column_handle(db),
-        DB_SCHEMA_VERSION_KEY,
-        db_schema_version.to_be_bytes(),
-    );
-}
-
 /// Get the schema version from the metadata column in the db.
 fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
     db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
-        .expect("Should get db_schema_version")
+        .context("Failed to get metadata column when trying to read the schema version")?
         .map(|version| {
             let version: [u8; 4] = version.try_into().expect("Version should be a u32");
             let version = u32::from_be_bytes(version);
