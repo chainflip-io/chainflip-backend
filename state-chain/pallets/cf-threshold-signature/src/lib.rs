@@ -288,8 +288,8 @@ pub mod pallet {
 		/// Not enough signers were available to reach threshold. Ceremony will be retried.
 		/// \[ceremony_id\]
 		SignersUnavailable(CeremonyId),
-		/// The threshold signature response timeout has been updated. \[new_timeout\]
-		ThresholdSignatureResponseTimeoutUpdated(BlockNumberFor<T>),
+		/// The threshold signature response timeout has been updated
+		ThresholdSignatureResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
 	}
 
 	#[pallet::error]
@@ -496,9 +496,9 @@ pub mod pallet {
 
 			if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
 				ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureResponseTimeoutUpdated(
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureResponseTimeoutUpdated {
 					new_timeout,
-				));
+				});
 			}
 
 			ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);

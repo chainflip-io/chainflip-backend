@@ -502,7 +502,7 @@ pub mod pallet {
 		/// Keygen response timeout has occurred \[ceremony_id\]
 		KeygenResponseTimeout(CeremonyId),
 		/// Keygen response timeout was updated \[new_timeout\]
-		KeygenResponseTimeoutUpdated(BlockNumberFor<T>),
+		KeygenResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
 	}
 
 	#[pallet::error]
@@ -716,7 +716,7 @@ pub mod pallet {
 
 			if new_timeout != KeygenResponseTimeout::<T, I>::get() {
 				KeygenResponseTimeout::<T, I>::put(new_timeout);
-				Pallet::<T, I>::deposit_event(Event::KeygenResponseTimeoutUpdated(new_timeout));
+				Pallet::<T, I>::deposit_event(Event::KeygenResponseTimeoutUpdated { new_timeout });
 			}
 
 			Ok(().into())
