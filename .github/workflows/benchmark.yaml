@@ -91,7 +91,7 @@ permissions:
   contents: read
 
 env:
-  CHAINFLIP_BOT_GITHUB_TOKEN: ${{ secrets.CHAINFLIP_BOT_GITHUB_TOKEN }}
+  CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
 
 jobs:
   deploy-benchmarks-runner:
@@ -114,7 +114,7 @@ jobs:
       - name: Generate Terraform Variables File
         id: tfvars
         run: |
-          runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
+          runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
           instance_spec=${{ github.event.inputs.benchmark_machine_spec }}
           runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }}
 

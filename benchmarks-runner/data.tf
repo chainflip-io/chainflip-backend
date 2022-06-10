@@ -9,7 +9,3 @@ data "aws_subnets" "default_subnets" {
   }
 }
 
-data "aws_route53_zone" "chartmuseum" {
-  name         = "aws.chainflip.xyz"
-  private_zone = false
-}
