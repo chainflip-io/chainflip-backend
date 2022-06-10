@@ -35,7 +35,8 @@ jobs:
         self-hosted,
         linux,
         x64,
-        "${{  github.event.inputs.benchmark_machine_spec }}"
+        "${{  github.event.inputs.benchmark_machine_spec }}",
+      ]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
