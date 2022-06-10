@@ -20,11 +20,11 @@ on:
         description: "What machine Spec the benchmark will run on?"
         required: true
         type: choice
-        default: linux, x64, 2vCPU-8GB
+        default: linux, x64, 2vcpu-8gb
         options:
-          - linux, x64, 2vCPU-8GB
-          - linux, x64, 4vCPU-8GB
-          - linux, x64, 4vCPU-16GB
+          - linux, x64, 2vcpu-8gb
+          - linux, x64, 4vcpu-8gb
+          - linux, x64, 4vcpu-16gb
 
 jobs:
   run_benchmarks:
