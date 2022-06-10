@@ -88,17 +88,17 @@ impl CfSettings for CLISettings {
 
 impl CLISettings {
     pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-        let mut cli_settings = CLISettings::default();
-
-        if !opts.all_options_are_set() {
-            cli_settings = Self::from_file_and_env(
+        let cli_settings = if !opts.all_options_are_set() {
+            Self::from_file_and_env(
                 match &opts.config_path.clone() {
                     Some(path) => path,
                     None => "./engine/config/Default.toml",
                 },
                 opts,
-            )?;
-        }
+            )?
+        } else {
+            CLISettings::default()
+        };
 
         cli_settings.validate_settings()?;
 
