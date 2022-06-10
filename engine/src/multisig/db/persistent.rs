@@ -3,7 +3,7 @@ use std::{
 };
 
 use super::KeyDB;
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
 use slog::o;
 
 use crate::{
@@ -508,12 +508,9 @@ mod tests {
     fn should_panic_when_trying_to_migrate() {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        assert!(
-            LATEST_SCHEMA_VERSION > 0,
-            "This test only works if LATEST_SCHEMA_VERSION > 0"
-        );
 
         // Create a db that is at schema version 0,
+        // this test only works if LATEST_SCHEMA_VERSION > 0
         {
             let _db = open_db_and_write_version_data(&db_path, 0);
         }
