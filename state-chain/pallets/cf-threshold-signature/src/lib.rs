@@ -501,7 +501,6 @@ pub mod pallet {
 				});
 			}
 
-			ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
 			Ok(().into())
 		}
 	}
