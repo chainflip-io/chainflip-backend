@@ -16,12 +16,15 @@ on:
         required: false
         type: number
         default: 10
-      # benchmark_machine_spec:
-      #   description: "What machine Spec the benchmark will run on?"
-      #   required: true
-      #   type: choice
-      #   options:
-      #     - 4vCPUs-8GB
+      benchmark_machine_spec:
+        description: "What machine Spec the benchmark will run on?"
+        required: true
+        type: choice
+        default: linux, x64, 2vCPU-8GB
+        options:
+          - linux, x64, 2vCPU-8GB
+          - linux, x64, 4vCPU-8GB
+          - linux, x64, 4vCPU-16GB
 
 jobs:
   run_benchmarks:
@@ -29,7 +32,7 @@ jobs:
       CIRCLE_TOKEN: ${{ secrets.CIRCLE_TOKEN }}
       CIRCLE_CI_ARTIFACT_URL: ${{ github.event.inputs.circleCiArtifactUrl }}
 
-    runs-on: [self-hosted, linux, x64, 4vcpu-8gb]
+    runs-on: [self-hosted, ${{ github.event.inputs.benchmark_machine_spec }}]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
