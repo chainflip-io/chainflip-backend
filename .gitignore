@@ -36,3 +36,10 @@ graph
 
 # created by running try-runtime (state-chain/TROUBLESHOOTING.md)
 .state-snapshot
+
+# Terrafrom
+*.terraform
+*terraform.tfstate*
+*provision.sh
+tfplan
+.tfvars

@@ -1,0 +1,97 @@
+name: Deploy/Destroy Benchmarks Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_machine_spec:
+        required: true
+        default: 4vCPU-8GB
+        type: choice
+        options:
+          - 4vCPU-8GB
+          - 4vCPU-16GB
+      command:
+        required: true
+        type: choice
+        options:
+          - apply
+          - destroy
+
+jobs:
+  deploy-benchmarks-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.1.7
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+
+      - name: Generate Terraform Variables File
+        id: tfvars
+        run: |
+          echo runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output) >> .tfvars
+          echo instance_spec=${{ github.event.inputs.benchmark_machine_spec }} >> .tfvars
+          echo runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }} >> .tfvars
+        working-directory: ./benchmarks-runner
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init
+        working-directory: ./benchmarks-runner
+
+      - name: Terraform Workspace
+        id: workspace
+        run: terraform workspace new ${{ github.event.inputs.benchmark_machine_spec }} || terraform workspace select ${{ github.event.inputs.benchmark_machine_spec }}
+        working-directory: ./benchmarks-runner
+
+      - name: Terraform Validate
+        if: ${{ github.event.inputs.command }} != 'destroy'
+        id: validate
+        run: terraform validate -no-color
+        working-directory: ./benchmarks-runner
+
+      - name: Terraform Plan
+        if: ${{ github.event.inputs.command }} != 'destroy'
+        id: plan
+        run: >
+          terraform plan
+          -no-color
+          -var-file=".tfvars"
+          -out tfplan
+        working-directory: ./benchmarks-runner
+
+      - name: Terraform Apply
+        id: apply
+        if: ${{ github.event.inputs.command }} != 'destroy'
+        run: >
+          terraform apply
+          -no-color
+          -auto-approve
+          "tfplan"
+        working-directory: ./benchmarks-runner
+
+      - name: Terraform Destroy
+        if: ${{ github.event.inputs.command }} == 'destroy'
+        run: >
+          terraform destroy
+          -no-color
+          -var-file=".tfvars"
+          -auto-approve
+        working-directory: ./benchmarks-runner
+
+      - name: Terraform Workspace
+        if: ${{ github.event.inputs.command }} == 'destroy'
+        run: |
+          terraform workspace select default
+          terraform workspace delete ${{ github.event.inputs.benchmark_machine_spec }}
+        working-directory: ./benchmarks-runner
