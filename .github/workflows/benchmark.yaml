@@ -135,13 +135,13 @@ jobs:
         working-directory: ./benchmarks-runner
 
       - name: Terraform Validate
-        if: github.event.inputs.command == apply
+        if: github.event.inputs.command == 'apply'
         id: validate
         run: terraform validate -no-color
         working-directory: ./benchmarks-runner
 
       - name: Terraform Plan
-        if: github.event.inputs.command == apply
+        if: github.event.inputs.command == 'apply'
         id: plan
         run: >
           terraform plan
@@ -151,7 +151,7 @@ jobs:
 
       - name: Terraform Apply
         id: apply
-        if: github.event.inputs.command == apply
+        if: github.event.inputs.command == 'apply'
         run: >
           terraform apply
           -no-color
@@ -161,7 +161,7 @@ jobs:
 
       - name: Terraform Destroy
         id: destroy
-        if: github.event.inputs.command == destroy
+        if: github.event.inputs.command == 'destroy'
         run: >
           terraform destroy
           -no-color
@@ -170,7 +170,7 @@ jobs:
 
       - name: Terraform Workspace
         id: destroy-workspace
-        if: github.event.inputs.command == destroy
+        if: github.event.inputs.command == 'destroy'
         run: |
           terraform workspace select default
           terraform workspace delete ${{ github.event.inputs.benchmark_machine_spec }}
