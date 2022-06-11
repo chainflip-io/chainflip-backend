@@ -116,6 +116,6 @@ jobs:
       - name: Remove Runner from GitHub
         if: github.event.inputs.command == 'destroy'
         run: |
-          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r '.runners[] | select(.name=="$INSTANCE_ID").id')
+          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "$INSTANCE_ID" '.runners[] | select(.name==$instance_id).id')
           curl -X DELETE -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
         working-directory: ./benchmarks-runner
