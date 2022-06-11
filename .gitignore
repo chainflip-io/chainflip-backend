@@ -40,6 +40,5 @@ graph
 # Terrafrom
 *.terraform
 *terraform.tfstate*
-*provision.sh
 tfplan
 .tfvars
