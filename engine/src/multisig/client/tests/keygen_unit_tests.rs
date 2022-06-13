@@ -42,48 +42,6 @@ async fn happy_path_results_in_valid_key() {
     let (_, _, _, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 }
 
-/*
-/// If keygen state expires before a formal request to keygen
-/// (from our SC), we should report initiators of that ceremony.
-/// TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
-#[tokio::test]
-#[ignore = "functionality disabled as SC does not expect this response"]
-async fn should_report_on_timeout_before_keygen_request() {
-    let (_, _, messages, _nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-    )
-    .await;
-
-    let good_account_id = &ACCOUNT_IDS[0];
-
-    let mut node = new_node(good_account_id.clone(), true);
-
-    let bad_account_id = ACCOUNT_IDS[1].clone();
-
-    node.ceremony_manager.process_keygen_data(
-        bad_account_id.clone(),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        messages.stage_1_messages[&bad_account_id][good_account_id]
-            .clone()
-            .into(),
-    );
-
-    // Force all ceremonies to time out
-    node.force_stage_timeout();
-
-    let (_, reported) = node
-        .try_recv_outcome::<KeygenResultInfo>()
-        .await
-        .unwrap()
-        .result
-        .unwrap_err();
-    assert_eq!(&[bad_account_id], &reported[..]);
-
-    // TODO: Check the failure reason is CeremonyFailureReason::ExpiredBeforeBeingAuthorized
-}
-*/
-
 #[tokio::test]
 async fn should_delay_comm1_before_keygen_request() {
     let (_, _, messages, _nodes) = standard_keygen(KeygenCeremonyRunner::new_with_default()).await;
