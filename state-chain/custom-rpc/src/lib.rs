@@ -87,5 +87,4 @@ where
 			.cf_backup_emission_per_block(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-
 }
