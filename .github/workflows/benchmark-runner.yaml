@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 env:
-  CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
+  RUNNERS_MANAGEMENT_GITHUB_TOKEN: ${{ secrets.RUNNERS_MANAGEMENT_GITHUB_TOKEN }}
 
 jobs:
   deploy-benchmarks-runner:
@@ -48,7 +48,7 @@ jobs:
       - name: Generate Terraform Variables
         id: tfvars
         run: |
-          runner_registration_token=$(curl -sX POST -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
+          runner_registration_token=$(curl -sX POST -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
           instance_spec=${{ github.event.inputs.benchmark_machine_spec }}
           runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }}
 
@@ -119,6 +119,6 @@ jobs:
       - name: Remove Runner from GitHub
         if: github.event.inputs.command == 'destroy'
         run: |
-          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "$INSTANCE_ID" '.runners[] | select(.name==$instance_id).id')
-          curl -X DELETE -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${CHAINFLIP_BOT_GITHUB_RUNNERS_MANAGEMENT_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
+          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "$INSTANCE_ID" '.runners[] | select(.name==$instance_id).id')
+          curl -X DELETE -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
         working-directory: ./benchmarks-runner
