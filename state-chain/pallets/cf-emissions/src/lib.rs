@@ -318,8 +318,7 @@ impl<T: Config> Pallet<T> {
 		));
 	}
 
-	/// Based on the last block at which rewards were minted, calculates how much issuance needs to
-	/// be minted and distributes this as a reward via [RewardsDistribution].
+	/// Mints and distributes block author rewards via [RewardsDistribution].
 	fn mint_rewards_for_block() {
 		// Calculate the outstanding reward amount.
 		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
