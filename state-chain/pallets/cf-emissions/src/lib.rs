@@ -149,13 +149,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Emissions have been distributed. \[block_number, amount_minted\]
+		/// Supply Update has been Broadcasted [block_number]
 		SupplyUpdateBroadcasted(BlockNumberFor<T>),
 		/// Current authority inflation emission has been updated \[new\]
 		CurrentAuthorityInflationEmissionsUpdated(BasisPoints),
 		/// Backup node inflation emission has been updated \[new\]
 		BackupNodeInflationEmissionsUpdated(BasisPoints),
-		/// MintInterval has been updated [block_number]
+		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
 	}
 
@@ -247,8 +247,6 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::BackupNodeInflationEmissionsUpdated(inflation));
 			Ok(().into())
 		}
-
-		// TODO: run the benchmarks: name of the extrinsic changes
 
 		/// Updates the Supply Update interval.
 		///
