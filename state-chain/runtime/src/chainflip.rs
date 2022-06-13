@@ -47,35 +47,27 @@ impl Chainflip for Runtime {
 }
 
 trait RewardDistribution {
-	type EpochInfo: EpochInfo;
-	type StakeTransfer: StakeTransfer;
-	type ValidatorId;
-	type BlockNumber;
-	type FlipBalance: UniqueSaturatedFrom<Self::BlockNumber> + AtLeast32BitUnsigned;
+	type FlipBalance: UniqueSaturatedFrom<BlockNumber> + AtLeast32BitUnsigned;
 	/// An implementation of the [Issuance] trait.
 	type Issuance: Issuance;
 
 	/// Distribute rewards
-	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight;
+	fn distribute_rewards(backup_nodes: &[AccountId]) -> Weight;
 }
 
 struct BackupNodeEmissions;
 
 impl RewardDistribution for BackupNodeEmissions {
-	type EpochInfo = Validator;
-	type StakeTransfer = Flip;
-	type ValidatorId = AccountId;
-	type BlockNumber = BlockNumber;
 	type FlipBalance = FlipBalance;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_nodes: &[Self::ValidatorId]) -> Weight {
+	fn distribute_rewards(backup_nodes: &[AccountId]) -> Weight {
 		if backup_nodes.is_empty() {
 			return 0
 		}
 		// The current minimum active bid
-		let minimum_active_bid = Self::EpochInfo::bond();
+		let minimum_active_bid = Validator::bond();
 		let heartbeat_block_interval: FlipBalance =
 			<<Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval as Get<
 				BlockNumber,
@@ -91,15 +83,15 @@ impl RewardDistribution for BackupNodeEmissions {
 
 		// The average authority emission
 		let average_authority_reward: Self::FlipBalance = authority_rewards /
-			Self::FlipBalance::unique_saturated_from(Self::EpochInfo::current_authority_count());
+			Self::FlipBalance::unique_saturated_from(Validator::current_authority_count());
 
 		let mut total_rewards = 0;
 
 		// Calculate rewards for each backup node and total rewards for capping
-		let mut rewards: Vec<(Self::ValidatorId, Self::FlipBalance)> = backup_nodes
+		let mut rewards: Vec<(AccountId, Self::FlipBalance)> = backup_nodes
 			.iter()
 			.map(|backup_node| {
-				let backup_node_stake = Self::StakeTransfer::stakeable_balance(backup_node);
+				let backup_node_stake = Flip::stakeable_balance(backup_node);
 				let reward_scaling_factor = min(1, (backup_node_stake / minimum_active_bid) ^ 2);
 				let reward = (reward_scaling_factor * average_authority_reward * 8) / 10;
 				total_rewards += reward;
