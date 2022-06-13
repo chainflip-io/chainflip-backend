@@ -511,7 +511,11 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { genesis_stakers: vec![], ..Default::default() }
+			Self {
+				genesis_stakers: vec![],
+				minimum_stake: Default::default(),
+				claim_ttl: Default::default(),
+			}
 		}
 	}
 

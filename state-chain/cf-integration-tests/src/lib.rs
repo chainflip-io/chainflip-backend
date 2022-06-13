@@ -1,18 +1,16 @@
 #[cfg(test)]
 mod tests {
-	use frame_support::{
-		assert_noop, assert_ok,
-		sp_io::TestExternalities,
-		traits::{GenesisBuild, OnInitialize},
-	};
+	use frame_support::{assert_noop, assert_ok, sp_io::TestExternalities, traits::OnInitialize};
 	use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 	use sp_core::crypto::{Pair, Public};
 	use sp_finality_grandpa::AuthorityId as GrandpaId;
-	use sp_runtime::{traits::Zero, Storage};
+	use sp_runtime::{traits::Zero, BuildStorage};
 	use state_chain_runtime::{
 		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
-		Emissions, EthereumVault, Flip, Governance, Online, Origin, Reputation, Runtime, Session,
-		Staking, System, Timestamp, Validator,
+		AuctionConfig, Emissions, EmissionsConfig, EthereumVault, EthereumVaultConfig, Flip,
+		FlipConfig, Governance, GovernanceConfig, Online, Origin, Reputation, ReputationConfig,
+		Runtime, Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator,
+		ValidatorConfig,
 	};
 
 	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance, IsOnline};
@@ -560,104 +558,75 @@ mod tests {
 			self
 		}
 
-		fn configure_storages(&self, storage: &mut Storage) {
-			pallet_cf_flip::GenesisConfig::<Runtime> { total_issuance: TOTAL_ISSUANCE }
-				.assimilate_storage(storage)
-				.unwrap();
-
-			pallet_cf_staking::GenesisConfig::<Runtime> {
-				genesis_stakers: self.accounts.clone(),
-				minimum_stake: MIN_STAKE,
-				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
-			}
-			.assimilate_storage(storage)
-			.unwrap();
-
-			pallet_session::GenesisConfig::<Runtime> {
-				keys: self
-					.accounts
-					.iter()
-					.map(|x| {
-						(
-							x.0.clone(),
-							x.0.clone(),
-							SessionKeys {
-								aura: get_from_seed::<AuraId>(&x.0.clone().to_string()),
-								grandpa: get_from_seed::<GrandpaId>(&x.0.clone().to_string()),
-							},
-						)
-					})
-					.collect::<Vec<_>>(),
-			}
-			.assimilate_storage(storage)
-			.unwrap();
-
-			GenesisBuild::<Runtime>::assimilate_storage(
-				&pallet_cf_auction::GenesisConfig {
-					min_size: self.min_authorities,
-					max_size: self.max_authorities,
-					max_expansion: self.max_authorities,
-					max_contraction: self.max_authorities,
-				},
-				storage,
-			)
-			.unwrap();
-
-			GenesisBuild::<Runtime>::assimilate_storage(
-				&pallet_cf_emissions::GenesisConfig {
-					current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
-					backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
-				},
-				storage,
-			)
-			.unwrap();
-
-			pallet_cf_governance::GenesisConfig::<Runtime> {
-				members: self.root.iter().cloned().collect(),
-				expiry_span: EXPIRY_SPAN_IN_SECONDS,
-			}
-			.assimilate_storage(storage)
-			.unwrap();
-
-			pallet_cf_reputation::GenesisConfig::<Runtime> {
-				accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
-				penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
-			}
-			.assimilate_storage(storage)
-			.unwrap();
-
-			pallet_cf_validator::GenesisConfig::<Runtime> {
-				blocks_per_epoch: self.blocks_per_epoch,
-				// TODO Fix this
-				bond: self.accounts[0].1,
-				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
-				backup_node_percentage: 34,
-			}
-			.assimilate_storage(storage)
-			.unwrap();
-
-			let (_, public_key, _) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
-			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
-
-			GenesisBuild::<Runtime, _>::assimilate_storage(
-				&state_chain_runtime::EthereumVaultConfig {
-					vault_key: ethereum_vault_key,
-					deployment_block: 0,
-					keygen_response_timeout: 4,
-				},
-				storage,
-			)
-			.unwrap();
-		}
-
 		/// Default ext configuration with BlockNumber 1
 		pub fn build(&self) -> TestExternalities {
 			let mut storage =
 				frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-			self.configure_storages(&mut storage);
+			let (_, public_key, _) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
+			let ethereum_vault_key = public_key.serialize_compressed().to_vec();
+
+			state_chain_runtime::GenesisConfig {
+				session: SessionConfig {
+					keys: self
+						.accounts
+						.iter()
+						.map(|x| {
+							(
+								x.0.clone(),
+								x.0.clone(),
+								SessionKeys {
+									aura: get_from_seed::<AuraId>(&x.0.clone().to_string()),
+									grandpa: get_from_seed::<GrandpaId>(&x.0.clone().to_string()),
+								},
+							)
+						})
+						.collect::<Vec<_>>(),
+				},
+				flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
+				staking: StakingConfig {
+					genesis_stakers: self.accounts.clone(),
+					minimum_stake: MIN_STAKE,
+					claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
+				},
+				auction: AuctionConfig {
+					min_size: self.min_authorities,
+					max_size: self.max_authorities,
+					max_expansion: self.max_authorities,
+					max_contraction: self.max_authorities,
+				},
+				reputation: ReputationConfig {
+					accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+					penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
+				},
+				governance: GovernanceConfig {
+					members: self.root.iter().cloned().collect(),
+					expiry_span: EXPIRY_SPAN_IN_SECONDS,
+				},
+				validator: ValidatorConfig {
+					blocks_per_epoch: self.blocks_per_epoch,
+					// TODO Fix this
+					bond: self.accounts[0].1,
+					claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+					backup_node_percentage: 34,
+				},
+				ethereum_vault: EthereumVaultConfig {
+					vault_key: ethereum_vault_key,
+					deployment_block: 0,
+					keygen_response_timeout: 4,
+				},
+				emissions: EmissionsConfig {
+					current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+					backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
+				},
+				..state_chain_runtime::GenesisConfig::default()
+			}
+			.assimilate_storage(&mut storage)
+			.unwrap();
 
 			let mut ext = TestExternalities::from(storage);
+
+			// Ensure we emit the events (no events emitted at block 0)
 			ext.execute_with(|| System::set_block_number(1));
 
 			ext
@@ -685,22 +654,6 @@ mod tests {
 		}
 
 		#[test]
-		// The following state is to be expected at genesis
-		// - Total issuance
-		// - The genesis authorities are all staked equally
-		// - The minimum active bid is set at the stake for a genesis authority
-		// - The genesis authorities are available via authority_lookup()
-		// - The genesis authorities are in the session
-		// - The genesis authorities are considered offline for this heartbeat interval
-		// - No emissions have been made
-		// - No rewards have been distributed
-		// - No vault rotation has occurred
-		// - Relevant nonce are at 0
-		// - Governance has its member
-		// - There have been no proposals
-		// - Emission inflation for both authorities and backup authorities are set
-		// - No one has reputation
-		// - The genesis authorities have last active epoch set
 		fn state_of_genesis_is_as_expected() {
 			default().build().execute_with(|| {
 				// Confirmation that we have our assumed state at block 1
