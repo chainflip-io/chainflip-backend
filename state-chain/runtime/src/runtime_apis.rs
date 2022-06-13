@@ -9,6 +9,9 @@ decl_runtime_apis!(
 		fn cf_eth_stake_manager_address() -> [u8; 20];
 		fn cf_eth_key_manager_address() -> [u8; 20];
 		fn cf_eth_chain_id() -> u64;
+		/// Returns the Auction params in the form [min_set_size, max_set_size]
+		fn cf_auction_parameters() -> (u32, u32);
+		fn cf_min_stake() -> u64;
 		fn cf_current_epoch() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u64;
