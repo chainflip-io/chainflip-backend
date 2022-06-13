@@ -1,0 +1,18 @@
+[package]
+authors = ['Chainflip <https://chainflip.io>']
+description = 'Common utilities used by the State Chain and the Chainflip Engine'
+edition = '2021'
+homepage = 'https://chainflip.io'
+license = 'TBC'
+name = 'utilities'
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+version = '0.1.0'
+
+[dependencies]
+hex = {version = "0.4.3", default-features = false}
+
+[features]
+default = ['std']
+std = [
+  'hex/std',
+]

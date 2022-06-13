@@ -1,41 +1,39 @@
 use super::*;
 use crate as pallet_cf_auction;
-use frame_system::{RawOrigin, ensure_root};
-use sp_core::{H256};
-use sp_runtime::{
-	traits::{
-		BlakeTwo256,
-		IdentityLookup,
+use cf_traits::{
+	impl_mock_online,
+	mocks::{
+		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
+		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
+		system_state_info::MockSystemStateInfo,
 	},
-	testing::{
-		Header,
-	},
+	Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
-use frame_support::{parameter_types, construct_runtime};
-use frame_support::traits::ValidatorRegistration;
-use sp_runtime::BuildStorage;
-use std::cell::RefCell;
+use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
+use std::{cell::RefCell, collections::HashMap};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-type Amount = u64;
-type ValidatorId = u64;
+pub type Amount = u128;
+pub type ValidatorId = u64;
 
-pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
-pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
-pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
-pub const INVALID_BID: (ValidatorId, Amount) = (1, 0);
-
-pub const MIN_AUCTION_SIZE : u32 = 2;
-pub const MAX_AUCTION_SIZE : u32 = 150;
+pub const MIN_AUTHORITY_SIZE: u32 = 1;
+pub const MAX_AUTHORITY_SIZE: u32 = 3;
+pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 2;
+pub const MAX_AUTHORITY_SET_CONTRACTION: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
-	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
-		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
-	]);
-	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
+	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
+	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -44,8 +42,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		System: frame_system,
+		AuctionPallet: pallet_cf_auction,
 	}
 );
 
@@ -54,7 +52,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -71,51 +69,60 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = ChainflipAccountData;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-pub struct MockEnsureWitness;
+pub struct MockEmergencyRotation;
 
-impl EnsureOrigin<Origin> for MockEnsureWitness {
-	type Success = ();
+impl EmergencyRotation for MockEmergencyRotation {
+	fn request_emergency_rotation() {
+		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
+	}
 
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		ensure_root(o).or(Err(RawOrigin::None.into()))
+	fn emergency_rotation_in_progress() -> bool {
+		EMERGENCY_ROTATION.with(|cell| *cell.borrow())
+	}
+
+	fn emergency_rotation_completed() {}
+}
+
+impl_mock_online!(ValidatorId);
+
+pub struct MockQualifyValidator;
+impl QualifyNode for MockQualifyValidator {
+	type ValidatorId = ValidatorId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		MockOnline::is_online(validator_id)
 	}
 }
 
-pub struct WitnesserMock;
-
-impl cf_traits::Witnesser for WitnesserMock {
-	type AccountId = u64;
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
 	type Call = Call;
-
-	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
-
-parameter_types! {
-	pub const MinAuctionSize: u32 = 2;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
+	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 impl Config for Test {
 	type Event = Event;
-	type Call = Call;
-	type Amount = Amount;
-	type ValidatorId = ValidatorId;
-	type BidderProvider = TestBidderProvider;
-	type Registrar = Test;
-	type AuctionIndex = u32;
-	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = Test;
-	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = WitnesserMock;
+	type BidderProvider = MockBidderProvider;
+	type ChainflipAccount = MockChainflipAccount;
+	type KeygenExclusionSet = MockKeygenExclusion<Self>;
+	type WeightInfo = ();
+	type EmergencyRotation = MockEmergencyRotation;
+	type AuctionQualification = MockQualifyValidator;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -124,9 +131,19 @@ impl ValidatorRegistration<ValidatorId> for Test {
 	}
 }
 
-pub struct TestBidderProvider;
+pub struct MockBidderProvider;
 
-impl BidderProvider for TestBidderProvider {
+impl MockBidderProvider {
+	// Create a set of descending bids, including an invalid bid of amount 0
+	// offset the ids to create unique bidder groups.  By default all bidders are online.
+	pub fn set_bids(bids: &[(ValidatorId, Amount)]) {
+		BIDDER_SET.with(|cell| {
+			*cell.borrow_mut() = bids.to_vec();
+		});
+	}
+}
+
+impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
@@ -135,23 +152,15 @@ impl BidderProvider for TestBidderProvider {
 	}
 }
 
-impl AuctionConfirmation for Test {
-
-	fn awaiting_confirmation() -> bool {
-		CONFIRM.with(|l| *l.borrow())
-	}
-
-	fn set_awaiting_confirmation(waiting: bool) {
-		CONFIRM.with(|l| *l.borrow_mut() = waiting);
-	}
-}
-
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_auction: Some(AuctionPalletConfig {
-			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
-		}),
+		system: Default::default(),
+		auction_pallet: AuctionPalletConfig {
+			min_size: MIN_AUTHORITY_SIZE,
+			max_size: MAX_AUTHORITY_SIZE,
+			max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+			max_contraction: MAX_AUTHORITY_SET_CONTRACTION,
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

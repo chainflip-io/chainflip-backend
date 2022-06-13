@@ -1,171 +1,701 @@
-mod test {
-	use crate::*;
-	use crate::{Error, mock::*};
-	use sp_runtime::traits::{BadOrigin, Zero};
-	use frame_support::{assert_ok, assert_noop};
-	use cf_traits::AuctionConfirmation;
+use crate::{mock::*, Error, *};
+use cf_test_utilities::last_event;
+use cf_traits::{
+	mocks::{
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
+	},
+	AuctionOutcome, SystemStateInfo, VaultRotator,
+};
+use frame_support::{assert_noop, assert_ok};
 
-	const ALICE: u64 = 100;
+const ALICE: u64 = 100;
+const BOB: u64 = 101;
+const GENESIS_EPOCH: u32 = 1;
 
-	fn last_event() -> mock::Event {
-		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-	}
+fn assert_next_epoch() {
+	assert_eq!(
+		<ValidatorPallet as EpochInfo>::epoch_index(),
+		2,
+		"we should be in epoch 2. Rotation status is {:?}, VaultRotator says {:?} / {:?}",
+		RotationPhase::<Test>::get(),
+		MockVaultRotator::get_vault_rotation_outcome(),
+		<Test as crate::Config>::VaultRotator::get_vault_rotation_outcome()
+	);
+}
 
-	fn assert_winners() -> Vec<ValidatorId> {
-		assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, _) => {
-			winners
-		})
-	}
+#[test]
+fn changing_epoch_block_size() {
+	new_test_ext().execute_with(|| {
+		let min_duration = <Test as Config>::MinEpoch::get();
+		assert_eq!(min_duration, 1);
+		// Throw up an error if we supply anything less than this
+		assert_noop!(
+			ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration - 1),
+			Error::<Test>::InvalidEpoch
+		);
+		assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration));
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::ValidatorPallet(crate::Event::EpochDurationChanged(
+				EPOCH_DURATION,
+				min_duration
+			)),
+		);
+		// We throw up an error if we try to set it to the current
+		assert_noop!(
+			ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration),
+			Error::<Test>::InvalidEpoch
+		);
+	});
+}
 
-	#[test]
-	fn you_have_to_be_priviledged() {
-		new_test_ext().execute_with(|| {
-			// Run through the sudo extrinsics to be sure they are what they are
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
-			assert_noop!(ValidatorPallet::force_rotation(Origin::signed(ALICE)), BadOrigin);
-		});
-	}
+#[test]
+fn should_request_emergency_rotation() {
+	new_test_ext().execute_with(|| {
+		ValidatorPallet::request_emergency_rotation();
+		let mut events = frame_system::Pallet::<Test>::events();
+		assert_eq!(
+			events.pop().expect("an event").event,
+			mock::Event::ValidatorPallet(crate::Event::RotationStatusUpdated(
+				RotationStatus::RunAuction
+			)),
+			"should emit event of a force rotation being requested"
+		);
+		assert_eq!(
+			events.pop().expect("an event").event,
+			mock::Event::ValidatorPallet(crate::Event::EmergencyRotationRequested()),
+			"should emit event of the request for an emergency rotation"
+		);
+		assert!(
+			ValidatorPallet::emergency_rotation_in_progress(),
+			"we should be in an emergency rotation"
+		);
+		ValidatorPallet::emergency_rotation_completed();
+		assert!(
+			!ValidatorPallet::emergency_rotation_in_progress(),
+			"we should not be in an emergency rotation"
+		);
 
-	#[test]
-	fn changing_epoch() {
-		new_test_ext().execute_with(|| {
-			// Confirm we have a minimum epoch of 1 block
-			assert_eq!(<Test as Config>::MinEpoch::get(), 1);
-			// Throw up an error if we supply anything less than this
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 0), Error::<Test>::InvalidEpoch);
-			// This should work as 2 > 1
-			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 2));
-			// Confirm we have an event for the change from 0 to 2
+		// Once we've passed the Idle phase, requesting an emergency rotation should have no
+		// effect on the rotation status.
+		for status in [
+			RotationStatus::<Test>::RunAuction,
+			RotationStatus::<Test>::AwaitingVaults(Default::default()),
+			RotationStatus::<Test>::VaultsRotated(Default::default()),
+			RotationStatus::<Test>::SessionRotating(Default::default()),
+		] {
+			RotationPhase::<Test>::put(&status);
+			ValidatorPallet::request_emergency_rotation();
+			assert_eq!(RotationPhase::<Test>::get(), status,);
+			ValidatorPallet::emergency_rotation_completed();
+		}
+	});
+}
+
+#[test]
+fn should_retry_rotation_until_success_with_failing_auctions() {
+	new_test_ext().execute_with(|| {
+		MockAuctioneer::set_run_behaviour(Err("auction failed"));
+		run_to_block(EPOCH_DURATION);
+		// Move forward a few blocks, the auction will be failing
+		move_forward_blocks(100);
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH,
+			"we should still be in the first epoch"
+		);
+		// The auction now runs
+		MockAuctioneer::set_run_behaviour(Ok(Default::default()));
+
+		move_forward_blocks(1);
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::AwaitingVaults(..)))
+	});
+}
+
+#[test]
+fn should_retry_rotation_until_success_with_failing_vault_rotations() {
+	new_test_ext().execute_with(|| {
+		MockVaultRotator::set_error_on_start(true);
+		RotationPhase::<Test>::set(RotationStatus::<Test>::RunAuction);
+		// Move forward a few blocks, vault rotations fail because the vault rotator can't start.
+		// We keep trying to resolve the auction.
+		move_forward_blocks(10);
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH,
+			"we should still be in the first epoch"
+		);
+		assert_eq!(ValidatorPallet::rotation_phase(), RotationStatus::RunAuction);
+
+		// Allow vault rotations to progress.
+		// The keygen ceremony will fail.
+		MockVaultRotator::set_error_on_start(false);
+		MockVaultRotator::failing();
+
+		for i in 0..10 {
+			move_forward_blocks(1);
+			assert!(matches!(
+				ValidatorPallet::rotation_phase(),
+				RotationStatus::AwaitingVaults(..)
+			));
+			move_forward_blocks(1);
 			assert_eq!(
-				last_event(),
-				mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
+				ValidatorPallet::rotation_phase(),
+				RotationStatus::RunAuction,
+				"Status is {:?} at iteration {:?}",
+				ValidatorPallet::rotation_phase(),
+				i
 			);
-			// We throw up an error if we try to set it to the current
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
+		}
+
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH,
+			"we should still be in the first epoch"
+		);
+
+		// Allow keygen to succeed.
+		MockVaultRotator::succeeding();
+
+		// Four blocks - one for auction, one for keygen, one for each session rotation.
+		move_forward_blocks(4);
+		assert_next_epoch();
+	});
+}
+
+#[test]
+fn should_be_unable_to_force_rotation_during_a_rotation() {
+	new_test_ext().execute_with(|| {
+		MockAuctioneer::set_run_behaviour(Ok(Default::default()));
+		run_to_block(EPOCH_DURATION);
+		assert_eq!(ValidatorPallet::rotation_phase(), RotationStatus::RunAuction);
+		assert_noop!(
+			ValidatorPallet::force_rotation(Origin::root()),
+			Error::<Test>::RotationInProgress
+		);
+	});
+}
+
+#[test]
+fn should_rotate_when_forced() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction));
+	});
+}
+
+#[test]
+fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
+	new_test_ext().execute_with(|| {
+		let new_bond = 10;
+		let new_authorities = vec![1, 2];
+
+		register_keys(&new_authorities);
+
+		MockAuctioneer::set_run_behaviour(Ok(AuctionOutcome {
+			winners: new_authorities.clone(),
+			losers: vec![],
+			bond: new_bond,
+		}));
+
+		assert_eq!(
+			CurrentAuthorities::<Test>::get(),
+			DUMMY_GENESIS_VALIDATORS,
+			"the current authorities should be the genesis authorities"
+		);
+		// Run to the epoch boundary.
+		run_to_block(EPOCH_DURATION);
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::current_authorities(),
+			DUMMY_GENESIS_VALIDATORS,
+			"we should still be validating with the genesis authorities"
+		);
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction));
+		move_forward_blocks(1);
+		assert!(matches!(RotationPhase::<Test>::get(), RotationStatus::<Test>::AwaitingVaults(..)));
+		move_forward_blocks(3); // Three blocks - one for keygen, one for each session rotation.
+		assert_next_epoch();
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::current_authorities(),
+			new_authorities,
+			"the new authorities are now validating"
+		);
+		assert_eq!(Bond::<Test>::get(), new_bond, "bond should be updated");
+
+		let auction_winners = AUCTION_WINNERS
+			.with(|cell| (*cell.borrow()).clone())
+			.expect("no value for auction winners is provided!");
+
+		// Expect new_authorities to be auction winners as well
+		assert_eq!(new_authorities, auction_winners);
+	});
+}
+
+#[test]
+fn genesis() {
+	new_test_ext().execute_with(|| {
+		// We should have a set of validators on genesis with a minimum bid set
+		assert_eq!(
+			CurrentAuthorities::<Test>::get(),
+			DUMMY_GENESIS_VALIDATORS,
+			"We should have a set of validators at genesis"
+		);
+		assert_eq!(
+			Bond::<Test>::get(),
+			MINIMUM_ACTIVE_BID_AT_GENESIS,
+			"We should have a minimum bid at genesis"
+		);
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::epoch_index(),
+			GENESIS_EPOCH,
+			"we should be in the genesis epoch({})",
+			GENESIS_EPOCH
+		);
+	});
+}
+
+#[test]
+fn send_cfe_version() {
+	new_test_ext().execute_with(|| {
+		// We initially submit version
+		let authority = DUMMY_GENESIS_VALIDATORS[0];
+
+		let version = SemVer { major: 4, ..Default::default() };
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), version.clone(),));
+
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
+				authority,
+				SemVer::default(),
+				version.clone()
+			)),
+			"should emit event on updated version"
+		);
+
+		assert_eq!(
+			version,
+			ValidatorPallet::node_cfe_version(authority),
+			"version should be stored"
+		);
+
+		// We submit a new version
+		let new_version = SemVer { major: 5, ..Default::default() };
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
+
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
+				authority,
+				version,
+				new_version.clone()
+			)),
+			"should emit event on updated version"
+		);
+
+		assert_eq!(
+			new_version,
+			ValidatorPallet::node_cfe_version(authority),
+			"new version should be stored"
+		);
+
+		// When we submit the same version we should see no `CFEVersionUpdated` event
+		frame_system::Pallet::<Test>::reset_events();
+		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
+
+		assert_eq!(
+			0,
+			frame_system::Pallet::<Test>::events().len(),
+			"We should have no events of an update"
+		);
+
+		assert_eq!(
+			new_version,
+			ValidatorPallet::node_cfe_version(authority),
+			"we should be still on the same new version"
+		);
+	});
+}
+
+#[test]
+fn register_peer_id() {
+	new_test_ext().execute_with(|| {
+		use sp_core::{Encode, Pair};
+
+		let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
+		let alice_peer_public_key = alice_peer_keypair.public();
+
+		// Don't allow invalid signatures
+		assert_noop!(
+			ValidatorPallet::register_peer_id(
+				Origin::signed(ALICE),
+				alice_peer_public_key,
+				0,
+				0,
+				alice_peer_keypair.sign(&BOB.encode()[..]),
+			),
+			Error::<Test>::InvalidAccountPeerMappingSignature
+		);
+
+		// Non-overlaping peer ids and valid signatures
+		assert_ok!(ValidatorPallet::register_peer_id(
+			Origin::signed(ALICE),
+			alice_peer_public_key,
+			40044,
+			10,
+			alice_peer_keypair.sign(&ALICE.encode()[..]),
+		));
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+				ALICE,
+				alice_peer_public_key,
+				40044,
+				10
+			)),
+			"should emit event on register peer id"
+		);
+		assert_eq!(ValidatorPallet::mapped_peer(&alice_peer_public_key), Some(()));
+		assert_eq!(
+			ValidatorPallet::node_peer_id(&ALICE),
+			Some((ALICE, alice_peer_public_key, 40044, 10))
+		);
+
+		// New mappings to overlapping peer id are disallowed
+		assert_noop!(
+			ValidatorPallet::register_peer_id(
+				Origin::signed(BOB),
+				alice_peer_public_key,
+				0,
+				0,
+				alice_peer_keypair.sign(&BOB.encode()[..]),
+			),
+			Error::<Test>::AccountPeerMappingOverlap
+		);
+
+		// New authority mapping works
+		let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob", None);
+		let bob_peer_public_key = bob_peer_keypair.public();
+		assert_ok!(ValidatorPallet::register_peer_id(
+			Origin::signed(BOB),
+			bob_peer_public_key,
+			40043,
+			11,
+			bob_peer_keypair.sign(&BOB.encode()[..]),
+		),);
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+				BOB,
+				bob_peer_public_key,
+				40043,
+				11
+			)),
+			"should emit event on register peer id"
+		);
+		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
+		assert_eq!(
+			ValidatorPallet::node_peer_id(&BOB),
+			Some((BOB, bob_peer_public_key, 40043, 11))
+		);
+
+		// Changing existing mapping to overlapping peer id is disallowed
+		assert_noop!(
+			ValidatorPallet::register_peer_id(
+				Origin::signed(BOB),
+				alice_peer_public_key,
+				0,
+				0,
+				alice_peer_keypair.sign(&BOB.encode()[..]),
+			),
+			Error::<Test>::AccountPeerMappingOverlap
+		);
+
+		let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob2", None);
+		let bob_peer_public_key = bob_peer_keypair.public();
+
+		// Changing to new peer id works
+		assert_ok!(ValidatorPallet::register_peer_id(
+			Origin::signed(BOB),
+			bob_peer_public_key,
+			40043,
+			11,
+			bob_peer_keypair.sign(&BOB.encode()[..]),
+		));
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+				BOB,
+				bob_peer_public_key,
+				40043,
+				11
+			)),
+			"should emit event on register peer id"
+		);
+		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
+		assert_eq!(
+			ValidatorPallet::node_peer_id(&BOB),
+			Some((BOB, bob_peer_public_key, 40043, 11))
+		);
+
+		// Updating only the ip address works
+		assert_ok!(ValidatorPallet::register_peer_id(
+			Origin::signed(BOB),
+			bob_peer_public_key,
+			40043,
+			12,
+			bob_peer_keypair.sign(&BOB.encode()[..]),
+		));
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+				BOB,
+				bob_peer_public_key,
+				40043,
+				12
+			)),
+			"should emit event on register peer id"
+		);
+		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
+		assert_eq!(
+			ValidatorPallet::node_peer_id(&BOB),
+			Some((BOB, bob_peer_public_key, 40043, 12))
+		);
+	});
+}
+
+#[test]
+fn historical_epochs() {
+	new_test_ext().execute_with(|| {
+		// Activate an epoch for ALICE
+		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
+		// Expect the the epoch to be in the storage for ALICE
+		assert!(HistoricalActiveEpochs::<Test>::get(ALICE).contains(&1));
+		// Activate the next epoch
+		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
+		// Remove epoch 1 for ALICE
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 1);
+		// Expect the epoch to be removed
+		assert!(!HistoricalActiveEpochs::<Test>::get(ALICE).contains(&1));
+		// and epoch 2 still in storage
+		assert!(HistoricalActiveEpochs::<Test>::get(ALICE).contains(&2));
+		// Deactivate epoch 2
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 2);
+		// And expect the historical active epoch array for ALICE to be empty
+		assert!(HistoricalActiveEpochs::<Test>::get(ALICE).is_empty());
+	});
+}
+
+#[test]
+fn highest_bond() {
+	new_test_ext().execute_with(|| {
+		// Epoch 1
+		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
+		HistoricalAuthorities::<Test>::insert(1, vec![ALICE]);
+		HistoricalBonds::<Test>::insert(1, 10);
+		// Epoch 2
+		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
+		HistoricalAuthorities::<Test>::insert(2, vec![ALICE]);
+		HistoricalBonds::<Test>::insert(2, 30);
+		// Epoch 3
+		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
+		HistoricalAuthorities::<Test>::insert(3, vec![ALICE]);
+		HistoricalBonds::<Test>::insert(3, 20);
+		// Expect the bond of epoch 2
+		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
+		// Deactivate all epochs
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 1);
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 2);
+		EpochHistory::<Test>::deactivate_epoch(&ALICE, 3);
+		// Expect the bond to be zero if there is no epoch the node is active in
+		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 0);
+	});
+}
+
+#[test]
+fn test_setting_vanity_names_() {
+	new_test_ext().execute_with(|| {
+		let validators: &[u64] = &[123, 456, 789, 101112];
+		assert_ok!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Test Validator 1".as_bytes().to_vec()));
+		assert_ok!(ValidatorPallet::set_vanity_name(Origin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
+		let vanity_names = crate::VanityNames::<Test>::get();
+		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[0]).unwrap()).unwrap(), "Test Validator 1");
+		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[2]).unwrap()).unwrap(), "Test Validator 2");
+		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), [0xfe, 0xff].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
+		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
+	});
+}
+
+#[test]
+fn test_missing_author_punishment() {
+	new_test_ext().execute_with(|| {
+		const SET_SIZE: u64 = 4;
+		let winners = (0..SET_SIZE).collect::<Vec<_>>();
+		register_keys(&winners[..]);
+
+		RotationPhase::<Test>::put(&RotationStatus::<Test>::VaultsRotated(AuctionOutcome {
+			winners,
+			..Default::default()
+		}));
+		move_forward_blocks(2);
+
+		// Use a large offset to ensure the modulo math selects the correct validators.
+		let offset: u64 = SET_SIZE * 123456;
+		let (expected_authority_index, authored_authority_index) = (1usize, 3usize);
+		MockMissedAuthorshipSlots::set(
+			expected_authority_index as u64 + offset,
+			authored_authority_index as u64 + offset,
+		);
+		move_forward_blocks(1);
+		MockOffenceReporter::assert_reported(
+			PalletOffence::MissedAuthorshipSlot,
+			ValidatorPallet::current_authorities()
+				.get(expected_authority_index..authored_authority_index)
+				.unwrap()
+				.to_vec(),
+		)
+	})
+}
+
+#[test]
+fn no_auction_during_maintenance() {
+	new_test_ext().execute_with(|| {
+		// Activate maintenance mode
+		MockSystemStateInfo::set_maintenance(true);
+		// Assert that we are in maintenance mode
+		assert!(MockSystemStateInfo::ensure_no_maintenance().is_err());
+		// Try to start an auction
+		RotationPhase::<Test>::set(RotationStatus::<Test>::RunAuction);
+		// Move a few blocks forward to trigger the auction
+		move_forward_blocks(1);
+		// Expect the auction to not be started - we are stll in the auction mode and not moving
+		// from here
+		assert_eq!(RotationPhase::<Test>::get(), RotationStatus::<Test>::RunAuction);
+		// Deactivate maintenance mode
+		MockSystemStateInfo::set_maintenance(false);
+		// Expect the maintenance mode to be deactivated
+		assert!(MockSystemStateInfo::ensure_no_maintenance().is_ok());
+		// Move a couple of blocks forward to run the auction
+		move_forward_blocks(2);
+		// Expect the auction to be to be completed
+		assert_eq!(
+			RotationPhase::<Test>::get(),
+			RotationStatus::<Test>::VaultsRotated(Default::default())
+		);
+	});
+}
+
+#[test]
+fn test_reputation_reset() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Simulate an epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatus::<Test>::SessionRotating(AuctionOutcome {
+			winners: vec![1, 2, 3],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_authorities() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		let first_epoch = ValidatorPallet::current_epoch();
+
+		// Simulate another epoch rotation and give the validators some reputation.
+		RotationPhase::<Test>::put(RotationStatus::<Test>::SessionRotating(AuctionOutcome {
+			winners: vec![4, 5, 6],
+			..Default::default()
+		}));
+		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+
+		for id in &ValidatorPallet::current_authorities() {
+			MockReputationResetter::<Test>::set_reputation(id, 100);
+		}
+
+		for id in &[1, 2, 3, 4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
+
+		ValidatorPallet::expire_epoch(first_epoch);
+
+		for id in &[1, 2, 3] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 0);
+		}
+		for id in &[4, 5, 6] {
+			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
+		}
+	});
+}
+
+#[test]
+fn backup_set_size_calculation() {
+	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 20u8), 30);
+	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 0u8), 0);
+	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 200u8), 300);
+}
+
+#[cfg(test)]
+mod bond_expiry {
+	use super::*;
+
+	#[test]
+	fn increasing_bond() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			let initial_epoch = ValidatorPallet::current_epoch();
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![1, 2],
+				bond: 100,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 100);
+
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![2, 3],
+				bond: 101,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 101);
+
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&2),
+				[initial_epoch + 1, initial_epoch + 2]
+			);
+			assert_eq!(EpochHistory::<Test>::active_bond(&2), 101);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&3), 101);
 		});
 	}
 
 	#[test]
-	fn should_end_session() {
-		new_test_ext().execute_with(|| {
-			let set_size = 10;
-			assert_ok!(AuctionPallet::set_auction_range((2, set_size)));
-			// Set block length of epoch to 10
-			let epoch = 10;
-			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
-			// If we are in the bidder phase we should check if we have a force auction or
-			// epoch has expired
-			// Test force rotation
-			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-			// Test we are in the bidder phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			// Move forward by 1 block, we have a block already
-			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
-			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
-			// Move forward by 1 block
-			run_to_block(3);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			// Move forward by 1 block, we should sit in the non-auction phase 'WaitingForBids'
-			run_to_block(5);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			// Epoch is block 10 so let's test an epoch cycle to provoke an auction
-			// This should be the same state
-			run_to_block(9);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			run_to_block(10);
-			// We should have started another auction
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
-			// Let's check we can't alter the state of the pallet during this period
-			assert_noop!(ValidatorPallet::force_rotation(Origin::root()), Error::<Test>::AuctionInProgress);
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::AuctionInProgress);
-			// Finally back to the start again
-			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
-			run_to_block(11);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-		});
-	}
+	fn decreasing_bond() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			let initial_epoch = ValidatorPallet::current_epoch();
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![1, 2],
+				bond: 100,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 100);
 
-	#[test]
-	fn rotation() {
-		// We expect from our `DummyAuction` that we will have our bidders which are then
-		// ran through an auction and that the winners of this auction become the validating set
-		new_test_ext().execute_with(|| {
-			let set_size = 10;
-			assert_ok!(AuctionPallet::set_auction_range((2, set_size)));
-			// Set block length of epoch to 10
-			let epoch = 10;
-			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
-			// We have the genesis set of validators
-			assert_eq!(mock::current_validators().len(), 2);
-			// ---------- Run Auction
-			// Confirm we are in the waiting state
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			// Move forward 2 blocks
-			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			// There are no validators as we are nice and fresh
-			assert!(<ValidatorPallet as EpochInfo>::current_validators().is_empty());
-			assert!(<ValidatorPallet as EpochInfo>::next_validators().is_empty());
-			// Run to the epoch
-			run_to_block(10);
-			// We should have now completed an auction have a set of winners to pass as validators
-			let winners = assert_winners();
-			assert!(<ValidatorPallet as EpochInfo>::current_validators().is_empty());
-			// and the winners are
-			assert!(!<ValidatorPallet as EpochInfo>::next_validators().is_empty());
-			// run more block to make them validators
-			run_to_block(11);
-			// Continue with our current validator set, as we had none should be empty
-			// TODO add genesis validators to mock
-			assert!(<ValidatorPallet as EpochInfo>::current_validators().is_empty());
-			// We do now see our winners lined up to be the next set of validators
-			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
-			// Complete the cycle
-			run_to_block(12);
-			// As we haven't confirmed the auction we would still be in the same phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
-			run_to_block(13);
-			// and still...
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
-			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
-			run_to_block(14);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1);
-			// We do now see our winners as the set of validators
-			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
-			// Our old winners remain
-			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
-			// Force an auction at the next block
-			assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
-			run_to_block(15);
-			// A new auction starts
-			// We should still see the old winners validating
-			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
-			// Our new winners are
-			// We should still see the old winners validating
-			let winners = assert_winners();
-			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
-			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
-			run_to_block(16);
-			// Finalised auction, waiting for bids again
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
-			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
-			// We have the new set of validators
-			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
-		});
-	}
+			ValidatorPallet::start_new_epoch(AuctionOutcome {
+				winners: vec![2, 3],
+				bond: 99,
+				..Default::default()
+			});
+			assert_eq!(ValidatorPallet::bond(), 99);
 
-	#[test]
-	fn genesis() {
-		new_test_ext().execute_with(|| {
-			// We should have a set of 2 validators on genesis with a minimum bid of 1 set
-			assert_eq!(current_validators().len(), 2, "We should have a set of validators at genesis");
-			assert_eq!(min_bid(), 1, "We should have a minimum bid");
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
+			assert_eq!(
+				EpochHistory::<Test>::active_epochs_for_authority(&2),
+				[initial_epoch + 1, initial_epoch + 2]
+			);
+			assert_eq!(EpochHistory::<Test>::active_bond(&2), 100);
+			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
+			assert_eq!(EpochHistory::<Test>::active_bond(&3), 99);
 		});
 	}
 }

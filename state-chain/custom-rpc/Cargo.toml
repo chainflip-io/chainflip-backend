@@ -1,0 +1,26 @@
+[package]
+name = 'custom-rpc'
+version = '0.1.0'
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
+edition = '2021'
+
+# Chainflip Runtime
+[dependencies.state-chain-runtime]
+path = '../runtime'
+
+[dependencies]
+jsonrpc-derive = '18.0.0'
+jsonrpc-core = '18.0.0'
+jsonrpc-core-client = '18.0.0'
+
+[dependencies.sp-runtime]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sp-api]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sc-client-api]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'

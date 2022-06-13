@@ -1,33 +1,68 @@
 # CFE Integration Tests
 
-This folder contains the "integration tests" (as Cargo calls them) for the CFE. This is treated as a separate module to the rest of the code. Thus code in these tests can only access public methods (and therefore should only test public methods).
+This folder contains the "integration tests" (as Cargo calls them) for the CFE.
 
-## Setup
+## First time setup
 
-In order to run the integration there is setup required:
+In order to run the integration tests you must go through the following setup process.
 
+### Linux
 
-- Running Nats instance
-- Eth network (most of the time this will be a local ganache network in Docker) with a deployed StakeManager contract
-  - [Script](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py) that creates the events expected by the test
+The following instructions are for Linux distros that use apt like Ubuntu.
 
-This should be done by the CI, and by the [setup script](scripts/setup.sh) (which is run by the CI)
+### Install Brownie
 
-## How It Works
+```sh
+sudo apt-get install pip
+pip install eth-brownie
+pip install umbral
+```
 
-The current tests work be checking that expected events arrive as expected from a particular expected subject on the message queue. This tests everything from message decoding, to the message routing.
+### Install Node.js and Hardhat
 
-This is done using a message queue client spawned within the test function, that polls the queue for events. After events are received they can be deserialized and compared to the expected events.
+```sh
+# These 3 steps install globally
+sudo apt install nodejs
+sudo apt-get update
+sudo apt install npm
 
-# Running Subsets of Tests
+# Hardhat is used through a local install in your project. So navigate into the `eth-contracts` repo 
+npm install --save-dev hardhat
+```
 
-## Running All Tests
+## Running the integration tests
+
+First get an instance of Hardhat running
+
+```sh
+npx hardhat node
+```
+
+Then run the [setup script](scripts/setup.sh) that creates the events expected by the test. The script will create a a folder and pull the eth-contracts into it from git, so you may want to run the script from a temp folder somewhere. This script will also download and install [poetry](https://github.com/python-poetry/poetry) if you don't have it already.
+
+Finally, the script will deploy all the Chainflip contracts, and perform transactions that generate all possible events on the StakeManager and the KeyManager contracts. These events are what are asserted against within the integration tests.
+
+```sh
+cd `engine/tests`
+./scripts/setup.sh
+```
+
+Now we can run the stake_manager_integration or key_manager_integration tests with cargo.
+
+```sh
+cargo test --package chainflip-engine --test stake_manager_integration -- test_all_stake_manager_events --exact --nocapture
+cargo test --package chainflip-engine --test key_manager_integration -- test_all_key_manager_events --exact --nocapture
+```
+
+## Running Subsets of Tests
+
+### Running All Tests in the CFE
 
 ```sh
 cargo test -p chainflip-engine
 ```
 
-## Run Unit Tests without Integration tests
+### Run Unit Tests without Integration tests
 
 You may only want to run the unit tests (for PRs for example) as there's a lot more setup involved for integration testing.
 
@@ -37,8 +72,7 @@ To run the library/unit tests without running the integration tests you can run:
 cargo test -p chainflip-engine --lib
 ```
 
-
-## Running the Integration Tests without Unit Tests
+### Running the Integration Tests without Unit Tests
 
 To run only a particular integration test you can as so:
 

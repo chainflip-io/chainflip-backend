@@ -1,0 +1,4 @@
+contact_links:
+  - name: Infrastructure changes
+    url: https://github.com/chainflip-io/chainflip-platform-monorepo/issues/new?assignees=&labels=request%2Ceffort-0&template=003-request.md&title=%5BREQUEST%5D+-+
+    about: For any infrastructure changes, please raise an issue in the Platform team's monorepo.

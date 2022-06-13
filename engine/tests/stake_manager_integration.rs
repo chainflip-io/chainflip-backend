@@ -2,119 +2,186 @@
 //! In order for these tests to work, nats and ganache with the preloaded db
 //! in `./eth-db` must be loaded in
 
-use std::str::FromStr;
-
 use chainflip_engine::{
-    eth::{self, stake_manager::stake_manager::StakeManagerEvent},
-    mq::{
-        nats_client::{NatsMQClient, NatsMQClientFactory},
-        pin_message_stream, IMQClient, IMQClientFactory, Subject,
+    eth::{
+        rpc::{EthHttpRpcClient, EthWsRpcClient},
+        stake_manager::{StakeManager, StakeManagerEvent},
+        EthObserver,
     },
-    settings::{self, Settings},
+    logging::utils,
+    settings::{CommandLineOptions, Settings},
 };
 
-use config::{Config, ConfigError, File};
-use tokio_stream::StreamExt;
-
+use futures::stream::StreamExt;
+use sp_core::H160;
+use sp_runtime::AccountId32;
+use std::str::FromStr;
 use web3::types::U256;
 
-pub async fn setup_mq(mq_settings: settings::MessageQueue) -> Box<NatsMQClient> {
-    let factory = NatsMQClientFactory::new(&mq_settings);
-
-    factory.create().await.unwrap()
-}
-
-// Creating the settings to be used for tests
-pub fn test_settings() -> Result<Settings, ConfigError> {
-    let mut s = Config::new();
-
-    // Start off by merging in the "default" configuration file
-    s.merge(File::with_name("config/Testing.toml"))?;
-
-    // You can deserialize (and thus freeze) the entire configuration as
-    s.try_into()
-}
+mod common;
+use crate::common::IntegrationTestSettings;
 
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let settings = test_settings().unwrap();
-    let mq_c = setup_mq(settings.clone().message_queue).await;
+    let root_logger = utils::new_cli_logger();
 
-    // subscribe before pushing events to the queue
-    let stream = mq_c
-        .subscribe::<StakeManagerEvent>(Subject::StakeManager)
+    let integration_test_settings =
+        IntegrationTestSettings::from_file("tests/config.toml").unwrap();
+    let settings =
+        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
+
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
         .await
-        .unwrap();
+        .expect("Couldn't create EthWsRpcClient");
 
-    println!("Subscribing to eth events");
-    // this future contains an infinite loop, so we must end it's life
-    let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
-    println!("Subscribed");
+    let eth_http_rpc_client = EthHttpRpcClient::new(&settings.eth, &root_logger)
+        .expect("Couldn't create EthHttpRpcClient");
 
-    // We just want the future to end, it should already have done it's job in 1 second
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;
+    let stake_manager =
+        StakeManager::new(integration_test_settings.eth.stake_manager_address).unwrap();
 
-    println!("What's the next event?");
-    let mut stream = pin_message_stream(stream);
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::Staked(node_id, amount) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
-            assert_eq!(
+    // The stream is infinite unless we stop it after a short time
+    // in which it should have already done it's job.
+    let sm_events = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        stake_manager.event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
+    )
+    .await
+    .expect(common::EVENT_STREAM_TIMEOUT_MESSAGE)
+    .unwrap()
+    .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Vec<_>>();
+
+    assert!(
+        !sm_events.is_empty(),
+        "{}",
+        common::EVENT_STREAM_EMPTY_MESSAGE
+    );
+
+    // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
+    sm_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            StakeManagerEvent::Staked {
+                account_id,
                 amount,
-                U256::from_dec_str("40000000000000000000000").unwrap()
-            );
-        }
-        _ => panic!("Was expected Staked event"),
-    };
+                staker,
+                return_addr,
+            } => {
+                assert_eq!(
+                    account_id,
+                    &AccountId32::from_str(
+                        "000000000000000000000000000000000000000000000000000000000000a455"
+                    )
+                    .unwrap()
+                );
+                assert_eq!(amount, &40000000000000000000000u128);
+                assert_eq!(
+                    staker,
+                    &web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
+                        .unwrap()
+                );
+                assert_eq!(
+                    return_addr,
+                    &web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
+                        .unwrap()
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find the Staked event");
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
-            assert_eq!(
+    sm_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            StakeManagerEvent::ClaimRegistered {
+                account_id,
                 amount,
-                U256::from_dec_str("13333333333333334032384").unwrap()
-            );
-            assert_eq!(
-                address,
-                web3::types::H160::from_str("0x4726b1555bf7ab73553be4eb3cfe15376d0db188").unwrap()
-            );
-            // these aren't determinstic, so exclude from the test
-            // assert_eq!(start_time, U256::from_dec_str("1621727544").unwrap());
-            // assert_eq!(end_time, U256::from_dec_str("1621900344").unwrap());
-        }
-        _ => panic!("Was expecting ClaimRegistered event"),
-    }
+                staker,
+                start_time,
+                expiry_time,
+            } => {
+                assert_eq!(
+                    account_id,
+                    &AccountId32::from_str(
+                        "000000000000000000000000000000000000000000000000000000000000a455"
+                    )
+                    .unwrap()
+                );
+                assert_eq!(
+                    amount,
+                    &U256::from_dec_str("13333333333333334032384").unwrap()
+                );
+                assert_eq!(
+                    staker,
+                    &web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
+                        .unwrap()
+                );
+                assert!(start_time > &U256::from_str("0").unwrap());
+                assert!(expiry_time > start_time);
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find the ClaimRegistered event");
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::ClaimExecuted(node_id, amount) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
-            assert_eq!(
-                amount,
-                U256::from_dec_str("13333333333333334032384").unwrap()
-            );
-        }
-        _ => panic!("Was expecting ClaimExecuted event"),
-    }
+    sm_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            StakeManagerEvent::ClaimExecuted {
+                account_id, amount, ..
+            } => {
+                assert_eq!(
+                    account_id,
+                    &AccountId32::from_str(
+                        "000000000000000000000000000000000000000000000000000000000000a455"
+                    )
+                    .unwrap()
+                );
+                assert_eq!(amount, &13333333333333334032384);
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find the ClaimExecuted event");
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::MinStakeChanged(before, after) => {
-            assert_eq!(
-                before,
-                U256::from_dec_str("40000000000000000000000").unwrap()
-            );
-            assert_eq!(
-                after,
-                U256::from_dec_str("13333333333333334032384").unwrap()
-            );
-        }
-        _ => panic!("Was expecting MinStakeChanged event"),
-    }
+    sm_events
+        .iter()
+        .find(|event| match event.event_parameters {
+            StakeManagerEvent::MinStakeChanged {
+                old_min_stake,
+                new_min_stake,
+            } => {
+                assert_eq!(
+                    old_min_stake,
+                    U256::from_dec_str("40000000000000000000000").unwrap()
+                );
+                assert_eq!(
+                    new_min_stake,
+                    U256::from_dec_str("13333333333333334032384").unwrap()
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find the MinStakeChanged event");
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::EmissionChanged(before, after) => {
-            assert_eq!(before, U256::from_dec_str("5607877281367557723").unwrap());
-            assert_eq!(after, U256::from_dec_str("1869292427122519296").unwrap());
-        }
-        _ => panic!("Was expecting MinStakeChanged event"),
-    }
+    sm_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            StakeManagerEvent::GovernanceWithdrawal { to, amount, .. } => {
+                assert_eq!(
+                    to,
+                    &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+                );
+                assert_eq!(amount, &10276666666666666665967616);
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find the GovernanceWithdrawal event");
 }

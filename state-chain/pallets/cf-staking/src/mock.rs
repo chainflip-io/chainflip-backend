@@ -1,20 +1,29 @@
-use std::time::Duration;
-
 use crate as pallet_cf_staking;
-use pallet_cf_flip;
-use app_crypto::ecdsa::Public;
-use sp_core::H256;
-use frame_support::{parameter_types};
-use sp_runtime::{BuildStorage, app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
+use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
+use cf_traits::{
+	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
+	AuthorityCount, ThresholdSigner, WaivedFees,
+};
+use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	AccountId32, BuildStorage,
+};
+use std::time::Duration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type AccountId = u64;
+// Use a realistic account id for compatibility with `RegisterClaim`.
+type AccountId = AccountId32;
 
-use cf_traits::mocks::epoch_info;
-pub(super) mod witnesser;
-pub(super) mod ensure_witnessed;
-pub(super) mod time_source;
+use cf_traits::{
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck,
+		eth_environment_provider::MockEthEnvironmentProvider, time_source,
+	},
+	Chainflip, ReplayProtectionProvider,
+};
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -23,21 +32,19 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
-		Staking: pallet_cf_staking::{Module, Call, Config<T>, Storage, Event<T>},
+		System: frame_system,
+		Flip: pallet_cf_flip,
+		Staking: pallet_cf_staking,
 	}
 );
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const MinClaimTTL: Duration = Duration::from_millis(100);
-	pub const ClaimTTL: Duration = Duration::from_millis(1000);
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -45,7 +52,7 @@ impl frame_system::Config for Test {
 	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Hash = H256;
+	type Hash = sp_core::H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -59,47 +66,139 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<5>;
+}
+
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = AccountId;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
+	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
+}
+
+parameter_types! {
+	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
 }
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
+parameter_types! {
+	pub const BlocksPerDay: u64 = 14400;
+}
+
+// Implement mock for RestrictionHandler
+impl_mock_waived_fees!(AccountId, Call);
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock;
 }
+
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call, u64);
+cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
+cf_traits::impl_mock_stake_transfer!(AccountId, u128);
+
+pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
+pub const CHAIN_ID: u64 = 31337;
+pub const COUNTER: u64 = 42;
+
+impl ReplayProtectionProvider<Ethereum> for Test {
+	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
+		EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: COUNTER,
+		}
+	}
+}
+
+pub struct MockThresholdSigner;
+
+thread_local! {
+	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+}
+
+impl MockThresholdSigner {
+	pub fn received_requests() -> Vec<<Ethereum as ChainCrypto>::Payload> {
+		SIGNATURE_REQUESTS.with(|cell| cell.borrow().clone())
+	}
+
+	pub fn on_signature_ready(account_id: &AccountId) -> DispatchResultWithPostInfo {
+		Staking::post_claim_signature(Origin::root(), account_id.clone(), 0)
+	}
+}
+
+impl ThresholdSigner<Ethereum> for MockThresholdSigner {
+	type RequestId = u32;
+	type Error = &'static str;
+	type Callback = Call;
+
+	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
+		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
+		0
+	}
+
+	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
+		Ok(())
+	}
+
+	fn signature_result(
+		_: Self::RequestId,
+	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
+		AsyncResult::Ready(ETH_DUMMY_SIG)
+	}
+}
+
+// The dummy signature can't be Default - this would be interpreted as no signature.
+pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
+	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
-	type Call = Call;
-	type Nonce = u32;
-	type EthereumCrypto = Public;
-	type EnsureWitnessed = ensure_witnessed::Mock;
-	type Witnesser = witnesser::Mock;
-	type EpochInfo = epoch_info::Mock;
 	type TimeSource = time_source::Mock;
-	type MinClaimTTL = MinClaimTTL;
-	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;
+	type WeightInfo = ();
+	type StakerId = AccountId;
+	type ReplayProtectionProvider = Self;
+	type ThresholdSigner = MockThresholdSigner;
+	type ThresholdCallable = Call;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type RegisterClaim = eth::api::EthereumApi;
+	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123123u64;
-pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
+pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
+pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
+// Used as genesis node for testing.
+pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 
+pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		frame_system: Default::default(),
-		pallet_cf_flip: Some(FlipConfig {
-			total_issuance: 1_000,
-		}),
-		pallet_cf_staking: Some(StakingConfig{
-			genesis_stakers: vec![],
-		}),
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000 },
+		staking: StakingConfig {
+			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
+			minimum_stake: MIN_STAKE,
+			claim_ttl: Duration::from_secs(10),
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

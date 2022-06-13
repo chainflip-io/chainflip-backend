@@ -1,5 +1,5 @@
 [![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/chainflip-io/chainflip-backend)
-[![Build Status](https://droneci.chainflip.xyz/api/badges/chainflip-io/chainflip-backend/status.svg)](https://droneci.chainflip.xyz/chainflip-io/chainflip-backend)
+
 # Chainflip
 
 This repo contains everything you need to run a validator node on the Chainflip network.
@@ -13,6 +13,13 @@ issue!
 ## Contributing
 
 ### Code style
+
+The best way to ensure that your code is easy to merge, is to copy the project's pre-commit hook into your local `.git/` directory. You can do this with:
+
+```bash
+cp .git-hooks/pre-commit .git/hooks/
+chmod +x .git/hooks/pre-commit
+```
 
 Since much of the project is reliant on parity substrate, please take inspiration from
 parity's [Substrate code style](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md) where possible.

@@ -1,5 +1,0 @@
----
-ansible_ssh_user: root
-ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o ForwardAgent=yes'
-
-chainflip_scn_version: 2021-04-19

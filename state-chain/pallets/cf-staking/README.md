@@ -2,15 +2,15 @@
 
 This pallet implements Chainflip staking functionality.
 
-## Purpose
+## Overview
 
 This pallet manages staking and claiming of stakes, including:
 
 - Receiving witnesses of events occurring in Chainflip's `StakeManager` Ethereum contract and updating validator's stakes accordingly.
 - Processing claim requests.
 - Expiring claims.
-- Account creation when stakers stake for the first time. 
-- Account deletion when stakers claim all remaining funds. 
+- Account creation when stakers stake for the first time.
+- Account deletion when stakers claim all remaining funds.
 
 ### Staking
 
@@ -38,7 +38,7 @@ Once the CFE has generated a valid signature for a claim, it should be posted ba
 
 This pallet depends on foreign implementations of the following [traits](../../traits):
 
-- `Witnesser`. See the [Witness](../cf-witness) pallet for an implementation.
+- `Witnesser`. See the [Witness](../cf-witnesser) pallet for an implementation.
 - `StakeTransfer`. See the [Flip](../cf-flip) pallet for an implementation.
 - `EpochInfo`. See the [Validator](../cf-validator) pallet for an implementation.
 
@@ -50,14 +50,6 @@ This pallet does not depend on any other FRAME pallet or externally developed mo
 
 Requires a list of genesis stakers as a vec of tuples (`Vec<(AccountId<T>, T::Balance)>`). Each account in the list is staked in to the network
 as if they had been staked through validator consensus.
-
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open
-```
 
 ## Improvements
 
