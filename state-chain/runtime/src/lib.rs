@@ -5,6 +5,7 @@ pub mod chainflip;
 pub mod constants;
 mod migrations;
 pub mod runtime_apis;
+mod weights;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
@@ -274,7 +275,7 @@ impl frame_system::Config for Runtime {
 	/// The data to be stored in an account.
 	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
-	type SystemWeightInfo = ();
+	type SystemWeightInfo = weights::frame_system::SubstrateWeight<Runtime>;
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
 	type SS58Prefix = SS58Prefix;
 	/// The set code logic, just the default since we're not a parachain.
@@ -315,7 +316,7 @@ impl pallet_timestamp::Config for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_timestamp::SubstrateWeight<Runtime>;
 }
 
 impl pallet_authorship::Config for Runtime {
@@ -548,11 +549,11 @@ mod benches {
 		[pallet_cf_flip, Flip]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_staking, Staking]
-		[pallet_session,  SessionBench::<Runtime>]
+		// [pallet_session,  SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
 		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
-		// [pallet_grandpa, GrandpaBench::<Runtime>]
+		[pallet_grandpa, Grandpa]
 		[pallet_cf_governance, Governance]
 		[pallet_cf_vaults, EthereumVault]
 		[pallet_cf_online, Online]
@@ -765,7 +766,7 @@ impl_runtime_apis! {
 			use baseline::Pallet as BaselineBench;
 
 			impl frame_system_benchmarking::Config for Runtime {}
-			impl pallet_session_benchmarking::Config for Runtime {}
+			// impl pallet_session_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 
 			let whitelist: Vec<TrackedStorageKey> = vec![

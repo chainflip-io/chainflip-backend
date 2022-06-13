@@ -207,6 +207,7 @@ runtime-benchmarks = [
   'frame-system-benchmarking',
   'frame-system/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
+  'pallet-grandpa/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
@@ -222,7 +223,7 @@ runtime-benchmarks = [
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-environment/runtime-benchmarks',
-  "pallet-session-benchmarking",
+  'pallet-session-benchmarking',
 ]
 std = [
   'frame-try-runtime/std',
@@ -269,6 +270,7 @@ std = [
   'pallet-cf-threshold-signature/std',
   'pallet-cf-environment/std',
   'pallet-cf-online/std',
+  'pallet-session-benchmarking/std',
 ]
 try-runtime = [
   "frame-executive/try-runtime",

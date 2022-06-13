@@ -5573,6 +5573,7 @@ dependencies = [
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
+ "serde",
  "sp-application-crypto",
  "sp-io",
  "sp-runtime",
@@ -8796,6 +8797,7 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthl
 dependencies = [
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-arithmetic",
  "sp-core",
  "sp-runtime",
