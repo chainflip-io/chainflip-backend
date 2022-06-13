@@ -9,7 +9,7 @@ decl_runtime_apis!(
 		fn cf_eth_stake_manager_address() -> [u8; 20];
 		fn cf_eth_key_manager_address() -> [u8; 20];
 		fn cf_eth_chain_id() -> u64;
-		fn cf_epoch_index() -> u32;
+		fn cf_current_epoch() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u64;
 		fn cf_backup_emission_per_block() -> u64;
