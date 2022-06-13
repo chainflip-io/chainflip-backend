@@ -97,8 +97,8 @@ jobs:
       - name: Get EC2 Instance ID
         if: github.event.inputs.command == 'destroy'
         run: |
-          echo "INSTANCE_ID=$(echo $(terraform output -raw ec2_id))" >> $GITHUB_ENV
-          echo $INSTANCE_ID
+          instance_id=$(echo $(terraform output -raw ec2_id))
+          echo "INSTANCE_ID=$instance_id" >> $GITHUB_ENV
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Destroy
