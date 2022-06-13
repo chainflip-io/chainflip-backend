@@ -19,6 +19,10 @@ pub trait CustomApi {
 	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_chain_id")]
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
+	#[rpc(name = "cf_current_epoch")]
+	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error>;
+	#[rpc(name = "cf_current_epoch_started_at")]
+	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_authority_emission_per_block")]
 	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
 	#[rpc(name = "cf_backup_emission_per_block")]
@@ -70,6 +74,20 @@ where
 		self.client
 			.runtime_api()
 			.cf_eth_chain_id(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_current_epoch(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_current_epoch_started_at(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {

@@ -578,6 +578,12 @@ impl_runtime_apis! {
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
 		}
+		fn cf_current_epoch() -> u32 {
+			Validator::current_epoch()
+		}
+		fn cf_current_epoch_started_at() -> u32 {
+			Validator::current_epoch_started_at()
+		}
 		fn cf_authority_emission_per_block() -> u64 {
 			Emissions::current_authority_emission_per_block().unique_saturated_into()
 		}
