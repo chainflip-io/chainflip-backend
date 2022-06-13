@@ -583,7 +583,7 @@ impl_runtime_apis! {
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
-    }
+	}
 		fn cf_authority_emission_per_block() -> u64 {
 			Emissions::current_authority_emission_per_block().unique_saturated_into()
 		}
