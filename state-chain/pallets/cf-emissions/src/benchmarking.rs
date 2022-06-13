@@ -61,7 +61,7 @@ benchmarks! {
 	}
 	verify {
 		 let supply_update_interval = Pallet::<T>::supply_update_interval();
-		 assert_eq!(supply_update_interval, (50 as u32).into());
+		 assert_eq!(supply_update_interval, (100 as u32).into());
 	}
 
 	impl_benchmark_test_suite!(
