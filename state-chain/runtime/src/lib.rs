@@ -578,6 +578,12 @@ impl_runtime_apis! {
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
 		}
+		fn cf_epoch_index() -> u32 {
+			Validator::current_epoch()
+		}
+		fn cf_current_epoch_started_at() -> u32 {
+			Validator::current_epoch_started_at()
+		}
 	}
 	// END custom runtime APIs
 
