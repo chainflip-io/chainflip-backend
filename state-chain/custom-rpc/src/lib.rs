@@ -23,6 +23,10 @@ pub trait CustomApi {
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch_started_at")]
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error>;
+	#[rpc(name = "cf_authority_emission_per_block")]
+	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
+	#[rpc(name = "cf_backup_emission_per_block")]
+	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -84,6 +88,20 @@ where
 		self.client
 			.runtime_api()
 			.cf_current_epoch_started_at(&at)
+      .map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+  }
+	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_authority_emission_per_block(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_backup_emission_per_block(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 }
