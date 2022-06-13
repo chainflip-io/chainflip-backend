@@ -121,8 +121,7 @@ jobs:
         if: github.event.inputs.command == 'destroy'
         run: |
           echo ${{ steps.get-ec2-id.outputs.instance_id }}
-          INSTANCE_ID=${{ steps.get-ec2-id.outputs.instance_id }}
-          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "$INSTANCE_ID" '.runners[] | select(.name==$instance_id).id')
+          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "${{ steps.get-ec2-id.outputs.instance_id }}" '.runners[] | select(.name==$instance_id).id')
           echo ID: $ID
           curl -X DELETE -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
         working-directory: ./aws/Workloads/benchmarks-github-runner
