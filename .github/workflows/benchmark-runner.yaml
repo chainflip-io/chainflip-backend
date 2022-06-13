@@ -1,0 +1,125 @@
+name: Deploy/Destroy Benchmarks Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_machine_spec:
+        required: true
+        default: 4vCPU-8GB
+        type: choice
+        options:
+          - 4vCPU-8GB
+          - 4vCPU-16GB
+      command:
+        required: true
+        type: choice
+        options:
+          - apply
+          - destroy
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RUNNERS_MANAGEMENT_GITHUB_TOKEN: ${{ secrets.RUNNERS_MANAGEMENT_GITHUB_TOKEN }}
+
+jobs:
+  terraform-benchmarks-runner:
+    name: Terrafrom ${{ github.event.inputs.command }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout chainflip-platform-monorepo
+        uses: actions/checkout@v3
+        with:
+          repository: chainflip-io/chainflip-platform-monorepo
+          ref: main
+          token: ${{ secrets.CHAINFLIP_BOT_GITHUB_TOKEN }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.1.7
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+
+      - name: Generate Terraform Variables
+        id: tfvars
+        run: |
+          runner_registration_token=$(curl -sX POST -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
+          instance_spec=${{ github.event.inputs.benchmark_machine_spec }}
+          runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }}
+
+          echo "TF_VAR_runner_registration_token=$runner_registration_token" >> $GITHUB_ENV
+          echo "TF_VAR_instance_spec=$instance_spec" >> $GITHUB_ENV
+          echo "TF_VAR_runner_custom_labels=$runner_custom_labels" >> $GITHUB_ENV
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Terraform Workspace
+        id: workspace
+        run: terraform workspace new ${{ github.event.inputs.benchmark_machine_spec }} || terraform workspace select ${{ github.event.inputs.benchmark_machine_spec }}
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Terraform Validate
+        if: github.event.inputs.command == 'apply'
+        id: validate
+        run: terraform validate -no-color
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Terraform Plan
+        if: github.event.inputs.command == 'apply'
+        id: plan
+        run: >
+          terraform plan
+          -no-color
+          -out tfplan
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Terraform Apply
+        id: apply
+        if: github.event.inputs.command == 'apply'
+        run: >
+          terraform apply
+          -no-color
+          -auto-approve
+          "tfplan"
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Get EC2 Instance ID
+        if: github.event.inputs.command == 'destroy'
+        run: |
+          echo "INSTANCE_ID=$(echo $(terraform output -raw ec2_id))" >> $GITHUB_ENV
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Terraform Destroy
+        id: destroy
+        if: github.event.inputs.command == 'destroy'
+        run: >
+          terraform destroy
+          -no-color
+          -auto-approve
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Terraform Workspace
+        id: destroy-workspace
+        if: github.event.inputs.command == 'destroy'
+        run: |
+          terraform workspace select default
+          terraform workspace delete ${{ github.event.inputs.benchmark_machine_spec }}
+        working-directory: ./aws/Workloads/benchmarks-github-runner
+
+      - name: Remove Runner from GitHub
+        if: github.event.inputs.command == 'destroy'
+        run: |
+          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "$INSTANCE_ID" '.runners[] | select(.name==$instance_id).id')
+          curl -X DELETE -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
+        working-directory: ./aws/Workloads/benchmarks-github-runner
