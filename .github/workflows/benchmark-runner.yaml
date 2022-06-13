@@ -28,9 +28,12 @@ jobs:
   deploy-benchmarks-runner:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout chainflip-platform-monorepo
         uses: actions/checkout@v3
-
+        with:
+          repository: chainflip-io/chainflip-platform-monorepo
+          ref: main
+          token: ${{ secrets.CHAINFLIP_BOT_GITHUB_TOKEN }}
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
