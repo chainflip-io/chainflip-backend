@@ -553,7 +553,8 @@ pub mod pallet {
 
 		/// Allow a node to set a "Vanity Name" for themselves. This is functionally
 		/// useless but can be used to make the network a bit more friendly for
-		/// observers.
+		/// observers. Names are required to be <= MAX_LENGTH_FOR_VANITY_NAME (64)
+		/// UTF-8 bytes.
 		///
 		/// The dispatch origin of this function must be signed.
 		///
