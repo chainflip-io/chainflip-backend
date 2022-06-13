@@ -578,6 +578,12 @@ impl_runtime_apis! {
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
 		}
+		fn cf_authority_emission_per_block() -> u64 {
+			Emissions::current_authority_emission_per_block().try_into().unwrap()
+		}
+		fn cf_backup_emission_per_block() -> u64 {
+			Emissions::backup_node_emission_per_block().try_into().unwrap()
+		}
 	}
 	// END custom runtime APIs
 
