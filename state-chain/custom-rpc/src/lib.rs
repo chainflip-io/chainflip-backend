@@ -84,8 +84,10 @@ where
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error> {
-		Ok(TX_FEE_MULTIPLIER.try_into().expect("We never set a fee multiplier greater than u64::MAX"))
-  }
+		Ok(TX_FEE_MULTIPLIER
+			.try_into()
+			.expect("We never set a fee multiplier greater than u64::MAX"))
+	}
 	fn cf_auction_parameters(&self) -> Result<(u32, u32), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
