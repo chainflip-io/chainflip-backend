@@ -140,6 +140,7 @@ pub mod pallet {
 		StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
 
 	#[pallet::storage]
+	// #[pallet::getter(fn minimum_stake)]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// TTL for a claim from the moment of issue.

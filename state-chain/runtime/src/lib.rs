@@ -24,6 +24,7 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 pub use pallet_cf_environment::cfe::CfeSettings;
+use pallet_cf_staking::MinimumStake;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -34,7 +35,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-	OpaqueKeys, Verify,
+	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
 use cf_traits::EpochInfo;
@@ -577,6 +578,13 @@ impl_runtime_apis! {
 		}
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
+		}
+		fn cf_auction_parameters() -> (u32, u32) {
+			let auction_params = Auction::auction_parameters();
+			(auction_params.min_size, auction_params.max_size)
+		}
+		fn cf_min_stake() -> u64 {
+			MinimumStake::<Runtime>::get().unique_saturated_into()
 		}
 	}
 	// END custom runtime APIs
