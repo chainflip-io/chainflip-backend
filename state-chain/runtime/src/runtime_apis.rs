@@ -12,5 +12,9 @@ decl_runtime_apis!(
 		/// Returns the Auction params in the form [min_set_size, max_set_size]
 		fn cf_auction_parameters() -> (u32, u32);
 		fn cf_min_stake() -> u64;
+		fn cf_current_epoch() -> u32;
+		fn cf_current_epoch_started_at() -> u32;
+		fn cf_authority_emission_per_block() -> u64;
+		fn cf_backup_emission_per_block() -> u64;
 	}
 );
