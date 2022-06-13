@@ -141,13 +141,27 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug, PartialOrd, Ord,
+)]
+pub struct Bid<Id, Amount> {
+	pub bidder_id: Id,
+	pub amount: Amount,
+}
+
+impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
+	fn from(bid: (Id, Amount)) -> Self {
+		Self { bidder_id: bid.0, amount: bid.1 }
+	}
+}
+
 /// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct AuctionOutcome<CandidateId, BidAmount> {
 	/// The auction winners.
 	pub winners: Vec<CandidateId>,
 	/// The auction losers and their bids.
-	pub losers: Vec<(CandidateId, BidAmount)>,
+	pub losers: Vec<Bid<CandidateId, BidAmount>>,
 	/// The resulting bond for the next epoch.
 	pub bond: BidAmount,
 }

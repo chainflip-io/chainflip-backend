@@ -1,5 +1,4 @@
 use crate::{
-    logging::{CEREMONY_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED},
     multisig::{
         client::{
             common::{
@@ -214,11 +213,7 @@ async fn should_ignore_duplicate_rts() {
     assert_ok!(node.ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::DuplicateCeremonyId,
-        CEREMONY_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 #[tokio::test]
@@ -248,11 +243,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     ));
 
     // Check that the failure reason is correct
-    test_node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        REQUEST_TO_SIGN_IGNORED,
-    );
+    test_node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]
@@ -302,7 +293,6 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     node.ensure_failure_reason(
         result_receiver,
         CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
-        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
@@ -439,100 +429,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        REQUEST_TO_SIGN_IGNORED,
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_rts_with_used_ceremony_id() {
-    let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
-
-    let (messages, result_receivers) = signing_ceremony.request().await;
-    let messages = run_stages!(
-        signing_ceremony,
-        messages,
-        VerifyComm2,
-        LocalSig3,
-        VerifyLocalSig4
-    );
-    // Finish a signing ceremony
-    signing_ceremony.distribute_messages(messages);
-    signing_ceremony.complete(result_receivers).await;
-
-    let account_id = signing_ceremony.nodes.keys().next().unwrap().clone();
-
-    // Send an rts with the same ceremony id (the default signing ceremony id for tests)
-    let signing_ceremony_details = signing_ceremony.signing_ceremony_details(&account_id);
-    let node = signing_ceremony.nodes.get_mut(&account_id).unwrap();
-    let result_receiver = node.request_signing(signing_ceremony_details);
-
-    // The rts should have been ignored
-    assert_ok!(node.ensure_ceremony_at_signing_stage(
-        STAGE_FINISHED_OR_NOT_STARTED,
-        signing_ceremony.ceremony_id
-    ));
-
-    // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::CeremonyIdAlreadyUsed,
-        REQUEST_TO_SIGN_IGNORED,
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_stage_data_with_used_ceremony_id() {
-    let (key_id, key_data, _, nodes) = helpers::run_keygen(
-        helpers::new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-    )
-    .await;
-
-    let (mut signing_ceremony, _) = SigningCeremonyRunner::new_with_threshold_subset_of_signers(
-        nodes,
-        DEFAULT_SIGNING_CEREMONY_ID,
-        key_id,
-        key_data,
-        MESSAGE_HASH.clone(),
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-    );
-
-    let [node_0_id, node_1_id] = signing_ceremony.select_account_ids();
-
-    let (_, signing_messages) = helpers::standard_signing(&mut signing_ceremony).await;
-
-    // Receive comm1 from a used ceremony id
-    signing_ceremony.distribute_message(
-        &node_1_id,
-        &node_0_id,
-        signing_messages
-            .stage_1_messages
-            .get(&node_1_id)
-            .unwrap()
-            .get(&node_0_id)
-            .unwrap()
-            .clone(),
-    );
-
-    // The message should have been ignored and no ceremony was started
-    // In this case, the ceremony would be unauthorised, so we must check how many signing states exist
-    // to see if a unauthorised state was created.
-    assert_ok!(signing_ceremony
-        .get_mut_node(&node_0_id)
-        .ensure_ceremony_at_signing_stage(
-            STAGE_FINISHED_OR_NOT_STARTED,
-            DEFAULT_SIGNING_CEREMONY_ID
-        ));
-    assert_eq!(
-        signing_ceremony
-            .get_mut_node(&node_0_id)
-            .ceremony_manager
-            .get_signing_states_len(),
-        0
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]

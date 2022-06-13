@@ -85,6 +85,17 @@ benchmarks_instance_pallet! {
 	} : {
 		let _ = completed_response_context.offenders();
 	}
+	set_threshold_signature_timeout {
+		let old_timeout: T::BlockNumber = 5u32.into();
+		ThresholdSignatureResponseTimeout::<T, I>::put(old_timeout);
+		let new_timeout: T::BlockNumber = old_timeout + 1u32.into();
+		let call = Call::<T, I>::set_threshold_signature_timeout {
+			new_timeout
+		};
+	} : { call.dispatch_bypass_filter(<T as Config<I>>::EnsureGovernance::successful_origin())? }
+	verify {
+		assert_eq!(ThresholdSignatureResponseTimeout::<T, I>::get(), new_timeout);
+	}
 }
 
 // NOTE: Test suite not included because of dependency mismatch between benchmarks and mocks.

@@ -1,5 +1,5 @@
 use crate::*;
-use cf_traits::{BackupNodes, BackupOrPassive};
+use cf_traits::{BackupNodes, BackupOrPassive, Bid};
 use sp_runtime::traits::Bounded;
 use sp_std::cmp::Reverse;
 
@@ -20,27 +20,13 @@ impl<Id, Amount> Default for BackupTriage<Id, Amount> {
 pub type RuntimeBackupTriage<T> =
 	BackupTriage<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-#[derive(
-	PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug, PartialOrd, Ord,
-)]
-pub struct Bid<Id, Amount> {
-	pub bidder_id: Id,
-	pub amount: Amount,
-}
-
-impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
-	fn from(bid: (Id, Amount)) -> Self {
-		Self { bidder_id: bid.0, amount: bid.1 }
-	}
-}
-
 impl<Id, Amount> BackupTriage<Id, Amount>
 where
 	Id: Ord,
 	Amount: Ord + Copy + Default + Zero + Bounded,
 {
 	pub fn new<AccountState: ChainflipAccount>(
-		mut backup_candidates: Vec<(Id, Amount)>,
+		mut backup_candidates: Vec<Bid<Id, Amount>>,
 		backup_group_size_target: usize,
 	) -> Self
 	where
@@ -48,17 +34,17 @@ where
 	{
 		let mut triage_result = if backup_group_size_target > backup_candidates.len() {
 			Self {
-				backup: backup_candidates.into_iter().map(Into::into).collect(),
+				backup: backup_candidates,
 				passive: Vec::new(),
 				backup_group_size_target: backup_group_size_target as u32,
 			}
 		} else {
 			// Sort the candidates by decreasing bid.
-			backup_candidates.sort_unstable_by_key(|(_, amount)| Reverse(*amount));
+			backup_candidates.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
 			let passive = backup_candidates.split_off(backup_group_size_target);
 			Self {
-				backup: backup_candidates.into_iter().map(Into::into).collect(),
-				passive: passive.into_iter().map(Into::into).collect(),
+				backup: backup_candidates,
+				passive,
 				backup_group_size_target: backup_group_size_target as u32,
 			}
 		};
@@ -226,9 +212,15 @@ impl<T: Config> BackupNodes for Pallet<T> {
 
 #[cfg(test)]
 mod test_backup_triage {
+	use crate::mock::ValidatorId;
+
 	use super::*;
 	use cf_traits::mocks::chainflip_account::MockChainflipAccount;
-	use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
+	use sp_std::collections::btree_set::BTreeSet;
+
+	fn candidates_to_bids(candidates: Vec<(ValidatorId, u32)>) -> Vec<Bid<ValidatorId, u32>> {
+		candidates.into_iter().map(Into::into).collect()
+	}
 
 	macro_rules! check_invariants {
 		($triage:ident) => {
@@ -281,29 +273,30 @@ mod test_backup_triage {
 	#[test]
 	fn test_new() {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3), (4, 4), (2, 2)];
+		let candidates = candidates_to_bids(CANDIDATES.to_vec());
 
-		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 3);
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(candidates.clone(), 3);
 
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 2, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 5);
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(candidates.clone(), 5);
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 10);
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(candidates.clone(), 10);
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 0);
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(candidates.clone(), 0);
 		assert_eq!(triage.lowest_backup_bid(), u32::MAX, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 5, "{:?}", triage);
 		check_invariants!(triage);
 
-		let triage = TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), 1);
+		let triage = TestBackupTriage::new::<MockChainflipAccount>(candidates, 1);
 		assert_eq!(triage.lowest_backup_bid(), 5, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 4, "{:?}", triage);
 		check_invariants!(triage);
@@ -312,10 +305,10 @@ mod test_backup_triage {
 	#[test]
 	fn test_promotion_from_passive() {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3), (4, 4), (2, 2)];
+		let candidates = candidates_to_bids(CANDIDATES.to_vec());
 		const TEST_SIZE: usize = 3;
 
-		let mut triage =
-			TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), TEST_SIZE);
+		let mut triage = TestBackupTriage::new::<MockChainflipAccount>(candidates, TEST_SIZE);
 
 		assert_eq!(triage.lowest_backup_bid(), 3, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 2, "{:?}", triage);
@@ -345,10 +338,10 @@ mod test_backup_triage {
 	#[test]
 	fn test_promotion_from_outside() {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3)];
+		let candidates = candidates_to_bids(CANDIDATES.to_vec());
 		const TEST_SIZE: usize = 3;
 
-		let mut triage =
-			TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), TEST_SIZE);
+		let mut triage = TestBackupTriage::new::<MockChainflipAccount>(candidates, TEST_SIZE);
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);
 		check_invariants!(triage);
@@ -369,10 +362,10 @@ mod test_backup_triage {
 	#[test]
 	fn test_demotion() {
 		const CANDIDATES: &[(u64, u32)] = &[(5, 5), (1, 1), (3, 3)];
+		let candidates = candidates_to_bids(CANDIDATES.to_vec());
 		const TEST_SIZE: usize = 3;
 
-		let mut triage =
-			TestBackupTriage::new::<MockChainflipAccount>(CANDIDATES.to_vec(), TEST_SIZE);
+		let mut triage = TestBackupTriage::new::<MockChainflipAccount>(candidates, TEST_SIZE);
 		// Initial: [5, 3, 1] / []
 		assert_eq!(triage.lowest_backup_bid(), 1, "{:?}", triage);
 		assert_eq!(triage.highest_passive_bid(), 0, "{:?}", triage);

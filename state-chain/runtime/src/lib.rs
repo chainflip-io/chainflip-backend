@@ -142,7 +142,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
-// FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
 	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
@@ -175,14 +174,9 @@ impl pallet_cf_environment::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 }
 
-parameter_types! {
-	pub const KeygenResponseGracePeriod: BlockNumber =
-		constants::common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS +
-		constants::common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
-}
-
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;
@@ -191,7 +185,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
-	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type EthEnvironmentProvider = Environment;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
@@ -432,12 +425,12 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = Origin;
 	type ThresholdCallable = Call;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
-	type ThresholdFailureTimeout = ConstU32<THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS>;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -570,8 +563,20 @@ mod benches {
 impl_runtime_apis! {
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
-		fn is_auction_phase() -> bool {
+		fn cf_is_auction_phase() -> bool {
 			Validator::is_auction_phase()
+		}
+		fn cf_eth_flip_token_address() -> [u8; 20] {
+			Environment::flip_token_address()
+		}
+		fn cf_eth_stake_manager_address() -> [u8; 20] {
+			Environment::stake_manager_address()
+		}
+		fn cf_eth_key_manager_address() -> [u8; 20] {
+			Environment::key_manager_address()
+		}
+		fn cf_eth_chain_id() -> u64 {
+			Environment::ethereum_chain_id()
 		}
 	}
 	// END custom runtime APIs

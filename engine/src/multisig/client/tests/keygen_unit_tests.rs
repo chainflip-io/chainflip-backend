@@ -3,32 +3,29 @@ use rand_legacy::{FromEntropy, SeedableRng};
 use std::{collections::BTreeSet, iter::FromIterator};
 use tokio::sync::oneshot;
 
-use crate::{
-    logging::CEREMONY_REQUEST_IGNORED,
-    multisig::{
-        client::{
-            common::{
-                BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
-                KeygenFailureReason,
-            },
-            keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
-            tests::helpers::{
-                all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
-                gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
-                run_stages, split_messages_for, standard_keygen, switch_out_participant,
-                KeygenCeremonyRunner,
-            },
-            utils::PartyIdxMapping,
+use crate::multisig::{
+    client::{
+        common::{
+            BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
         },
-        crypto::Rng,
+        keygen::{
+            self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
+            VerifyHashComm2,
+        },
+        tests::helpers::{
+            all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
+            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
+            run_stages, split_messages_for, standard_keygen, switch_out_participant,
+            KeygenCeremonyRunner,
+        },
+        utils::PartyIdxMapping,
     },
+    crypto::Rng,
 };
 
 use crate::testing::assert_ok;
 
 use super::*;
-
-use crate::logging::KEYGEN_REQUEST_IGNORED;
 
 use crate::multisig::crypto::eth::Point;
 type CoeffComm3 = keygen::CoeffComm3<Point>;
@@ -443,11 +440,7 @@ async fn should_ignore_duplicate_keygen_request() {
     assert_ok!(node.ensure_ceremony_at_keygen_stage(2, ceremony_id));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::DuplicateCeremonyId,
-        CEREMONY_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -889,68 +882,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        KEYGEN_REQUEST_IGNORED,
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_keygen_request_with_used_ceremony_id() {
-    let (_, _, _messages, mut nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.iter().cloned()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-    )
-    .await;
-
-    let node = nodes.get_mut(&ACCOUNT_IDS[0]).unwrap();
-
-    // Use the same ceremony id as was used in the previous ceremony
-    let (result_sender, result_receiver) = oneshot::channel();
-    node.ceremony_manager.on_keygen_request(
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        ACCOUNT_IDS.clone(),
-        Rng::from_entropy(),
-        result_sender,
-    );
-
-    // Check that the request did not start a ceremony
-    assert_ok!(node.ensure_ceremony_at_keygen_stage(
-        STAGE_FINISHED_OR_NOT_STARTED,
-        DEFAULT_KEYGEN_CEREMONY_ID
-    ));
-
-    // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::CeremonyIdAlreadyUsed,
-        KEYGEN_REQUEST_IGNORED,
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_stage_data_with_used_ceremony_id() {
-    let (_, _, messages, mut nodes) =
-        run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
-
-    let node = nodes.get_mut(&ACCOUNT_IDS[0]).unwrap();
-
-    assert_eq!(node.ceremony_manager.get_keygen_states_len(), 0);
-
-    // Receive a comm1 with a used ceremony id (same default keygen ceremony id)
-    node.ceremony_manager.process_keygen_data(
-        ACCOUNT_IDS[1].clone(),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        messages.stage_3_messages[&ACCOUNT_IDS[1]][&ACCOUNT_IDS[0]]
-            .clone()
-            .into(),
-    );
-
-    // The message should have been ignored and no ceremony was started
-    // In this case, the ceremony would be unauthorised, so we must check how many keygen states exist
-    // to see if a unauthorised state was created.
-    assert_eq!(node.ceremony_manager.get_keygen_states_len(), 0);
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]
@@ -1492,27 +1424,8 @@ async fn genesis_keys_can_sign() {
         .map(|i| AccountId::new([*i; 32]))
         .collect();
 
-    use rand_legacy::FromEntropy;
-
-    let mut rng = Rng::from_entropy();
-
-    // Limit iteration count so we don't loop forever
-    // in case there is a bug
-    const MAX_KEYGEN_ATTEMPTS: usize = 20;
-
-    let mut attempt_counter = 0;
-
-    let (key_id, key_data) = loop {
-        attempt_counter += 1;
-        match keygen::generate_key_data::<Point>(&account_ids, &mut rng) {
-            Ok(result) => break result,
-            Err(_) => {
-                if attempt_counter >= MAX_KEYGEN_ATTEMPTS {
-                    panic!("too many keygen attempts");
-                }
-            }
-        }
-    };
+    let rng = Rng::from_entropy();
+    let (key_id, key_data) = generate_key_data_until_compatible::<Point>(&account_ids, 20, rng);
 
     let (mut signing_ceremony, _non_signing_nodes) =
         SigningCeremonyRunner::new_with_threshold_subset_of_signers(
