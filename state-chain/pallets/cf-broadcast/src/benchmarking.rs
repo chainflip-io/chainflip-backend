@@ -133,7 +133,7 @@ benchmarks_instance_pallet! {
 			tx_signer: SignerIdFor::<T, I>::benchmark_value(),
 			tx_fee: ChainAmountFor::<T, I>::default(),
 			block_number: 1,
-			tx_hash: TransactionHashFor::<T, I>::benchmark_value()
+			tx_hash: TransactionHashFor::<T, I>::default()
 		};
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
