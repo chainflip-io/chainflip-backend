@@ -585,7 +585,7 @@ impl_runtime_apis! {
 		}
 		fn cf_min_stake() -> u64 {
 			MinimumStake::<Runtime>::get().unique_saturated_into()
-    }
+	}
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
 		}

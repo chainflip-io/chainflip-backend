@@ -93,8 +93,8 @@ where
 		self.client
 			.runtime_api()
 			.cf_min_stake(&at)
-      .map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
-  }
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
