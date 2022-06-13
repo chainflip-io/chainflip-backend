@@ -1,6 +1,7 @@
 // ==== Logging key constants ====
 pub const COMPONENT_KEY: &str = "component";
 pub const CEREMONY_ID_KEY: &str = "ceremony_id";
+pub const REPORTED_PARTIES_KEY: &str = "reported_parties";
 
 // ==== Logging Error/Warning Tag constants ====
 pub const REQUEST_TO_SIGN_IGNORED: &str = "E0";
@@ -9,7 +10,9 @@ pub const KEYGEN_REQUEST_IGNORED: &str = "E3";
 pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
 pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
-pub const CEREMONY_REQUEST_IGNORED: &str = "E7";
+// pub const CEREMONY_REQUEST_IGNORED: &str = "E7"; // No longer used
+pub const UNAUTHORIZED_SIGNING_EXPIRED: &str = "E8";
+pub const UNAUTHORIZED_KEYGEN_EXPIRED: &str = "E9";
 
 // ==== Logging Eth Observer constants ====
 pub const ETH_HTTP_STREAM_YIELDED: &str = "eth-observer-http-yielded";

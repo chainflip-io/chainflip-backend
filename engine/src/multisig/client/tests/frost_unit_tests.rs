@@ -1,5 +1,4 @@
 use crate::{
-    logging::{CEREMONY_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED},
     multisig::{
         client::{
             common::{
@@ -214,11 +213,7 @@ async fn should_ignore_duplicate_rts() {
     assert_ok!(node.ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::DuplicateCeremonyId,
-        CEREMONY_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 #[tokio::test]
@@ -248,11 +243,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     ));
 
     // Check that the failure reason is correct
-    test_node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        REQUEST_TO_SIGN_IGNORED,
-    );
+    test_node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]
@@ -302,7 +293,6 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     node.ensure_failure_reason(
         result_receiver,
         CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
-        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
@@ -439,11 +429,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        REQUEST_TO_SIGN_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]

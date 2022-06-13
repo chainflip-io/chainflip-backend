@@ -57,6 +57,8 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
+const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -137,6 +139,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
 
@@ -167,10 +172,6 @@ pub mod pallet {
 
 		/// CeremonyId source.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
-
-		/// Timeout after which we consider a threshold signature ceremony to have failed.
-		#[pallet::constant]
-		type ThresholdFailureTimeout: Get<Self::BlockNumber>;
 
 		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
 		/// number of blocks to wait before retrying with a new set.
@@ -234,6 +235,37 @@ pub mod pallet {
 	pub type RetryQueues<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<CeremonyId>, ValueQuery>;
 
+	/// Maximum duration of a threshold signing ceremony before it is timed out and retried
+	#[pallet::storage]
+	pub type ThresholdSignatureResponseTimeout<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub threshold_signature_response_timeout: BlockNumberFor<T>,
+		pub _instance: PhantomData<I>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self {
+				threshold_signature_response_timeout:
+					THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into(),
+				_instance: PhantomData,
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			ThresholdSignatureResponseTimeout::<T, I>::put(
+				self.threshold_signature_response_timeout,
+			);
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -256,6 +288,8 @@ pub mod pallet {
 		/// Not enough signers were available to reach threshold. Ceremony will be retried.
 		/// \[ceremony_id\]
 		SignersUnavailable(CeremonyId),
+		/// The threshold signature response timeout has been updated
+		ThresholdSignatureResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
 	}
 
 	#[pallet::error]
@@ -453,6 +487,23 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		#[pallet::weight(T::Weights::set_threshold_signature_timeout())]
+		pub fn set_threshold_signature_timeout(
+			origin: OriginFor<T>,
+			new_timeout: BlockNumberFor<T>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
+				ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureResponseTimeoutUpdated {
+					new_timeout,
+				});
+			}
+
+			Ok(().into())
+		}
 	}
 }
 
@@ -469,7 +520,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
 
 		// Schedule an initial retry.
-		Self::schedule_retry(ceremony_id, T::ThresholdFailureTimeout::get());
+		Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
 
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
 

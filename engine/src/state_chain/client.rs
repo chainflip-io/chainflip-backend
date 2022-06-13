@@ -224,10 +224,10 @@ impl StateChainRpcApi for StateChainRpcClient {
 
     async fn is_auction_phase(&self) -> Result<bool> {
         self.custom_rpc_client
-            .is_auction_phase()
+            .cf_is_auction_phase()
             .await
             .map_err(rpc_error_into_anyhow_error)
-            .context("is_auction_phase RPC API failed")
+            .context("cf_is_auction_phase RPC API failed")
     }
 }
 
@@ -1207,7 +1207,7 @@ mod tests {
     #[test]
     async fn test_finalised_storage_subs() {
         let settings =
-            Settings::from_default_file("config/Local.toml", CommandLineOptions::default())
+            Settings::from_file_and_env("config/Local.toml", CommandLineOptions::default())
                 .unwrap();
         let logger = logging::test_utils::new_test_logger();
         let (_, mut block_stream, state_chain_client) =

@@ -1,6 +1,9 @@
 use super::*;
 use crate::{
-    logging::{self},
+    logging::{
+        test_utils::{new_test_logger, new_test_logger_with_tag_cache},
+        REQUEST_TO_SIGN_IGNORED,
+    },
     multisig::{
         client::{
             self,
@@ -20,7 +23,7 @@ use client::MultisigClient;
 #[tokio::test]
 async fn should_ignore_rts_for_unknown_key() {
     let account_id = &ACCOUNT_IDS[0];
-    let logger = logging::test_utils::new_test_logger();
+    let (logger, tag_cache) = new_test_logger_with_tag_cache();
     let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
     // Use any key id, as the key db will be empty
@@ -35,7 +38,7 @@ async fn should_ignore_rts_for_unknown_key() {
             .expect("Failed to open database"),
         keygen_request_sender,
         signing_request_sender,
-        &logging::test_utils::new_test_logger(),
+        &logger,
     );
 
     // Send Sign Request
@@ -52,11 +55,14 @@ async fn should_ignore_rts_for_unknown_key() {
         failure_reason,
         CeremonyFailureReason::Other(SigningFailureReason::UnknownKey)
     );
+
+    // Check that the signing failure reason is being logged
+    assert!(tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
 #[tokio::test]
 async fn should_save_key_after_keygen() {
-    let logger = logging::test_utils::new_test_logger();
+    let logger = new_test_logger();
     let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
     // Generate a key to use in this test
@@ -77,7 +83,7 @@ async fn should_save_key_after_keygen() {
                 .expect("Failed to open database"),
             keygen_request_sender,
             signing_request_sender,
-            &logging::test_utils::new_test_logger(),
+            &logger,
         );
 
         // Send Keygen Request
@@ -119,7 +125,7 @@ async fn should_load_keys_on_creation() {
     let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
     // Create a new db and store the key in it
-    let logger = logging::test_utils::new_test_logger();
+    let logger = new_test_logger();
     {
         let mut key_store = KeyStore::new(
             PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
@@ -137,7 +143,7 @@ async fn should_load_keys_on_creation() {
             .expect("Failed to open database"),
         keygen_request_sender,
         signing_request_sender,
-        &logging::test_utils::new_test_logger(),
+        &new_test_logger(),
     );
 
     // Check that the key was loaded during the creation of the client and it matches the original key

@@ -82,7 +82,6 @@ impl Chainflip for Test {
 }
 
 parameter_types! {
-	pub const ThresholdFailureTimeout: <Test as frame_system::Config>::BlockNumber = 10;
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
 }
 

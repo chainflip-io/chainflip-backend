@@ -3,35 +3,29 @@ use rand_legacy::{FromEntropy, SeedableRng};
 use std::{collections::BTreeSet, iter::FromIterator};
 use tokio::sync::oneshot;
 
-use crate::{
-    logging::CEREMONY_REQUEST_IGNORED,
-    multisig::{
-        client::{
-            common::{
-                BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
-                KeygenFailureReason,
-            },
-            keygen::{
-                self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
-                VerifyHashComm2,
-            },
-            tests::helpers::{
-                all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
-                gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
-                run_stages, split_messages_for, standard_keygen, switch_out_participant,
-                KeygenCeremonyRunner,
-            },
-            utils::PartyIdxMapping,
+use crate::multisig::{
+    client::{
+        common::{
+            BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
         },
-        crypto::Rng,
+        keygen::{
+            self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
+            VerifyHashComm2,
+        },
+        tests::helpers::{
+            all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
+            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
+            run_stages, split_messages_for, standard_keygen, switch_out_participant,
+            KeygenCeremonyRunner,
+        },
+        utils::PartyIdxMapping,
     },
+    crypto::Rng,
 };
 
 use crate::testing::assert_ok;
 
 use super::*;
-
-use crate::logging::KEYGEN_REQUEST_IGNORED;
 
 use crate::multisig::crypto::eth::Point;
 type CoeffComm3 = keygen::CoeffComm3<Point>;
@@ -446,11 +440,7 @@ async fn should_ignore_duplicate_keygen_request() {
     assert_ok!(node.ensure_ceremony_at_keygen_stage(2, ceremony_id));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::DuplicateCeremonyId,
-        CEREMONY_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -892,11 +882,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        KEYGEN_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]

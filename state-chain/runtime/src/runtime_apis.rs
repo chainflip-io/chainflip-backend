@@ -4,6 +4,10 @@ decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
-		fn is_auction_phase() -> bool;
+		fn cf_is_auction_phase() -> bool;
+		fn cf_eth_flip_token_address() -> [u8; 20];
+		fn cf_eth_stake_manager_address() -> [u8; 20];
+		fn cf_eth_key_manager_address() -> [u8; 20];
+		fn cf_eth_chain_id() -> u64;
 	}
 );
