@@ -128,6 +128,7 @@ mod tests {
 
         assert_eq!(
             poll_latest_block_numbers(&rpc, Duration::from_millis(10), &logger)
+                .take(BLOCK_COUNT as usize)
                 .collect::<Vec<_>>()
                 .await,
             (0..BLOCK_COUNT).collect::<Vec<_>>()
@@ -138,28 +139,37 @@ mod tests {
     async fn test_poll_latest_block_numbers_skips_errors() {
         use crate::eth::rpc::MockEthRpcApi;
 
-        const BLOCK_COUNT: u64 = 10;
-        let mut block_numbers = (0..BLOCK_COUNT).map(Into::into);
+        const REQUEST_COUNT: usize = 10;
+        const BLOCK_COUNT: usize = 8;
 
         let mut rpc = MockEthRpcApi::new();
         let logger = new_test_logger();
 
         // ** Rpc Api Assumptions **
+        // Simulates a realistic infura sever: one in five requests errors.
+        let mut req_number = 0;
+        let mut block_number = 0;
         rpc.expect_block_number()
-            .times(BLOCK_COUNT as usize)
+            .times(REQUEST_COUNT as usize)
             .returning(move || {
-                block_numbers
-                    .next()
-                    .and_then(|n: web3::types::U64| if n.as_usize() < 5 { None } else { Some(n) })
-                    .ok_or_else(|| anyhow::anyhow!("No more block numbers"))
+                let result = if req_number % 5 == 0 {
+                    Err(anyhow::anyhow!("Infura says no."))
+                } else {
+                    let res = Ok(block_number.into());
+                    block_number += 1;
+                    res
+                };
+                req_number += 1;
+                result
             });
         // ** Rpc Api Assumptions **
 
         assert_eq!(
             poll_latest_block_numbers(&rpc, Duration::from_millis(10), &logger)
+                .take(BLOCK_COUNT)
                 .collect::<Vec<_>>()
                 .await,
-            (0..BLOCK_COUNT).filter(|n| *n >= 5).collect::<Vec<_>>()
+            (0..BLOCK_COUNT as u64).collect::<Vec<_>>()
         );
     }
 }
