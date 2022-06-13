@@ -254,10 +254,10 @@ pub mod mocks {
 		}
 	}
 
-	impl_benchmark_value_for!(Validity);
-	impl_benchmark_value_for!([u8; 4]);
-	impl_benchmark_value_for!(MockThresholdSignature<[u8; 4], [u8; 4]>);
-	impl_benchmark_value_for!(u32);
+	impl_default_benchmark_value!(Validity);
+	impl_default_benchmark_value!([u8; 4]);
+	impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
+	impl_default_benchmark_value!(u32);
 
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;
