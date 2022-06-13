@@ -32,7 +32,7 @@ pub trait WeightInfo {
 	fn update_current_authority_emission_inflation() -> Weight;
 	fn no_rewards_minted() -> Weight;
 	fn rewards_minted() -> Weight;
-	fn update_mint_interval() -> Weight;
+	fn update_supply_update_interval() -> Weight;
 	fn on_runtime_upgrade_v1() -> Weight;
 	fn on_runtime_upgrade() -> Weight;
 }
@@ -80,7 +80,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(8 as Weight))
 	}
 	// Storage: Emissions MintInterval (r:0 w:1)
-	fn update_mint_interval() -> Weight {
+	fn update_supply_update_interval() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(19_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -143,7 +143,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
 	}
 	// Storage: Emissions MintInterval (r:0 w:1)
-	fn update_mint_interval() -> Weight {
+	fn update_supply_update_interval() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(19_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))

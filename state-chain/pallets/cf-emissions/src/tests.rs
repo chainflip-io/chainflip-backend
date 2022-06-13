@@ -37,31 +37,31 @@ fn test_should_mint_at() {
 mod test_block_rewards {
 	use super::*;
 
-	fn test_with(emissions_per_block: u128, expected_mint: u128) {
+	fn test_with(emissions_per_block: u128) {
 		new_test_ext(vec![1, 2], Some(1000)).execute_with(|| {
 			Emissions::update_authority_block_emission(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
-			let _weights = Emissions::mint_rewards_for_block();
+			Emissions::mint_rewards_for_block();
 			let after = Flip::<Test>::total_issuance();
 
-			assert_eq!(before + expected_mint, after);
+			assert_eq!(before + emissions_per_block, after);
 		});
 	}
 
 	#[test]
 	fn test_zero_block() {
-		test_with(1, 1);
+		test_with(1);
 	}
 
 	#[test]
 	fn test_zero_emissions_rate() {
-		test_with(0, 0);
+		test_with(0);
 	}
 
 	#[test]
 	fn test_non_zero_rate() {
-		test_with(10, 10);
+		test_with(10);
 	}
 }
 
@@ -75,14 +75,14 @@ fn test_duplicate_emission_should_be_noop() {
 		Emissions::update_authority_block_emission(EMISSION_RATE);
 
 		let before = Flip::<Test>::total_issuance();
-		let _weights = Emissions::mint_rewards_for_block();
+		Emissions::mint_rewards_for_block();
 		let after = Flip::<Test>::total_issuance();
 
 		assert_eq!(before + EMISSION_RATE, after);
 
 		// Minting again at the same block should have no effect.
 		let before = after;
-		let _weights = Emissions::mint_rewards_for_block();
+		Emissions::mint_rewards_for_block();
 		let after = Flip::<Test>::total_issuance();
 
 		assert_eq!(before + EMISSION_RATE, after);
@@ -123,6 +123,7 @@ fn test_reward_distribution() {
 fn should_mint_and_initiate_broadcast() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		let before = Flip::<Test>::total_issuance();
+		assert!(MockBroadcast::get_called().is_none());
 		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL_DEFAULT);
 		let after = Flip::<Test>::total_issuance();
 		assert!(after > before, "Expected {:?} > {:?}", after, before);

@@ -41,7 +41,7 @@ pub mod pallet {
 	use cf_chains::ChainAbi;
 	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
-	use frame_system::{ensure_root, pallet_prelude::OriginFor};
+	use frame_system::pallet_prelude::OriginFor;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -112,7 +112,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn last_supply_update_block)]
-	/// The block number at which we last minted Flip.
+	/// The block number at which we last updated supply to the Eth Chain.
 	pub type LastSupplyUpdateBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
@@ -222,7 +222,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			CurrentAuthorityEmissionInflation::<T>::set(inflation);
 			Self::deposit_event(Event::<T>::CurrentAuthorityInflationEmissionsUpdated(inflation));
 			Ok(().into())
@@ -242,7 +242,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			BackupNodeEmissionInflation::<T>::set(inflation);
 			Self::deposit_event(Event::<T>::BackupNodeInflationEmissionsUpdated(inflation));
 			Ok(().into())
@@ -250,16 +250,16 @@ pub mod pallet {
 
 		// TODO: run the benchmarks: name of the extrinsic changes
 
-		/// Updates the mint interval.
+		/// Updates the Supply Update interval.
 		///
 		/// ## Events
 		///
-		/// - [MintIntervalUpdated](Event:: MintIntervalUpdated)
+		/// - [SupplyUpdateIntervalUpdated](Event:: SupplyUpdateIntervalUpdated)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_mint_interval())]
+		#[pallet::weight(T::WeightInfo::update_supply_update_interval())]
 		pub fn update_supply_update_interval(
 			origin: OriginFor<T>,
 			value: BlockNumberFor<T>,

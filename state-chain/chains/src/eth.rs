@@ -19,7 +19,6 @@ use sp_runtime::{
 };
 use sp_std::{
 	convert::{TryFrom, TryInto},
-	ops::Neg,
 	prelude::*,
 	str, vec,
 };
@@ -279,6 +278,8 @@ impl AggKey {
 	/// Sign a message, using a secret key, and a signature nonce
 	#[cfg(feature = "runtime-integration-tests")]
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, sig_nonce: &SecretKey) -> [u8; 32] {
+		use std::ops::Neg;
+
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
 		let e = {
