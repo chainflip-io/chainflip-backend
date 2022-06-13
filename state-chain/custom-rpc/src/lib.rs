@@ -72,7 +72,6 @@ where
 			.cf_eth_chain_id(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-
 	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
