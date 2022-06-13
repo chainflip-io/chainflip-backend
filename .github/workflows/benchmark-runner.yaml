@@ -95,10 +95,11 @@ jobs:
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Get EC2 Instance ID
+        id: get-ec2-id
         if: github.event.inputs.command == 'destroy'
         run: |
           instance_id=$( terraform output ec2_id | tr -d '"' )
-          echo "INSTANCE_ID=$instance_id" >> $GITHUB_ENV
+          echo ::set-output name=instance_id::$instance_id
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Destroy
@@ -121,7 +122,7 @@ jobs:
       - name: Remove Runner from GitHub
         if: github.event.inputs.command == 'destroy'
         run: |
-          echo INSTANCE_ID: $INSTANCE_ID
+          INSTANCE_ID=${{ steps.get-ec2-id.outputs.instance_id }}
           ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "$INSTANCE_ID" '.runners[] | select(.name==$instance_id).id')
           echo ID: $ID
           curl -X DELETE -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
