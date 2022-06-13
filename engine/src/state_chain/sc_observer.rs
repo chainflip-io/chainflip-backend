@@ -133,7 +133,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
 
     let send_instruction = |observe_instruction: ObserveInstruction| {
         witnessing_instruction_sender
-            .send(observe_instruction.clone())
+            .send(observe_instruction)
             .unwrap();
     };
 

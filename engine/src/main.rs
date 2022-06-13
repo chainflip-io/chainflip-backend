@@ -1,6 +1,6 @@
 use chainflip_engine::{
     eth::{
-        self,
+        self, build_broadcast_channel,
         key_manager::KeyManager,
         rpc::{EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
         stake_manager::StakeManager,
@@ -91,10 +91,10 @@ async fn main() {
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    // TODO: Consider using watch senders in place of broadcast.
-    let (witnessing_instruction_broadcast_sender, _) = tokio::sync::broadcast::channel(10);
-    let (witnessing_instruction_watch_sender, witnessing_instruction_watch_receiver) =
-        tokio::sync::watch::channel(None);
+    let (
+        witnessing_instruction_sender,
+        [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
+    ) = build_broadcast_channel(10);
 
     {
         // ensure configured eth node is pointing to the correct chain id
@@ -191,7 +191,7 @@ async fn main() {
             eth_broadcaster,
             eth_multisig_client,
             account_peer_mapping_change_sender,
-            witnessing_instruction_broadcast_sender.clone(),
+            witnessing_instruction_sender,
             latest_block_hash,
             &root_logger
         ),
@@ -200,7 +200,7 @@ async fn main() {
             stake_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            witnessing_instruction_broadcast_sender.subscribe(),
+            witnessing_instruction_receiver_1,
             state_chain_client.clone(),
             &root_logger,
         ),
@@ -208,32 +208,15 @@ async fn main() {
             key_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            witnessing_instruction_broadcast_sender.subscribe(),
+            witnessing_instruction_receiver_2,
             state_chain_client.clone(),
             &root_logger,
         ),
-        // Adapter for piping instructions to the chain data witnesser.
-        async {
-            tokio::spawn({
-                let mut witnessing_instruction_broadcast_receiver =
-                    witnessing_instruction_broadcast_sender.subscribe();
-                async move {
-                    while let Some(instruction) =
-                        witnessing_instruction_broadcast_receiver.recv().await.ok()
-                    {
-                        witnessing_instruction_watch_sender
-                            .send(Some(instruction))
-                            .unwrap();
-                    }
-                }
-            })
-            .await
-            .unwrap()
-        },
         eth::start_chain_data_witnesser(
             &eth_dual_rpc,
             state_chain_client.clone(),
-            witnessing_instruction_watch_receiver,
+            witnessing_instruction_receiver_3,
+            eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
             &root_logger
         )
     );
