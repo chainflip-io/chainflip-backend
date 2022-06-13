@@ -19,8 +19,8 @@ pub trait CustomApi {
 	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_chain_id")]
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
-	#[rpc(name = "cf_epoch_index")]
-	fn cf_epoch_index(&self) -> Result<u32, jsonrpc_core::Error>;
+	#[rpc(name = "cf_current_epoch")]
+	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch_started_at")]
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error>;
 }
@@ -72,11 +72,11 @@ where
 			.cf_eth_chain_id(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn cf_epoch_index(&self) -> Result<u32, jsonrpc_core::Error> {
+	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
 			.runtime_api()
-			.cf_epoch_index(&at)
+			.cf_current_epoch(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error> {
