@@ -34,7 +34,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-	OpaqueKeys, Verify,
+	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
 use cf_traits::EpochInfo;
@@ -577,6 +577,12 @@ impl_runtime_apis! {
 		}
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
+		}
+		fn cf_authority_emission_per_block() -> u64 {
+			Emissions::current_authority_emission_per_block().unique_saturated_into()
+		}
+		fn cf_backup_emission_per_block() -> u64 {
+			Emissions::backup_node_emission_per_block().unique_saturated_into()
 		}
 	}
 	// END custom runtime APIs
