@@ -32,6 +32,7 @@ pub trait WeightInfo {
 	fn report_signature_failed(a: u32, ) -> Weight;
 	fn on_initialize() -> Weight;
 	fn determine_offenders(a: u32, ) -> Weight;
+	fn set_threshold_signature_timeout() -> Weight;
 }
 
 /// Weights for pallet_cf_threshold_signature using the Substrate node and recommended hardware.
@@ -72,6 +73,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			// Standard Error: 0
 			.saturating_add((48_000 as Weight).saturating_mul(a as Weight))
 	}
+	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:1)
+	fn set_threshold_signature_timeout() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(7_000_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
 }
 
 // For backwards compatibility and tests
@@ -110,5 +118,12 @@ impl WeightInfo for () {
 		(157_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((48_000 as Weight).saturating_mul(a as Weight))
+	}
+	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:1)
+	fn set_threshold_signature_timeout() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(7_000_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 }

@@ -643,6 +643,7 @@ mod tests {
 				&state_chain_runtime::EthereumVaultConfig {
 					vault_key: ethereum_vault_key,
 					deployment_block: 0,
+					keygen_response_timeout: 4,
 				},
 				storage,
 			)

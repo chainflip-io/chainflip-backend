@@ -15,11 +15,6 @@ pub mod common {
 	// Number of accrual points
 	pub const ACCRUAL_POINTS: i32 = 1;
 
-	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
-	pub const SECS_IN_AN_HOUR: u64 = 3600;
-	// This should be the same as the `CLAIM_DELAY` in:
-	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
-	pub const CLAIM_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
 	/// This determines the average expected block time that we are targeting.
 	/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
 	/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
@@ -27,6 +22,37 @@ pub mod common {
 	///
 	/// Change this to adjust the block time.
 	pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
+
+	const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
+
+	// ======= Keygen and signing =======
+
+	/// Maximum duration a ceremony stage can last
+	pub const MAX_STAGE_DURATION_SECONDS: u32 = 300;
+
+	// Allow for the CFE to receive the finalised block (~3.5*6) for initiation, and some extra time
+	// (~9) for networking / other latency
+	const TIMEOUT_BUFFER_SECONDS: u32 = 30;
+
+	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
+
+	const NUM_KEYGEN_STAGES: u32 = 9;
+
+	/// The number of blocks to wait for a threshold signature ceremony to complete.
+	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 =
+		((MAX_STAGE_DURATION_SECONDS * NUM_THRESHOLD_SIGNING_STAGES) + TIMEOUT_BUFFER_SECONDS) /
+			SECONDS_PER_BLOCK as u32;
+
+	/// The maximum number of blocks to wait for a keygen to complete.
+	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 =
+		((MAX_STAGE_DURATION_SECONDS * NUM_KEYGEN_STAGES) + TIMEOUT_BUFFER_SECONDS) /
+			SECONDS_PER_BLOCK as u32;
+
+	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
+	pub const SECS_IN_AN_HOUR: u64 = 3600;
+	// This should be the same as the `CLAIM_DELAY` in:
+	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
+	pub const CLAIM_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
@@ -41,12 +67,6 @@ pub mod common {
 
 	pub const CURRENT_AUTHORITY_EMISSION_INFLATION_BPS: u32 = 1000;
 	pub const BACKUP_NODE_EMISSION_INFLATION_BPS: u32 = 100;
-
-	/// The number of blocks to wait for a threshold signature ceremony to complete.
-	pub const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS: u32 = 15;
-
-	/// The maximum number of blocks to wait for a keygen to complete.
-	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = 150; // 150 * 6 == 900 seconds(15 minutes)
 
 	/// The maximum number of broadcast attempts
 	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;

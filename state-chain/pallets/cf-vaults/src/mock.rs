@@ -16,8 +16,8 @@ use super::*;
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider, epoch_info::MockEpochInfo,
-		eth_environment_provider::MockEthEnvironmentProvider,
+		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
+		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
@@ -194,11 +194,11 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();
-	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type Broadcaster = MockBroadcaster;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
@@ -211,12 +211,15 @@ pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 pub const GENESIS_AGG_PUB_KEY: [u8; 4] = *b"genk";
 pub const NEW_AGG_PUB_KEY: [u8; 4] = *b"next";
 
+pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
+
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
 			vault_key: GENESIS_AGG_PUB_KEY.to_vec(),
 			deployment_block: 0,
+			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
 	};
 

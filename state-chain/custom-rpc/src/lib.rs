@@ -21,6 +21,19 @@ pub trait CustomApi {
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
 	#[rpc(name = "cf_tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error>;
+	// Returns the Auction params in the form [min_set_size, max_set_size]
+	#[rpc(name = "cf_auction_parameters")]
+	fn cf_auction_parameters(&self) -> Result<(u32, u32), jsonrpc_core::Error>;
+	#[rpc(name = "cf_min_stake")]
+	fn cf_min_stake(&self) -> Result<u64, jsonrpc_core::Error>;
+	#[rpc(name = "cf_current_epoch")]
+	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error>;
+	#[rpc(name = "cf_current_epoch_started_at")]
+	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error>;
+	#[rpc(name = "cf_authority_emission_per_block")]
+	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
+	#[rpc(name = "cf_backup_emission_per_block")]
+	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -72,5 +85,47 @@ where
 	}
 	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error> {
 		Ok(TX_FEE_MULTIPLIER.try_into().expect("We never set a fee multiplier greater than u64::MAX"))
+  }
+	fn cf_auction_parameters(&self) -> Result<(u32, u32), jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_auction_parameters(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_min_stake(&self) -> Result<u64, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_min_stake(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_current_epoch(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_current_epoch_started_at(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_authority_emission_per_block(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_backup_emission_per_block(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 }

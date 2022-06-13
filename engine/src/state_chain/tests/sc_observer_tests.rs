@@ -24,7 +24,7 @@ use crate::{
     },
     logging::{self, test_utils::new_test_logger},
     multisig::client::mocks::MockMultisigClientApi,
-    settings::test_utils::new_test_settings,
+    settings::Settings,
     state_chain::{
         client::{
             mock_events_key, test_utils::storage_change_set_from, MockStateChainRpcApi,
@@ -831,7 +831,7 @@ async fn only_encodes_and_signs_when_specified() {
 #[tokio::test]
 #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
 async fn run_the_sc_observer() {
-    let settings = new_test_settings().unwrap();
+    let settings = Settings::new_test().unwrap();
     let logger = logging::test_utils::new_test_logger();
 
     let (initial_block_hash, block_stream, state_chain_client) =

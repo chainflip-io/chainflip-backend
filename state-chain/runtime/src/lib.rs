@@ -24,6 +24,7 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 pub use pallet_cf_environment::cfe::CfeSettings;
+use pallet_cf_staking::MinimumStake;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -34,7 +35,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-	OpaqueKeys, Verify,
+	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
 use cf_traits::EpochInfo;
@@ -174,14 +175,9 @@ impl pallet_cf_environment::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 }
 
-parameter_types! {
-	pub const KeygenResponseGracePeriod: BlockNumber =
-		constants::common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS +
-		constants::common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS;
-}
-
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;
@@ -190,7 +186,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
-	type KeygenResponseGracePeriod = KeygenResponseGracePeriod;
 	type EthEnvironmentProvider = Environment;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
@@ -431,12 +426,12 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = Origin;
 	type ThresholdCallable = Call;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type SignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
-	type ThresholdFailureTimeout = ConstU32<THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS>;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -583,6 +578,25 @@ impl_runtime_apis! {
 		}
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
+		}
+		fn cf_auction_parameters() -> (u32, u32) {
+			let auction_params = Auction::auction_parameters();
+			(auction_params.min_size, auction_params.max_size)
+		}
+		fn cf_min_stake() -> u64 {
+			MinimumStake::<Runtime>::get().unique_saturated_into()
+	}
+		fn cf_current_epoch() -> u32 {
+			Validator::current_epoch()
+		}
+		fn cf_current_epoch_started_at() -> u32 {
+			Validator::current_epoch_started_at()
+		}
+		fn cf_authority_emission_per_block() -> u64 {
+			Emissions::current_authority_emission_per_block().unique_saturated_into()
+		}
+		fn cf_backup_emission_per_block() -> u64 {
+			Emissions::backup_node_emission_per_block().unique_saturated_into()
 		}
 	}
 	// END custom runtime APIs
