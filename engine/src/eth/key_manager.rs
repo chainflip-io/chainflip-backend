@@ -150,28 +150,49 @@ impl Tokenizable for SigData {
 /// Represents the events that are expected from the KeyManager contract.
 #[derive(Debug, PartialEq)]
 pub enum KeyManagerEvent {
-    /// `AggKeySetByAggKey(Key oldKey, Key newKey)`
+    /// `AggKeySetByAggKey(Key oldAggKey, Key newAggKey)`
     AggKeySetByAggKey {
-        /// The old key.
-        old_key: ChainflipKey,
-        /// The new key.
-        new_key: ChainflipKey,
+        /// The old aggregate key.
+        old_agg_key: ChainflipKey,
+        /// The new aggregate key.
+        new_agg_key: ChainflipKey,
     },
 
     /// `AggKeySetByGovKey(Key oldKey, Key newKey)`
     AggKeySetByGovKey {
-        /// The old key.
-        old_key: ChainflipKey,
-        /// The new key.
-        new_key: ChainflipKey,
+        /// The old agg key.
+        old_agg_key: ChainflipKey,
+        /// The new agg key.
+        new_agg_key: ChainflipKey,
+    },
+
+    CommKeySetByAggKey {
+        /// The old comm key
+        old_comm_key: ethabi::Address,
+        /// The new comm key,
+        new_comm_key: ethabi::Address,
+    },
+
+    CommKeySetByCommKey {
+        /// The old comm key
+        old_comm_key: ethabi::Address,
+        /// The new comm key,
+        new_comm_key: ethabi::Address,
+    },
+
+    GovKeySetByAggKey {
+        /// The old gov key.
+        old_gov_key: ethabi::Address,
+        /// The new gov key.
+        new_gov_key: ethabi::Address,
     },
 
     /// `GovKeySetByGovKey(Key oldKey, Key newKey)`
     GovKeySetByGovKey {
-        /// The old key.
-        old_key: ethabi::Address,
-        /// The new key.
-        new_key: ethabi::Address,
+        /// The old gov key.
+        old_gov_key: ethabi::Address,
+        /// The new gov key.
+        new_gov_key: ethabi::Address,
     },
 
     /// `SignatureAccepted(sigData, signer);`
@@ -180,6 +201,12 @@ pub enum KeyManagerEvent {
         sig_data: SigData,
         /// Address of the signer of the broadcast.
         signer: ethabi::Address,
+    },
+
+    // `GovernanceAction(message)`
+    GovernanceAction {
+        /// Call hash of substrate call to be executed
+        message: H256,
     },
 }
 
@@ -202,14 +229,14 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
-            KeyManagerEvent::AggKeySetByAggKey { new_key, .. } => {
+            KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_witnesser::Call::witness {
                             call: Box::new(
                                 pallet_cf_vaults::Call::vault_key_rotated {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
-                                        new_key.serialize(),
+                                        new_agg_key.serialize(),
                                     ),
                                     block_number: event.block_number,
                                     tx_hash: event.tx_hash,
@@ -221,14 +248,14 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                     )
                     .await;
             }
-            KeyManagerEvent::AggKeySetByGovKey { new_key, .. } => {
+            KeyManagerEvent::AggKeySetByGovKey { new_agg_key, .. } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_witnesser::Call::witness {
                             call: Box::new(
                                 pallet_cf_vaults::Call::vault_key_rotated_externally {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
-                                        new_key.serialize(),
+                                        new_agg_key.serialize(),
                                     ),
                                     block_number: event.block_number,
                                     tx_hash: event.tx_hash,
@@ -275,6 +302,9 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                     )
                     .await;
             }
+            KeyManagerEvent::GovernanceAction { message } => {
+                // submit the witness to the state chain bro
+            }
             _ => {
                 slog::trace!(logger, "Ignoring unused event: {}", event);
             }
@@ -284,7 +314,14 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
         let ak_set_by_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
         let ak_set_by_gk = SignatureAndEvent::new(&self.contract, "AggKeySetByGovKey")?;
+
+        let ck_set_by_ak = SignatureAndEvent::new(&self.contract, "CommKeySetByAggKey")?;
+        let ck_set_by_ck = SignatureAndEvent::new(&self.contract, "CommKeySetByCommKey")?;
+
+        let gk_set_by_ak = SignatureAndEvent::new(&self.contract, "GovKeySetByAggKey")?;
         let gk_set_by_gk = SignatureAndEvent::new(&self.contract, "GovKeySetByGovKey")?;
+
+        let gov_action = SignatureAndEvent::new(&self.contract, "GovernanceAction")?;
         let sig_accepted = SignatureAndEvent::new(&self.contract, "SignatureAccepted")?;
 
         Ok(Box::new(
@@ -292,26 +329,61 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                 Ok(if signature == ak_set_by_ak.signature {
                     let log = ak_set_by_ak.event.parse_log(raw_log)?;
                     KeyManagerEvent::AggKeySetByAggKey {
-                        old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
-                        new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                        old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
+                        new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
                     }
                 } else if signature == ak_set_by_gk.signature {
                     let log = ak_set_by_gk.event.parse_log(raw_log)?;
                     KeyManagerEvent::AggKeySetByGovKey {
-                        old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
-                        new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                        old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
+                        new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
+                    }
+                } else if signature == ck_set_by_ak.signature {
+                    let log = ck_set_by_ak.event.parse_log(raw_log)?;
+                    KeyManagerEvent::CommKeySetByAggKey {
+                        old_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "oldCommKey",
+                        )?,
+                        new_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "newCommKey",
+                        )?,
+                    }
+                } else if signature == ck_set_by_ck.signature {
+                    let log = ck_set_by_ck.event.parse_log(raw_log)?;
+                    KeyManagerEvent::CommKeySetByCommKey {
+                        old_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "oldCommKey",
+                        )?,
+                        new_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "newCommKey",
+                        )?,
+                    }
+                } else if signature == gk_set_by_ak.signature {
+                    let log = gk_set_by_ak.event.parse_log(raw_log)?;
+                    KeyManagerEvent::GovKeySetByAggKey {
+                        old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
+                        new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
                     }
                 } else if signature == gk_set_by_gk.signature {
                     let log = gk_set_by_gk.event.parse_log(raw_log)?;
                     KeyManagerEvent::GovKeySetByGovKey {
-                        old_key: utils::decode_log_param(&log, "oldKey")?,
-                        new_key: utils::decode_log_param(&log, "newKey")?,
+                        old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
+                        new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
                     }
                 } else if signature == sig_accepted.signature {
                     let log = sig_accepted.event.parse_log(raw_log)?;
                     KeyManagerEvent::SignatureAccepted {
                         sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
                         signer: utils::decode_log_param(&log, "signer")?,
+                    }
+                } else if signature == gov_action.signature {
+                    let log = gov_action.event.parse_log(raw_log)?;
+                    KeyManagerEvent::GovernanceAction {
+                        message: utils::decode_log_param(&log, "message")?,
                     }
                 } else {
                     return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
@@ -373,11 +445,11 @@ mod tests {
                 }
             ).expect("Failed parsing KeyManagerEvent::AggKeySetByAggKey event") {
                 KeyManagerEvent::AggKeySetByAggKey {
-                    old_key,
-                    new_key,
+                    old_agg_key,
+                    new_agg_key,
                 } => {
-                    assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                    assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                    assert_eq!(old_agg_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                    assert_eq!(new_agg_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                 }
                 _ => panic!("Expected KeyManagerEvent::AggKeySetByAggKey, got different variant"),
             }
@@ -401,11 +473,11 @@ mod tests {
             ).expect("Failed parsing KeyManagerEvent::AggKeySetByGovKey event")
             {
                 KeyManagerEvent::AggKeySetByGovKey {
-                    old_key,
-                    new_key,
+                    old_agg_key,
+                    new_agg_key,
                 } => {
-                    assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                    assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                    assert_eq!(old_agg_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                    assert_eq!(new_agg_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 }
                 _ => panic!("Expected KeyManagerEvent::AggKeySetByGovKey, got different variant"),
             }
@@ -429,11 +501,11 @@ mod tests {
             ).expect("Failed parsing KeyManagerEvent::GovKeySetByGovKey event")
             {
                 KeyManagerEvent::GovKeySetByGovKey {
-                    old_key,
-                    new_key,
+                    old_gov_key,
+                    new_gov_key,
                 } => {
-                    assert_eq!(old_key, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
-                    assert_eq!(new_key, H160::from_str("0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap());
+                    assert_eq!(old_gov_key, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
+                    assert_eq!(new_gov_key, H160::from_str("0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap());
                 }
                 _ => panic!("Expected KeyManagerEvent::GovKeySetByGovKey, got different variant"),
             }

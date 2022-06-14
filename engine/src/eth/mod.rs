@@ -903,8 +903,8 @@ mod merged_stream_tests {
             base_fee_per_gas: U256::from(2),
             block_number,
             event_parameters: KeyManagerEvent::AggKeySetByAggKey {
-                old_key: ChainflipKey::default(),
-                new_key: ChainflipKey::default(),
+                old_agg_key: ChainflipKey::default(),
+                new_agg_key: ChainflipKey::default(),
             },
         }
     }

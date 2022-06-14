@@ -67,10 +67,10 @@ pub async fn test_all_key_manager_events() {
             .iter()
             .find(|event| match &event.event_parameters {
             KeyManagerEvent::AggKeySetByAggKey {
-                old_key, new_key
+                old_agg_key, new_agg_key
             } => {
-                assert_eq!(old_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                assert_eq!(new_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                assert_eq!(old_agg_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                assert_eq!(new_agg_key,&ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
                 true
             },
             _ => false,
@@ -80,11 +80,11 @@ pub async fn test_all_key_manager_events() {
         .iter()
         .find(|event| match &event.event_parameters {
             KeyManagerEvent::AggKeySetByGovKey {
-                old_key, new_key
+                old_agg_key, new_agg_key
             } => {
-                if old_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap()
-                || old_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap(){
-                    assert_eq!(new_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                if old_agg_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap()
+                || old_agg_key == &ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap(){
+                    assert_eq!(new_agg_key,&ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
                 }else{
                     panic!("Unexpected AggKeySetByGovKey event. The details did not match the 2 expected AggKeySetByGovKey events");
                 }
@@ -96,13 +96,16 @@ pub async fn test_all_key_manager_events() {
     km_events
         .iter()
         .find(|event| match &event.event_parameters {
-            KeyManagerEvent::GovKeySetByGovKey { old_key, new_key } => {
+            KeyManagerEvent::GovKeySetByGovKey {
+                old_gov_key,
+                new_gov_key,
+            } => {
                 assert_eq!(
-                    old_key,
+                    old_gov_key,
                     &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
                 );
                 assert_eq!(
-                    new_key,
+                    new_gov_key,
                     &H160::from_str("0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap()
                 );
                 true
