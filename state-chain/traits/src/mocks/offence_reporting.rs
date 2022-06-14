@@ -1,7 +1,5 @@
 use codec::{Decode, Encode};
-use sp_std::{
-	collections::btree_set::BTreeSet, fmt::Debug, iter::FromIterator, marker::PhantomData,
-};
+use sp_std::{collections::btree_set::BTreeSet, fmt::Debug, marker::PhantomData};
 
 use crate::offence_reporting::OffenceReporter;
 

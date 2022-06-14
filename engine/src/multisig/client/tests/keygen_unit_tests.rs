@@ -1,6 +1,6 @@
 use cf_traits::AuthorityCount;
 use rand_legacy::{FromEntropy, SeedableRng};
-use std::{collections::BTreeSet, iter::FromIterator};
+use std::collections::BTreeSet;
 use tokio::sync::oneshot;
 
 use crate::multisig::{

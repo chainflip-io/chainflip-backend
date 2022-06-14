@@ -17,12 +17,7 @@ use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
-use sp_std::{
-	convert::{TryFrom, TryInto},
-	ops::Neg,
-	prelude::*,
-	str, vec,
-};
+use sp_std::{ops::Neg, prelude::*, str, vec};
 
 use self::api::EthereumReplayProtection;
 

@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, iter::FromIterator, marker::PhantomData};
+use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
 	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,

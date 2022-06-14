@@ -9,7 +9,6 @@ use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use frame_system::RawOrigin;
 use pallet_cf_online::Call as OnlineCall;
 use pallet_cf_validator::CurrentAuthorities;
-use sp_std::convert::TryInto;
 
 const SEED: u32 = 0;
 
