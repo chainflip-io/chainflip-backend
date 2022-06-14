@@ -106,7 +106,7 @@ impl<P: ECPoint> PersistentKeyDB<P> {
             migrate_db_to_latest(db, db_path, logger)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?
         } else {
-            // Its a new db, so just write the latest schema version
+            // It's a new db, so just write the latest schema version
             PersistentKeyDB::new_from_db_and_set_schema_version_to_latest(db, logger)?
         };
 
@@ -370,12 +370,13 @@ mod tests {
         .expect("Should write DB_SCHEMA_VERSION");
     }
 
-    fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Vec<PathBuf> {
+    fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
         let backups_path = temp_dir.path().join(BACKUPS_DIRECTORY);
-        let backups: Vec<PathBuf> = fs::read_dir(&backups_path)
-            .unwrap()
+
+        let backups: Vec<PathBuf> = fs::read_dir(&backups_path)?
+            .collect::<Result<Vec<std::fs::DirEntry>, std::io::Error>>()?
+            .iter()
             .filter_map(|entry| {
-                let entry = entry.expect("File should exist");
                 let file_path = entry.path();
                 if file_path.is_dir() && file_path != *db_path {
                     Some(file_path)
@@ -385,7 +386,7 @@ mod tests {
             })
             .collect();
 
-        backups
+        Ok(backups)
     }
 
     // Just a random key
@@ -586,7 +587,7 @@ mod tests {
 
         // Try and open the backup to make sure it still works
         {
-            let backups = find_backups(&directory, db_path);
+            let backups = find_backups(&directory, db_path).unwrap();
             assert!(
                 backups.len() == 1,
                 "Incorrect number of backups found in {}",
