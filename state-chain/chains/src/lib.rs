@@ -59,7 +59,7 @@ pub trait ChainCrypto: Chain {
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type UnsignedTransaction: Member + Parameter + Default;
+	type UnsignedTransaction: Member + Parameter + Default + BenchmarkValue;
 	type SignedTransaction: Member + Parameter + BenchmarkValue;
 	type SignerCredential: Member + Parameter + BenchmarkValue;
 	type ReplayProtection: Member + Parameter + Default;
@@ -258,6 +258,7 @@ pub mod mocks {
 	impl_default_benchmark_value!([u8; 4]);
 	impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
 	impl_default_benchmark_value!(u32);
+	impl_default_benchmark_value!(MockUnsignedTransaction);
 
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;

@@ -22,7 +22,7 @@ fn insert_transaction_signing_attempt<T: pallet::Config<I>, I: 'static>(
 		broadcast_attempt_id,
 		TransactionSigningAttempt {
 			broadcast_attempt: BroadcastAttempt::<T, I> {
-				unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
+				unsigned_tx: UnsignedTransactionFor::<T, I>::benchmark_value(),
 				broadcast_attempt_id,
 			},
 			nominee,
@@ -54,7 +54,7 @@ benchmarks_instance_pallet! {
 		for i in 1 .. b {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			BroadcastRetryQueue::<T, I>::append(&BroadcastAttempt::<T, I> {
-				unsigned_tx: UnsignedTransactionFor::<T, I>::default(),
+				unsigned_tx: UnsignedTransactionFor::<T, I>::benchmark_value(),
 				broadcast_attempt_id,
 			});
 			insert_sig(i);
