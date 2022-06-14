@@ -1,7 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
-use crate::common::format_iterator;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::crypto::{CryptoScheme, Rng};
@@ -14,10 +13,7 @@ use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
-use crate::logging::{
-    CEREMONY_ID_KEY, KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED,
-    SIGNING_CEREMONY_FAILED,
-};
+use crate::logging::CEREMONY_ID_KEY;
 
 use client::common::{
     broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
@@ -92,7 +88,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 if state.is_authorized() {
                     self.process_signing_ceremony_outcome(*ceremony_id, result);
                 } else {
-                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised signing ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.signing_states.remove(ceremony_id);
                 }
@@ -113,7 +108,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 if state.is_authorized() {
                     self.process_keygen_ceremony_outcome(*ceremony_id, result);
                 } else {
-                    // TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
                     slog::warn!(self.logger, "Removing expired unauthorised keygen ceremony"; CEREMONY_ID_KEY => ceremony_id);
                     self.keygen_states.remove(ceremony_id);
                 }
@@ -167,16 +161,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        if let Err((blamed_parties, reason)) = &result {
-            slog::warn!(
-                self.logger,
-                #SIGNING_CEREMONY_FAILED,
-                "{}",
-                reason; "reported parties" =>
-                format_iterator(blamed_parties).to_string(),
-                CEREMONY_ID_KEY => ceremony_id,
-            );
-        }
         let _result = result_sender.send(result);
     }
 
@@ -197,16 +181,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .unwrap()
             .try_into_result_sender()
             .unwrap();
-        if let Err((blamed_parties, reason)) = &result {
-            slog::warn!(
-                self.logger,
-                #KEYGEN_CEREMONY_FAILED,
-                "{}",
-                reason; "reported parties" =>
-                format_iterator(blamed_parties).to_string(),
-                CEREMONY_ID_KEY => ceremony_id,
-            );
-        }
         let _result = result_sender.send(result);
     }
 
@@ -228,7 +202,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         {
             Ok(res) => res,
             Err(reason) => {
-                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "Keygen request ignored: {}", reason);
+                slog::debug!(logger, "Keygen request invalid: {}", reason);
                 let _result = result_sender.send(Err((
                     BTreeSet::new(),
                     CeremonyFailureReason::InvalidParticipants,
@@ -292,11 +266,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         let minimum_signers_needed = key_info.params.threshold + 1;
         let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
         if signers_len < minimum_signers_needed {
-            slog::warn!(
+            slog::debug!(
                 logger,
-                #REQUEST_TO_SIGN_IGNORED,
-                "Request to sign ignored: not enough signers {}/{}",
-                signers.len(), minimum_signers_needed
+                "Request to sign invalid: not enough signers ({}/{})",
+                signers.len(),
+                minimum_signers_needed
             );
             let _result = result_sender.send(Err((
                 BTreeSet::new(),
@@ -305,19 +279,18 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             return;
         }
 
-        let (own_idx, signer_idxs) = match self
-            .map_ceremony_parties(&signers, &key_info.validator_map)
-        {
-            Ok(res) => res,
-            Err(reason) => {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "Request to sign ignored: {}", reason);
-                let _result = result_sender.send(Err((
-                    BTreeSet::new(),
-                    CeremonyFailureReason::InvalidParticipants,
-                )));
-                return;
-            }
-        };
+        let (own_idx, signer_idxs) =
+            match self.map_ceremony_parties(&signers, &key_info.validator_map) {
+                Ok(res) => res,
+                Err(reason) => {
+                    slog::debug!(logger, "Request to sign invalid: {}", reason);
+                    let _result = result_sender.send(Err((
+                        BTreeSet::new(),
+                        CeremonyFailureReason::InvalidParticipants,
+                    )));
+                    return;
+                }
+            };
 
         // We have the key and have received a request to sign
         let logger_no_ceremony_id = &self.logger;

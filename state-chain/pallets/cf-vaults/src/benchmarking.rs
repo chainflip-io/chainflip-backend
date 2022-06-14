@@ -22,7 +22,8 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	caller: T::ValidatorId,
 ) -> BTreeSet<T::ValidatorId> {
 	let mut authority_set: BTreeSet<T::ValidatorId> = BTreeSet::new();
-	for i in 0..set_size {
+	// make room for the caller
+	for i in 0..set_size.checked_sub(1).expect("set size should be at least 1") {
 		let validator_id = account("doogle", i, 0);
 		authority_set.insert(validator_id);
 	}
@@ -126,15 +127,13 @@ benchmarks_instance_pallet! {
 		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Success(aggkey_from_slice::<T, I>(&AGG_KEY_PUB), payload_from_slice::<T, I>(&MSG_HASH), threshold_sig_from_slice::<T, I>(&bad_sig)))
 	verify {
-		let rotation = PendingVaultRotation::<T, I>::get().unwrap();
 		assert!(matches!(
-			rotation,
+			PendingVaultRotation::<T, I>::get().unwrap(),
 			VaultRotationStatus::AwaitingKeygen { response_status, .. }
-				if response_status.response_count() == 1
+				if response_status.remaining_candidate_count() == 149
 		))
 	}
 	vault_key_rotated {
-		let caller: T::AccountId = whitelisted_caller();
 		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
@@ -160,6 +159,16 @@ benchmarks_instance_pallet! {
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index().saturating_add(1)));
+	}
+	set_keygen_timeout {
+		let old_timeout: T::BlockNumber = 5u32.into();
+		KeygenResponseTimeout::<T, I>::put(old_timeout);
+		let new_timeout: T::BlockNumber = old_timeout + 1u32.into();
+		// ensure it's a different value for most expensive path.
+		let call = Call::<T, I>::set_keygen_timeout { new_timeout };
+	} : { call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin())? }
+	verify {
+		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
 	}
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
 }

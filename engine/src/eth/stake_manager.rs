@@ -2,7 +2,7 @@
 //! the EthEventStreamer
 
 use crate::state_chain::client::StateChainClient;
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     eth::{utils, SignatureAndEvent},

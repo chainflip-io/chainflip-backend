@@ -371,7 +371,7 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo build --locked --release
+          cargo build --locked --release --features runtime-benchmarks
           sccache --show-stats
       - run: |
           cargo test --lib --locked --release --all-features
@@ -382,7 +382,7 @@ jobs:
             - target/release/chainflip-node
             - target/release/chainflip-engine
             - target/release/chainflip-cli
-            - target/release/insert-genesis-keyshare
+            - target/release/generate-genesis-keys
             - target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
       - send_notification:
           only_for_branches: "develop"

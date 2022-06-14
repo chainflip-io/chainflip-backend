@@ -27,7 +27,7 @@ serde = { version = "1.0.126", optional = true, features = ['derive'] }
 # Chainflip local dependencies
 cf-traits = { path = "../traits", default-features = false }
 cf-chains = { path = "../chains", default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+cf-utilities = { package = "utilities", path = '../../utilities', default-features = false }
 cf-runtime-benchmark-utilities = { path = "../runtime-benchmark-utilities", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }

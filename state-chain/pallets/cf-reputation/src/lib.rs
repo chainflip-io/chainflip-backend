@@ -90,7 +90,7 @@ impl<T: Config> Default for Penalty<T> {
 	}
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedHeartbeat,
 }

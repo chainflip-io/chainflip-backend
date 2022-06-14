@@ -8,8 +8,6 @@ signing_key_file = ""
 ws_endpoint = "ws://localhost:9944"
 
 [eth]
-ws_node_endpoint = "wss://my_eth_node:80/<secret_key>"
-http_node_endpoint = "http://my_eth_node:81/<secret_key>"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"
 

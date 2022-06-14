@@ -1,5 +1,4 @@
 use crate::{
-    logging::{CEREMONY_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED},
     multisig::{
         client::{
             common::{
@@ -214,11 +213,7 @@ async fn should_ignore_duplicate_rts() {
     assert_ok!(node.ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::DuplicateCeremonyId,
-        CEREMONY_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 #[tokio::test]
@@ -248,11 +243,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     ));
 
     // Check that the failure reason is correct
-    test_node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        REQUEST_TO_SIGN_IGNORED,
-    );
+    test_node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]
@@ -302,7 +293,6 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     node.ensure_failure_reason(
         result_receiver,
         CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
-        REQUEST_TO_SIGN_IGNORED,
     );
 }
 
@@ -439,11 +429,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        REQUEST_TO_SIGN_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]
@@ -567,42 +553,6 @@ async fn should_sign_with_all_parties() {
 mod timeout {
 
     use super::*;
-
-    /* TODO: Refactor once feature re-enabled
-    // [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
-
-    // If timeout during an "unauthorised" ceremony, we report the nodes that attempted to start it
-    // (i.e. whoever send stage data for the ceremony)
-    #[tokio::test]
-    #[ignore = "functionality disabled as SC does not expect this response"]
-    async fn should_report_on_timeout_before_request_to_sign() {
-        let mut ctx = helpers::KeygenContext::new();
-        let keygen_states = ctx.generate().await;
-        let sign_states = ctx.sign().await;
-
-        let id0 = ctx.get_account_id(0);
-
-        let mut c0 = keygen_states
-            .key_ready_data()
-            .expect("successful keygen")
-            .clients[&id0]
-            .clone();
-
-        assert_ok!(c0.ensure_ceremony_at_signing_stage(STAGE_FINISHED_OR_NOT_STARTED));
-
-        let bad_array_ids = [ctx.get_account_id(1), ctx.get_account_id(2)];
-
-        for id in &bad_array_ids {
-            c0.receive_signing_stage_data(1, &sign_states, id);
-        }
-
-        assert_ok!(c0.ensure_ceremony_at_signing_stage(STAGE_FINISHED_OR_NOT_STARTED));
-
-        c0.force_stage_timeout();
-
-        check_blamed_paries(ctx.outcome_receivers.get_mut(&id0).unwrap(), &bad_array_ids).await;
-    }
-    */
 
     mod during_regular_stage {
 

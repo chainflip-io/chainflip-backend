@@ -10,7 +10,7 @@ pub use keygen_data::{
     VerifyBlameResponses9, VerifyCoeffComm4, VerifyComplaints7, VerifyHashComm2,
 };
 
-pub use keygen_frost::genesis::generate_key_data;
+pub use keygen_frost::genesis::generate_key_data_until_compatible;
 pub use keygen_frost::HashContext;
 
 pub use keygen_stages::HashCommitments1;

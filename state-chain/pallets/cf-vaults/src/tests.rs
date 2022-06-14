@@ -10,7 +10,7 @@ use cf_traits::{
 	SuccessOrFailure, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
-use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
+use sp_std::collections::btree_set::BTreeSet;
 
 macro_rules! assert_last_event {
 	($pat:pat) => {
@@ -549,7 +549,7 @@ fn keygen_report_failure() {
 }
 
 #[test]
-fn test_grace_period() {
+fn test_keygen_timeout_period() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		let ceremony_id = current_ceremony_id();
@@ -566,9 +566,9 @@ fn test_grace_period() {
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(25);
+		VaultsPallet::on_initialize(MOCK_KEYGEN_RESPONSE_TIMEOUT);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(26);
+		VaultsPallet::on_initialize(MOCK_KEYGEN_RESPONSE_TIMEOUT + 1);
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// Too many candidates failed to report, so we report nobody.
@@ -672,7 +672,7 @@ mod keygen_reporting {
 	use super::*;
 	use crate::{AggKeyFor, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
 	use frame_support::assert_err;
-	use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator};
+	use sp_std::collections::btree_set::BTreeSet;
 
 	macro_rules! assert_ok_no_repeat {
 		($ex:expr) => {{

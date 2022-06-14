@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, time::Duration};
+use std::time::Duration;
 
 use futures::{stream, Stream};
 use slog::o;
