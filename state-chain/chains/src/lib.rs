@@ -288,10 +288,7 @@ pub mod mocks {
 	#[cfg(feature = "runtime-benchmarks")]
 	impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
 		fn benchmark_value() -> Self {
-			Self {
-				0: C::Payload::benchmark_value(),
-				1: Some(C::ThresholdSignature::benchmark_value()),
-			}
+			Self(C::Payload::benchmark_value(), Some(C::ThresholdSignature::benchmark_value()))
 		}
 	}
 
