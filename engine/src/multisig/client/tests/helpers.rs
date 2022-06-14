@@ -647,7 +647,13 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
             .get_mut(receiver_id)
             .unwrap()
             .ceremony_manager
-            .process_keygen_data(sender_id.clone(), self.ceremony_id, stage_data);
+            .process_p2p_message(
+                sender_id.clone(),
+                MultisigMessage {
+                    ceremony_id: self.ceremony_id,
+                    data: MultisigData::Keygen(stage_data),
+                },
+            );
     }
 }
 impl KeygenCeremonyRunner {
@@ -726,7 +732,13 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
             .get_mut(receiver_id)
             .unwrap()
             .ceremony_manager
-            .process_signing_data(sender_id.clone(), self.ceremony_id, stage_data);
+            .process_p2p_message(
+                sender_id.clone(),
+                MultisigMessage {
+                    ceremony_id: self.ceremony_id,
+                    data: MultisigData::Signing(stage_data),
+                },
+            );
     }
 }
 impl SigningCeremonyRunner {
@@ -1198,7 +1210,7 @@ const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 impl Node {
     pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
-        self.ceremony_manager.check_timeouts();
+        self.ceremony_manager.check_timeouts_all();
     }
 
     pub fn ensure_ceremony_at_signing_stage(

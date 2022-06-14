@@ -1,6 +1,7 @@
 // ==== Logging key constants ====
 pub const COMPONENT_KEY: &str = "component";
 pub const CEREMONY_ID_KEY: &str = "ceremony_id";
+pub const CEREMONY_TYPE_KEY: &str = "ceremony_type";
 pub const REPORTED_PARTIES_KEY: &str = "reported_parties";
 
 // ==== Logging Error/Warning Tag constants ====

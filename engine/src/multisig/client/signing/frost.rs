@@ -106,9 +106,9 @@ impl<P: ECPoint> Display for SigningData<P> {
     }
 }
 
-impl<P: ECPoint> SigningData<P> {
+impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
     /// Check that the number of elements and indexes in the data is correct
-    pub fn check_data_size(&self, num_of_parties: Option<AuthorityCount>) -> bool {
+    fn is_data_size_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool {
         if let Some(num_of_parties) = num_of_parties {
             match self {
                 // For messages that don't contain a collection (eg. CommStage1), we don't need to check the size.
@@ -129,12 +129,7 @@ impl<P: ECPoint> SigningData<P> {
             true
         }
     }
-}
 
-impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
-    fn check_data_size(&self, num_of_parties: Option<AuthorityCount>) -> bool {
-        self.check_data_size(num_of_parties)
-    }
     fn is_first_stage(&self) -> bool {
         matches!(self, SigningData::CommStage1(_))
     }
@@ -417,9 +412,9 @@ mod tests {
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.check_data_size(Some(test_size)));
-        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
-        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
+        assert!(data_to_check.is_data_size_valid(Some(test_size)));
+        assert!(!data_to_check.is_data_size_valid(Some(test_size - 1)));
+        assert!(!data_to_check.is_data_size_valid(Some(test_size + 1)));
     }
 
     #[test]
@@ -434,9 +429,9 @@ mod tests {
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.check_data_size(Some(test_size)));
-        assert!(!data_to_check.check_data_size(Some(test_size - 1)));
-        assert!(!data_to_check.check_data_size(Some(test_size + 1)));
+        assert!(data_to_check.is_data_size_valid(Some(test_size)));
+        assert!(!data_to_check.is_data_size_valid(Some(test_size - 1)));
+        assert!(!data_to_check.is_data_size_valid(Some(test_size + 1)));
     }
 
     #[test]
@@ -447,6 +442,6 @@ mod tests {
                 data: BTreeMap::new(),
             });
 
-        data_to_check.check_data_size(None);
+        data_to_check.is_data_size_valid(None);
     }
 }

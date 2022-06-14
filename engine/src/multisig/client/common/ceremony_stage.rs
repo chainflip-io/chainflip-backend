@@ -87,6 +87,6 @@ impl CeremonyCommon {
 }
 
 pub trait PreProcessStageDataCheck {
-    fn check_data_size(&self, num_of_parties: Option<AuthorityCount>) -> bool;
+    fn is_data_size_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool;
     fn is_first_stage(&self) -> bool;
 }
