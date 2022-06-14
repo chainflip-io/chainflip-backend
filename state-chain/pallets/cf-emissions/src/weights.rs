@@ -39,12 +39,14 @@ pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Emissions BackupNodeEmissionInflation (r:0 w:1)
 	fn update_backup_node_emission_inflation() -> Weight {
-		(9_000_000 as Weight)
+		#[allow(clippy::unnecessary_cast)]
+		(8_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionInflation (r:0 w:1)
 	fn update_current_authority_emission_inflation() -> Weight {
-		(9_000_000 as Weight)
+		#[allow(clippy::unnecessary_cast)]
+		(8_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionPerBlock (r:1 w:0)
@@ -57,12 +59,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Emissions SupplyUpdateInterval (r:1 w:0)
 	// Storage: Emissions LastSupplyUpdateBlock (r:1 w:0)
 	fn rewards_minted() -> Weight {
-		(29_000_000 as Weight)
+		#[allow(clippy::unnecessary_cast)]
+		(28_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(9 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Emissions SupplyUpdateInterval (r:0 w:1)
 	fn update_supply_update_interval() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
 		(8_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -73,13 +77,13 @@ impl WeightInfo for () {
 	// Storage: Emissions BackupNodeEmissionInflation (r:0 w:1)
 	fn update_backup_node_emission_inflation() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(9_000_000 as Weight)
+		(8_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionInflation (r:0 w:1)
 	fn update_current_authority_emission_inflation() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(9_000_000 as Weight)
+		(8_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionPerBlock (r:1 w:0)
@@ -93,7 +97,7 @@ impl WeightInfo for () {
 	// Storage: Emissions LastSupplyUpdateBlock (r:1 w:0)
 	fn rewards_minted() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(29_000_000 as Weight)
+		(28_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(9 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
