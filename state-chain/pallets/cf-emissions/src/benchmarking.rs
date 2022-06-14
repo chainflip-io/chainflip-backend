@@ -32,13 +32,7 @@ benchmarks! {
 	verify {
 		assert_eq!(BackupNodeEmissionInflation::<T>::get(), 100);
 	}
-	no_rewards_minted {
-	} : {
-		Pallet::<T>::on_initialize(5u32.into());
-	}
-	verify {
-		assert_eq!(LastSupplyUpdateBlock::<T>::get(), 0u32.into());
-	}
+	//TODO: Benchmarks for the case where the supply update is broadcasted, the future case where rewards for backup nodes are minted.
 	// Benchmark for the rewards minted case in the on init hook
 	rewards_minted {
 		use sp_runtime::{Digest, DigestItem};
@@ -51,9 +45,7 @@ benchmarks! {
 	}: {
 		Pallet::<T>::on_initialize(author_slot.into());
 	}
-	verify {
-		assert_eq!(LastSupplyUpdateBlock::<T>::get(), SUPPLY_UPDATE_INTERVAL.into());
-	}
+	verify {}
 	update_supply_update_interval {
 		let call = Call::<T>::update_supply_update_interval { value: SUPPLY_UPDATE_INTERVAL.into() };
 	}: {
