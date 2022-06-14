@@ -1,7 +1,4 @@
-use std::{
-	collections::{BTreeMap, BTreeSet},
-	iter::{FromIterator, IntoIterator},
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,

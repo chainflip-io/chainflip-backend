@@ -1,5 +1,5 @@
 use frame_support::traits::Get;
-use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, marker::PhantomData};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 
 use crate::Chainflip;
 

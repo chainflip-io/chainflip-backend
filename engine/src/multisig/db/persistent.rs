@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path};
+use std::{collections::HashMap, convert::TryInto, fs, path::Path};
 
 use super::KeyDB;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};

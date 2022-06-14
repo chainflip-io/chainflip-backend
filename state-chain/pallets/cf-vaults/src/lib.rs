@@ -20,7 +20,7 @@ pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	iter::{FromIterator, Iterator},
+	iter::Iterator,
 	prelude::*,
 };
 

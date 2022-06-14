@@ -33,7 +33,6 @@ use sp_runtime::{
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	iter::FromIterator,
 	marker::PhantomData,
 	prelude::*,
 };
