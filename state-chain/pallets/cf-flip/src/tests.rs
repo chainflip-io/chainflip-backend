@@ -226,10 +226,10 @@ impl FlipOperation {
 			// Update stake, Bond and claim
 			FlipOperation::UpdateStakeAndBond(account_id, stake, bond) => {
 				// Update Stake
-				let previous_stake = <Flip as StakeTransfer>::stakeable_balance(account_id);
+				let previous_stake = <Flip as StakeTransfer>::staked_balance(account_id);
 				let previous_offchain_funds = OffchainFunds::<Test>::get();
 				<Flip as StakeTransfer>::credit_stake(account_id, *stake);
-				let new_stake = <Flip as StakeTransfer>::stakeable_balance(account_id);
+				let new_stake = <Flip as StakeTransfer>::staked_balance(account_id);
 				let new_offchain_funds = OffchainFunds::<Test>::get();
 				if new_offchain_funds != previous_offchain_funds.saturating_sub(*stake) ||
 					new_stake !=
