@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use crate::common::format_iterator;
 use crate::multisig::client::common::{
     BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
 };
 use crate::multisig::client::{self, KeygenResult, KeygenResultInfo};
-use crate::{common::format_iterator, logging::KEYGEN_REJECTED_INCOMPATIBLE};
 
 use cf_traits::AuthorityCount;
 use client::{
@@ -306,11 +306,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                 StageResult::NextStage(Box::new(stage))
             }
             Err(err) => {
-                slog::debug!(
-                    self.common.logger,
-                    #KEYGEN_REJECTED_INCOMPATIBLE,
-                    "Aborting keygen ceremony: {}", err
-                );
+                slog::debug!(self.common.logger, "Invalid pubkey: {}", err);
                 // It is nobody's fault that the key is not compatible,
                 // so we abort with an empty list of responsible nodes
                 // to let the State Chain restart the ceremony

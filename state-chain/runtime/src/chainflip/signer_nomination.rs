@@ -87,7 +87,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 
 #[cfg(test)]
 mod tests {
-	use std::{collections::BTreeSet, iter::FromIterator};
+	use std::collections::BTreeSet;
 
 	use super::*;
 

@@ -1,6 +1,6 @@
 [package]
 authors = ['Chainflip <https://chainflip.io>']
-description = 'Common utilities used by the State Chain and the Chain Flip Engine'
+description = 'Common utilities used by the State Chain and the Chainflip Engine'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = 'TBC'

@@ -34,8 +34,6 @@ fn check_threshold_calculation() {
     assert_eq!(threshold_from_share_count(4), 2);
 }
 
-use core::convert::TryInto;
-
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
     let eth_address_hex_str = match dirty_eth_address.strip_prefix("0x") {
         Some(eth_address_stripped) => eth_address_stripped,

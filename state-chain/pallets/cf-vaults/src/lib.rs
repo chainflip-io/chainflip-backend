@@ -20,7 +20,7 @@ pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	iter::{FromIterator, Iterator},
+	iter::Iterator,
 	prelude::*,
 };
 
@@ -35,10 +35,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum KeygenOutcome<Key, Id> {
 	/// We have reached keygen consensus, and the key is now available.
 	Success(Key),
+	/// Generated key is incompatible with requirements
+	Incompatible,
 	/// Keygen failed with the enclosed guilty parties.
 	Failure(BTreeSet<Id>),
 }
@@ -48,6 +52,9 @@ pub enum KeygenOutcome<Key, Id> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum ReportedKeygenOutcome<Key, Payload, Signature, Id> {
 	Success(Key, Payload, Signature),
+
+	/// Generated key is incompatible with requirements
+	Incompatible,
 
 	Failure(BTreeSet<Id>),
 }
@@ -110,9 +117,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		self.success_threshold()
 	}
 
-	/// Accumulate a success vote into the keygen status.
-	///
-	/// Does not mutate on the error case.
 	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
 		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
 
@@ -123,9 +127,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		Ok(())
 	}
 
-	/// Accumulate a failure vote into the keygen status.
-	///
-	/// Does not mutate on the error case.
 	fn add_failure_vote(
 		&mut self,
 		voter: &T::ValidatorId,
@@ -142,14 +143,17 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		Ok(())
 	}
 
+	fn add_incompatible_vote(&mut self, voter: &T::ValidatorId) -> DispatchResult {
+		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
+
+		IncompatibleVoters::<T, I>::append(voter);
+
+		Ok(())
+	}
+
 	/// How many candidates are we still awaiting a response from?
 	fn remaining_candidate_count(&self) -> AuthorityCount {
 		self.remaining_candidates.len() as AuthorityCount
-	}
-
-	/// How many responses have we received so far?
-	fn response_count(&self) -> AuthorityCount {
-		self.candidate_count.saturating_sub(self.remaining_candidate_count())
 	}
 
 	/// Resolves the keygen outcome as follows:
@@ -167,32 +171,36 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			}
 		}
 
+		let remaining_success_voters = || {
+			SuccessVoters::<T, I>::drain()
+				.map(|(_k, dissenters)| dissenters)
+				.flatten()
+				.collect()
+		};
+
 		let mut to_punish = self.remaining_candidates.clone();
 		match self.consensus_outcome() {
 			Some(KeygenOutcome::Success(consensus_key)) => {
-				// all nodes that reported failure *and* all nodes that reported another success.
 				SuccessVoters::<T, I>::remove(consensus_key);
-				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
-					for dissenter in key_dissenters {
-						to_punish.insert(dissenter);
-					}
-				}
-				for failure_voter in FailureVoters::<T, I>::take() {
-					to_punish.insert(failure_voter);
-				}
+				to_punish.append(&mut remaining_success_voters());
+				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
+				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
+			},
+			Some(KeygenOutcome::Incompatible) => {
+				IncompatibleVoters::<T, I>::kill();
+				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
+				to_punish.append(&mut remaining_success_voters());
 			},
 			Some(KeygenOutcome::Failure(mut blamed)) => {
-				to_punish.append(&mut blamed);
 				FailureVoters::<T, I>::kill();
-				for (_bad_key, key_dissenters) in SuccessVoters::<T, I>::drain() {
-					for dissenter in key_dissenters {
-						to_punish.insert(dissenter);
-					}
-				}
+				to_punish.append(&mut blamed);
+				to_punish.append(&mut remaining_success_voters());
+				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
 			},
 			None => {
 				SuccessVoters::<T, I>::remove_all(None);
 				FailureVoters::<T, I>::kill();
+				IncompatibleVoters::<T, I>::kill();
 				log::warn!("Unable to determine a consensus outcome for keygen.")
 			},
 		};
@@ -210,39 +218,42 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
 	/// votes.
 	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
-		if self.response_count() < self.success_threshold() {
-			return None
-		}
-
-		for key in SuccessVoters::<T, I>::iter_keys() {
-			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
-				self.success_threshold() as usize
-			{
-				return Some(KeygenOutcome::Success(key))
-			}
-		}
-
-		if FailureVoters::<T, I>::decode_len().unwrap_or_default() <
-			self.success_threshold() as usize
+		let success_threshold = self.success_threshold() as usize;
+		if (self.candidate_count.saturating_sub(self.remaining_candidate_count()) as usize) <
+			success_threshold
 		{
 			return None
 		}
 
-		Some(KeygenOutcome::Failure(
-			self.blame_votes
-				.iter()
-				.filter_map(
-					|(id, vote_count)| {
-						if *vote_count >= self.blame_threshold() {
-							Some(id)
-						} else {
-							None
-						}
-					},
-				)
-				.cloned()
-				.collect(),
-		))
+		for key in SuccessVoters::<T, I>::iter_keys() {
+			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= success_threshold {
+				return Some(KeygenOutcome::Success(key))
+			}
+		}
+
+		if IncompatibleVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
+			return Some(KeygenOutcome::Incompatible)
+		}
+
+		if FailureVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
+			Some(KeygenOutcome::Failure(
+				self.blame_votes
+					.iter()
+					.filter_map(
+						|(id, vote_count)| {
+							if *vote_count >= self.blame_threshold() {
+								Some(id)
+							} else {
+								None
+							}
+						},
+					)
+					.cloned()
+					.collect(),
+			))
+		} else {
+			None
+		}
 	}
 }
 
@@ -290,6 +301,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -303,6 +315,9 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// The event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
 		/// Offences supported in this runtime.
 		type Offence: From<PalletOffence>;
@@ -336,10 +351,6 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
-
-		/// The maximum number of blocks to wait after the first keygen response comes in.
-		#[pallet::constant]
-		type KeygenResponseGracePeriod: Get<BlockNumberFor<Self>>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -361,13 +372,11 @@ pub mod pallet {
 				let resolve = if response_status.remaining_candidate_count() == 0 {
 					log::debug!("All keygen candidates have reported, resolving outcome...");
 					true
-				} else if Self::has_grace_period_elapsed(current_block) {
-					log::debug!(
-						"Keygen response grace period has elapsed, reporting keygen failure."
-					);
-					Self::deposit_event(Event::<T, I>::KeygenGracePeriodElapsed(
-						keygen_ceremony_id,
-					));
+				} else if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
+					KeygenResponseTimeout::<T, I>::get()
+				{
+					log::debug!("Keygen response timeout has elapsed, reporting keygen failure.");
+					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(keygen_ceremony_id));
 					true
 				} else {
 					false
@@ -379,6 +388,10 @@ pub mod pallet {
 						KeygenOutcome::Success(new_public_key) => {
 							weight += T::WeightInfo::on_initialize_success();
 							Self::on_keygen_success(keygen_ceremony_id, new_public_key);
+						},
+						KeygenOutcome::Incompatible => {
+							PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+							Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
 						},
 						KeygenOutcome::Failure(offenders) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
@@ -435,6 +448,12 @@ pub mod pallet {
 	pub type SuccessVoters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
 
+	/// The voters who voted that a particular keygen ceremony generated an incompatible key
+	#[pallet::storage]
+	#[pallet::getter(fn incompatible_voters)]
+	pub type IncompatibleVoters<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+
 	/// The voters who voted for failure for a particular agg key rotation
 	#[pallet::storage]
 	#[pallet::getter(fn failure_voters)]
@@ -445,6 +464,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_resolution_pending_since)]
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
@@ -464,16 +487,23 @@ pub mod pallet {
 		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
+		/// A keygen participant has reported that an incompatible key was generated
+		/// \[validator_id\]
+		KeygenIncompatibleReported(T::ValidatorId),
 		/// A keygen participant has reported that keygen has failed \[validator_id\]
 		KeygenFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
 		KeygenSuccess(CeremonyId),
+		/// Keygen was incompatible \[ceremony_id\]
+		KeygenIncompatible(CeremonyId),
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
 		/// KeygenSignatureVerificationFailed \[validator_id\]
 		KeygenSignatureVerificationFailed(T::ValidatorId),
-		/// Keygen grace period has elapsed \[ceremony_id\]
-		KeygenGracePeriodElapsed(CeremonyId),
+		/// Keygen response timeout has occurred \[ceremony_id\]
+		KeygenResponseTimeout(CeremonyId),
+		/// Keygen response timeout was updated \[new_timeout\]
+		KeygenResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
 	}
 
 	#[pallet::error]
@@ -556,6 +586,10 @@ pub mod pallet {
 							reporter,
 						));
 					},
+				ReportedKeygenOutcome::Incompatible => {
+					keygen_status.add_incompatible_vote(&reporter)?;
+					Self::deposit_event(Event::<T, I>::KeygenIncompatibleReported(reporter));
+				},
 				ReportedKeygenOutcome::Failure(blamed) => {
 					keygen_status.add_failure_vote(&reporter, blamed)?;
 					Self::deposit_event(Event::<T, I>::KeygenFailureReported(reporter));
@@ -673,6 +707,21 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		#[pallet::weight(T::WeightInfo::set_keygen_timeout())]
+		pub fn set_keygen_timeout(
+			origin: OriginFor<T>,
+			new_timeout: T::BlockNumber,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			if new_timeout != KeygenResponseTimeout::<T, I>::get() {
+				KeygenResponseTimeout::<T, I>::put(new_timeout);
+				Pallet::<T, I>::deposit_event(Event::KeygenResponseTimeoutUpdated { new_timeout });
+			}
+
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -683,24 +732,29 @@ pub mod pallet {
 		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
 		pub vault_key: Vec<u8>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
+		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { vault_key: Default::default(), deployment_block: Default::default() }
+			Self {
+				vault_key: Default::default(),
+				deployment_block: Default::default(),
+				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into(),
+			}
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			use sp_std::convert::TryFrom;
-
 			let public_key = AggKeyFor::<T, I>::try_from(self.vault_key.clone())
 				// Note: Can't use expect() here without some type shenanigans, but would give
 				// clearer error messages.
 				.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."));
+
+			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 
 			Vaults::<T, I>::insert(
 				CurrentEpochIndex::<T>::get(),
@@ -735,11 +789,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
-	}
-
-	fn has_grace_period_elapsed(block: BlockNumberFor<T>) -> bool {
-		block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
-			T::KeygenResponseGracePeriod::get()
 	}
 }
 

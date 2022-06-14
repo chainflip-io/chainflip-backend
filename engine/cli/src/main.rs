@@ -1,6 +1,9 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
-    eth::{rpc::EthWsRpcClient, EthBroadcaster},
+    eth::{
+        rpc::{EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
+        EthBroadcaster,
+    },
     state_chain::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
@@ -13,7 +16,6 @@ use sp_core::ed25519::Public as EdPublic;
 use sp_core::sr25519::Public as SrPublic;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
-use std::convert::TryInto;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
@@ -227,11 +229,17 @@ async fn register_claim(
         stake_manager_address
     );
 
-    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, logger)
-        .await
-        .expect("Unable to create EthRpcClient");
-
-    let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_ws_rpc_client, logger)?;
+    let eth_broadcaster = EthBroadcaster::new(
+        &settings.eth,
+        EthDualRpcClient::new(
+            EthWsRpcClient::new(&settings.eth, logger)
+                .await
+                .expect("Unable to create EthWslRpcClient"),
+            EthHttpRpcClient::new(&settings.eth, logger)
+                .expect("Unable to create EthHttpRpcClient"),
+        ),
+        logger,
+    )?;
 
     eth_broadcaster
         .send(

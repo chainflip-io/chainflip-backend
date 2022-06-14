@@ -2,6 +2,7 @@
 mod helpers;
 pub mod curve25519_ristretto;
 pub mod eth;
+pub mod polkadot;
 pub mod secp255k1;
 
 use generic_array::{typenum::Unsigned, ArrayLength};

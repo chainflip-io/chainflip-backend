@@ -11,15 +11,12 @@ mod tests;
 
 pub mod ceremony_manager;
 
-#[cfg(test)]
-mod genesis;
-
 use std::collections::BTreeSet;
 
 use crate::{
     common::format_iterator,
     logging::CEREMONY_ID_KEY,
-    multisig::{client::common::SigningFailureReason, crypto::Rng, KeyDB, KeyId},
+    multisig::{client::common::SigningFailureReason, KeyDB, KeyId},
 };
 
 use async_trait::async_trait;
@@ -46,13 +43,14 @@ pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
-    common::{CeremonyFailureReason, KeygenFailureReason},
     signing::frost::SigningData,
 };
 
+pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
+
 use super::{
     crypto::{CryptoScheme, ECPoint},
-    MessageHash,
+    MessageHash, Rng,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -283,7 +281,14 @@ where
 
                     Ok(keygen_result_info.key.get_public_key())
                 }
-                Err(error) => Err(error),
+                Err((reported_parties, failure_reason)) => {
+                    failure_reason.log(
+                        &reported_parties,
+                        &self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+                    );
+
+                    Err((reported_parties, failure_reason))
+                }
             }
         }
     }
@@ -347,23 +352,37 @@ where
             });
 
         Box::pin(async move {
-            match request {
+            let result = match request {
                 Some(RequestStatus::Ready(signature)) => Ok(signature),
                 Some(RequestStatus::WaitForOneshot(result_receiver)) => result_receiver
                     .await
                     .expect("Signing result oneshot channel dropped before receiving a result"),
-                None => Err((
-                    BTreeSet::new(),
-                    CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),
-                )),
-            }
+                None => {
+                    // No key was found for the given key_id
+                    Err((
+                        BTreeSet::new(),
+                        CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),
+                    ))
+                }
+            };
+
+            result.map_err(|(reported_parties, failure_reason)| {
+                failure_reason.log(
+                    &reported_parties,
+                    &self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+                );
+
+                (reported_parties, failure_reason)
+            })
         })
     }
 
     fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
         slog::info!(self.logger, "Performing solo keygen");
 
-        single_party_keygen(self.my_account_id.clone(), rng)
+        let (_key_id, key_data) =
+            keygen::generate_key_data_until_compatible(&[self.my_account_id.clone()], 30, rng);
+        key_data[&self.my_account_id].clone()
     }
 
     fn single_party_signing(
@@ -386,19 +405,6 @@ where
             signing::frost::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
 
         C::build_signature(sigma, r)
-    }
-}
-
-pub fn single_party_keygen<Point: ECPoint>(
-    my_account_id: AccountId,
-    mut rng: Rng,
-) -> KeygenResultInfo<Point> {
-    loop {
-        if let Ok((_key_id, key_data)) =
-            keygen::generate_key_data::<Point>(&[my_account_id.clone()], &mut rng)
-        {
-            return key_data[&my_account_id].clone();
-        }
     }
 }
 

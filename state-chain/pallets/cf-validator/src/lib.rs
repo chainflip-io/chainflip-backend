@@ -344,6 +344,10 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidClaimPeriod](Error::InvalidClaimPeriod)
+		///
+		/// ## Dependencies
+		///
+		/// - [EnsureGovernance]
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
 		pub fn update_period_for_claims(
 			origin: OriginFor<T>,
@@ -368,6 +372,10 @@ pub mod pallet {
 		///
 		/// - [RotationInProgress](Error::RotationInProgress)
 		/// - [InvalidEpoch](Error::InvalidEpoch)
+		///
+		/// ## Dependencies
+		///
+		/// - [EnsureGovernance]
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
 		pub fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
@@ -387,8 +395,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Force a new epoch.  From the next block we will try to move to a new epoch and rotate
-		/// our validators.
+		/// Force a new epoch. From the next block we will try to move to a new
+		/// epoch and rotate our validators.
 		///
 		/// The dispatch origin of this function must be root.
 		///
@@ -520,6 +528,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_system::error::BadOrigin)
+		///
 		/// ## Dependencies
 		///
 		/// - None
@@ -542,6 +551,26 @@ pub mod pallet {
 			})
 		}
 
+		/// Allow a node to set a "Vanity Name" for themselves. This is functionally
+		/// useless but can be used to make the network a bit more friendly for
+		/// observers. Names are required to be <= MAX_LENGTH_FOR_VANITY_NAME (64)
+		/// UTF-8 bytes.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [VanityNameSet](Event::VanityNameSet)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// - [NameTooLong](Error::NameTooLong)
+		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
+		///
+		/// ## Dependencies
+		///
+		/// - None
 		#[pallet::weight(T::ValidatorWeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -554,6 +583,23 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Allow governance to set the percentage of Validators that should be set
+		/// as backup Validators. This percentage is relative to the total permitted
+		/// number of Authorities.
+		///
+		/// The dispatch origin of this function must be governance.
+		///
+		/// ## Events
+		///
+		/// - [BackupNodePercentageUpdated](Event::BackupNodePercentageUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		///
+		/// ## Dependencies
+		///
+		/// - [EnsureGovernance]
 		#[pallet::weight(T::ValidatorWeightInfo::set_backup_node_percentage())]
 		pub fn set_backup_node_percentage(
 			origin: OriginFor<T>,
@@ -827,7 +873,6 @@ impl<T: Config> Pallet<T> {
 	fn start_new_epoch(auction_outcome: RuntimeAuctionOutcome<T>) {
 		let epoch_authorities = auction_outcome.winners;
 		let new_bond = auction_outcome.bond;
-		let backup_candidates = auction_outcome.losers;
 
 		// Calculate the new epoch index
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
@@ -884,7 +929,7 @@ impl<T: Config> Pallet<T> {
 
 		// We've got new validators, which means the backups and passives may have changed.
 		BackupValidatorTriage::<T>::put(RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
-			backup_candidates,
+			auction_outcome.losers,
 			Self::backup_set_target_size(&epoch_authorities, BackupNodePercentage::<T>::get()),
 		));
 

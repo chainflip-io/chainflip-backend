@@ -1,6 +1,5 @@
 use std::{
     fmt::Display,
-    iter::FromIterator,
     ops::{Deref, DerefMut},
     path::Path,
     time::Duration,
