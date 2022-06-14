@@ -377,7 +377,7 @@ pub mod pallet {
 
 			T::Flip::settle_claim(claimed_amount);
 
-			if T::Flip::stakeable_balance(&account_id).is_zero() {
+			if T::Flip::staked_balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix it on a
 					// subsequent release. Consequences are minor.
@@ -631,7 +631,7 @@ impl<T: Config> Pallet<T> {
 		// Calculate the maximum that would remain after this claim and ensure it won't be less than
 		// the system's minimum stake.  N.B. This would be caught in `StakeTranser::try_claim()` but
 		// this will need to be handled in a refactor of that trait(?)
-		let remaining = T::Flip::stakeable_balance(account_id)
+		let remaining = T::Flip::staked_balance(account_id)
 			.checked_sub(&amount)
 			.ok_or(Error::<T>::InvalidClaim)?;
 
@@ -781,7 +781,7 @@ impl<T: Config> BidderProvider for Pallet<T> {
 				if retired {
 					None
 				} else {
-					let stake = T::Flip::stakeable_balance(&acct);
+					let stake = T::Flip::staked_balance(&acct);
 					Some((acct, stake))
 				}
 			})
