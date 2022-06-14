@@ -8,6 +8,7 @@ use crate::{
 	},
 	ApiCall,
 };
+use sp_std::vec;
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];
 const PRIVATE_KEY: [u8; 32] = [2u8; 32];
@@ -46,21 +47,19 @@ impl BenchmarkValue for H256 {
 
 impl BenchmarkValue for RawSignedTransaction {
 	fn benchmark_value() -> Self {
-		SchnorrVerificationComponents::benchmark_value().s.to_vec()
+		vec![].into()
 	}
 }
 
 impl BenchmarkValue for AggKey {
 	fn benchmark_value() -> Self {
 		AggKey::from_private_key_bytes(
-			SecretKey::parse(&PRIVATE_KEY).expect("Valid signature nonce").serialize(),
+			SecretKey::parse(&PRIVATE_KEY).expect("Valid private key").serialize(),
 		)
 	}
 }
 
-#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for EthereumApi {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		EthereumApi::UpdateFlipSupply(UpdateFlipSupply::new_unsigned(
 			EthereumReplayProtection {
@@ -75,9 +74,7 @@ impl BenchmarkValue for EthereumApi {
 	}
 }
 
-#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for UnsignedTransaction {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		UnsignedTransaction {
 			chain_id: 31337,
@@ -85,7 +82,7 @@ impl BenchmarkValue for UnsignedTransaction {
 			gas_limit: U256::from(21_000u32).into(),
 			contract: [0xcf; 20].into(),
 			value: 0.into(),
-			data: RawSignedTransaction::benchmark_value().into(),
+			data: b"do_something()".to_vec(),
 			..Default::default()
 		}
 	}

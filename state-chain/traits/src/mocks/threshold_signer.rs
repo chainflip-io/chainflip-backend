@@ -59,7 +59,4 @@ where
 	) -> crate::AsyncResult<<C as ChainCrypto>::ThresholdSignature> {
 		Self::take_storage::<_, AsyncResult<_>>(b"SIG", request_id).unwrap_or(AsyncResult::Void)
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(_: Self::RequestId, _: <C as ChainCrypto>::ThresholdSignature) {}
 }

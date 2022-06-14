@@ -1,8 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-/// A trait for implementing a default instance of a type for use in benchmarking.
+/// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
-	/// Returns a default value suitable for running against benchmarks.
+	/// Returns a value suitable for running against benchmarks.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self;
 }
