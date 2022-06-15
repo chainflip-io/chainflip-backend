@@ -1,5 +1,4 @@
 use sp_api::decl_runtime_apis;
-use sp_std::vec::Vec;
 
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
