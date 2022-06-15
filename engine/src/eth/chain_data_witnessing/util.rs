@@ -4,9 +4,17 @@ use futures::{future, stream, Stream, StreamExt};
 use sp_runtime::traits::Bounded;
 use tokio::sync::watch;
 
-/// Returns a stream that yields `()` at regular intervals.
-pub fn tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
-    stream::unfold(tokio::time::interval(tick_interval), |mut interval| async {
+use crate::common::make_periodic_tick;
+
+/// Returns a stream that yields `()` at regular intervals. Uses tokio's [MissedTickBehavior::Delay] tick strategy,
+/// meaning ticks will always be at least `interval` duration apart.
+///
+/// Suitable for polling.
+///
+/// Note that in order for this to work as expected, due to the underlying implementation of [Interval::poll_tick], the
+/// polling interval should be >> 5ms.
+pub fn periodic_tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
+    stream::unfold(make_periodic_tick(tick_interval), |mut interval| async {
         interval.tick().await;
         Some(((), interval))
     })
@@ -64,7 +72,7 @@ mod test {
         const EXPECTED_DURATION_MS: u64 = INTERVAL_MS * (REPETITIONS - 1) as u64;
 
         let start = std::time::Instant::now();
-        let result = tick_stream(Duration::from_millis(INTERVAL_MS))
+        let result = periodic_tick_stream(Duration::from_millis(INTERVAL_MS))
             .scan(0, |count, _| {
                 *count += 1;
                 future::ready(Some(*count))

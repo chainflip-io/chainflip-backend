@@ -23,10 +23,8 @@ pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync + 'a>(
 ) -> impl Stream<Item = u64> + 'a {
     let logger = logger.new(o!(COMPONENT_KEY => "ETH_Poll_LatestBlockStream"));
 
-    util::tick_stream(polling_interval)
-        // Get the latest block number.
+    util::periodic_tick_stream(polling_interval)
         .then(move |_| eth_rpc.block_number())
-        // Warn on error.
         .filter_map(move |rpc_result| {
             future::ready(match rpc_result {
                 Ok(block_number) => Some(block_number.as_u64()),
