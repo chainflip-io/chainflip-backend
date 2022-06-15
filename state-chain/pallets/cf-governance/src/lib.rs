@@ -35,6 +35,7 @@ pub mod pallet {
 	use cf_traits::{ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
+		error::BadOrigin,
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
@@ -107,6 +108,11 @@ pub mod pallet {
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
+	/// Call hash that has been committed to by the governance key (off-chain gnosis safe governance
+	/// key)
+	#[pallet::storage]
+	pub(super) type GovKeyWhiteListedCallHash<T> = StorageValue<_, [u8; 32], OptionQuery>;
+
 	/// Number of proposals that have been submitted
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_id_counter)]
@@ -114,7 +120,7 @@ pub mod pallet {
 
 	/// Pipeline of proposals which will get executed in the next block
 	#[pallet::storage]
-	#[pallet::getter(fn execution_pipeline )]
+	#[pallet::getter(fn execution_pipeline)]
 	pub(super) type ExecutionPipeline<T> =
 		StorageValue<_, Vec<(OpaqueCall, ProposalId)>, ValueQuery>;
 
@@ -165,6 +171,8 @@ pub mod pallet {
 		DecodeOfCallFailed(ProposalId),
 		/// The upgrade conditions for a runtime upgrade were satisfied
 		UpgradeConditionsSatisfied,
+		/// Call dispatched by GovKey
+		GovKeyCallDispatched,
 	}
 
 	#[pallet::error]
@@ -183,6 +191,8 @@ pub mod pallet {
 		UpgradeConditionsNotMet,
 		/// A runtime upgrade was not successful
 		UpgradeHasFailed,
+		/// The call hash was not whitelisted
+		CallHashNotWhitelisted,
 	}
 
 	#[pallet::call]
@@ -308,6 +318,34 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Execute the root call
 			call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into())
+		}
+
+		#[pallet::weight(0)]
+		pub fn submit_govkey_call(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
+			// can be governance or a staker
+			if ensure_signed(origin.clone()).is_ok() ||
+				T::EnsureGovernance::ensure_origin(origin).is_ok()
+			{
+				match GovKeyWhiteListedCallHash::<T>::get() {
+					Some(whitelisted_call_hash)
+						if whitelisted_call_hash == frame_support::Hashable::blake2_256(&call) =>
+					{
+						call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into())?;
+						// call has been dispatched so we increment the nonce, and clear
+						// the whitelisted call
+						NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
+						GovKeyWhiteListedCallHash::<T>::kill();
+						Self::deposit_event(Event::GovKeyCallDispatched);
+						Ok(Pays::No.into())
+					},
+					_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
+				}
+			} else {
+				Err(BadOrigin.into())
+			}
 		}
 	}
 
