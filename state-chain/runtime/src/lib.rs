@@ -598,6 +598,10 @@ impl_runtime_apis! {
 		fn cf_backup_emission_per_block() -> u64 {
 			Emissions::backup_node_emission_per_block().unique_saturated_into()
 		}
+		fn cf_flip_supply() -> (u64, u64) {
+			// Don't know if it's a good idea to coerce these into u64 - they are u128
+			(Flip::total_issuance().unique_saturated_into(), Flip::offchain_funds().unique_saturated_into())
+		}
 	}
 	// END custom runtime APIs
 
