@@ -408,6 +408,38 @@ impl<EthRpc: EthRpcApi> KeyManager<EthRpc> {
     }
 }
 
+#[test]
+fn generate_signatures() {
+    let contract =
+        ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref()).unwrap();
+
+    let ak_set_by_ak = SignatureAndEvent::new(&contract, "AggKeySetByAggKey").unwrap();
+    println!("ak_set_by_ak: {:?}", ak_set_by_ak.signature);
+    let ak_set_by_gk = SignatureAndEvent::new(&contract, "AggKeySetByGovKey").unwrap();
+    println!("ak_set_by_gk: {:?}", ak_set_by_gk.signature);
+    let ck_set_by_ak = SignatureAndEvent::new(&contract, "CommKeySetByAggKey").unwrap();
+    println!("ck_set_by_ak: {:?}", ck_set_by_ak.signature);
+    let ck_set_by_ck = SignatureAndEvent::new(&contract, "CommKeySetByCommKey").unwrap();
+    println!("ck_set_by_ck: {:?}", ck_set_by_ck.signature);
+    let gk_set_by_ak = SignatureAndEvent::new(&contract, "GovKeySetByAggKey").unwrap();
+    println!("gk_set_by_ak: {:?}", gk_set_by_ak.signature);
+    let gk_set_by_gk = SignatureAndEvent::new(&contract, "GovKeySetByGovKey").unwrap();
+    println!("gk_set_by_gk: {:?}", gk_set_by_gk.signature);
+    let gov_action = SignatureAndEvent::new(&contract, "GovernanceAction").unwrap();
+    println!("gov_action: {:?}", gov_action.signature);
+    let sig_accepted = SignatureAndEvent::new(&contract, "SignatureAccepted").unwrap();
+    println!("sig_accepted: {:?}", sig_accepted.signature);
+}
+
+// ak_set_by_ak: 0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521
+// ak_set_by_gk: 0xe441a6cf7a12870075eb2f6399c0de122bfe6cd8a75bfa83b05d5b611552532e
+// ck_set_by_ak: 0x999bc9c97358a1254b8ba2c1e65893b34385bf27c448cb21af3f19eee6b809ce
+// ck_set_by_ck: 0xb8529adc43e07de6ef9ce6a65ca2e5ad5f52b155e85bbbc28f7d3c165170deab
+// gk_set_by_ak: 0x6049e088bb150ffb9041c7bfd3f7d4017d79a930d2d23e2f331eeffb0cb74297
+// gk_set_by_gk: 0xb79780665df55038fba66988b1b3f2eda919a59b75cd2581f31f8f04f58bec7c
+// gov_action: 0x06e69d4af70b00b0c269b2707345abc134d9767085930456d9d03285f1eaf5c7
+// sig_accepted: 0x38045dba3d9ee1fee641ad521bd1cf34c28562f6658772ee04678edf17b9a3bc
+
 #[cfg(test)]
 mod tests {
 
@@ -509,6 +541,118 @@ mod tests {
                 }
                 _ => panic!("Expected KeyManagerEvent::GovKeySetByGovKey, got different variant"),
             }
+    }
+
+    // 🔑 Aggregate Key sets the new Governance Key 🔑
+    #[test]
+    fn test_gk_set_by_ak_parsing() {
+        let key_manager = new_test_key_manager();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("0x6049e088bb150ffb9041c7bfd3f7d4017d79a930d2d23e2f331eeffb0cb74297")
+                .unwrap();
+
+        match decode_log(
+                    event_signature,
+                    RawLog {
+                        topics : vec![event_signature],
+                        data : hex::decode("0000000000000000000000009965507d1a55bcc2695c58ba16fb37d819b0a4dc000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+                    }
+                ).expect("Failed parsing KeyManagerEvent::GovKeySetByAggKey event")
+                {
+                    KeyManagerEvent::GovKeySetByAggKey {
+                        old_gov_key,
+                        new_gov_key,
+                    } => {
+                        assert_eq!(old_gov_key, H160::from_str("0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap());
+                        assert_eq!(new_gov_key, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
+                    }
+                    _ => panic!("Expected KeyManagerEvent::GovKeySetByAggKey, got different variant"),
+                }
+    }
+
+    // 🔑 Comm Key sets the new Comm Key 🔑
+    #[test]
+    fn test_ck_set_by_ck_parsing() {
+        let key_manager = new_test_key_manager();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("0xb8529adc43e07de6ef9ce6a65ca2e5ad5f52b155e85bbbc28f7d3c165170deab")
+                .unwrap();
+
+        match decode_log(
+                        event_signature,
+                        RawLog {
+                            topics : vec![event_signature],
+                            data : hex::decode("000000000000000000000000976ea74026e726554db657fa54763abd0c3a0aa900000000000000000000000014dc79964da2c08b23698b3d3cc7ca32193d9955").unwrap()
+                        }
+                    ).expect("Failed parsing KeyManagerEvent::CommKeySetByCommKey event")
+                    {
+                        KeyManagerEvent::CommKeySetByCommKey {
+                            old_comm_key,
+                            new_comm_key,
+                        } => {
+                            assert_eq!(old_comm_key, H160::from_str("0x976ea74026e726554db657fa54763abd0c3a0aa9").unwrap());
+                            assert_eq!(new_comm_key, H160::from_str("0x14dc79964da2c08b23698b3d3cc7ca32193d9955").unwrap());
+                        }
+                        _ => panic!("Expected KeyManagerEvent::CommKeySetByCommKey, got different variant"),
+                    }
+    }
+
+    // 🔑 Comm Key sets the new Comm Key 🔑
+    #[test]
+    fn test_ck_set_by_agg_key_parsing() {
+        let key_manager = new_test_key_manager();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("0x999bc9c97358a1254b8ba2c1e65893b34385bf27c448cb21af3f19eee6b809ce")
+                .unwrap();
+
+        match decode_log(
+                            event_signature,
+                            RawLog {
+                                topics : vec![event_signature],
+                                data : hex::decode("00000000000000000000000014dc79964da2c08b23698b3d3cc7ca32193d9955000000000000000000000000976ea74026e726554db657fa54763abd0c3a0aa9").unwrap()
+                            }
+                        ).expect("Failed parsing KeyManagerEvent::CommKeySetByAggKey event")
+                        {
+                            KeyManagerEvent::CommKeySetByAggKey {
+                                old_comm_key,
+                                new_comm_key,
+                            } => {
+                                assert_eq!(old_comm_key, H160::from_str("0x14dc79964da2c08b23698b3d3cc7ca32193d9955").unwrap());
+                                assert_eq!(new_comm_key, H160::from_str("0x976ea74026e726554db657fa54763abd0c3a0aa9").unwrap());
+                            }
+                            _ => panic!("Expected KeyManagerEvent::CommKeySetByAggKey, got different variant"),
+                        }
+    }
+
+    // Governance Action
+    #[test]
+    fn test_gov_action_parsing() {
+        let key_manager = new_test_key_manager();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("0x06e69d4af70b00b0c269b2707345abc134d9767085930456d9d03285f1eaf5c7")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "000000000000000000000000000000000000000000000000000000000000a455",
+                )
+                .unwrap(),
+            },
+        )
+        .expect("Failed parsing KeyManagerEvent::GovernanceAction event")
+        {
+            KeyManagerEvent::GovernanceAction { message } => {
+                assert_eq!(message, H256::from_low_u64_be(42069));
+            }
+            _ => panic!("Expected KeyManagerEvent::GovernanceAction, got different variant"),
+        }
     }
 
     #[test]
