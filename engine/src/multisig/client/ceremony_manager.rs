@@ -111,7 +111,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         rng: Rng,
         result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>, KeygenFailureReason>,
     ) {
-        let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+        let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
@@ -119,7 +119,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         {
             Ok(res) => res,
             Err(reason) => {
-                slog::debug!(logger, "Keygen request invalid: {}", reason);
+                slog::debug!(
+                    logger_with_ceremony_id,
+                    "Keygen request invalid: {}",
+                    reason
+                );
                 let _result = result_sender.send(Err((
                     BTreeSet::new(),
                     CeremonyFailureReason::InvalidParticipants,
@@ -131,26 +135,26 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         let num_of_participants: AuthorityCount =
             signer_idxs.len().try_into().expect("too many participants");
 
-        let logger_no_ceremony_id = &self.logger;
         let state = self
             .keygen_states
-            .get_state_or_create_unauthorized(ceremony_id, logger_no_ceremony_id);
+            .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
         let initial_stage = {
-            let context = generate_keygen_context(ceremony_id, participants);
-
             let common = CeremonyCommon {
                 ceremony_id,
                 outgoing_p2p_message_sender: self.outgoing_p2p_message_sender.clone(),
                 validator_mapping: validator_map.clone(),
                 own_idx: our_idx,
                 all_idxs: signer_idxs,
-                logger: logger.clone(),
+                logger: logger_with_ceremony_id,
                 rng,
             };
 
-            let processor =
-                HashCommitments1::new(common.clone(), self.allowing_high_pubkey, context);
+            let processor = HashCommitments1::new(
+                common.clone(),
+                self.allowing_high_pubkey,
+                generate_keygen_context(ceremony_id, participants),
+            );
 
             Box::new(BroadcastStage::new(processor, common))
         };
@@ -176,16 +180,16 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         rng: Rng,
         result_sender: CeremonyResultSender<C::Signature, SigningFailureReason>,
     ) {
-        let logger = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+        let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
-        slog::debug!(logger, "Processing a request to sign");
+        slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
 
         // Check that the number of signers is enough
         let minimum_signers_needed = key_info.params.threshold + 1;
         let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
         if signers_len < minimum_signers_needed {
             slog::debug!(
-                logger,
+                logger_with_ceremony_id,
                 "Request to sign invalid: not enough signers ({}/{})",
                 signers.len(),
                 minimum_signers_needed
@@ -201,7 +205,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             match self.map_ceremony_parties(&signers, &key_info.validator_map) {
                 Ok(res) => res,
                 Err(reason) => {
-                    slog::debug!(logger, "Request to sign invalid: {}", reason);
+                    slog::debug!(
+                        logger_with_ceremony_id,
+                        "Request to sign invalid: {}",
+                        reason
+                    );
                     let _result = result_sender.send(Err((
                         BTreeSet::new(),
                         CeremonyFailureReason::InvalidParticipants,
@@ -211,10 +219,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             };
 
         // We have the key and have received a request to sign
-        let logger_no_ceremony_id = &self.logger;
         let state = self
             .signing_states
-            .get_state_or_create_unauthorized(ceremony_id, logger_no_ceremony_id);
+            .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
         let initial_stage = {
             use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
@@ -225,7 +232,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 validator_mapping: key_info.validator_map.clone(),
                 own_idx,
                 all_idxs: signer_idxs,
-                logger: logger.clone(),
+                logger: logger_with_ceremony_id,
                 rng,
             };
 
@@ -387,9 +394,8 @@ struct CeremonyStates<CeremonyData, CeremonyResult, FailureReason> {
 impl<CeremonyData, CeremonyResult, FailureReason>
     CeremonyStates<CeremonyData, CeremonyResult, FailureReason>
 where
-    CeremonyData: Display,
+    CeremonyData: Display + PreProcessStageDataCheck,
     FailureReason: Display,
-    CeremonyData: PreProcessStageDataCheck,
 {
     fn new() -> Self {
         Self {
@@ -451,10 +457,7 @@ where
         &mut self,
         ceremony_id: CeremonyId,
         result: Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>,
-    ) where
-        CeremonyData: Display,
-        FailureReason: Display,
-    {
+    ) {
         let _result = self
             .inner
             .remove(&ceremony_id)
