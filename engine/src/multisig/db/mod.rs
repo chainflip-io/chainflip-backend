@@ -1,7 +1,5 @@
 pub mod persistent;
 
-mod migrations;
-
 use std::collections::HashMap;
 
 pub use persistent::PersistentKeyDB;
