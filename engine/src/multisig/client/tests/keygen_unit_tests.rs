@@ -1,37 +1,31 @@
 use cf_traits::AuthorityCount;
 use rand_legacy::{FromEntropy, SeedableRng};
-use std::{collections::BTreeSet, iter::FromIterator};
+use std::collections::BTreeSet;
 use tokio::sync::oneshot;
 
-use crate::{
-    logging::CEREMONY_REQUEST_IGNORED,
-    multisig::{
-        client::{
-            common::{
-                BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
-                KeygenFailureReason,
-            },
-            keygen::{
-                self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
-                VerifyHashComm2,
-            },
-            tests::helpers::{
-                all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
-                gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
-                run_stages, split_messages_for, standard_keygen, switch_out_participant,
-                KeygenCeremonyRunner,
-            },
-            utils::PartyIdxMapping,
+use crate::multisig::{
+    client::{
+        common::{
+            BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
         },
-        crypto::Rng,
+        keygen::{
+            self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
+            VerifyHashComm2,
+        },
+        tests::helpers::{
+            all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
+            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
+            run_stages, split_messages_for, standard_keygen, switch_out_participant,
+            KeygenCeremonyRunner,
+        },
+        utils::PartyIdxMapping,
     },
+    crypto::Rng,
 };
 
 use crate::testing::assert_ok;
 
 use super::*;
-
-use crate::logging::KEYGEN_REQUEST_IGNORED;
 
 use crate::multisig::crypto::eth::Point;
 type CoeffComm3 = keygen::CoeffComm3<Point>;
@@ -47,48 +41,6 @@ type KeygenData = keygen::KeygenData<Point>;
 async fn happy_path_results_in_valid_key() {
     let (_, _, _, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 }
-
-/*
-/// If keygen state expires before a formal request to keygen
-/// (from our SC), we should report initiators of that ceremony.
-/// TODO: [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
-#[tokio::test]
-#[ignore = "functionality disabled as SC does not expect this response"]
-async fn should_report_on_timeout_before_keygen_request() {
-    let (_, _, messages, _nodes) = run_keygen(
-        new_nodes(ACCOUNT_IDS.clone()),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-    )
-    .await;
-
-    let good_account_id = &ACCOUNT_IDS[0];
-
-    let mut node = new_node(good_account_id.clone(), true);
-
-    let bad_account_id = ACCOUNT_IDS[1].clone();
-
-    node.ceremony_manager.process_keygen_data(
-        bad_account_id.clone(),
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        messages.stage_1_messages[&bad_account_id][good_account_id]
-            .clone()
-            .into(),
-    );
-
-    // Force all ceremonies to time out
-    node.force_stage_timeout();
-
-    let (_, reported) = node
-        .try_recv_outcome::<KeygenResultInfo>()
-        .await
-        .unwrap()
-        .result
-        .unwrap_err();
-    assert_eq!(&[bad_account_id], &reported[..]);
-
-    // TODO: Check the failure reason is CeremonyFailureReason::ExpiredBeforeBeingAuthorized
-}
-*/
 
 #[tokio::test]
 async fn should_delay_comm1_before_keygen_request() {
@@ -446,11 +398,7 @@ async fn should_ignore_duplicate_keygen_request() {
     assert_ok!(node.ensure_ceremony_at_keygen_stage(2, ceremony_id));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::DuplicateCeremonyId,
-        CEREMONY_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -892,11 +840,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     ));
 
     // Check that the failure reason is correct
-    node.ensure_failure_reason(
-        result_receiver,
-        CeremonyFailureReason::InvalidParticipants,
-        KEYGEN_REQUEST_IGNORED,
-    );
+    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
 }
 
 #[tokio::test]

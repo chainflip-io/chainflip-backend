@@ -78,7 +78,7 @@ macro_rules! derive_from_enum {
 
 macro_rules! derive_try_from_variant {
     (impl $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)? for $variant: ty, $variant_path: path, $enum: ty) => {
-        impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? std::convert::TryFrom<$enum> for $variant {
+        impl $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? TryFrom<$enum> for $variant {
             type Error = $enum;
 
             fn try_from(data: $enum) -> Result<Self, Self::Error> {

@@ -1,6 +1,4 @@
-use std::{
-    cmp::Ordering, collections::HashMap, convert::TryInto, fs, iter::FromIterator, path::Path,
-};
+use std::{cmp::Ordering, collections::HashMap, fs, path::Path};
 
 use super::KeyDB;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};

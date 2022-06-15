@@ -5,12 +5,21 @@ mod ceremony_stage;
 pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
 pub use broadcast_verification::BroadcastVerificationMessage;
+use state_chain_runtime::AccountId;
 
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
-use crate::multisig::crypto::{ECPoint, KeyShare};
+use crate::{
+    common::format_iterator,
+    logging::{
+        KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED,
+        REPORTED_PARTIES_KEY, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
+        UNAUTHORIZED_KEYGEN_EXPIRED, UNAUTHORIZED_SIGNING_EXPIRED,
+    },
+    multisig::crypto::{ECPoint, KeyShare},
+};
 
 use super::{utils::PartyIdxMapping, ThresholdParameters};
 
@@ -45,11 +54,11 @@ pub struct KeygenResultInfo<P: ECPoint> {
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CeremonyFailureReason<T> {
-    #[error("Request Ignored (Duplicate Ceremony Id)")]
+    #[error("Duplicate Ceremony Id")]
     DuplicateCeremonyId,
     #[error("Expired before being authorized")]
     ExpiredBeforeBeingAuthorized,
-    #[error("Request Ignored (Invalid Participants)")]
+    #[error("Invalid Participants")]
     InvalidParticipants,
     #[error("Broadcast Failure ({0}) during {1} stage")]
     BroadcastFailure(BroadcastFailureReason, BroadcastStageName),
@@ -61,9 +70,9 @@ pub enum CeremonyFailureReason<T> {
 pub enum SigningFailureReason {
     #[error("Invalid Sig Share")]
     InvalidSigShare,
-    #[error("Request Ignored (Not Enough Signers)")]
+    #[error("Not Enough Signers")]
     NotEnoughSigners,
-    #[error("Request Ignored (Unknown Key)")]
+    #[error("Unknown Key")]
     UnknownKey,
 }
 
@@ -104,4 +113,70 @@ pub enum BroadcastStageName {
     Complaints,
     #[error("Blame Responses")]
     BlameResponses,
+}
+
+const SIGNING_CEREMONY_FAILED_PREFIX: &str = "Signing ceremony failed";
+const KEYGEN_CEREMONY_FAILED_PREFIX: &str = "Keygen ceremony failed";
+const REQUEST_TO_SIGN_IGNORED_PREFIX: &str = "Signing request ignored";
+const KEYGEN_REQUEST_IGNORED_PREFIX: &str = "Keygen request ignored";
+
+impl CeremonyFailureReason<SigningFailureReason> {
+    pub fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
+        let reported_parties = format_iterator(reported_parties).to_string();
+        match self {
+            CeremonyFailureReason::BroadcastFailure(_, _) => {
+                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+            }
+            CeremonyFailureReason::DuplicateCeremonyId => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::ExpiredBeforeBeingAuthorized => {
+                slog::warn!(logger,#UNAUTHORIZED_SIGNING_EXPIRED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::InvalidParticipants => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare) => {
+                slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+            }
+            CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(SigningFailureReason::UnknownKey) => {
+                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+            }
+        }
+    }
+}
+
+impl CeremonyFailureReason<KeygenFailureReason> {
+    pub fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
+        let reported_parties = format_iterator(reported_parties).to_string();
+        match self {
+            CeremonyFailureReason::DuplicateCeremonyId => {
+                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::BroadcastFailure(_, _) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+            }
+            CeremonyFailureReason::ExpiredBeforeBeingAuthorized => {
+                slog::warn!(logger,#UNAUTHORIZED_KEYGEN_EXPIRED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+            CeremonyFailureReason::InvalidParticipants => {
+                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint) => {
+                slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+            }
+            CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible) => {
+                slog::debug!(logger, #KEYGEN_REJECTED_INCOMPATIBLE, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+            }
+        }
+    }
 }

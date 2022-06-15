@@ -75,7 +75,6 @@ where
 
 #[cfg(test)]
 mod test_suspension_tracking {
-	use sp_std::iter::FromIterator;
 
 	use super::*;
 

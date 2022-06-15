@@ -29,7 +29,6 @@ use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
 use state_chain_runtime::{PalletInstanceAlias, SignedBlock};
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
@@ -224,10 +223,10 @@ impl StateChainRpcApi for StateChainRpcClient {
 
     async fn is_auction_phase(&self) -> Result<bool> {
         self.custom_rpc_client
-            .is_auction_phase()
+            .cf_is_auction_phase()
             .await
             .map_err(rpc_error_into_anyhow_error)
-            .context("is_auction_phase RPC API failed")
+            .context("cf_is_auction_phase RPC API failed")
     }
 }
 
@@ -1189,8 +1188,6 @@ pub mod test_utils {
 #[cfg(test)]
 mod tests {
 
-    use std::convert::TryInto;
-
     use sp_runtime::create_runtime_str;
     use sp_version::RuntimeVersion;
 
@@ -1207,7 +1204,7 @@ mod tests {
     #[test]
     async fn test_finalised_storage_subs() {
         let settings =
-            Settings::from_default_file("config/Local.toml", CommandLineOptions::default())
+            Settings::from_file_and_env("config/Local.toml", CommandLineOptions::default())
                 .unwrap();
         let logger = logging::test_utils::new_test_logger();
         let (_, mut block_stream, state_chain_client) =
