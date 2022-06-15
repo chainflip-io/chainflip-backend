@@ -8,11 +8,12 @@ macro_rules! derive_scalar_impls {
 
         impl Drop for $scalar {
             fn drop(&mut self) {
+                use zeroize::Zeroize;
                 self.zeroize();
             }
         }
 
-        impl ZeroizeOnDrop for $scalar {}
+        impl zeroize::ZeroizeOnDrop for $scalar {}
 
         impl std::ops::Add for $scalar {
             type Output = $scalar;

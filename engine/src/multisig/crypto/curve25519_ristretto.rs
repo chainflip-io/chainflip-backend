@@ -70,7 +70,7 @@ mod point_impls {
 
 mod scalar_impls {
 
-    use zeroize::{Zeroize, ZeroizeOnDrop};
+    use zeroize::Zeroize;
 
     use super::*;
 

@@ -1,5 +1,4 @@
 use generic_array::GenericArray;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::{ECPoint, ECScalar, Rng};
 use serde::{Deserialize, Serialize};
