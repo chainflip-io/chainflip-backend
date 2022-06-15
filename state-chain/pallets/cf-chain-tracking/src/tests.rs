@@ -4,7 +4,7 @@ use frame_support::assert_ok;
 use crate::mock::{new_test_ext, MockChainTracking, Origin};
 
 #[test]
-fn test_invalid_sigdata_is_noop() {
+fn test_update_chain_state() {
 	new_test_ext().execute_with(|| {
 		let dummy_data = TrackedData { block_height: 1000, base_fee: 20, priority_fee: 2 };
 
