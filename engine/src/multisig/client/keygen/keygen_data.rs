@@ -49,7 +49,7 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 
 impl<P: ECPoint> PreProcessStageDataCheck for KeygenData<P> {
     /// Check that the number of elements in the data is correct
-    fn is_data_size_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool {
+    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool {
         if let Some(num_of_parties) = num_of_parties {
             let num_of_parties = num_of_parties as usize;
             match self {

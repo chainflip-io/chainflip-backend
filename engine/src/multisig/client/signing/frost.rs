@@ -108,7 +108,7 @@ impl<P: ECPoint> Display for SigningData<P> {
 
 impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
     /// Check that the number of elements and indexes in the data is correct
-    fn is_data_size_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool {
+    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool {
         if let Some(num_of_parties) = num_of_parties {
             match self {
                 // For messages that don't contain a collection (eg. CommStage1), we don't need to check the size.
@@ -412,9 +412,9 @@ mod tests {
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.is_data_size_valid(Some(test_size)));
-        assert!(!data_to_check.is_data_size_valid(Some(test_size - 1)));
-        assert!(!data_to_check.is_data_size_valid(Some(test_size + 1)));
+        assert!(data_to_check.data_size_is_valid(Some(test_size)));
+        assert!(!data_to_check.data_size_is_valid(Some(test_size - 1)));
+        assert!(!data_to_check.data_size_is_valid(Some(test_size + 1)));
     }
 
     #[test]
@@ -429,9 +429,9 @@ mod tests {
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.is_data_size_valid(Some(test_size)));
-        assert!(!data_to_check.is_data_size_valid(Some(test_size - 1)));
-        assert!(!data_to_check.is_data_size_valid(Some(test_size + 1)));
+        assert!(data_to_check.data_size_is_valid(Some(test_size)));
+        assert!(!data_to_check.data_size_is_valid(Some(test_size - 1)));
+        assert!(!data_to_check.data_size_is_valid(Some(test_size + 1)));
     }
 
     #[test]
@@ -442,6 +442,6 @@ mod tests {
                 data: BTreeMap::new(),
             });
 
-        data_to_check.is_data_size_valid(None);
+        data_to_check.data_size_is_valid(None);
     }
 }

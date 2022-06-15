@@ -442,7 +442,7 @@ where
         };
 
         // Check that the number of elements in the data is what we expect
-        if !data.is_data_size_valid(state.get_participant_count()) {
+        if !data.data_size_is_valid(state.get_participant_count()) {
             slog::debug!(logger, "Ignoring data: incorrect number of elements");
             return;
         }
