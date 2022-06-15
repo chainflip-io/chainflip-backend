@@ -48,7 +48,9 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 benchmarks_instance_pallet! {
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
+		// Complexity parameter for retry queue.
 		let b in 1 .. 1000u32;
+		// Complexity parameter for expiry queue.
 		let x in 1000 .. 2000u32;
 		let insert_sig = |i| ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()));
 		for i in 1 .. b {
@@ -59,7 +61,7 @@ benchmarks_instance_pallet! {
 			});
 			insert_sig(i);
 		}
-		for i in 1 .. x {
+		for i in 1000 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
@@ -72,9 +74,6 @@ benchmarks_instance_pallet! {
 		Pallet::<T, I>::on_initialize(expiry_block);
 	}
 	transaction_ready_for_transmission {
-		// At the moment we benchmark the fail case which is
-		// not the expensive case and not the default case.
-		// TODO: we should measure the case in which the transaction is valid.
 		let caller: T::AccountId = whitelisted_caller();
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
@@ -84,11 +83,9 @@ benchmarks_instance_pallet! {
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
-		// TODO: at the moment we verify the case were the eth signature is invalid - thats wrong
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_value(), SignerIdFor::<T, I>::benchmark_value())
 	verify {
-		// TODO: verify the case if we're done with the verification
-		// assert!(Expiries::<T, I>::contains_key(frame_system::Pallet::<T>::block_number() + T::TransmissionTimeout::get()));
+		assert!(Expiries::<T, I>::contains_key(frame_system::Pallet::<T>::block_number() + T::TransmissionTimeout::get()));
 	}
 	// TODO: add a benchmark for the failure case
 	transaction_signing_failure {

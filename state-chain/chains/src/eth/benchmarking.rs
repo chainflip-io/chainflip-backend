@@ -8,7 +8,6 @@ use crate::{
 	},
 	ApiCall,
 };
-use sp_std::vec;
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];
 const PRIVATE_KEY: [u8; 32] = [2u8; 32];
