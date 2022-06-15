@@ -24,21 +24,25 @@ pub fn periodic_tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
 /// Sender that can be used to push an `end` item. The stream will continue yielding so long as:
 /// 1. No `end` item has been received.
 /// 2. The next item to be yielded is less than or equal to the `end` item.
+///
+/// Start is inclusive, End is exclusive.
+///
+/// The end_receiver should be freshly created from using [watch::Sender::subscribe].
+///
+/// It's possible to send multiple `end` items over the channel. In this case, the last one overrides any previous ones.
 pub fn bounded<'a, Item: 'a + Ord + Send + Sync>(
     start: Item,
-    end_receiver: watch::Receiver<Option<Item>>,
+    end_receiver: watch::Receiver<Item>,
     stream: impl Stream<Item = Item> + Send + 'a,
 ) -> impl Stream<Item = Item> + 'a {
     stream
         .skip_while(move |item| future::ready(*item < start))
         .take_while(move |item| {
-            future::ready(
-                end_receiver
-                    .borrow()
-                    .as_ref()
-                    .map(|end| item <= end)
-                    .unwrap_or(true),
-            )
+            future::ready(match end_receiver.has_changed() {
+                Ok(true) => item < &end_receiver.borrow(),
+                Ok(false) => true,
+                Err(_) => false,
+            })
         })
 }
 
@@ -95,18 +99,18 @@ mod test {
         const START: u64 = 10;
         const END: u64 = 20;
 
-        let (end_sender, end_receiver) = watch::channel(None);
+        let (end_sender, end_receiver) = watch::channel(0);
 
         let handle = tokio::spawn(async move {
             bounded(START, end_receiver, stream::iter(0..))
                 .collect::<Vec<_>>()
                 .await
         });
-        end_sender.send(Some(END)).unwrap();
+        end_sender.send(END).unwrap();
 
         let result = handle.await.unwrap();
 
-        assert_eq!(result, (START..=END).collect::<Vec<_>>());
+        assert_eq!(result, (START..END).collect::<Vec<_>>());
     }
 
     #[tokio::test]

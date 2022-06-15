@@ -100,6 +100,7 @@ impl SignatureAndEvent {
     }
 }
 
+/// Instructions for starting and ending witnessing. Start is inclusive, End is exclusive.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ObserveInstruction {
     Start(
@@ -228,7 +229,7 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
     slog::info!(&logger, "Starting");
 
     let (tracked_data_sender, mut tracked_data_receiver) = tokio::sync::mpsc::channel(10);
-    let (to_block_sender, _) = watch::channel(None);
+    let (to_block_sender, _) = watch::channel(0);
 
     let state_chain_task_handle = tokio::spawn({
         let logger = logger.clone();
@@ -262,7 +263,7 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
 
     while let Ok(instruction) = instruction_receiver.recv().await.map_err(|e| {
         // We need to send an end block to allow the witnesser to stop gracefully.
-        let _ = to_block_sender.send(Some(0));
+        let _ = to_block_sender.send(0);
         slog::info!(&logger, "Stopping witnesser. Channel state is `{:?}`", e)
     }) {
         match instruction {
@@ -322,7 +323,7 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
                     "Duplicate end event received, or end received before start."
                 );
 
-                to_block_sender.send(Some(end_block)).unwrap();
+                to_block_sender.send(end_block).unwrap();
                 witnesser_task_handle
                     .take()
                     .expect("is_some asserted above")
@@ -1034,19 +1035,15 @@ fn redact_and_log_node_endpoint(
 mod merged_stream_tests {
     use std::time::Duration;
 
-    use tokio::time::timeout;
-
     use crate::logging::test_utils::new_test_logger;
     use crate::logging::test_utils::new_test_logger_with_tag_cache;
     use crate::logging::ETH_WS_STREAM_YIELDED;
-    use crate::state_chain::client::MockStateChainRpcApi;
 
     use super::key_manager::ChainflipKey;
     use super::key_manager::KeyManagerEvent;
 
     use super::key_manager::KeyManager;
 
-    use super::rpc::mocks::MockEthHttpRpcClient;
     use super::*;
 
     // Arbitrariily chosen one of the EthRpc's for these tests
@@ -1481,6 +1478,15 @@ mod merged_stream_tests {
 
         assert!(stream.next().await.is_none());
     }
+}
+
+#[cfg(test)]
+mod witnesser_tests {
+    use super::rpc::mocks::MockEthHttpRpcClient;
+    use super::*;
+    use crate::logging::test_utils::new_test_logger;
+    use crate::state_chain::client::MockStateChainRpcApi;
+    use tokio::time::timeout;
 
     #[tokio::test]
     async fn test_start_chain_data_witnesser() {
@@ -1586,7 +1592,7 @@ mod merged_stream_tests {
 
         sc_rpc
             .expect_submit_extrinsic_rpc()
-            .times(REPEATS * (START..=END).count())
+            .times(REPEATS * (START..END).count())
             .returning(|_| Ok(Default::default()));
         // ** Rpc Api Assumptions **
 
