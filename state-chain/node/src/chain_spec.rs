@@ -5,11 +5,12 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
-	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumVaultConfig,
-	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
-	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
+	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig,
+	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
+	SystemConfig, ValidatorConfig, WASM_BINARY,
 };
-use std::{convert::TryInto, env};
+use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 mod network_env;
@@ -592,6 +593,11 @@ fn testnet_genesis(
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),
 			deployment_block: ethereum_deployment_block,
+			keygen_response_timeout: KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+		},
+		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+			threshold_signature_response_timeout: THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+			_instance: PhantomData,
 		},
 		emissions: EmissionsConfig {
 			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,

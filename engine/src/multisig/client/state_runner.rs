@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
@@ -11,17 +11,18 @@ use pallet_cf_vaults::CeremonyId;
 
 use crate::{
     common::format_iterator,
-    constants::MAX_STAGE_DURATION,
     logging::CEREMONY_ID_KEY,
     multisig::client::common::{ProcessMessageResult, StageResult},
 };
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
     ceremony_manager::CeremonyResultSender,
     common::{CeremonyFailureReason, CeremonyStage},
     utils::PartyIdxMapping,
 };
+
+const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
 type OptionalCeremonyReturn<CeremonyResult, FailureReason> =
     Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>>;

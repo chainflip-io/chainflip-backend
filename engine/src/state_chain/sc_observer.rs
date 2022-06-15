@@ -4,7 +4,7 @@ use slog::o;
 use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::AccountId;
-use std::{collections::BTreeSet, iter::FromIterator, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{

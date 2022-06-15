@@ -52,7 +52,7 @@ macro_rules! impl_mock_stake_transfer {
 			fn locked_balance(account_id: &Self::AccountId) -> Self::Balance {
 				Self::get_balance(account_id.clone())
 			}
-			fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance {
+			fn staked_balance(account_id: &Self::AccountId) -> Self::Balance {
 				Self::get_balance(account_id.clone())
 			}
 			fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance {

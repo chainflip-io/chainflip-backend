@@ -1,11 +1,8 @@
-use std::{
-	collections::{BTreeMap, BTreeSet},
-	iter::{FromIterator, IntoIterator},
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, PalletOffence, RequestId,
+	Error, PalletOffence, RequestId, THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT,
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{AsyncResult, Chainflip};
@@ -220,8 +217,12 @@ fn fail_path_with_timeout() {
 			// Account 1 has 1 blame vote against it.
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 1)]));
 
-			// Callback has *not* executed but is scheduled for a retry in 10 blocks' time.
-			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 10;
+			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
+			// Callback has *not* executed but is scheduled for a retry after the timeout has
+			// elapsed.
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
+
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 
@@ -279,10 +280,17 @@ fn fail_path_no_timeout() {
 			// Account 1 has 4 blame votes against it.
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 4)]));
 
-			// Callback has *not* executed but is scheduled for a retry both in the next block *and*
-			// in 10 blocks' time.
-			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
-			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() + 10;
+			// Callback has *not* executed but is scheduled for a retry after the CeremonyRetryDelay
+			// *and* the threshold timeout.
+			let ceremony_retry_delay =
+				<Test as crate::Config<Instance1>>::CeremonyRetryDelay::get();
+			let init_timeout_delay: <Test as frame_system::Config>::BlockNumber =
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
+			let retry_block =
+				frame_system::Pallet::<Test>::current_block_number() + ceremony_retry_delay;
+			let retry_block_redundant =
+				frame_system::Pallet::<Test>::current_block_number() + init_timeout_delay;
+
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
@@ -325,7 +333,8 @@ fn test_not_enough_signers_for_threshold() {
 		.with_request(b"OHAI")
 		.build()
 		.execute_with(|| {
-			let retry_block = frame_system::Pallet::<Test>::current_block_number() + 1;
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
+				<Test as crate::Config<Instance1>>::CeremonyRetryDelay::get();
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 		});
 }

@@ -4,7 +4,6 @@ use frame_support::{storage::migration::*, StorageHasher};
 #[cfg(feature = "try-runtime")]
 use frame_support::{traits::OnRuntimeUpgradeHelpersExt, Hashable};
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_std::convert::{TryFrom, TryInto};
 use v0_types::{VaultRotationStatusV0, VaultV0};
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);

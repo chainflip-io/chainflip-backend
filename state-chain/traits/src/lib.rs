@@ -260,7 +260,7 @@ pub trait StakeTransfer {
 	fn locked_balance(account_id: &Self::AccountId) -> Self::Balance;
 
 	/// An account's tokens that are free to be staked.
-	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
+	fn staked_balance(account_id: &Self::AccountId) -> Self::Balance;
 
 	/// An account's tokens that are free to be claimed.
 	fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance;
