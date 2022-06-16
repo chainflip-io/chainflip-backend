@@ -668,7 +668,7 @@ mod tests {
 
 				for account in accounts.iter() {
 					assert_eq!(
-						Flip::stakeable_balance(account),
+						Flip::staked_balance(account),
 						GENESIS_BALANCE,
 						"the account has its stake"
 					);
@@ -1226,7 +1226,7 @@ mod tests {
 					let backup_node_balances: HashMap<NodeId, FlipBalance> = current_backup_nodes
 						.iter()
 						.map(|validator_id| {
-							(validator_id.clone(), Flip::stakeable_balance(validator_id))
+							(validator_id.clone(), Flip::staked_balance(validator_id))
 						})
 						.collect::<Vec<(NodeId, FlipBalance)>>()
 						.into_iter()
@@ -1238,7 +1238,7 @@ mod tests {
 					// We won't calculate the exact emissions but they should be greater than their
 					// initial stake
 					for (backup_node, pre_balance) in backup_node_balances {
-						assert!(pre_balance < Flip::stakeable_balance(&backup_node));
+						assert!(pre_balance < Flip::staked_balance(&backup_node));
 					}
 				});
 		}

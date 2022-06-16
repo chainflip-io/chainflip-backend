@@ -6,7 +6,7 @@ pub mod offence_reporting;
 
 pub use async_result::AsyncResult;
 
-use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
@@ -260,7 +260,7 @@ pub trait StakeTransfer {
 	fn locked_balance(account_id: &Self::AccountId) -> Self::Balance;
 
 	/// An account's tokens that are free to be staked.
-	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
+	fn staked_balance(account_id: &Self::AccountId) -> Self::Balance;
 
 	/// An account's tokens that are free to be claimed.
 	fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance;
@@ -513,6 +513,11 @@ pub trait KeyProvider<C: ChainCrypto> {
 
 	/// Get the chain's current agg key.
 	fn current_key() -> C::AggKey;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_key(_key: C::AggKey) {
+		unimplemented!()
+	}
 }
 
 /// Api trait for pallets that need to sign things.
@@ -520,7 +525,7 @@ pub trait ThresholdSigner<C>
 where
 	C: ChainCrypto,
 {
-	type RequestId: Member + Parameter + Copy;
+	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
 
@@ -555,6 +560,12 @@ where
 			);
 		});
 		id
+	}
+
+	/// Helper function to enable benchmarking of the brodcast pallet
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_signature(_request_id: Self::RequestId, _signature: C::ThresholdSignature) {
+		unimplemented!();
 	}
 }
 

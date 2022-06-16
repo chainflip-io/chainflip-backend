@@ -635,4 +635,12 @@ where
 	) -> cf_traits::AsyncResult<<T::TargetChain as ChainCrypto>::ThresholdSignature> {
 		Signatures::<T, I>::take(request_id)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_signature(
+		request_id: Self::RequestId,
+		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
+	) {
+		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
+	}
 }
