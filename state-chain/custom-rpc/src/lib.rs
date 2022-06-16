@@ -135,8 +135,11 @@ where
 	}
 	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let (issuance, offchain) = self.client.runtime_api().cf_flip_supply(&at).unwrap();
-
-		Ok((issuance.try_into().unwrap(), offchain.try_into().unwrap()))
+		let (issuance, offchain) = self
+			.client
+			.runtime_api()
+			.cf_flip_supply(&at)
+			.expect("The runtime API should not return error.");
+		Ok((issuance.into(), offchain.into()))
 	}
 }
