@@ -33,7 +33,6 @@ use sp_runtime::{
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	iter::FromIterator,
 	marker::PhantomData,
 	prelude::*,
 };
@@ -635,5 +634,13 @@ where
 		request_id: Self::RequestId,
 	) -> cf_traits::AsyncResult<<T::TargetChain as ChainCrypto>::ThresholdSignature> {
 		Signatures::<T, I>::take(request_id)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_signature(
+		request_id: Self::RequestId,
+		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
+	) {
+		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
 	}
 }

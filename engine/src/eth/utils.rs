@@ -2,7 +2,6 @@ use crate::eth::EventParseError;
 use anyhow::Result;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
-use std::convert::TryInto;
 use web3::{contract::tokens::Tokenizable, ethabi::Log};
 
 /// Helper method to decode the parameters from an ETH log

@@ -5,7 +5,6 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    convert::TryInto,
     fmt::Display,
 };
 

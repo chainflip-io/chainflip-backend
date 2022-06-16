@@ -21,7 +21,6 @@ hex = {default-features = false, version = "0.4"}
 hex-literal = {optional = true, version = '0.3'}
 serde = {optional = true, version = "1.0.126", features = ['derive']}
 log = { version = '0.4.14', default-features = false }
-cf-runtime-benchmark-utilities = { path = '../runtime-benchmark-utilities', default-features = false }
 
 # Substrate packages
 [dependencies.codec]
@@ -66,7 +65,6 @@ rand = {version='0.8.4'}
 [features]
 default = ['std']
 std = [
-    'cf-runtime-benchmark-utilities/std',
     'codec/std',
     'ethabi/full-serde',
     'ethereum/std',
@@ -81,7 +79,6 @@ std = [
     'secp256k1'
 ]
 runtime-benchmarks = [
-    'cf-runtime-benchmark-utilities/runtime-benchmarks',
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
     'hex-literal',

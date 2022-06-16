@@ -1,6 +1,9 @@
 //! Types and functions that are common to ethereum.
 pub mod api;
 
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
+
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -17,12 +20,7 @@ use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
-use sp_std::{
-	convert::{TryFrom, TryInto},
-	ops::Neg,
-	prelude::*,
-	str, vec,
-};
+use sp_std::{ops::Neg, prelude::*, str, vec};
 
 use self::api::EthereumReplayProtection;
 
@@ -277,7 +275,7 @@ impl AggKey {
 	}
 
 	/// Sign a message, using a secret key, and a signature nonce
-	#[cfg(feature = "runtime-integration-tests")]
+	#[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, sig_nonce: &SecretKey) -> [u8; 32] {
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));

@@ -75,6 +75,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_traits::KeyProvider;
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
@@ -160,7 +161,7 @@ pub mod pallet {
 		type TargetChain: ChainAbi;
 
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<Self::TargetChain>;
+		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;
@@ -368,11 +369,7 @@ pub mod pallet {
 				}
 			}
 
-			// TODO: replace this with benchmark results.
-			retry_count as u64 *
-				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3) +
-				expiries.len() as u64 *
-					frame_support::weights::RuntimeDbWeight::default().reads_writes(1, 1)
+			T::WeightInfo::on_initialize(retry_count as u32, expiries.len() as u32)
 		}
 
 		fn on_runtime_upgrade() -> Weight {

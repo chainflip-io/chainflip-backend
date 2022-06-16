@@ -10,7 +10,7 @@ use state_chain_runtime::{
 	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
 	SystemConfig, ValidatorConfig, WASM_BINARY,
 };
-use std::{convert::TryInto, env, marker::PhantomData};
+use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 mod network_env;

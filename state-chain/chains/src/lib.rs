@@ -1,6 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
-use cf_runtime_benchmark_utilities::BenchmarkDefault;
+use crate::benchmarking_value::BenchmarkValue;
 use codec::{FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use frame_support::{
@@ -9,16 +8,11 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{One, Saturating};
-use sp_std::{
-	convert::{Into, TryFrom},
-	fmt::Debug,
-	prelude::*,
-};
+use sp_std::{fmt::Debug, prelude::*};
+
+pub mod benchmarking_value;
 
 pub mod eth;
-
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
@@ -47,10 +41,10 @@ pub trait Chain: Member + Parameter {
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord;
-	type Payload: Member + Parameter + BenchmarkDefault;
-	type ThresholdSignature: Member + Parameter + BenchmarkDefault;
-	type TransactionHash: Member + Parameter + BenchmarkDefault;
+	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord + BenchmarkValue;
+	type Payload: Member + Parameter + BenchmarkValue;
+	type ThresholdSignature: Member + Parameter + BenchmarkValue;
+	type TransactionHash: Member + Parameter + Default;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -61,9 +55,9 @@ pub trait ChainCrypto: Chain {
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type UnsignedTransaction: Member + Parameter + Default;
-	type SignedTransaction: Member + Parameter;
-	type SignerCredential: Member + Parameter;
+	type UnsignedTransaction: Member + Parameter + Default + BenchmarkValue;
+	type SignedTransaction: Member + Parameter + BenchmarkValue;
+	type SignerCredential: Member + Parameter + BenchmarkValue;
 	type ReplayProtection: Member + Parameter + Default;
 	type ValidationError;
 
@@ -201,6 +195,16 @@ pub mod mocks {
 		}
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
+	impl BenchmarkValue for MockSignedTransation<MockUnsignedTransaction> {
+		fn benchmark_value() -> Self {
+			MockSignedTransation {
+				transaction: MockUnsignedTransaction::default(),
+				signature: Validity::Valid,
+			}
+		}
+	}
+
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockSignedTransation<Unsigned> {
 		transaction: Unsigned,
@@ -246,6 +250,12 @@ pub mod mocks {
 		}
 	}
 
+	impl_default_benchmark_value!(Validity);
+	impl_default_benchmark_value!([u8; 4]);
+	impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
+	impl_default_benchmark_value!(u32);
+	impl_default_benchmark_value!(MockUnsignedTransaction);
+
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;
 		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
@@ -271,6 +281,13 @@ pub mod mocks {
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
+		fn benchmark_value() -> Self {
+			Self(C::Payload::benchmark_value(), Some(C::ThresholdSignature::benchmark_value()))
+		}
+	}
 
 	impl<C: ChainCrypto> MaxEncodedLen for MockApiCall<C> {
 		fn max_encoded_len() -> usize {

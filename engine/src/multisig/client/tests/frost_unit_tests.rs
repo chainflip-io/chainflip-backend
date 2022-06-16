@@ -554,42 +554,6 @@ mod timeout {
 
     use super::*;
 
-    /* TODO: Refactor once feature re-enabled
-    // [SC-2898] Re-enable reporting of unauthorised ceremonies #1135
-
-    // If timeout during an "unauthorised" ceremony, we report the nodes that attempted to start it
-    // (i.e. whoever send stage data for the ceremony)
-    #[tokio::test]
-    #[ignore = "functionality disabled as SC does not expect this response"]
-    async fn should_report_on_timeout_before_request_to_sign() {
-        let mut ctx = helpers::KeygenContext::new();
-        let keygen_states = ctx.generate().await;
-        let sign_states = ctx.sign().await;
-
-        let id0 = ctx.get_account_id(0);
-
-        let mut c0 = keygen_states
-            .key_ready_data()
-            .expect("successful keygen")
-            .clients[&id0]
-            .clone();
-
-        assert_ok!(c0.ensure_ceremony_at_signing_stage(STAGE_FINISHED_OR_NOT_STARTED));
-
-        let bad_array_ids = [ctx.get_account_id(1), ctx.get_account_id(2)];
-
-        for id in &bad_array_ids {
-            c0.receive_signing_stage_data(1, &sign_states, id);
-        }
-
-        assert_ok!(c0.ensure_ceremony_at_signing_stage(STAGE_FINISHED_OR_NOT_STARTED));
-
-        c0.force_stage_timeout();
-
-        check_blamed_paries(ctx.outcome_receivers.get_mut(&id0).unwrap(), &bad_array_ids).await;
-    }
-    */
-
     mod during_regular_stage {
 
         type SigningData = crate::multisig::client::signing::frost::SigningData<Point>;

@@ -16,7 +16,6 @@ use sp_core::ed25519::Public as EdPublic;
 use sp_core::sr25519::Public as SrPublic;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
-use std::convert::TryInto;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;

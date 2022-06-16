@@ -35,7 +35,6 @@ use slog::o;
 use sp_core::{H160, U256};
 use std::{
     cmp::Ordering,
-    convert::{TryFrom, TryInto},
     fmt::{self, Debug},
     pin::Pin,
     str::FromStr,

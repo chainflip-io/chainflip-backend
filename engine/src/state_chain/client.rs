@@ -29,7 +29,6 @@ use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
 use state_chain_runtime::{PalletInstanceAlias, SignedBlock};
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
@@ -1188,8 +1187,6 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod tests {
-
-    use std::convert::TryInto;
 
     use sp_runtime::create_runtime_str;
     use sp_version::RuntimeVersion;

@@ -47,7 +47,7 @@ benchmarks! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(AccountRetired::<T>::get(&caller));
-		assert_eq!(T::Flip::stakeable_balance(&caller), amount);
+		assert_eq!(T::Flip::staked_balance(&caller), amount);
 	}
 
 	claim {
