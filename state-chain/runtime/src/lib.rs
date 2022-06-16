@@ -551,11 +551,9 @@ mod benches {
 		[pallet_cf_flip, Flip]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_staking, Staking]
-		// [pallet_session,  SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
 		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
-		[pallet_grandpa, Grandpa]
 		[pallet_cf_governance, Governance]
 		[pallet_cf_vaults, EthereumVault]
 		[pallet_cf_online, Online]
@@ -769,7 +767,6 @@ impl_runtime_apis! {
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
-			use pallet_session_benchmarking::Pallet as SessionBench;
 
 			let mut list = Vec::<BenchmarkList>::new();
 
