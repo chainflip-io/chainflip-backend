@@ -16,6 +16,7 @@ use web3::{
     types::{Transaction, H160, H256},
 };
 
+use pallet_cf_governance::GovCallHash;
 use anyhow::Result;
 
 use std::fmt::Debug;
@@ -205,8 +206,8 @@ pub enum KeyManagerEvent {
 
     // `GovernanceAction(message)`
     GovernanceAction {
-        /// Call hash of substrate call to be executed
-        message: H256,
+        /// Call hash of substrate call to be executed, hash over (call, nonce, runtime_version)
+        message: GovCallHash,
     },
 }
 

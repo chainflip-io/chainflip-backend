@@ -25,6 +25,9 @@ mod old_storage {
 	}
 }
 
+/// Hash over (call, nonce, runtime_version)
+pub type GovCallHash = [u8; 32];
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -44,7 +47,7 @@ pub mod pallet {
 	use frame_system::{pallet, pallet_prelude::*};
 	use sp_std::{boxed::Box, vec::Vec};
 
-	use crate::WeightInfo;
+	use crate::{GovCallHash, WeightInfo};
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -112,7 +115,7 @@ pub mod pallet {
 	/// Call hash that has been committed to by the governance key (off-chain gnosis safe governance
 	/// key)
 	#[pallet::storage]
-	pub(super) type GovKeyWhiteListedCallHash<T> = StorageValue<_, [u8; 32], OptionQuery>;
+	pub(super) type GovKeyWhiteListedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
 
 	/// Any nonces before this have been consumed
 	#[pallet::storage]
@@ -330,7 +333,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn set_whitelisted_call_hash(
 			origin: OriginFor<T>,
-			call_hash: [u8; 32],
+			call_hash: GovCallHash,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			GovKeyWhiteListedCallHash::<T>::put(call_hash);
