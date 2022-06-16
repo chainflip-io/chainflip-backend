@@ -9,6 +9,7 @@ pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
 use cf_chains::{eth, Ethereum};
+use codec::Encode;
 pub use frame_support::{
 	construct_runtime, debug,
 	instances::Instance1,
@@ -33,9 +34,12 @@ pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
-use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-	OpaqueKeys, UniqueSaturatedInto, Verify,
+use sp_runtime::{
+	traits::{
+		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+		OpaqueKeys, UniqueSaturatedInto, Verify,
+	},
+	AccountId32,
 };
 
 use cf_traits::EpochInfo;
@@ -58,7 +62,7 @@ pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
 use constants::common::*;
-use pallet_cf_flip::{Bonder, FlipSlasher};
+use pallet_cf_flip::{Bonder, FlipAccount, FlipSlasher};
 use pallet_cf_validator::PercentageRange;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
@@ -600,6 +604,12 @@ impl_runtime_apis! {
 		}
 		fn cf_flip_supply() -> (u128, u128) {
 			(Flip::total_issuance(), Flip::offchain_funds())
+		}
+		fn cf_accounts() -> Vec<(AccountId, Vec<u8>)> {
+			let vanity_names = Validator::vanity_names();
+			pallet_cf_flip::Account::<Runtime>::iter_keys().map(|account_id| {
+				(account_id.clone(), vanity_names.get(&account_id).unwrap_or(&vec![]).clone())
+			}).collect()
 		}
 	}
 	// END custom runtime APIs

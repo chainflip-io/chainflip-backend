@@ -1,4 +1,8 @@
 use sp_api::decl_runtime_apis;
+use sp_runtime::AccountId32;
+use sp_std::vec::Vec;
+
+type VanityName = Vec<u8>;
 
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
@@ -18,5 +22,6 @@ decl_runtime_apis!(
 		fn cf_backup_emission_per_block() -> u64;
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
+		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 	}
 );
