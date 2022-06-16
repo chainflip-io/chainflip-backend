@@ -116,7 +116,7 @@ pub mod pallet {
 	/// Call hash that has been committed to by the governance key (off-chain gnosis safe governance
 	/// key)
 	#[pallet::storage]
-	pub(super) type GovKeyWhiteListedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
+	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
 
 	/// Any nonces before this have been consumed
 	#[pallet::storage]
@@ -347,7 +347,7 @@ pub mod pallet {
 			call_hash: GovCallHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			GovKeyWhiteListedCallHash::<T>::put(call_hash);
+			GovKeyWhitelistedCallHash::<T>::put(call_hash);
 			Ok(())
 		}
 
@@ -372,7 +372,7 @@ pub mod pallet {
 				T::EnsureGovernance::ensure_origin(origin).is_ok()
 			{
 				let next_nonce = NextGovKeyCallHashNonce::<T>::get();
-				match GovKeyWhiteListedCallHash::<T>::get() {
+				match GovKeyWhitelistedCallHash::<T>::get() {
 					Some(whitelisted_call_hash)
 						if whitelisted_call_hash ==
 							frame_support::Hashable::blake2_256(&(
@@ -383,7 +383,7 @@ pub mod pallet {
 					{
 						call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into())?;
 						NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
-						GovKeyWhiteListedCallHash::<T>::kill();
+						GovKeyWhitelistedCallHash::<T>::kill();
 						Self::deposit_event(Event::GovKeyCallDispatched);
 						Ok(Pays::No.into())
 					},

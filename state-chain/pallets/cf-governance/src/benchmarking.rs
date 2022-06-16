@@ -77,7 +77,7 @@ benchmarks! {
 		call.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
 	}
 	verify {
-		assert_eq!(GovKeyWhiteListedCallHash::<T>::get().unwrap(), call_hash);
+		assert_eq!(GovKeyWhitelistedCallHash::<T>::get().unwrap(), call_hash);
 	}
 	submit_govkey_call {
 		let next_nonce = 788;
@@ -93,7 +93,7 @@ benchmarks! {
 			T::Version::get(),
 		));
 
-		GovKeyWhiteListedCallHash::<T>::put(call_hash.clone());
+		GovKeyWhitelistedCallHash::<T>::put(call_hash.clone());
 
 		let call = Call::<T>::submit_govkey_call {
 			call: Box::new(new_membership_set_call.into()),
@@ -103,7 +103,7 @@ benchmarks! {
 	}
 	verify {
 		assert_eq!(NextGovKeyCallHashNonce::<T>::get(), next_nonce + 1);
-		assert!(GovKeyWhiteListedCallHash::<T>::get().is_none());
+		assert!(GovKeyWhitelistedCallHash::<T>::get().is_none());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
