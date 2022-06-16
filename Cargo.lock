@@ -1614,6 +1614,7 @@ dependencies = [
  "jsonrpc-derive",
  "sc-client-api",
  "sp-api",
+ "sp-rpc",
  "sp-runtime",
  "state-chain-runtime",
 ]

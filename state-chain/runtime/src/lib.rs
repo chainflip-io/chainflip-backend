@@ -389,6 +389,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -600,6 +601,9 @@ impl_runtime_apis! {
 		}
 		fn cf_backup_emission_per_block() -> u64 {
 			Emissions::backup_node_emission_per_block().unique_saturated_into()
+		}
+		fn cf_flip_supply() -> (u128, u128) {
+			(Flip::total_issuance(), Flip::offchain_funds())
 		}
 	}
 	// END custom runtime APIs

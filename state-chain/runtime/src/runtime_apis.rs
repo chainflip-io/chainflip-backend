@@ -16,5 +16,7 @@ decl_runtime_apis!(
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u64;
 		fn cf_backup_emission_per_block() -> u64;
+		/// Returns the flip supply in the form [total_issuance, offchain_funds]
+		fn cf_flip_supply() -> (u128, u128);
 	}
 );
