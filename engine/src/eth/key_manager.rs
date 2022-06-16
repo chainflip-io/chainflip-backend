@@ -16,8 +16,8 @@ use web3::{
     types::{Transaction, H160, H256},
 };
 
-use pallet_cf_governance::GovCallHash;
 use anyhow::Result;
+use pallet_cf_governance::GovCallHash;
 
 use std::fmt::Debug;
 
@@ -663,7 +663,7 @@ mod tests {
         .expect("Failed parsing KeyManagerEvent::GovernanceAction event")
         {
             KeyManagerEvent::GovernanceAction { message } => {
-                assert_eq!(message, H256::from_low_u64_be(42069));
+                assert_eq!(message, H256::from_low_u64_be(42069).as_ref());
             }
             _ => panic!("Expected KeyManagerEvent::GovernanceAction, got different variant"),
         }
