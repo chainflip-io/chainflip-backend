@@ -25,20 +25,46 @@
 
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
+use frame_support::weights::{
+	constants::{RocksDbWeight as DbWeight, WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
+};
 
 use pallet_grandpa::WeightInfo;
 
 /// Weights for pallet_grandpa using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn check_equivocation_proof(_x: u32, ) -> Weight {
-		#[allow(clippy::unnecessary_cast)]
-		(124_500_000 as Weight)
-	}
+	// fn check_equivocation_proof(_x: u32, ) -> Weight {
+	// 	#[allow(clippy::unnecessary_cast)]
+	// 	(124_500_000 as Weight)
+	// }
 	// Storage: Grandpa Stalled (r:0 w:1)
 	fn note_stalled() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(2_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	fn report_equivocation(validator_count: u32) -> Weight {
+		// we take the validator set count from the membership proof to
+		// calculate the weight but we set a floor of 100 validators.
+		let validator_count = validator_count.max(100) as u64;
+
+		// worst case we are considering is that the given offender
+		// is backed by 200 nominators
+		const MAX_NOMINATORS: u64 = 200;
+
+		// checking membership proof
+		(35 * WEIGHT_PER_MICROS)
+			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+			.saturating_add(DbWeight::get().reads(5))
+			// check equivocation proof
+			.saturating_add(95 * WEIGHT_PER_MICROS)
+			// report offence
+			.saturating_add(110 * WEIGHT_PER_MICROS)
+			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
+			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
+			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
+			// fetching set id -> session index mappings
+			.saturating_add(DbWeight::get().reads(2))
 	}
 }
