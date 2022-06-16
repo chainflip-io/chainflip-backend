@@ -346,8 +346,6 @@ pub mod pallet {
 						if whitelisted_call_hash == frame_support::Hashable::blake2_256(&call) =>
 					{
 						call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into())?;
-						// call has been dispatched so we increment the nonce, and clear
-						// the whitelisted call
 						NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
 						GovKeyWhiteListedCallHash::<T>::kill();
 						Self::deposit_event(Event::GovKeyCallDispatched);
@@ -391,7 +389,7 @@ pub mod pallet {
 	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
 	pub enum RawOrigin {
-		GovernanceThreshold,
+		GovernanceApproval,
 	}
 }
 
@@ -409,7 +407,7 @@ where
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		match o.into() {
 			Ok(o) => match o {
-				RawOrigin::GovernanceThreshold => Ok(()),
+				RawOrigin::GovernanceApproval => Ok(()),
 			},
 			Err(o) => Err(o),
 		}
@@ -417,7 +415,7 @@ where
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
-		RawOrigin::GovernanceThreshold.into()
+		RawOrigin::GovernanceApproval.into()
 	}
 }
 
@@ -450,9 +448,8 @@ impl<T: Config> Pallet<T> {
 			for (call, id) in execution_pipeline {
 				if let Some(call) = Self::decode_call(&call) {
 					// Execute the proposal
-					let result = call
-						.clone()
-						.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
+					let result =
+						call.clone().dispatch_bypass_filter((RawOrigin::GovernanceApproval).into());
 					// Emit events about the execution status
 					match result {
 						Ok(_) => Self::deposit_event(Event::Executed(id)),
