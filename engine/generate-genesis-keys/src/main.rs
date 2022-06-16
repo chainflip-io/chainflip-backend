@@ -1,8 +1,6 @@
 use chainflip_engine::{
     logging::utils::new_discard_logger,
-    multisig::{
-        client::keygen::generate_key_data_until_compatible, eth, KeyDB, PersistentKeyDB, Rng,
-    },
+    multisig::{client::keygen::generate_key_data_until_compatible, eth, PersistentKeyDB, Rng},
 };
 use rand_legacy::FromEntropy;
 use state_chain_runtime::AccountId;

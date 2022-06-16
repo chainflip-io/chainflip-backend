@@ -1,6 +1,5 @@
 use std::{cmp::Ordering, collections::HashMap, fs, path::Path};
 
-use super::KeyDB;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
 use slog::o;
 
@@ -134,11 +133,9 @@ impl<P: ECPoint> PersistentKeyDB<P> {
 
         Ok(PersistentKeyDB::new_from_db(db, logger))
     }
-}
 
-impl<P: ECPoint> KeyDB<P> for PersistentKeyDB<P> {
     /// Write the keyshare to the db, indexed by the key id
-    fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo<P>) {
+    pub fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo<P>) {
         let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
         self.db
@@ -151,7 +148,7 @@ impl<P: ECPoint> KeyDB<P> for PersistentKeyDB<P> {
             .unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
     }
 
-    fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo<P>> {
+    pub fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo<P>> {
         self.db
             .prefix_iterator_cf(get_data_column_handle(&self.db), KEYGEN_DATA_PREFIX)
             .filter_map(|(key_id, key_info)| {
