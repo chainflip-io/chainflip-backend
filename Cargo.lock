@@ -743,7 +743,6 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
- "cf-runtime-benchmark-utilities",
  "cf-test-utilities",
  "ethabi",
  "ethereum",
@@ -812,13 +811,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "state-chain-runtime",
-]
-
-[[package]]
-name = "cf-runtime-benchmark-utilities"
-version = "0.1.0"
-dependencies = [
- "sp-std",
 ]
 
 [[package]]
@@ -5377,7 +5369,6 @@ name = "pallet-cf-threshold-signature"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5419,7 +5410,6 @@ name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "cf-runtime-benchmark-utilities",
  "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
@@ -9058,7 +9048,6 @@ name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
- "cf-runtime-benchmark-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",

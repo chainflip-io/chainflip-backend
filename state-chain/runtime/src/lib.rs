@@ -9,7 +9,6 @@ pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
 use cf_chains::{eth, Ethereum};
-use codec::Encode;
 pub use frame_support::{
 	construct_runtime, debug,
 	instances::Instance1,
@@ -38,8 +37,7 @@ use sp_runtime::{
 	traits::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
 		OpaqueKeys, UniqueSaturatedInto, Verify,
-	},
-	AccountId32,
+	}
 };
 
 use cf_traits::EpochInfo;
@@ -62,7 +60,7 @@ pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
 use constants::common::*;
-use pallet_cf_flip::{Bonder, FlipAccount, FlipSlasher};
+use pallet_cf_flip::{Bonder, FlipSlasher};
 use pallet_cf_validator::PercentageRange;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
@@ -392,6 +390,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_transaction_payment::Config for Runtime {

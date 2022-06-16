@@ -1,4 +1,5 @@
 use crate::*;
+use frame_support::generate_storage_alias;
 
 use frame_support::{migration::get_storage_value, weights::RuntimeDbWeight};
 use sp_std::marker::PhantomData;
@@ -11,6 +12,8 @@ const VALIDATOR_EMISSION_INFLATION: &[u8] = b"ValidatorEmissionInflation";
 const VALIDATOR_EMISSION_PER_BLOCK: &[u8] = b"ValidatorEmissionPerBlock";
 const BACKUP_VALIDATOR_EMISSION_INFLATION: &[u8] = b"BackupValidatorEmissionInflation";
 const BACKUP_VALIDATOR_EMISSION_PER_BLOCK: &[u8] = b"BackupValidatorEmissionPerBlock";
+
+generate_storage_alias!(Emissions, MintInterval<T: Config> => Value<T::BlockNumber>);
 
 pub struct Migration<T>(PhantomData<T>);
 
@@ -90,7 +93,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade() -> Result<(), &'static str> {
 		use frame_support::assert_ok;
 
-		assert_eq!(T::BlockNumber::from(100 as u32), MintInterval::<T>::get());
+		//assert_eq!(T::BlockNumber::from(100 as u32), MintInterval::<T>::get());
 		assert_ok!(BackupNodeEmissionInflation::<T>::try_get());
 		assert_ok!(CurrentAuthorityEmissionInflation::<T>::try_get());
 		assert_ok!(BackupNodeEmissionPerBlock::<T>::try_get());
