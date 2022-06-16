@@ -4,7 +4,10 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{Get, OnInitialize},
+};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec};
 
@@ -62,6 +65,45 @@ benchmarks! {
 		}
 	} : {
 		Pallet::<T>::expire_proposals(<ActiveProposals<T>>::get());
+	}
+	set_whitelisted_call_hash {
+		let call_hash = [0xb; 32];
+
+		let call = Call::<T>::set_whitelisted_call_hash{
+			call_hash: call_hash.clone(),
+		};
+
+	} : {
+		call.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
+	}
+	verify {
+		assert_eq!(GovKeyWhiteListedCallHash::<T>::get().unwrap(), call_hash);
+	}
+	submit_govkey_call {
+		let next_nonce = 788;
+		NextGovKeyCallHashNonce::<T>::put(next_nonce);
+
+		let new_membership_set_call: <T as Config>::Call = Call::<T>::new_membership_set {
+			accounts: vec![]
+		}.into();
+
+		let call_hash = frame_support::Hashable::blake2_256(&(
+			new_membership_set_call.clone(),
+			next_nonce,
+			T::Version::get(),
+		));
+
+		GovKeyWhiteListedCallHash::<T>::put(call_hash.clone());
+
+		let call = Call::<T>::submit_govkey_call {
+			call: Box::new(new_membership_set_call.into()),
+		};
+	} : {
+		call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin())?;
+	}
+	verify {
+		assert_eq!(NextGovKeyCallHashNonce::<T>::get(), next_nonce + 1);
+		assert!(GovKeyWhiteListedCallHash::<T>::get().is_none());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

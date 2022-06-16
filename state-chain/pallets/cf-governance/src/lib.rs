@@ -85,6 +85,7 @@ pub mod pallet {
 			+ Parameter
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ From<frame_system::Call<Self>>
+			+ From<Call<Self>>
 			+ GetDispatchInfo;
 		/// UnixTime implementation for TimeSource
 		type TimeSource: UnixTime;
@@ -340,7 +341,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_whitelisted_call_hash())]
 		pub fn set_whitelisted_call_hash(
 			origin: OriginFor<T>,
 			call_hash: GovCallHash,
@@ -362,7 +363,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight))]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
