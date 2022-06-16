@@ -1,5 +1,6 @@
 use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
+use sp_rpc::number::NumberOrHex;
 use state_chain_runtime::{constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi};
 use std::{marker::PhantomData, sync::Arc};
 
@@ -35,7 +36,7 @@ pub trait CustomApi {
 	#[rpc(name = "cf_backup_emission_per_block")]
 	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
 	#[rpc(name = "cf_flip_supply")]
-	fn cf_flip_supply(&self) -> Result<(u64, u64), jsonrpc_core::Error>;
+	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -132,11 +133,10 @@ where
 			.cf_backup_emission_per_block(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn cf_flip_supply(&self) -> Result<(u64, u64), jsonrpc_core::Error> {
+	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
-			.runtime_api()
-			.cf_flip_supply(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+		let (issuance, offchain) = self.client.runtime_api().cf_flip_supply(&at).unwrap();
+
+		Ok((issuance.try_into().unwrap(), offchain.try_into().unwrap()))
 	}
 }
