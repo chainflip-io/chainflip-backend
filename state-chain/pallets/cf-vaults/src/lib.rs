@@ -849,6 +849,14 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 			.expect("We can't exist without a vault")
 			.public_key
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_key(key: <T::Chain as ChainCrypto>::AggKey) {
+		Vaults::<T, I>::insert(
+			CurrentEpochIndex::<T>::get(),
+			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0) },
+		);
+	}
 }
 
 impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {

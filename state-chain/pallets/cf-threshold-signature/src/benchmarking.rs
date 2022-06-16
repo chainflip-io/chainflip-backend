@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_runtime_benchmark_utilities::BenchmarkDefault;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use frame_system::RawOrigin;
@@ -42,8 +42,8 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_default());
-		let signature = SignatureFor::<T, I>::benchmark_default();
+		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value());
+		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
 		let last_event = frame_system::Pallet::<T>::events().pop().unwrap().event;
@@ -56,7 +56,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_default());
+		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value());
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
