@@ -114,6 +114,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type GovKeyWhiteListedCallHash<T> = StorageValue<_, [u8; 32], OptionQuery>;
 
+	/// Any nonces before this have been consumed
+	#[pallet::storage]
+	#[pallet::getter(fn next_gov_key_call_hash_nonce)]
+	pub(super) type NextGovKeyCallHashNonce<T> = StorageValue<_, u32, ValueQuery>;
+
 	/// Number of proposals that have been submitted
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_id_counter)]
@@ -341,9 +346,15 @@ pub mod pallet {
 			if ensure_signed(origin.clone()).is_ok() ||
 				T::EnsureGovernance::ensure_origin(origin).is_ok()
 			{
+				let next_nonce = NextGovKeyCallHashNonce::<T>::get();
 				match GovKeyWhiteListedCallHash::<T>::get() {
 					Some(whitelisted_call_hash)
-						if whitelisted_call_hash == frame_support::Hashable::blake2_256(&call) =>
+						if whitelisted_call_hash ==
+							frame_support::Hashable::blake2_256(&(
+								call.clone(),
+								next_nonce,
+								T::Version::get(),
+							)) =>
 					{
 						call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into())?;
 						NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
