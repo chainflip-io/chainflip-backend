@@ -91,7 +91,7 @@ impl RewardDistribution for BackupNodeEmissions {
 		let mut rewards: Vec<(AccountId, Self::FlipBalance)> = backup_nodes
 			.iter()
 			.map(|backup_node| {
-				let backup_node_stake = Flip::stakeable_balance(backup_node);
+				let backup_node_stake = Flip::staked_balance(backup_node);
 				let reward_scaling_factor = min(1, (backup_node_stake / minimum_active_bid) ^ 2);
 				let reward = (reward_scaling_factor * average_authority_reward * 8) / 10;
 				total_rewards += reward;
