@@ -13,6 +13,9 @@ use slog::o;
 use sp_core::U256;
 use web3::types::{BlockNumber, U64};
 
+/// The percentile at which we want to request the Ethereum priority fee, expressed as float between 0 and 1.
+const ETH_PRIORITY_FEE_PERCENTILE: f64 = 0.5;
+
 /// Returns a stream of latest eth block numbers by polling at regular intervals.
 ///
 /// Uses polling.
@@ -36,6 +39,24 @@ pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync + 'a>(
         })
 }
 
+/// Rounds some amount in Wei to the nearest whole amount of Gwei.
+fn round_wei_to_gwei(number: u128) -> u128 {
+    const ONE_GWEI: u128 = 1_000_000_000;
+    const HALF_GWEI: u128 = ONE_GWEI / 2;
+    let rounded_down = (number / ONE_GWEI) * ONE_GWEI;
+    if number % ONE_GWEI < HALF_GWEI {
+        rounded_down
+    } else {
+        rounded_down + ONE_GWEI
+    }
+}
+
+/// Queries the rpc node and builds the `TrackedData` for Ethereum at the requested block number.
+///
+/// Value in Wei is rounded to nearest Gwei in an effort to ensure agreement between nodes in the presence of floating
+/// point / rounding error. This approach is still vulnerable when the true value is near the rounding boundary.
+///
+/// See: https://github.com/chainflip-io/chainflip-backend/issues/1803
 pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
     rpc: &EthRpcClient,
     block_number: u64,
@@ -44,7 +65,8 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
         .fee_history(
             U256::one(),
             BlockNumber::Number(U64::from(block_number)),
-            Some(vec![0.5]),
+            // TODO: Constant + create issue to move to state chain.
+            Some(vec![ETH_PRIORITY_FEE_PERCENTILE]),
         )
         .await?;
 
@@ -55,14 +77,16 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
             .first()
             .expect("Requested, so should be present.")
             .as_u128(),
-        priority_fee: fee_history
-            .reward
-            .expect("Requested, so should be present.")
-            .first()
-            .expect("Requested, so should be present.")
-            .first()
-            .expect("Requested, so should be present.")
-            .as_u128(),
+        priority_fee: round_wei_to_gwei(
+            fee_history
+                .reward
+                .expect("Requested, so should be present.")
+                .first()
+                .expect("Requested, so should be present.")
+                .first()
+                .expect("Requested, so should be present.")
+                .as_u128(),
+        ),
     })
 }
 
@@ -71,13 +95,29 @@ mod tests {
     use super::*;
     use crate::logging::test_utils::new_test_logger;
 
+    #[test]
+    fn test_round_wei_to_gwei() {
+        assert_eq!(
+            round_wei_to_gwei(1_000_000_001_000_000_000),
+            1_000_000_001_000_000_000
+        );
+        assert_eq!(
+            round_wei_to_gwei(1_000_000_001_499_999_999),
+            1_000_000_001_000_000_000
+        );
+        assert_eq!(
+            round_wei_to_gwei(1_000_000_000_500_000_001),
+            1_000_000_001_000_000_000
+        );
+    }
+
     #[tokio::test]
     async fn test_get_tracked_data() {
         use crate::eth::rpc::MockEthRpcApi;
 
         const BLOCK_HEIGHT: u64 = 42;
-        const BASE_FEE: u128 = 40;
-        const PRIORITY_FEE: u128 = 5;
+        const BASE_FEE: u128 = 40_000_000_000;
+        const PRIORITY_FEE: u128 = 5_000_000_000;
 
         let mut rpc = MockEthRpcApi::new();
 
