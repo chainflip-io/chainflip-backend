@@ -6,7 +6,7 @@ use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Chainflip,
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -76,10 +76,13 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
+pub const SAFE_BLOCK_MARGIN: u64 = 5;
+
 impl Config for Test {
 	type Event = Event;
 	type TargetChain = MockEthereum;
 	type WeightInfo = ();
+	type SafeBlockMargin = ConstU64<SAFE_BLOCK_MARGIN>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

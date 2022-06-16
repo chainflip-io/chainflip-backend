@@ -12,7 +12,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, IndexedBy};
 use cf_traits::Chainflip;
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::pallet_prelude::OriginFor;
@@ -35,6 +35,11 @@ pub mod pallet {
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
+
+		/// The safety margin beyond which we reject chain re-orgs. It's not possible to sumit
+		/// tracking data older than this number of blocks.
+		#[pallet::constant]
+		type SafeBlockMargin: Get<<Self::TargetChain as Chain>::ChainBlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -54,7 +59,9 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	pub enum Error<T, I = ()> {}
+	pub enum Error<T, I = ()> {
+		StaleDataSubmitted,
+	}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -74,7 +81,15 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ok = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			ChainState::<T, I>::put(&state);
+			ChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
+				if let Some(previous) = maybe_previous.replace(state.clone()) {
+					ensure!(
+						state.index() > previous.index() - T::SafeBlockMargin::get(),
+						Error::<T, I>::StaleDataSubmitted
+					)
+				};
+				Ok(())
+			})?;
 
 			Self::deposit_event(Event::<T, I>::ChainStateUpdated { state });
 

@@ -17,7 +17,7 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
+use sp_runtime::traits::{BlockNumberProvider, One, Saturating, Zero};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::Iterator,
@@ -740,7 +740,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				vault_key: Default::default(),
-				deployment_block: Default::default(),
+				deployment_block: Zero::zero(),
 				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into(),
 			}
 		}
@@ -854,7 +854,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	fn set_key(key: <T::Chain as ChainCrypto>::AggKey) {
 		Vaults::<T, I>::insert(
 			CurrentEpochIndex::<T>::get(),
-			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0) },
+			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },
 		);
 	}
 }

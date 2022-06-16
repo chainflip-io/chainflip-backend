@@ -26,6 +26,8 @@ use sp_std::{
 	str, vec,
 };
 
+use crate::IndexedBy;
+
 use self::api::EthereumReplayProtection;
 
 // Reference constants for the chain spec
@@ -47,6 +49,12 @@ pub struct TrackedData<C: crate::Chain> {
 	pub block_height: C::ChainBlockNumber,
 	pub base_fee: C::ChainAmount,
 	pub priority_fee: C::ChainAmount,
+}
+
+impl<C: crate::Chain> IndexedBy<C::ChainBlockNumber> for TrackedData<C> {
+	fn index(&self) -> C::ChainBlockNumber {
+		self.block_height
+	}
 }
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.

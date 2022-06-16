@@ -72,6 +72,7 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
+  'cf-chains/std',
   'cf-traits/std',
   'cf-runtime-upgrade-utilities/std',
   'codec/std',

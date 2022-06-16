@@ -7,8 +7,12 @@ use frame_support::{
 	Parameter, RuntimeDebug,
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::{One, Saturating};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Saturating};
+use sp_std::{
+	convert::{Into, TryFrom},
+	fmt::Debug,
+	prelude::*,
+};
 
 pub mod benchmarking_value;
 
@@ -22,9 +26,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ MaybeSerializeDeserialize
-		+ Default
-		+ One
-		+ Saturating
+		+ AtLeast32BitUnsigned
 		+ From<u64>
 		+ MaxEncodedLen;
 
@@ -38,7 +40,12 @@ pub trait Chain: Member + Parameter {
 		+ FullCodec
 		+ MaxEncodedLen;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen;
+	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + IndexedBy<Self::ChainBlockNumber>;
+}
+
+/// Something that can be ordered by an index.
+pub trait IndexedBy<I: Ord> {
+	fn index(&self) -> I;
 }
 
 /// Common crypto-related types and operations for some external chain.
