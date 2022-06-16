@@ -1208,7 +1208,7 @@ const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 impl Node {
     pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
-        self.ceremony_manager.check_timeouts_all();
+        self.ceremony_manager.check_all_timeouts();
     }
 
     pub fn ensure_ceremony_at_signing_stage(

@@ -69,7 +69,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     // This function is called periodically to check if any
     // ceremony should be aborted, reporting responsible parties
     // and cleaning up any relevant data
-    pub fn check_timeouts_all(&mut self) {
+    pub fn check_all_timeouts(&mut self) {
         self.signing_states.try_expiring_all(&self.logger);
         self.keygen_states.try_expiring_all(&self.logger);
     }
