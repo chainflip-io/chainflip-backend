@@ -32,7 +32,7 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_traits::{ExecutionCondition, RuntimeUpgrade};
+	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
 		error::BadOrigin,
@@ -68,7 +68,8 @@ pub mod pallet {
 	pub type ProposalId = u32;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: Chainflip {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// The outer Origin needs to be compatible with this pallet's Origin
@@ -318,6 +319,17 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Execute the root call
 			call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into())
+		}
+
+		// Dispatched by witnssers of the `GovernanceAction` events
+		#[pallet::weight(0)]
+		pub fn set_whitelisted_call_hash(
+			origin: OriginFor<T>,
+			call_hash: [u8; 32],
+		) -> DispatchResult {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			GovKeyWhiteListedCallHash::<T>::put(call_hash);
+			Ok(())
 		}
 
 		#[pallet::weight(0)]

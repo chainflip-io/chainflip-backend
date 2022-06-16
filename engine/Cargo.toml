@@ -86,6 +86,7 @@ cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
+pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 pallet-cf-online = {path = "../state-chain/pallets/cf-online"}
 pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
