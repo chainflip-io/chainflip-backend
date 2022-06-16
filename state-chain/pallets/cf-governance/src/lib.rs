@@ -329,23 +329,44 @@ pub mod pallet {
 			call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into())
 		}
 
-		// Dispatched by witnssers of the `GovernanceAction` events
+		/// **Can only be called via the Witnesser Origin**
+		///
+		/// Execute an extrinsic as root
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(0)]
 		pub fn set_whitelisted_call_hash(
 			origin: OriginFor<T>,
 			call_hash: GovCallHash,
 		) -> DispatchResult {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			T::EnsureWitnessed::ensure_origin(origin)?;
 			GovKeyWhiteListedCallHash::<T>::put(call_hash);
 			Ok(())
 		}
 
+		/// **Can only be called via the Governance Origin or a Staked Party**
+		///
+		/// Submit a call to be executed if the gov key has already committed to it.
+		///
+		/// ## Events
+		///
+		/// - GovKeyCallDispatched
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
 		#[pallet::weight(0)]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			// can be governance or a staker
 			if ensure_signed(origin.clone()).is_ok() ||
 				T::EnsureGovernance::ensure_origin(origin).is_ok()
 			{
