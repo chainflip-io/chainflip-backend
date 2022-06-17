@@ -1609,6 +1609,7 @@ dependencies = [
 name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",

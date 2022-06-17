@@ -8,8 +8,8 @@ pub mod runtime_apis;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
-use crate::runtime_apis::RuntimeAccountInfo;
-use cf_chains::{eth, Ethereum};
+use crate::runtime_apis::{RuntimeAccountInfo, RuntimePendingClaim};
+use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
 pub use frame_support::{
 	construct_runtime, debug,
 	instances::Instance1,
@@ -39,8 +39,6 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
-use cf_traits::EpochInfo;
-
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -54,8 +52,10 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::ChainflipAccountData;
-pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
+pub use cf_traits::{
+	BlockNumber, ChainflipAccountData, ChainflipAccountState, EpochInfo, FlipBalance,
+	SessionKeysRegistered,
+};
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
 use constants::common::*;
@@ -617,13 +617,26 @@ impl_runtime_apis! {
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
 			RuntimeAccountInfo {
-				stake: account_info.total().into(),
-				bond: account_info.bond().into(),
+				stake: account_info.total(),
+				bond: account_info.bond(),
 				last_heartbeat: last_heartbeat.unwrap_or(0),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
-				withdrawal_address: withdrawal_address
+				withdrawal_address,
 			}
+		}
+		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimePendingClaim> {
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let pending_claim: RegisterClaim = match api_call {
+				eth::api::EthereumApi::RegisterClaim(tx) => tx,
+				_ => unreachable!(),
+			};
+			Some(RuntimePendingClaim {
+				amount: pending_claim.amount,
+				address: pending_claim.address.into(),
+				expiry: pending_claim.expiry,
+				sig_data: pending_claim.sig_data,
+			})
 		}
 	}
 	// END custom runtime APIs

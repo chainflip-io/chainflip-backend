@@ -1,3 +1,4 @@
+use cf_chains::eth::SigData;
 use jsonrpc_core::serde::{Deserialize, Serialize};
 use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
@@ -16,6 +17,14 @@ pub struct RpcAccountInfo {
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcPendingClaim {
+	amount: NumberOrHex,
+	address: [u8; 20],
+	expiry: NumberOrHex,
+	sig_data: SigData,
 }
 
 #[rpc]
@@ -56,6 +65,11 @@ pub trait CustomApi {
 		&self,
 		account_id: AccountId32,
 	) -> Result<RpcAccountInfo, jsonrpc_core::Error>;
+	#[rpc(name = "cf_pending_claim")]
+	fn cf_pending_claim(
+		&self,
+		account_id: AccountId32,
+	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -187,5 +201,27 @@ where
 			reputation_points: account_info.reputation_points,
 			withdrawal_address: account_info.withdrawal_address,
 		})
+	}
+	fn cf_pending_claim(
+		&self,
+		account_id: AccountId32,
+	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		let pending_claim = match self
+			.client
+			.runtime_api()
+			.cf_pending_claim(&at, account_id)
+			.map_err(|_| jsonrpc_core::Error::internal_error())?
+		{
+			Some(pending_claim) => pending_claim,
+			None => return Ok(None),
+		};
+
+		Ok(Some(RpcPendingClaim {
+			amount: pending_claim.amount.into(),
+			expiry: pending_claim.expiry.into(),
+			address: pending_claim.address,
+			sig_data: pending_claim.sig_data,
+		}))
 	}
 }
