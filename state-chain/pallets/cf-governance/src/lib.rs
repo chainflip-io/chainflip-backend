@@ -116,6 +116,7 @@ pub mod pallet {
 	/// Call hash that has been committed to by the governance key (off-chain gnosis safe governance
 	/// key)
 	#[pallet::storage]
+	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
 
 	/// Any nonces before this have been consumed.
