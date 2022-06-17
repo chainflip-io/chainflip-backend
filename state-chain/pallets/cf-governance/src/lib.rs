@@ -183,6 +183,8 @@ pub mod pallet {
 		UpgradeConditionsSatisfied,
 		/// Call dispatched by GovKey
 		GovKeyCallDispatched,
+		/// CallHash whitelisted by the GovKey
+		GovKeyCallHashWhitelisted { call_hash: GovCallHash },
 	}
 
 	#[pallet::error]
@@ -336,7 +338,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - None
+		/// - [GovKeyCallHashWhitelisted](Event::GovKeyCallHashWhitelisted)
 		///
 		/// ## Errors
 		///
@@ -348,6 +350,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			GovKeyWhitelistedCallHash::<T>::put(call_hash);
+			Self::deposit_event(Event::GovKeyCallHashWhitelisted { call_hash });
 			Ok(())
 		}
 
