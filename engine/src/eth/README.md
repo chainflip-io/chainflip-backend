@@ -15,3 +15,9 @@ TODO: This needs filling in once the contract audit fixes are in, the KeyManager
 ## ETH Broadcaster
 
 Can encode and sign raw transaction data. As well as send signed transactions to the network. This is a dumb component. It does not detect transaction failures that occur on the blockchain, nor retry failed transactions.
+
+## Tests
+
+The `key_manager.rs` and `stake_manager.rs` tests found at bottom of file are created based on events created by the `all_events` script in the (`chainflip-eth-contracts`)[https://github.com/chainflip-io/chainflip-eth-contracts]. 
+
+When the script is run against a node, you can query the node for events that match the particular event signature, generated from the ABI of the contract. The data of these queried events are then used in the tests.

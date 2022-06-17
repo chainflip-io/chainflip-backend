@@ -24,7 +24,6 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
-/// The type used as an epoch index.
 pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
