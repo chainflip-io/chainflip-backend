@@ -86,7 +86,6 @@ git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
 tag = 'chainflip-monthly-2022-05'
 
-
 [dependencies.hex-literal]
 optional = true
 version = '0.3.4'
@@ -234,7 +233,7 @@ std = [
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment/std',
-	"pallet-transaction-payment-rpc-runtime-api/std",
+	'pallet-transaction-payment-rpc-runtime-api/std',
   'serde',
   'sp-api/std',
   'sp-block-builder/std',
