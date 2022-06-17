@@ -221,7 +221,7 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
 
     async fn handle_event<RpcClient>(
         &self,
-        epoch_index: EpochIndex,
+        _epoch_index: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         logger: &slog::Logger,
@@ -306,14 +306,13 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
             KeyManagerEvent::GovernanceAction { message } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch {
+                        pallet_cf_witnesser::Call::witness {
                             call: Box::new(
                                 pallet_cf_governance::Call::set_whitelisted_call_hash {
                                     call_hash: message,
                                 }
                                 .into(),
                             ),
-                            epoch_index,
                         },
                         logger,
                     )

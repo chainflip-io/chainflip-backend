@@ -352,7 +352,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			call_hash: GovCallHash,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			GovKeyWhitelistedCallHash::<T>::put(call_hash);
 			Self::deposit_event(Event::GovKeyCallHashWhitelisted { call_hash });
 			Ok(())
