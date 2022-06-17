@@ -190,7 +190,7 @@ pub mod mocks {
 	#[derive(
 		Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 	)]
-	pub struct MockTrackedData(u64);
+	pub struct MockTrackedData(pub u64);
 
 	impl IndexedBy<u64> for MockTrackedData {
 		fn index(&self) -> u64 {
@@ -198,6 +198,7 @@ pub mod mocks {
 		}
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	impl BenchmarkValue for MockTrackedData {
 		fn benchmark_value() -> Self {
 			Self(1_000)

@@ -17,7 +17,7 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, One, Saturating, Zero};
+use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::Iterator,
@@ -35,6 +35,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "std")]
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
@@ -738,6 +739,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
+			use sp_runtime::traits::Zero;
 			Self {
 				vault_key: Default::default(),
 				deployment_block: Zero::zero(),
