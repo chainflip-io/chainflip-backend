@@ -60,6 +60,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
+		/// The submitted data is older than the inclusion limit.
 		StaleDataSubmitted,
 	}
 
