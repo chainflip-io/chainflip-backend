@@ -374,33 +374,28 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			if ensure_signed(origin.clone()).is_ok() ||
-				T::EnsureGovernance::ensure_origin(origin).is_ok()
-			{
-				let next_nonce = NextGovKeyCallHashNonce::<T>::get();
-				let call_hash = frame_support::Hashable::blake2_256(&(
-					call.clone(),
-					next_nonce,
-					T::Version::get(),
-				));
-				match GovKeyWhitelistedCallHash::<T>::get() {
-					Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
-						Self::deposit_event(
-							match call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into())
-							{
-								Ok(_) => Event::GovKeyCallExecuted { call_hash },
-								Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
-							},
-						);
-						NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
-						GovKeyWhitelistedCallHash::<T>::kill();
+			ensure!(
+				(ensure_signed(origin.clone()).is_ok() ||
+					T::EnsureGovernance::ensure_origin(origin).is_ok()),
+				BadOrigin,
+			);
+			let next_nonce = NextGovKeyCallHashNonce::<T>::get();
+			let call_hash =
+				frame_support::Hashable::blake2_256(&(call.clone(), next_nonce, T::Version::get()));
+			match GovKeyWhitelistedCallHash::<T>::get() {
+				Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
+					Self::deposit_event(
+						match call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into()) {
+							Ok(_) => Event::GovKeyCallExecuted { call_hash },
+							Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
+						},
+					);
+					NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
+					GovKeyWhitelistedCallHash::<T>::kill();
 
-						Ok(Pays::No.into())
-					},
-					_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
-				}
-			} else {
-				Err(BadOrigin.into())
+					Ok(Pays::No.into())
+				},
+				_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
 			}
 		}
 	}
