@@ -101,8 +101,7 @@ pub enum ObserveInstruction {
     End(<cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber),
 }
 
-// TODO: Look at refactoring this to take specific "start" and "end" blocks, rather than this being implicit over the windows
-// NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
+// NB: This code can submit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     contract_observer: ContractObserver,
     eth_ws_rpc: &EthWsRpcClient,
