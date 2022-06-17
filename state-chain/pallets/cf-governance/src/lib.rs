@@ -181,10 +181,12 @@ pub mod pallet {
 		DecodeOfCallFailed(ProposalId),
 		/// The upgrade conditions for a runtime upgrade were satisfied
 		UpgradeConditionsSatisfied,
-		/// Call dispatched by GovKey
-		GovKeyCallDispatched,
+		/// Call executed by GovKey
+		GovKeyCallExecuted { call_hash: GovCallHash },
 		/// CallHash whitelisted by the GovKey
 		GovKeyCallHashWhitelisted { call_hash: GovCallHash },
+		/// Failed GovKey call
+		GovKeyCallExecutionFailed { call_hash: GovCallHash },
 	}
 
 	#[pallet::error]
@@ -376,19 +378,23 @@ pub mod pallet {
 				T::EnsureGovernance::ensure_origin(origin).is_ok()
 			{
 				let next_nonce = NextGovKeyCallHashNonce::<T>::get();
+				let call_hash = frame_support::Hashable::blake2_256(&(
+					call.clone(),
+					next_nonce,
+					T::Version::get(),
+				));
 				match GovKeyWhitelistedCallHash::<T>::get() {
-					Some(whitelisted_call_hash)
-						if whitelisted_call_hash ==
-							frame_support::Hashable::blake2_256(&(
-								call.clone(),
-								next_nonce,
-								T::Version::get(),
-							)) =>
-					{
-						call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into())?;
+					Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
+						Self::deposit_event(
+							match call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into())
+							{
+								Ok(_) => Event::GovKeyCallExecuted { call_hash },
+								Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
+							},
+						);
 						NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
 						GovKeyWhitelistedCallHash::<T>::kill();
-						Self::deposit_event(Event::GovKeyCallDispatched);
+
 						Ok(Pays::No.into())
 					},
 					_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
