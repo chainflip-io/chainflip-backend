@@ -339,20 +339,20 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
         let sig_accepted = SignatureAndEvent::new(&self.contract, "SignatureAccepted")?;
 
         Ok(Box::new(
-            move |signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
-                Ok(if signature == ak_set_by_ak.signature {
+            move |event_signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
+                Ok(if event_signature == ak_set_by_ak.signature {
                     let log = ak_set_by_ak.event.parse_log(raw_log)?;
                     KeyManagerEvent::AggKeySetByAggKey {
                         old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
                         new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
                     }
-                } else if signature == ak_set_by_gk.signature {
+                } else if event_signature == ak_set_by_gk.signature {
                     let log = ak_set_by_gk.event.parse_log(raw_log)?;
                     KeyManagerEvent::AggKeySetByGovKey {
                         old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
                         new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
                     }
-                } else if signature == ck_set_by_ak.signature {
+                } else if event_signature == ck_set_by_ak.signature {
                     let log = ck_set_by_ak.event.parse_log(raw_log)?;
                     KeyManagerEvent::CommKeySetByAggKey {
                         old_comm_key: utils::decode_log_param::<ethabi::Address>(
@@ -364,7 +364,7 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                             "newCommKey",
                         )?,
                     }
-                } else if signature == ck_set_by_ck.signature {
+                } else if event_signature == ck_set_by_ck.signature {
                     let log = ck_set_by_ck.event.parse_log(raw_log)?;
                     KeyManagerEvent::CommKeySetByCommKey {
                         old_comm_key: utils::decode_log_param::<ethabi::Address>(
@@ -376,31 +376,33 @@ impl<EthRpc: EthRpcApi> EthObserver for KeyManager<EthRpc> {
                             "newCommKey",
                         )?,
                     }
-                } else if signature == gk_set_by_ak.signature {
+                } else if event_signature == gk_set_by_ak.signature {
                     let log = gk_set_by_ak.event.parse_log(raw_log)?;
                     KeyManagerEvent::GovKeySetByAggKey {
                         old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
                         new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
                     }
-                } else if signature == gk_set_by_gk.signature {
+                } else if event_signature == gk_set_by_gk.signature {
                     let log = gk_set_by_gk.event.parse_log(raw_log)?;
                     KeyManagerEvent::GovKeySetByGovKey {
                         old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
                         new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
                     }
-                } else if signature == sig_accepted.signature {
+                } else if event_signature == sig_accepted.signature {
                     let log = sig_accepted.event.parse_log(raw_log)?;
                     KeyManagerEvent::SignatureAccepted {
                         sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
                         signer: utils::decode_log_param(&log, "signer")?,
                     }
-                } else if signature == gov_action.signature {
+                } else if event_signature == gov_action.signature {
                     let log = gov_action.event.parse_log(raw_log)?;
                     KeyManagerEvent::GovernanceAction {
                         message: utils::decode_log_param(&log, "message")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
+                        event_signature
+                    )));
                 })
             },
         ))
