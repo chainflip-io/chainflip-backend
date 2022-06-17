@@ -8,6 +8,7 @@ pub mod runtime_apis;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
+use crate::runtime_apis::RuntimeAccountInfo;
 use cf_chains::{eth, Ethereum};
 pub use frame_support::{
 	construct_runtime, debug,
@@ -59,6 +60,7 @@ pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
+pub use pallet_cf_staking::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
@@ -607,6 +609,21 @@ impl_runtime_apis! {
 			pallet_cf_flip::Account::<Runtime>::iter_keys().map(|account_id| {
 				(account_id.clone(), vanity_names.get(&account_id).unwrap_or(&vec![]).clone())
 			}).collect()
+		}
+		fn cf_account_info(account_id: AccountId) -> RuntimeAccountInfo {
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
+			let last_heartbeat = pallet_cf_online::LastHeartbeat::<Runtime>::get(&account_id);
+			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
+			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
+
+			RuntimeAccountInfo {
+				stake: account_info.total().into(),
+				bond: account_info.bond().into(),
+				last_heartbeat: last_heartbeat.unwrap_or(0),
+				online_credits: reputation_info.online_credits,
+				reputation_points: reputation_info.reputation_points,
+				withdrawal_address: withdrawal_address
+			}
 		}
 	}
 	// END custom runtime APIs

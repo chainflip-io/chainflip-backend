@@ -1613,6 +1613,7 @@ dependencies = [
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "sc-client-api",
+ "serde",
  "sp-api",
  "sp-rpc",
  "sp-runtime",

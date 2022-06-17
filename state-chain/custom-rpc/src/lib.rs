@@ -1,3 +1,4 @@
+use jsonrpc_core::serde::{Deserialize, Serialize};
 use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
 use sp_rpc::number::NumberOrHex;
@@ -6,6 +7,16 @@ use state_chain_runtime::{constants::common::TX_FEE_MULTIPLIER, runtime_apis::Cu
 use std::{marker::PhantomData, sync::Arc};
 
 pub use self::gen_client::Client as CustomClient;
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcAccountInfo {
+	pub stake: NumberOrHex,
+	pub bond: NumberOrHex,
+	pub last_heartbeat: u32,
+	pub online_credits: u32,
+	pub reputation_points: i32,
+	pub withdrawal_address: [u8; 20],
+}
 
 #[rpc]
 /// The custom RPC endoints for the state chain node.
@@ -40,6 +51,11 @@ pub trait CustomApi {
 	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
 	#[rpc(name = "cf_accounts")]
 	fn cf_accounts(&self) -> Result<Vec<(AccountId32, Vec<u8>)>, jsonrpc_core::Error>;
+	#[rpc(name = "cf_account_info")]
+	fn cf_account_info(
+		&self,
+		account_id: AccountId32,
+	) -> Result<RpcAccountInfo, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -151,5 +167,25 @@ where
 			.runtime_api()
 			.cf_accounts(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_account_info(
+		&self,
+		account_id: AccountId32,
+	) -> Result<RpcAccountInfo, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		let account_info = self
+			.client
+			.runtime_api()
+			.cf_account_info(&at, account_id)
+			.expect("The runtime API should not return error.");
+
+		Ok(RpcAccountInfo {
+			stake: account_info.stake.into(),
+			bond: account_info.bond.into(),
+			last_heartbeat: account_info.last_heartbeat,
+			online_credits: account_info.online_credits,
+			reputation_points: account_info.reputation_points,
+			withdrawal_address: account_info.withdrawal_address,
+		})
 	}
 }
