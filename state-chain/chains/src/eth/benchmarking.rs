@@ -4,9 +4,9 @@ use crate::{
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection, RawSignedTransaction,
-		SchnorrVerificationComponents, UnsignedTransaction, H256, U256,
+		SchnorrVerificationComponents, TrackedData, UnsignedTransaction, H256, U256,
 	},
-	ApiCall,
+	ApiCall, Ethereum,
 };
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];
@@ -84,5 +84,11 @@ impl BenchmarkValue for UnsignedTransaction {
 			data: b"do_something()".to_vec(),
 			..Default::default()
 		}
+	}
+}
+
+impl BenchmarkValue for TrackedData<Ethereum> {
+	fn benchmark_value() -> Self {
+		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
 	}
 }

@@ -40,7 +40,12 @@ pub trait Chain: Member + Parameter {
 		+ FullCodec
 		+ MaxEncodedLen;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + IndexedBy<Self::ChainBlockNumber>;
+	type TrackedData: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Clone
+		+ IndexedBy<Self::ChainBlockNumber>
+		+ BenchmarkValue;
 }
 
 /// Something that can be ordered by an index.
@@ -179,7 +184,24 @@ pub mod mocks {
 	impl Chain for MockEthereum {
 		type ChainBlockNumber = u64;
 		type ChainAmount = u128;
-		type TrackedData = eth::TrackedData<Self>;
+		type TrackedData = MockTrackedData;
+	}
+
+	#[derive(
+		Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+	)]
+	pub struct MockTrackedData(u64);
+
+	impl IndexedBy<u64> for MockTrackedData {
+		fn index(&self) -> u64 {
+			self.0
+		}
+	}
+
+	impl BenchmarkValue for MockTrackedData {
+		fn benchmark_value() -> Self {
+			Self(1_000)
+		}
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]

@@ -573,6 +573,7 @@ mod benches {
 		[pallet_cf_reputation, Reputation]
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
+		[pallet_cf_chain_tracking, EthereumChainTracking]
 	);
 }
 

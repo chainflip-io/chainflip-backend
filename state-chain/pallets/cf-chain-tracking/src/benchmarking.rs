@@ -1,28 +1,20 @@
-//! Benchmarking setup for pallet-template
-#![cfg(feature = "runtime-benchmarks")]
-
 use super::*;
 
+use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::benchmarks_instance_pallet;
+use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 
 benchmarks_instance_pallet! {
-	on_initialize {} : {}
-	// start_broadcast {
-	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	let unsigned: SignedTransactionFor<T, I> = UnsignedTransaction {
-	// 		chain_id: 42,
-	// 		max_fee_per_gas: U256::from(1_000_000_000u32).into(),
-	// 		gas_limit: U256::from(21_000u32).into(),
-	// 		contract: [0xcf; 20].into(),
-	// 		value: 0.into(),
-	// 		data: b"do_something()".to_vec(),
-	// 		..Default::default()
-	// 	};
-	// 	let call = Call::<T, I>::start_broadcast(unsigned.into());
-	// 	let origin = T::EnsureWitnessed::successful_origin();
-	// } : { call.dispatch_bypass_filter(origin)? }
-	transaction_ready_for_transmission {} : {}
-	transaction_signing_failure {} : {}
-	on_signature_ready {} : {}
-	signature_accepted {} : {}
+	update_chain_state {
+		let call = Call::<T, I>::update_chain_state {
+			state: BenchmarkValue::benchmark_value()
+		};
+
+		let origin = T::EnsureWitnessed::successful_origin();
+		// Dispatch once to ensure we have a value already inserted - replacing a value is more expensive
+		// than inserting a new one.
+		assert_ok!(call.clone().dispatch_bypass_filter(origin.clone()));
+	}: {
+		let _ = call.dispatch_bypass_filter(origin);
+	}
 }
