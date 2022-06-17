@@ -16,5 +16,7 @@ benchmarks_instance_pallet! {
 		assert_ok!(call.clone().dispatch_bypass_filter(origin.clone()));
 	}: {
 		let _ = call.dispatch_bypass_filter(origin);
+	} verify {
+		assert!(ChainState::<T,I>::get() == Some(BenchmarkValue::benchmark_value()));
 	}
 }
