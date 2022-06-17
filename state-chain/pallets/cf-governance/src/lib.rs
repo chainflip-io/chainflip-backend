@@ -102,13 +102,13 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	/// Proposals
+	/// Proposals.
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub(super) type Proposals<T: Config> =
 		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>, ValueQuery>;
 
-	/// Active proposals
+	/// Active proposals.
 	#[pallet::storage]
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
@@ -118,28 +118,28 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
 
-	/// Any nonces before this have been consumed
+	/// Any nonces before this have been consumed.
 	#[pallet::storage]
 	#[pallet::getter(fn next_gov_key_call_hash_nonce)]
 	pub(super) type NextGovKeyCallHashNonce<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Number of proposals that have been submitted
+	/// Number of proposals that have been submitted.
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_id_counter)]
 	pub(super) type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Pipeline of proposals which will get executed in the next block
+	/// Pipeline of proposals which will get executed in the next block.
 	#[pallet::storage]
 	#[pallet::getter(fn execution_pipeline)]
 	pub(super) type ExecutionPipeline<T> =
 		StorageValue<_, Vec<(OpaqueCall, ProposalId)>, ValueQuery>;
 
-	/// Time in seconds until a proposal expires
+	/// Time in seconds until a proposal expires.
 	#[pallet::storage]
 	#[pallet::getter(fn expiry_span)]
 	pub(super) type ExpiryTime<T> = StorageValue<_, Timestamp, ValueQuery>;
 
-	/// Array of accounts which are included in the current governance
+	/// Array of accounts which are included in the current governance.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub(super) type Members<T> = StorageValue<_, Vec<AccountId<T>>, ValueQuery>;
