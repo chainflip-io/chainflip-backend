@@ -334,7 +334,8 @@ pub mod pallet {
 
 		/// **Can only be called via the Witnesser Origin**
 		///
-		/// Execute an extrinsic as root
+		/// Set a whitelisted call hash, to be executed when someone submits a call
+		/// via `submit_govkey_call` that matches the hash whitelisted here.
 		///
 		/// ## Events
 		///
