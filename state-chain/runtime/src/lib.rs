@@ -786,7 +786,6 @@ impl_runtime_apis! {
 			use baseline::Pallet as BaselineBench;
 
 			impl frame_system_benchmarking::Config for Runtime {}
-			// impl pallet_session_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 
 			let whitelist: Vec<TrackedStorageKey> = vec![
