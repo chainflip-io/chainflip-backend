@@ -113,8 +113,7 @@ pub mod pallet {
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
-	/// Call hash that has been committed to by the governance key (off-chain gnosis safe governance
-	/// key)
+	/// Call hash that has been committed to by the Governance Key.
 	#[pallet::storage]
 	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
