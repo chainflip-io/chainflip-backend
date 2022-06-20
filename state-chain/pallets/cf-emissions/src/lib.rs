@@ -79,7 +79,7 @@ pub mod pallet {
 		/// An implementation of `RewardsDistribution` defining how to distribute the emissions.
 		type RewardsDistribution: RewardsDistribution<
 			Balance = Self::FlipBalance,
-			Surplus = Self::Surplus,
+			Issuance = Self::Issuance,
 		>;
 
 		/// An outgoing api call that supports UpdateFlipSupply.
@@ -123,7 +123,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_node_emission_per_block)]
-	/// The block number at which we last minted Flip.
+	/// The amount of Flip we mint to backup nodes per block.
 	pub type BackupNodeEmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
@@ -319,14 +319,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Mints and distributes block author rewards via [RewardsDistribution].
 	fn mint_rewards_for_block() {
-		// Calculate the outstanding reward amount.
-		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
-		if !reward_amount.is_zero() {
-			// Mint the rewards
-			let reward = T::Issuance::mint(reward_amount);
-			// Delegate the distribution.
-			T::RewardsDistribution::distribute(reward);
-		}
+		// Mint and Delegate the distribution.
+		T::RewardsDistribution::distribute();
 	}
 }
 

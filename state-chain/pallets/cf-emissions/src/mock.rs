@@ -23,7 +23,7 @@ use cf_traits::{
 		eth_environment_provider::MockEthEnvironmentProvider,
 		system_state_info::MockSystemStateInfo,
 	},
-	Broadcaster, WaivedFees,
+	Broadcaster, Issuance, WaivedFees,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -146,16 +146,17 @@ impl ReplayProtectionProvider<MockEthereum> for Test {
 
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
 
+pub const EMISSION_RATE: u128 = 10;
 pub struct MockRewardsDistribution;
 
 impl RewardsDistribution for MockRewardsDistribution {
 	type Balance = u128;
-	type Surplus = pallet_cf_flip::Surplus<Test>;
+	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 
-	fn distribute(rewards: Self::Surplus) {
-		let reward_amount = rewards.peek();
-		let deposit = Flip::deposit_reserves(*b"RSVR", reward_amount);
-		let _result = rewards.offset(deposit);
+	fn distribute() {
+		let deposit = Flip::deposit_reserves(*b"RSVR", EMISSION_RATE);
+		let amount = deposit.peek();
+		let _result = deposit.offset(Self::Issuance::mint(amount));
 	}
 }
 

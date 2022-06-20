@@ -17,7 +17,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, MaybeSerializeDeserialize},
+	traits::{Bounded, MaybeSerializeDeserialize, UniqueSaturatedFrom},
 	DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::{marker::PhantomData, prelude::*};
@@ -300,12 +300,12 @@ pub trait Issuance {
 
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
-	type Balance;
-	/// An imbalance representing an unallocated surplus of funds.
-	type Surplus: Imbalance<Self::Balance>;
+	type Balance: UniqueSaturatedFrom<BlockNumber> + AtLeast32BitUnsigned;
+	/// An implementation of the issuance trait.
+	type Issuance: Issuance;
 
 	/// Distribute some rewards.
-	fn distribute(rewards: Self::Surplus);
+	fn distribute();
 }
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {

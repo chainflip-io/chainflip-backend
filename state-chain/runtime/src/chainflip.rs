@@ -6,7 +6,6 @@ mod offences;
 pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
-use pallet_cf_flip::Surplus;
 pub use signer_nomination::RandomSignerNomination;
 
 use crate::{
@@ -24,14 +23,14 @@ use cf_traits::{
 	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, StakeTransfer,
 };
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::traits::Get;
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational,
-	traits::{AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto},
+	traits::{UniqueSaturatedFrom, UniqueSaturatedInto},
 };
 use sp_std::{cmp::min, prelude::*};
 
@@ -46,25 +45,17 @@ impl Chainflip for Runtime {
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
-trait RewardDistribution {
-	type FlipBalance: UniqueSaturatedFrom<BlockNumber> + AtLeast32BitUnsigned;
-	/// An implementation of the [Issuance] trait.
-	type Issuance: Issuance;
-
-	/// Distribute rewards
-	fn distribute_rewards(backup_nodes: &[AccountId]) -> Weight;
-}
-
 struct BackupNodeEmissions;
 
-impl RewardDistribution for BackupNodeEmissions {
-	type FlipBalance = FlipBalance;
+impl RewardsDistribution for BackupNodeEmissions {
+	type Balance = FlipBalance;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	// This is called on each heartbeat interval
-	fn distribute_rewards(backup_nodes: &[AccountId]) -> Weight {
+	fn distribute() {
+		let backup_nodes = Validator::backup_nodes();
 		if backup_nodes.is_empty() {
-			return 0
+			return
 		}
 		// The current minimum active bid
 		let minimum_active_bid = Validator::bond();
@@ -82,13 +73,13 @@ impl RewardDistribution for BackupNodeEmissions {
 			.saturating_mul(heartbeat_block_interval);
 
 		// The average authority emission
-		let average_authority_reward: Self::FlipBalance = authority_rewards /
-			Self::FlipBalance::unique_saturated_from(Validator::current_authority_count());
+		let average_authority_reward: Self::Balance = authority_rewards /
+			Self::Balance::unique_saturated_from(Validator::current_authority_count());
 
 		let mut total_rewards = 0;
 
 		// Calculate rewards for each backup node and total rewards for capping
-		let mut rewards: Vec<(AccountId, Self::FlipBalance)> = backup_nodes
+		let mut rewards: Vec<(AccountId, Self::Balance)> = backup_nodes
 			.iter()
 			.map(|backup_node| {
 				let backup_node_stake = Flip::staked_balance(backup_node);
@@ -118,8 +109,6 @@ impl RewardDistribution for BackupNodeEmissions {
 		for (validator_id, reward) in rewards {
 			Flip::settle(&validator_id, Self::Issuance::mint(reward).into());
 		}
-
-		0
 	}
 }
 
@@ -137,8 +126,7 @@ impl Heartbeat for ChainflipHeartbeat {
 		// Reputation depends on heartbeats
 		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
 
-		let backup_nodes = <Validator as BackupNodes>::backup_nodes();
-		BackupNodeEmissions::distribute_rewards(&backup_nodes);
+		BackupNodeEmissions::distribute();
 
 		// Check the state of the network and if we are within the emergency rotation range
 		// then issue an emergency rotation request
@@ -197,13 +185,16 @@ pub struct BlockAuthorRewardDistribution;
 
 impl RewardsDistribution for BlockAuthorRewardDistribution {
 	type Balance = FlipBalance;
-	type Surplus = Surplus<Runtime>;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
-	fn distribute(rewards: Self::Surplus) {
-		// TODO: Check if it's ok to panic here.
-		let current_block_author =
-			Authorship::author().expect("A block without an author is invalid.");
-		Flip::settle_imbalance(&current_block_author, rewards);
+	fn distribute() {
+		let reward_amount = Emissions::current_authority_emission_per_block();
+		if reward_amount != 0 {
+			// TODO: Check if it's ok to panic here.
+			let current_block_author =
+				Authorship::author().expect("A block without an author is invalid.");
+			Flip::settle_imbalance(&current_block_author, Self::Issuance::mint(reward_amount));
+		}
 	}
 }
 pub struct RuntimeUpgradeManager;
