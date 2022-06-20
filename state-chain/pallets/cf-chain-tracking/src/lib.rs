@@ -12,7 +12,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{Chain, IndexedBy};
+use cf_chains::{Chain, Safety};
 use cf_traits::Chainflip;
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::pallet_prelude::OriginFor;
@@ -39,7 +39,7 @@ pub mod pallet {
 		/// The safety margin beyond which we reject chain re-orgs. It's not possible to sumit
 		/// tracking data older than this number of blocks.
 		#[pallet::constant]
-		type SafeBlockMargin: Get<<Self::TargetChain as Chain>::ChainBlockNumber>;
+		type SafetyMargin: Get<<<Self::TargetChain as Chain>::TrackedData as Safety>::SafetyMetric>;
 	}
 
 	#[pallet::pallet]
@@ -60,8 +60,9 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The submitted data is older than the inclusion limit.
-		StaleDataSubmitted,
+		/// The submitted data is already considered safe aka. finalised and as such cannot be
+		/// replaced.
+		SafeDataSubmitted,
 	}
 
 	#[pallet::call]
@@ -74,7 +75,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - N/A
+		/// - [Error::StaleDataSubmitted]
 		#[pallet::weight(T::WeightInfo::update_chain_state())]
 		pub fn update_chain_state(
 			origin: OriginFor<T>,
@@ -85,8 +86,8 @@ pub mod pallet {
 			ChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
 				if let Some(previous) = maybe_previous.replace(state.clone()) {
 					ensure!(
-						state.index() > previous.index() - T::SafeBlockMargin::get(),
-						Error::<T, I>::StaleDataSubmitted
+						!state.is_safe(&previous, T::SafetyMargin::get()),
+						Error::<T, I>::SafeDataSubmitted
 					)
 				};
 				Ok(())

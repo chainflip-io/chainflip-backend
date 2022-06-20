@@ -82,7 +82,7 @@ impl Config for Test {
 	type Event = Event;
 	type TargetChain = MockEthereum;
 	type WeightInfo = ();
-	type SafeBlockMargin = ConstU64<SAFE_BLOCK_MARGIN>;
+	type SafetyMargin = ConstU64<SAFE_BLOCK_MARGIN>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

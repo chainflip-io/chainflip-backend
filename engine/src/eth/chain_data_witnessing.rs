@@ -65,7 +65,6 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
         .fee_history(
             U256::one(),
             BlockNumber::Number(U64::from(block_number)),
-            // TODO: Constant + create issue to move to state chain.
             Some(vec![ETH_PRIORITY_FEE_PERCENTILE]),
         )
         .await?;

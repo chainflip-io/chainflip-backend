@@ -40,17 +40,20 @@ pub trait Chain: Member + Parameter {
 		+ FullCodec
 		+ MaxEncodedLen;
 
-	type TrackedData: Member
-		+ Parameter
-		+ MaxEncodedLen
-		+ Clone
-		+ IndexedBy<Self::ChainBlockNumber>
-		+ BenchmarkValue;
+	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Safety + BenchmarkValue;
 }
 
-/// Something that can be ordered by an index.
-pub trait IndexedBy<I: Ord> {
-	fn index(&self) -> I;
+pub trait Safety {
+	/// A number used for expressing the degree of safety. Higher is better.
+	type SafetyMetric: Member + Parameter + MaxEncodedLen + AtLeast32BitUnsigned;
+
+	/// What is the relative safety of this object.
+	fn safety(&self) -> Self::SafetyMetric;
+
+	/// Is this thing 'safer' compared to another, within some margin.
+	fn is_safe(&self, other: &Self, margin: Self::SafetyMetric) -> bool {
+		self.safety() > other.safety().saturating_add(margin)
+	}
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -192,9 +195,11 @@ pub mod mocks {
 	)]
 	pub struct MockTrackedData(pub u64);
 
-	impl IndexedBy<u64> for MockTrackedData {
-		fn index(&self) -> u64 {
-			self.0
+	impl Safety for MockTrackedData {
+		type SafetyMetric = u64;
+
+		fn safety(&self) -> Self::SafetyMetric {
+			u64::MAX - self.0
 		}
 	}
 
