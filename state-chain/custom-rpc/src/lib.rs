@@ -243,24 +243,23 @@ where
 	}
 	fn cf_penalties(&self) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let mut return_vec = Vec::new();
-		for (offence, runtime_api_penalty) in self
+		Ok(self
 			.client
 			.runtime_api()
 			.cf_penalties(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 			.expect("The runtime API should not return error.")
 			.iter()
-		{
-			return_vec.push((
-				*offence,
-				RpcPenalty {
-					reputation_points: runtime_api_penalty.reputation_points,
-					suspension_duration_blocks: runtime_api_penalty.suspension_duration_blocks,
-				},
-			));
-		}
-		Ok(return_vec)
+			.map(|(offence, runtime_api_penalty)| {
+				(
+					*offence,
+					RpcPenalty {
+						reputation_points: runtime_api_penalty.reputation_points,
+						suspension_duration_blocks: runtime_api_penalty.suspension_duration_blocks,
+					},
+				)
+			})
+			.collect())
 	}
 	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);

@@ -45,23 +45,23 @@ pub trait Tokenizable {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SigData {
 	/// The address of the Key Manager contract, to prevent replay attacks
-	pub key_manager_address: Address,
+	key_manager_address: Address,
 	/// The ID of the chain we're broadcasting to, to prevent x-chain replays
-	pub chain_id: Uint,
+	chain_id: Uint,
 	/// The message hash aka. payload to be signed over.
-	pub msg_hash: H256,
+	msg_hash: H256,
 	/// The Schnorr signature.
-	pub sig: Uint,
+	sig: Uint,
 	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to
 	/// prevent replay attacks.
-	pub nonce: Uint,
+	nonce: Uint,
 	/// The address value derived from the random nonce value `k`. Also known as
 	/// `nonceTimesGeneratorAddress`.
 	///
 	/// Note this is unrelated to the `nonce` above. The nonce in the context of
 	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
 	/// the Schnorr signature) to prevent certain classes of cryptographic attacks.
-	pub k_times_g_address: Address,
+	k_times_g_address: Address,
 }
 
 impl MaxEncodedLen for SigData {
