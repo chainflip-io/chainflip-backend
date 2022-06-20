@@ -366,13 +366,16 @@ pub mod pallet {
 			T::WeightInfo::on_initialize(expiries.len() as u32)
 		}
 
+		// We want to retry broadcasts when we have free block space.
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			// We want to retry broadcasts when we have free block space.
-			let mut retries = BroadcastRetryQueue::<T, I>::take();
-
 			let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
 
-			let num_retries_that_fit = (remaining_weight / next_broadcast_weight) as usize;
+			let num_retries_that_fit = remaining_weight
+				.checked_div(next_broadcast_weight)
+				.expect("start_next_broadcast_attempt weight should not be 0")
+				as usize;
+
+			let mut retries = BroadcastRetryQueue::<T, I>::take();
 
 			if retries.len() >= num_retries_that_fit {
 				BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit));
