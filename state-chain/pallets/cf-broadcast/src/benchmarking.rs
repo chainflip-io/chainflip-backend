@@ -48,25 +48,14 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 benchmarks_instance_pallet! {
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
-		// Complexity parameter for retry queue.
-		let b in 1 .. 1000u32;
 		// Complexity parameter for expiry queue.
 		let x in 1000 .. 2000u32;
-		let insert_sig = |i| ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()));
-		for i in 1 .. b {
-			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
-			BroadcastRetryQueue::<T, I>::append(&BroadcastAttempt::<T, I> {
-				unsigned_tx: UnsignedTransactionFor::<T, I>::benchmark_value(),
-				broadcast_attempt_id,
-			});
-			insert_sig(i);
-		}
 		for i in 1000 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
 			});
-			insert_sig(i);
+			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
@@ -120,6 +109,32 @@ benchmarks_instance_pallet! {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
 		assert!(BroadcastIdToAttemptNumbers::<T, I>::contains_key(1));
 		assert!(Expiries::<T, I>::contains_key(should_expire_in));
+	}
+	start_next_broadcast_attempt {
+		let broadcast_id = 1;
+		let broadcast_attempt_id = BroadcastAttemptId {
+			broadcast_id,
+			attempt_count: 0
+		};
+		let signature = ThresholdSignatureFor::<T, I>::benchmark_value();
+
+		SignatureToBroadcastIdLookup::<T, I>::insert(signature.clone(), broadcast_id);
+		BroadcastIdToAttemptNumbers::<T, I>::insert(broadcast_id, vec![0]);
+
+		ThresholdSignatureData::<T, I>::insert(broadcast_id, (ApiCallFor::<T, I>::benchmark_value(), signature));
+
+		let broadcast_attempt = BroadcastAttempt::<T, I> {
+			broadcast_attempt_id,
+			unsigned_tx: UnsignedTransactionFor::<T, I>::benchmark_value(),
+		};
+
+		insert_transaction_signing_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
+
+		T::KeyProvider::set_key(<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value());
+
+	} : { Pallet::<T, I>::start_next_broadcast_attempt(broadcast_attempt) }
+	verify {
+		assert!(AwaitingTransactionSignature::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
 	}
 	signature_accepted {
 		let caller: T::AccountId = whitelisted_caller();
