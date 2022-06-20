@@ -845,6 +845,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-session-benchmarking"
+version = "0.1.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-session",
+]
+
+[[package]]
 name = "cf-test-utilities"
 version = "0.1.0"
 dependencies = [

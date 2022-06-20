@@ -31,4 +31,5 @@ members = [
   'engine/generate-genesis-keys',
   'utilities',
   'state-chain/custom-rpc',
+  'state-chain/cf-session-benchmark',
 ]
