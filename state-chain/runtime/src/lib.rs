@@ -53,7 +53,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_traits::{
-	BlockNumber, ChainflipAccountData, ChainflipAccountState, EpochInfo, FlipBalance,
+	BlockNumber, ChainflipAccountData, ChainflipAccountState, ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance,
 	SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
@@ -618,6 +618,7 @@ impl_runtime_apis! {
 			let last_heartbeat = pallet_cf_online::LastHeartbeat::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
+			let account_data = ChainflipAccountStore::<Runtime>::get(&account_id);
 
 			RuntimeApiAccountInfo {
 				stake: account_info.total(),
@@ -626,6 +627,7 @@ impl_runtime_apis! {
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
+				state: account_data.state
 			}
 		}
 		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimeApiPendingClaim> {

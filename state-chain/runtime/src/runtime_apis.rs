@@ -1,4 +1,5 @@
 use cf_chains::eth::SigData;
+use cf_traits::ChainflipAccountState;
 use codec::{Decode, Encode};
 use sp_api::decl_runtime_apis;
 use sp_core::U256;
@@ -15,6 +16,7 @@ pub struct RuntimeApiAccountInfo {
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
+	pub state: ChainflipAccountState
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]

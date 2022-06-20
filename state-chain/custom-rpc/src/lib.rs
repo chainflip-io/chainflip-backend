@@ -4,7 +4,7 @@ use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::AccountId32;
-use state_chain_runtime::{constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi};
+use state_chain_runtime::{constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi, ChainflipAccountState};
 use std::{marker::PhantomData, sync::Arc};
 
 pub use self::gen_client::Client as CustomClient;
@@ -17,6 +17,7 @@ pub struct RpcAccountInfo {
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
+	pub state: ChainflipAccountState
 }
 
 #[derive(Serialize, Deserialize)]
@@ -200,6 +201,7 @@ where
 			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
 			withdrawal_address: account_info.withdrawal_address,
+			state: account_info.state
 		})
 	}
 	fn cf_pending_claim(

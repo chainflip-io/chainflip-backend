@@ -6,6 +6,8 @@ pub mod offence_reporting;
 
 pub use async_result::AsyncResult;
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -372,12 +374,14 @@ pub trait EmergencyRotation {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	HistoricalAuthority(BackupOrPassive),
@@ -386,6 +390,7 @@ pub enum ChainflipAccountState {
 
 // TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
 }
