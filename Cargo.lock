@@ -863,6 +863,7 @@ dependencies = [
  "log 0.4.17",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -1609,10 +1610,12 @@ dependencies = [
 name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "sc-client-api",
+ "serde",
  "sp-api",
  "sp-rpc",
  "sp-runtime",

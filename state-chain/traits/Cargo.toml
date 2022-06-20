@@ -7,6 +7,7 @@ description = "Common traits used in the Chainflip runtime"
 
 [dependencies]
 log = { version = '0.4.14', default-features = false }
+serde = { optional = true, version = "1.0.126", features = ['derive'] }
 
 # Internal
 cf-chains = { path ='../chains', default-features = false }
@@ -67,6 +68,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'sp-runtime/std',
+    'serde'
 ]
 runtime-benchmarks = [
     'frame-support/runtime-benchmarks',

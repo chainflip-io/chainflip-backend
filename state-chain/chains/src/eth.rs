@@ -42,6 +42,7 @@ pub trait Tokenizable {
 /// The `SigData` struct used for threshold signatures in the smart contracts.
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SigData {
 	/// The address of the Key Manager contract, to prevent replay attacks
 	key_manager_address: Address,

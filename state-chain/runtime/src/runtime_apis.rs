@@ -1,4 +1,38 @@
+use crate::chainflip::Offence;
+use cf_chains::eth::SigData;
+use cf_traits::ChainflipAccountState;
+use codec::{Decode, Encode};
 use sp_api::decl_runtime_apis;
+use sp_core::U256;
+use sp_runtime::AccountId32;
+use sp_std::vec::Vec;
+
+type VanityName = Vec<u8>;
+
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct RuntimeApiAccountInfo {
+	pub stake: u128,
+	pub bond: u128,
+	pub last_heartbeat: u32,
+	pub online_credits: u32,
+	pub reputation_points: i32,
+	pub withdrawal_address: [u8; 20],
+	pub state: ChainflipAccountState,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct RuntimeApiPendingClaim {
+	pub amount: U256,
+	pub address: [u8; 20],
+	pub expiry: U256,
+	pub sig_data: SigData,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct RuntimeApiPenalty {
+	pub reputation_points: i32,
+	pub suspension_duration_blocks: u32,
+}
 
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
@@ -18,5 +52,10 @@ decl_runtime_apis!(
 		fn cf_backup_emission_per_block() -> u64;
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
+		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
+		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
+		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimeApiPendingClaim>;
+		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
+		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 	}
 );

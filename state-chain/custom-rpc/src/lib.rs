@@ -1,10 +1,43 @@
+use cf_chains::eth::SigData;
+use jsonrpc_core::serde::{Deserialize, Serialize};
 use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
 use sp_rpc::number::NumberOrHex;
-use state_chain_runtime::{constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi};
+use sp_runtime::AccountId32;
+use state_chain_runtime::{
+	chainflip::Offence, constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi,
+	ChainflipAccountState,
+};
 use std::{marker::PhantomData, sync::Arc};
 
 pub use self::gen_client::Client as CustomClient;
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcAccountInfo {
+	pub stake: NumberOrHex,
+	pub bond: NumberOrHex,
+	pub last_heartbeat: u32,
+	pub online_credits: u32,
+	pub reputation_points: i32,
+	pub withdrawal_address: [u8; 20],
+	pub state: ChainflipAccountState,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcPendingClaim {
+	amount: NumberOrHex,
+	address: [u8; 20],
+	expiry: NumberOrHex,
+	sig_data: SigData,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcPenalty {
+	reputation_points: i32,
+	suspension_duration_blocks: u32,
+}
+
+type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 
 #[rpc]
 /// The custom RPC endoints for the state chain node.
@@ -37,6 +70,22 @@ pub trait CustomApi {
 	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
 	#[rpc(name = "cf_flip_supply")]
 	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
+	#[rpc(name = "cf_accounts")]
+	fn cf_accounts(&self) -> Result<Vec<(AccountId32, Vec<u8>)>, jsonrpc_core::Error>;
+	#[rpc(name = "cf_account_info")]
+	fn cf_account_info(
+		&self,
+		account_id: AccountId32,
+	) -> Result<RpcAccountInfo, jsonrpc_core::Error>;
+	#[rpc(name = "cf_pending_claim")]
+	fn cf_pending_claim(
+		&self,
+		account_id: AccountId32,
+	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error>;
+	#[rpc(name = "cf_penalties")]
+	fn cf_penalties(&self) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error>;
+	#[rpc(name = "cf_suspensions")]
+	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -141,5 +190,82 @@ where
 			.cf_flip_supply(&at)
 			.expect("The runtime API should not return error.");
 		Ok((issuance.into(), offchain.into()))
+	}
+	fn cf_accounts(&self) -> Result<Vec<(AccountId32, Vec<u8>)>, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_accounts(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_account_info(
+		&self,
+		account_id: AccountId32,
+	) -> Result<RpcAccountInfo, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		let account_info = self
+			.client
+			.runtime_api()
+			.cf_account_info(&at, account_id)
+			.expect("The runtime API should not return error.");
+
+		Ok(RpcAccountInfo {
+			stake: account_info.stake.into(),
+			bond: account_info.bond.into(),
+			last_heartbeat: account_info.last_heartbeat,
+			online_credits: account_info.online_credits,
+			reputation_points: account_info.reputation_points,
+			withdrawal_address: account_info.withdrawal_address,
+			state: account_info.state,
+		})
+	}
+	fn cf_pending_claim(
+		&self,
+		account_id: AccountId32,
+	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		let pending_claim = match self
+			.client
+			.runtime_api()
+			.cf_pending_claim(&at, account_id)
+			.map_err(|_| jsonrpc_core::Error::internal_error())?
+		{
+			Some(pending_claim) => pending_claim,
+			None => return Ok(None),
+		};
+
+		Ok(Some(RpcPendingClaim {
+			amount: pending_claim.amount.into(),
+			expiry: pending_claim.expiry.into(),
+			address: pending_claim.address,
+			sig_data: pending_claim.sig_data,
+		}))
+	}
+	fn cf_penalties(&self) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		Ok(self
+			.client
+			.runtime_api()
+			.cf_penalties(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.")
+			.iter()
+			.map(|(offence, runtime_api_penalty)| {
+				(
+					*offence,
+					RpcPenalty {
+						reputation_points: runtime_api_penalty.reputation_points,
+						suspension_duration_blocks: runtime_api_penalty.suspension_duration_blocks,
+					},
+				)
+			})
+			.collect())
+	}
+	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_suspensions(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 }
