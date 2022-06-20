@@ -160,7 +160,7 @@ async fn main() {
     use crate::multisig::eth::EthSigning;
 
     let (eth_multisig_client, eth_multisig_client_backend_future) =
-        multisig::start_client::<_, EthSigning>(
+        multisig::start_client::<EthSigning>(
             state_chain_client.our_account_id.clone(),
             db,
             incoming_p2p_message_receiver,
