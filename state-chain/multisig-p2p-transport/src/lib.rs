@@ -6,7 +6,7 @@
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
 pub use gen_client::Client as P2PRpcClient;
-use ipc_channel::ipc::{IpcReceiver, IpcSender};
+use ipc_channel::ipc::IpcSender;
 pub use sc_network::PeerId;
 
 use async_trait::async_trait;
@@ -161,9 +161,6 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 }
 
-type Channels =
-	(IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>, IpcReceiver<(PeerIdTransferable, Vec<u8>)>);
-
 #[rpc]
 pub trait P2PValidatorNetworkNodeRpcApi {
 	/// RPC Metadata
@@ -203,7 +200,7 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 
 	/// Send a message to authorities returning a HTTP status code
 	#[rpc(name = "p2p_setup_ipc_oneshot_server")]
-	fn setup_ipc_channels(&self) -> Result<Channels>;
+	fn setup_ipc_channels(&self, server: String) -> Result<()>;
 }
 
 impl<
@@ -451,11 +448,16 @@ pub fn new_p2p_network_node<
 					})
 				}
 
-				fn setup_ipc_channels(&self) -> jsonrpc_core::Result<Channels> {
+				fn setup_ipc_channels(&self, server: String) -> jsonrpc_core::Result<()> {
 					let (incoming_sender, incoming_receiver) =
 						ipc_channel::ipc::channel::<(PeerIdTransferable, Vec<u8>)>().unwrap();
 					let (outgoing_sender, outgoing_receiver) =
 						ipc_channel::ipc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>().unwrap();
+
+					IpcSender::connect(server)
+						.unwrap()
+						.send((outgoing_sender, incoming_receiver))
+						.unwrap();
 
 					{
 						let mut state = self.state.write().unwrap();
@@ -502,7 +504,8 @@ pub fn new_p2p_network_node<
 					// spawn thread to consume receiver ???
 					// spawn thread to send messages ???
 
-					Ok((outgoing_sender, incoming_receiver))
+					Ok(())
+					//Ok((outgoing_sender, incoming_receiver))
 				}
 			}
 

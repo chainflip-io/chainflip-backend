@@ -314,10 +314,19 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     let peer_to_account_mapping_on_chain =
         Arc::new(tokio::sync::Mutex::new(peer_to_account_mapping_on_chain));
 
-    let (sender, receiver) = client
-        .setup_ipc_channels()
+    let (ipc_oneshot, name) = ipc_channel::ipc::IpcOneShotServer::new().unwrap();
+
+    client
+        .setup_ipc_channels(name)
         .map_err(rpc_error_into_anyhow_error)
         .await?;
+
+    type Channels = (
+        ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>,
+        ipc_channel::ipc::IpcReceiver<(PeerIdTransferable, Vec<u8>)>,
+    );
+
+    let (_, (sender, receiver)): (_, Channels) = ipc_oneshot.accept().unwrap();
 
     let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
 
