@@ -335,7 +335,6 @@ mod tests {
 
     use crate::{
         logging::test_utils::new_test_logger,
-        multisig::db::PersistentKeyDB,
         testing::{assert_ok, new_temp_directory_with_nonexistent_file},
     };
 

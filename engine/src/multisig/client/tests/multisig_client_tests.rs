@@ -8,8 +8,8 @@ use crate::{
         client::{
             self,
             common::{CeremonyFailureReason, SigningFailureReason},
+            key_store::KeyStore,
         },
-        db::KeyStore,
         eth::{EthSigning, Point as EthPoint},
         KeyId, MessageHash, PersistentKeyDB,
     },

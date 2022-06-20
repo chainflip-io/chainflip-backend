@@ -1,6 +1,7 @@
 #[macro_use]
 mod utils;
 mod common;
+mod key_store;
 pub mod keygen;
 pub mod signing;
 mod state_runner;
@@ -40,6 +41,7 @@ pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
+    key_store::KeyStore,
     signing::frost::SigningData,
 };
 
@@ -47,7 +49,6 @@ pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
 
 use super::{
     crypto::{CryptoScheme, ECPoint},
-    db::KeyStore,
     MessageHash, PersistentKeyDB, Rng,
 };
 
