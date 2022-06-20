@@ -49,8 +49,9 @@ benchmarks_instance_pallet! {
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
 		// Complexity parameter for expiry queue.
-		let x in 1000 .. 2000u32;
-		for i in 1000 .. x {
+		let start_range = 1;
+		let x in start_range .. 1000u32;
+		for i in start_range .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
