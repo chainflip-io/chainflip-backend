@@ -8,7 +8,7 @@ use sp_std::vec::Vec;
 type VanityName = Vec<u8>;
 
 #[derive(Encode, Decode, Eq, PartialEq)]
-pub struct RuntimeAccountInfo {
+pub struct RuntimeApiAccountInfo {
 	pub stake: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32,
@@ -18,7 +18,7 @@ pub struct RuntimeAccountInfo {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
-pub struct RuntimePendingClaim {
+pub struct RuntimeApiPendingClaim {
 	pub amount: U256,
 	pub address: [u8; 20],
 	pub expiry: U256,
@@ -44,7 +44,7 @@ decl_runtime_apis!(
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
-		fn cf_account_info(account_id: AccountId32) -> RuntimeAccountInfo;
-		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimePendingClaim>;
+		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
+		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimeApiPendingClaim>;
 	}
 );

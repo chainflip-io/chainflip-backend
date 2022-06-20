@@ -8,7 +8,7 @@ pub mod runtime_apis;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
-use crate::runtime_apis::{RuntimeAccountInfo, RuntimePendingClaim};
+use crate::runtime_apis::{RuntimeApiAccountInfo, RuntimeApiPendingClaim};
 use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
 pub use frame_support::{
 	construct_runtime, debug,
@@ -613,13 +613,13 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_account_info(account_id: AccountId) -> RuntimeAccountInfo {
+		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let last_heartbeat = pallet_cf_online::LastHeartbeat::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
-			RuntimeAccountInfo {
+			RuntimeApiAccountInfo {
 				stake: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: last_heartbeat.unwrap_or(0),
@@ -628,13 +628,13 @@ impl_runtime_apis! {
 				withdrawal_address,
 			}
 		}
-		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimePendingClaim> {
+		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimeApiPendingClaim> {
 			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
 			let pending_claim: RegisterClaim = match api_call {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),
 			};
-			Some(RuntimePendingClaim {
+			Some(RuntimeApiPendingClaim {
 				amount: pending_claim.amount,
 				address: pending_claim.address.into(),
 				expiry: pending_claim.expiry,
