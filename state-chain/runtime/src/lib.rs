@@ -605,10 +605,13 @@ impl_runtime_apis! {
 			(Flip::total_issuance(), Flip::offchain_funds())
 		}
 		fn cf_accounts() -> Vec<(AccountId, Vec<u8>)> {
-			let vanity_names = Validator::vanity_names();
-			pallet_cf_flip::Account::<Runtime>::iter_keys().map(|account_id| {
-				(account_id.clone(), vanity_names.get(&account_id).unwrap_or(&vec![]).clone())
-			}).collect()
+			let mut vanity_names = Validator::vanity_names();
+			pallet_cf_flip::Account::<Runtime>::iter_keys()
+				.map(|account_id| {
+					let vanity_name = vanity_names.remove(&account_id).unwrap_or(Vec::new());
+					(account_id, vanity_name)
+				})
+				.collect()
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
