@@ -190,7 +190,7 @@ pub struct MultisigClient<C: CryptoScheme> {
     my_account_id: AccountId,
     keygen_request_sender: KeygenRequestSender<C::Point>,
     signing_request_sender: SigningRequestSender<C>,
-    key_store: std::sync::Mutex<KeyStore<C::Point>>,
+    key_store: std::sync::Mutex<KeyStore<C>>,
     logger: slog::Logger,
 }
 
@@ -205,7 +205,7 @@ where
 {
     pub fn new(
         my_account_id: AccountId,
-        db: Arc<Mutex<PersistentKeyDB<C::Point>>>,
+        db: Arc<Mutex<PersistentKeyDB<C>>>,
         keygen_request_sender: KeygenRequestSender<C::Point>,
         signing_request_sender: SigningRequestSender<C>,
         logger: &slog::Logger,

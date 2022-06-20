@@ -12,7 +12,7 @@ use crate::{
             common::{CeremonyFailureReason, SigningFailureReason},
             key_store::KeyStore,
         },
-        eth::{EthSigning, Point as EthPoint},
+        eth::EthSigning,
         KeyId, MessageHash, PersistentKeyDB,
     },
     testing::{
@@ -84,7 +84,7 @@ async fn should_save_key_after_keygen() {
         let client = MultisigClient::<EthSigning>::new(
             ACCOUNT_IDS[0].clone(),
             Arc::new(Mutex::new(
-                PersistentKeyDB::<EthPoint>::new_and_migrate_to_latest(&db_file, &logger)
+                PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(&db_file, &logger)
                     .expect("Failed to open database"),
             )),
             keygen_request_sender,
@@ -111,7 +111,7 @@ async fn should_save_key_after_keygen() {
     }
 
     // Check that the key was saved by Loading it from the same db file
-    let key_store = KeyStore::<EthPoint>::new(Arc::new(Mutex::new(
+    let key_store = KeyStore::<EthSigning>::new(Arc::new(Mutex::new(
         PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
             .expect("Failed to open database"),
     )));
@@ -133,7 +133,7 @@ async fn should_load_keys_on_creation() {
     // Create a new db and store the key in it
     let logger = new_test_logger();
     {
-        let mut key_store = KeyStore::new(Arc::new(Mutex::new(
+        let mut key_store = KeyStore::<EthSigning>::new(Arc::new(Mutex::new(
             PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
                 .expect("Failed to open database"),
         )));
