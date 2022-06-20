@@ -1,3 +1,4 @@
+use crate::chainflip::Offence;
 use cf_chains::eth::SigData;
 use cf_traits::ChainflipAccountState;
 use codec::{Decode, Encode};
@@ -27,6 +28,12 @@ pub struct RuntimeApiPendingClaim {
 	pub sig_data: SigData,
 }
 
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct RuntimeApiPenalty {
+	pub reputation_points: i32,
+	pub suspension_duration_blocks: u32,
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -48,5 +55,7 @@ decl_runtime_apis!(
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
 		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimeApiPendingClaim>;
+		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
+		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 	}
 );

@@ -71,8 +71,8 @@ pub struct ReputationPenaltyRate<BlockNumber> {
 #[scale_info(skip_type_params(T))]
 #[codec(mel_bound(T: Config))]
 pub struct Penalty<T: Config> {
-	reputation: ReputationPoints,
-	suspension: T::BlockNumber,
+	pub reputation: ReputationPoints,
+	pub suspension: T::BlockNumber,
 }
 
 impl<T: Config> sp_std::fmt::Debug for Penalty<T> {

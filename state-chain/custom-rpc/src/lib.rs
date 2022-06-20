@@ -5,7 +5,8 @@ use sc_client_api::HeaderBackend;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi, ChainflipAccountState,
+	chainflip::Offence, constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi,
+	ChainflipAccountState,
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -29,6 +30,14 @@ pub struct RpcPendingClaim {
 	expiry: NumberOrHex,
 	sig_data: SigData,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcPenalty {
+	reputation_points: i32,
+	suspension_duration_blocks: u32,
+}
+
+type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 
 #[rpc]
 /// The custom RPC endoints for the state chain node.
@@ -73,6 +82,10 @@ pub trait CustomApi {
 		&self,
 		account_id: AccountId32,
 	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error>;
+	#[rpc(name = "cf_penalties")]
+	fn cf_penalties(&self) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error>;
+	#[rpc(name = "cf_suspensions")]
+	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -227,5 +240,33 @@ where
 			address: pending_claim.address,
 			sig_data: pending_claim.sig_data,
 		}))
+	}
+	fn cf_penalties(&self) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		let mut return_vec = Vec::new();
+		for (offence, runtime_api_penalty) in self
+			.client
+			.runtime_api()
+			.cf_penalties(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.")
+			.iter()
+		{
+			return_vec.push((
+				*offence,
+				RpcPenalty {
+					reputation_points: runtime_api_penalty.reputation_points,
+					suspension_duration_blocks: runtime_api_penalty.suspension_duration_blocks,
+				},
+			));
+		}
+		Ok(return_vec)
+	}
+	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_suspensions(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 }

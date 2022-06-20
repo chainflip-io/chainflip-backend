@@ -8,7 +8,10 @@ pub mod runtime_apis;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
-use crate::runtime_apis::{RuntimeApiAccountInfo, RuntimeApiPendingClaim};
+use crate::{
+	chainflip::Offence,
+	runtime_apis::{RuntimeApiAccountInfo, RuntimeApiPenalty, RuntimeApiPendingClaim},
+};
 use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
 pub use frame_support::{
 	construct_runtime, debug,
@@ -642,6 +645,25 @@ impl_runtime_apis! {
 				expiry: pending_claim.expiry,
 				sig_data: pending_claim.sig_data,
 			})
+		}
+		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
+			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
+				.map(|offence| {
+					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence).unwrap_or_default();
+					(offence, RuntimeApiPenalty {
+						reputation_points: penalty.reputation,
+						suspension_duration_blocks: penalty.suspension
+					})
+				})
+				.collect()
+		}
+		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId)>)> {
+			pallet_cf_reputation::Suspensions::<Runtime>::iter_keys()
+				.map(|offence| {
+					let suspension = pallet_cf_reputation::Suspensions::<Runtime>::get(offence);
+					(offence, suspension.into())
+				})
+				.collect()
 		}
 	}
 	// END custom runtime APIs
