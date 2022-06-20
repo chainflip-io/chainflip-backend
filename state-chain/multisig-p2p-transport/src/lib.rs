@@ -6,6 +6,7 @@
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
 pub use gen_client::Client as P2PRpcClient;
+use ipc_channel::ipc::{IpcReceiver, IpcSender};
 pub use sc_network::PeerId;
 
 use async_trait::async_trait;
@@ -88,6 +89,8 @@ pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	_phantom: std::marker::PhantomData<MetaData>,
 }
 
+type IpcSenderMy = std::sync::Mutex<IpcSender<(PeerIdTransferable, Vec<u8>)>>;
+
 /// Shared state to allow Rpc to send P2P Messages, and the P2P to send Rpc notifcations
 #[derive(Default)]
 struct P2PValidatorNetworkNodeState {
@@ -95,6 +98,7 @@ struct P2PValidatorNetworkNodeState {
 	p2p_message_rpc_subscribers:
 		HashMap<SubscriptionId, UnboundedSender<(PeerIdTransferable, Vec<u8>)>>,
 	reserved_peers: BTreeMap<PeerId, (u16, Ipv6Addr, Sender<Vec<u8>>)>,
+	ipc_sender: Option<IpcSenderMy>,
 }
 
 /// An abstration of the underlying network of peers.
@@ -157,6 +161,9 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 }
 
+type Channels =
+	(IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>, IpcReceiver<(PeerIdTransferable, Vec<u8>)>);
+
 #[rpc]
 pub trait P2PValidatorNetworkNodeRpcApi {
 	/// RPC Metadata
@@ -193,6 +200,10 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 		metadata: Option<Self::Metadata>,
 		id: SubscriptionId,
 	) -> Result<bool>;
+
+	/// Send a message to authorities returning a HTTP status code
+	#[rpc(name = "p2p_setup_ipc_oneshot_server")]
+	fn setup_ipc_channels(&self) -> Result<Channels>;
 }
 
 impl<
@@ -439,6 +450,60 @@ pub fn new_p2p_network_node<
 						false
 					})
 				}
+
+				fn setup_ipc_channels(&self) -> jsonrpc_core::Result<Channels> {
+					let (incoming_sender, incoming_receiver) =
+						ipc_channel::ipc::channel::<(PeerIdTransferable, Vec<u8>)>().unwrap();
+					let (outgoing_sender, outgoing_receiver) =
+						ipc_channel::ipc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>().unwrap();
+
+					{
+						let mut state = self.state.write().unwrap();
+
+						state.ipc_sender = Some(std::sync::Mutex::new(incoming_sender));
+					}
+
+					let state = self.state.clone();
+
+					self.message_sender_spawner.spawn_blocking("a", "b", async move {
+						while let Ok((peers, message)) = outgoing_receiver.recv() {
+							// If receiver errors when senders are dropped then fine (Else could
+							// force receiver to close via sending special message)
+							let peers = peers
+								.into_iter()
+								.map(PeerIdTransferable::try_into)
+								.collect::<std::result::Result<BTreeSet<_>, _>>()
+								.unwrap();
+
+							let state = state.read().unwrap();
+							if peers.iter().all(|peer| state.reserved_peers.contains_key(peer)) {
+								for peer_id in peers {
+									let (_, _, message_sender) =
+										state.reserved_peers.get(&peer_id).unwrap();
+									match message_sender.try_send(message.clone()) {
+										Ok(_) => (),
+										Err(TrySendError::Full(_)) => {
+											log::info!("Dropping message for peer {}", peer_id);
+										},
+										Err(_) => panic!(),
+									}
+								}
+							} else {
+								/*Err(jsonrpc_core::Error::invalid_params(
+									"Request to send message to an unset peer",
+								))*/
+							}
+						}
+						log::error!("Closing ipc p2p message sender");
+					});
+
+					// kill old channels ???
+
+					// spawn thread to consume receiver ???
+					// spawn thread to send messages ???
+
+					Ok((outgoing_sender, incoming_receiver))
+				}
 			}
 
 			RpcRequestHandler {
@@ -502,12 +567,14 @@ pub fn new_p2p_network_node<
 								.peekable();
 							if messages.peek().is_some() {
 								let state = state.read().unwrap();
-								let remote: PeerIdTransferable = From::from(&remote);
-								for message in messages {
-									let message = message.into_iter().collect::<Vec<u8>>();
-									for sender in state.p2p_message_rpc_subscribers.values() {
+								if let Some(ipc_sender) = &state.ipc_sender {
+									let ipc_sender = ipc_sender.lock().unwrap();
+
+									let remote: PeerIdTransferable = From::from(&remote);
+									for message in messages {
+										let message = message.into_iter().collect::<Vec<u8>>();
 										if let Err(e) =
-											sender.unbounded_send((remote.clone(), message.clone()))
+											ipc_sender.send((remote.clone(), message.clone()))
 										{
 											log::error!(
 												"Failed to forward message to rpc subscriber: {}",

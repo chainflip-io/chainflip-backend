@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use futures::TryStreamExt;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use multisig_p2p_transport::{PeerId, PeerIdTransferable};
@@ -19,7 +18,7 @@ use state_chain_runtime::AccountId;
 
 use codec::Encode;
 
-use futures::{StreamExt, TryFutureExt};
+use futures::TryFutureExt;
 use zeroize::Zeroizing;
 
 use frame_support::StoragePrefixedMap;
@@ -255,7 +254,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         })
         .collect::<Result<BTreeMap<_, _>>>()?;
 
-    let mut peer_to_account_mapping_on_chain = account_to_peer_mapping_on_chain
+    let peer_to_account_mapping_on_chain = account_to_peer_mapping_on_chain
         .iter()
         .map(|(account_id, (peer_id, _, _))| (*peer_id, account_id.clone()))
         .collect::<BTreeMap<_, _>>();
@@ -312,16 +311,43 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer_mapping_on_chain
     );
 
-    let mut incoming_p2p_message_stream = client
-        .subscribe_messages()
-        .map_err(rpc_error_into_anyhow_error)?
-        .map_err(rpc_error_into_anyhow_error);
+    let peer_to_account_mapping_on_chain =
+        Arc::new(tokio::sync::Mutex::new(peer_to_account_mapping_on_chain));
+
+    let (sender, receiver) = client
+        .setup_ipc_channels()
+        .map_err(rpc_error_into_anyhow_error)
+        .await?;
 
     let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
 
+    let peer_to_account_mapping_on_chain_2 = peer_to_account_mapping_on_chain.clone();
+    let handle = tokio::runtime::Handle::current();
+    tokio::task::spawn_blocking(move || {
+        handle.block_on(async move {
+            while let Ok((peer_id, serialised_message)) = receiver.recv() {
+                let peer_id: PeerId = peer_id.try_into().unwrap();
+                if let Some(account_id) = peer_to_account_mapping_on_chain_2
+                    .lock()
+                    .await
+                    .get(&peer_id)
+                {
+                    incoming_p2p_message_sender
+                        .send((account_id.clone(), serialised_message))
+                        .map_err(anyhow::Error::new)
+                        .with_context(|| "Failed to send message via channel".to_string())
+                        .unwrap();
+                    //Ok(account_id)
+                } else {
+                    //Err(anyhow::Error::msg(format!("Missing Account Id mapping for Peer Id: {}", peer_id)))
+                }
+            }
+        });
+    });
+
     loop {
         tokio::select! {
-            Some(result_p2p_message) = incoming_p2p_message_stream.next() => {
+            /*Some(result_p2p_message) = incoming_p2p_message_stream.next() => {
                 match result_p2p_message.and_then(|(peer_id, serialised_message)| {
                     let peer_id: PeerId = peer_id.try_into()?;
                     if let Some(account_id) = peer_to_account_mapping_on_chain.get(&peer_id) {
@@ -337,10 +363,10 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     Ok(account_id) => slog::info!(logger, "Received P2P message from: {}", account_id),
                     Err(error) => slog::error!(logger, "Failed to receive P2P message: {}", error)
                 }
-            }
+            }*/
             Some(messages) = outgoing_p2p_message_receiver.recv() => {
                 async fn send_messages<'a, AccountIds: 'a + IntoIterator<Item = &'a AccountId> + Clone>(
-                    client: &P2PRpcClient,
+                    sender: &ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>,Vec<u8>)>,
                     account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
                     account_ids: AccountIds,
                     message: Vec<u8>,
@@ -348,29 +374,28 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                 ) {
 
                     // If we can't get peer id for some accounts, should we still try to send messages to the rest?
-                    match async {
-                        account_ids.clone().into_iter().map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
-                            Some((peer_id, _, _)) => Ok(peer_id.into()),
-                            None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
-                        }).collect::<Result<Vec<_>, _>>()
-                    }.and_then(|peer_ids| {
-                        client.send_message(
-                            peer_ids,
-                            message
-                        ).map_err(rpc_error_into_anyhow_error)
-                    }).await {
-                        Ok(_) => slog::info!(logger, "Sent P2P message to: {}", format_iterator(account_ids)),
-                        Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", format_iterator(account_ids), error)
+                    match account_ids.clone().into_iter().map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
+                        Some((peer_id, _, _)) => Ok(peer_id.into()),
+                        None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
+                    }).collect::<Result<Vec<_>, _>>() {
+                        Ok(peer_ids) => {
+                            slog::info!(logger, "Sent P2P message to: {}", format_iterator(account_ids));
+                            sender.send((
+                                peer_ids,
+                                message
+                            )).unwrap();
+                        },
+                        Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", format_iterator(account_ids), error),
                     }
                 }
 
                 match messages {
                     OutgoingMultisigStageMessages::Broadcast(account_ids, message) => {
-                        send_messages(&client, &account_to_peer_mapping_on_chain, account_ids.iter(), message, &logger).await;
+                        send_messages(&sender, &account_to_peer_mapping_on_chain, account_ids.iter(), message, &logger).await;
                     },
                     OutgoingMultisigStageMessages::Private(messages) => {
                         for (account_id, message) in messages {
-                            send_messages(&client, &account_to_peer_mapping_on_chain, std::iter::once(&account_id), message, &logger).await;
+                            send_messages(&sender, &account_to_peer_mapping_on_chain, std::iter::once(&account_id), message, &logger).await;
                         }
                     }
                 }
@@ -380,6 +405,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     Ok(peer_id) => {
                         match account_peer_mapping_change {
                             AccountPeerMappingChange::Registered(port, ip_address) => {
+                                let mut peer_to_account_mapping_on_chain = peer_to_account_mapping_on_chain.lock().await;
+
                                 if let Some((existing_peer_id, _, _)) = account_to_peer_mapping_on_chain.get(&account_id) {
                                     peer_to_account_mapping_on_chain.remove(existing_peer_id);
                                 }
@@ -398,6 +425,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                                 }
                             }
                             AccountPeerMappingChange::Unregistered => {
+                                let mut peer_to_account_mapping_on_chain = peer_to_account_mapping_on_chain.lock().await;
+
                                 if Some(&account_id) == peer_to_account_mapping_on_chain.get(&peer_id) {
                                     account_to_peer_mapping_on_chain.remove(&account_id);
                                     peer_to_account_mapping_on_chain.remove(&peer_id);

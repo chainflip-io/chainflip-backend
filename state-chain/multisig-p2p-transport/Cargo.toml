@@ -18,6 +18,7 @@ bs58 = '0.4.0'
 futures = { version = '0.3.4', features = ['compat'] }
 tokio = {version = '1.13.1', features = ['full']}
 async-trait = "0.1.49"
+ipc-channel = "0.16.0"
 
 [dependencies.sp-runtime]
 git = 'https://github.com/chainflip-io/substrate.git'
