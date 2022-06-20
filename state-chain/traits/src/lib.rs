@@ -6,8 +6,6 @@ pub mod offence_reporting;
 
 pub use async_result::AsyncResult;
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -18,6 +16,8 @@ use frame_support::{
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,

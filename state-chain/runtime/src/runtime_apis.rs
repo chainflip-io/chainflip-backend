@@ -16,7 +16,7 @@ pub struct RuntimeApiAccountInfo {
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
-	pub state: ChainflipAccountState
+	pub state: ChainflipAccountState,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]

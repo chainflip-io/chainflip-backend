@@ -53,8 +53,8 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_traits::{
-	BlockNumber, ChainflipAccountData, ChainflipAccountState, ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance,
-	SessionKeysRegistered,
+	BlockNumber, ChainflipAccount, ChainflipAccountData, ChainflipAccountState,
+	ChainflipAccountStore, EpochInfo, FlipBalance, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
