@@ -608,7 +608,7 @@ impl_runtime_apis! {
 			let mut vanity_names = Validator::vanity_names();
 			pallet_cf_flip::Account::<Runtime>::iter_keys()
 				.map(|account_id| {
-					let vanity_name = vanity_names.remove(&account_id).unwrap_or(Vec::new());
+					let vanity_name = vanity_names.remove(&account_id).unwrap_or_default();
 					(account_id, vanity_name)
 				})
 				.collect()
