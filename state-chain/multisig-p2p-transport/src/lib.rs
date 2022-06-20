@@ -593,6 +593,7 @@ pub fn new_p2p_network_node<
 	)
 }
 
+/*
 #[cfg(test)]
 mod tests {
 	use std::time::Duration;
@@ -1176,3 +1177,4 @@ mod tests {
 		));
 	}
 }
+*/
