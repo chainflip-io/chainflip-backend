@@ -49,9 +49,8 @@ benchmarks_instance_pallet! {
 	on_initialize {
 		let expiry_block = T::BlockNumber::from(6u32);
 		// Complexity parameter for expiry queue.
-		let start_range = 1;
-		let x in start_range .. 1000u32;
-		for i in start_range .. x {
+		let x in 1 .. 1000u32;
+		for i in 1 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
 			Expiries::<T, I>::mutate(expiry_block, |entries| {
 				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
@@ -112,28 +111,17 @@ benchmarks_instance_pallet! {
 		assert!(Expiries::<T, I>::contains_key(should_expire_in));
 	}
 	start_next_broadcast_attempt {
-		let broadcast_id = 1;
-		let broadcast_attempt_id = BroadcastAttemptId {
-			broadcast_id,
-			attempt_count: 0
-		};
-		let signature = ThresholdSignatureFor::<T, I>::benchmark_value();
-
-		SignatureToBroadcastIdLookup::<T, I>::insert(signature.clone(), broadcast_id);
-		BroadcastIdToAttemptNumbers::<T, I>::insert(broadcast_id, vec![0]);
-
-		ThresholdSignatureData::<T, I>::insert(broadcast_id, (ApiCallFor::<T, I>::benchmark_value(), signature));
-
-		let broadcast_attempt = BroadcastAttempt::<T, I> {
-			broadcast_attempt_id,
-			unsigned_tx: UnsignedTransactionFor::<T, I>::benchmark_value(),
-		};
-
-		insert_transaction_signing_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
+		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(&BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value());
 
 		T::KeyProvider::set_key(<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value());
+		let unsigned_tx = UnsignedTransactionFor::<T, I>::benchmark_value();
 
-	} : { Pallet::<T, I>::start_next_broadcast_attempt(broadcast_attempt) }
+	} : {
+		Pallet::<T, I>::start_next_broadcast_attempt( BroadcastAttempt::<T, I> {
+			broadcast_attempt_id,
+			unsigned_tx,
+		})
+	}
 	verify {
 		assert!(AwaitingTransactionSignature::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
 	}
