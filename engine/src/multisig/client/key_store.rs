@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use crate::multisig::{crypto::ECPoint, db::persistent::PersistentKeyDB, KeyId};
 
@@ -10,7 +13,7 @@ where
     P: ECPoint,
 {
     keys: HashMap<KeyId, KeygenResultInfo<P>>,
-    db: PersistentKeyDB<P>,
+    db: Arc<Mutex<PersistentKeyDB<P>>>,
 }
 
 impl<P> KeyStore<P>
@@ -18,8 +21,8 @@ where
     P: ECPoint,
 {
     /// Load the keys from persistent memory and put them into a new keystore
-    pub fn new(db: PersistentKeyDB<P>) -> Self {
-        let keys = db.load_keys();
+    pub fn new(db: Arc<Mutex<PersistentKeyDB<P>>>) -> Self {
+        let keys = db.lock().expect("should get lock").load_keys();
 
         KeyStore { keys, db }
     }
@@ -31,7 +34,10 @@ where
 
     /// Save or update the key data and write it to persistent memory
     pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<P>) {
-        self.db.update_key(&key_id, &key);
+        self.db
+            .lock()
+            .expect("should get lock")
+            .update_key(&key_id, &key);
         self.keys.insert(key_id, key);
     }
 }

@@ -11,7 +11,10 @@ mod tests;
 
 pub mod ceremony_manager;
 
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     common::format_iterator,
@@ -202,7 +205,7 @@ where
 {
     pub fn new(
         my_account_id: AccountId,
-        db: PersistentKeyDB<C::Point>,
+        db: Arc<Mutex<PersistentKeyDB<C::Point>>>,
         keygen_request_sender: KeygenRequestSender<C::Point>,
         signing_request_sender: SigningRequestSender<C>,
         logger: &slog::Logger,
