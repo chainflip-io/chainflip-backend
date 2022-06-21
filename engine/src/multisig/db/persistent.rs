@@ -33,13 +33,13 @@ pub const DEFAULT_COLUMN_NAME: &str = "default";
 const BACKUPS_DIRECTORY: &str = "backups";
 
 /// Database for keys and persistent metadata
-pub struct PersistentKeyDB<C: CryptoScheme> {
+pub struct PersistentKeyDB {
     /// Rocksdb database instance
     db: DB,
     logger: slog::Logger,
-    _phantom: std::marker::PhantomData<C::Point>,
+    //_phantom: std::marker::PhantomData<C::Point>, //TODO: how to get this to work with crypto scheme?
 }
-impl<C: CryptoScheme> PersistentKeyDB<C> {
+impl PersistentKeyDB {
     /// Create a new persistent key database. If the database exists and the schema version
     /// is below the latest, it will attempt to migrate the data to the latest version
     pub fn new_and_migrate_to_latest(db_path: &Path, logger: &slog::Logger) -> Result<Self> {
@@ -113,7 +113,7 @@ impl<C: CryptoScheme> PersistentKeyDB<C> {
         PersistentKeyDB {
             db,
             logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
-            _phantom: Default::default(),
+            //_phantom: Default::default(),
         }
     }
 
@@ -134,7 +134,11 @@ impl<C: CryptoScheme> PersistentKeyDB<C> {
     }
 
     /// Write the keyshare to the db, indexed by the key id
-    pub fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo<C::Point>) {
+    pub fn update_key<C: CryptoScheme>(
+        &mut self,
+        key_id: &KeyId,
+        keygen_result_info: &KeygenResultInfo<C::Point>,
+    ) {
         let key_id_with_prefix = [C::DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
         self.db
@@ -147,7 +151,7 @@ impl<C: CryptoScheme> PersistentKeyDB<C> {
             .unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
     }
 
-    pub fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo<C::Point>> {
+    pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C::Point>> {
         self.db
             .prefix_iterator_cf(get_data_column_handle(&self.db), C::DATA_PREFIX)
             .filter_map(|(key_id, key_info)| {
@@ -159,7 +163,8 @@ impl<C: CryptoScheme> PersistentKeyDB<C> {
                     Ok(keygen_result_info) => {
                         slog::debug!(
                             self.logger,
-                            "Loaded key_info (key_id: {}) from database",
+                            "Loaded {} key_info (key_id: {}) from database",
+                            C::SCHEME_NAME,
                             key_id
                         );
                         Some((key_id, keygen_result_info))
@@ -167,7 +172,8 @@ impl<C: CryptoScheme> PersistentKeyDB<C> {
                     Err(err) => {
                         slog::error!(
                             self.logger,
-                            "Could not deserialize key_info (key_id: {}) from database: {}",
+                            "Could not deserialize {} key_info (key_id: {}) from database: {}",
+                            C::SCHEME_NAME,
                             key_id,
                             err
                         );
@@ -266,11 +272,11 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
 }
 
 /// Reads the schema version and migrates the db to the latest schema version if required
-fn migrate_db_to_latest<C: CryptoScheme>(
+fn migrate_db_to_latest(
     db: DB,
     path: &Path,
     logger: &slog::Logger,
-) -> Result<PersistentKeyDB<C>, anyhow::Error> {
+) -> Result<PersistentKeyDB, anyhow::Error> {
     // Read the schema version from the db
     let version =
         read_schema_version(&db, logger).context("Failed to read schema version on existing db")?;
@@ -324,6 +330,7 @@ mod tests {
 
     use std::path::PathBuf;
 
+    use crate::multisig::crypto::polkadot::PolkadotSigning;
     use crate::multisig::{client::keygen::generate_key_data_until_compatible, crypto::Rng};
     use sp_runtime::AccountId32;
     use tempfile::TempDir;
@@ -337,7 +344,7 @@ mod tests {
         testing::{assert_ok, new_temp_directory_with_nonexistent_file},
     };
 
-    fn generate_key_share_for_test() -> KeygenResultInfo<<EthSigning as CryptoScheme>::Point> {
+    fn generate_key_share_for_test<C: CryptoScheme>() -> KeygenResultInfo<C::Point> {
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
         let account_id = AccountId32::new([0; 32]);
@@ -392,7 +399,7 @@ mod tests {
     fn can_create_new_database() {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        assert_ok!(PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
             &db_path, &logger
         ));
         assert!(db_path.exists());
@@ -403,7 +410,7 @@ mod tests {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a fresh db. This will also write the schema version
-        assert_ok!(PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
             &db_path, &logger
         ));
 
@@ -429,7 +436,7 @@ mod tests {
     fn new_db_returns_db_when_db_data_version_is_latest() {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         open_db_and_write_version_data(&db_path, LATEST_SCHEMA_VERSION);
-        assert_ok!(PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
             &db_path,
             &new_test_logger()
         ));
@@ -447,7 +454,7 @@ mod tests {
         {
             let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest::<EthSigning>(db, &db_path, &new_test_logger()).is_err());
+            assert!(migrate_db_to_latest(db, &db_path, &new_test_logger()).is_err());
         }
     }
 
@@ -455,23 +462,20 @@ mod tests {
     fn can_load_keys_with_current_keygen_info() {
         // doesn't really matter if it's random, we won't be using the exact values
 
-        let secret_share = generate_key_share_for_test();
+        let secret_share = generate_key_share_for_test::<EthSigning>();
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         {
-            let mut p_db =
-                PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(&db_path, &logger)
-                    .unwrap();
+            let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
-            p_db.update_key(&key_id, &secret_share);
+            p_db.update_key::<EthSigning>(&key_id, &secret_share);
         }
 
         {
-            let p_db = PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(&db_path, &logger)
-                .unwrap();
-            let keys = p_db.load_keys();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let keys = p_db.load_keys::<EthSigning>();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             // single party keygen has a threshold of 0
             assert_eq!(key.params.threshold, 0);
@@ -484,17 +488,16 @@ mod tests {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
 
-        let mut p_db =
-            PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+        let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
-        let keys_before = p_db.load_keys();
+        let keys_before = p_db.load_keys::<EthSigning>();
         // there should be no key [0; 33] yet
         assert!(keys_before.get(&key_id).is_none());
 
-        let keygen_result_info = generate_key_share_for_test();
-        p_db.update_key(&key_id, &keygen_result_info);
+        let keygen_result_info = generate_key_share_for_test::<EthSigning>();
+        p_db.update_key::<EthSigning>(&key_id, &keygen_result_info);
 
-        let keys_before = p_db.load_keys();
+        let keys_before = p_db.load_keys::<EthSigning>();
         assert!(keys_before.get(&key_id).is_some());
     }
 
@@ -511,9 +514,7 @@ mod tests {
         }
 
         // Try and open the db, but no migrations exist yet, so we expect this to panic
-        assert!(
-            PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(&db_path, &logger).is_err()
-        );
+        assert!(PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).is_err());
     }
 
     #[test]
@@ -521,7 +522,7 @@ mod tests {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
-        assert_ok!(PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
             &db_path, &logger
         ));
 
@@ -543,7 +544,7 @@ mod tests {
         let (directory, db_path) = new_temp_directory_with_nonexistent_file();
 
         // Create a normal db
-        assert_ok!(PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(
+        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
             &db_path, &logger
         ));
         // Do a backup of the db,
@@ -572,11 +573,9 @@ mod tests {
 
         // Create a normal db and save a key in it
         {
-            let mut p_db =
-                PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(&db_path, &logger)
-                    .unwrap();
-            let keygen_result_info = generate_key_share_for_test();
-            p_db.update_key(&key_id, &keygen_result_info);
+            let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let keygen_result_info = generate_key_share_for_test::<EthSigning>();
+            p_db.update_key::<EthSigning>(&key_id, &keygen_result_info);
         }
 
         // Do a backup of the db,
@@ -592,13 +591,52 @@ mod tests {
             );
 
             // Should be able to open the backup and load the key
-            let p_db = PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(
-                backups.first().unwrap(),
-                &logger,
-            )
-            .unwrap();
+            let p_db =
+                PersistentKeyDB::new_and_migrate_to_latest(backups.first().unwrap(), &logger)
+                    .unwrap();
 
-            assert!(p_db.load_keys().get(&key_id).is_some());
+            assert!(p_db.load_keys::<EthSigning>().get(&key_id).is_some());
+        }
+    }
+
+    #[test]
+    fn can_use_multiple_crypto_schemes() {
+        let logger = new_test_logger();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+        let eth_key_id = KeyId(vec![0; 33]);
+        let dot_key_id = KeyId(vec![1; 33]);
+
+        // Create a normal db and save multiple keys to it of different crypto schemes
+        {
+            let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+
+            p_db.update_key::<EthSigning>(
+                &eth_key_id,
+                &generate_key_share_for_test::<EthSigning>(),
+            );
+            p_db.update_key::<PolkadotSigning>(
+                &dot_key_id,
+                &generate_key_share_for_test::<PolkadotSigning>(),
+            );
+        }
+
+        // Open the db and load the keys of both types
+        {
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+
+            let eth_keys = p_db.load_keys::<EthSigning>();
+            let eth_key = eth_keys
+                .get(&eth_key_id)
+                .expect("Should have an entry for key");
+            assert_eq!(eth_key.params.threshold, 0);
+            assert_eq!(eth_keys.len(), 1, "Incorrect number of keys loaded");
+
+            let dot_keys = p_db.load_keys::<PolkadotSigning>();
+            let dot_key = dot_keys
+                .get(&dot_key_id)
+                .expect("Should have an entry for key");
+            assert_eq!(dot_key.params.threshold, 0);
+            assert_eq!(dot_keys.len(), 1, "Incorrect number of keys loaded");
         }
     }
 }

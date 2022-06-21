@@ -79,6 +79,10 @@ pub trait CryptoScheme: 'static {
         + Sync
         + Send;
 
+    /// Friendly name of the scheme used for logging
+    const SCHEME_NAME: &'static str;
+
+    /// A unique prefix used to store the keys in the database
     const DATA_PREFIX: &'static [u8; PREFIX_SIZE];
 
     fn build_signature(

@@ -13,7 +13,7 @@ where
     C: CryptoScheme,
 {
     keys: HashMap<KeyId, KeygenResultInfo<C::Point>>,
-    db: Arc<Mutex<PersistentKeyDB<C>>>,
+    db: Arc<Mutex<PersistentKeyDB>>,
 }
 
 impl<C> KeyStore<C>
@@ -21,8 +21,8 @@ where
     C: CryptoScheme,
 {
     /// Load the keys from persistent memory and put them into a new keystore
-    pub fn new(db: Arc<Mutex<PersistentKeyDB<C>>>) -> Self {
-        let keys = db.lock().expect("should get lock").load_keys();
+    pub fn new(db: Arc<Mutex<PersistentKeyDB>>) -> Self {
+        let keys = db.lock().expect("should get lock").load_keys::<C>();
 
         KeyStore { keys, db }
     }
@@ -37,7 +37,7 @@ where
         self.db
             .lock()
             .expect("should get lock")
-            .update_key(&key_id, &key);
+            .update_key::<C>(&key_id, &key);
         self.keys.insert(key_id, key);
     }
 }

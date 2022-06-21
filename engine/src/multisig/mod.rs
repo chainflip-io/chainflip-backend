@@ -53,7 +53,7 @@ impl std::fmt::Display for KeyId {
 /// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<C>(
     my_account_id: AccountId,
-    db: Arc<Mutex<PersistentKeyDB<C>>>,
+    db: Arc<Mutex<PersistentKeyDB>>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     logger: &slog::Logger,

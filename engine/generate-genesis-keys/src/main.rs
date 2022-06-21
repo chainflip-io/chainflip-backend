@@ -68,7 +68,7 @@ fn main() {
     // Create a db for each key share, giving the db the name of the node it is for.
     for (node_id, key_share) in key_shares {
         Arc::new(Mutex::new(
-            PersistentKeyDB::<eth::EthSigning>::new_and_migrate_to_latest(
+            PersistentKeyDB::new_and_migrate_to_latest(
                 &Path::new(
                     node_id_to_name_map
                         .get(&node_id)
@@ -78,7 +78,7 @@ fn main() {
                 &new_discard_logger(),
             )
             .expect("Should create database at latest version")
-            .update_key(&eth_key_id, &key_share),
+            .update_key::<eth::EthSigning>(&eth_key_id, &key_share),
         ));
     }
 

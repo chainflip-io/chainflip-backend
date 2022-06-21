@@ -84,7 +84,7 @@ async fn should_save_key_after_keygen() {
         let client = MultisigClient::<EthSigning>::new(
             ACCOUNT_IDS[0].clone(),
             Arc::new(Mutex::new(
-                PersistentKeyDB::<EthSigning>::new_and_migrate_to_latest(&db_file, &logger)
+                PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
                     .expect("Failed to open database"),
             )),
             keygen_request_sender,

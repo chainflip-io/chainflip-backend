@@ -37,9 +37,9 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 
 impl CryptoScheme for PolkadotSigning {
     type Point = Point;
-
     type Signature = PolkadotSignature;
 
+    const SCHEME_NAME: &'static str = "Polkadot";
     const DATA_PREFIX: &'static [u8; PREFIX_SIZE] = b"dot_";
 
     fn build_signature(

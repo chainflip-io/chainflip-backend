@@ -35,6 +35,7 @@ impl CryptoScheme for EthSigning {
     type Point = Point;
     type Signature = EthSchnorrSignature;
 
+    const SCHEME_NAME: &'static str = "Ethereum";
     const DATA_PREFIX: &'static [u8; PREFIX_SIZE] = b"eth_";
 
     fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
