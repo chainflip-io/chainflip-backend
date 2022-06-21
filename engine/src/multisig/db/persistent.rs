@@ -20,7 +20,6 @@ pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
 
 /// Prefixes for the `DATA_COLUMN`
 pub const PREFIX_SIZE: usize = 4;
-pub const KEYGEN_DATA_PREFIX: &[u8; PREFIX_SIZE] = b"key_";
 
 /// Column family names
 // All data is stored in `DATA_COLUMN` with a prefix for key spaces
@@ -136,7 +135,7 @@ impl<C: CryptoScheme> PersistentKeyDB<C> {
 
     /// Write the keyshare to the db, indexed by the key id
     pub fn update_key(&mut self, key_id: &KeyId, keygen_result_info: &KeygenResultInfo<C::Point>) {
-        let key_id_with_prefix = [KEYGEN_DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
+        let key_id_with_prefix = [C::DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
 
         self.db
             .put_cf(
@@ -150,7 +149,7 @@ impl<C: CryptoScheme> PersistentKeyDB<C> {
 
     pub fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo<C::Point>> {
         self.db
-            .prefix_iterator_cf(get_data_column_handle(&self.db), KEYGEN_DATA_PREFIX)
+            .prefix_iterator_cf(get_data_column_handle(&self.db), C::DATA_PREFIX)
             .filter_map(|(key_id, key_info)| {
                 // Strip the prefix off the key_id
                 let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());

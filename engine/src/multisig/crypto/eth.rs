@@ -1,4 +1,4 @@
-use crate::multisig::crypto::ECScalar;
+use crate::multisig::{crypto::ECScalar, db::persistent::PREFIX_SIZE};
 
 use super::{CryptoScheme, ECPoint};
 
@@ -34,6 +34,8 @@ pub struct EthSigning {}
 impl CryptoScheme for EthSigning {
     type Point = Point;
     type Signature = EthSchnorrSignature;
+
+    const DATA_PREFIX: &'static [u8; PREFIX_SIZE] = b"eth_";
 
     fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
         EthSchnorrSignature {

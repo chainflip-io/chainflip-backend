@@ -1,3 +1,5 @@
+use crate::multisig::db::persistent::PREFIX_SIZE;
+
 use super::curve25519_ristretto::Point;
 use super::CryptoScheme;
 use schnorrkel::context::{SigningContext, SigningTranscript};
@@ -37,6 +39,8 @@ impl CryptoScheme for PolkadotSigning {
     type Point = Point;
 
     type Signature = PolkadotSignature;
+
+    const DATA_PREFIX: &'static [u8; PREFIX_SIZE] = b"dot_";
 
     fn build_signature(
         z: <Self::Point as super::ECPoint>::Scalar,

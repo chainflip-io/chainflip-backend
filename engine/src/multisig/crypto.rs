@@ -15,6 +15,8 @@ use std::fmt::Debug;
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
+use super::db::persistent::PREFIX_SIZE;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyShare<P: ECPoint> {
     #[serde(bound = "")]
@@ -76,6 +78,8 @@ pub trait CryptoScheme: 'static {
         + for<'de> serde::Deserialize<'de>
         + Sync
         + Send;
+
+    const DATA_PREFIX: &'static [u8; PREFIX_SIZE];
 
     fn build_signature(
         z: <Self::Point as ECPoint>::Scalar,
