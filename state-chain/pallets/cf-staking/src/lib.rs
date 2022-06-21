@@ -669,15 +669,15 @@ impl<T: Config> Pallet<T> {
 		T::Flip::try_claim(account_id, amount)?;
 
 		// Set expiry and build the claim parameters.
-		let expiry = T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get());
-		Self::register_claim_expiry(account_id.clone(), expiry.as_secs());
+		let expiry = (T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
+		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(
 			T::ReplayProtectionProvider::replay_protection(),
 			<T as Config>::StakerId::from_ref(account_id).as_ref(),
 			amount.into(),
 			&address,
-			expiry.as_secs(),
+			expiry,
 		);
 
 		// Emit a threshold signature request.
