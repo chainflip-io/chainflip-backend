@@ -156,7 +156,7 @@ pub mod pallet {
 			let mut expiries = ClaimExpiries::<T>::get();
 			// Expiries are sorted on insertion so we can just partition the slice.
 			ClaimExpiries::<T>::set(expiries.split_off(
-				expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs()),
+				expiries.partition_point(|(expiry, _)| expiry <= &T::TimeSource::now().as_secs()),
 			));
 
 			// take the len after we've partitioned the expiries.
@@ -670,6 +670,7 @@ impl<T: Config> Pallet<T> {
 
 		// Set expiry and build the claim parameters.
 		let expiry = (T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
+
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(

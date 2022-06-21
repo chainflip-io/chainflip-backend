@@ -175,8 +175,6 @@ benchmarks! {
 		assert!(ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0);
 	}
 
-	// TODO: we need to manipulate the time to expire the claims
-	// otherwise we didn't include the iteration in our benchmark
 	on_initialize_worst_case {
 		let b in 0 .. 150 as u32;
 		let accounts = create_accounts::<T>(150);
@@ -193,6 +191,10 @@ benchmarks! {
 				tx_hash: [0; 32]
 			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
 			Pallet::<T>::do_claim(staker, T::Flip::claimable_balance(staker), withdrawal_address)?;
+
+			// we're registering the claim to be expired at the unix epoch.
+			// T::TimeSource::now().as_secs() evaulates to 0 in the benchmarks. So this ensures
+			// we hit the most expensive case, all possible expiries expiring.
 			Pallet::<T>::register_claim_expiry(staker.clone(), 0);
 		}
 	}: {
