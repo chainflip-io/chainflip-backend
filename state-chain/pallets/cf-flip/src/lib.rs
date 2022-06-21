@@ -306,14 +306,14 @@ impl<T: Config> Pallet<T> {
 	/// rules defined in RevertImbalance.
 	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
 		let settlement_source = ImbalanceSource::from_acct(account_id.clone());
-		let (from, to, amount) = match &imbalance {
+		let (_from, _to, amount) = match &imbalance {
 			SignedImbalance::Positive(surplus) =>
 				(surplus.source.clone(), settlement_source, surplus.peek()),
 			SignedImbalance::Negative(deficit) =>
 				(settlement_source, deficit.source.clone(), deficit.peek()),
 		};
 
-		let (settled, reverted) = Self::try_settle(account_id, imbalance)
+		let (_settled, _reverted) = Self::try_settle(account_id, imbalance)
 			// In the case of success, nothing to revert.
 			.map(|_| (amount, Zero::zero()))
 			// In case of failure, calculate the remainder.
@@ -327,8 +327,6 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::<T>::RemainingImbalance(source, remainder));
 				(amount.saturating_sub(remainder), remainder)
 			});
-
-		Self::deposit_event(Event::<T>::BalanceSettled(from, to, settled, reverted))
 	}
 
 	pub fn settle_imbalance<I: Into<FlipImbalance<T>>>(account_id: &T::AccountId, imbalance: I) {
