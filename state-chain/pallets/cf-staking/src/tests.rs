@@ -10,12 +10,11 @@ use cf_traits::{
 };
 
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
-use pallet_cf_flip::{Bonder, ImbalanceSource, InternalSource};
+use pallet_cf_flip::Bonder;
 use sp_runtime::DispatchError;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
-type FlipEvent = pallet_cf_flip::Event<Test>;
 
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
@@ -79,40 +78,10 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE_A1,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE_A1, STAKE_A1)),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE_A2,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE_A2, STAKE_A1 + STAKE_A2)),
 			Event::System(frame_system::Event::NewAccount { account: BOB }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(BOB)),
-				STAKE_B,
-				0
-			)),
-			Event::Staking(crate::Event::Staked(BOB, STAKE_B, STAKE_B)),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				ImbalanceSource::External,
-				CLAIM_A,
-				0
-			)),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::Internal(InternalSource::Account(BOB)),
-				ImbalanceSource::External,
-				STAKE_B,
-				0
-			))
+			Event::Staking(crate::Event::Staked(BOB, STAKE_B, STAKE_B))
 		);
 	});
 }
@@ -153,12 +122,6 @@ fn claiming_unclaimable_is_err() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE))
 		);
 	});
@@ -268,19 +231,7 @@ fn staked_and_claimed_events_must_match() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				ImbalanceSource::External,
-				STAKE,
-				0
-			)),
 			Event::System(frame_system::Event::KilledAccount { account: ALICE }),
 			Event::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
 		);
@@ -330,19 +281,7 @@ fn signature_is_inserted() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				ImbalanceSource::External,
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
 				vec![
@@ -455,12 +394,6 @@ fn test_retirement() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			Event::Staking(crate::Event::AccountActivated(ALICE))
 		);
@@ -517,33 +450,9 @@ fn claim_expiry() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			Event::System(frame_system::Event::NewAccount { account: BOB }),
-			Event::Flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(BOB)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(BOB, STAKE, STAKE)),
-			Event::Flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				ImbalanceSource::External,
-				STAKE,
-				0
-			)),
-			Event::Flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::Internal(InternalSource::Account(BOB)),
-				ImbalanceSource::External,
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
 				vec![
@@ -567,19 +476,7 @@ fn claim_expiry() {
 				]
 			)),
 			Event::Staking(crate::Event::ClaimExpired(ALICE, STAKE)),
-			Event::Flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
-			Event::Staking(crate::Event::ClaimExpired(BOB, STAKE)),
-			Event::Flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(BOB)),
-				STAKE,
-				0
-			))
+			Event::Staking(crate::Event::ClaimExpired(BOB, STAKE))
 		);
 	});
 }
@@ -620,19 +517,7 @@ fn test_claim_all() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				100,
-				0
-			)),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				ImbalanceSource::External,
-				STAKE - BOND,
-				0
-			))
+			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE))
 		);
 	});
 }
@@ -667,12 +552,6 @@ fn test_check_withdrawal_address() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			Event::Staking(crate::Event::FailedStakeAttempt(ALICE, DIFFERENT_ETH_ADDR, STAKE))
 		);
@@ -729,12 +608,6 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Flip(pallet_cf_flip::Event::BalanceSettled(
-				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
-				STAKE,
-				0
-			)),
 			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			Event::Staking(crate::Event::FailedStakeAttempt(ALICE, ETH_DUMMY_ADDR, STAKE))
 		);

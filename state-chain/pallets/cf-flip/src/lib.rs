@@ -121,13 +121,6 @@ pub mod pallet {
 		/// amount/]
 		RemainingImbalance(ImbalanceSource<T::AccountId>, T::Balance),
 
-		/// An imbalance has been settled. /[source, dest, amount_settled, amount_reverted/]
-		BalanceSettled(
-			ImbalanceSource<T::AccountId>,
-			ImbalanceSource<T::AccountId>,
-			T::Balance,
-			T::Balance,
-		),
 		/// Slashing has been performed. /[account_id, amount/]
 		SlashingPerformed(T::AccountId, T::Balance),
 	}
