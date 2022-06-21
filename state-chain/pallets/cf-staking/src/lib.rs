@@ -486,7 +486,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_minimum_stake())]
 		pub fn update_minimum_stake(
 			origin: OriginFor<T>,
 			minimum_stake: T::Balance,

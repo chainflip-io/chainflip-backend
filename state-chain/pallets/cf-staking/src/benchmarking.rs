@@ -198,6 +198,16 @@ benchmarks! {
 	}: {
 		Pallet::<T>::expire_pending_claims();
 	}
+	update_minimum_stake {
+		let call = Call::<T>::update_minimum_stake {
+			minimum_stake: MIN_STAKE.into(),
+		};
+
+		let origin = T::EnsureGovernance::successful_origin();
+	} : { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(MinimumStake::<T>::get(), MIN_STAKE.into());
+	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
