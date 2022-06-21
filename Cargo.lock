@@ -852,6 +852,8 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-session",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -9058,6 +9060,7 @@ name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-session-benchmarking",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",

@@ -18,6 +18,11 @@ git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 features = ['historical']
 
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -31,18 +36,20 @@ tag = 'chainflip-monthly-2022-05'
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
 [features]
 default = ["std"]
 std = [
-    "frame-system/std",
+    "sp-std/std",
 	"frame-benchmarking/std",
-]
-
-runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-session/std",
+	"sp-runtime/std",
 ]
