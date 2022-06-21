@@ -430,14 +430,12 @@ pub mod pallet {
 				.ok_or(Error::<T>::NoPendingClaim)?
 				.signed(&signature);
 
-			// Notify the claimant.
+			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
+
 			Self::deposit_event(Event::ClaimSignatureIssued(
-				account_id.clone(),
+				account_id,
 				claim_details_signed.encoded(),
 			));
-
-			// Store the signature.
-			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
 
 			Ok(().into())
 		}
