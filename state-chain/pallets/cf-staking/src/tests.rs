@@ -566,20 +566,20 @@ fn claim_expiry() {
 					0, 0, 0, 20
 				]
 			)),
-			Event::Staking(crate::Event::ClaimExpired(ALICE, STAKE)),
 			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
 				STAKE,
 				0
 			)),
-			Event::Staking(crate::Event::ClaimExpired(BOB, STAKE)),
+			Event::Staking(crate::Event::ClaimExpired(ALICE, STAKE)),
 			Event::Flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
 				ImbalanceSource::Internal(InternalSource::Account(BOB)),
 				STAKE,
 				0
-			))
+			)),
+			Event::Staking(crate::Event::ClaimExpired(BOB, STAKE))
 		);
 	});
 }

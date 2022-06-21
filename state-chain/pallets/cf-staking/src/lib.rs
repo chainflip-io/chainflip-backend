@@ -150,31 +150,28 @@ pub mod pallet {
 		/// Expires any pending claims that have passed their TTL.
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
-				// Nothing to expire, should be pretty cheap.
 				return T::WeightInfo::on_initialize_best_case()
 			}
 
-			let expiries = ClaimExpiries::<T>::get();
+			let mut expiries = ClaimExpiries::<T>::get();
 			// Expiries are sorted on insertion so we can just partition the slice.
-			let expiry_cutoff =
-				expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs());
+			ClaimExpiries::<T>::set(expiries.split_off(
+				expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs()),
+			));
 
-			let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
-
-			ClaimExpiries::<T>::set(remaining.into());
-
-			for (_, account_id) in to_expire {
-				if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
+			// take the len after we've partitioned the expiries.
+			let expiries_len = expiries.len() as u32;
+			for (_, account_id) in expiries {
+				if let Some(pending_claim) = PendingClaims::<T>::take(&account_id) {
 					let claim_amount = pending_claim.amount().into();
-					// Notify that the claim has expired.
-					Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
-
 					// Re-credit the account
-					T::Flip::revert_claim(account_id, claim_amount);
+					T::Flip::revert_claim(&account_id, claim_amount);
+
+					Self::deposit_event(Event::<T>::ClaimExpired(account_id, claim_amount));
 				}
 			}
 
-			T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
+			T::WeightInfo::on_initialize_worst_case(expiries_len)
 		}
 
 		fn on_runtime_upgrade() -> Weight {
