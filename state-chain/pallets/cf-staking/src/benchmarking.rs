@@ -196,7 +196,7 @@ benchmarks! {
 			Pallet::<T>::register_claim_expiry(staker.clone(), 0);
 		}
 	}: {
-		Pallet::<T>::expire_pending_claims();
+		Pallet::<T>::on_initialize(0u32.into());
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {

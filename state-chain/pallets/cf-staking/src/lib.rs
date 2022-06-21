@@ -147,8 +147,34 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Expires any pending claims that have passed their TTL.
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			Self::expire_pending_claims()
+			if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
+				// Nothing to expire, should be pretty cheap.
+				return T::WeightInfo::on_initialize_best_case()
+			}
+
+			let expiries = ClaimExpiries::<T>::get();
+			// Expiries are sorted on insertion so we can just partition the slice.
+			let expiry_cutoff =
+				expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs());
+
+			let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
+
+			ClaimExpiries::<T>::set(remaining.into());
+
+			for (_, account_id) in to_expire {
+				if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
+					let claim_amount = pending_claim.amount().into();
+					// Notify that the claim has expired.
+					Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
+
+					// Re-credit the account
+					T::Flip::revert_claim(account_id, claim_amount);
+				}
+			}
+
+			T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -739,36 +765,6 @@ impl<T: Config> Pallet<T> {
 			expiries.reverse();
 			expiries.sort_by_key(|tup| tup.0);
 		});
-	}
-
-	/// Expires any pending claims that have passed their TTL.
-	pub fn expire_pending_claims() -> Weight {
-		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
-			// Nothing to expire, should be pretty cheap.
-			return T::WeightInfo::on_initialize_best_case()
-		}
-
-		let expiries = ClaimExpiries::<T>::get();
-		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff =
-			expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs());
-
-		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
-
-		ClaimExpiries::<T>::set(remaining.into());
-
-		for (_, account_id) in to_expire {
-			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
-				let claim_amount = pending_claim.amount().into();
-				// Notify that the claim has expired.
-				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
-
-				// Re-credit the account
-				T::Flip::revert_claim(account_id, claim_amount);
-			}
-		}
-
-		T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
 	}
 }
 
