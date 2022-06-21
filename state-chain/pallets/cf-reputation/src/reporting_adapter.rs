@@ -93,7 +93,7 @@ where
 		Ok(())
 	}
 
-	/// Checks if we have alrady seen this offence. Needs to be efficient since it's used in the
+	/// Checks if we have already seen this offence. Needs to be efficient since it's used in the
 	/// mempool for transaction validity checks.
 	///
 	/// This implementation assumes that it's not possible to submit a report for a *future* time
