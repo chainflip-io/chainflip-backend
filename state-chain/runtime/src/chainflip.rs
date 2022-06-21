@@ -1,4 +1,5 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
+mod backup_node_rewards;
 pub mod chain_instances;
 pub mod epoch_transition;
 mod missed_authorship_slots;
@@ -28,11 +29,10 @@ use frame_support::traits::Get;
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
-use sp_runtime::{
-	helpers_128bit::multiply_by_rational,
-	traits::{UniqueSaturatedFrom, UniqueSaturatedInto},
-};
-use sp_std::{cmp::min, prelude::*};
+use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
+use sp_std::prelude::*;
+
+use backup_node_rewards::calculate_backup_rewards;
 
 impl Chainflip for Runtime {
 	type Call = Call;
@@ -57,6 +57,12 @@ impl RewardsDistribution for BackupNodeEmissions {
 		if backup_nodes.is_empty() {
 			return
 		}
+
+		let backup_nodes: Vec<_> = backup_nodes
+			.iter()
+			.map(|backup_node| (backup_node.clone(), Flip::staked_balance(backup_node)))
+			.collect();
+
 		// The current minimum active bid
 		let minimum_active_bid = Validator::bond();
 		let heartbeat_block_interval: FlipBalance =
@@ -64,45 +70,21 @@ impl RewardsDistribution for BackupNodeEmissions {
 				BlockNumber,
 			>>::get()
 			.unique_saturated_into();
-		// Our emission cap for this heartbeat interval
-		let emissions_cap =
-			Emissions::backup_node_emission_per_block().saturating_mul(heartbeat_block_interval);
-
-		// Emissions for this heartbeat interval for the active set
-		let authority_rewards = Emissions::current_authority_emission_per_block()
-			.saturating_mul(heartbeat_block_interval);
-
+		let backup_node_emission_per_block = Emissions::backup_node_emission_per_block();
+		let current_authority_emission_per_block =
+			Emissions::current_authority_emission_per_block();
 		// The average authority emission
-		let average_authority_reward: Self::Balance = authority_rewards /
+		let current_authority_count =
 			Self::Balance::unique_saturated_from(Validator::current_authority_count());
 
-		let mut total_rewards = 0;
-
-		// Calculate rewards for each backup node and total rewards for capping
-		let mut rewards: Vec<(AccountId, Self::Balance)> = backup_nodes
-			.iter()
-			.map(|backup_node| {
-				let backup_node_stake = Flip::staked_balance(backup_node);
-				let reward_scaling_factor = min(1, (backup_node_stake / minimum_active_bid) ^ 2);
-				let reward = (reward_scaling_factor * average_authority_reward * 8) / 10;
-				total_rewards += reward;
-				(backup_node.clone(), reward)
-			})
-			.collect();
-
-		// Cap if needed
-		if total_rewards > emissions_cap {
-			rewards = rewards
-				.into_iter()
-				.map(|(validator_id, reward)| {
-					(
-						validator_id,
-						multiply_by_rational(reward, emissions_cap, total_rewards)
-							.unwrap_or_default(),
-					)
-				})
-				.collect();
-		}
+		let rewards = calculate_backup_rewards(
+			backup_nodes,
+			minimum_active_bid,
+			heartbeat_block_interval,
+			backup_node_emission_per_block,
+			current_authority_emission_per_block,
+			current_authority_count,
+		);
 
 		// Distribute rewards one by one
 		// N.B. This could be more optimal
