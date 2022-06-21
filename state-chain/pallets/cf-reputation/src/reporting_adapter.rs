@@ -84,15 +84,13 @@ where
 			})
 			.collect::<Vec<_>>();
 
-		if !offenders.is_empty() {
-			Pallet::<T>::report_many(offence, &offenders[..]);
-			for offender in &offenders {
-				T::Slasher::slash(offender, 1u32.into());
-			}
-			Ok(())
-		} else {
-			Err(sp_staking::offence::OffenceError::DuplicateReport)
+		ensure!(!offenders.is_empty(), sp_staking::offence::OffenceError::DuplicateReport);
+
+		Pallet::<T>::report_many(offence, &offenders[..]);
+		for offender in &offenders {
+			T::Slasher::slash(offender, 1u32.into());
 		}
+		Ok(())
 	}
 
 	/// Checks if we have alrady seen this offence. Needs to be efficient since it's used in the
