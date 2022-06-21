@@ -3,27 +3,17 @@
 
 use super::*;
 
-use codec::{Decode, Encode};
+use cf_chains::{ChainCrypto, Ethereum};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
 use sp_std::vec::Vec;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+use cf_chains::benchmarking_value::BenchmarkValue;
 
 fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 	(0..=count).map(|i| account("doogle", i, 0)).collect()
-}
-
-/// Takes something [Encode]able, encodes it, and then [Decode]s the result to the desired
-/// output type. Panics if the output type is incompatible with the encoded bytes of the
-/// input type.
-///
-/// This is useful when you know that `In` and `Out` are the same at runtime, but the compiler
-/// can't infer this from the type contraints.
-fn transmogrify<In: Encode, Out: Decode>(thing: In) -> Out {
-	let bytes = thing.encode();
-	Out::decode(&mut bytes.as_slice()).unwrap()
 }
 
 const MIN_STAKE: u128 = 50_000 * 10u128.pow(18);
@@ -83,14 +73,12 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
 
-		// Stake some funds to claim
-		let stake_call = Call::<T>::staked {
+		Call::<T>::staked {
 			account_id: caller.clone(),
 			amount: balance_to_stake,
 			withdrawal_address,
 			tx_hash
-		};
-		stake_call.dispatch_bypass_filter(origin)?;
+		}.dispatch_bypass_filter(origin)?;
 
 	}:_(RawOrigin::Signed(caller.clone()), withdrawal_address)
 	verify {
@@ -98,7 +86,6 @@ benchmarks! {
 	}
 
 	claimed {
-		let balance_to_stake: T::Balance = T::Balance::from(MIN_STAKE);
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
@@ -106,13 +93,12 @@ benchmarks! {
 		let origin = T::EnsureWitnessed::successful_origin();
 
 		// Stake some funds to claim
-		let stake_call = Call::<T>::staked {
+		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: balance_to_stake,
+			amount: T::Balance::from(MIN_STAKE),
 			withdrawal_address,
 			tx_hash
-		};
-		stake_call.dispatch_bypass_filter(origin.clone())?;
+		}.dispatch_bypass_filter(origin.clone())?;
 
 		// Push a claim
 		let claimable = T::Flip::claimable_balance(&caller);
@@ -130,36 +116,37 @@ benchmarks! {
 	}
 
 	post_claim_signature {
-		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
-		let balance_to_stake: T::Balance = T::Balance::from(MIN_STAKE);
 
 		let caller: T::AccountId = whitelisted_caller();
-		let witness_origin = T::EnsureWitnessed::successful_origin();
-		let threshold_origin = T::EnsureThresholdSigned::successful_origin();
 
 		// Stake some funds to claim
-		let stake_call = Call::<T>::staked {
+		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: balance_to_stake,
+			amount: T::Balance::from(MIN_STAKE),
 			withdrawal_address,
-			tx_hash
-		};
-		stake_call.dispatch_bypass_filter(witness_origin)?;
+			tx_hash: [211u8; 32],
+		}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
 
-		// Push a claim
-		let claimable = T::Flip::claimable_balance(&caller);
-		Pallet::<T>::do_claim(&caller, claimable, withdrawal_address)?;
+		// requests a signature. So it's in the AsyncResult::Pending state
+		Pallet::<T>::do_claim(&caller, T::Flip::claimable_balance(&caller), withdrawal_address)?;
 
-		// TODO: insert a valid signature...
+		// inserts signature so it's in the AsyncResult::Ready state
+		let threshold_request_id = <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId::benchmark_value();
+		T::ThresholdSigner::insert_signature(
+			threshold_request_id,
+			<Ethereum as ChainCrypto>::ThresholdSignature::benchmark_value(),
+		);
 
 		let call = Call::<T>::post_claim_signature {
 			account_id: caller.clone(),
-			signature_request_id: transmogrify(1u32)
+			signature_request_id: threshold_request_id,
 		};
-	}: { call.dispatch_bypass_filter(threshold_origin)? }
+	}: { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
 	verify {
+		// is this right? do we still have a pending claim???
 		assert!(PendingClaims::<T>::contains_key(&caller));
+		frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the post_claim_signature extrinsic");
 	}
 
 	retire_account {
@@ -195,22 +182,18 @@ benchmarks! {
 		let accounts = create_accounts::<T>(150);
 
 		let eth_base_addr: EthereumAddress = [1u8; 20];
-		let now = Duration::from_millis(100);
 		for i in 0 .. b {
 			// Stake some funds
 			let staker = &accounts[i as usize];
 			let withdrawal_address = eth_base_addr.map(|x| x + i as u8);
-			let stake_call = Call::<T>::staked {
+			Call::<T>::staked {
 				account_id: staker.clone(),
 				amount: MIN_STAKE.into(),
 				withdrawal_address,
 				tx_hash: [0; 32]
-			};
-			stake_call.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
-			// Submit a claim
-			let claimable = T::Flip::claimable_balance(staker);
-			Pallet::<T>::do_claim(staker, claimable, withdrawal_address)?;
-			Pallet::<T>::register_claim_expiry(staker.clone(), now.as_secs());
+			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
+			Pallet::<T>::do_claim(staker, T::Flip::claimable_balance(staker), withdrawal_address)?;
+			Pallet::<T>::register_claim_expiry(staker.clone(), 0);
 		}
 	}: {
 		Pallet::<T>::expire_pending_claims();
