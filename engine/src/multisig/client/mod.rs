@@ -11,7 +11,7 @@ mod tests;
 
 pub mod ceremony_manager;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
 
 use crate::{
     common::format_iterator,
@@ -209,7 +209,7 @@ where
     ) -> Self {
         MultisigClient {
             my_account_id,
-            key_store: std::sync::Mutex::new(KeyStore::new(Arc::new(db))),
+            key_store: std::sync::Mutex::new(KeyStore::new(db)),
             keygen_request_sender,
             signing_request_sender,
             logger: logger.clone(),

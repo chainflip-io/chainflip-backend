@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::*;
 use crate::{
     logging::{
@@ -107,10 +105,10 @@ async fn should_save_key_after_keygen() {
     }
 
     // Check that the key was saved by Loading it from the same db file
-    let key_store = KeyStore::<EthSigning>::new(Arc::new(
+    let key_store = KeyStore::<EthSigning>::new(
         PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
             .expect("Failed to open database"),
-    ));
+    );
     assert!(key_store.get_key(&key_id).is_some(), "Key not found in db");
 }
 
@@ -129,10 +127,10 @@ async fn should_load_keys_on_creation() {
     // Create a new db and store the key in it
     let logger = new_test_logger();
     {
-        let mut key_store = KeyStore::<EthSigning>::new(Arc::new(
+        let mut key_store = KeyStore::<EthSigning>::new(
             PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
                 .expect("Failed to open database"),
-        ));
+        );
         key_store.set_key(key_id.clone(), stored_keygen_result_info.clone());
     }
 
