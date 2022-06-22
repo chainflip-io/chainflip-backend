@@ -153,25 +153,7 @@ pub mod pallet {
 				return T::WeightInfo::on_initialize_best_case()
 			}
 
-			let mut expiries = ClaimExpiries::<T>::get();
-			// Expiries are sorted on insertion so we can just partition the slice.
-			ClaimExpiries::<T>::set(expiries.split_off(
-				expiries.partition_point(|(expiry, _)| expiry <= &T::TimeSource::now().as_secs()),
-			));
-
-			// take the len after we've partitioned the expiries.
-			let expiries_len = expiries.len() as u32;
-			for (_, account_id) in expiries {
-				if let Some(pending_claim) = PendingClaims::<T>::take(&account_id) {
-					let claim_amount = pending_claim.amount().into();
-					// Re-credit the account
-					T::Flip::revert_claim(&account_id, claim_amount);
-
-					Self::deposit_event(Event::<T>::ClaimExpired(account_id, claim_amount));
-				}
-			}
-
-			T::WeightInfo::on_initialize_worst_case(expiries_len)
+			Self::expire_pending_claims_at(T::TimeSource::now().as_secs())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -566,6 +548,32 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	// We pull this out of on_initialize to give us control over the expiry time (as we don't want
+	// to have to modify the system time in the benchmarks
+	fn expire_pending_claims_at(secs_since_unix_epoch: u64) -> Weight {
+		let mut expiries = ClaimExpiries::<T>::get();
+		// Expiries are sorted on insertion so we can just partition the slice.
+		ClaimExpiries::<T>::set(
+			expiries.split_off(
+				expiries.partition_point(|(expiry, _)| expiry <= &secs_since_unix_epoch),
+			),
+		);
+
+		// take the len after we've partitioned the expiries.
+		let expiries_len = expiries.len() as u32;
+		for (_, account_id) in expiries {
+			if let Some(pending_claim) = PendingClaims::<T>::take(&account_id) {
+				let claim_amount = pending_claim.amount().into();
+				// Re-credit the account
+				T::Flip::revert_claim(&account_id, claim_amount);
+
+				Self::deposit_event(Event::<T>::ClaimExpired(account_id, claim_amount));
+			}
+		}
+
+		T::WeightInfo::expire_pending_claims_at(expiries_len)
+	}
+
 	/// Logs an failed stake attempt
 	fn log_failed_stake_attempt(
 		account_id: &AccountId<T>,

@@ -173,8 +173,7 @@ benchmarks! {
 	verify {
 		assert!(ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0);
 	}
-
-	on_initialize_worst_case {
+	expire_pending_claims_at {
 		let b in 0 .. 150 as u32;
 		let accounts = create_accounts::<T>(150);
 
@@ -197,7 +196,7 @@ benchmarks! {
 			Pallet::<T>::register_claim_expiry(staker.clone(), 0);
 		}
 	}: {
-		Pallet::<T>::on_initialize(0u32.into());
+		Pallet::<T>::expire_pending_claims_at(u64::MAX);
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {
