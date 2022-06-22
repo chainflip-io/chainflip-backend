@@ -6,7 +6,7 @@ use super::{CryptoScheme, ECPoint};
 // clear that these a the primitives used by ethereum.
 // TODO: we probably want to change the "clients" to
 // solely use "CryptoScheme" as generic parameter instead.
-pub use super::secp255k1::{Point, Scalar};
+pub use super::secp256k1::{Point, Scalar};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
