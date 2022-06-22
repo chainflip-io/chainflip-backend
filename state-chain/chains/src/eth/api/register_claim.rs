@@ -46,6 +46,7 @@ impl RegisterClaim {
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Self {
+		// TODO: Why does it do this??. Why not init with the message hash?
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(replay_protection),
 			node_id: (*node_id),

@@ -86,6 +86,9 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter + MaxEncodedLen {
 
 	/// The call, encoded as a vector of bytes using the chain's native encoding.
 	fn encoded(&self) -> Vec<u8>;
+
+	/// Checks we have updated the sig data to non-default values
+	fn is_signed(&self) -> bool;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -306,6 +309,10 @@ pub mod mocks {
 
 		fn encoded(&self) -> Vec<u8> {
 			self.encode()
+		}
+
+		fn is_signed(&self) -> bool {
+			self.1.is_some()
 		}
 	}
 

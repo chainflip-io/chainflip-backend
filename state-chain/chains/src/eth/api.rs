@@ -133,6 +133,14 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(call) => call.abi_encoded(),
 		}
 	}
+
+	fn is_signed(&self) -> bool {
+		match self {
+			EthereumApi::SetAggKeyWithAggKey(call) => call.is_signed(),
+			EthereumApi::RegisterClaim(call) => call.is_signed(),
+			EthereumApi::UpdateFlipSupply(call) => call.is_signed(),
+		}
+	}
 }
 
 macro_rules! impl_api_calls {
@@ -150,6 +158,10 @@ macro_rules! impl_api_calls {
                 fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
                     self.abi_encoded()
                 }
+
+				fn is_signed(&self) -> bool {
+					self.sig_data.is_signed()
+				}
             }
         )+
 	};

@@ -132,20 +132,19 @@ benchmarks! {
 		Pallet::<T>::do_claim(&caller, T::Flip::claimable_balance(&caller), withdrawal_address)?;
 
 		// inserts signature so it's in the AsyncResult::Ready state
-		let threshold_request_id = <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId::benchmark_value();
+		let signature_request_id = <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId::benchmark_value();
 		T::ThresholdSigner::insert_signature(
-			threshold_request_id,
+			signature_request_id,
 			<Ethereum as ChainCrypto>::ThresholdSignature::benchmark_value(),
 		);
 
 		let call = Call::<T>::post_claim_signature {
 			account_id: caller.clone(),
-			signature_request_id: threshold_request_id,
+			signature_request_id,
 		};
 	}: { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
 	verify {
-		// is this right? do we still have a pending claim???
-		assert!(PendingClaims::<T>::contains_key(&caller));
+		assert!(PendingClaims::<T>::get(&caller).expect("Should have claim for caller").is_signed());
 		frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the post_claim_signature extrinsic");
 	}
 

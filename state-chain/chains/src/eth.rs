@@ -106,6 +106,10 @@ impl SigData {
 			k_times_g_address: self.k_times_g_address.into(),
 		}
 	}
+
+	pub fn is_signed(&self) -> bool {
+		self.sig != Default::default() && self.k_times_g_address != Default::default()
+	}
 }
 
 impl Tokenizable for SigData {
