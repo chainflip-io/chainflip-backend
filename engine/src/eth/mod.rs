@@ -1,3 +1,4 @@
+mod chain_data_witnessing;
 mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;
@@ -22,13 +23,14 @@ use crate::{
     },
     eth::{
         http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
-        rpc::EthWsRpcApi,
+        rpc::{EthDualRpcClient, EthWsRpcApi},
         ws_safe_stream::safe_ws_head_stream,
     },
     logging::{COMPONENT_KEY, ETH_HTTP_STREAM_YIELDED, ETH_STREAM_BEHIND, ETH_WS_STREAM_YIELDED},
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
+use chain_data_witnessing::*;
 use ethbloom::{Bloom, Input};
 use futures::{stream, FutureExt, StreamExt};
 use slog::o;
@@ -39,9 +41,13 @@ use std::{
     pin::Pin,
     str::FromStr,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use thiserror::Error;
-use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
+use tokio::{
+    sync::{broadcast, watch},
+    task::JoinHandle,
+};
 use web3::{
     ethabi::{self, Address, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -66,6 +72,8 @@ pub struct EthNumberBloom {
 }
 
 use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
+
+pub const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 // TODO: Not possible to fix the clippy warning here. At the moment we
 // need to ignore it on a global level.
@@ -92,7 +100,8 @@ impl SignatureAndEvent {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+/// Instructions for starting and ending witnessing. Start is inclusive, End is exclusive.
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ObserveInstruction {
     Start(
         <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
@@ -101,12 +110,21 @@ pub enum ObserveInstruction {
     End(<cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber),
 }
 
-// NB: This code can submit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
+/// Helper that generates a broadcast channel with multiple receivers.
+pub fn build_broadcast_channel<T: Clone, const S: usize>(
+    capacity: usize,
+) -> (broadcast::Sender<T>, [broadcast::Receiver<T>; S]) {
+    let (sender, _) = broadcast::channel(capacity);
+    let receivers = [0; S].map(|_| sender.subscribe());
+    (sender, receivers)
+}
+
+// NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     contract_observer: ContractObserver,
     eth_ws_rpc: &EthWsRpcClient,
     eth_http_rpc: &EthHttpRpcClient,
-    mut instruction_receiver: UnboundedReceiver<ObserveInstruction>,
+    mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) where
@@ -123,7 +141,11 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
 
     let contract_observer = Arc::new(contract_observer);
 
-    while let Some(observe_instruction) = instruction_receiver.recv().await {
+    while let Ok(observe_instruction) = instruction_receiver
+        .recv()
+        .await
+        .map_err(|e| slog::error!(logger, "Witnessing instruction receiver failed: {:?}", e))
+    {
         match observe_instruction {
             ObserveInstruction::End(to_block) => {
                 let (handle, end_at_block) = option_handle_end_block
@@ -145,6 +167,7 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
                     let task_end_at_block_c = task_end_at_block.clone();
                     let eth_ws_rpc = eth_ws_rpc.clone();
                     let eth_http_rpc = eth_http_rpc.clone();
+                    let dual_rpc = EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone());
                     let logger = logger.clone();
                     let contract_observer = contract_observer.clone();
                     let state_chain_client = state_chain_client.clone();
@@ -174,7 +197,13 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
                                     }
                                 }
                                 contract_observer
-                                    .handle_event(epoch, event, state_chain_client.clone(), &logger)
+                                    .handle_event(
+                                        epoch,
+                                        event,
+                                        state_chain_client.clone(),
+                                        &dual_rpc,
+                                        &logger,
+                                    )
                                     .await;
                             }
                         }),
@@ -184,6 +213,132 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
             }
         }
     }
+}
+
+pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
+    eth_rpc: &EthRpcClient,
+    state_chain_client: Arc<StateChainClient<ScRpcClient>>,
+    mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
+    poll_interval: Duration,
+    logger: &slog::Logger,
+) where
+    EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
+    ScRpcClient: 'static + StateChainRpcApi + Send + Sync,
+{
+    let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
+    slog::info!(&logger, "Starting");
+
+    let (tracked_data_sender, mut tracked_data_receiver) = tokio::sync::mpsc::channel(10);
+    let (to_block_sender, _) = watch::channel(0);
+
+    let state_chain_task_handle = tokio::spawn({
+        let logger = logger.clone();
+
+        async move {
+            while let Some(tracked_data) = tracked_data_receiver.recv().await {
+                match state_chain_client
+                    .submit_signed_extrinsic(
+                        state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
+                            call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                pallet_cf_chain_tracking::Call::update_chain_state {
+                                    state: tracked_data,
+                                },
+                            )),
+                        }),
+                        &logger,
+                    )
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(e) => {
+                        slog::error!(logger, "Failed to submit signed extrinsic: {:?}", e);
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    let mut witnesser_task_handle: Option<_> = None;
+
+    while let Ok(instruction) = instruction_receiver.recv().await.map_err(|e| {
+        // We need to send an end block to allow the witnesser to stop gracefully.
+        let _ = to_block_sender.send(0);
+        slog::info!(&logger, "Stopping witnesser. Channel state is `{:?}`", e)
+    }) {
+        match instruction {
+            ObserveInstruction::Start(start_block, _) => {
+                slog::info!(&logger, "Start observing from ETH block: {}", start_block);
+                assert!(
+                    witnesser_task_handle.is_none(),
+                    "Duplicate start event received."
+                );
+
+                let _ = witnesser_task_handle.insert(tokio::spawn({
+                    let eth_rpc = eth_rpc.clone();
+                    let logger = logger.clone();
+                    let to_block_receiver = to_block_sender.subscribe();
+                    let tracked_data_sender = tracked_data_sender.clone();
+
+                    async move {
+                        util::bounded(
+                            start_block,
+                            to_block_receiver,
+                            util::strictly_increasing(
+                                chain_data_witnessing::poll_latest_block_numbers(
+                                    &eth_rpc,
+                                    poll_interval,
+                                    &logger,
+                                ),
+                            ),
+                        )
+                        .for_each(|block_number| {
+                            let eth_rpc_c = eth_rpc.clone();
+                            let logger = logger.clone();
+                            let tracked_data_sender = tracked_data_sender.clone();
+
+                            async move {
+                                match get_tracked_data(&eth_rpc_c, block_number).await {
+                                    Ok(tracked_data) => {
+                                        tracked_data_sender.send(tracked_data).await.unwrap()
+                                    }
+                                    Err(e) => {
+                                        slog::error!(
+                                            &logger,
+                                            "Failed to get tracked data: {:?}",
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        })
+                        .await
+                    }
+                }));
+            }
+            ObserveInstruction::End(end_block) => {
+                slog::info!(&logger, "End observing at ETH block: {}", end_block);
+                assert!(
+                    witnesser_task_handle.is_some(),
+                    "Duplicate end event received, or end received before start."
+                );
+
+                to_block_sender.send(end_block).unwrap();
+                witnesser_task_handle
+                    .take()
+                    .expect("is_some asserted above")
+                    .await
+                    .unwrap();
+            }
+        }
+    }
+
+    if let Some(h) = witnesser_task_handle.take() {
+        h.await.unwrap();
+    }
+    // Dropping the sender ensures that the state chain task will stop.
+    drop(tracked_data_sender);
+    state_chain_task_handle.await.unwrap();
 }
 
 impl TryFrom<Block<H256>> for EthNumberBloom {
@@ -794,14 +949,16 @@ pub trait EthObserver {
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-    async fn handle_event<RpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
+        eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
-        RpcClient: 'static + StateChainRpcApi + Sync + Send;
+        RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        EthRpcClient: EthRpcApi + Sync + Send;
 
     fn get_contract_address(&self) -> H160;
 }
@@ -882,17 +1039,16 @@ mod merged_stream_tests {
     use crate::logging::test_utils::new_test_logger_with_tag_cache;
     use crate::logging::ETH_WS_STREAM_YIELDED;
 
+    use super::key_manager::ChainflipKey;
     use super::key_manager::KeyManagerEvent;
-    use super::{key_manager::ChainflipKey, rpc::mocks::MockEthHttpRpcClient};
 
     use super::key_manager::KeyManager;
 
     use super::*;
 
     // Arbitrariily chosen one of the EthRpc's for these tests
-    fn test_km_contract() -> KeyManager<MockEthHttpRpcClient> {
-        let mock_eth_http_rpc_client = MockEthHttpRpcClient::new();
-        KeyManager::new(H160::default(), mock_eth_http_rpc_client).unwrap()
+    fn test_km_contract() -> KeyManager {
+        KeyManager::new(H160::default()).unwrap()
     }
 
     fn key_change(block_number: u64, log_index: u8) -> EventWithCommon<KeyManagerEvent> {
@@ -1321,6 +1477,154 @@ mod merged_stream_tests {
         assert_eq!(stream.next().await.unwrap(), key_change(11, 0));
 
         assert!(stream.next().await.is_none());
+    }
+}
+
+#[cfg(test)]
+mod witnesser_tests {
+    use super::rpc::mocks::MockEthHttpRpcClient;
+    use super::*;
+    use crate::logging::test_utils::new_test_logger;
+    use crate::state_chain::client::MockStateChainRpcApi;
+    use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn test_start_chain_data_witnesser() {
+        struct ClonableRpc<T>(Arc<T>);
+
+        impl<T> Clone for ClonableRpc<T> {
+            fn clone(&self) -> Self {
+                ClonableRpc(self.0.clone())
+            }
+        }
+
+        impl<T> ClonableRpc<T> {
+            pub fn new(rpc: T) -> Self {
+                Self(Arc::new(rpc))
+            }
+        }
+
+        #[async_trait]
+        impl<T: EthRpcApi> EthRpcApi for ClonableRpc<T> {
+            async fn estimate_gas(
+                &self,
+                req: CallRequest,
+                block: Option<BlockNumber>,
+            ) -> Result<U256> {
+                self.0.estimate_gas(req, block).await
+            }
+
+            async fn sign_transaction(
+                &self,
+                tx: TransactionParameters,
+                key: &SecretKey,
+            ) -> Result<web3::types::SignedTransaction> {
+                self.0.sign_transaction(tx, key).await
+            }
+
+            async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
+                self.0.send_raw_transaction(rlp).await
+            }
+
+            async fn get_logs(&self, filter: web3::types::Filter) -> Result<Vec<web3::types::Log>> {
+                self.0.get_logs(filter).await
+            }
+
+            async fn chain_id(&self) -> Result<U256> {
+                self.0.chain_id().await
+            }
+
+            async fn transaction(&self, tx_hash: H256) -> Result<web3::types::Transaction> {
+                self.0.transaction(tx_hash).await
+            }
+
+            async fn block(&self, block_number: U64) -> Result<Block<H256>> {
+                self.0.block(block_number).await
+            }
+
+            async fn fee_history(
+                &self,
+                block_count: U256,
+                newest_block: BlockNumber,
+                reward_percentiles: Option<Vec<f64>>,
+            ) -> Result<web3::types::FeeHistory> {
+                self.0
+                    .fee_history(block_count, newest_block, reward_percentiles)
+                    .await
+            }
+
+            /// Get the latest block number.
+            async fn block_number(&self) -> Result<U64> {
+                self.0.block_number().await
+            }
+        }
+
+        let logger = new_test_logger();
+
+        let mut eth_rpc = MockEthHttpRpcClient::new();
+        let mut sc_rpc = MockStateChainRpcApi::new();
+        let (instruction_sender, [instruction_receiver]) = build_broadcast_channel(10);
+
+        // ** Rpc Api Assumptions **
+        const BASE_FEE: u128 = 40;
+        const PRIORITY_FEE: u128 = 5;
+        const START: usize = 2;
+        const END: usize = 10;
+        const REPEATS: usize = 4;
+
+        let mut block_numbers = (0u64..).map(web3::types::U64::from);
+        eth_rpc.expect_block_number().returning(move || {
+            block_numbers
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("No more block numbers"))
+        });
+
+        eth_rpc
+            .expect_fee_history()
+            .returning(|_, block_number, _| {
+                Ok(web3::types::FeeHistory {
+                    oldest_block: block_number,
+                    base_fee_per_gas: vec![U256::from(BASE_FEE)],
+                    gas_used_ratio: vec![],
+                    reward: Some(vec![vec![U256::from(PRIORITY_FEE)]]),
+                })
+            });
+
+        sc_rpc
+            .expect_submit_extrinsic_rpc()
+            .times(REPEATS * (START..END).count())
+            .returning(|_| Ok(Default::default()));
+        // ** Rpc Api Assumptions **
+
+        let eth_rpc = ClonableRpc::new(eth_rpc);
+        let sc_client = Arc::new(StateChainClient::create_test_sc_client(sc_rpc));
+        let h = tokio::spawn({
+            let eth_rpc = eth_rpc.clone();
+            let logger = logger.clone();
+            async move {
+                start_chain_data_witnesser(
+                    &eth_rpc,
+                    sc_client,
+                    instruction_receiver,
+                    Duration::from_millis(10),
+                    &logger,
+                )
+                .await
+            }
+        });
+
+        for i in 0..REPEATS {
+            let offset = i * END;
+            instruction_sender
+                .send(ObserveInstruction::Start((offset + START) as u64, i as u32))
+                .unwrap();
+            instruction_sender
+                .send(ObserveInstruction::End((offset + END) as u64))
+                .unwrap();
+        }
+        drop(instruction_sender);
+
+        timeout(Duration::from_secs(1), h).await.unwrap().unwrap();
     }
 }
 

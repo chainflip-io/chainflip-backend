@@ -979,6 +979,7 @@ dependencies = [
  "multisig-p2p-transport",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
+ "pallet-cf-chain-tracking",
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
@@ -5237,6 +5238,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-chain-tracking"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-runtime-upgrade-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log 0.4.17",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -9067,6 +9087,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
+ "pallet-cf-chain-tracking",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",

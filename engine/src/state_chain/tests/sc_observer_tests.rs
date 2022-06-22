@@ -15,6 +15,7 @@ use sp_core::{
 };
 use sp_runtime::{AccountId32, Digest};
 use state_chain_runtime::{EthereumInstance, Header, Runtime};
+use tokio::sync::broadcast;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -132,18 +133,14 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
@@ -151,11 +148,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
 
     // ensure we kicked off the witness processes
     assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
+        instruction_receiver.recv().await.unwrap(),
         EPOCH_THREE_START
     );
 }
@@ -190,10 +183,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
     sc_observer::start(
         state_chain_client,
@@ -201,8 +191,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
@@ -210,25 +199,13 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
     // ensure we kicked off the witness processes
     assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
+        instruction_receiver.recv().await.unwrap(),
         EPOCH_THREE_START
     );
 
-    assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_END
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_END
-    );
+    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_THREE_END);
 
-    assert!(km_instruction_receiver.recv().await.is_none());
-    assert!(sm_instruction_receiver.recv().await.is_none());
+    assert!(instruction_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -257,10 +234,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
     sc_observer::start(
         state_chain_client,
@@ -268,16 +242,14 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
     .await;
 
     // ensure we did NOT kick off the witness processes - as we are *only* backup, not outgoing
-    assert!(km_instruction_receiver.recv().await.is_none());
-    assert!(sm_instruction_receiver.recv().await.is_none());
+    assert!(instruction_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -303,10 +275,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
@@ -388,8 +357,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
@@ -397,35 +365,16 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 
     // ensure we did kick off the witness processes at the start
     assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
+        instruction_receiver.recv().await.unwrap(),
         EPOCH_THREE_START
     );
 
-    assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_END
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_END
-    );
+    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_THREE_END);
 
     // after a new epoch, we should have sent new messages down the channels
-    assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_FOUR_START
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
-        EPOCH_FOUR_START
-    );
+    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_FOUR_START);
 
-    assert!(km_instruction_receiver.recv().await.is_none());
-    assert!(sm_instruction_receiver.recv().await.is_none());
+    assert!(instruction_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -452,10 +401,7 @@ async fn not_historical_to_authority_on_new_epoch() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
@@ -537,25 +483,16 @@ async fn not_historical_to_authority_on_new_epoch() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
     .await;
 
     // after a new epoch, we should have sent new messages down the channels
-    assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_FOUR_START
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
-        EPOCH_FOUR_START
-    );
+    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_FOUR_START);
 
-    assert!(km_instruction_receiver.recv().await.is_none());
-    assert!(sm_instruction_receiver.recv().await.is_none());
+    assert!(instruction_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -658,10 +595,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
     sc_observer::start(
         state_chain_client,
@@ -669,8 +603,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
@@ -678,25 +611,13 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
     // ensure we did kick off the witness processes at the start
     assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
+        instruction_receiver.recv().await.unwrap(),
         EPOCH_THREE_START
     );
 
-    assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_END
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_END
-    );
+    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_THREE_END);
 
-    assert!(km_instruction_receiver.recv().await.is_none());
-    assert!(sm_instruction_receiver.recv().await.is_none());
+    assert!(instruction_receiver.recv().await.is_err());
 }
 
 // TODO: We should test that this works for historical epochs too. We should be able to sign for historical epochs we
@@ -796,10 +717,7 @@ async fn only_encodes_and_signs_when_specified() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (sm_instruction_sender, mut sm_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, mut km_instruction_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
     sc_observer::start(
         state_chain_client,
@@ -807,8 +725,7 @@ async fn only_encodes_and_signs_when_specified() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
@@ -816,16 +733,11 @@ async fn only_encodes_and_signs_when_specified() {
 
     // ensure we kicked off the witness processes
     assert_eq!(
-        km_instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
-    assert_eq!(
-        sm_instruction_receiver.recv().await.unwrap(),
+        instruction_receiver.recv().await.unwrap(),
         EPOCH_THREE_START
     );
 
-    assert!(km_instruction_receiver.recv().await.is_none());
-    assert!(sm_instruction_receiver.recv().await.is_none());
+    assert!(instruction_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -848,8 +760,7 @@ async fn run_the_sc_observer() {
 
     let multisig_client = Arc::new(MockMultisigClientApi::new());
 
-    let (sm_instruction_sender, _sm_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, _km_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (instruction_sender, _) = broadcast::channel(10);
 
     sc_observer::start(
         state_chain_client,
@@ -857,8 +768,7 @@ async fn run_the_sc_observer() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        sm_instruction_sender,
-        km_instruction_sender,
+        instruction_sender,
         initial_block_hash,
         &logger,
     )
