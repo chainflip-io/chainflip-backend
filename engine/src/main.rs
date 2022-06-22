@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use chainflip_engine::{
     eth::{
@@ -78,13 +78,13 @@ async fn main() {
         .expect("Should submit version to state chain");
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = Arc::new(Mutex::new(
+    let db = Arc::new(
         PersistentKeyDB::new_and_migrate_to_latest(
             settings.signing.db_file.as_path(),
             &root_logger,
         )
         .expect("Failed to open database"),
-    ));
+    );
 
     // TODO: Merge this into the MultisigClientApi
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =

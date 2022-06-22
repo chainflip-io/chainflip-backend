@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::multisig::{crypto::CryptoScheme, db::persistent::PersistentKeyDB, KeyId};
 
@@ -13,7 +10,7 @@ where
     C: CryptoScheme,
 {
     keys: HashMap<KeyId, KeygenResultInfo<C::Point>>,
-    db: Arc<Mutex<PersistentKeyDB>>,
+    db: Arc<PersistentKeyDB>,
 }
 
 impl<C> KeyStore<C>
@@ -21,8 +18,8 @@ where
     C: CryptoScheme,
 {
     /// Load the keys from persistent memory and put them into a new keystore
-    pub fn new(db: Arc<Mutex<PersistentKeyDB>>) -> Self {
-        let keys = db.lock().expect("should get lock").load_keys::<C>();
+    pub fn new(db: Arc<PersistentKeyDB>) -> Self {
+        let keys = db.load_keys::<C>();
 
         KeyStore { keys, db }
     }
@@ -34,10 +31,7 @@ where
 
     /// Save or update the key data and write it to persistent memory
     pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C::Point>) {
-        self.db
-            .lock()
-            .expect("should get lock")
-            .update_key::<C>(&key_id, &key);
+        self.db.update_key::<C>(&key_id, &key);
         self.keys.insert(key_id, key);
     }
 }

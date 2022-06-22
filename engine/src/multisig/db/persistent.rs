@@ -37,7 +37,6 @@ pub struct PersistentKeyDB {
     /// Rocksdb database instance
     db: DB,
     logger: slog::Logger,
-    //_phantom: std::marker::PhantomData<C::Point>, //TODO: how to get this to work with crypto scheme?
 }
 impl PersistentKeyDB {
     /// Create a new persistent key database. If the database exists and the schema version
@@ -113,7 +112,6 @@ impl PersistentKeyDB {
         PersistentKeyDB {
             db,
             logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
-            //_phantom: Default::default(),
         }
     }
 
@@ -135,7 +133,7 @@ impl PersistentKeyDB {
 
     /// Write the keyshare to the db, indexed by the key id
     pub fn update_key<C: CryptoScheme>(
-        &mut self,
+        &self,
         key_id: &KeyId,
         keygen_result_info: &KeygenResultInfo<C::Point>,
     ) {
@@ -468,7 +466,7 @@ mod tests {
         let key_id = KeyId(TEST_KEY.into());
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         {
-            let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
             p_db.update_key::<EthSigning>(&key_id, &secret_share);
         }
@@ -488,7 +486,7 @@ mod tests {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
 
-        let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+        let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
         let keys_before = p_db.load_keys::<EthSigning>();
         // there should be no key [0; 33] yet
@@ -573,7 +571,7 @@ mod tests {
 
         // Create a normal db and save a key in it
         {
-            let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
             let keygen_result_info = generate_key_share_for_test::<EthSigning>();
             p_db.update_key::<EthSigning>(&key_id, &keygen_result_info);
         }
@@ -608,7 +606,7 @@ mod tests {
 
         // Create a normal db and save multiple keys to it of different crypto schemes
         {
-            let mut p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
             p_db.update_key::<EthSigning>(
                 &eth_key_id,

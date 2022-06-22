@@ -8,7 +8,6 @@ use std::{
     collections::{BTreeSet, HashMap},
     env, io,
     path::Path,
-    sync::{Arc, Mutex},
 };
 
 const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
@@ -67,19 +66,17 @@ fn main() {
 
     // Create a db for each key share, giving the db the name of the node it is for.
     for (node_id, key_share) in key_shares {
-        Arc::new(Mutex::new(
-            PersistentKeyDB::new_and_migrate_to_latest(
-                &Path::new(
-                    node_id_to_name_map
-                        .get(&node_id)
-                        .unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id)),
-                )
-                .with_extension(DB_EXTENSION),
-                &new_discard_logger(),
+        PersistentKeyDB::new_and_migrate_to_latest(
+            &Path::new(
+                node_id_to_name_map
+                    .get(&node_id)
+                    .unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id)),
             )
-            .expect("Should create database at latest version")
-            .update_key::<eth::EthSigning>(&eth_key_id, &key_share),
-        ));
+            .with_extension(DB_EXTENSION),
+            &new_discard_logger(),
+        )
+        .expect("Should create database at latest version")
+        .update_key::<eth::EthSigning>(&eth_key_id, &key_share);
     }
 
     // output to stdout - CI can read the json from stdout
