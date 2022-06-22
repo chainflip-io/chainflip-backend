@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
-pub const LATEST_SCHEMA_VERSION: u32 = 1;
+pub const LATEST_SCHEMA_VERSION: u32 = 0;
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
@@ -497,22 +497,6 @@ mod tests {
 
         let keys_before = p_db.load_keys::<EthSigning>();
         assert!(keys_before.get(&key_id).is_some());
-    }
-
-    #[test]
-    #[should_panic]
-    fn should_panic_when_trying_to_migrate() {
-        let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-
-        // Create a db that is at schema version 0,
-        // this test only works if LATEST_SCHEMA_VERSION > 0
-        {
-            let _db = open_db_and_write_version_data(&db_path, 0);
-        }
-
-        // Try and open the db, but no migrations exist yet, so we expect this to panic
-        assert!(PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).is_err());
     }
 
     #[test]
