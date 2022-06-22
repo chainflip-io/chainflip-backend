@@ -45,7 +45,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::{broadcast, watch},
+    sync::{broadcast, oneshot},
     task::JoinHandle,
 };
 use web3::{
@@ -229,7 +229,6 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
     slog::info!(&logger, "Starting");
 
     let (tracked_data_sender, mut tracked_data_receiver) = tokio::sync::mpsc::channel(10);
-    let (to_block_sender, _) = watch::channel(0);
 
     let state_chain_task_handle = tokio::spawn({
         let logger = logger.clone();
@@ -259,11 +258,13 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
         }
     });
 
-    let mut witnesser_task_handle: Option<_> = None;
+    let mut witnesser_task_handle: Option<(_, JoinHandle<_>)> = None;
 
     while let Ok(instruction) = instruction_receiver.recv().await.map_err(|e| {
         // We need to send an end block to allow the witnesser to stop gracefully.
-        let _ = to_block_sender.send(0);
+        if let Some((_, handle)) = &witnesser_task_handle {
+            handle.abort();
+        }
         slog::info!(&logger, "Stopping witnesser. Channel state is `{:?}`", e)
     }) {
         match instruction {
@@ -274,68 +275,68 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
                     "Duplicate start event received."
                 );
 
-                let _ = witnesser_task_handle.insert(tokio::spawn({
-                    let eth_rpc = eth_rpc.clone();
-                    let logger = logger.clone();
-                    let to_block_receiver = to_block_sender.subscribe();
-                    let tracked_data_sender = tracked_data_sender.clone();
+                let (to_block_sender, to_block_receiver) = oneshot::channel();
 
-                    async move {
-                        util::bounded(
-                            start_block,
-                            to_block_receiver,
-                            util::strictly_increasing(
-                                chain_data_witnessing::poll_latest_block_numbers(
-                                    &eth_rpc,
-                                    poll_interval,
-                                    &logger,
+                let _ref = witnesser_task_handle.insert((
+                    to_block_sender,
+                    tokio::spawn({
+                        let eth_rpc = eth_rpc.clone();
+                        let logger = logger.clone();
+                        let tracked_data_sender = tracked_data_sender.clone();
+
+                        async move {
+                            util::bounded(
+                                start_block,
+                                to_block_receiver,
+                                util::strictly_increasing(
+                                    chain_data_witnessing::poll_latest_block_numbers(
+                                        &eth_rpc,
+                                        poll_interval,
+                                        &logger,
+                                    ),
                                 ),
-                            ),
-                        )
-                        .for_each(|block_number| {
-                            let eth_rpc_c = eth_rpc.clone();
-                            let logger = logger.clone();
-                            let tracked_data_sender = tracked_data_sender.clone();
+                            )
+                            .for_each(|block_number| {
+                                let eth_rpc_c = eth_rpc.clone();
+                                let logger = logger.clone();
+                                let tracked_data_sender = tracked_data_sender.clone();
 
-                            async move {
-                                match get_tracked_data(&eth_rpc_c, block_number).await {
-                                    Ok(tracked_data) => {
-                                        tracked_data_sender.send(tracked_data).await.unwrap()
-                                    }
-                                    Err(e) => {
-                                        slog::error!(
-                                            &logger,
-                                            "Failed to get tracked data: {:?}",
-                                            e
-                                        );
+                                async move {
+                                    match get_tracked_data(&eth_rpc_c, block_number).await {
+                                        Ok(tracked_data) => {
+                                            tracked_data_sender.send(tracked_data).await.unwrap()
+                                        }
+                                        Err(e) => {
+                                            slog::error!(
+                                                &logger,
+                                                "Failed to get tracked data: {:?}",
+                                                e
+                                            );
+                                        }
                                     }
                                 }
-                            }
-                        })
-                        .await
-                    }
-                }));
+                            })
+                            .await
+                        }
+                    }),
+                ));
             }
             ObserveInstruction::End(end_block) => {
                 slog::info!(&logger, "End observing at ETH block: {}", end_block);
-                assert!(
-                    witnesser_task_handle.is_some(),
-                    "Duplicate end event received, or end received before start."
-                );
 
-                to_block_sender.send(end_block).unwrap();
-                witnesser_task_handle
+                let (to_block_sender, join_handle) = witnesser_task_handle
                     .take()
-                    .expect("is_some asserted above")
-                    .await
-                    .unwrap();
+                    .expect("Duplicate end event received, or end received before start.");
+                to_block_sender.send(end_block).unwrap();
+                join_handle.await.unwrap();
             }
         }
     }
 
-    if let Some(h) = witnesser_task_handle.take() {
-        h.await.unwrap();
+    if let Some((_to_block_sender, join_handle)) = witnesser_task_handle.take() {
+        join_handle.abort();
     }
+
     // Dropping the sender ensures that the state chain task will stop.
     drop(tracked_data_sender);
     state_chain_task_handle.await.unwrap();
