@@ -261,7 +261,6 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
     let mut witnesser_task_handle: Option<(_, JoinHandle<_>)> = None;
 
     while let Ok(instruction) = instruction_receiver.recv().await.map_err(|e| {
-        // We need to send an end block to allow the witnesser to stop gracefully.
         if let Some((_, handle)) = &witnesser_task_handle {
             handle.abort();
         }
@@ -331,10 +330,6 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
                 join_handle.await.unwrap();
             }
         }
-    }
-
-    if let Some((_to_block_sender, join_handle)) = witnesser_task_handle.take() {
-        join_handle.abort();
     }
 
     // Dropping the sender ensures that the state chain task will stop.
