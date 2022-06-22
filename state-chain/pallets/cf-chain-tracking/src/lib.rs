@@ -36,7 +36,7 @@ pub mod pallet {
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 
-		/// Determines the maximum age (inclusive) of tracked data submissions.
+		/// Determines the maximum age of tracked data submissions.
 		#[pallet::constant]
 		type AgeLimit: Get<<Self::TargetChain as Chain>::ChainBlockNumber>;
 	}
@@ -87,7 +87,7 @@ pub mod pallet {
 						sp_runtime::traits::Saturating::saturating_sub(
 							previous.birth_block(),
 							state.birth_block()
-						) <= T::AgeLimit::get(),
+						) < T::AgeLimit::get(),
 						Error::<T, I>::StaleDataSubmitted
 					)
 				};

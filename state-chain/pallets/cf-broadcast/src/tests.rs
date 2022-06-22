@@ -3,14 +3,14 @@ use crate::{
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
 	Event as BroadcastEvent, Expiries, FailedTransactionSigners, Instance1, PalletOffence,
 	RefundSignerId, SignatureToBroadcastIdLookup, SignerIdToAccountId, ThresholdSignatureData,
-	TransactionFeeDeficit,
+	TransactionFeeDeficit, WeightInfo,
 };
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity},
 	ChainAbi,
 };
 use cf_traits::{mocks::threshold_signer::MockThresholdSigner, AsyncResult, ThresholdSigner};
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,6 +26,9 @@ thread_local! {
 	pub static EXPIRED_ATTEMPTS: std::cell::RefCell<Vec<(BroadcastAttemptId, BroadcastStage)>> = Default::default();
 	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
 }
+
+// When calling on_idle, we should broadcast everything with this excess weight.
+const LARGE_EXCESS_WEIGHT: Weight = 20_000_000_000;
 
 struct MockCfe;
 
@@ -211,7 +214,8 @@ fn test_abort_after_max_attempt_reached() {
 			// so we can test all the failed authorities reported
 			MockNominator::increment_nominee();
 
-			// The `on_initialize` hook is called and triggers a new broadcast attempt.
+			// retry should kick off at end of block if sufficient block space is free.
+			MockBroadcast::on_idle(0, LARGE_EXCESS_WEIGHT);
 			MockBroadcast::on_initialize(0);
 
 			broadcast_attempt_id = broadcast_attempt_id.next_attempt();
@@ -228,6 +232,43 @@ fn test_abort_after_max_attempt_reached() {
 			(starting_nomination..=(starting_nomination + (MAXIMUM_BROADCAST_ATTEMPTS as u64)))
 				.collect::<Vec<_>>(),
 		);
+	})
+}
+
+#[test]
+fn on_idle_caps_broadcasts_when_not_enough_weight() {
+	new_test_ext().execute_with(|| {
+		// kick off two broadcasts
+		let broadcast_attempt_id = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
+		let broadcast_attempt_id_2 = MockBroadcast::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
+
+		// respond failure to both
+		MockCfe::respond(Scenario::SigningFailure);
+
+		let start_next_broadcast_weight: Weight =
+			<() as WeightInfo>::start_next_broadcast_attempt();
+
+		// only a single retry will fit in the block since we use the exact weight of the call
+		MockBroadcast::on_idle(0, start_next_broadcast_weight);
+		MockBroadcast::on_initialize(0);
+
+		// only the first one should have retried, incremented attempt count
+		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(
+			broadcast_attempt_id.next_attempt()
+		)
+		.is_some());
+		// the other should be still in the retry queue
+		let retry_queue = BroadcastRetryQueue::<Test, Instance1>::get();
+		assert_eq!(retry_queue.len(), 1);
+		assert_eq!(retry_queue.first().unwrap().broadcast_attempt_id, broadcast_attempt_id_2);
 	})
 }
 
@@ -263,8 +304,10 @@ fn test_transaction_signing_failed() {
 			broadcast_attempt_id
 		);
 
-		// initialising a new block should kick off the retry
+		// retry should kick off at end of block
+		MockBroadcast::on_idle(0, LARGE_EXCESS_WEIGHT);
 		MockBroadcast::on_initialize(0);
+
 		assert!(AwaitingTransactionSignature::<Test, Instance1>::get(
 			broadcast_attempt_id.next_attempt()
 		)

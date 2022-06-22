@@ -330,12 +330,6 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// The `on_initialize` hook for this pallet handles scheduled retries and expiries.
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
-			let retries = BroadcastRetryQueue::<T, I>::take();
-			let retry_count = retries.len();
-			for failed in retries {
-				Self::start_next_broadcast_attempt(failed);
-			}
-
 			let expiries = Expiries::<T, I>::take(block_number);
 			for (stage, attempt_id) in expiries.iter() {
 				let notify_and_retry = |attempt: BroadcastAttempt<T, I>| {
@@ -369,7 +363,30 @@ pub mod pallet {
 				}
 			}
 
-			T::WeightInfo::on_initialize(retry_count as u32, expiries.len() as u32)
+			T::WeightInfo::on_initialize(expiries.len() as u32)
+		}
+
+		// We want to retry broadcasts when we have free block space.
+		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
+
+			let num_retries_that_fit = remaining_weight
+				.checked_div(next_broadcast_weight)
+				.expect("start_next_broadcast_attempt weight should not be 0")
+				as usize;
+
+			let mut retries = BroadcastRetryQueue::<T, I>::take();
+
+			if retries.len() >= num_retries_that_fit {
+				BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit));
+			}
+
+			let retries_len = retries.len();
+
+			for retry in retries {
+				Self::start_next_broadcast_attempt(retry);
+			}
+			next_broadcast_weight * retries_len as Weight
 		}
 
 		fn on_runtime_upgrade() -> Weight {
