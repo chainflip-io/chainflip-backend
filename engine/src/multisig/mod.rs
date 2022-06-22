@@ -69,7 +69,7 @@ where
 
     let multisig_client = Arc::new(MultisigClient::new(
         my_account_id.clone(),
-        Arc::new(db),
+        db,
         keygen_request_sender,
         signing_request_sender,
         &logger,

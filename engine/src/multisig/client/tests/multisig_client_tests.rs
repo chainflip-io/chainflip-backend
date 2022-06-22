@@ -36,10 +36,8 @@ async fn should_ignore_rts_for_unknown_key() {
     let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let client = MultisigClient::<EthSigning>::new(
         account_id.clone(),
-        Arc::new(
-            PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
-                .expect("Failed to open database"),
-        ),
+        PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+            .expect("Failed to open database"),
         keygen_request_sender,
         signing_request_sender,
         &logger,
@@ -83,10 +81,8 @@ async fn should_save_key_after_keygen() {
         let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
         let client = MultisigClient::<EthSigning>::new(
             ACCOUNT_IDS[0].clone(),
-            Arc::new(
-                PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
-                    .expect("Failed to open database"),
-            ),
+            PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+                .expect("Failed to open database"),
             keygen_request_sender,
             signing_request_sender,
             &logger,
@@ -145,10 +141,8 @@ async fn should_load_keys_on_creation() {
     let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let client = MultisigClient::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
-        Arc::new(
-            PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
-                .expect("Failed to open database"),
-        ),
+        PersistentKeyDB::new_and_migrate_to_latest(&db_file, &logger)
+            .expect("Failed to open database"),
         keygen_request_sender,
         signing_request_sender,
         &new_test_logger(),

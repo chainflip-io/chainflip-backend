@@ -202,14 +202,14 @@ where
 {
     pub fn new(
         my_account_id: AccountId,
-        db: Arc<PersistentKeyDB>,
+        db: PersistentKeyDB,
         keygen_request_sender: KeygenRequestSender<C::Point>,
         signing_request_sender: SigningRequestSender<C>,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
             my_account_id,
-            key_store: std::sync::Mutex::new(KeyStore::new(db)),
+            key_store: std::sync::Mutex::new(KeyStore::new(Arc::new(db))),
             keygen_request_sender,
             signing_request_sender,
             logger: logger.clone(),
