@@ -56,7 +56,7 @@ impl CryptoScheme for EthSigning {
             &pubkey_to_eth_addr(nonce_commitment.get_element()),
         );
 
-        Scalar::from_bytes(&e)
+        Scalar::from_bytes_mod_order(&e)
     }
 
     fn build_response(

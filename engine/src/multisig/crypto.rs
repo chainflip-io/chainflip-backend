@@ -7,7 +7,6 @@ pub mod secp255k1;
 
 use generic_array::{typenum::Unsigned, ArrayLength};
 
-pub use curv::{arithmetic::traits::Converter as BigIntConverter, BigInt};
 use zeroize::{DefaultIsZeroes, ZeroizeOnDrop};
 
 use std::fmt::Debug;
@@ -61,6 +60,10 @@ pub trait ECPoint:
     }
 
     // Only relevant for ETH contract keys
+    // TODO: this is a property of a signing scheme
+    // rather than the underlying curve, so this
+    // should be moved to `CryptoScheme` before we
+    // Bitcoin or any other secp256k1 scheme
     fn is_compatible(&self) -> bool {
         true
     }
@@ -117,7 +120,7 @@ pub trait ECScalar:
 {
     fn random(rng: &mut Rng) -> Self;
 
-    fn from_bytes(x: &[u8; 32]) -> Self;
+    fn from_bytes_mod_order(x: &[u8; 32]) -> Self;
 
     fn zero() -> Self;
 
