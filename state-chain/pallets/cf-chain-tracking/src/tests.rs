@@ -12,7 +12,7 @@ fn test_update_chain_state_within_age_limit() {
 		));
 		assert_ok!(MockChainTracking::update_chain_state(
 			Origin::signed(0),
-			MockTrackedData(LATEST_BLOCK - AGE_LIMIT)
+			MockTrackedData(LATEST_BLOCK - AGE_LIMIT + 1)
 		));
 		assert_ok!(MockChainTracking::update_chain_state(
 			Origin::signed(0),
@@ -32,7 +32,7 @@ fn test_update_chain_state_outside_of_age_limit() {
 		assert_noop!(
 			MockChainTracking::update_chain_state(
 				Origin::signed(0),
-				MockTrackedData(LATEST_BLOCK - AGE_LIMIT - 1)
+				MockTrackedData(LATEST_BLOCK - AGE_LIMIT)
 			),
 			Error::<Test>::StaleDataSubmitted
 		);
