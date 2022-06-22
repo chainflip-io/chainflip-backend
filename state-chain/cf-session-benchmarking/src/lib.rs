@@ -24,5 +24,5 @@ benchmarks! {
 		let validator = T::ValidatorIdOf::convert(caller.clone()).unwrap();
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 		<NextKeys<T>>::insert(validator, keys);
-	}:  _(RawOrigin::Signed(caller))
+	}: _(RawOrigin::Signed(caller))
 }
