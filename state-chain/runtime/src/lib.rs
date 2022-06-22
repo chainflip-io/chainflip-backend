@@ -466,7 +466,7 @@ impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
-	type SafetyMargin = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
+	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
 }
 
 construct_runtime!(

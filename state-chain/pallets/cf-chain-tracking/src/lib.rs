@@ -12,7 +12,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{Chain, Safety};
+use cf_chains::{Age, Chain};
 use cf_traits::Chainflip;
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::pallet_prelude::OriginFor;
@@ -36,10 +36,9 @@ pub mod pallet {
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 
-		/// The safety margin beyond which we reject chain re-orgs. It's not possible to sumit
-		/// tracking data older than this number of blocks.
+		/// Determines the maximum age (inclusive) of tracked data submissions.
 		#[pallet::constant]
-		type SafetyMargin: Get<<<Self::TargetChain as Chain>::TrackedData as Safety>::SafetyMetric>;
+		type AgeLimit: Get<<Self::TargetChain as Chain>::ChainBlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -60,9 +59,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The submitted data is already considered safe aka. finalised and as such cannot be
-		/// replaced.
-		SafeDataSubmitted,
+		/// The submitted data is too old.
+		StaleDataSubmitted,
 	}
 
 	#[pallet::call]
@@ -86,8 +84,11 @@ pub mod pallet {
 			ChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
 				if let Some(previous) = maybe_previous.replace(state.clone()) {
 					ensure!(
-						!state.is_safe(&previous, T::SafetyMargin::get()),
-						Error::<T, I>::SafeDataSubmitted
+						sp_runtime::traits::Saturating::saturating_sub(
+							previous.birth_block(),
+							state.birth_block()
+						) <= T::AgeLimit::get(),
+						Error::<T, I>::StaleDataSubmitted
 					)
 				};
 				Ok(())

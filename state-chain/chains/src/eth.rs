@@ -18,7 +18,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Bounded, Hash, Keccak256},
+	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
 use sp_std::{
@@ -49,11 +49,9 @@ pub struct TrackedData<C: Chain> {
 	pub priority_fee: C::ChainAmount,
 }
 
-impl<C: Chain> Safety for TrackedData<C> {
-	type SafetyMetric = C::ChainBlockNumber;
-
-	fn safety(&self) -> Self::SafetyMetric {
-		Self::SafetyMetric::max_value().saturating_sub(self.block_height)
+impl<C: Chain> Age<C> for TrackedData<C> {
+	fn birth_block(&self) -> <C as Chain>::ChainBlockNumber {
+		self.block_height
 	}
 }
 
@@ -717,8 +715,6 @@ impl From<H256> for TransactionHash {
 
 #[cfg(test)]
 mod tests {
-	use crate::mocks::MockEthereum;
-
 	use super::*;
 
 	/// Asymmetrisation is a very complex procedure that ensures our arrays are not symmetric.
@@ -758,35 +754,6 @@ mod tests {
 		bytes[0] = 3;
 		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
 		assert!(key.pub_key_y_parity.is_odd());
-	}
-
-	#[test]
-	fn test_tracked_data_safety() {
-		use crate::Safety;
-		const LATEST_BLOCK: u64 = 100;
-		const SAFE_BLOCK_MARGIN: u64 = 5;
-		let tracked_data_at = |block_height| TrackedData::<MockEthereum> {
-			block_height,
-			base_fee: 0,
-			priority_fee: 0,
-		};
-		let latest_data = tracked_data_at(LATEST_BLOCK);
-
-		assert!(tracked_data_at(LATEST_BLOCK - SAFE_BLOCK_MARGIN - 1)
-			.is_safe(&latest_data, SAFE_BLOCK_MARGIN));
-		// Safe block margin is *exclusive* ie. any block within the margin maybe re-orged.
-		assert!(!tracked_data_at(LATEST_BLOCK - SAFE_BLOCK_MARGIN)
-			.is_safe(&latest_data, SAFE_BLOCK_MARGIN));
-		assert!(!tracked_data_at(LATEST_BLOCK - SAFE_BLOCK_MARGIN + 1)
-			.is_safe(&latest_data, SAFE_BLOCK_MARGIN));
-
-		assert!(!tracked_data_at(1500).is_safe(&tracked_data_at(995), 5));
-
-		// 0 block is safe by definition.
-		assert!(tracked_data_at(0).is_safe(&latest_data, SAFE_BLOCK_MARGIN));
-
-		// Highest block is unsafe by definition.
-		assert!(!tracked_data_at(u64::MAX).is_safe(&latest_data, SAFE_BLOCK_MARGIN));
 	}
 }
 

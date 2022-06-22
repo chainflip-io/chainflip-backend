@@ -76,13 +76,13 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub const SAFE_BLOCK_MARGIN: u64 = 5;
+pub const AGE_LIMIT: u64 = 5;
 
 impl Config for Test {
 	type Event = Event;
 	type TargetChain = MockEthereum;
 	type WeightInfo = ();
-	type SafetyMargin = ConstU64<SAFE_BLOCK_MARGIN>;
+	type AgeLimit = ConstU64<AGE_LIMIT>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

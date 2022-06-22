@@ -3,7 +3,7 @@ use cf_chains::mocks::MockTrackedData;
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
-fn test_update_chain_state_within_safety_margin() {
+fn test_update_chain_state_within_age_limit() {
 	new_test_ext().execute_with(|| {
 		const LATEST_BLOCK: u64 = 1000;
 		assert_ok!(MockChainTracking::update_chain_state(
@@ -12,17 +12,17 @@ fn test_update_chain_state_within_safety_margin() {
 		));
 		assert_ok!(MockChainTracking::update_chain_state(
 			Origin::signed(0),
-			MockTrackedData(LATEST_BLOCK - SAFE_BLOCK_MARGIN)
+			MockTrackedData(LATEST_BLOCK - AGE_LIMIT)
 		));
 		assert_ok!(MockChainTracking::update_chain_state(
 			Origin::signed(0),
-			MockTrackedData(LATEST_BLOCK + SAFE_BLOCK_MARGIN * 100)
+			MockTrackedData(LATEST_BLOCK + AGE_LIMIT * 100)
 		));
 	})
 }
 
 #[test]
-fn test_update_chain_state_outside_of_safety_margin() {
+fn test_update_chain_state_outside_of_age_limit() {
 	new_test_ext().execute_with(|| {
 		const LATEST_BLOCK: u64 = 1000;
 		assert_ok!(MockChainTracking::update_chain_state(
@@ -32,13 +32,13 @@ fn test_update_chain_state_outside_of_safety_margin() {
 		assert_noop!(
 			MockChainTracking::update_chain_state(
 				Origin::signed(0),
-				MockTrackedData(LATEST_BLOCK - SAFE_BLOCK_MARGIN - 1)
+				MockTrackedData(LATEST_BLOCK - AGE_LIMIT - 1)
 			),
-			Error::<Test>::SafeDataSubmitted
+			Error::<Test>::StaleDataSubmitted
 		);
 		assert_noop!(
 			MockChainTracking::update_chain_state(Origin::signed(0), MockTrackedData(0)),
-			Error::<Test>::SafeDataSubmitted
+			Error::<Test>::StaleDataSubmitted
 		);
 	})
 }

@@ -40,20 +40,13 @@ pub trait Chain: Member + Parameter {
 		+ FullCodec
 		+ MaxEncodedLen;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Safety + BenchmarkValue;
+	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 }
 
-pub trait Safety {
-	/// A number used for expressing the degree of safety. Higher is better.
-	type SafetyMetric: Member + Parameter + MaxEncodedLen + AtLeast32BitUnsigned;
-
-	/// What is the relative safety of this object.
-	fn safety(&self) -> Self::SafetyMetric;
-
-	/// Is this thing 'safer' compared to another, within some margin.
-	fn is_safe(&self, other: &Self, margin: Self::SafetyMetric) -> bool {
-		self.safety() > other.safety().saturating_add(margin)
-	}
+/// Measures the age of items associated with the Chain.
+pub trait Age<C: Chain> {
+	/// The creation block of this item.
+	fn birth_block(&self) -> C::ChainBlockNumber;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -195,11 +188,9 @@ pub mod mocks {
 	)]
 	pub struct MockTrackedData(pub u64);
 
-	impl Safety for MockTrackedData {
-		type SafetyMetric = u64;
-
-		fn safety(&self) -> Self::SafetyMetric {
-			u64::MAX - self.0
+	impl Age<MockEthereum> for MockTrackedData {
+		fn birth_block(&self) -> u64 {
+			self.0
 		}
 	}
 
