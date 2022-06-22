@@ -145,25 +145,25 @@ impl ApiCall<Ethereum> for EthereumApi {
 
 macro_rules! impl_api_calls {
 	( $( $implementation:ty ),+ $(,)? ) => {
-        $(
-            impl ApiCall<Ethereum> for $implementation {
-                fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-                    self.signing_payload()
-                }
+		$(
+			impl ApiCall<Ethereum> for $implementation {
+				fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+					self.signing_payload()
+				}
 
-                fn signed(self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-                    self.signed(signature)
-                }
+				fn signed(self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+					self.signed(signature)
+				}
 
-                fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
-                    self.abi_encoded()
-                }
+				fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+					self.abi_encoded()
+				}
 
 				fn is_signed(&self) -> bool {
 					self.sig_data.is_signed()
 				}
-            }
-        )+
+			}
+		)+
 	};
 }
 
