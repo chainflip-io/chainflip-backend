@@ -1,8 +1,8 @@
 //! Definitions for the "registerClaim" transaction.
 
 use crate::{
-	eth::{AggKey, SchnorrVerificationComponents, SigData, Tokenizable},
-	ChainCrypto, Ethereum,
+	eth::{AggKey, SigData, Tokenizable},
+	ApiCall, ChainAbi, ChainCrypto, Ethereum,
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -30,29 +30,9 @@ impl SetAggKeyWithAggKey {
 	) -> Self {
 		let mut calldata =
 			Self { sig_data: SigData::new_empty(replay_protection), new_key: new_key.into() };
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
+		calldata.sig_data.insert_msg_hash_from(calldata.encoded().as_slice());
 
 		calldata
-	}
-
-	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	pub fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
-			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
-			.expect(
-				r#"
-					This can only fail if the parameter types don't match the function signature encoded below.
-					Therefore, as long as the tests pass, it can't fail at runtime.
-				"#,
-			)
 	}
 
 	/// Gets the function defintion for the `setAggKeyWithAggKey` smart contract call. Loading this
@@ -82,8 +62,32 @@ impl SetAggKeyWithAggKey {
 	}
 }
 
+impl ApiCall<Ethereum> for SetAggKeyWithAggKey {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		self.sig_data.msg_hash
+	}
+
+	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+		self.sig_data.insert_signature(signature);
+		self
+	}
+
+	fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+		self.get_function()
+			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
+			.expect(
+				r#"
+						This can only fail if the parameter types don't match the function signature encoded below.
+						Therefore, as long as the tests pass, it can't fail at runtime.
+					"#,
+			)
+	}
+}
+
 #[cfg(test)]
 mod test_set_agg_key_with_agg_key {
+	use crate::eth::SchnorrVerificationComponents;
+
 	use super::*;
 	use frame_support::assert_ok;
 	use sp_runtime::traits::{Hash, Keccak256};
@@ -125,7 +129,7 @@ mod test_set_agg_key_with_agg_key {
 			)),
 		);
 
-		assert_eq!(call.signing_payload(), expected_payload);
+		assert_eq!(call.threshold_signature_payload(), expected_payload);
 	}
 
 	#[test]
@@ -158,16 +162,16 @@ mod test_set_agg_key_with_agg_key {
 
 		let expected_msg_hash = set_agg_key_runtime.sig_data.msg_hash;
 
-		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
+		assert_eq!(set_agg_key_runtime.threshold_signature_payload(), expected_msg_hash);
 		let runtime_payload = set_agg_key_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
-			.abi_encoded();
+			.encoded();
 		// Ensure signing payload isn't modified by signature.
-		assert_eq!(set_agg_key_runtime.signing_payload(), expected_msg_hash);
+		assert_eq!(set_agg_key_runtime.threshold_signature_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:
