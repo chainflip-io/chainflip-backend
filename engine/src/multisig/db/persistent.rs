@@ -144,9 +144,9 @@ impl PersistentKeyDB {
         keygen_result_info: &KeygenResultInfo<C::Point>,
     ) {
         let key_id_with_prefix = [
-            KEYGEN_DATA_PARTIAL_PREFIX.to_vec(),
-            C::CHAIN_TAG.to_vec(),
-            key_id.0.clone(),
+            KEYGEN_DATA_PARTIAL_PREFIX,
+            &((C::CHAIN_TAG as u16).to_be_bytes())[..],
+            &key_id.0.clone()[..],
         ]
         .concat();
 
@@ -164,7 +164,11 @@ impl PersistentKeyDB {
         self.db
             .prefix_iterator_cf(
                 get_data_column_handle(&self.db),
-                [KEYGEN_DATA_PARTIAL_PREFIX.to_vec(), C::CHAIN_TAG.to_vec()].concat(),
+                [
+                    &KEYGEN_DATA_PARTIAL_PREFIX[..],
+                    &((C::CHAIN_TAG as u16).to_be_bytes())[..],
+                ]
+                .concat(),
             )
             .filter_map(|(key_id, key_info)| {
                 // Strip the prefix off the key_id

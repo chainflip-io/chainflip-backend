@@ -16,19 +16,12 @@ use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
-pub const CHAIN_TAG_SIZE: usize = 2; // u16 = 2 bytes
+pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 
 #[repr(u16)]
-#[derive(Clone, Copy)]
 pub enum ChainTag {
     Ethereum = 0x0000,
     Polkadot = 0x0001,
-}
-
-impl ChainTag {
-    pub fn to_vec(self) -> Vec<u8> {
-        (self as u16).to_be_bytes().to_vec()
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
