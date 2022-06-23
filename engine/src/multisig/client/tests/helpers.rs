@@ -89,7 +89,7 @@ pub struct Node {
 
 pub fn new_node(account_id: AccountId, allow_high_pubkey: bool) -> Node {
     let (logger, tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
-    let logger = logger.new(slog::o!("account_id" => format!("{}",account_id)));
+    let logger = logger.new(slog::o!("account_id" => account_id.to_string()));
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 

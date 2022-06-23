@@ -239,7 +239,7 @@ where
         slog::info!(
             self.logger,
             "Received a keygen request";
-            "participants" => format!("{}",format_iterator(&participants)),
+            "participants" => format_iterator(&participants).to_string(),
             CEREMONY_ID_KEY => ceremony_id
         );
 
@@ -313,8 +313,8 @@ where
         slog::debug!(
             self.logger,
             "Received a request to sign";
-            "message_hash" => format!("{}",data),
-            "signers" => format!("{}",format_iterator(&signers)),
+            "message_hash" => data.to_string(),
+            "signers" => format_iterator(&signers).to_string(),
             CEREMONY_ID_KEY => ceremony_id
         );
 
