@@ -810,12 +810,18 @@ mod tests {
 					// Move to start of auction
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(Validator::current_rotation_phase(), RotationPhase::RunAuction);
+					assert!(matches!(
+						Validator::current_rotation_phase(),
+						RotationPhase::VaultsRotating(..)
+					));
 
 					// Next block, another auction
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(Validator::current_rotation_phase(), RotationPhase::RunAuction);
+					assert!(matches!(
+						Validator::current_rotation_phase(),
+						RotationPhase::VaultsRotating(..)
+					));
 
 					for node in &offline_nodes {
 						testnet.set_active(node, true);

@@ -1,6 +1,5 @@
 use crate::*;
 use cf_runtime_upgrade_utilities::move_storage;
-use frame_support::storage::{migration::*, storage_prefix};
 use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config>(PhantomData<T>);

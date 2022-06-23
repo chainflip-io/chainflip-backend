@@ -144,7 +144,6 @@ impl pallet_cf_auction::Config for Runtime {
 			pallet_session::Pallet<Self>,
 		>,
 	);
-	type EmergencyRotation = Validator;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 

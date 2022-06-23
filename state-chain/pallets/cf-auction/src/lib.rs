@@ -17,8 +17,7 @@ pub use weights::WeightInfo;
 
 pub use auction_resolver::*;
 use cf_traits::{
-	AuctionOutcome, Auctioneer, BidderProvider, Chainflip, ChainflipAccount, EmergencyRotation,
-	EpochInfo, QualifyNode,
+	AuctionOutcome, Auctioneer, BidderProvider, Chainflip, ChainflipAccount, EpochInfo, QualifyNode,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -51,8 +50,6 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// For looking up Chainflip Account data.
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
-		/// Emergency Rotations
-		type EmergencyRotation: EmergencyRotation;
 		/// Qualify an authority
 		type AuctionQualification: QualifyNode<ValidatorId = Self::ValidatorId>;
 		/// For governance checks.
