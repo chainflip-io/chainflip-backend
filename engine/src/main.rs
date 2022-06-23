@@ -139,6 +139,13 @@ async fn main() {
         }
     }
 
+    let cfe_settings = state_chain_client
+        .get_storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
+            latest_block_hash,
+        )
+        .await
+        .expect("Should get on chain CFE settings from SC");
+
     let stake_manager_address = state_chain_client
         .get_storage_value::<pallet_cf_environment::StakeManagerAddress::<
             state_chain_runtime::Runtime,
@@ -217,6 +224,7 @@ async fn main() {
             state_chain_client.clone(),
             witnessing_instruction_receiver_3,
             eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
+            cfe_settings.eth_priority_fee_percentile,
             &root_logger
         )
     );

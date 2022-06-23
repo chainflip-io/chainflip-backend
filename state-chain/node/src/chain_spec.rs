@@ -27,6 +27,7 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 // 50k FLIP in Fliperinos
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
+const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -186,6 +187,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
 						max_ceremony_stage_duration,
+						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
 				},
 				eth_init_agg_key,
@@ -261,6 +263,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
 						max_ceremony_stage_duration,
+						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
 				},
 				eth_init_agg_key,
@@ -386,6 +389,7 @@ fn chainflip_three_node_testnet_config_from_env(
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
 						max_ceremony_stage_duration,
+						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
 				},
 				eth_init_agg_key,
@@ -514,6 +518,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
 						max_ceremony_stage_duration,
+						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
 				},
 				eth_init_agg_key,

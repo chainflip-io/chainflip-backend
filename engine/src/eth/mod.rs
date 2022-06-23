@@ -220,6 +220,7 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
     state_chain_client: Arc<StateChainClient<ScRpcClient>>,
     mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
     poll_interval: Duration,
+    priority_fee_percentile: u8,
     logger: &slog::Logger,
 ) where
     EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
@@ -301,7 +302,13 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
                                 let tracked_data_sender = tracked_data_sender.clone();
 
                                 async move {
-                                    match get_tracked_data(&eth_rpc_c, block_number).await {
+                                    match get_tracked_data(
+                                        &eth_rpc_c,
+                                        block_number,
+                                        priority_fee_percentile,
+                                    )
+                                    .await
+                                    {
                                         Ok(tracked_data) => {
                                             tracked_data_sender.send(tracked_data).await.unwrap()
                                         }
@@ -1603,6 +1610,7 @@ mod witnesser_tests {
                     sc_client,
                     instruction_receiver,
                     Duration::from_millis(10),
+                    50,
                     &logger,
                 )
                 .await

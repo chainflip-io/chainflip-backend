@@ -40,6 +40,9 @@ pub mod cfe {
 	pub struct CfeSettings {
 		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
 		pub eth_block_safety_margin: u32,
+		/// The percentile of priority fee we want to fetch from fee_history (expressed
+		/// as a number between 0 and 100)
+		pub eth_priority_fee_percentile: u8,
 		/// Maximum duration a ceremony stage can last
 		pub max_ceremony_stage_duration: u32,
 	}
@@ -47,7 +50,11 @@ pub mod cfe {
 	/// Sensible default values for the CFE setting.
 	impl Default for CfeSettings {
 		fn default() -> Self {
-			Self { eth_block_safety_margin: 6, max_ceremony_stage_duration: 300 }
+			Self {
+				eth_block_safety_margin: 6,
+				eth_priority_fee_percentile: 50,
+				max_ceremony_stage_duration: 300,
+			}
 		}
 	}
 }
