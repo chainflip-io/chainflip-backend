@@ -32,18 +32,18 @@ use pallet_session::weights::WeightInfo;
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Session NextKeys (r:1 w:1)
-	// Storage: Session KeyOwner (r:2 w:2)
+	// Storage: Session KeyOwner (r:2 w:4)
 	fn set_keys() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(28_000_000 as Weight)
+		(29_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	// Storage: Session NextKeys (r:1 w:1)
 	// Storage: Session KeyOwner (r:0 w:2)
 	fn purge_keys() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(22_000_000 as Weight)
+		(23_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
