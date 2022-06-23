@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 use crate::{
     common::format_iterator,
     logging::CEREMONY_ID_KEY,
-    multisig::{client::common::SigningFailureReason, KeyDB, KeyId},
+    multisig::{client::common::SigningFailureReason, KeyId},
 };
 
 use async_trait::async_trait;
@@ -27,8 +27,6 @@ use state_chain_runtime::AccountId;
 use serde::{Deserialize, Serialize};
 
 use pallet_cf_vaults::CeremonyId;
-
-use key_store::KeyStore;
 
 use tokio::sync::mpsc::UnboundedSender;
 use utilities::threshold_from_share_count;
@@ -43,6 +41,7 @@ pub use utils::ensure_unsorted;
 
 use self::{
     ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
+    key_store::KeyStore,
     signing::frost::SigningData,
 };
 
@@ -50,7 +49,7 @@ pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
 
 use super::{
     crypto::{CryptoScheme, ECPoint},
-    MessageHash, Rng,
+    MessageHash, PersistentKeyDB, Rng,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,14 +183,11 @@ type SigningRequestSender<C> = UnboundedSender<(
 /// Multisig client acts as the frontend for the multisig functionality, delegating
 /// the actual signing to "Ceremony Manager". It is additionally responsible for
 /// persistently storing generated keys and providing them to the signing ceremonies.
-pub struct MultisigClient<KeyDatabase, C: CryptoScheme>
-where
-    KeyDatabase: KeyDB<C::Point>,
-{
+pub struct MultisigClient<C: CryptoScheme> {
     my_account_id: AccountId,
     keygen_request_sender: KeygenRequestSender<C::Point>,
     signing_request_sender: SigningRequestSender<C>,
-    key_store: std::sync::Mutex<KeyStore<KeyDatabase, C::Point>>,
+    key_store: std::sync::Mutex<KeyStore<C::Point>>,
     logger: slog::Logger,
 }
 
@@ -200,14 +196,13 @@ enum RequestStatus<Output, FailureReason> {
     WaitForOneshot(CeremonyResultReceiver<Output, FailureReason>),
 }
 
-impl<S, C> MultisigClient<S, C>
+impl<C> MultisigClient<C>
 where
-    S: KeyDB<C::Point>,
     C: CryptoScheme,
 {
     pub fn new(
         my_account_id: AccountId,
-        db: S,
+        db: PersistentKeyDB<C::Point>,
         keygen_request_sender: KeygenRequestSender<C::Point>,
         signing_request_sender: SigningRequestSender<C>,
         logger: &slog::Logger,
@@ -409,9 +404,7 @@ where
 }
 
 #[async_trait]
-impl<KeyDatabase: KeyDB<C::Point> + Send + Sync, C: CryptoScheme> MultisigClientApi<C>
-    for MultisigClient<KeyDatabase, C>
-{
+impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
     async fn keygen(
         &self,
         ceremony_id: CeremonyId,

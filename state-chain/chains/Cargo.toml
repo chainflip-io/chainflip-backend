@@ -69,6 +69,7 @@ std = [
     'ethabi/full-serde',
     'ethereum/std',
     'frame-support/std',
+    'frame-system/std',
     'hex/std',
     'libsecp256k1/std',
     'log/std',

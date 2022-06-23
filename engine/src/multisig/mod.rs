@@ -24,7 +24,7 @@ use state_chain_runtime::AccountId;
 
 pub use client::{MultisigClient, MultisigMessage};
 
-pub use db::{KeyDB, PersistentKeyDB};
+pub use db::PersistentKeyDB;
 
 use self::crypto::CryptoScheme;
 
@@ -48,15 +48,14 @@ impl std::fmt::Display for KeyId {
 }
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC
-pub fn start_client<S, C>(
+pub fn start_client<C>(
     my_account_id: AccountId,
-    db: S,
+    db: PersistentKeyDB<C::Point>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     logger: &slog::Logger,
-) -> (Arc<MultisigClient<S, C>>, impl futures::Future)
+) -> (Arc<MultisigClient<C>>, impl futures::Future)
 where
-    S: KeyDB<C::Point>,
     C: CryptoScheme,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "MultisigClient"));

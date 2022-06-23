@@ -1,7 +1,10 @@
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_governance};
-use cf_traits::{mocks::time_source, ExecutionCondition, RuntimeUpgrade};
+use cf_traits::{
+	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo, time_source},
+	Chainflip, ExecutionCondition, RuntimeUpgrade,
+};
 use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
 use frame_system as system;
 use sp_core::H256;
@@ -94,6 +97,19 @@ impl RuntimeUpgradeMock {
 	pub fn set(mode: bool) {
 		UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = mode);
 	}
+}
+
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
+	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 impl pallet_cf_governance::Config for Test {

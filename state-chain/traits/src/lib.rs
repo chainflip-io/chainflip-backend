@@ -16,6 +16,8 @@ use frame_support::{
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
@@ -24,7 +26,6 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
-/// The type used as an epoch index.
 pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
@@ -372,12 +373,14 @@ pub trait EmergencyRotation {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	HistoricalAuthority(BackupOrPassive),
@@ -386,6 +389,7 @@ pub enum ChainflipAccountState {
 
 // TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
 }

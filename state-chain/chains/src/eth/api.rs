@@ -133,25 +133,37 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(call) => call.abi_encoded(),
 		}
 	}
+
+	fn is_signed(&self) -> bool {
+		match self {
+			EthereumApi::SetAggKeyWithAggKey(call) => call.is_signed(),
+			EthereumApi::RegisterClaim(call) => call.is_signed(),
+			EthereumApi::UpdateFlipSupply(call) => call.is_signed(),
+		}
+	}
 }
 
 macro_rules! impl_api_calls {
 	( $( $implementation:ty ),+ $(,)? ) => {
-        $(
-            impl ApiCall<Ethereum> for $implementation {
-                fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-                    self.signing_payload()
-                }
+		$(
+			impl ApiCall<Ethereum> for $implementation {
+				fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+					self.signing_payload()
+				}
 
-                fn signed(self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-                    self.signed(signature)
-                }
+				fn signed(self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+					self.signed(signature)
+				}
 
-                fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
-                    self.abi_encoded()
-                }
-            }
-        )+
+				fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+					self.abi_encoded()
+				}
+
+				fn is_signed(&self) -> bool {
+					self.sig_data.is_signed()
+				}
+			}
+		)+
 	};
 }
 

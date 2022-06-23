@@ -25,6 +25,9 @@ mod old_storage {
 	}
 }
 
+/// Hash over (call, nonce, runtime_version)
+pub type GovCallHash = [u8; 32];
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -32,9 +35,10 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_traits::{ExecutionCondition, RuntimeUpgrade};
+	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
+		error::BadOrigin,
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
@@ -43,7 +47,7 @@ pub mod pallet {
 	use frame_system::{pallet, pallet_prelude::*};
 	use sp_std::{boxed::Box, vec::Vec};
 
-	use crate::WeightInfo;
+	use crate::{GovCallHash, WeightInfo};
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -67,7 +71,8 @@ pub mod pallet {
 	pub type ProposalId = u32;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: Chainflip {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// The outer Origin needs to be compatible with this pallet's Origin
@@ -80,6 +85,7 @@ pub mod pallet {
 			+ Parameter
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ From<frame_system::Call<Self>>
+			+ From<Call<Self>>
 			+ GetDispatchInfo;
 		/// UnixTime implementation for TimeSource
 		type TimeSource: UnixTime;
@@ -96,34 +102,44 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	/// Proposals
+	/// Proposals.
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub(super) type Proposals<T: Config> =
 		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>, ValueQuery>;
 
-	/// Active proposals
+	/// Active proposals.
 	#[pallet::storage]
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
-	/// Number of proposals that have been submitted
+	/// Call hash that has been committed to by the Governance Key.
+	#[pallet::storage]
+	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
+	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
+
+	/// Any nonces before this have been consumed.
+	#[pallet::storage]
+	#[pallet::getter(fn next_gov_key_call_hash_nonce)]
+	pub(super) type NextGovKeyCallHashNonce<T> = StorageValue<_, u32, ValueQuery>;
+
+	/// Number of proposals that have been submitted.
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_id_counter)]
 	pub(super) type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Pipeline of proposals which will get executed in the next block
+	/// Pipeline of proposals which will get executed in the next block.
 	#[pallet::storage]
-	#[pallet::getter(fn execution_pipeline )]
+	#[pallet::getter(fn execution_pipeline)]
 	pub(super) type ExecutionPipeline<T> =
 		StorageValue<_, Vec<(OpaqueCall, ProposalId)>, ValueQuery>;
 
-	/// Time in seconds until a proposal expires
+	/// Time in seconds until a proposal expires.
 	#[pallet::storage]
 	#[pallet::getter(fn expiry_span)]
 	pub(super) type ExpiryTime<T> = StorageValue<_, Timestamp, ValueQuery>;
 
-	/// Array of accounts which are included in the current governance
+	/// Array of accounts which are included in the current governance.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub(super) type Members<T> = StorageValue<_, Vec<AccountId<T>>, ValueQuery>;
@@ -165,6 +181,12 @@ pub mod pallet {
 		DecodeOfCallFailed(ProposalId),
 		/// The upgrade conditions for a runtime upgrade were satisfied
 		UpgradeConditionsSatisfied,
+		/// Call executed by GovKey
+		GovKeyCallExecuted { call_hash: GovCallHash },
+		/// CallHash whitelisted by the GovKey
+		GovKeyCallHashWhitelisted { call_hash: GovCallHash },
+		/// Failed GovKey call
+		GovKeyCallExecutionFailed { call_hash: GovCallHash },
 	}
 
 	#[pallet::error]
@@ -183,6 +205,8 @@ pub mod pallet {
 		UpgradeConditionsNotMet,
 		/// A runtime upgrade was not successful
 		UpgradeHasFailed,
+		/// The call hash was not whitelisted
+		CallHashNotWhitelisted,
 	}
 
 	#[pallet::call]
@@ -309,6 +333,71 @@ pub mod pallet {
 			// Execute the root call
 			call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into())
 		}
+
+		/// **Can only be called via the Witnesser Origin**
+		///
+		/// Set a whitelisted call hash, to be executed when someone submits a call
+		/// via `submit_govkey_call` that matches the hash whitelisted here.
+		///
+		/// ## Events
+		///
+		/// - [GovKeyCallHashWhitelisted](Event::GovKeyCallHashWhitelisted)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::set_whitelisted_call_hash())]
+		pub fn set_whitelisted_call_hash(
+			origin: OriginFor<T>,
+			call_hash: GovCallHash,
+		) -> DispatchResult {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			GovKeyWhitelistedCallHash::<T>::put(call_hash);
+			Self::deposit_event(Event::GovKeyCallHashWhitelisted { call_hash });
+			Ok(())
+		}
+
+		/// **Can only be called via the Governance Origin or a Staked Party**
+		///
+		/// Submit a call to be executed if the gov key has already committed to it.
+		///
+		/// ## Events
+		///
+		/// - GovKeyCallDispatched
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
+		#[pallet::weight(T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight))]
+		pub fn submit_govkey_call(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
+			ensure!(
+				(ensure_signed(origin.clone()).is_ok() ||
+					T::EnsureGovernance::ensure_origin(origin).is_ok()),
+				BadOrigin,
+			);
+			let next_nonce = NextGovKeyCallHashNonce::<T>::get();
+			let call_hash =
+				frame_support::Hashable::blake2_256(&(call.clone(), next_nonce, T::Version::get()));
+			match GovKeyWhitelistedCallHash::<T>::get() {
+				Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
+					Self::deposit_event(
+						match call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into()) {
+							Ok(_) => Event::GovKeyCallExecuted { call_hash },
+							Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
+						},
+					);
+					NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
+					GovKeyWhitelistedCallHash::<T>::kill();
+
+					Ok(Pays::No.into())
+				},
+				_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
+			}
+		}
 	}
 
 	/// Genesis definition
@@ -341,7 +430,7 @@ pub mod pallet {
 	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
 	pub enum RawOrigin {
-		GovernanceThreshold,
+		GovernanceApproval,
 	}
 }
 
@@ -359,7 +448,7 @@ where
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		match o.into() {
 			Ok(o) => match o {
-				RawOrigin::GovernanceThreshold => Ok(()),
+				RawOrigin::GovernanceApproval => Ok(()),
 			},
 			Err(o) => Err(o),
 		}
@@ -367,7 +456,7 @@ where
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
-		RawOrigin::GovernanceThreshold.into()
+		RawOrigin::GovernanceApproval.into()
 	}
 }
 
@@ -396,23 +485,17 @@ impl<T: Config> Pallet<T> {
 		let mut execution_weight = 0;
 		// If there is something in the pipeline execute it
 		if ExecutionPipeline::<T>::decode_len() > Some(0) {
-			let execution_pipeline = ExecutionPipeline::<T>::get();
-			for (call, id) in execution_pipeline {
-				if let Some(call) = Self::decode_call(&call) {
-					// Execute the proposal
-					let result = call
-						.clone()
-						.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
-					// Emit events about the execution status
-					match result {
-						Ok(_) => Self::deposit_event(Event::Executed(id)),
-						Err(err) => Self::deposit_event(Event::FailedExecution(err.error)),
-					}
+			for (call, id) in ExecutionPipeline::<T>::get() {
+				Self::deposit_event(if let Some(call) = Self::decode_call(&call) {
 					execution_weight += call.get_dispatch_info().weight;
+					match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
+						Ok(_) => Event::Executed(id),
+						Err(err) => Event::FailedExecution(err.error),
+					}
 				} else {
 					// Emit an error if the decode of a call failed
-					Self::deposit_event(Event::DecodeOfCallFailed(id));
-				}
+					Event::DecodeOfCallFailed(id)
+				})
 			}
 			// Clean up execution pipeline
 			ExecutionPipeline::<T>::set(vec![]);

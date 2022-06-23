@@ -5,7 +5,7 @@ use crate::state_chain::client::StateChainClient;
 use std::sync::Arc;
 
 use crate::{
-    eth::{utils, SignatureAndEvent},
+    eth::{utils, EthRpcApi, SignatureAndEvent},
     state_chain::client::StateChainRpcApi,
 };
 
@@ -93,14 +93,16 @@ impl EthObserver for StakeManager {
         "StakeManager"
     }
 
-    async fn handle_event<RpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
+        _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        EthRpcClient: EthRpcApi + Sync + Send,
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
@@ -164,7 +166,7 @@ impl EthObserver for StakeManager {
         let gov_withdrawal = SignatureAndEvent::new(&self.contract, "GovernanceWithdrawal")?;
 
         Ok(Box::new(
-            move |signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
+            move |event_signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
                 // get the node_id from the log and return as AccountId32
                 let node_id_from_log = |log| {
                     let account_bytes: [u8; 32] =
@@ -176,7 +178,7 @@ impl EthObserver for StakeManager {
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
 
-                Ok(if signature == staked.signature {
+                Ok(if event_signature == staked.signature {
                     let log = staked.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
                     StakeManagerEvent::Staked {
@@ -185,7 +187,7 @@ impl EthObserver for StakeManager {
                         staker: utils::decode_log_param(&log, "staker")?,
                         return_addr: utils::decode_log_param(&log, "returnAddr")?,
                     }
-                } else if signature == claim_registered.signature {
+                } else if event_signature == claim_registered.signature {
                     let log = claim_registered.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
                     StakeManagerEvent::ClaimRegistered {
@@ -195,27 +197,29 @@ impl EthObserver for StakeManager {
                         start_time: utils::decode_log_param(&log, "startTime")?,
                         expiry_time: utils::decode_log_param(&log, "expiryTime")?,
                     }
-                } else if signature == claim_executed.signature {
+                } else if event_signature == claim_executed.signature {
                     let log = claim_executed.event.parse_log(raw_log)?;
                     let account_id = node_id_from_log(&log)?;
                     StakeManagerEvent::ClaimExecuted {
                         account_id,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     }
-                } else if signature == min_stake_changed.signature {
+                } else if event_signature == min_stake_changed.signature {
                     let log = min_stake_changed.event.parse_log(raw_log)?;
                     StakeManagerEvent::MinStakeChanged {
                         old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
                         new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
                     }
-                } else if signature == gov_withdrawal.signature {
+                } else if event_signature == gov_withdrawal.signature {
                     let log = gov_withdrawal.event.parse_log(raw_log)?;
                     StakeManagerEvent::GovernanceWithdrawal {
                         to: utils::decode_log_param(&log, "to")?,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(signature)));
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
+                        event_signature
+                    )));
                 })
             },
         ))

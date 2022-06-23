@@ -11,7 +11,7 @@ pub type ReputationPoints = i32;
 #[scale_info(skip_type_params(P))]
 #[codec(mel_bound(P: ReputationParameters))]
 pub struct ReputationTracker<P: ReputationParameters> {
-	online_credits: P::OnlineCredits,
+	pub online_credits: P::OnlineCredits,
 	pub reputation_points: ReputationPoints,
 }
 
