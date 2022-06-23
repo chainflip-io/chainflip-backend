@@ -26,7 +26,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::{collections::btree_set::BTreeSet, prelude::*};
+use sp_std::prelude::*;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
@@ -55,8 +55,6 @@ pub mod pallet {
 		type EmergencyRotation: EmergencyRotation;
 		/// Qualify an authority
 		type AuctionQualification: QualifyNode<ValidatorId = Self::ValidatorId>;
-		/// Key generation exclusion set
-		type KeygenExclusionSet: Get<BTreeSet<Self::ValidatorId>>;
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 	}
@@ -166,8 +164,6 @@ impl<T: Config> Auctioneer<T> for Pallet<T> {
 		let mut bids = T::BidderProvider::get_bidders();
 		// Determine if this node is qualified for bidding
 		bids.retain(|(validator_id, _)| T::AuctionQualification::is_qualified(validator_id));
-		let excluded = T::KeygenExclusionSet::get();
-		bids.retain(|(validator_id, _)| !excluded.contains(validator_id));
 
 		let outcome = DynamicSetSizeAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),

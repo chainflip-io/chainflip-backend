@@ -158,13 +158,13 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 
 /// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub struct AuctionOutcome<CandidateId, BidAmount> {
-	/// The auction winners.
-	pub winners: Vec<CandidateId>,
-	/// The auction losers and their bids.
-	pub losers: Vec<Bid<CandidateId, BidAmount>>,
+pub struct AuctionOutcome<Id, Amount> {
+	/// The auction winners, sorted by in descending order.
+	pub winners: Vec<Id>,
+	/// The auction losers and their bids, sorted in descending order.
+	pub losers: Vec<Bid<Id, Amount>>,
 	/// The resulting bond for the next epoch.
-	pub bond: BidAmount,
+	pub bond: Amount,
 }
 
 impl<T, BidAmount: Copy + AtLeast32BitUnsigned> AuctionOutcome<T, BidAmount> {
@@ -196,14 +196,8 @@ pub trait Auctioneer<T: Chainflip> {
 pub trait BackupNodes {
 	type ValidatorId;
 
-	/// The current set of backup nodes.  The set may change on any stake or claim event
+	/// The current set of backup nodes. The set may change on any stake or claim event.
 	fn backup_nodes() -> Vec<Self::ValidatorId>;
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SuccessOrFailure {
-	Success,
-	Failure,
 }
 
 /// Rotating vaults
@@ -211,11 +205,11 @@ pub trait VaultRotator {
 	type ValidatorId;
 	type RotationError: Into<DispatchError>;
 
-	/// Start a vault rotation with the following `candidates`
+	/// Start a vault rotation with the following `candidates`.
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
 
-	/// Get the status of the current key generation
-	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure>;
+	/// Poll for the vault rotation outcome.
+	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
 }
 
 /// Handler for Epoch life cycle events.
@@ -707,6 +701,11 @@ pub trait MissedAuthorshipSlots {
 pub trait SystemStateInfo {
 	/// Ensure that the network is **not** in maintenance mode.
 	fn ensure_no_maintenance() -> DispatchResult;
+
+	/// Check if the network is in maintenance mode.
+	fn is_maintenance_mode() -> bool {
+		Self::ensure_no_maintenance().is_err()
+	}
 }
 
 /// Something that can manipulate the system state.

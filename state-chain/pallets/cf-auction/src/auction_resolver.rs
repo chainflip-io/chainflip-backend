@@ -113,6 +113,7 @@ mod test_auction_resolution {
 	use super::*;
 
 	use cf_traits::Bid;
+	use sp_std::collections::btree_set::BTreeSet;
 
 	#[test]
 	fn test_parameter_validation() {

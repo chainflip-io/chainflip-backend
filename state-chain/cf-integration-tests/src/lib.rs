@@ -756,7 +756,7 @@ mod tests {
 			BackupOrPassive, BidderProvider, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo,
 		};
-		use pallet_cf_validator::RotationStatus;
+		use pallet_cf_validator::RotationPhase;
 		use state_chain_runtime::Validator;
 
 		#[test]
@@ -810,12 +810,12 @@ mod tests {
 					// Move to start of auction
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
+					assert_eq!(Validator::current_rotation_phase(), RotationPhase::RunAuction);
 
 					// Next block, another auction
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
+					assert_eq!(Validator::current_rotation_phase(), RotationPhase::RunAuction);
 
 					for node in &offline_nodes {
 						testnet.set_active(node, true);
@@ -828,8 +828,8 @@ mod tests {
 
 					// The rotation can now continue to the next phase.
 					assert!(matches!(
-						Validator::rotation_phase(),
-						RotationStatus::AwaitingVaults(..)
+						Validator::current_rotation_phase(),
+						RotationPhase::VaultsRotating(..)
 					));
 				});
 		}
@@ -904,8 +904,8 @@ mod tests {
 					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
 					assert!(matches!(
-						Validator::rotation_phase(),
-						RotationStatus::AwaitingVaults(..)
+						Validator::current_rotation_phase(),
+						RotationPhase::VaultsRotating(..)
 					));
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);

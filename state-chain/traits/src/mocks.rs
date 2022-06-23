@@ -12,7 +12,6 @@ pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod eth_replay_protection_provider;
 pub mod key_provider;
-pub mod keygen_exclusion;
 pub mod offence_reporting;
 pub mod online;
 pub mod reputation_resetter;

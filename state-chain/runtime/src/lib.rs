@@ -61,7 +61,7 @@ pub use cf_traits::{
 	ChainflipAccountStore, EpochInfo, FlipBalance, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
+use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
@@ -145,7 +145,6 @@ impl pallet_cf_auction::Config for Runtime {
 		>,
 	);
 	type EmergencyRotation = Validator;
-	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 

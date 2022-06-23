@@ -4,8 +4,7 @@ use cf_traits::{
 	impl_mock_online,
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
-		system_state_info::MockSystemStateInfo,
+		epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo,
 	},
 	Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
 };
@@ -118,7 +117,6 @@ impl Config for Test {
 	type Event = Event;
 	type BidderProvider = MockBidderProvider;
 	type ChainflipAccount = MockChainflipAccount;
-	type KeygenExclusionSet = MockKeygenExclusion<Self>;
 	type WeightInfo = ();
 	type EmergencyRotation = MockEmergencyRotation;
 	type AuctionQualification = MockQualifyValidator;

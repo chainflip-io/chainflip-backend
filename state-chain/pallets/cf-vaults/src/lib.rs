@@ -7,8 +7,8 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
 	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
-	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SuccessOrFailure,
-	SystemStateManager, VaultRotator,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SystemStateManager,
+	VaultRotator,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -252,7 +252,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// The key has been successfully updated on the contract.
 	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionHash },
 	/// The rotation has failed at one of the above stages.
-	Failed,
+	Failed { offenders: Vec<T::ValidatorId> },
 }
 
 impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
@@ -275,9 +275,7 @@ pub struct Vault<T: ChainAbi> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
-	/// Failing a keygen ceremony carries its own consequences.
-	ParticipateKeygenFailed,
-	/// In addition, failing keygen is considered a regular signing offence.
+	/// Failing keygen is equivalent to a regular signing offence.
 	SigningOffence,
 }
 
@@ -374,7 +372,9 @@ pub mod pallet {
 							Self::on_keygen_success(keygen_ceremony_id, new_public_key);
 						},
 						Err(KeygenError::Incompatible) => {
-							PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+							PendingVaultRotation::<T, I>::put(
+								VaultRotationStatus::<T, I>::Failed { offenders: Vec::new() },
+							);
 							Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
 						},
 						Err(KeygenError::Failure(offenders)) => {
@@ -767,12 +767,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	// Called once there's consensus between the authorities that the keygen was unsuccessful
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
-		// TODO: We should combine this reporting to include both, so we only send a
-		// single: partipate keygen failure report, and the report handles both
-		// cases.
-		T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
 		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
+			offenders: offenders.to_vec(),
+		});
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 	}
 }
@@ -806,14 +804,17 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	/// Get the status of the current key generation
-	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure> {
+	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<T::ValidatorId>>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::Complete) =>
-				AsyncResult::Ready(SuccessOrFailure::Success),
-			Some(VaultRotationStatusVariant::Failed) =>
-				AsyncResult::Ready(SuccessOrFailure::Failure),
+			Some(VaultRotationStatusVariant::Complete) => AsyncResult::Ready(Ok(())),
+			Some(VaultRotationStatusVariant::Failed) => match PendingVaultRotation::<T, I>::get() {
+				Some(VaultRotationStatus::Failed { offenders }) =>
+					AsyncResult::Ready(Err(offenders)),
+				_ =>
+					unreachable!("Unreachable because we are in the branch for the Failed variant."),
+			},
 			None => AsyncResult::Void,
 		}
 	}
@@ -849,7 +850,6 @@ impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
-		T::OffenceReporter::forgive_all(PalletOffence::ParticipateKeygenFailed);
 	}
 }
 

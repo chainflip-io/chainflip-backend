@@ -34,7 +34,7 @@ benchmarks! {
 		call.dispatch_bypass_filter(o)?
 	}
 	verify {
-		assert_eq!(Pallet::<T>::rotation_phase(), RotationStatus::RunAuction)
+		assert!(matches!(Pallet::<T>::current_rotation_phase(), RotationPhase::VaultsRotating(..)));
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();

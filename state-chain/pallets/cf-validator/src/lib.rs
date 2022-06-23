@@ -15,14 +15,15 @@ mod backup_triage;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
+mod rotation_status;
 
 pub use backup_triage::*;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bonding,
 	Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation,
 	EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch,
-	MissedAuthorshipSlots, QualifyNode, ReputationResetter, RuntimeAuctionOutcome, StakeHandler,
-	SuccessOrFailure, VaultRotator,
+	MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo,
+	VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -30,10 +31,15 @@ use frame_support::{
 };
 pub use pallet::*;
 use sp_core::ed25519;
-use sp_runtime::traits::{BlockNumberProvider, CheckedDiv, One, Saturating, Zero};
+use sp_runtime::{
+	traits::{BlockNumberProvider, CheckedDiv, One, Saturating, UniqueSaturatedInto, Zero},
+	Percent,
+};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+use crate::rotation_status::RotationStatus;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 type SessionIndex = u32;
 
@@ -58,31 +64,32 @@ pub struct PercentageRange {
 	pub bottom: u8,
 }
 
+type RuntimeRotationStatus<T> =
+	RotationStatus<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
+
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub enum RotationStatus<T: Config> {
+pub enum RotationPhase<T: Config> {
 	Idle,
-	RunAuction,
-	AwaitingVaults(RuntimeAuctionOutcome<T>),
-	VaultsRotated(RuntimeAuctionOutcome<T>),
-	SessionRotating(RuntimeAuctionOutcome<T>),
+	VaultsRotating(RuntimeRotationStatus<T>),
+	VaultsRotated(RuntimeRotationStatus<T>),
+	SessionRotating(RuntimeRotationStatus<T>),
 }
 
-impl<T: Config> sp_std::fmt::Debug for RotationStatus<T> {
+impl<T: Config> sp_std::fmt::Debug for RotationPhase<T> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match self {
-			RotationStatus::Idle => write!(f, "Idle"),
-			RotationStatus::RunAuction => write!(f, "RunAuction"),
-			RotationStatus::AwaitingVaults(..) => write!(f, "AwaitingVaults(..)"),
-			RotationStatus::VaultsRotated(..) => write!(f, "VaultsRotated(..)"),
-			RotationStatus::SessionRotating(..) => write!(f, "SessionRotating(..)"),
+			RotationPhase::Idle => write!(f, "Idle"),
+			RotationPhase::VaultsRotating(..) => write!(f, "AwaitingVaults(..)"),
+			RotationPhase::VaultsRotated(..) => write!(f, "VaultsRotated(..)"),
+			RotationPhase::SessionRotating(..) => write!(f, "SessionRotating(..)"),
 		}
 	}
 }
 
-impl<T: Config> Default for RotationStatus<T> {
+impl<T: Config> Default for RotationPhase<T> {
 	fn default() -> Self {
-		RotationStatus::Idle
+		RotationPhase::Idle
 	}
 }
 
@@ -115,9 +122,7 @@ pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
-
 	use super::*;
-	use cf_traits::SystemStateInfo;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -192,7 +197,7 @@ pub mod pallet {
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// Rotation status updated \[rotation_status\]
-		RotationStatusUpdated(RotationStatus<T>),
+		RotationStatusUpdated(RotationPhase<T>),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
@@ -253,64 +258,37 @@ pub mod pallet {
 				}
 			}
 
-			match RotationPhase::<T>::get() {
-				RotationStatus::Idle => {
-					let blocks_per_epoch = BlocksPerEpoch::<T>::get();
-					if blocks_per_epoch > Zero::zero() {
-						let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
-						let diff = block_number.saturating_sub(current_epoch_started_at);
-						if diff >= blocks_per_epoch {
-							Self::set_rotation_status(RotationStatus::RunAuction);
-						}
+			match CurrentRotationPhase::<T>::get() {
+				RotationPhase::Idle => {
+					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
+						BlocksPerEpoch::<T>::get()
+					{
+						Self::start_authority_rotation();
 					}
 				},
-				RotationStatus::RunAuction => {
-					if T::SystemState::ensure_no_maintenance().is_ok() {
-						match T::Auctioneer::resolve_auction() {
-							Ok(auction_outcome) => {
-								match T::VaultRotator::start_vault_rotation(
-									auction_outcome.winners.clone(),
-								) {
-									Ok(_) => Self::set_rotation_status(
-										RotationStatus::AwaitingVaults(auction_outcome),
-									),
-									// We are assuming here that this is unlikely as the only reason
-									// it would fail is if we have no validators, which is already
-									// checked by the auction pallet, of if there is already a
-									// rotation in progress which isn't possible.
-									Err(e) => {
-										log::warn!(target: "cf-validator", "starting a vault rotation failed due to error: {:?}", e.into())
-									},
-								}
-							},
-							Err(e) =>
-								log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
-						}
-					}
-				},
-				RotationStatus::AwaitingVaults(auction_outcome) =>
+				RotationPhase::VaultsRotating(mut rotation_status) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
-						AsyncResult::Ready(SuccessOrFailure::Success) => {
-							Self::set_rotation_status(RotationStatus::VaultsRotated(
-								auction_outcome,
+						AsyncResult::Ready(Ok(_)) => {
+							Self::set_rotation_status(RotationPhase::VaultsRotated(
+								rotation_status,
 							));
 						},
-						AsyncResult::Ready(SuccessOrFailure::Failure) => {
-							Self::deposit_event(Event::RotationAborted);
-							Self::set_rotation_status(RotationStatus::RunAuction);
+						AsyncResult::Ready(Err(offenders)) => {
+							rotation_status.ban(offenders);
+							Self::start_vault_rotation(rotation_status);
 						},
 						AsyncResult::Void => {
-							log::error!(target: "cf-validator", "no vault rotation pending, returning to auction state");
+							log::error!(target: "cf-validator", "no vault rotation pending");
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
 						},
 					},
-				RotationStatus::VaultsRotated(auction_outcome) => {
-					Self::set_rotation_status(RotationStatus::SessionRotating(auction_outcome));
+				RotationPhase::VaultsRotated(rotation_status) => {
+					Self::set_rotation_status(RotationPhase::SessionRotating(rotation_status));
 				},
-				RotationStatus::SessionRotating(_) => {
-					Self::set_rotation_status(RotationStatus::Idle);
+				RotationPhase::SessionRotating(_) => {
+					Self::set_rotation_status(RotationPhase::Idle);
 				},
 			}
 			0
@@ -383,7 +361,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				RotationPhase::<T>::get() == RotationStatus::Idle,
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
 				Error::<T>::RotationInProgress
 			);
 			ensure!(number_of_blocks >= T::MinEpoch::get(), Error::<T>::InvalidEpoch);
@@ -412,10 +390,10 @@ pub mod pallet {
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				RotationPhase::<T>::get() == RotationStatus::Idle,
+				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
 				Error::<T>::RotationInProgress
 			);
-			Self::set_rotation_status(RotationStatus::RunAuction);
+			Self::start_authority_rotation();
 
 			Ok(().into())
 		}
@@ -659,8 +637,8 @@ pub mod pallet {
 
 	/// The rotation phase we are currently at
 	#[pallet::storage]
-	#[pallet::getter(fn rotation_phase)]
-	pub type RotationPhase<T: Config> = StorageValue<_, RotationStatus<T>, ValueQuery>;
+	#[pallet::getter(fn current_rotation_phase)]
+	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
 	/// A list of the current authorites
 	#[pallet::storage]
@@ -763,7 +741,7 @@ pub mod pallet {
 		fn build(&self) {
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			RotationPhase::<T>::set(RotationStatus::default());
+			CurrentRotationPhase::<T>::set(RotationPhase::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			BackupNodePercentage::<T>::set(self.backup_node_percentage);
 			const GENESIS_EPOCH: u32 = 0;
@@ -774,11 +752,12 @@ pub mod pallet {
 				GENESIS_EPOCH,
 				genesis_authorities.len() as AuthorityCount,
 			);
-			Pallet::<T>::start_new_epoch(RuntimeAuctionOutcome::<T> {
-				winners: genesis_authorities,
-				bond: self.bond,
-				..Default::default()
-			});
+			Pallet::<T>::start_new_epoch(RotationStatus::new(
+				genesis_authorities,
+				Vec::new(),
+				self.bond,
+				Vec::new(),
+			));
 		}
 	}
 }
@@ -814,10 +793,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
-	// TODO: This logic is currently duplicated in the CLI. Using an RPC could fix this
-	// https://github.com/chainflip-io/chainflip-backend/issues/1462
 	fn is_auction_phase() -> bool {
-		if RotationPhase::<T>::get() != RotationStatus::Idle {
+		if CurrentRotationPhase::<T>::get() != RotationPhase::Idle {
 			return true
 		}
 
@@ -861,8 +838,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
 		matches!(
-			RotationPhase::<T>::get(),
-			RotationStatus::VaultsRotated(_) | RotationStatus::SessionRotating(_)
+			CurrentRotationPhase::<T>::get(),
+			RotationPhase::VaultsRotated(_) | RotationPhase::SessionRotating(_)
 		)
 	}
 }
@@ -870,8 +847,8 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(auction_outcome: RuntimeAuctionOutcome<T>) {
-		let epoch_authorities = auction_outcome.winners;
+	fn start_new_epoch(auction_outcome: RuntimeRotationStatus<T>) {
+		let epoch_authorities = auction_outcome.authority_candidates();
 		let new_bond = auction_outcome.bond;
 
 		// Calculate the new epoch index
@@ -928,8 +905,7 @@ impl<T: Config> Pallet<T> {
 		});
 
 		// We've got new validators, which means the backups and passives may have changed.
-		BackupValidatorTriage::<T>::put(RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
-			auction_outcome.losers,
+		BackupValidatorTriage::<T>::put(auction_outcome.to_backup_triage::<T::ChainflipAccount>(
 			Self::backup_set_target_size(&epoch_authorities, BackupNodePercentage::<T>::get()),
 		));
 
@@ -953,13 +929,63 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn set_rotation_status(new_status: RotationStatus<T>) {
-		RotationPhase::<T>::put(new_status.clone());
+	fn set_rotation_status(new_status: RotationPhase<T>) {
+		CurrentRotationPhase::<T>::put(new_status.clone());
 		Self::deposit_event(Event::RotationStatusUpdated(new_status));
 	}
 
 	fn backup_set_target_size<A>(authorites: &[A], backup_node_percentage: Percentage) -> usize {
-		authorites.len() * backup_node_percentage as usize / 100usize
+		Percent::from_percent(backup_node_percentage) * authorites.len()
+	}
+
+	fn start_authority_rotation() {
+		if T::SystemState::is_maintenance_mode() {
+			log::info!(
+				target: "cf-validator",
+				"Can't start rotation. System is in maintenance mode."
+			);
+			return
+		}
+		log::info!(target: "cf-validator", "Starting rotation");
+		match T::Auctioneer::resolve_auction() {
+			Ok(auction_outcome) => {
+				log::info!(
+					target: "cf-validator",
+					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
+					auction_outcome.winners.len(),
+					auction_outcome.losers.len(),
+					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
+						10u128.pow(18),
+				);
+				Self::start_vault_rotation(RotationStatus::from_auction_outcome::<Self>(
+					auction_outcome,
+				));
+			},
+			Err(e) =>
+				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
+		}
+	}
+
+	fn start_vault_rotation(rotation_status: RuntimeRotationStatus<T>) {
+		match T::VaultRotator::start_vault_rotation(rotation_status.authority_candidates()) {
+			Ok(_) => {
+				log::info!(target: "cf-validator", "Vault rotation started.");
+				Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
+			},
+			// This can only happen if no validators are left, or if there
+			Err(e) => {
+				// is some logic error that causes `start_rotation` to be called
+				// when a vault rotation is already pending. It *should* never
+				// happen. If it does, the only thing we can try is to start
+				// over with a new auction.
+				log::error!(
+					target: "cf-validator",
+					"starting a vault rotation failed due to error: {:?}",
+					e.into()
+				);
+				Self::start_authority_rotation();
+			},
+		}
 	}
 }
 
@@ -1014,8 +1040,9 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	/// The first rotation queues the new validators, the next rotation queues `None`, and
 	/// activates the queued validators.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
-		match RotationPhase::<T>::get() {
-			RotationStatus::VaultsRotated(auction_outcome) => Some(auction_outcome.winners),
+		match CurrentRotationPhase::<T>::get() {
+			RotationPhase::VaultsRotated(rotation_status) =>
+				Some(rotation_status.authority_candidates()),
 			_ => None,
 		}
 	}
@@ -1031,8 +1058,8 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
-		if let RotationStatus::SessionRotating(auction_outcome) = RotationPhase::<T>::get() {
-			Pallet::<T>::start_new_epoch(auction_outcome)
+		if let RotationPhase::SessionRotating(rotation_status) = CurrentRotationPhase::<T>::get() {
+			Pallet::<T>::start_new_epoch(rotation_status)
 		}
 	}
 }
@@ -1111,7 +1138,7 @@ pub struct NotDuringRotation<T: Config>(PhantomData<T>);
 
 impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	fn is_satisfied() -> bool {
-		RotationPhase::<T>::get() == RotationStatus::Idle
+		CurrentRotationPhase::<T>::get() == RotationPhase::Idle
 	}
 }
 
