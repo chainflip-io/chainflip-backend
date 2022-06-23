@@ -472,9 +472,9 @@ mod tests {
 
     #[test]
     fn can_load_keys_with_current_keygen_info() {
-        // doesn't really matter if it's random, we won't be using the exact values
+        type Scheme = EthSigning;
 
-        let secret_share = generate_key_share_for_test::<EthSigning>();
+        let secret_share = generate_key_share_for_test::<Scheme>();
         let logger = new_test_logger();
 
         let key_id = KeyId(TEST_KEY.into());
@@ -482,12 +482,12 @@ mod tests {
         {
             let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
-            p_db.update_key::<EthSigning>(&key_id, &secret_share);
+            p_db.update_key::<Scheme>(&key_id, &secret_share);
         }
 
         {
             let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-            let keys = p_db.load_keys::<EthSigning>();
+            let keys = p_db.load_keys::<Scheme>();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             // single party keygen has a threshold of 0
             assert_eq!(key.params.threshold, 0);
@@ -496,20 +496,22 @@ mod tests {
 
     #[test]
     fn can_update_key() {
+        type Scheme = EthSigning;
+
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
 
         let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
-        let keys_before = p_db.load_keys::<EthSigning>();
+        let keys_before = p_db.load_keys::<Scheme>();
         // there should be no key [0; 33] yet
         assert!(keys_before.get(&key_id).is_none());
 
-        let keygen_result_info = generate_key_share_for_test::<EthSigning>();
-        p_db.update_key::<EthSigning>(&key_id, &keygen_result_info);
+        let keygen_result_info = generate_key_share_for_test::<Scheme>();
+        p_db.update_key::<Scheme>(&key_id, &keygen_result_info);
 
-        let keys_before = p_db.load_keys::<EthSigning>();
+        let keys_before = p_db.load_keys::<Scheme>();
         assert!(keys_before.get(&key_id).is_some());
     }
 
@@ -563,6 +565,8 @@ mod tests {
 
     #[test]
     fn can_load_key_from_backup() {
+        type Scheme = EthSigning;
+
         let logger = new_test_logger();
         let (directory, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
@@ -570,8 +574,8 @@ mod tests {
         // Create a normal db and save a key in it
         {
             let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-            let keygen_result_info = generate_key_share_for_test::<EthSigning>();
-            p_db.update_key::<EthSigning>(&key_id, &keygen_result_info);
+            let keygen_result_info = generate_key_share_for_test::<Scheme>();
+            p_db.update_key::<Scheme>(&key_id, &keygen_result_info);
         }
 
         // Do a backup of the db,
@@ -591,48 +595,45 @@ mod tests {
                 PersistentKeyDB::new_and_migrate_to_latest(backups.first().unwrap(), &logger)
                     .unwrap();
 
-            assert!(p_db.load_keys::<EthSigning>().get(&key_id).is_some());
+            assert!(p_db.load_keys::<Scheme>().get(&key_id).is_some());
         }
     }
 
     #[test]
     fn can_use_multiple_crypto_schemes() {
+        type Scheme1 = EthSigning;
+        type Scheme2 = PolkadotSigning;
+
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        let eth_key_id = KeyId(vec![0; 33]);
-        let dot_key_id = KeyId(vec![1; 33]);
+        let scheme_1_key_id = KeyId(vec![0; 33]);
+        let scheme_2_key_id = KeyId(vec![1; 33]);
 
         // Create a normal db and save multiple keys to it of different crypto schemes
         {
             let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
-            p_db.update_key::<EthSigning>(
-                &eth_key_id,
-                &generate_key_share_for_test::<EthSigning>(),
-            );
-            p_db.update_key::<PolkadotSigning>(
-                &dot_key_id,
-                &generate_key_share_for_test::<PolkadotSigning>(),
-            );
+            p_db.update_key::<Scheme1>(&scheme_1_key_id, &generate_key_share_for_test::<Scheme1>());
+            p_db.update_key::<Scheme2>(&scheme_2_key_id, &generate_key_share_for_test::<Scheme2>());
         }
 
         // Open the db and load the keys of both types
         {
             let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
 
-            let eth_keys = p_db.load_keys::<EthSigning>();
-            let eth_key = eth_keys
-                .get(&eth_key_id)
-                .expect("Should have an entry for key");
-            assert_eq!(eth_key.params.threshold, 0);
-            assert_eq!(eth_keys.len(), 1, "Incorrect number of keys loaded");
+            let scheme_1_keys = p_db.load_keys::<Scheme1>();
+            assert_eq!(scheme_1_keys.len(), 1, "Incorrect number of keys loaded");
+            assert!(
+                scheme_1_keys.get(&scheme_1_key_id).is_some(),
+                "Incorrect key id"
+            );
 
-            let dot_keys = p_db.load_keys::<PolkadotSigning>();
-            let dot_key = dot_keys
-                .get(&dot_key_id)
-                .expect("Should have an entry for key");
-            assert_eq!(dot_key.params.threshold, 0);
-            assert_eq!(dot_keys.len(), 1, "Incorrect number of keys loaded");
+            let scheme_2_keys = p_db.load_keys::<Scheme2>();
+            assert_eq!(scheme_2_keys.len(), 1, "Incorrect number of keys loaded");
+            assert!(
+                scheme_2_keys.get(&scheme_2_key_id).is_some(),
+                "Incorrect key id"
+            );
         }
     }
 }
