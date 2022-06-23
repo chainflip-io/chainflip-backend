@@ -32,7 +32,6 @@ thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
-	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -75,20 +74,6 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
-}
-
-pub struct MockEmergencyRotation;
-
-impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation() {
-		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
-	}
-
-	fn emergency_rotation_in_progress() -> bool {
-		EMERGENCY_ROTATION.with(|cell| *cell.borrow())
-	}
-
-	fn emergency_rotation_completed() {}
 }
 
 impl_mock_online!(ValidatorId);

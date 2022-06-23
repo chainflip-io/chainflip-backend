@@ -597,11 +597,6 @@ pub mod pallet {
 	#[pallet::getter(fn claim_period_as_percentage)]
 	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
-	/// An emergency rotation has been requested
-	#[pallet::storage]
-	#[pallet::getter(fn emergency_rotation_requested)]
-	pub(super) type EmergencyRotationRequested<T: Config> = StorageValue<_, bool, ValueQuery>;
-
 	/// The starting block number for the current epoch
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
@@ -878,9 +873,6 @@ impl<T: Config> Pallet<T> {
 		// Set the block this epoch starts at
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
-		// If we were in an emergency, mark as completed
-		Self::emergency_rotation_completed();
-
 		// Save the epoch -> authorities map
 		HistoricalAuthorities::<T>::insert(new_epoch, &epoch_authorities);
 
@@ -1091,22 +1083,9 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 
 impl<T: Config> EmergencyRotation for Pallet<T> {
 	fn request_emergency_rotation() {
-		if !EmergencyRotationRequested::<T>::get() {
-			EmergencyRotationRequested::<T>::set(true);
-			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
-			if RotationPhase::<T>::get() == RotationStatus::<T>::Idle {
-				Self::set_rotation_status(RotationStatus::RunAuction);
-			}
-		}
-	}
-
-	fn emergency_rotation_in_progress() -> bool {
-		EmergencyRotationRequested::<T>::get()
-	}
-
-	fn emergency_rotation_completed() {
-		if Self::emergency_rotation_in_progress() {
-			EmergencyRotationRequested::<T>::set(false);
+		Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
+		if CurrentRotationPhase::<T>::get() == RotationPhase::<T>::Idle {
+			Self::start_authority_rotation();
 		}
 	}
 }
