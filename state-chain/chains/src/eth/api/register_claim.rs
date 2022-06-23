@@ -1,8 +1,8 @@
 //! Definitions for the "registerClaim" transaction.
 
 use crate::{
-	eth::{SchnorrVerificationComponents, SigData, Tokenizable},
-	ChainCrypto, Ethereum,
+	eth::{SigData, Tokenizable},
+	ApiCall, ChainAbi, ChainCrypto, Ethereum,
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -58,32 +58,6 @@ impl RegisterClaim {
 		calldata
 	}
 
-	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	pub fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
-			.encode_input(&[
-				self.sig_data.tokenize(),
-				Token::FixedBytes(self.node_id.to_vec()),
-				Token::Uint(self.amount),
-				Token::Address(self.address),
-				Token::Uint(self.expiry),
-			])
-			.expect(
-				r#"
-					This can only fail if the parameter types don't match the function signature encoded below.
-					Therefore, as long as the tests pass, it can't fail at runtime.
-				"#,
-			)
-	}
-
 	/// Gets the function defintion for the `registerClaim` smart contract call. Loading this from
 	/// the json abi definition is currently not supported in no-std, so instead swe hard-code it
 	/// here and verify against the abi in a unit test.
@@ -117,8 +91,42 @@ impl RegisterClaim {
 	}
 }
 
+impl ApiCall<Ethereum> for RegisterClaim {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		self.sig_data.msg_hash
+	}
+
+	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+		self.sig_data.insert_signature(signature);
+		self
+	}
+
+	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+		self.get_function()
+			.encode_input(&[
+				self.sig_data.tokenize(),
+				Token::FixedBytes(self.node_id.to_vec()),
+				Token::Uint(self.amount),
+				Token::Address(self.address),
+				Token::Uint(self.expiry),
+			])
+			.expect(
+				r#"
+					This can only fail if the parameter types don't match the function signature encoded below.
+					Therefore, as long as the tests pass, it can't fail at runtime.
+				"#,
+			)
+	}
+
+	fn is_signed(&self) -> bool {
+		self.sig_data.is_signed()
+	}
+}
+
 #[cfg(test)]
 mod test_register_claim {
+	use crate::eth::SchnorrVerificationComponents;
+
 	use super::*;
 	use frame_support::assert_ok;
 
@@ -166,7 +174,7 @@ mod test_register_claim {
 
 		let expected_msg_hash = register_claim_runtime.sig_data.msg_hash;
 
-		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
+		assert_eq!(register_claim_runtime.threshold_signature_payload(), expected_msg_hash);
 		let runtime_payload = register_claim_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {
@@ -175,7 +183,7 @@ mod test_register_claim {
 			})
 			.abi_encoded(); // Ensure signing payload isn't modified by signature.
 
-		assert_eq!(register_claim_runtime.signing_payload(), expected_msg_hash);
+		assert_eq!(register_claim_runtime.threshold_signature_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:

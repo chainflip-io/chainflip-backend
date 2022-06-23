@@ -439,7 +439,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id,
-				claim_details_signed.encoded(),
+				claim_details_signed.abi_encoded(),
 			));
 
 			Ok(().into())

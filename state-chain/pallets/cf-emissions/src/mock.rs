@@ -195,7 +195,7 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 		unimplemented!()
 	}
 
-	fn encoded(&self) -> Vec<u8> {
+	fn abi_encoded(&self) -> Vec<u8> {
 		unimplemented!()
 	}
 
