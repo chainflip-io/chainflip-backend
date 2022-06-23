@@ -9,7 +9,7 @@ use cf_traits::{
 	Bonding,
 };
 
-use frame_support::{assert_noop, assert_ok, error::BadOrigin};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::Hooks};
 use pallet_cf_flip::Bonder;
 use sp_runtime::DispatchError;
 use std::time::Duration;
@@ -426,7 +426,7 @@ fn claim_expiry() {
 		assert_ok!(Staking::post_claim_signature(Origin::root(), ALICE, 0));
 
 		// Trigger expiry.
-		Pallet::<Test>::expire_pending_claims();
+		Pallet::<Test>::on_initialize(0);
 
 		// Nothing should have expired yet.
 		assert!(PendingClaims::<Test>::contains_key(ALICE));
@@ -434,7 +434,7 @@ fn claim_expiry() {
 
 		// Tick the clock forward and expire.
 		time_source::Mock::tick(Duration::from_secs(7));
-		Pallet::<Test>::expire_pending_claims();
+		Pallet::<Test>::on_initialize(0);
 
 		// Alice should have expired but not Bob.
 		assert!(!PendingClaims::<Test>::contains_key(ALICE));
@@ -442,7 +442,7 @@ fn claim_expiry() {
 
 		// Tick forward again and expire.
 		time_source::Mock::tick(Duration::from_secs(10));
-		Pallet::<Test>::expire_pending_claims();
+		Pallet::<Test>::on_initialize(0);
 
 		// Bob's (unsigned) claim should now be expired too.
 		assert!(!PendingClaims::<Test>::contains_key(BOB));

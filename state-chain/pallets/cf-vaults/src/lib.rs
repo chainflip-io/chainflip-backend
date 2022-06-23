@@ -35,6 +35,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "std")]
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
@@ -738,9 +739,10 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
+			use sp_runtime::traits::Zero;
 			Self {
 				vault_key: Default::default(),
-				deployment_block: Default::default(),
+				deployment_block: Zero::zero(),
 				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into(),
 			}
 		}
@@ -854,7 +856,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	fn set_key(key: <T::Chain as ChainCrypto>::AggKey) {
 		Vaults::<T, I>::insert(
 			CurrentEpochIndex::<T>::get(),
-			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0) },
+			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },
 		);
 	}
 }

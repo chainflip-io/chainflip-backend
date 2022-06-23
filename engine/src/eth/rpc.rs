@@ -3,8 +3,8 @@ use web3::{
     api::SubscriptionStream,
     signing::SecretKeyRef,
     types::{
-        Block, BlockHeader, BlockNumber, Bytes, CallRequest, Filter, Log, SignedTransaction,
-        SyncState, Transaction, TransactionId, TransactionParameters, U64,
+        Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
+        SignedTransaction, SyncState, Transaction, TransactionId, TransactionParameters, U64,
     },
     Web3,
 };
@@ -77,6 +77,16 @@ pub trait EthRpcApi: Send + Sync {
     /// - Request fails
     /// - Request succeeds, but doesn't return a block
     async fn block(&self, block_number: U64) -> Result<Block<H256>>;
+
+    async fn fee_history(
+        &self,
+        block_count: U256,
+        newest_block: BlockNumber,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> Result<FeeHistory>;
+
+    /// Get the latest block number.
+    async fn block_number(&self) -> Result<U64>;
 }
 
 #[async_trait]
@@ -186,6 +196,33 @@ where
                 })
             })
     }
+
+    async fn fee_history(
+        &self,
+        block_count: U256,
+        newest_block: BlockNumber,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> Result<FeeHistory> {
+        self.web3
+            .eth()
+            .fee_history(block_count, newest_block, reward_percentiles.clone())
+            .await
+            .context(format!(
+                "{} client: Call failed: fee_history({:?}, {:?}, {:?})",
+                T::transport_protocol(),
+                block_count,
+                newest_block,
+                reward_percentiles,
+            ))
+    }
+
+    async fn block_number(&self) -> Result<U64> {
+        self.web3
+            .eth()
+            .block_number()
+            .await
+            .context("Failed to fetch block number with HTTP client")
+    }
 }
 
 impl EthWsRpcClient {
@@ -268,22 +305,6 @@ impl EthHttpRpcClient {
     }
 }
 
-#[async_trait]
-pub trait EthHttpRpcApi {
-    async fn block_number(&self) -> Result<U64>;
-}
-
-#[async_trait]
-impl EthHttpRpcApi for EthHttpRpcClient {
-    async fn block_number(&self) -> Result<U64> {
-        self.web3
-            .eth()
-            .block_number()
-            .await
-            .context("Failed to fetch block number with HTTP client")
-    }
-}
-
 #[derive(Clone)]
 pub struct EthDualRpcClient {
     ws_client: EthWsRpcClient,
@@ -350,6 +371,25 @@ impl EthRpcApi for EthDualRpcClient {
     async fn block(&self, block_number: U64) -> Result<Block<H256>> {
         dual_call_rpc!(self, block, block_number)
     }
+
+    async fn fee_history(
+        &self,
+        block_count: U256,
+        newest_block: BlockNumber,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> Result<FeeHistory> {
+        dual_call_rpc!(
+            self,
+            fee_history,
+            block_count,
+            newest_block,
+            reward_percentiles
+        )
+    }
+
+    async fn block_number(&self) -> Result<U64> {
+        dual_call_rpc!(self, block_number,)
+    }
 }
 
 #[cfg(test)]
@@ -361,14 +401,8 @@ pub mod mocks {
     use web3::types::{Block, Bytes, Filter, Log, Transaction};
 
     mock!(
-
         // becomes MockEthHttpRpcClient
         pub EthHttpRpcClient {}
-
-        #[async_trait]
-        impl EthHttpRpcApi for EthHttpRpcClient {
-            async fn block_number(&self) -> Result<U64>;
-        }
 
         #[async_trait]
         impl EthRpcApi for EthHttpRpcClient {
@@ -389,6 +423,15 @@ pub mod mocks {
             async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>>;
+
+            async fn fee_history(
+                &self,
+                block_count: U256,
+                newest_block: BlockNumber,
+                reward_percentiles: Option<Vec<f64>>,
+            ) -> Result<FeeHistory>;
+
+            async fn block_number(&self) -> Result<U64>;
         }
     );
 }

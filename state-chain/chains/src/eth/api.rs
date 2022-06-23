@@ -112,9 +112,9 @@ impl From<update_flip_supply::UpdateFlipSupply> for EthereumApi {
 impl ApiCall<Ethereum> for EthereumApi {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		match self {
-			EthereumApi::SetAggKeyWithAggKey(tx) => tx.signing_payload(),
-			EthereumApi::RegisterClaim(tx) => tx.signing_payload(),
-			EthereumApi::UpdateFlipSupply(tx) => tx.signing_payload(),
+			EthereumApi::SetAggKeyWithAggKey(tx) => tx.threshold_signature_payload(),
+			EthereumApi::RegisterClaim(tx) => tx.threshold_signature_payload(),
+			EthereumApi::UpdateFlipSupply(tx) => tx.threshold_signature_payload(),
 		}
 	}
 
@@ -126,39 +126,21 @@ impl ApiCall<Ethereum> for EthereumApi {
 		}
 	}
 
-	fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(call) => call.abi_encoded(),
 			EthereumApi::RegisterClaim(call) => call.abi_encoded(),
 			EthereumApi::UpdateFlipSupply(call) => call.abi_encoded(),
 		}
 	}
-}
 
-macro_rules! impl_api_calls {
-	( $( $implementation:ty ),+ $(,)? ) => {
-        $(
-            impl ApiCall<Ethereum> for $implementation {
-                fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-                    self.signing_payload()
-                }
-
-                fn signed(self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-                    self.signed(signature)
-                }
-
-                fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
-                    self.abi_encoded()
-                }
-            }
-        )+
-	};
-}
-
-impl_api_calls! {
-	register_claim::RegisterClaim,
-	set_agg_key_with_agg_key::SetAggKeyWithAggKey,
-	update_flip_supply::UpdateFlipSupply,
+	fn is_signed(&self) -> bool {
+		match self {
+			EthereumApi::SetAggKeyWithAggKey(call) => call.is_signed(),
+			EthereumApi::RegisterClaim(call) => call.is_signed(),
+			EthereumApi::UpdateFlipSupply(call) => call.is_signed(),
+		}
+	}
 }
 
 fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {

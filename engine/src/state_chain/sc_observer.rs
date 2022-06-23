@@ -5,11 +5,11 @@ use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::AccountId;
 use std::{collections::BTreeSet, sync::Arc};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{broadcast, mpsc::UnboundedSender};
 
 use crate::{
     eth::{rpc::EthRpcApi, EthBroadcaster, ObserveInstruction},
-    logging::COMPONENT_KEY,
+    logging::{CEREMONY_ID_KEY, COMPONENT_KEY},
     multisig::{
         client::{CeremonyFailureReason, KeygenFailureReason, MultisigClientApi},
         KeyId, MessageHash,
@@ -60,19 +60,13 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                         signature.into(),
                     ),
                     // Report keygen failure if we failed to sign
-                    Err((bad_account_ids, reason)) => {
-                        slog::debug!(
-                            logger,
-                            "Keygen ceremony {} verification failed: {}",
-                            ceremony_id,
-                            reason
-                        );
+                    Err((bad_account_ids, _reason)) => {
+                        slog::debug!(logger, "Keygen ceremony verification failed"; CEREMONY_ID_KEY => ceremony_id);
                         ReportedKeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
                     }
                 }
             }
             Err((bad_account_ids, reason)) => {
-                slog::debug!(logger, "Keygen ceremony {} failed: {}", ceremony_id, reason);
                 if let CeremonyFailureReason::<KeygenFailureReason>::Other(
                     KeygenFailureReason::KeyNotCompatible,
                 ) = reason
@@ -107,9 +101,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         AccountPeerMappingChange,
     )>,
 
-    // TODO: we should be able to factor this out into a single ETH window sender
-    sm_instruction_sender: UnboundedSender<ObserveInstruction>,
-    km_instruction_sender: UnboundedSender<ObserveInstruction>,
+    witnessing_instruction_sender: broadcast::Sender<ObserveInstruction>,
     initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
@@ -134,10 +126,9 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .expect("Should be able to submit first heartbeat");
 
     let send_instruction = |observe_instruction: ObserveInstruction| {
-        km_instruction_sender
-            .send(observe_instruction.clone())
+        witnessing_instruction_sender
+            .send(observe_instruction)
             .unwrap();
-        sm_instruction_sender.send(observe_instruction).unwrap();
     };
 
     macro_rules! start_epoch_observation {
@@ -315,8 +306,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                                     )
                                                                     .await;
                                                             }
-                                                            Err((bad_account_ids, reason)) => {
-                                                                slog::debug!(logger, "Threshold signing ceremony {} failed: {}", ceremony_id, reason);
+                                                            Err((bad_account_ids, _reason)) => {
                                                                 let _result = state_chain_client
                                                                     .submit_signed_extrinsic(
                                                                         pallet_cf_threshold_signature::Call::report_signature_failed {
