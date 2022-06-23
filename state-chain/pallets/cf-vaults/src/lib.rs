@@ -39,32 +39,16 @@ mod tests;
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub enum KeygenOutcome<Key, Id> {
-	/// We have reached keygen consensus, and the key is now available.
-	Success(Key),
+pub enum KeygenError<Id> {
 	/// Generated key is incompatible with requirements
 	Incompatible,
 	/// Keygen failed with the enclosed guilty parties.
 	Failure(BTreeSet<Id>),
 }
 
-/// CFE reports the keygen outcome, on success it will report the signature and the payload it
-/// signed.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub enum ReportedKeygenOutcome<Key, Payload, Signature, Id> {
-	Success(Key, Payload, Signature),
-
-	/// Generated key is incompatible with requirements
-	Incompatible,
-
-	Failure(BTreeSet<Id>),
-}
-
-impl<Key, Id: Ord> Default for KeygenOutcome<Key, Id> {
-	fn default() -> Self {
-		Self::Failure(BTreeSet::new())
-	}
-}
+pub type KeygenOutcome<Key, Id> = Result<Key, KeygenError<Id>>;
+pub type ReportedKeygenOutcome<Key, Payload, Signature, Id> =
+	Result<(Key, Payload, Signature), KeygenError<Id>>;
 
 pub type CeremonyId = u64;
 pub type ReportedKeygenOutcomeFor<T, I = ()> = ReportedKeygenOutcome<
@@ -168,7 +152,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		if let Some((key, votes)) = self.success_votes.iter().next() {
 			if *votes == self.candidate_count {
 				SuccessVoters::<T, I>::remove_all(None);
-				return KeygenOutcome::Success(*key)
+				return Ok(*key)
 			}
 		}
 
@@ -181,18 +165,18 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 
 		let mut to_punish = self.remaining_candidates.clone();
 		match self.consensus_outcome() {
-			Some(KeygenOutcome::Success(consensus_key)) => {
+			Some(Ok(consensus_key)) => {
 				SuccessVoters::<T, I>::remove(consensus_key);
 				to_punish.append(&mut remaining_success_voters());
 				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
 				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
 			},
-			Some(KeygenOutcome::Incompatible) => {
+			Some(Err(KeygenError::Incompatible)) => {
 				IncompatibleVoters::<T, I>::kill();
 				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
 				to_punish.append(&mut remaining_success_voters());
 			},
-			Some(KeygenOutcome::Failure(mut blamed)) => {
+			Some(Err(KeygenError::Failure(mut blamed))) => {
 				FailureVoters::<T, I>::kill();
 				to_punish.append(&mut blamed);
 				to_punish.append(&mut remaining_success_voters());
@@ -206,15 +190,14 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			},
 		};
 
-		KeygenOutcome::Failure(to_punish)
+		Err(KeygenError::Failure(to_punish))
 	}
 
 	/// Determines the keygen outcome based on threshold consensus.
 	/// - If less than `self.success_threshold()` voted for failure or success returns `None`.
-	/// - Returns `Some(KeygenOutcomeSuccess(key))` *iff any* key has at least
-	///   `self.success_threshold()` number of
+	/// - Returns `Some(Ok(key))` *iff any* key has at least `self.success_threshold()` number of
 	/// votes.
-	/// - Returns `Some(KeygenOutcomeFailur(blamed_nodes))` *iff* at least
+	/// - Returns `Some(Err(KeygenError::Failure(blamed_nodes)))` *iff* at least
 	///   `self.success_threshold()` number of nodes voted
 	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
 	/// votes.
@@ -228,16 +211,16 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 
 		for key in SuccessVoters::<T, I>::iter_keys() {
 			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= success_threshold {
-				return Some(KeygenOutcome::Success(key))
+				return Some(Ok(key))
 			}
 		}
 
 		if IncompatibleVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
-			return Some(KeygenOutcome::Incompatible)
+			return Some(Err(KeygenError::Incompatible))
 		}
 
 		if FailureVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
-			Some(KeygenOutcome::Failure(
+			Some(Err(KeygenError::Failure(
 				self.blame_votes
 					.iter()
 					.filter_map(
@@ -251,7 +234,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 					)
 					.cloned()
 					.collect(),
-			))
+			)))
 		} else {
 			None
 		}
@@ -386,15 +369,15 @@ pub mod pallet {
 				if resolve {
 					let candidate_count = response_status.candidate_count;
 					match response_status.resolve_keygen_outcome() {
-						KeygenOutcome::Success(new_public_key) => {
+						Ok(new_public_key) => {
 							weight += T::WeightInfo::on_initialize_success();
 							Self::on_keygen_success(keygen_ceremony_id, new_public_key);
 						},
-						KeygenOutcome::Incompatible => {
+						Err(KeygenError::Incompatible) => {
 							PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
 							Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
 						},
-						KeygenOutcome::Failure(offenders) => {
+						Err(KeygenError::Failure(offenders)) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							let offenders = if (offenders.len() as AuthorityCount) <
 								utilities::success_threshold_from_share_count(candidate_count)
@@ -577,7 +560,7 @@ pub mod pallet {
 			// -- Tally the votes.
 
 			match reported_outcome {
-				ReportedKeygenOutcome::Success(key, payload, sig) =>
+				Ok((key, payload, sig)) =>
 					if <T::Chain as ChainCrypto>::verify_threshold_signature(&key, &payload, &sig) {
 						keygen_status.add_success_vote(&reporter, key)?;
 						Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
@@ -587,11 +570,11 @@ pub mod pallet {
 							reporter,
 						));
 					},
-				ReportedKeygenOutcome::Incompatible => {
+				Err(KeygenError::Incompatible) => {
 					keygen_status.add_incompatible_vote(&reporter)?;
 					Self::deposit_event(Event::<T, I>::KeygenIncompatibleReported(reporter));
 				},
-				ReportedKeygenOutcome::Failure(blamed) => {
+				Err(KeygenError::Failure(blamed)) => {
 					keygen_status.add_failure_vote(&reporter, blamed)?;
 					Self::deposit_event(Event::<T, I>::KeygenFailureReported(reporter));
 				},

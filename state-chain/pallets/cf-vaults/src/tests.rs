@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenResolutionPendingSince,
-	PalletOffence, PendingVaultRotation, ReportedKeygenOutcome, SuccessVoters, Vault,
+	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenError,
+	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
 	VaultRotationStatus, Vaults,
 };
 use cf_chains::mocks::MockThresholdSignature;
@@ -132,11 +132,7 @@ fn no_active_rotation() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				1,
-				ReportedKeygenOutcome::Success(
-					NEW_AGG_PUB_KEY,
-					Default::default(),
-					Default::default()
-				)
+				Ok((NEW_AGG_PUB_KEY, Default::default(), Default::default()))
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
@@ -145,7 +141,7 @@ fn no_active_rotation() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				1,
-				ReportedKeygenOutcome::Failure(Default::default())
+				Err(KeygenError::Failure(Default::default()))
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
@@ -161,11 +157,7 @@ fn cannot_report_keygen_success_twice() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(
-				NEW_AGG_PUB_KEY,
-				MOCK_THRESHOLD_SIG.signed_payload,
-				MOCK_THRESHOLD_SIG
-			)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// Can't report twice.
@@ -173,11 +165,7 @@ fn cannot_report_keygen_success_twice() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				ReportedKeygenOutcome::Success(
-					NEW_AGG_PUB_KEY,
-					MOCK_THRESHOLD_SIG.signed_payload,
-					MOCK_THRESHOLD_SIG
-				)
+				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -197,11 +185,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(
-				NEW_AGG_PUB_KEY,
-				MOCK_THRESHOLD_SIG.signed_payload,
-				MOCK_THRESHOLD_SIG
-			)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// Can't report failure after reporting success
@@ -209,7 +193,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				ReportedKeygenOutcome::Failure(BTreeSet::from_iter([BOB, CHARLIE]))
+				Err(KeygenError::Failure(BTreeSet::from_iter([BOB, CHARLIE])))
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -229,11 +213,7 @@ fn only_participants_can_report_keygen_outcome() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(
-				NEW_AGG_PUB_KEY,
-				MOCK_THRESHOLD_SIG.signed_payload,
-				MOCK_THRESHOLD_SIG
-			)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// Only participants can respond.
@@ -243,11 +223,7 @@ fn only_participants_can_report_keygen_outcome() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(non_participant),
 				ceremony_id,
-				ReportedKeygenOutcome::Success(
-					NEW_AGG_PUB_KEY,
-					MOCK_THRESHOLD_SIG.signed_payload,
-					MOCK_THRESHOLD_SIG
-				)
+				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -267,11 +243,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(
-				NEW_AGG_PUB_KEY,
-				MOCK_THRESHOLD_SIG.signed_payload,
-				MOCK_THRESHOLD_SIG
-			)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// Ceremony id in the past (not the pending one we're waiting for)
@@ -279,11 +251,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id - 1,
-				ReportedKeygenOutcome::Success(
-					NEW_AGG_PUB_KEY,
-					MOCK_THRESHOLD_SIG.signed_payload,
-					MOCK_THRESHOLD_SIG
-				)
+				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -297,11 +265,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id + 1,
-				ReportedKeygenOutcome::Success(
-					NEW_AGG_PUB_KEY,
-					MOCK_THRESHOLD_SIG.signed_payload,
-					MOCK_THRESHOLD_SIG
-				)
+				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -323,7 +287,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		assert_eq!(
@@ -342,7 +306,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// A resolution is still pending - we require 100% response rate.
@@ -362,7 +326,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// This time we should have enough votes for consensus.
@@ -411,29 +375,21 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(
-				NEW_AGG_PUB_KEY,
-				MOCK_THRESHOLD_SIG.signed_payload,
-				MOCK_THRESHOLD_SIG
-			)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(
-				NEW_AGG_PUB_KEY,
-				MOCK_THRESHOLD_SIG.signed_payload,
-				MOCK_THRESHOLD_SIG
-			)
+			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
 		));
 
 		// Charlie responds success but with an invalid sig, so the vote should fail.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			ReportedKeygenOutcome::Success(NEW_AGG_PUB_KEY, Default::default(), Default::default())
+			Ok((NEW_AGG_PUB_KEY, Default::default(), Default::default()))
 		));
 
 		assert!(FailureVoters::<MockRuntime, _>::get().contains(&CHARLIE));
@@ -483,7 +439,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
 		));
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
@@ -501,7 +457,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
 		));
 
 		// A resolution is still pending - we expect 100% response rate.
@@ -521,7 +477,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
 		));
 
 		// This time we should have enough votes for consensus.
@@ -559,7 +515,7 @@ fn test_keygen_timeout_period() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			ReportedKeygenOutcome::Failure(BTreeSet::from_iter([CHARLIE]))
+			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
 		));
 
 		// > 25 blocks later we should resolve an error.
@@ -670,7 +626,7 @@ fn test_vault_key_rotated_externally() {
 
 mod keygen_reporting {
 	use super::*;
-	use crate::{AggKeyFor, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
+	use crate::{AggKeyFor, KeygenError, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
 	use frame_support::assert_err;
 	use sp_std::collections::btree_set::BTreeSet;
 
@@ -681,22 +637,11 @@ mod keygen_reporting {
 		}};
 	}
 
-	macro_rules! assert_success_outcome {
-		($ex:expr) => {
-			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
-			assert!(
-				matches!(outcome, KeygenOutcome::Success(_)),
-				"Expected success, got: {:?}",
-				outcome
-			);
-		};
-	}
-
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
 			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
 			assert!(
-				matches!(outcome, KeygenOutcome::Failure(_)),
+				matches!(outcome, Err(KeygenError::Failure(_))),
 				"Expected failure, got: {:?}",
 				outcome
 			);
@@ -841,7 +786,7 @@ mod keygen_reporting {
 		new_test_ext().execute_with(|| {
 			for n in 3..200 {
 				// Full agreement.
-				assert_success_outcome!(unanimous_success(n));
+				assert_ok!(unanimous_success(n));
 				// Any dissenters cause failure.
 				assert_failure_outcome!(get_outcome_simple(n - 1, 1, 0, 0, |_| []));
 				assert_failure_outcome!(get_outcome_simple(5, 0, 1, 0, |_| []));
@@ -864,7 +809,7 @@ mod keygen_reporting {
 					assert!(
 						matches!(
 							outcome.clone(),
-							KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([n as u64])
+							Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([n as u64])
 						),
 						"Expected Failure([{:?}]), got: {:?}.",
 						n,
@@ -898,7 +843,7 @@ mod keygen_reporting {
 					&n_times([(3, ReportedOutcome::Failure), (3, ReportedOutcome::Success)]),
 					|_| [4, 5, 6]
 				),
-				KeygenOutcome::Failure(blamed) if blamed.is_empty()
+				Err(KeygenError::Failure(blamed)) if blamed.is_empty()
 			));
 
 			// A keygen where more than `threshold` nodes have reported failure, but there is no
@@ -908,7 +853,7 @@ mod keygen_reporting {
 					&n_times([(17, ReportedOutcome::Failure), (7, ReportedOutcome::Timeout)]),
 					|id| if id < 16 { [17] } else { [16] }
 				),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter(18..=24)
 			));
 
 			// As above, but some nodes have reported the wrong outcome.
@@ -922,7 +867,7 @@ mod keygen_reporting {
 					]),
 					|id| if id < 16 { [17] } else { [16] }
 				),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(18..=24)
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter(18..=24)
 			));
 
 			// As above, but some nodes have additionally been voted on.
@@ -936,7 +881,7 @@ mod keygen_reporting {
 					]),
 					|id| if id > 16 { [1, 2] } else { [17, 18] }
 				),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter(17..=24)
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter(17..=24)
 			));
 		});
 	}
@@ -947,31 +892,31 @@ mod keygen_reporting {
 			// First five candidates all report candidate 6, candidate 6 unresponsive.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffft"), |_| [6]),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
 			));
 
 			// First five candidates all report candidate 6, candidate 6 reports 1.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffft"), |id| if id == 6 { [1] } else { [6] }),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
 			));
 
 			// First five candidates all report nobody, candidate 6 unresponsive.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffft"), |_| []),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
 			));
 
 			// Candidates 3 and 6 unresponsive.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"fftfft"), |_| []),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([3, 6])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([3, 6])
 			));
 
 			// One candidate unresponsive, one blamed by majority.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffftf"), |id| if id != 3 { [3] } else { [4] }),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([3, 6])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([3, 6])
 			));
 
 			// One candidate unresponsive, one rogue blames everyone else.
@@ -983,7 +928,7 @@ mod keygen_reporting {
 						vec![1, 2, 4, 5, 6, 7]
 					}
 				}),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([3, 6])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([3, 6])
 			));
 
 			let failures = |n| n_times([(n, ReportedOutcome::Failure)]);
@@ -991,25 +936,25 @@ mod keygen_reporting {
 			// Candidates don't agree.
 			assert!(matches!(
 				get_outcome(&failures(6), |id| [(id + 1) % 6]),
-				KeygenOutcome::Failure(blamed) if blamed.is_empty()
+				Err(KeygenError::Failure(blamed)) if blamed.is_empty()
 			));
 
 			// Candidate agreement is below reporting threshold.
 			assert!(matches!(
 				get_outcome(&failures(6), |id| if id < 4 { [6] } else { [2] }),
-				KeygenOutcome::Failure(blamed) if blamed.is_empty()
+				Err(KeygenError::Failure(blamed)) if blamed.is_empty()
 			));
 
 			// Candidates agreement just above threshold.
 			assert!(matches!(
 				get_outcome(&failures(6), |id| if id == 6 { [1] } else { [6] }),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([6])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
 			));
 
 			// Candidates agree on multiple offenders.
 			assert!(matches!(
 				get_outcome(&failures(12), |id| if id < 9 { [11, 12] } else { [1, 2] }),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([11, 12])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([11, 12])
 			));
 
 			// Overlapping agreement - no agreement on the entire set but in aggregate we can
@@ -1024,13 +969,13 @@ mod keygen_reporting {
 						[1, 2]
 					}
 				}),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([1, 11])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([1, 11])
 			));
 
 			// Unresponsive and dissenting nodes are reported.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"tfffsfffbffft"), |_| []),
-				KeygenOutcome::Failure(blamed) if blamed == BTreeSet::from_iter([1, 5, 9, 13])
+				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([1, 5, 9, 13])
 			));
 		});
 	}
