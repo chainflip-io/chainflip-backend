@@ -1,7 +1,7 @@
 #[macro_use]
 mod utils;
 mod common;
-mod key_store;
+pub mod key_store;
 pub mod keygen;
 pub mod signing;
 mod state_runner;
@@ -11,7 +11,7 @@ mod tests;
 
 pub mod ceremony_manager;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
 
 use crate::{
     common::format_iterator,
@@ -49,7 +49,7 @@ pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
 
 use super::{
     crypto::{CryptoScheme, ECPoint},
-    MessageHash, PersistentKeyDB, Rng,
+    MessageHash, Rng,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -202,14 +202,14 @@ where
 {
     pub fn new(
         my_account_id: AccountId,
-        db: Arc<PersistentKeyDB>,
+        key_store: KeyStore<C>,
         keygen_request_sender: KeygenRequestSender<C::Point>,
         signing_request_sender: SigningRequestSender<C>,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
             my_account_id,
-            key_store: std::sync::Mutex::new(KeyStore::new(db)),
+            key_store: std::sync::Mutex::new(key_store),
             keygen_request_sender,
             signing_request_sender,
             logger: logger.clone(),

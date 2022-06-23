@@ -10,7 +10,7 @@ use chainflip_engine::{
     },
     health::HealthMonitor,
     logging,
-    multisig::{self, PersistentKeyDB},
+    multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
@@ -42,6 +42,14 @@ async fn main() {
             .run()
             .await;
     }
+
+    let db = Arc::new(
+        PersistentKeyDB::new_and_migrate_to_latest(
+            settings.signing.db_file.as_path(),
+            &root_logger,
+        )
+        .expect("Failed to open database"),
+    );
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
@@ -76,15 +84,6 @@ async fn main() {
         )
         .await
         .expect("Should submit version to state chain");
-
-    // TODO: Investigate whether we want to encrypt it on disk
-    let db = Arc::new(
-        PersistentKeyDB::new_and_migrate_to_latest(
-            settings.signing.db_file.as_path(),
-            &root_logger,
-        )
-        .expect("Failed to open database"),
-    );
 
     // TODO: Merge this into the MultisigClientApi
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
@@ -166,7 +165,7 @@ async fn main() {
     let (eth_multisig_client, eth_multisig_client_backend_future) =
         multisig::start_client::<EthSigning>(
             state_chain_client.our_account_id.clone(),
-            db,
+            KeyStore::new(db),
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
             &root_logger,
