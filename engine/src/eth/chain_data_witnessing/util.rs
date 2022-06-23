@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use futures::{future, stream, Stream, StreamExt};
 use sp_runtime::traits::Bounded;
-use tokio::sync::watch;
+use tokio::sync::oneshot;
 
 use crate::common::make_periodic_tick;
 
@@ -32,16 +32,23 @@ pub fn periodic_tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
 /// It's possible to send multiple `end` items over the channel. In this case, the last one overrides any previous ones.
 pub fn bounded<'a, Item: 'a + Ord + Send + Sync>(
     start: Item,
-    end_receiver: watch::Receiver<Item>,
+    mut end_receiver: oneshot::Receiver<Item>,
     stream: impl Stream<Item = Item> + Send + 'a,
 ) -> impl Stream<Item = Item> + 'a {
+    let mut option_end_bound = None;
     stream
         .skip_while(move |item| future::ready(*item < start))
         .take_while(move |item| {
-            future::ready(match end_receiver.has_changed() {
-                Ok(true) => item < &end_receiver.borrow(),
-                Ok(false) => true,
-                Err(_) => false,
+            future::ready({
+                if let Some(end_bound) = &option_end_bound {
+                    Some(end_bound)
+                } else {
+                    match end_receiver.try_recv() {
+                        Ok(end_bound) => Some(&*option_end_bound.insert(end_bound)),
+                        Err(_) => None,
+                    }
+                }
+                .map_or(true, |end_bound| item < end_bound)
             })
         })
 }
@@ -99,7 +106,7 @@ mod test {
         const START: u64 = 10;
         const END: u64 = 20;
 
-        let (end_sender, end_receiver) = watch::channel(0);
+        let (end_sender, end_receiver) = oneshot::channel();
 
         let handle = tokio::spawn(async move {
             bounded(START, end_receiver, stream::iter(0..))

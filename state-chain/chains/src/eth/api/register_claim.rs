@@ -117,6 +117,10 @@ impl ApiCall<Ethereum> for RegisterClaim {
 				"#,
 			)
 	}
+
+	fn is_signed(&self) -> bool {
+		self.sig_data.is_signed()
+	}
 }
 
 #[cfg(test)]

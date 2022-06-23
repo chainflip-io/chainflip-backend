@@ -98,6 +98,10 @@ impl ApiCall<Ethereum> for UpdateFlipSupply {
 				"#,
 			)
 	}
+
+	fn is_signed(&self) -> bool {
+		self.sig_data.is_signed()
+	}
 }
 
 #[cfg(test)]

@@ -133,6 +133,14 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(call) => call.abi_encoded(),
 		}
 	}
+
+	fn is_signed(&self) -> bool {
+		match self {
+			EthereumApi::SetAggKeyWithAggKey(call) => call.is_signed(),
+			EthereumApi::RegisterClaim(call) => call.is_signed(),
+			EthereumApi::UpdateFlipSupply(call) => call.is_signed(),
+		}
+	}
 }
 
 fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {

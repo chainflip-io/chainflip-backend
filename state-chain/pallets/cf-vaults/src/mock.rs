@@ -161,6 +161,10 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn abi_encoded(&self) -> Vec<u8> {
 		unimplemented!()
 	}
+
+	fn is_signed(&self) -> bool {
+		unimplemented!()
+	}
 }
 
 pub struct MockBroadcaster;
