@@ -412,7 +412,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             slog::debug!(
                 self.logger,
                 "Ignoring signing data: incorrect number of elements";
-                CEREMONY_ID_KEY => format!("{}",ceremony_id)
+                CEREMONY_ID_KEY => ceremony_id,
             );
             return;
         }
@@ -470,7 +470,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             slog::debug!(
                 self.logger,
                 "Ignoring keygen data: Incorrect number of elements";
-                CEREMONY_ID_KEY => format!("{}",ceremony_id)
+                CEREMONY_ID_KEY => ceremony_id,
             );
             return;
         }

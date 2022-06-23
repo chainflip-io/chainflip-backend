@@ -67,7 +67,7 @@ impl TryInto<PeerId> for PeerIdTransferable {
 
 	fn try_into(self) -> std::result::Result<PeerId, Self::Error> {
 		PeerId::from_bytes(&self.0[..])
-			.map_err(|err| jsonrpc_core::Error::invalid_params(format!("{}", err)))
+			.map_err(|err| jsonrpc_core::Error::invalid_params(err.to_string()))
 	}
 }
 
