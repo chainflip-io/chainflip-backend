@@ -198,6 +198,10 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 	fn encoded(&self) -> Vec<u8> {
 		unimplemented!()
 	}
+
+	fn is_signed(&self) -> bool {
+		unimplemented!()
+	}
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
