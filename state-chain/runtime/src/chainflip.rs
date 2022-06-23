@@ -177,7 +177,7 @@ pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainAbi>::UnsignedTransaction {
-		let data = signed_call.encoded();
+		let data = signed_call.abi_encoded();
 		match signed_call {
 			EthereumApi::SetAggKeyWithAggKey(_) => eth::UnsignedTransaction {
 				chain_id: Environment::ethereum_chain_id(),

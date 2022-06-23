@@ -42,7 +42,7 @@ impl UpdateFlipSupply {
 			state_chain_block_number: state_chain_block_number.into(),
 			stake_manager_address: stake_manager_address.into(),
 		};
-		calldata.sig_data.insert_msg_hash_from(calldata.encoded().as_slice());
+		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
 	}
@@ -83,7 +83,7 @@ impl ApiCall<Ethereum> for UpdateFlipSupply {
 		self
 	}
 
-	fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
@@ -157,7 +157,7 @@ mod test_update_flip_supply {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
-			.encoded();
+			.abi_encoded();
 
 		// Ensure signing payload isn't modified by signature.
 		assert_eq!(update_flip_supply_runtime.threshold_signature_payload(), expected_msg_hash);

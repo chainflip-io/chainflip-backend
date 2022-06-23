@@ -97,7 +97,7 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter + MaxEncodedLen {
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
 	/// The call, encoded as a vector of bytes using the chain's native encoding.
-	fn encoded(&self) -> Vec<u8>;
+	fn abi_encoded(&self) -> Vec<u8>;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -320,7 +320,7 @@ pub mod mocks {
 			Self(self.0, Some(threshold_signature.clone()))
 		}
 
-		fn encoded(&self) -> Vec<u8> {
+		fn abi_encoded(&self) -> Vec<u8> {
 			self.encode()
 		}
 	}

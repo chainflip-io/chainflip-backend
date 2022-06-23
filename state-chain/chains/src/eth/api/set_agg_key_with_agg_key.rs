@@ -30,7 +30,7 @@ impl SetAggKeyWithAggKey {
 	) -> Self {
 		let mut calldata =
 			Self { sig_data: SigData::new_empty(replay_protection), new_key: new_key.into() };
-		calldata.sig_data.insert_msg_hash_from(calldata.encoded().as_slice());
+		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
 	}
@@ -72,7 +72,7 @@ impl ApiCall<Ethereum> for SetAggKeyWithAggKey {
 		self
 	}
 
-	fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		self.get_function()
 			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
 			.expect(
@@ -169,7 +169,7 @@ mod test_set_agg_key_with_agg_key {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
-			.encoded();
+			.abi_encoded();
 		// Ensure signing payload isn't modified by signature.
 		assert_eq!(set_agg_key_runtime.threshold_signature_payload(), expected_msg_hash);
 

@@ -53,7 +53,7 @@ impl RegisterClaim {
 			address: address.into(),
 			expiry: expiry.into(),
 		};
-		calldata.sig_data.insert_msg_hash_from(calldata.encoded().as_slice());
+		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
 	}
@@ -101,7 +101,7 @@ impl ApiCall<Ethereum> for RegisterClaim {
 		self
 	}
 
-	fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
@@ -177,7 +177,7 @@ mod test_register_claim {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
-			.encoded(); // Ensure signing payload isn't modified by signature.
+			.abi_encoded(); // Ensure signing payload isn't modified by signature.
 
 		assert_eq!(register_claim_runtime.threshold_signature_payload(), expected_msg_hash);
 

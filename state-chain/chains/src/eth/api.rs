@@ -126,11 +126,11 @@ impl ApiCall<Ethereum> for EthereumApi {
 		}
 	}
 
-	fn encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		match self {
-			EthereumApi::SetAggKeyWithAggKey(call) => call.encoded(),
-			EthereumApi::RegisterClaim(call) => call.encoded(),
-			EthereumApi::UpdateFlipSupply(call) => call.encoded(),
+			EthereumApi::SetAggKeyWithAggKey(call) => call.abi_encoded(),
+			EthereumApi::RegisterClaim(call) => call.abi_encoded(),
+			EthereumApi::UpdateFlipSupply(call) => call.abi_encoded(),
 		}
 	}
 }

@@ -433,7 +433,7 @@ pub mod pallet {
 			// Notify the claimant.
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id.clone(),
-				claim_details_signed.encoded(),
+				claim_details_signed.abi_encoded(),
 			));
 
 			// Store the signature.
