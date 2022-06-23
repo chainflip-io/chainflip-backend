@@ -7,7 +7,7 @@ use cf_chains::mocks::MockThresholdSignature;
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
-	SuccessOrFailure, VaultRotator,
+	VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::collections::btree_set::BTreeSet;
@@ -111,13 +111,9 @@ fn keygen_failure() {
 		// Outcome is ready.
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(SuccessOrFailure::Failure)
+			AsyncResult::Ready(Err(BAD_CANDIDATES.to_vec()))
 		);
 
-		MockOffenceReporter::assert_reported(
-			PalletOffence::ParticipateKeygenFailed,
-			BAD_CANDIDATES.iter().cloned(),
-		);
 		MockOffenceReporter::assert_reported(
 			PalletOffence::SigningOffence,
 			BAD_CANDIDATES.iter().cloned(),
@@ -412,13 +408,13 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(SuccessOrFailure::Failure)
+			AsyncResult::Ready(Err(vec![CHARLIE]))
 		);
 
-		assert!(matches!(
+		assert_eq!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::Failed
-		));
+			VaultRotationStatus::<MockRuntime, _>::Failed { offenders: vec![CHARLIE] }
+		);
 
 		assert_last_event!(crate::Event::KeygenFailure(..));
 
@@ -490,10 +486,9 @@ fn keygen_report_failure() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(SuccessOrFailure::Failure)
+			AsyncResult::Ready(Err(vec![CHARLIE]))
 		);
 
-		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![CHARLIE]);
 		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![CHARLIE]);
 
 		assert_last_event!(crate::Event::KeygenFailure(..));
@@ -528,7 +523,6 @@ fn test_keygen_timeout_period() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// Too many candidates failed to report, so we report nobody.
-		MockOffenceReporter::assert_reported(PalletOffence::ParticipateKeygenFailed, vec![]);
 		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![]);
 	});
 }
