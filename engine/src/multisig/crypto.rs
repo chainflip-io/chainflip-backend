@@ -19,9 +19,16 @@ use serde::{Deserialize, Serialize};
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 
 #[repr(u16)]
+#[derive(Clone, Copy)]
 pub enum ChainTag {
     Ethereum = 0x0000,
     Polkadot = 0x0001,
+}
+
+impl ChainTag {
+    pub fn to_bytes(self) -> [u8; CHAIN_TAG_SIZE] {
+        (self as u16).to_be_bytes()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

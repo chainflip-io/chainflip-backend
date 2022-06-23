@@ -145,7 +145,7 @@ impl PersistentKeyDB {
     ) {
         let key_id_with_prefix = [
             KEYGEN_DATA_PARTIAL_PREFIX,
-            &((C::CHAIN_TAG as u16).to_be_bytes())[..],
+            &(C::CHAIN_TAG.to_bytes())[..],
             &key_id.0.clone()[..],
         ]
         .concat();
@@ -166,7 +166,7 @@ impl PersistentKeyDB {
                 get_data_column_handle(&self.db),
                 [
                     &KEYGEN_DATA_PARTIAL_PREFIX[..],
-                    &((C::CHAIN_TAG as u16).to_be_bytes())[..],
+                    &(C::CHAIN_TAG.to_bytes())[..],
                 ]
                 .concat(),
             )
