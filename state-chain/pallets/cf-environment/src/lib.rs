@@ -85,6 +85,9 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The network is currently paused.
 		NetworkIsInMaintenance,
+
+		/// The settings provided were invalid
+		InvalidCfeSettings,
 	}
 
 	#[pallet::pallet]
@@ -128,6 +131,9 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// The system state has been updated
 		SystemStateUpdated { new_system_state: SystemState },
+
+		/// The on-chain CFE settings have been updated
+		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 	}
 
 	#[pallet::call]
@@ -148,6 +154,30 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			SystemStateProvider::<T>::set_system_state(state);
+			Ok(().into())
+		}
+
+		/// Sets the current on-chain CFE settings
+		///
+		/// ## Events
+		///
+		/// - [CfeSettingsUpdated](Event::CfeSettingsUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::set_cfe_settings())]
+		pub fn set_cfe_settings(
+			origin: OriginFor<T>,
+			cfe_settings: cfe::CfeSettings,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(
+				cfe_settings.eth_priority_fee_percentile <= 100,
+				Error::<T>::InvalidCfeSettings
+			);
+			CfeSettings::<T>::put(cfe_settings);
+			Self::deposit_event(Event::<T>::CfeSettingsUpdated { new_cfe_settings: cfe_settings });
 			Ok(().into())
 		}
 	}
