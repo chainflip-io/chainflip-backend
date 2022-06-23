@@ -548,8 +548,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	// We pull this out of on_initialize to give us control over the expiry time (as we don't want
-	// to have to modify the system time in the benchmarks
 	fn expire_pending_claims_at(secs_since_unix_epoch: u64) -> Weight {
 		let mut expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
