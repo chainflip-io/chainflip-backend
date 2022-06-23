@@ -80,7 +80,7 @@ impl<T: Config> sp_std::fmt::Debug for RotationPhase<T> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match self {
 			RotationPhase::Idle => write!(f, "Idle"),
-			RotationPhase::VaultsRotating(..) => write!(f, "AwaitingVaults(..)"),
+			RotationPhase::VaultsRotating(..) => write!(f, "VaultsRotating(..)"),
 			RotationPhase::VaultsRotated(..) => write!(f, "VaultsRotated(..)"),
 			RotationPhase::SessionRotating(..) => write!(f, "SessionRotating(..)"),
 		}

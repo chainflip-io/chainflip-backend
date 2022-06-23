@@ -807,21 +807,20 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 
-					// Move to start of auction
+					assert!(
+						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
+						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						Validator::current_rotation_phase(),
+					);
+
+					// Next block, no progress.
 					testnet.move_forward_blocks(1);
 
-					assert!(matches!(
+					assert!(
+						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
+						"Expected RotationPhase::VaultsRotating, got: {:?}.",
 						Validator::current_rotation_phase(),
-						RotationPhase::VaultsRotating(..)
-					));
-
-					// Next block, another auction
-					testnet.move_forward_blocks(1);
-
-					assert!(matches!(
-						Validator::current_rotation_phase(),
-						RotationPhase::VaultsRotating(..)
-					));
+					);
 
 					for node in &offline_nodes {
 						testnet.set_active(node, true);
@@ -833,10 +832,14 @@ mod tests {
 					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// The rotation can now continue to the next phase.
-					assert!(matches!(
+					assert!(
+						matches!(
+							Validator::current_rotation_phase(),
+							RotationPhase::VaultsRotating(..)
+						),
+						"Expected RotationPhase::VaultsRotated, got: {:?}.",
 						Validator::current_rotation_phase(),
-						RotationPhase::VaultsRotating(..)
-					));
+					);
 				});
 		}
 
