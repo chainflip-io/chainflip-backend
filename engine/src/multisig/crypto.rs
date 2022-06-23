@@ -15,7 +15,21 @@ use std::fmt::Debug;
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
-use super::db::persistent::PREFIX_SIZE;
+/// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
+pub const CHAIN_TAG_SIZE: usize = 2; // u16 = 2 bytes
+
+#[repr(u16)]
+#[derive(Clone, Copy)]
+pub enum ChainTag {
+    Ethereum = 0x0000,
+    Polkadot = 0x0001,
+}
+
+impl ChainTag {
+    pub fn to_vec(self) -> Vec<u8> {
+        (self as u16).to_be_bytes().to_vec()
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyShare<P: ECPoint> {
@@ -80,10 +94,11 @@ pub trait CryptoScheme: 'static {
         + Send;
 
     /// Friendly name of the scheme used for logging
-    const SCHEME_NAME: &'static str;
+    const NAME: &'static str;
 
-    /// A unique prefix used to store the keys in the database
-    const DATA_PREFIX: &'static [u8; PREFIX_SIZE];
+    /// A unique tag used to identify the chain.
+    /// Used in both p2p and database storage.
+    const CHAIN_TAG: ChainTag;
 
     fn build_signature(
         z: <Self::Point as ECPoint>::Scalar,

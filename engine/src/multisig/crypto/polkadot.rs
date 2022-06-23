@@ -1,7 +1,5 @@
-use crate::multisig::db::persistent::PREFIX_SIZE;
-
-use super::curve25519_ristretto::Point;
 use super::CryptoScheme;
+use super::{curve25519_ristretto::Point, ChainTag};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -39,8 +37,8 @@ impl CryptoScheme for PolkadotSigning {
     type Point = Point;
     type Signature = PolkadotSignature;
 
-    const SCHEME_NAME: &'static str = "Polkadot";
-    const DATA_PREFIX: &'static [u8; PREFIX_SIZE] = b"dot_";
+    const NAME: &'static str = "Polkadot";
+    const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
 
     fn build_signature(
         z: <Self::Point as super::ECPoint>::Scalar,

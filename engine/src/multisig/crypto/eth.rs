@@ -1,6 +1,6 @@
-use crate::multisig::{crypto::ECScalar, db::persistent::PREFIX_SIZE};
+use crate::multisig::crypto::ECScalar;
 
-use super::{CryptoScheme, ECPoint};
+use super::{ChainTag, CryptoScheme, ECPoint};
 
 // NOTE: for now, we re-export these to make it
 // clear that these a the primitives used by ethereum.
@@ -35,8 +35,8 @@ impl CryptoScheme for EthSigning {
     type Point = Point;
     type Signature = EthSchnorrSignature;
 
-    const SCHEME_NAME: &'static str = "Ethereum";
-    const DATA_PREFIX: &'static [u8; PREFIX_SIZE] = b"eth_";
+    const NAME: &'static str = "Ethereum";
+    const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
 
     fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
         EthSchnorrSignature {

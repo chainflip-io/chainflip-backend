@@ -5,7 +5,11 @@ use slog::o;
 
 use crate::{
     logging::COMPONENT_KEY,
-    multisig::{client::KeygenResultInfo, crypto::CryptoScheme, KeyId},
+    multisig::{
+        client::KeygenResultInfo,
+        crypto::{CryptoScheme, CHAIN_TAG_SIZE},
+        KeyId,
+    },
 };
 
 use anyhow::{Context, Result};
@@ -18,8 +22,10 @@ pub const LATEST_SCHEMA_VERSION: u32 = 0;
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
 
-/// Prefixes for the `DATA_COLUMN`
-pub const PREFIX_SIZE: usize = 4;
+/// A static length prefix is used on the `DATA_COLUMN`
+pub const PREFIX_SIZE: usize = 10;
+/// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
+const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PREFIX_SIZE - CHAIN_TAG_SIZE] = b"key_____";
 
 /// Column family names
 // All data is stored in `DATA_COLUMN` with a prefix for key spaces
@@ -137,7 +143,12 @@ impl PersistentKeyDB {
         key_id: &KeyId,
         keygen_result_info: &KeygenResultInfo<C::Point>,
     ) {
-        let key_id_with_prefix = [C::DATA_PREFIX.to_vec(), key_id.0.clone()].concat();
+        let key_id_with_prefix = [
+            KEYGEN_DATA_PARTIAL_PREFIX.to_vec(),
+            C::CHAIN_TAG.to_vec(),
+            key_id.0.clone(),
+        ]
+        .concat();
 
         self.db
             .put_cf(
@@ -151,7 +162,10 @@ impl PersistentKeyDB {
 
     pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C::Point>> {
         self.db
-            .prefix_iterator_cf(get_data_column_handle(&self.db), C::DATA_PREFIX)
+            .prefix_iterator_cf(
+                get_data_column_handle(&self.db),
+                [KEYGEN_DATA_PARTIAL_PREFIX.to_vec(), C::CHAIN_TAG.to_vec()].concat(),
+            )
             .filter_map(|(key_id, key_info)| {
                 // Strip the prefix off the key_id
                 let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
@@ -162,7 +176,7 @@ impl PersistentKeyDB {
                         slog::debug!(
                             self.logger,
                             "Loaded {} key_info (key_id: {}) from database",
-                            C::SCHEME_NAME,
+                            C::NAME,
                             key_id
                         );
                         Some((key_id, keygen_result_info))
@@ -171,7 +185,7 @@ impl PersistentKeyDB {
                         slog::error!(
                             self.logger,
                             "Could not deserialize {} key_info (key_id: {}) from database: {}",
-                            C::SCHEME_NAME,
+                            C::NAME,
                             key_id,
                             err
                         );
