@@ -298,28 +298,15 @@ impl<T: Config> Pallet<T> {
 	/// Settles an imbalance against an account. Any excess is reverted to source according to the
 	/// rules defined in RevertImbalance.
 	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
-		let settlement_source = ImbalanceSource::from_acct(account_id.clone());
-		let (_from, _to, amount) = match &imbalance {
-			SignedImbalance::Positive(surplus) =>
-				(surplus.source.clone(), settlement_source, surplus.peek()),
-			SignedImbalance::Negative(deficit) =>
-				(settlement_source, deficit.source.clone(), deficit.peek()),
-		};
-
-		let (_settled, _reverted) = Self::try_settle(account_id, imbalance)
-			// In the case of success, nothing to revert.
-			.map(|_| (amount, Zero::zero()))
-			// In case of failure, calculate the remainder.
-			.unwrap_or_else(|remaining| {
-				// Note `remaining` will be dropped and automatically reverted at the end of this
-				// block.
-				let (source, remainder) = match remaining {
-					SignedImbalance::Positive(surplus) => (surplus.source.clone(), surplus.peek()),
-					SignedImbalance::Negative(deficit) => (deficit.source.clone(), deficit.peek()),
-				};
-				Self::deposit_event(Event::<T>::RemainingImbalance(source, remainder));
-				(amount.saturating_sub(remainder), remainder)
-			});
+		if let Err(remaining) = Self::try_settle(account_id, imbalance) {
+			// Note `remaining` will be dropped and automatically reverted at the end of this
+			// block.
+			let (source, remainder) = match remaining {
+				SignedImbalance::Positive(surplus) => (surplus.source.clone(), surplus.peek()),
+				SignedImbalance::Negative(deficit) => (deficit.source.clone(), deficit.peek()),
+			};
+			Self::deposit_event(Event::<T>::RemainingImbalance(source, remainder));
+		}
 	}
 
 	pub fn settle_imbalance<I: Into<FlipImbalance<T>>>(account_id: &T::AccountId, imbalance: I) {
