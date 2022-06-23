@@ -852,7 +852,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-session",
- "rand 0.7.3",
  "sp-runtime",
  "sp-std",
 ]
