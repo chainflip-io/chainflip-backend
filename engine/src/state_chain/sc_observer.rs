@@ -1,5 +1,6 @@
 use futures::{stream, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
+use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
@@ -28,8 +29,6 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    use pallet_cf_vaults::ReportedKeygenOutcome;
-
     tokio::spawn(async move {
         let keygen_outcome = multisig_client
             .keygen(ceremony_id, validator_candidates.clone())
@@ -54,28 +53,28 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                     .await
                 {
                     // Report keygen success if we are able to sign
-                    Ok(signature) => ReportedKeygenOutcome::Success(
+                    Ok(signature) => Ok((
                         cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
                         data_to_sign.into(),
                         signature.into(),
-                    ),
+                    )),
                     // Report keygen failure if we failed to sign
                     Err((bad_account_ids, _reason)) => {
                         slog::debug!(logger, "Keygen ceremony verification failed"; CEREMONY_ID_KEY => ceremony_id);
-                        ReportedKeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                        Err(KeygenError::Failure(BTreeSet::from_iter(bad_account_ids)))
                     }
                 }
             }
-            Err((bad_account_ids, reason)) => {
+            Err((bad_account_ids, reason)) => Err({
                 if let CeremonyFailureReason::<KeygenFailureReason>::Other(
                     KeygenFailureReason::KeyNotCompatible,
                 ) = reason
                 {
-                    ReportedKeygenOutcome::Incompatible
+                    KeygenError::Incompatible
                 } else {
-                    ReportedKeygenOutcome::Failure(BTreeSet::from_iter(bad_account_ids))
+                    KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
                 }
-            }
+            }),
         };
 
         let _result = state_chain_client

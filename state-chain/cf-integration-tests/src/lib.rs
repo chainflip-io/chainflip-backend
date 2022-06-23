@@ -41,7 +41,6 @@ mod tests {
 		use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore};
 		use codec::Encode;
 		use libsecp256k1::PublicKey;
-		use pallet_cf_vaults::ReportedKeygenOutcome;
 		use sp_core::H256;
 		use state_chain_runtime::{constants::common::HEARTBEAT_BLOCK_INTERVAL, Event, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -297,7 +296,7 @@ mod tests {
 										Origin::signed(self.node_id.clone()),
 										*ceremony_id,
 										// Propose a new key
-										ReportedKeygenOutcome::Success(proposed_key_components.agg_key, payload, sig),
+										Ok((proposed_key_components.agg_key, payload, sig)),
 									).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 								}
 						},
