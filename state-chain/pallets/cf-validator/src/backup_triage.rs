@@ -1,6 +1,6 @@
 use crate::*;
 use cf_traits::{BackupNodes, BackupOrPassive, Bid};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::cmp::Reverse;
 
 /// Tracker for backup and passive validators.
@@ -23,7 +23,7 @@ pub type RuntimeBackupTriage<T> =
 impl<Id, Amount> BackupTriage<Id, Amount>
 where
 	Id: Ord,
-	Amount: Ord + Copy + Default + Zero + Bounded,
+	Amount: AtLeast32BitUnsigned + Copy,
 {
 	pub fn new<AccountState: ChainflipAccount>(
 		mut backup_candidates: Vec<Bid<Id, Amount>>,
@@ -77,11 +77,11 @@ where
 		if self.backup_group_size_target == 0 {
 			return Amount::max_value()
 		}
-		self.backup.iter().map(|bid| bid.amount).min().unwrap_or_default()
+		self.backup.iter().map(|bid| bid.amount).min().unwrap_or(Zero::zero())
 	}
 
 	fn highest_passive_bid(&self) -> Amount {
-		self.passive.iter().map(|bid| bid.amount).max().unwrap_or_default()
+		self.passive.iter().map(|bid| bid.amount).max().unwrap_or(Zero::zero())
 	}
 
 	pub fn adjust_bid<AccountState: ChainflipAccount>(
