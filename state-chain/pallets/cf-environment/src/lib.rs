@@ -126,8 +126,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The system state has been changed \[system_state\]
-		SystemStateHasBeenChanged(SystemState),
+		/// The system state has been updated
+		SystemStateUpdated { new_system_state: SystemState },
 	}
 
 	#[pallet::call]
@@ -136,7 +136,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SystemStateHasBeenChanged](Event::SystemStateHasBeenChanged)
+		/// - [SystemStateUpdated](Event::SystemStateUpdated)
 		///
 		/// ## Errors
 		///
@@ -192,7 +192,7 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 	fn set_system_state(state: SystemState) {
 		if CurrentSystemState::<T>::get() != state {
 			CurrentSystemState::<T>::put(&state);
-			Pallet::<T>::deposit_event(Event::<T>::SystemStateHasBeenChanged(state));
+			Pallet::<T>::deposit_event(Event::<T>::SystemStateUpdated { new_system_state: state });
 		}
 	}
 	fn set_maintenance_mode() {
