@@ -275,7 +275,13 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(Err(offenders)) => {
 							rotation_status.ban(offenders);
-							Self::start_vault_rotation(rotation_status);
+							let remaining_candidates = rotation_status.authority_candidates();
+							if remaining_candidates.len() >= AuthoritySetMinSize::<T>::get().into()
+							{
+								Self::start_vault_rotation(rotation_status);
+							} else {
+								Self::set_rotation_status(RotationPhase::Idle);
+							}
 						},
 						AsyncResult::Void => {
 							log::error!(target: "cf-validator", "no vault rotation pending");
@@ -711,12 +717,18 @@ pub mod pallet {
 	#[pallet::getter(fn backup_node_percentage)]
 	pub type BackupNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
 
+	/// The absolute minimum number of authority nodes for the next epoch.
+	#[pallet::storage]
+	#[pallet::getter(fn authority_set_min_size)]
+	pub type AuthoritySetMinSize<T> = StorageValue<_, u8, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
 		pub backup_node_percentage: Percentage,
+		pub authority_set_min_size: u8,
 	}
 
 	#[cfg(feature = "std")]
@@ -727,6 +739,7 @@ pub mod pallet {
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
 				backup_node_percentage: Zero::zero(),
+				authority_set_min_size: Zero::zero(),
 			}
 		}
 	}
@@ -736,6 +749,7 @@ pub mod pallet {
 		fn build(&self) {
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			CurrentRotationPhase::<T>::set(RotationPhase::default());
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			BackupNodePercentage::<T>::set(self.backup_node_percentage);
@@ -959,24 +973,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_vault_rotation(rotation_status: RuntimeRotationStatus<T>) {
-		match T::VaultRotator::start_vault_rotation(rotation_status.authority_candidates()) {
-			Ok(_) => {
-				log::info!(target: "cf-validator", "Vault rotation started.");
-				Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
-			},
-			// This can only happen if no validators are left, or if there
-			Err(e) => {
-				// is some logic error that causes `start_rotation` to be called
-				// when a vault rotation is already pending. It *should* never
-				// happen. If it does, the only thing we can try is to start
-				// over with a new auction.
-				log::error!(
-					target: "cf-validator",
-					"starting a vault rotation failed due to error: {:?}",
-					e.into()
-				);
-				Self::start_authority_rotation();
-			},
+		if T::VaultRotator::start_vault_rotation(rotation_status.authority_candidates()).is_ok() {
+			log::info!(target: "cf-validator", "Vault rotation initiated.");
+			Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
+		} else {
+			log::warn!(
+				target: "cf-validator",
+				"Vault rotation already in progress.",
+			);
 		}
 	}
 }

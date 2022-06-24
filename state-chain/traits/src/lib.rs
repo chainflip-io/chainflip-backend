@@ -200,13 +200,13 @@ pub trait BackupNodes {
 	fn backup_nodes() -> Vec<Self::ValidatorId>;
 }
 
-/// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
-	type RotationError: Into<DispatchError>;
 
-	/// Start a vault rotation with the following `candidates`.
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
+	/// Start a vault rotation with the provided `candidates`.
+	///
+	/// A return value of `Err` indicates that another rotation is still in progress.
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), ()>;
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;

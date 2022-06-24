@@ -298,6 +298,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 			bond: MINIMUM_ACTIVE_BID_AT_GENESIS,
 			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
 			backup_node_percentage: 34,
+			authority_set_min_size: 3,
 		},
 	};
 

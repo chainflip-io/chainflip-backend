@@ -592,7 +592,6 @@ mod tests {
 					min_size: self.min_authorities,
 					max_size: self.max_authorities,
 					max_expansion: self.max_authorities,
-					max_contraction: self.max_authorities,
 				},
 				reputation: ReputationConfig {
 					accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),

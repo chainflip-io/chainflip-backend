@@ -11,7 +11,7 @@ use cf_traits::{
 	VaultRotator,
 };
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchResult,
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
 };
@@ -778,15 +778,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 // TODO: Implement this on Runtime instead of pallet so that we can rotate multiple vaults.
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
-	type RotationError = DispatchError;
 
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), ()> {
 		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyAuthoritySet);
-		ensure!(
-			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
-			Error::<T, I>::DuplicateRotationRequest
-		);
+		ensure!(!candidates.is_empty(), ());
+		ensure!(Self::get_vault_rotation_outcome() != AsyncResult::Pending, ());
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 

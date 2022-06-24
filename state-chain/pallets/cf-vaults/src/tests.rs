@@ -39,10 +39,7 @@ const MOCK_THRESHOLD_SIG: MockThresholdSignature<[u8; 4], [u8; 4]> =
 #[test]
 fn no_candidates_is_noop_and_error() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]),
-			Error::<MockRuntime, _>::EmptyAuthoritySet
-		);
+		assert_noop!(<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]), ());
 	});
 }
 
@@ -73,7 +70,7 @@ fn only_one_concurrent_request_per_chain() {
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		assert_noop!(
 			<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()),
-			Error::<MockRuntime, _>::DuplicateRotationRequest
+			()
 		);
 	});
 }

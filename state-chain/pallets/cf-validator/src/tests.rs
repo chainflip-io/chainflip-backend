@@ -122,10 +122,7 @@ fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 			GENESIS_EPOCH,
 			"we should still be in the first epoch"
 		);
-		assert!(matches!(
-			ValidatorPallet::current_rotation_phase(),
-			RotationPhase::VaultsRotating(..)
-		));
+		assert_eq!(ValidatorPallet::current_rotation_phase(), RotationPhase::Idle);
 
 		// Allow vault rotations to progress.
 		// The keygen ceremony will fail.
@@ -145,8 +142,10 @@ fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 		// Allow keygen to succeed.
 		MockVaultRotator::succeeding();
 
-		// THree blocks - one for keygen, one for each session rotation.
-		move_forward_blocks(3);
+		// Four blocks - one for keygen, one for each session rotation, then one more because the
+		// vaults on_initialise runs *after* the validator pallet's on_initialise.
+		// TODO: Address this as part of issue [#1702](https://github.com/chainflip-io/chainflip-backend/issues/1702)
+		move_forward_blocks(4);
 		assert_epoch_number(GENESIS_EPOCH + 1);
 	});
 }
@@ -623,7 +622,8 @@ fn test_reputation_reset() {
 fn backup_set_size_calculation() {
 	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 20u8), 30);
 	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 0u8), 0);
-	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 200u8), 300);
+	// Saturates at 100%.
+	assert_eq!(Pallet::<Test>::backup_set_target_size(&(0..150).collect::<Vec<_>>(), 200u8), 150);
 }
 
 #[cfg(test)]

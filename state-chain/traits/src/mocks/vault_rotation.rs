@@ -48,13 +48,10 @@ impl MockVaultRotator {
 
 impl VaultRotator for MockVaultRotator {
 	type ValidatorId = u64;
-	type RotationError = &'static str;
 
-	fn start_vault_rotation(
-		_candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::RotationError> {
+	fn start_vault_rotation(_candidates: Vec<Self::ValidatorId>) -> Result<(), ()> {
 		if Self::get_error_on_start() {
-			return Err("failure")
+			return Err(())
 		}
 
 		Self::put_storage(ROTATION_OUTCOME, b"", AsyncResult::<MockVaultOutcome>::Pending);
