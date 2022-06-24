@@ -206,7 +206,7 @@ mod scalar_impls {
         pub fn as_bytes(&self) -> &[u8; SECRET_KEY_SIZE] {
             match self.0.as_ref() {
                 Some(sk) => sk.as_ref(),
-                None => &[0; 32],
+                None => &ZERO_SCALAR_BYTES,
             }
         }
     }
@@ -249,7 +249,7 @@ mod scalar_impls {
                 let order = BigUint::from_bytes_be(&CURVE_ORDER);
 
                 // Modular multiplicative inverse is equivalent to raising
-                // to the power of `order - 2` (using Euler's theorem; also
+                // to the power of `order - 2` if the order is prime (using Euler's theorem; also
                 // see libsecp256k1 which uses a somewhat similar implementation:
                 // https://docs.rs/libsecp256k1-core/0.3.0/src/libsecp256k1_core/field.rs.html#1546)
                 let inverse = x.modpow(&(&order - 2u32), &order);
@@ -328,9 +328,8 @@ mod scalar_impls {
 
         fn add(self, rhs: Self) -> Self::Output {
             let inner = match (self.0, rhs.0) {
-                (None, None) => None,
-                (None, Some(rhs)) => Some(rhs),
-                (Some(lhs), None) => Some(lhs),
+                (None, rhs) => rhs,
+                (lhs, None) => lhs,
                 (Some(mut lhs), Some(rhs)) => {
                     // Both lhs and rhs are considered "valid" (i.e.
                     // non-zero and belong to the group). Further,
