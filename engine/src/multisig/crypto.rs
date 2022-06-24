@@ -63,7 +63,7 @@ pub trait ECPoint:
     // TODO: this is a property of a signing scheme
     // rather than the underlying curve, so this
     // should be moved to `CryptoScheme` before we
-    // Bitcoin or any other secp256k1 scheme
+    // add Bitcoin or any other secp256k1 scheme
     fn is_compatible(&self) -> bool {
         true
     }
