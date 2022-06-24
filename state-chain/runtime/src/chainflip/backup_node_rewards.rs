@@ -1,4 +1,4 @@
-use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+use core::iter::zip;
 use sp_runtime::helpers_128bit::multiply_by_rational;
 use sp_std::{cmp::min, prelude::*};
 
@@ -8,18 +8,27 @@ use sp_std::{cmp::min, prelude::*};
 // back to u128 after calculation. In this case, the saturation problem can lead to upto 0.03 - 0.05
 // Flip error in calculation.
 
-pub fn calculate_backup_rewards<I, Q>(
-	backup_nodes: Vec<(I, Q)>,
-	minimum_active_bid: Q,
-	heartbeat_block_interval: Q,
-	backup_node_emission_per_block: Q,
-	current_authority_emission_per_block: Q,
-	current_authority_count: Q,
-) -> Vec<(I, Q)>
+pub fn calculate_backup_rewards<Id, Amount>(
+	backup_nodes: Vec<(Id, u128)>,
+	minimum_active_bid: u128,
+	heartbeat_block_interval: u128,
+	backup_node_emission_per_block: u128,
+	current_authority_emission_per_block: u128,
+	current_authority_count: u128,
+) -> Vec<(Id, Amount)>
 where
-	Q: AtLeast32BitUnsigned + From<u128> + Into<u128> + Copy,
-	u128: From<Q>,
+	Amount: From<u128>,
 {
+	const QUANTISATION_FACTOR: u128 = 1_000_000_000;
+
+	let (minimum_active_bid, backup_node_emission_per_block, current_authority_emission_per_block) = (
+		minimum_active_bid / QUANTISATION_FACTOR,
+		backup_node_emission_per_block / QUANTISATION_FACTOR,
+		current_authority_emission_per_block / QUANTISATION_FACTOR,
+	);
+	let backup_nodes =
+		backup_nodes.into_iter().map(|(id, stake)| (id, stake / QUANTISATION_FACTOR));
+
 	// Our emission cap for this heartbeat interval
 	let emissions_cap = backup_node_emission_per_block.saturating_mul(heartbeat_block_interval);
 
@@ -28,56 +37,55 @@ where
 		current_authority_emission_per_block.saturating_mul(heartbeat_block_interval);
 
 	// The average authority emission
-	let average_authority_reward = authority_rewards.checked_div(&current_authority_count).unwrap();
+	let average_authority_reward = authority_rewards.checked_div(current_authority_count).unwrap();
 
-	let mut total_rewards: Q = Q::from(0_u128);
+	let mut total_rewards = 0_u128;
 
 	// Calculate rewards for each backup node and total rewards for capping
-	let mut rewards: Vec<_> = backup_nodes
+	let rewards: Vec<_> = backup_nodes
 		.into_iter()
-		.map(|(backup_node, backup_node_stake)| {
+		.map(|(node_id, backup_stake)| {
 			let reward = min(
 				average_authority_reward,
-				average_authority_reward
-					.saturating_mul(u128::from(backup_node_stake).pow(2).into())
-					.checked_div(&u128::from(minimum_active_bid).pow(2).into())
-					.unwrap(),
+				multiply_by_rational(
+					average_authority_reward * backup_stake,
+					backup_stake,
+					minimum_active_bid,
+				)
+				.unwrap()
+				.checked_div(minimum_active_bid)
+				.unwrap(),
 			)
-			.saturating_mul(Q::from(8_u128))
-			.checked_div(&Q::from(10_u128))
+			.saturating_mul(8_u128)
+			.checked_div(10_u128)
 			.unwrap();
 			total_rewards += reward;
-			(backup_node, reward)
+			(node_id, reward)
 		})
 		.collect();
 
 	// Cap if needed
 	if total_rewards > emissions_cap {
-		rewards = rewards
+		rewards
 			.into_iter()
-			.map(|(validator_id, reward)| {
-				(
-					validator_id,
-					Q::from(
-						multiply_by_rational(
-							reward.into(),
-							emissions_cap.into(),
-							total_rewards.into(),
-						)
-						.unwrap_or_default(),
-					),
-				)
+			.map(|(id, reward)| {
+				(id, multiply_by_rational(reward, emissions_cap, total_rewards).unwrap_or_default())
 			})
-			.collect();
+			.map(|(id, reward)| (id, (reward * QUANTISATION_FACTOR).into()))
+			.collect()
+	} else {
+		rewards
+			.into_iter()
+			.map(|(id, reward)| (id, (reward * QUANTISATION_FACTOR).into()))
+			.collect()
 	}
-	rewards
 }
 
 #[test]
 fn test_example_calculations() {
 	// The example calculation is taken from here: https://www.notion.so/chainflip/Calculating-Backup-Validator-Rewards-8c42dee6bbc842ab99b1c4f0065b19fe
-	let test_backup_nodes: Vec<(u128, u128)> = vec![
-		(1, 15000000),
+	let test_backup_nodes = [
+		(1, 90_000_000_00),
 		(2, 12000000),
 		(3, 11760000),
 		(4, 11524800),
@@ -129,7 +137,7 @@ fn test_example_calculations() {
 		(50, 4550225),
 	];
 
-	let mut backup_rewards: Vec<u128> = vec![
+	let backup_rewards = [
 		3408412, 3408412, 3408412, 3408412, 3408412, 3408412, 3314286, 3183040, 3056992, 2935935,
 		2819672, 2708013, 2600776, 2497785, 2398873, 2303877, 2212644, 2125023, 2040872, 1960054,
 		1882435, 1807891, 1736298, 1667541, 1601506, 1538087, 1477179, 1418682, 1362502, 1308547,
@@ -137,20 +145,22 @@ fn test_example_calculations() {
 		839002, 805778, 773869, 743224, 713792, 685526, 658379, 632307, 607268, 583220,
 	];
 
-	const MUL_FACTOR: u128 = 100000;
+	const FLIPPERINOS: u128 = 1_000_000_000_000_000_000;
+	const FLIPPERINOS_PER_CENTIFLIP: u128 = 10_000_000_000_000_000;
+
+	assert!(FLIPPERINOS / FLIPPERINOS_PER_CENTIFLIP == 100);
 
 	let test_backup_nodes = test_backup_nodes
-		.into_iter()
-		.map(|(node, reward)| (node, reward * MUL_FACTOR))
-		.collect();
+		.map(|(node, reward)| (node, reward * FLIPPERINOS_PER_CENTIFLIP))
+		.to_vec();
 
-	const MAB: u128 = 11000000 * MUL_FACTOR;
-	const BLOCKSPERYEAR: u128 = 14400 * 356;
-	const BACKUP_EMISSIONS_CAP_PER_BLOCK: u128 = 90_000_000 * MUL_FACTOR / BLOCKSPERYEAR;
-	const AUTHORITY_EMISSIONS_PER_BLOCK: u128 = 900_000_000 * MUL_FACTOR / BLOCKSPERYEAR;
+	const MAB: u128 = 110_000 * FLIPPERINOS;
+	const BLOCKSPERYEAR: u128 = 14_400 * 356;
+	const BACKUP_EMISSIONS_CAP_PER_BLOCK: u128 = 900_000 * FLIPPERINOS / BLOCKSPERYEAR;
+	const AUTHORITY_EMISSIONS_PER_BLOCK: u128 = 9_000_000 * FLIPPERINOS / BLOCKSPERYEAR;
 	const AUTHORITY_COUNT: u128 = 150;
 
-	let mut calculated_rewards = calculate_backup_rewards(
+	let calculated_rewards: Vec<(_, u128)> = calculate_backup_rewards(
 		test_backup_nodes,
 		MAB,
 		BLOCKSPERYEAR,
@@ -159,22 +169,12 @@ fn test_example_calculations() {
 		AUTHORITY_COUNT,
 	);
 
-	fn abs_diff(a: u128, b: u128) -> u128 {
-		if a > b {
-			a - b
-		} else {
-			b - a
-		}
+	for ((node_id, backup_reward), expected_reward) in zip(calculated_rewards, backup_rewards) {
+		// let a = backup_reward / (FLIPPERINOS_PER_CENTIFLIP / 10);
+		// let b = expected_reward * 10;
+		// println!("backup: {a:?}, expected: {b:?}");
+		let diff = (backup_reward / FLIPPERINOS_PER_CENTIFLIP).abs_diff(expected_reward);
+		// println!("AbsDiff: {:?}", diff);
+		assert!(diff <= 1_u128, "Diff was {:?} at {:?}", diff, node_id);
 	}
-
-	for _ in 0..backup_rewards.len() {
-		assert!(
-			abs_diff(
-				calculated_rewards.pop().unwrap().1 / MUL_FACTOR,
-				backup_rewards.pop().unwrap()
-			) <= 3_u128
-		)
-	}
-	assert!(calculated_rewards.pop().is_none());
-	assert!(backup_rewards.pop().is_none());
 }
