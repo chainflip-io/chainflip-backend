@@ -21,12 +21,21 @@ fn generate_key<T: Config>(seed: u64) -> T::Keys {
 benchmarks! {
 	set_keys {
 		let caller: T::AccountId = whitelisted_caller();
-		<NextKeys<T>>::insert(T::ValidatorIdOf::convert(caller.clone()).unwrap(), generate_key::<T>(1));
+		let validator_id = T::ValidatorIdOf::convert(caller.clone()).unwrap();
+		<NextKeys<T>>::insert(validator_id.clone(), generate_key::<T>(1));
 		frame_system::Pallet::<T>::inc_providers(&caller);
 		assert_ok!(frame_system::Pallet::<T>::inc_consumers(&caller));
-	}: _(RawOrigin::Signed(caller), generate_key::<T>(0),  vec![])
+		let new_key = generate_key::<T>(0);
+	}: _(RawOrigin::Signed(caller), new_key.clone(), vec![])
+	verify {
+		assert_eq!(<NextKeys<T>>::get(validator_id).expect("No key for id"), new_key);
+	}
 	purge_keys {
 		let caller: T::AccountId = whitelisted_caller();
-		<NextKeys<T>>::insert(T::ValidatorIdOf::convert(caller.clone()).unwrap(), generate_key::<T>(0));
+		let validator_id = T::ValidatorIdOf::convert(caller.clone()).unwrap();
+		<NextKeys<T>>::insert(validator_id.clone(), generate_key::<T>(0));
 	}: _(RawOrigin::Signed(caller))
+	verify {
+		assert_eq!(<NextKeys<T>>::get(validator_id), None);
+	}
 }
