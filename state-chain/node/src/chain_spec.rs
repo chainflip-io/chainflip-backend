@@ -559,7 +559,7 @@ fn testnet_genesis(
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_node_percentage: 20,
 			bond: genesis_stake_amount,
-			authority_set_min_size: min_authorities,
+			authority_set_min_size: min_authorities as u8,
 		},
 		session: SessionConfig {
 			keys: initial_authorities
