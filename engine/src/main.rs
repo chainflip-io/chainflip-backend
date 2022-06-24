@@ -207,6 +207,16 @@ fn main() -> anyhow::Result<()> {
                     &root_logger,
                 )
             );
+            scope.spawn(
+                eth::start_chain_data_witnesser(
+                    eth_dual_rpc,
+                    state_chain_client.clone(),
+                    witnessing_instruction_receiver_3,
+                    cfe_settings_update_receiver,
+                    eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
+                    &root_logger
+                )
+            );
 
             tokio::join!(
                 eth_multisig_client_backend_future,
@@ -222,14 +232,6 @@ fn main() -> anyhow::Result<()> {
                     latest_block_hash,
                     &root_logger
                 ),
-                eth::start_chain_data_witnesser(
-                    &eth_dual_rpc,
-                    state_chain_client.clone(),
-                    witnessing_instruction_receiver_3,
-                    cfe_settings_update_receiver,
-                    eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
-                    &root_logger
-                )
             );
 
             Ok(())

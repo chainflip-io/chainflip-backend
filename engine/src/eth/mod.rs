@@ -48,10 +48,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::{
-    sync::{broadcast, oneshot, watch},
-    task::JoinHandle,
-};
+use tokio::sync::{broadcast, oneshot, watch};
 use web3::{
     ethabi::{self, Address, Contract, Event},
     signing::{Key, SecretKeyRef},
@@ -237,133 +234,127 @@ where
 }
 
 pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
-    eth_rpc: &EthRpcClient,
+    eth_rpc: EthRpcClient,
     state_chain_client: Arc<StateChainClient<ScRpcClient>>,
     mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
     cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
     poll_interval: Duration,
     logger: &slog::Logger,
-) where
+) -> anyhow::Result<()>
+where
     EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
     ScRpcClient: 'static + StateChainRpcApi + Send + Sync,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
     slog::info!(&logger, "Starting");
 
-    let (tracked_data_sender, mut tracked_data_receiver) = tokio::sync::mpsc::channel(10);
+    with_task_scope(|scope| async {
 
-    let state_chain_task_handle = tokio::spawn({
-        let logger = logger.clone();
+        let (tracked_data_sender, mut tracked_data_receiver) = tokio::sync::mpsc::channel(10);
 
-        async move {
-            while let Some(tracked_data) = tracked_data_receiver.recv().await {
-                match state_chain_client
-                    .submit_signed_extrinsic(
-                        state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
-                            call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
-                                pallet_cf_chain_tracking::Call::update_chain_state {
-                                    state: tracked_data,
-                                },
-                            )),
+        scope.spawn({
+            let logger = logger.clone();
+
+            async move {
+                while let Some(tracked_data) = tracked_data_receiver.recv().await {
+                    state_chain_client
+                        .submit_signed_extrinsic(
+                            state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
+                                call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                    pallet_cf_chain_tracking::Call::update_chain_state {
+                                        state: tracked_data,
+                                    },
+                                )),
+                            }),
+                            &logger,
+                        )
+                        .await
+                        .context("Failed to submit signed extrinsic")?;
+                }
+
+                Ok(())
+            }
+        });
+
+        let mut witnesser_task_handle: Option<(_, ScopedJoinHandle<_>)> = None;
+
+        while let Ok(instruction) = instruction_receiver.recv().await {
+            match instruction {
+                ObserveInstruction::Start(start_block, _) => {
+                    slog::info!(&logger, "Start observing from ETH block: {}", start_block);
+                    assert!(
+                        witnesser_task_handle.is_none(),
+                        "Duplicate start event received."
+                    );
+
+                    let (to_block_sender, to_block_receiver) = oneshot::channel();
+
+                    let _ref = witnesser_task_handle.insert((
+                        to_block_sender,
+                        scope.spawn_with_handle({
+                            let eth_rpc = eth_rpc.clone();
+                            let logger = logger.clone();
+                            let tracked_data_sender = tracked_data_sender.clone();
+                            let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
+
+                            async move {
+                                util::bounded(
+                                    start_block,
+                                    to_block_receiver,
+                                    util::strictly_increasing(
+                                        chain_data_witnessing::poll_latest_block_numbers(
+                                            &eth_rpc,
+                                            poll_interval,
+                                            &logger,
+                                        ),
+                                    ),
+                                )
+                                .for_each(|block_number| {
+                                    let eth_rpc_c = eth_rpc.clone();
+                                    let logger = logger.clone();
+                                    let tracked_data_sender = tracked_data_sender.clone();
+
+                                    let priority_fee = cfe_settings_update_receiver
+                                        .borrow()
+                                        .eth_priority_fee_percentile;
+
+                                    async move {
+                                        match get_tracked_data(&eth_rpc_c, block_number, priority_fee).await {
+                                            Ok(tracked_data) => {
+                                                let _result = tracked_data_sender.send(tracked_data).await;
+                                            }
+                                            Err(e) => {
+                                                slog::error!(
+                                                    &logger,
+                                                    "Failed to get tracked data: {:?}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                })
+                                .await;
+
+                                Ok(())
+                            }
                         }),
-                        &logger,
-                    )
-                    .await
-                {
-                    Ok(_) => (),
-                    Err(e) => {
-                        slog::error!(logger, "Failed to submit signed extrinsic: {:?}", e);
-                        break;
-                    }
+                    ));
+                }
+                ObserveInstruction::End(end_block) => {
+                    slog::info!(&logger, "End observing at ETH block: {}", end_block);
+
+                    let (to_block_sender, join_handle) = witnesser_task_handle
+                        .take()
+                        .expect("Duplicate end event received, or end received before start.");
+                    let _result = to_block_sender.send(end_block);
+                    join_handle.await;
                 }
             }
         }
-    });
 
-    let mut witnesser_task_handle: Option<(_, JoinHandle<_>)> = None;
-
-    while let Ok(instruction) = instruction_receiver.recv().await.map_err(|e| {
-        if let Some((_, handle)) = &witnesser_task_handle {
-            handle.abort();
-        }
-        slog::info!(&logger, "Stopping witnesser. Channel state is `{:?}`", e)
-    }) {
-        match instruction {
-            ObserveInstruction::Start(start_block, _) => {
-                slog::info!(&logger, "Start observing from ETH block: {}", start_block);
-                assert!(
-                    witnesser_task_handle.is_none(),
-                    "Duplicate start event received."
-                );
-
-                let (to_block_sender, to_block_receiver) = oneshot::channel();
-
-                let _ref = witnesser_task_handle.insert((
-                    to_block_sender,
-                    tokio::spawn({
-                        let eth_rpc = eth_rpc.clone();
-                        let logger = logger.clone();
-                        let tracked_data_sender = tracked_data_sender.clone();
-                        let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
-
-                        async move {
-                            util::bounded(
-                                start_block,
-                                to_block_receiver,
-                                util::strictly_increasing(
-                                    chain_data_witnessing::poll_latest_block_numbers(
-                                        &eth_rpc,
-                                        poll_interval,
-                                        &logger,
-                                    ),
-                                ),
-                            )
-                            .for_each(|block_number| {
-                                let eth_rpc_c = eth_rpc.clone();
-                                let logger = logger.clone();
-                                let tracked_data_sender = tracked_data_sender.clone();
-
-                                let priority_fee = cfe_settings_update_receiver
-                                    .borrow()
-                                    .eth_priority_fee_percentile;
-
-                                async move {
-                                    match get_tracked_data(&eth_rpc_c, block_number, priority_fee)
-                                        .await
-                                    {
-                                        Ok(tracked_data) => {
-                                            tracked_data_sender.send(tracked_data).await.unwrap()
-                                        }
-                                        Err(e) => {
-                                            slog::error!(
-                                                &logger,
-                                                "Failed to get tracked data: {:?}",
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                            })
-                            .await
-                        }
-                    }),
-                ));
-            }
-            ObserveInstruction::End(end_block) => {
-                slog::info!(&logger, "End observing at ETH block: {}", end_block);
-
-                let (to_block_sender, join_handle) = witnesser_task_handle
-                    .take()
-                    .expect("Duplicate end event received, or end received before start.");
-                to_block_sender.send(end_block).unwrap();
-                join_handle.await.unwrap();
-            }
-        }
-    }
-
-    // Dropping the sender ensures that the state chain task will stop.
-    drop(tracked_data_sender);
-    state_chain_task_handle.await.unwrap();
+        slog::info!(&logger, "Stopping witnesser");
+        Ok(())
+    }.boxed()).await
 }
 
 impl TryFrom<Block<H256>> for EthNumberBloom {
@@ -1544,10 +1535,10 @@ mod witnesser_tests {
     use super::*;
     use crate::logging::test_utils::new_test_logger;
     use crate::state_chain::client::MockStateChainRpcApi;
-    use tokio::time::timeout;
+    use crate::task_scope::with_main_task_scope;
 
-    #[tokio::test]
-    async fn test_start_chain_data_witnesser() {
+    #[test]
+    fn test_start_chain_data_witnesser() {
         struct ClonableRpc<T>(Arc<T>);
 
         impl<T> Clone for ClonableRpc<T> {
@@ -1621,7 +1612,6 @@ mod witnesser_tests {
 
         let mut eth_rpc = MockEthHttpRpcClient::new();
         let mut sc_rpc = MockStateChainRpcApi::new();
-        let (instruction_sender, [instruction_receiver]) = build_broadcast_channel(10);
 
         // ** Rpc Api Assumptions **
         const BASE_FEE: u128 = 40;
@@ -1655,38 +1645,36 @@ mod witnesser_tests {
         // ** Rpc Api Assumptions **
 
         let eth_rpc = ClonableRpc::new(eth_rpc);
-        let sc_client = Arc::new(StateChainClient::create_test_sc_client(sc_rpc));
-
-        let (_, cfe_settings_update_receiver) =
-            watch::channel::<CfeSettings>(CfeSettings::default());
-        let h = tokio::spawn({
-            let eth_rpc = eth_rpc.clone();
-            let logger = logger.clone();
-            async move {
-                start_chain_data_witnesser(
-                    &eth_rpc,
+        with_main_task_scope(|scope| {
+            async {
+                let sc_client = Arc::new(StateChainClient::create_test_sc_client(sc_rpc));
+                let (instruction_sender, [instruction_receiver]) = build_broadcast_channel(10);
+                let (_, cfe_settings_update_receiver) =
+                    watch::channel::<CfeSettings>(CfeSettings::default());
+                scope.spawn(start_chain_data_witnesser(
+                    eth_rpc.clone(),
                     sc_client,
                     instruction_receiver,
                     cfe_settings_update_receiver,
                     Duration::from_millis(10),
                     &logger,
-                )
-                .await
+                ));
+
+                for i in 0..REPEATS {
+                    let offset = i * END;
+                    instruction_sender
+                        .send(ObserveInstruction::Start((offset + START) as u64, i as u32))
+                        .unwrap();
+                    instruction_sender
+                        .send(ObserveInstruction::End((offset + END) as u64))
+                        .unwrap();
+                }
+
+                Ok(())
             }
-        });
-
-        for i in 0..REPEATS {
-            let offset = i * END;
-            instruction_sender
-                .send(ObserveInstruction::Start((offset + START) as u64, i as u32))
-                .unwrap();
-            instruction_sender
-                .send(ObserveInstruction::End((offset + END) as u64))
-                .unwrap();
-        }
-        drop(instruction_sender);
-
-        timeout(Duration::from_secs(1), h).await.unwrap().unwrap();
+            .boxed()
+        })
+        .unwrap();
     }
 }
 
