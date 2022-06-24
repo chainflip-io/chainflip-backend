@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 
+/// Used as a unique identifier when serializing/deserializing chain specific data.
+/// The values are explicitly given and should never be changed.
 #[repr(u16)]
 #[derive(Clone, Copy)]
 pub enum ChainTag {
