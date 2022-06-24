@@ -2,6 +2,12 @@ use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_runtime::helpers_128bit::multiply_by_rational;
 use sp_std::{cmp::min, prelude::*};
 
+//TODO: The u128 is not big enough for some calculations (for example this one) which involve
+// intermediate steps of the calculation create values that saturate the u128. In this and in
+// similar cases we might have to convert the values to BigInt for calculation and then convert it
+// back to u128 after calculation. In this case, the saturation problem can lead to upto 0.03 - 0.05
+// Flip error in calculation.
+
 pub fn calculate_backup_rewards<I, Q>(
 	backup_nodes: Vec<(I, Q)>,
 	minimum_active_bid: Q,
@@ -67,16 +73,9 @@ where
 	rewards
 }
 
-fn abs_difff(a: u128, b: u128) -> u128 {
-	if a > b {
-		a - b
-	} else {
-		b - a
-	}
-}
-
 #[test]
 fn test_example_calculations() {
+	// The example calculation is taken from here: https://www.notion.so/chainflip/Calculating-Backup-Validator-Rewards-8c42dee6bbc842ab99b1c4f0065b19fe
 	let test_backup_nodes: Vec<(u128, u128)> = vec![
 		(1, 15000000),
 		(2, 12000000),
@@ -160,9 +159,17 @@ fn test_example_calculations() {
 		AUTHORITY_COUNT,
 	);
 
+	fn abs_diff(a: u128, b: u128) -> u128 {
+		if a > b {
+			a - b
+		} else {
+			b - a
+		}
+	}
+
 	for _ in 0..backup_rewards.len() {
 		assert!(
-			abs_difff(
+			abs_diff(
 				calculated_rewards.pop().unwrap().1 / MUL_FACTOR,
 				backup_rewards.pop().unwrap()
 			) <= 3_u128
