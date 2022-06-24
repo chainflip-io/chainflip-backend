@@ -26,7 +26,6 @@ pub type ValidatorId = u64;
 pub const MIN_AUTHORITY_SIZE: u32 = 1;
 pub const MAX_AUTHORITY_SIZE: u32 = 3;
 pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 2;
-pub const MAX_AUTHORITY_SET_CONTRACTION: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
@@ -141,7 +140,6 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 			min_size: MIN_AUTHORITY_SIZE,
 			max_size: MAX_AUTHORITY_SIZE,
 			max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-			max_contraction: MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	};
 

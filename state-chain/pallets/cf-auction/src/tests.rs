@@ -31,21 +31,13 @@ fn should_provide_winning_set() {
 fn auction_params_must_be_valid_when_set() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			AuctionPallet::set_auction_parameters(
-				Origin::root(),
-				DynamicSetSizeParameters::default()
-			),
+			AuctionPallet::set_auction_parameters(Origin::root(), SetSizeParameters::default()),
 			Error::<Test>::InvalidAuctionParameters
 		);
 
 		assert_ok!(AuctionPallet::set_auction_parameters(
 			Origin::root(),
-			DynamicSetSizeParameters {
-				min_size: 3,
-				max_size: 10,
-				max_contraction: 10,
-				max_expansion: 10,
-			}
+			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 }
 		));
 		// Confirm we have an event
 		assert!(matches!(

@@ -580,7 +580,6 @@ fn testnet_genesis(
 			min_size: min_authorities,
 			max_size: MAX_AUTHORITIES,
 			max_expansion: MAX_AUTHORITIES,
-			max_contraction: MAX_AUTHORITIES,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },

@@ -607,6 +607,7 @@ mod tests {
 					bond: self.accounts[0].1,
 					claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 					backup_node_percentage: 34,
+					authority_set_min_size: self.min_authorities,
 				},
 				ethereum_vault: EthereumVaultConfig {
 					vault_key: ethereum_vault_key,

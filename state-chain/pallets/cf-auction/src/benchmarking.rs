@@ -8,10 +8,9 @@ use frame_system::RawOrigin;
 
 benchmarks! {
 	set_auction_parameters {
-		let params = DynamicSetSizeParameters {
+		let params = SetSizeParameters {
 			min_size: 3,
 			max_size: 150,
-			max_contraction: 10,
 			max_expansion: 15,
 		};
 	}: _(RawOrigin::Root, params)
