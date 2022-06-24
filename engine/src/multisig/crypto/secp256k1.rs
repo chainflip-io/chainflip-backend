@@ -294,7 +294,7 @@ mod scalar_impls {
             // `negate_assign` expects a valid non-zero scalar
 
             match rhs.0 {
-                None => Scalar(None),
+                None => self.clone(),
                 Some(mut x) => {
                     // it is safe to negate non-zero Scalar
                     x.negate_assign();
