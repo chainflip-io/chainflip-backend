@@ -76,7 +76,7 @@ fn main() {
             &new_discard_logger(),
         )
         .expect("Should create database at latest version")
-        .update_key(&eth_key_id, &key_share);
+        .update_key::<eth::EthSigning>(&eth_key_id, &key_share);
     }
 
     // output to stdout - CI can read the json from stdout
