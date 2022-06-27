@@ -67,7 +67,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 		self.authority_candidates_iter().cloned().collect::<I>()
 	}
 
-	pub fn to_backup_triage<AccountState: ChainflipAccount>(
+	pub fn into_backup_triage<AccountState: ChainflipAccount>(
 		self,
 		backup_group_size_target: usize,
 	) -> BackupTriage<Id, Amount>

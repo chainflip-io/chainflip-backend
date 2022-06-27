@@ -77,11 +77,11 @@ where
 		if self.backup_group_size_target == 0 {
 			return Amount::max_value()
 		}
-		self.backup.iter().map(|bid| bid.amount).min().unwrap_or(Zero::zero())
+		self.backup.iter().map(|bid| bid.amount).min().unwrap_or_else(Zero::zero)
 	}
 
 	fn highest_passive_bid(&self) -> Amount {
-		self.passive.iter().map(|bid| bid.amount).max().unwrap_or(Zero::zero())
+		self.passive.iter().map(|bid| bid.amount).max().unwrap_or_else(Zero::zero)
 	}
 
 	pub fn adjust_bid<AccountState: ChainflipAccount>(

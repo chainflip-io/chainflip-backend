@@ -900,10 +900,12 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_status.bond,
-			rotation_status.to_backup_triage::<T::ChainflipAccount>(Self::backup_set_target_size(
-				new_authorities.len(),
-				BackupNodePercentage::<T>::get(),
-			)),
+			rotation_status.into_backup_triage::<T::ChainflipAccount>(
+				Self::backup_set_target_size(
+					new_authorities.len(),
+					BackupNodePercentage::<T>::get(),
+				),
+			),
 		);
 
 		// Trigger the new epoch handlers on other pallets.
@@ -999,10 +1001,10 @@ impl<T: Config> Pallet<T> {
 			Ok(()) => {
 				log::info!(target: "cf-validator", "Vault rotation initiated.");
 				Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
-			}
+			},
 			Err(e) => {
 				log::warn!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
-			}
+			},
 		}
 	}
 }
