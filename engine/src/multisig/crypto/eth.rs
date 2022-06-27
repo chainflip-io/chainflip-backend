@@ -6,7 +6,7 @@ use super::{ChainTag, CryptoScheme, ECPoint};
 // clear that these a the primitives used by ethereum.
 // TODO: we probably want to change the "clients" to
 // solely use "CryptoScheme" as generic parameter instead.
-pub use super::secp255k1::{Point, Scalar};
+pub use super::secp256k1::{Point, Scalar};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,7 +59,7 @@ impl CryptoScheme for EthSigning {
             &pubkey_to_eth_addr(nonce_commitment.get_element()),
         );
 
-        Scalar::from_bytes(&e)
+        Scalar::from_bytes_mod_order(&e)
     }
 
     fn build_response(
