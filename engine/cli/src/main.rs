@@ -323,7 +323,7 @@ async fn set_vanity_name(
         return Err(anyhow::Error::msg(
             "Name too long. Max length is 64 characters.",
         ));
-    } else if std::str::from_utf8(&name.as_bytes()).is_err() {
+    } else if std::str::from_utf8(name.as_bytes()).is_err() {
         return Err(anyhow::Error::msg(
             "Name contains invalid characters. Must be valid UTF-8.",
         ));
