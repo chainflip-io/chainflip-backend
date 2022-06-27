@@ -173,7 +173,6 @@ fn main() -> anyhow::Result<()> {
                     outgoing_p2p_message_sender,
                     &root_logger,
                 );
-
             scope.spawn(
                 multisig_p2p::start(
                     &settings,
@@ -185,6 +184,10 @@ fn main() -> anyhow::Result<()> {
                     &root_logger,
                 )
             );
+            scope.spawn(async move {
+                eth_multisig_client_backend_future.await;
+                Ok(()) // TODO Handle errors/panics from backend
+            });
 
             // Start eth observers
             scope.spawn(
@@ -218,21 +221,23 @@ fn main() -> anyhow::Result<()> {
                 )
             );
 
-            tokio::join!(
-                eth_multisig_client_backend_future,
-                // Start state chain components
-                state_chain::sc_observer::start(
-                    state_chain_client.clone(),
-                    state_chain_block_stream,
-                    eth_broadcaster,
-                    eth_multisig_client,
-                    account_peer_mapping_change_sender,
-                    witnessing_instruction_sender,
-                    cfe_settings_update_sender,
-                    latest_block_hash,
-                    &root_logger
-                ),
+            // Start state chain components
+            let sc_observer_future = state_chain::sc_observer::start(
+                state_chain_client.clone(),
+                state_chain_block_stream,
+                eth_broadcaster,
+                eth_multisig_client,
+                account_peer_mapping_change_sender,
+                witnessing_instruction_sender,
+                cfe_settings_update_sender,
+                latest_block_hash,
+                &root_logger
             );
+            scope.spawn(async move {
+                sc_observer_future.await;
+                Ok(()) // TODO Handle errors/panics from sc_observer
+            });
+
 
             Ok(())
         }.boxed()
