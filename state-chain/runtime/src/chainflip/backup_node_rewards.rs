@@ -147,8 +147,6 @@ fn test_example_calculations() {
 	const FLIPPERINOS: u128 = 1_000_000_000_000_000_000;
 	const FLIPPERINOS_PER_CENTIFLIP: u128 = 10_000_000_000_000_000;
 
-	assert!(FLIPPERINOS / FLIPPERINOS_PER_CENTIFLIP == 100);
-
 	let test_backup_nodes = test_backup_nodes
 		.map(|(node, reward)| (node, reward * FLIPPERINOS_PER_CENTIFLIP))
 		.to_vec();
