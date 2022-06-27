@@ -1,4 +1,3 @@
-use core::iter::zip;
 use sp_runtime::helpers_128bit::multiply_by_rational;
 use sp_std::{cmp::min, prelude::*};
 
@@ -19,7 +18,7 @@ pub fn calculate_backup_rewards<Id, Amount>(
 where
 	Amount: From<u128>,
 {
-	const QUANTISATION_FACTOR: u128 = 1_000_000_000;
+	const QUANTISATION_FACTOR: u128 = 100_000_000;
 
 	let (minimum_active_bid, backup_node_emission_per_block, current_authority_emission_per_block) = (
 		minimum_active_bid / QUANTISATION_FACTOR,
@@ -85,7 +84,7 @@ where
 fn test_example_calculations() {
 	// The example calculation is taken from here: https://www.notion.so/chainflip/Calculating-Backup-Validator-Rewards-8c42dee6bbc842ab99b1c4f0065b19fe
 	let test_backup_nodes = [
-		(1, 90_000_000_00),
+		(1, 15000000),
 		(2, 12000000),
 		(3, 11760000),
 		(4, 11524800),
@@ -169,12 +168,9 @@ fn test_example_calculations() {
 		AUTHORITY_COUNT,
 	);
 
-	for ((node_id, backup_reward), expected_reward) in zip(calculated_rewards, backup_rewards) {
-		// let a = backup_reward / (FLIPPERINOS_PER_CENTIFLIP / 10);
-		// let b = expected_reward * 10;
-		// println!("backup: {a:?}, expected: {b:?}");
+	use core::iter::zip;
+	for ((_node_id, backup_reward), expected_reward) in zip(calculated_rewards, backup_rewards) {
 		let diff = (backup_reward / FLIPPERINOS_PER_CENTIFLIP).abs_diff(expected_reward);
-		// println!("AbsDiff: {:?}", diff);
-		assert!(diff <= 1_u128, "Diff was {:?} at {:?}", diff, node_id);
+		assert!(diff <= 1_u128);
 	}
 }
