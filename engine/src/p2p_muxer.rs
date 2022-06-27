@@ -135,3 +135,46 @@ impl P2PMuxer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use crate::engine_utils::test_utils::expect_recv_with_timeout;
+    use crate::multisig_p2p::OutgoingMultisigStageMessages;
+
+    #[tokio::test]
+    async fn correctly_prepends_chain_tag() {
+        let logger = crate::logging::test_utils::new_test_logger();
+
+        let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
+        let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let (eth_outgoing_sender, _, muxer_future) =
+            P2PMuxer::init(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+
+        let _jh = tokio::task::spawn(muxer_future);
+
+        let message = OutgoingMultisigStageMessages::Broadcast(
+            vec![AccountId::new([b'A'; 32]), AccountId::new([b'B'; 32])],
+            vec![0, 1, 2],
+        );
+
+        eth_outgoing_sender.send(message).unwrap();
+
+        let message = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
+
+        let expected = {
+            let expected_data = [&ChainTag::Ethereum.to_bytes()[..], &[0u8, 1, 2][..]].concat();
+
+            OutgoingMultisigStageMessages::Broadcast(
+                vec![AccountId::new([b'A'; 32]), AccountId::new([b'B'; 32])],
+                expected_data,
+            )
+        };
+
+        assert_eq!(expected, message);
+    }
+}
