@@ -285,6 +285,12 @@ impl TestExternalitiesWithCheck {
 }
 
 pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
+	let _ = simple_logger::SimpleLogger::new()
+		.with_level(LevelFilter::Off)
+		.without_timestamps()
+		.env()
+		.init();
+
 	let config = GenesisConfig {
 		system: SystemConfig::default(),
 		session: SessionConfig {
