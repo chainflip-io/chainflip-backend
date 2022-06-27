@@ -845,6 +845,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-session-benchmarking"
+version = "0.1.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-session",
+ "rand 0.7.3",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-test-utilities"
 version = "0.1.0"
 dependencies = [
@@ -8855,6 +8868,7 @@ name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-session-benchmarking",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
