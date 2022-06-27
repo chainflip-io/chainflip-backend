@@ -62,6 +62,11 @@ pub enum CFCommand {
     Retire {},
     #[clap(about = "Activates an account for all future Auctions")]
     Activate {},
+    #[clap(about = "Set a UTF-8 vanity name for your node (max length 64)")]
+    VanityName {
+        #[clap(help = "Name in UTF-8 (max length 64)")]
+        name: String,
+    },
     #[clap(about = "Submit a query to the State Chain")]
     Query {
         #[clap(help = "Block hash to be queried")]
