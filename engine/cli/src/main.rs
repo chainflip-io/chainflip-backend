@@ -24,8 +24,6 @@ use utilities::clean_eth_address;
 
 mod settings;
 
-const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
-
 #[tokio::main]
 async fn main() {
     std::process::exit(match run_cli().await {
@@ -321,10 +319,10 @@ async fn set_vanity_name(
     // to avoid a failing extrinsic.
     // ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
     // ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-    if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
+    if name.len() > pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME {
         return Err(anyhow::Error::msg(format!(
             "Name too long. Max length is {} characters.",
-            MAX_LENGTH_FOR_VANITY_NAME,
+            pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME,
         )));
     } else if std::str::from_utf8(name.as_bytes()).is_err() {
         return Err(anyhow::Error::msg(
