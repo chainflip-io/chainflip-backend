@@ -131,6 +131,8 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// Not enough reserves.
 		InsufficientReserves,
+		/// Invalid Slashing Rate: Has to be between 0 and 100
+		InvalidSlashingRate,
 	}
 
 	#[pallet::hooks]
@@ -138,6 +140,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Slashing Rate is a percentage. It, therefore, has to be between 0 and 100
 		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(
 			origin: OriginFor<T>,
@@ -145,6 +148,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(slashing_rate <= T::Balance::from(100u32), Error::<T>::InvalidSlashingRate);
 			// Set the slashing rate
 			SlashingRate::<T>::set(slashing_rate);
 			Ok(().into())
