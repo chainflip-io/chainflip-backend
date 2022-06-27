@@ -154,7 +154,8 @@ impl RewardsDistribution for MockRewardsDistribution {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 
 	fn distribute() {
-		let deposit = Flip::deposit_reserves(*b"RSVR", EMISSION_RATE);
+		let deposit =
+			Flip::deposit_reserves(*b"RSVR", Emissions::current_authority_emission_per_block());
 		let amount = deposit.peek();
 		let _result = deposit.offset(Self::Issuance::mint(amount));
 	}
