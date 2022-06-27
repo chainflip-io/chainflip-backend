@@ -19,7 +19,8 @@ use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
 
 mod settings;
@@ -315,17 +316,13 @@ async fn set_vanity_name(
     settings: &CLISettings,
     logger: &slog::Logger,
 ) -> Result<()> {
-    // Might as well replicate the validation performed by the State Chain here,
-    // to avoid a failing extrinsic.
-    // ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
-    // ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-    if name.len() > pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME {
-        return Err(anyhow::Error::msg(format!(
+    if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
+        return Err(anyhow!(
             "Name too long. Max length is {} characters.",
-            pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME,
-        )));
+            MAX_LENGTH_FOR_VANITY_NAME,
+        ));
     } else if std::str::from_utf8(name.as_bytes()).is_err() {
-        return Err(anyhow::Error::msg(
+        return Err(anyhow!(
             "Name contains invalid characters. Must be valid UTF-8.",
         ));
     }
