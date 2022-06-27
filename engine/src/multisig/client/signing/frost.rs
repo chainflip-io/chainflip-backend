@@ -204,7 +204,7 @@ fn gen_rho_i<P: ECPoint>(
 
     let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-    P::Scalar::from_bytes(&x)
+    P::Scalar::from_bytes_mod_order(&x)
 }
 
 type SigningResponse<P> = LocalSig3<P>;

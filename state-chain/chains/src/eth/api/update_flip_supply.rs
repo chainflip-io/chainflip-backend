@@ -1,11 +1,11 @@
-use crate::{eth::Tokenizable, ChainCrypto, Ethereum};
+use crate::{eth::Tokenizable, ApiCall, ChainAbi, ChainCrypto, Ethereum};
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
-use sp_std::{vec, vec::Vec};
+use sp_std::vec;
 
-use crate::eth::{SchnorrVerificationComponents, SigData};
+use crate::eth::SigData;
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
@@ -47,31 +47,6 @@ impl UpdateFlipSupply {
 		calldata
 	}
 
-	pub fn signed(mut self, signature: &SchnorrVerificationComponents) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	pub fn signing_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	pub fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
-			.encode_input(&[
-				self.sig_data.tokenize(),
-				Token::Uint(self.new_total_supply),
-				Token::Uint(self.state_chain_block_number),
-				Token::Address(self.stake_manager_address),
-			])
-			.expect(
-				r#"
-					This can only fail if the parameter types don't match the function signature encoded below.
-					Therefore, as long as the tests pass, it can't fail at runtime.
-				"#,
-			)
-	}
-
 	/// Gets the function defintion for the `updateFlipSupply` smart contract call. Loading this
 	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
 	/// it here and verify against the abi in a unit test.
@@ -98,9 +73,40 @@ impl UpdateFlipSupply {
 	}
 }
 
+impl ApiCall<Ethereum> for UpdateFlipSupply {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		self.sig_data.msg_hash
+	}
+
+	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+		self.sig_data.insert_signature(signature);
+		self
+	}
+
+	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+		self.get_function()
+			.encode_input(&[
+				self.sig_data.tokenize(),
+				Token::Uint(self.new_total_supply),
+				Token::Uint(self.state_chain_block_number),
+				Token::Address(self.stake_manager_address),
+			])
+			.expect(
+				r#"
+					This can only fail if the parameter types don't match the function signature encoded below.
+					Therefore, as long as the tests pass, it can't fail at runtime.
+				"#,
+			)
+	}
+
+	fn is_signed(&self) -> bool {
+		self.sig_data.is_signed()
+	}
+}
+
 #[cfg(test)]
 mod test_update_flip_supply {
-	use crate::eth::api::EthereumReplayProtection;
+	use crate::eth::{api::EthereumReplayProtection, SchnorrVerificationComponents};
 
 	use super::*;
 	use frame_support::assert_ok;
@@ -147,7 +153,7 @@ mod test_update_flip_supply {
 
 		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
 
-		assert_eq!(update_flip_supply_runtime.signing_payload(), expected_msg_hash);
+		assert_eq!(update_flip_supply_runtime.threshold_signature_payload(), expected_msg_hash);
 
 		let runtime_payload = update_flip_supply_runtime
 			.clone()
@@ -158,7 +164,7 @@ mod test_update_flip_supply {
 			.abi_encoded();
 
 		// Ensure signing payload isn't modified by signature.
-		assert_eq!(update_flip_supply_runtime.signing_payload(), expected_msg_hash);
+		assert_eq!(update_flip_supply_runtime.threshold_signature_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:

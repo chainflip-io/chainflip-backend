@@ -161,6 +161,15 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
 		AsyncResult::Ready(ETH_DUMMY_SIG)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_signature(
+		_request_id: Self::RequestId,
+		_signature: <Ethereum as ChainCrypto>::ThresholdSignature,
+	) {
+		// do nothing, the mock impl of signature_result doesn't take from any storage
+		// so we don't need to insert any storage.
+	}
 }
 
 // The dummy signature can't be Default - this would be interpreted as no signature.

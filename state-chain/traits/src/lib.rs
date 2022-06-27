@@ -6,7 +6,7 @@ pub mod offence_reporting;
 
 pub use async_result::AsyncResult;
 
-use cf_chains::{ApiCall, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
@@ -16,6 +16,8 @@ use frame_support::{
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
@@ -24,7 +26,6 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
-/// The type used as an epoch index.
 pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
@@ -372,12 +373,14 @@ pub trait EmergencyRotation {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	HistoricalAuthority(BackupOrPassive),
@@ -386,6 +389,7 @@ pub enum ChainflipAccountState {
 
 // TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ChainflipAccountData {
 	pub state: ChainflipAccountState,
 }
@@ -513,6 +517,11 @@ pub trait KeyProvider<C: ChainCrypto> {
 
 	/// Get the chain's current agg key.
 	fn current_key() -> C::AggKey;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_key(_key: C::AggKey) {
+		unimplemented!()
+	}
 }
 
 /// Api trait for pallets that need to sign things.
@@ -520,7 +529,7 @@ pub trait ThresholdSigner<C>
 where
 	C: ChainCrypto,
 {
-	type RequestId: Member + Parameter + Copy;
+	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
 
@@ -555,6 +564,12 @@ where
 			);
 		});
 		id
+	}
+
+	/// Helper function to enable benchmarking of the brodcast pallet
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_signature(_request_id: Self::RequestId, _signature: C::ThresholdSignature) {
+		unimplemented!();
 	}
 }
 

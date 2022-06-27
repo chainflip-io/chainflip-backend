@@ -47,7 +47,7 @@ lazy_static = "1.4"
 parking_lot = "0.12"
 regex = "1"
 reqwest = {version = "0.11.4", features = ["json"]}
-secp256k1 = "0.20"
+secp256k1 = {version = "0.20", features = ["serde", "rand-std", "global-context"]}
 serde = {version = "1.0", features = ["derive", "rc"]}
 serde_json = "1.0"
 sha2 = "0.9.5"
@@ -58,6 +58,8 @@ thiserror = "1.0.26"
 tokio = {version = "1.13.1", features = ["full"]}
 tokio-stream = "0.1.5"
 url = "1.7.2"
+num-bigint = "0.4"
+num-traits = "0.2"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['signing']}
 zeroize = "1.5.4"
 libp2p = "0.40"
@@ -85,7 +87,9 @@ multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
+pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
+pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 pallet-cf-online = {path = "../state-chain/pallets/cf-online"}
 pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
@@ -147,9 +151,6 @@ tag = 'chainflip-monthly-2022-05'
 [dependencies.sp-version]
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
-
-[dependencies.curv-kzen]
-version = "0.9"
 
 [dev-dependencies]
 env_logger = "0.9.0"

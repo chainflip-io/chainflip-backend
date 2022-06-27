@@ -205,7 +205,7 @@ fn sudo_extrinsic() {
 fn upgrade_runtime_successfully() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Governance::chainflip_runtime_upgrade(
-			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			DUMMY_WASM_BLOB
 		));
 		assert_eq!(
@@ -221,7 +221,7 @@ fn wrong_upgrade_conditions() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Governance::chainflip_runtime_upgrade(
-				pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				DUMMY_WASM_BLOB
 			),
 			<Error<Test>>::UpgradeConditionsNotMet
@@ -237,7 +237,7 @@ fn error_during_runtime_upgrade() {
 		// assert_noop! is not working when we emit an event and
 		// the result is an error
 		let result = Governance::chainflip_runtime_upgrade(
-			pallet_cf_governance::RawOrigin::GovernanceThreshold.into(),
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			DUMMY_WASM_BLOB,
 		);
 		assert!(result.is_err());

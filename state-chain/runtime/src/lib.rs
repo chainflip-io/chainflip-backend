@@ -5,10 +5,15 @@ pub mod chainflip;
 pub mod constants;
 mod migrations;
 pub mod runtime_apis;
+mod weights;
 pub use frame_system::Call as SystemCall;
 #[cfg(test)]
 mod tests;
-use cf_chains::{eth, Ethereum};
+use crate::{
+	chainflip::Offence,
+	runtime_apis::{RuntimeApiAccountInfo, RuntimeApiPenalty, RuntimeApiPendingClaim},
+};
+use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
 pub use frame_support::{
 	construct_runtime, debug,
 	instances::Instance1,
@@ -38,8 +43,6 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
-use cf_traits::EpochInfo;
-
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -53,12 +56,15 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-use cf_traits::ChainflipAccountData;
-pub use cf_traits::{BlockNumber, FlipBalance, SessionKeysRegistered};
+pub use cf_traits::{
+	BlockNumber, ChainflipAccount, ChainflipAccountData, ChainflipAccountState,
+	ChainflipAccountStore, EpochInfo, FlipBalance, SessionKeysRegistered,
+};
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
+pub use pallet_cf_staking::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
@@ -275,7 +281,7 @@ impl frame_system::Config for Runtime {
 	/// The data to be stored in an account.
 	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
-	type SystemWeightInfo = ();
+	type SystemWeightInfo = weights::frame_system::SubstrateWeight<Runtime>;
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
 	type SS58Prefix = SS58Prefix;
 	/// The set code logic, just the default since we're not a parachain.
@@ -316,7 +322,7 @@ impl pallet_timestamp::Config for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_timestamp::SubstrateWeight<Runtime>;
 }
 
 impl pallet_authorship::Config for Runtime {
@@ -388,6 +394,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -455,6 +462,13 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type KeyProvider = EthereumVault;
 }
 
+impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Ethereum;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -483,6 +497,7 @@ construct_runtime!(
 		Reputation: pallet_cf_reputation,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
+		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 	}
 );
 
@@ -558,6 +573,7 @@ mod benches {
 		[pallet_cf_reputation, Reputation]
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
+		[pallet_cf_chain_tracking, EthereumChainTracking]
 	);
 }
 
@@ -597,6 +613,67 @@ impl_runtime_apis! {
 		}
 		fn cf_backup_emission_per_block() -> u64 {
 			Emissions::backup_node_emission_per_block().unique_saturated_into()
+		}
+		fn cf_flip_supply() -> (u128, u128) {
+			(Flip::total_issuance(), Flip::offchain_funds())
+		}
+		fn cf_accounts() -> Vec<(AccountId, Vec<u8>)> {
+			let mut vanity_names = Validator::vanity_names();
+			pallet_cf_flip::Account::<Runtime>::iter_keys()
+				.map(|account_id| {
+					let vanity_name = vanity_names.remove(&account_id).unwrap_or_default();
+					(account_id, vanity_name)
+				})
+				.collect()
+		}
+		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
+			let last_heartbeat = pallet_cf_online::LastHeartbeat::<Runtime>::get(&account_id);
+			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
+			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
+			let account_data = ChainflipAccountStore::<Runtime>::get(&account_id);
+
+			RuntimeApiAccountInfo {
+				stake: account_info.total(),
+				bond: account_info.bond(),
+				last_heartbeat: last_heartbeat.unwrap_or(0),
+				online_credits: reputation_info.online_credits,
+				reputation_points: reputation_info.reputation_points,
+				withdrawal_address,
+				state: account_data.state
+			}
+		}
+		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimeApiPendingClaim> {
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let pending_claim: RegisterClaim = match api_call {
+				eth::api::EthereumApi::RegisterClaim(tx) => tx,
+				_ => unreachable!(),
+			};
+			Some(RuntimeApiPendingClaim {
+				amount: pending_claim.amount,
+				address: pending_claim.address.into(),
+				expiry: pending_claim.expiry,
+				sig_data: pending_claim.sig_data,
+			})
+		}
+		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
+			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
+				.map(|offence| {
+					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence).unwrap_or_default();
+					(offence, RuntimeApiPenalty {
+						reputation_points: penalty.reputation,
+						suspension_duration_blocks: penalty.suspension
+					})
+				})
+				.collect()
+		}
+		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId)>)> {
+			pallet_cf_reputation::Suspensions::<Runtime>::iter_keys()
+				.map(|offence| {
+					let suspension = pallet_cf_reputation::Suspensions::<Runtime>::get(offence);
+					(offence, suspension.into())
+				})
+				.collect()
 		}
 	}
 	// END custom runtime APIs

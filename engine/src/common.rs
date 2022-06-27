@@ -102,7 +102,7 @@ mod tests {
 
 // Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
 pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
-    anyhow::Error::msg(format!("{}", error))
+    anyhow::Error::msg(error.to_string())
 }
 
 pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(
@@ -162,16 +162,18 @@ mod tests_read_clean_and_decode_hex_str_file {
 }
 
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for some time)
-/// it will immediately output a single tick on the next call to tick() and resume ticking every duration
+/// it will immediately output a single tick on the next call to tick() and resume ticking every duration.
+///
+/// The supplied duration should be >> 5ms due to the underlying implementation of [Intervall::poll_tick].
 pub fn make_periodic_tick(duration: Duration) -> tokio::time::Interval {
     let mut interval = tokio::time::interval_at(Instant::now() + duration, duration);
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     interval
 }
 
 #[cfg(test)]
 mod tests_make_periodic_tick {
-    use crate::testing::assert_ok;
+    use crate::testing::{assert_err, assert_ok};
 
     use super::*;
 
@@ -187,15 +189,15 @@ mod tests_make_periodic_tick {
         // Next tick outputs immediately
         assert_ok!(tokio::time::timeout(Duration::from_secs_f32(0.01), tick.tick()).await);
 
-        // We skip ticks instead of bursting ticks (Next tick should occur in PERIOD * 0.5)
-        assert!(
-            tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.25), tick.tick())
-                .await
-                .is_err()
-        );
+        // We skip ticks instead of bursting ticks.
+        assert_err!(tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.9), tick.tick()).await);
+        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.1), tick.tick()).await);
 
-        // Ticks continue to be insync with duration (Next tick should occur in PERIOD * 0.25)
-        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.35), tick.tick()).await);
+        // Ticks continue to be in sync with duration.
+        assert_err!(
+            tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.95), tick.tick()).await
+        );
+        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(PERIOD), tick.tick()).await);
     }
 
     #[tokio::test]

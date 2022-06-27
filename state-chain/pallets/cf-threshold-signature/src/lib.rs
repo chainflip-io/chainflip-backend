@@ -56,6 +56,7 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
+#[cfg(feature = "std")]
 const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
 
 #[frame_support::pallet]
@@ -634,5 +635,13 @@ where
 		request_id: Self::RequestId,
 	) -> cf_traits::AsyncResult<<T::TargetChain as ChainCrypto>::ThresholdSignature> {
 		Signatures::<T, I>::take(request_id)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_signature(
+		request_id: Self::RequestId,
+		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
+	) {
+		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
 	}
 }

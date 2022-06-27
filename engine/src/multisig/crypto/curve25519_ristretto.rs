@@ -70,7 +70,7 @@ mod point_impls {
 
 mod scalar_impls {
 
-    use zeroize::{Zeroize, ZeroizeOnDrop};
+    use zeroize::Zeroize;
 
     use super::*;
 
@@ -88,7 +88,7 @@ mod scalar_impls {
             Scalar(SK::from_bytes_mod_order_wide(&scalar_bytes))
         }
 
-        fn from_bytes(x: &[u8; 32]) -> Self {
+        fn from_bytes_mod_order(x: &[u8; 32]) -> Self {
             Scalar(SK::from_bytes_mod_order(*x))
         }
 

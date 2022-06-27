@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use chainflip_engine::{
     eth::{
-        self,
+        self, build_broadcast_channel,
         key_manager::KeyManager,
         rpc::{EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
         stake_manager::StakeManager,
@@ -8,7 +10,7 @@ use chainflip_engine::{
     },
     health::HealthMonitor,
     logging,
-    multisig::{self, PersistentKeyDB},
+    multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
     state_chain,
@@ -40,6 +42,14 @@ async fn main() {
             .run()
             .await;
     }
+
+    let db = Arc::new(
+        PersistentKeyDB::new_and_migrate_to_latest(
+            settings.signing.db_file.as_path(),
+            &root_logger,
+        )
+        .expect("Failed to open database"),
+    );
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
@@ -75,13 +85,6 @@ async fn main() {
         .await
         .expect("Should submit version to state chain");
 
-    // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new_and_migrate_to_latest(
-        settings.signing.db_file.as_path(),
-        &root_logger,
-    )
-    .expect("Failed to open database");
-
     // TODO: Merge this into the MultisigClientApi
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -91,9 +94,10 @@ async fn main() {
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    // TODO: multi consumer, single producer?
-    let (sm_instruction_sender, sm_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (km_instruction_sender, km_instruction_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (
+        witnessing_instruction_sender,
+        [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
+    ) = build_broadcast_channel(10);
 
     {
         // ensure configured eth node is pointing to the correct chain id
@@ -154,15 +158,15 @@ async fn main() {
         .await
         .expect("Should get KeyManager address from SC");
 
-    let key_manager_contract = KeyManager::new(key_manager_address.into(), eth_dual_rpc)
-        .expect("Should create KeyManager contract");
+    let key_manager_contract =
+        KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
 
     use crate::multisig::eth::EthSigning;
 
     let (eth_multisig_client, eth_multisig_client_backend_future) =
-        multisig::start_client::<_, EthSigning>(
+        multisig::start_client::<EthSigning>(
             state_chain_client.our_account_id.clone(),
-            db,
+            KeyStore::new(db),
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
             &root_logger,
@@ -190,9 +194,7 @@ async fn main() {
             eth_broadcaster,
             eth_multisig_client,
             account_peer_mapping_change_sender,
-            // send messages to these channels to start witnessing
-            sm_instruction_sender,
-            km_instruction_sender,
+            witnessing_instruction_sender,
             latest_block_hash,
             &root_logger
         ),
@@ -201,7 +203,7 @@ async fn main() {
             stake_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            sm_instruction_receiver,
+            witnessing_instruction_receiver_1,
             state_chain_client.clone(),
             &root_logger,
         ),
@@ -209,9 +211,16 @@ async fn main() {
             key_manager_contract,
             &eth_ws_rpc_client,
             &eth_http_rpc_client,
-            km_instruction_receiver,
+            witnessing_instruction_receiver_2,
             state_chain_client.clone(),
             &root_logger,
         ),
+        eth::start_chain_data_witnesser(
+            &eth_dual_rpc,
+            state_chain_client.clone(),
+            witnessing_instruction_receiver_3,
+            eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
+            &root_logger
+        )
     );
 }

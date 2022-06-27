@@ -15,7 +15,6 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
-cf-runtime-benchmark-utilities = { path = '../../runtime-benchmark-utilities', default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 
@@ -80,7 +79,6 @@ default = ['std']
 std = [
 	'cf-chains/std',
 	'cf-traits/std',
-	'cf-runtime-benchmark-utilities/std',
 	'codec/std',
 	'scale-info/std',
 	'frame-support/std',
@@ -95,7 +93,6 @@ runtime-benchmarks = [
 	'frame-system/runtime-benchmarks',
 	'cf-traits/runtime-benchmarks',
 	'cf-chains/runtime-benchmarks',
-	'cf-runtime-benchmark-utilities/runtime-benchmarks',
 	'pallet-cf-validator',
 	'pallet-cf-online',
 ]

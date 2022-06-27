@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-/// Number of blocks we wait until we deem it safe (from reorgs)
-pub const ETH_BLOCK_SAFETY_MARGIN: u64 = 4;
+pub use state_chain_runtime::constants::common::eth::BLOCK_SAFETY_MARGIN as ETH_BLOCK_SAFETY_MARGIN;
 
 // ======= State chain client =======
 

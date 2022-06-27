@@ -1,39 +1,37 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::multisig::{crypto::ECPoint, KeyDB, KeyId};
+use crate::multisig::{crypto::CryptoScheme, db::persistent::PersistentKeyDB, KeyId};
 
-use super::common::KeygenResultInfo;
+use super::KeygenResultInfo;
 
-// TODO: do we want all keys (irrespective of the blockchain/scheme) to
-// be stored in the same database?
 // Successfully generated multisig keys live here
-pub struct KeyStore<S, P>
+pub struct KeyStore<C>
 where
-    S: KeyDB<P>,
-    P: ECPoint,
+    C: CryptoScheme,
 {
-    keys: HashMap<KeyId, KeygenResultInfo<P>>,
-    db: S,
+    keys: HashMap<KeyId, KeygenResultInfo<C::Point>>,
+    db: Arc<PersistentKeyDB>,
 }
 
-impl<S, P> KeyStore<S, P>
+impl<C> KeyStore<C>
 where
-    S: KeyDB<P>,
-    P: ECPoint,
+    C: CryptoScheme,
 {
-    pub fn new(db: S) -> Self {
-        let keys = db.load_keys();
+    /// Load the keys from persistent memory and put them into a new keystore
+    pub fn new(db: Arc<PersistentKeyDB>) -> Self {
+        let keys = db.load_keys::<C>();
 
         KeyStore { keys, db }
     }
 
-    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo<P>> {
+    /// Get the key for the given key id
+    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo<C::Point>> {
         self.keys.get(key_id)
     }
 
-    // Save `key` under key `key_id` overwriting if exists
-    pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<P>) {
-        self.db.update_key(&key_id, &key);
+    /// Save or update the key data and write it to persistent memory
+    pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C::Point>) {
+        self.db.update_key::<C>(&key_id, &key);
         self.keys.insert(key_id, key);
     }
 }

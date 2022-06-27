@@ -90,22 +90,22 @@ pub fn get_environment() -> StateChainEnvironment {
 	.try_into()
 	.expect("ETH_INIT_AGG_KEY cast to agg pub key failed");
 	let ethereum_deployment_block = env::var("ETH_DEPLOYMENT_BLOCK")
-		.unwrap_or(format!("{}", ETH_DEPLOYMENT_BLOCK_DEFAULT))
+		.unwrap_or_else(|_| ETH_DEPLOYMENT_BLOCK_DEFAULT.to_string())
 		.parse::<u64>()
 		.expect("ETH_DEPLOYMENT_BLOCK env var could not be parsed to u64");
 
 	let genesis_stake_amount = env::var("GENESIS_STAKE")
-		.unwrap_or(format!("{}", GENESIS_STAKE_AMOUNT_DEFAULT))
+		.unwrap_or_else(|_| GENESIS_STAKE_AMOUNT_DEFAULT.to_string())
 		.parse::<u128>()
 		.expect("GENESIS_STAKE env var could not be parsed to u128");
 
 	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
-		.unwrap_or(format!("{}", CfeSettings::default().eth_block_safety_margin))
+		.unwrap_or_else(|_| CfeSettings::default().eth_block_safety_margin.to_string())
 		.parse::<u32>()
 		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
 
 	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
-		.unwrap_or(format!("{}", CfeSettings::default().max_ceremony_stage_duration))
+		.unwrap_or_else(|_| CfeSettings::default().max_ceremony_stage_duration.to_string())
 		.parse::<u32>()
 		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
 

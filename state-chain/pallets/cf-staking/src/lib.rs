@@ -124,20 +124,19 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
 	#[pallet::storage]
-	pub(super) type PendingClaims<T: Config> =
+	pub type PendingClaims<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
 
 	#[pallet::storage]
-	pub(super) type WithdrawalAddresses<T: Config> =
+	pub type WithdrawalAddresses<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
 
 	#[pallet::storage]
-	pub(super) type FailedStakeAttempts<T: Config> =
+	pub type FailedStakeAttempts<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<StakeAttempt<T::Balance>>, ValueQuery>;
 
 	#[pallet::storage]
-	pub(super) type ClaimExpiries<T: Config> =
-		StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
+	pub type ClaimExpiries<T: Config> = StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
@@ -148,8 +147,13 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Expires any pending claims that have passed their TTL.
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			Self::expire_pending_claims()
+			if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
+				return T::WeightInfo::on_initialize_best_case()
+			}
+
+			Self::expire_pending_claims_at(T::TimeSource::now().as_secs())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -431,14 +435,12 @@ pub mod pallet {
 				.ok_or(Error::<T>::NoPendingClaim)?
 				.signed(&signature);
 
-			// Notify the claimant.
-			Self::deposit_event(Event::ClaimSignatureIssued(
-				account_id.clone(),
-				claim_details_signed.encoded(),
-			));
-
-			// Store the signature.
 			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
+
+			Self::deposit_event(Event::ClaimSignatureIssued(
+				account_id,
+				claim_details_signed.abi_encoded(),
+			));
 
 			Ok(().into())
 		}
@@ -489,7 +491,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_minimum_stake())]
 		pub fn update_minimum_stake(
 			origin: OriginFor<T>,
 			minimum_stake: T::Balance,
@@ -546,6 +548,30 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	fn expire_pending_claims_at(secs_since_unix_epoch: u64) -> Weight {
+		let mut expiries = ClaimExpiries::<T>::get();
+		// Expiries are sorted on insertion so we can just partition the slice.
+		ClaimExpiries::<T>::set(
+			expiries.split_off(
+				expiries.partition_point(|(expiry, _)| expiry <= &secs_since_unix_epoch),
+			),
+		);
+
+		// take the len after we've partitioned the expiries.
+		let expiries_len = expiries.len() as u32;
+		for (_, account_id) in expiries {
+			if let Some(pending_claim) = PendingClaims::<T>::take(&account_id) {
+				let claim_amount = pending_claim.amount().into();
+				// Re-credit the account
+				T::Flip::revert_claim(&account_id, claim_amount);
+
+				Self::deposit_event(Event::<T>::ClaimExpired(account_id, claim_amount));
+			}
+		}
+
+		T::WeightInfo::expire_pending_claims_at(expiries_len)
+	}
+
 	/// Logs an failed stake attempt
 	fn log_failed_stake_attempt(
 		account_id: &AccountId<T>,
@@ -649,15 +675,16 @@ impl<T: Config> Pallet<T> {
 		T::Flip::try_claim(account_id, amount)?;
 
 		// Set expiry and build the claim parameters.
-		let expiry = T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get());
-		Self::register_claim_expiry(account_id.clone(), expiry.as_secs());
+		let expiry = (T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
+
+		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let call = T::RegisterClaim::new_unsigned(
 			T::ReplayProtectionProvider::replay_protection(),
 			<T as Config>::StakerId::from_ref(account_id).as_ref(),
 			amount.into(),
 			&address,
-			expiry.as_secs(),
+			expiry,
 		);
 
 		// Emit a threshold signature request.
@@ -742,36 +769,6 @@ impl<T: Config> Pallet<T> {
 			expiries.reverse();
 			expiries.sort_by_key(|tup| tup.0);
 		});
-	}
-
-	/// Expires any pending claims that have passed their TTL.
-	pub fn expire_pending_claims() -> Weight {
-		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
-			// Nothing to expire, should be pretty cheap.
-			return T::WeightInfo::on_initialize_best_case()
-		}
-
-		let expiries = ClaimExpiries::<T>::get();
-		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff =
-			expiries.partition_point(|(expiry, _)| expiry < &T::TimeSource::now().as_secs());
-
-		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
-
-		ClaimExpiries::<T>::set(remaining.into());
-
-		for (_, account_id) in to_expire {
-			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
-				let claim_amount = pending_claim.amount().into();
-				// Notify that the claim has expired.
-				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
-
-				// Re-credit the account
-				T::Flip::revert_claim(account_id, claim_amount);
-			}
-		}
-
-		T::WeightInfo::on_initialize_worst_case(to_expire.len() as u32)
 	}
 }
 

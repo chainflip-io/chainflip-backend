@@ -18,15 +18,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u64 = 100;
 
-use cf_traits::{
-	BlockEmissions, EmissionsTrigger, EpochTransitionHandler, Issuance, RewardsDistribution,
-};
+use cf_traits::{BlockEmissions, EpochTransitionHandler, Issuance, RewardsDistribution};
 use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedDiv, CheckedMul, UniqueSaturatedInto, Zero},
+	traits::{AtLeast32BitUnsigned, CheckedDiv, UniqueSaturatedInto, Zero},
 	SaturatedConversion,
 };
 
@@ -42,7 +41,7 @@ pub mod pallet {
 	use cf_chains::ChainAbi;
 	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
-	use frame_system::{ensure_root, pallet_prelude::OriginFor};
+	use frame_system::pallet_prelude::OriginFor;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -101,6 +100,9 @@ pub mod pallet {
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
+
+		/// For governance checks.
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 	}
 
 	#[pallet::pallet]
@@ -109,9 +111,9 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
-	#[pallet::getter(fn last_mint_block)]
-	/// The block number at which we last minted Flip.
-	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	#[pallet::getter(fn last_supply_update_block)]
+	/// The block number at which we last updated supply to the Eth Chain.
+	pub type LastSupplyUpdateBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn current_authority_emission_per_block)]
@@ -139,21 +141,22 @@ pub mod pallet {
 		StorageValue<_, BasisPoints, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn mint_interval)]
+	#[pallet::getter(fn supply_update_interval)]
 	/// Mint interval in blocks
-	pub(super) type MintInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub(super) type SupplyUpdateInterval<T: Config> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Emissions have been distributed. \[block_number, amount_minted\]
-		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
+		/// Supply Update has been Broadcasted [block_number]
+		SupplyUpdateBroadcasted(BlockNumberFor<T>),
 		/// Current authority inflation emission has been updated \[new\]
 		CurrentAuthorityInflationEmissionsUpdated(BasisPoints),
 		/// Backup node inflation emission has been updated \[new\]
 		BackupNodeInflationEmissionsUpdated(BasisPoints),
-		/// MintInterval has been updated [block_number]
-		MintIntervalUpdated(BlockNumberFor<T>),
+		/// SupplyUpdateInterval has been updated [block_number]
+		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
 	}
 
 	// Errors inform users that something went wrong.
@@ -168,8 +171,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade();
-			T::WeightInfo::on_runtime_upgrade()
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
@@ -182,21 +184,21 @@ pub mod pallet {
 			migrations::PalletMigration::<T>::post_upgrade()
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let should_mint = Self::should_mint_at(current_block);
-			if should_mint {
-				Self::mint_rewards_for_block(current_block);
+			Self::mint_rewards_for_block();
+			if Self::should_update_supply_at(current_block) {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
 						current_block,
 					);
+					Self::deposit_event(Event::SupplyUpdateBroadcasted(current_block));
+					// Update this pallet's state.
+					LastSupplyUpdateBlock::<T>::set(current_block);
 				} else {
 					log::info!("System maintenance: skipping supply update broadcast.");
 				}
-				T::WeightInfo::rewards_minted()
-			} else {
-				T::WeightInfo::no_rewards_minted()
 			}
+			T::WeightInfo::rewards_minted()
 		}
 	}
 
@@ -219,7 +221,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			CurrentAuthorityEmissionInflation::<T>::set(inflation);
 			Self::deposit_event(Event::<T>::CurrentAuthorityInflationEmissionsUpdated(inflation));
 			Ok(().into())
@@ -239,29 +241,29 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			inflation: BasisPoints,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			BackupNodeEmissionInflation::<T>::set(inflation);
 			Self::deposit_event(Event::<T>::BackupNodeInflationEmissionsUpdated(inflation));
 			Ok(().into())
 		}
 
-		/// Updates the mint interval.
+		/// Updates the Supply Update interval.
 		///
 		/// ## Events
 		///
-		/// - [MintIntervalUpdated](Event:: MintIntervalUpdated)
+		/// - [SupplyUpdateIntervalUpdated](Event:: SupplyUpdateIntervalUpdated)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_mint_interval())]
-		pub fn update_mint_interval(
+		#[pallet::weight(T::WeightInfo::update_supply_update_interval())]
+		pub fn update_supply_update_interval(
 			origin: OriginFor<T>,
 			value: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			MintInterval::<T>::put(value);
-			Self::deposit_event(Event::<T>::MintIntervalUpdated(value));
+			T::EnsureGovernance::ensure_origin(origin)?;
+			SupplyUpdateInterval::<T>::put(value);
+			Self::deposit_event(Event::<T>::SupplyUpdateIntervalUpdated(value));
 			Ok(().into())
 		}
 	}
@@ -279,26 +281,28 @@ pub mod pallet {
 		fn build(&self) {
 			CurrentAuthorityEmissionInflation::<T>::put(self.current_authority_emission_inflation);
 			BackupNodeEmissionInflation::<T>::put(self.backup_node_emission_inflation);
-			MintInterval::<T>::put(T::BlockNumber::from(100_u32));
+			SupplyUpdateInterval::<T>::put(T::BlockNumber::from(
+				SUPPLY_UPDATE_INTERVAL_DEFAULT as u32,
+			));
 			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Determines if we should mint at block number `block_number`.
-	fn should_mint_at(block_number: T::BlockNumber) -> bool {
-		let mint_interval = MintInterval::<T>::get();
-		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
-		Self::should_mint(blocks_elapsed, mint_interval)
+	/// Determines if we should broadcast supply update at block number `block_number`.
+	fn should_update_supply_at(block_number: T::BlockNumber) -> bool {
+		let supply_update_interval = SupplyUpdateInterval::<T>::get();
+		let blocks_elapsed = block_number - LastSupplyUpdateBlock::<T>::get();
+		Self::should_update_supply(blocks_elapsed, supply_update_interval)
 	}
 
-	/// Checks if we should mint.
-	fn should_mint(
-		blocks_elapsed_since_last_mint: T::BlockNumber,
-		mint_interval: T::BlockNumber,
+	/// Checks if we should broadcast supply update.
+	fn should_update_supply(
+		blocks_elapsed_since_last_supply_update: T::BlockNumber,
+		supply_update_interval: T::BlockNumber,
 	) -> bool {
-		blocks_elapsed_since_last_mint >= mint_interval
+		blocks_elapsed_since_last_supply_update >= supply_update_interval
 	}
 
 	/// Updates the total supply on the ETH blockchain
@@ -315,35 +319,15 @@ impl<T: Config> Pallet<T> {
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to
 	/// be minted and distributes this as a reward via [RewardsDistribution].
-	fn mint_rewards_for_block(block_number: T::BlockNumber) {
+	fn mint_rewards_for_block() {
 		// Calculate the outstanding reward amount.
-		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
-		if blocks_elapsed == Zero::zero() {
-			return
-		}
-
-		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
-
-		let reward_amount =
-			CurrentAuthorityEmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed);
-
-		let reward_amount = reward_amount.unwrap_or_else(|| {
-			log::error!("Overflow while trying to mint rewards at block {:?}.", block_number);
-			Zero::zero()
-		});
-
+		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
 		if !reward_amount.is_zero() {
 			// Mint the rewards
 			let reward = T::Issuance::mint(reward_amount);
-
 			// Delegate the distribution.
 			T::RewardsDistribution::distribute(reward);
 		}
-
-		// Update this pallet's state.
-		LastMintBlock::<T>::set(block_number);
-
-		Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
 	}
 }
 
@@ -381,20 +365,11 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	}
 }
 
-impl<T: Config> EmissionsTrigger for Pallet<T> {
-	fn trigger_emissions() {
-		let current_block_number = frame_system::Pallet::<T>::block_number();
-		Self::mint_rewards_for_block(current_block_number);
-	}
-}
-
 impl<T: Config> EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = <T as frame_system::Config>::AccountId;
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		// Calculate block emissions on every epoch
 		Self::calculate_block_emissions();
-		// Process any outstanding emissions.
-		Self::trigger_emissions();
 	}
 }

@@ -1,12 +1,12 @@
 use crate::multisig::crypto::ECScalar;
 
-use super::{CryptoScheme, ECPoint};
+use super::{ChainTag, CryptoScheme, ECPoint};
 
 // NOTE: for now, we re-export these to make it
 // clear that these a the primitives used by ethereum.
 // TODO: we probably want to change the "clients" to
 // solely use "CryptoScheme" as generic parameter instead.
-pub use super::secp255k1::{Point, Scalar};
+pub use super::secp256k1::{Point, Scalar};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,6 +35,9 @@ impl CryptoScheme for EthSigning {
     type Point = Point;
     type Signature = EthSchnorrSignature;
 
+    const NAME: &'static str = "Ethereum";
+    const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
+
     fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
         EthSchnorrSignature {
             s: *z.as_bytes(),
@@ -56,7 +59,7 @@ impl CryptoScheme for EthSigning {
             &pubkey_to_eth_addr(nonce_commitment.get_element()),
         );
 
-        Scalar::from_bytes(&e)
+        Scalar::from_bytes_mod_order(&e)
     }
 
     fn build_response(
