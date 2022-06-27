@@ -766,8 +766,11 @@ pub mod pallet {
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			BackupNodePercentage::<T>::set(self.backup_node_percentage);
 
-			const GENESIS_EPOCH: u32 = 0;
+			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
+			for id in &self.genesis_authorities {
+				ChainflipAccountStore::<T>::set_current_authority(id.into_ref());
+			}
 			Pallet::<T>::init_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,

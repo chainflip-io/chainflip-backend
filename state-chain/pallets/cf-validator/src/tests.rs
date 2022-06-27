@@ -12,7 +12,7 @@ use frame_system::RawOrigin;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
-const GENESIS_EPOCH: u32 = 0;
+const GENESIS_EPOCH: u32 = 1;
 
 fn assert_epoch_number(n: EpochIndex) {
 	assert_eq!(
