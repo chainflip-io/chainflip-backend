@@ -1067,6 +1067,11 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 	/// These Validators' keys must be registered as part of the session pallet genesis.
 	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
+		let genesis_authorities = Self::current_authorities();
+		assert!(
+			!genesis_authorities.is_empty(),
+			"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet."
+		);
 		Some(Self::current_authorities())
 	}
 
