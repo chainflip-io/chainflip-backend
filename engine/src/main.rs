@@ -12,6 +12,7 @@ use chainflip_engine::{
     logging,
     multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
     multisig_p2p,
+    p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
     state_chain,
 };
@@ -89,11 +90,6 @@ async fn main() {
     let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-
     let (
         witnessing_instruction_sender,
         [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
@@ -161,14 +157,28 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
 
+    // p2p -> muxer
+    let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    // muxer -> p2p
+    let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::init(
+        incoming_p2p_message_receiver,
+        outgoing_p2p_message_sender,
+        &root_logger,
+    );
+
     use crate::multisig::eth::EthSigning;
 
     let (eth_multisig_client, eth_multisig_client_backend_future) =
         multisig::start_client::<EthSigning>(
             state_chain_client.our_account_id.clone(),
             KeyStore::new(db),
-            incoming_p2p_message_receiver,
-            outgoing_p2p_message_sender,
+            eth_incoming_receiver,
+            eth_outgoing_sender,
             &root_logger,
         );
 
@@ -177,6 +187,7 @@ async fn main() {
     });
 
     tokio::join!(
+        muxer_future,
         async {
             multisig_p2p::start(
                 &settings,
