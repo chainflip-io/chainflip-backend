@@ -14,7 +14,9 @@ use super::CeremonyFailureReason;
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result, FailureReason> {
     /// Ceremony proceeds to the next stage
-    NextStage(Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason>>),
+    NextStage(
+        Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason> + Send>,
+    ),
     /// Ceremony aborted (contains parties to report)
     Error(
         BTreeSet<AuthorityCount>,

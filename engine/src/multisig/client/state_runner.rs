@@ -31,10 +31,10 @@ pub struct StateAuthorised<CeremonyData, CeremonyResult, FailureReason> {
     pub stage: Option<
         Box<
             dyn CeremonyStage<
-                Message = CeremonyData,
-                Result = CeremonyResult,
-                FailureReason = FailureReason,
-            >,
+                    Message = CeremonyData,
+                    Result = CeremonyResult,
+                    FailureReason = FailureReason,
+                > + Send,
         >,
     >,
     pub result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
@@ -76,10 +76,10 @@ where
         &mut self,
         mut stage: Box<
             dyn CeremonyStage<
-                Message = CeremonyData,
-                Result = CeremonyResult,
-                FailureReason = FailureReason,
-            >,
+                    Message = CeremonyData,
+                    Result = CeremonyResult,
+                    FailureReason = FailureReason,
+                > + Send,
         >,
         idx_mapping: Arc<PartyIdxMapping>,
         result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,

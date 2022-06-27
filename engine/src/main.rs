@@ -172,8 +172,11 @@ async fn main() {
             &root_logger,
         );
 
+    tokio::task::spawn_blocking(move || {
+        tokio::runtime::Handle::current().block_on(eth_multisig_client_backend_future)
+    });
+
     tokio::join!(
-        eth_multisig_client_backend_future,
         async {
             multisig_p2p::start(
                 &settings,
