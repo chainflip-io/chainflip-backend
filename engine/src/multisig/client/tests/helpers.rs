@@ -3,7 +3,6 @@ use std::{
     collections::{BTreeSet, HashMap},
     fmt::Display,
     pin::Pin,
-    time::Duration,
 };
 
 use anyhow::Result;
@@ -63,23 +62,7 @@ use crate::multisig::tests::fixtures::MESSAGE_HASH;
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 
-pub async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option<I> {
-    tokio::time::timeout(CHANNEL_TIMEOUT, receiver.recv())
-        .await
-        .ok()?
-}
-
-pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
-    receiver: &mut UnboundedReceiver<Item>,
-) -> Item {
-    match recv_with_timeout(receiver).await {
-        Some(i) => i,
-        None => panic!(
-            "Timeout waiting for message, expected {}",
-            std::any::type_name::<Item>()
-        ),
-    }
-}
+use crate::engine_utils::test_utils::expect_recv_with_timeout;
 
 pub struct Node {
     pub ceremony_manager: CeremonyManager<EthSigning>,
@@ -1168,8 +1151,6 @@ pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment<Point> {
         e: Point::random(rng),
     }
 }
-
-const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 
 impl Node {
     pub fn force_stage_timeout(&mut self) {
