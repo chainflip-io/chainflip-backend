@@ -1,20 +1,18 @@
 use super::*;
 use crate as pallet_cf_validator;
-use frame_support::{
-	construct_runtime, parameter_types,
-	traits::{OnInitialize, ValidatorRegistration},
-};
-
 use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	Chainflip, ChainflipAccount, ChainflipAccountData, IsOnline, QualifyNode,
-	RuntimeAuctionOutcome,
+	Chainflip, ChainflipAccountData, IsOnline, QualifyNode, RuntimeAuctionOutcome,
 };
-use frame_system::RawOrigin;
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{OnInitialize, ValidatorRegistration},
+};
+use log::LevelFilter;
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
@@ -37,8 +35,8 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Session: pallet_session,
 		ValidatorPallet: pallet_cf_validator,
+		Session: pallet_session,
 	}
 );
 
@@ -102,14 +100,24 @@ impl pallet_session::Config for Test {
 
 pub struct MockAuctioneer;
 
+pub const AUCTION_WINNERS: [ValidatorId; 5] = [0, 1, 2, 3, 4];
+pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
+pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
+pub const BOND: Amount = 100;
+
 thread_local! {
-	pub static AUCTION_RUN_BEHAVIOUR: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(Default::default()));
-	pub static AUCTION_WINNERS: RefCell<Option<Vec<ValidatorId>>> = RefCell::new(None);
+	pub static NEXT_AUCTION_OUTCOME: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(
+		RuntimeAuctionOutcome::<Test> {
+			winners: AUCTION_WINNERS.to_vec(),
+			losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
+			bond: BOND,
+		}
+	));
 }
 
 impl MockAuctioneer {
-	pub fn set_run_behaviour(behaviour: Result<RuntimeAuctionOutcome<Test>, &'static str>) {
-		AUCTION_RUN_BEHAVIOUR.with(|cell| {
+	pub fn set_next_auction_outcome(behaviour: Result<RuntimeAuctionOutcome<Test>, &'static str>) {
+		NEXT_AUCTION_OUTCOME.with(|cell| {
 			*cell.borrow_mut() = behaviour;
 		});
 	}
@@ -119,15 +127,7 @@ impl Auctioneer<Test> for MockAuctioneer {
 	type Error = &'static str;
 
 	fn resolve_auction() -> Result<RuntimeAuctionOutcome<Test>, Self::Error> {
-		AUCTION_RUN_BEHAVIOUR.with(|cell| {
-			let run_behaviour = (*cell.borrow()).clone();
-			run_behaviour.map(|result| {
-				AUCTION_WINNERS.with(|cell| {
-					*cell.borrow_mut() = Some(result.winners.to_vec());
-				});
-				result
-			})
-		})
+		NEXT_AUCTION_OUTCOME.with(|cell| cell.borrow().clone())
 	}
 }
 
@@ -151,10 +151,9 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
-	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]) {
-		for authority in epoch_authorities {
-			MockChainflipAccount::set_current_authority(authority);
-		}
+	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
+		// Reset the auctioneer to ensure we don't accidentally call it after the epoch has ended.
+		MockAuctioneer::set_next_auction_outcome(Err("MockAuctioneer is not initialised"));
 	}
 }
 
@@ -240,38 +239,33 @@ impl Config for Test {
 }
 
 /// Session pallet requires a set of validators at genesis.
-pub const DUMMY_GENESIS_VALIDATORS: &[u64] = &[u64::MAX];
+pub const GENESIS_VALIDATORS: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2];
 pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
-pub const MINIMUM_ACTIVE_BID_AT_GENESIS: Amount = 1;
+pub const GENESIS_BOND: Amount = 1;
 pub const EPOCH_DURATION: u64 = 10;
-
-pub fn register_keys(ids: &[u64]) {
-	for id in ids {
-		System::inc_providers(id);
-		Session::set_keys(
-			RawOrigin::Signed(*id).into(),
-			UintAuthorityId(*id).into(),
-			Default::default(),
-		)
-		.unwrap();
-	}
-}
-
 pub(crate) struct TestExternalitiesWithCheck {
 	ext: sp_io::TestExternalities,
 }
 
-impl TestExternalitiesWithCheck {
-	fn check_invariants() {
-		assert_eq!(CurrentAuthorities::<Test>::get(), Session::validators(),);
-	}
+macro_rules! assert_invariants {
+	() => {
+		assert_eq!(
+			<ValidatorPallet as EpochInfo>::current_authorities(),
+			Session::validators(),
+			"Authorities out of sync at block {:?}. RotationStatus: {:?}",
+			System::block_number(),
+			ValidatorPallet::current_rotation_phase(),
+		);
+	};
+}
 
+impl TestExternalitiesWithCheck {
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
-			Self::check_invariants();
+			assert_invariants!();
 			let r = execute();
-			Self::check_invariants();
+			assert_invariants!();
 			r
 		})
 	}
@@ -285,6 +279,8 @@ impl TestExternalitiesWithCheck {
 }
 
 pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
+	// Log nothing by default, set RUST_LOG=debug in the environment and use
+	// `cargo test -- --no-capture` to enable debug logs.
 	let _ = simple_logger::SimpleLogger::new()
 		.with_level(LevelFilter::Off)
 		.without_timestamps()
@@ -294,14 +290,16 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 	let config = GenesisConfig {
 		system: SystemConfig::default(),
 		session: SessionConfig {
-			keys: DUMMY_GENESIS_VALIDATORS
+			keys: [&GENESIS_VALIDATORS[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+				.concat()
 				.iter()
 				.map(|&i| (i, i, UintAuthorityId(i).into()))
 				.collect(),
 		},
 		validator_pallet: ValidatorPalletConfig {
+			genesis_authorities: GENESIS_VALIDATORS.to_vec(),
 			blocks_per_epoch: EPOCH_DURATION,
-			bond: MINIMUM_ACTIVE_BID_AT_GENESIS,
+			bond: GENESIS_BOND,
 			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
 			backup_node_percentage: 34,
 			authority_set_min_size: 3,
@@ -314,12 +312,13 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 }
 
 pub fn run_to_block(n: u64) {
-	assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
+	assert_invariants!();
 	while System::block_number() < n {
+		log::debug!("Test::on_initialise({:?})", System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		AllPalletsWithoutSystem::on_initialize(System::block_number());
 		MockVaultRotator::on_initialise();
-		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), Session::validators());
+		assert_invariants!();
 	}
 }
 

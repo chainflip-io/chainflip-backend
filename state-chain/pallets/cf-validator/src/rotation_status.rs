@@ -8,7 +8,7 @@ pub struct RotationStatus<Id, Amount> {
 	primary_candidates: Vec<Id>,
 	backup_candidates: Vec<Id>,
 	auction_losers: Vec<Bid<Id, Amount>>,
-	banned: Vec<Id>,
+	banned: BTreeSet<Id>,
 	pub bond: Amount,
 	target_set_size: u8,
 }
@@ -28,7 +28,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 			primary_candidates: auction_winners,
 			backup_candidates: backup_validators,
 			auction_losers,
-			banned: Vec::new(),
+			banned: Default::default(),
 			bond,
 			target_set_size,
 		}
@@ -45,21 +45,26 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 		)
 	}
 
-	pub fn ban(&mut self, mut banned: Vec<Id>) {
-		self.banned.append(&mut banned);
+	pub fn ban(&mut self, new_banned: impl IntoIterator<Item = Id>) {
+		for id in new_banned {
+			self.banned.insert(id);
+		}
 	}
 
-	fn authority_candidates_iter(&self) -> impl Iterator<Item = Id> + '_ {
+	fn authority_candidates_iter(&self) -> impl Iterator<Item = &Id> {
 		self.primary_candidates
 			.iter()
 			.chain(&self.backup_candidates)
 			.filter(|id| !self.banned.contains(id))
 			.take(self.target_set_size as usize)
-			.cloned()
 	}
 
-	pub fn authority_candidates(&self) -> Vec<Id> {
-		self.authority_candidates_iter().collect()
+	pub fn candidate_count(&self) -> usize {
+		self.authority_candidates_iter().count()
+	}
+
+	pub fn authority_candidates<I: FromIterator<Id>>(&self) -> I {
+		self.authority_candidates_iter().cloned().collect::<I>()
 	}
 
 	pub fn to_backup_triage<AccountState: ChainflipAccount>(
@@ -69,7 +74,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 	where
 		Id: IsType<AccountState::AccountId>,
 	{
-		let authorities_lookup = BTreeSet::from_iter(self.authority_candidates());
+		let authorities_lookup = self.authority_candidates::<BTreeSet<_>>();
 		let new_backup_candidates = self
 			.auction_losers
 			.into_iter()

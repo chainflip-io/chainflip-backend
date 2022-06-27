@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(array_zip)]
 
 #[cfg(test)]
 mod mock;
@@ -35,7 +36,10 @@ use sp_runtime::{
 	traits::{BlockNumberProvider, CheckedDiv, One, Saturating, UniqueSaturatedInto, Zero},
 	Percent,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	prelude::*,
+};
 
 use crate::rotation_status::RotationStatus;
 
@@ -237,6 +241,8 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			log::debug!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
+
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
 				LastExpiredEpoch::<T>::set(epoch_index);
@@ -275,11 +281,15 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(Err(offenders)) => {
 							rotation_status.ban(offenders);
-							let remaining_candidates = rotation_status.authority_candidates();
-							if remaining_candidates.len() >= AuthoritySetMinSize::<T>::get().into()
+							if rotation_status.candidate_count() >=
+								AuthoritySetMinSize::<T>::get().into()
 							{
 								Self::start_vault_rotation(rotation_status);
 							} else {
+								log::warn!(
+									target: "cf-validator",
+									"Not enough auction candidates left - aborting rotation."
+								);
 								Self::set_rotation_status(RotationPhase::Idle);
 							}
 						},
@@ -724,6 +734,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		pub genesis_authorities: Vec<ValidatorIdOf<T>>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
@@ -735,6 +746,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
+				genesis_authorities: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
@@ -750,23 +762,18 @@ pub mod pallet {
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
-			CurrentRotationPhase::<T>::set(RotationPhase::default());
+			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			BackupNodePercentage::<T>::set(self.backup_node_percentage);
+
 			const GENESIS_EPOCH: u32 = 0;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
-			CurrentEpochStartedAt::<T>::set(Default::default());
-			let genesis_authorities = pallet_session::Pallet::<T>::validators();
-			EpochAuthorityCount::<T>::insert(
+			Pallet::<T>::init_new_epoch(
 				GENESIS_EPOCH,
-				genesis_authorities.len() as AuthorityCount,
-			);
-			Pallet::<T>::start_new_epoch(RotationStatus::new(
-				genesis_authorities,
-				Vec::new(),
+				&self.genesis_authorities,
 				self.bond,
-				Vec::new(),
-			));
+				RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(vec![], 0),
+			);
 		}
 	}
 }
@@ -856,69 +863,52 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Starting a new epoch we update the storage, emit the event and call
 	/// `EpochTransitionHandler::on_new_epoch`
-	fn start_new_epoch(auction_outcome: RuntimeRotationStatus<T>) {
-		let epoch_authorities = auction_outcome.authority_candidates();
-		let new_bond = auction_outcome.bond;
+	fn transition_to_next_epoch(rotation_status: RuntimeRotationStatus<T>) {
+		log::debug!(target: "cf-validator", "Starting new epoch");
 
-		// Calculate the new epoch index
+		// Update epoch numbers.
 		let (old_epoch, new_epoch) = CurrentEpoch::<T>::mutate(|epoch| {
 			*epoch = epoch.saturating_add(One::one());
 			(*epoch - 1, *epoch)
 		});
 
-		let mut old_authorities = CurrentAuthorities::<T>::get();
-		// Update state of current authorities.
-		CurrentAuthorities::<T>::put(&epoch_authorities);
-
-		epoch_authorities.iter().enumerate().for_each(|(index, account_id)| {
-			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as AuthorityCount);
-		});
-
-		EpochAuthorityCount::<T>::insert(new_epoch, epoch_authorities.len() as AuthorityCount);
-
-		// The new bond set
-		Bond::<T>::set(new_bond);
-		// Set the expiry block number for the outgoing set
+		// Set the expiry block number for the old epoch.
 		EpochExpiries::<T>::insert(
 			frame_system::Pallet::<T>::current_block_number() + BlocksPerEpoch::<T>::get(),
 			old_epoch,
 		);
 
-		// Set the block this epoch starts at
-		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		// Save the epoch -> authorities map
-		HistoricalAuthorities::<T>::insert(new_epoch, &epoch_authorities);
-
-		// Save the bond for each epoch
-		HistoricalBonds::<T>::insert(new_epoch, new_bond);
-
-		for authority in epoch_authorities.iter() {
-			// Remember in which epoch an authority was active
-			EpochHistory::<T>::activate_epoch(authority, new_epoch);
-			// Bond the authoritys
-			let bond = EpochHistory::<T>::active_bond(authority);
-			T::Bonder::update_bond(authority, bond);
-
-			ChainflipAccountStore::<T>::set_current_authority(authority.into_ref());
+		// Update current / historical authority status.
+		let new_authorities = rotation_status.authority_candidates::<BTreeSet<_>>();
+		let old_authorities =
+			BTreeSet::<ValidatorIdOf<T>>::from_iter(CurrentAuthorities::<T>::get().into_iter());
+		for outgoing_authority in
+			old_authorities.iter().filter(|authority| !new_authorities.contains(authority))
+		{
+			ChainflipAccountStore::<T>::set_historical_authority(outgoing_authority.into_ref());
 		}
 
-		// find all the valitators moving out of the epoch
-		old_authorities.retain(|authority| !epoch_authorities.contains(authority));
+		for incoming_authority in
+			new_authorities.iter().filter(|authority| !old_authorities.contains(authority))
+		{
+			ChainflipAccountStore::<T>::set_current_authority(incoming_authority.into_ref());
+		}
 
-		old_authorities.iter().for_each(|authority| {
-			ChainflipAccountStore::<T>::set_historical_authority(authority.into_ref());
-		});
+		// Initialise the new epoch.
+		let new_authorities = rotation_status.authority_candidates::<Vec<_>>();
+		Self::init_new_epoch(
+			new_epoch,
+			&new_authorities,
+			rotation_status.bond,
+			rotation_status.to_backup_triage::<T::ChainflipAccount>(Self::backup_set_target_size(
+				new_authorities.len(),
+				BackupNodePercentage::<T>::get(),
+			)),
+		);
 
-		// We've got new validators, which means the backups and passives may have changed.
-		BackupValidatorTriage::<T>::put(auction_outcome.to_backup_triage::<T::ChainflipAccount>(
-			Self::backup_set_target_size(&epoch_authorities, BackupNodePercentage::<T>::get()),
-		));
+		// Trigger the new epoch handlers on other pallets.
+		T::EpochTransitionHandler::on_new_epoch(&new_authorities);
 
-		// Handler for a new epoch
-		T::EpochTransitionHandler::on_new_epoch(&epoch_authorities);
-
-		// Emit that a new epoch will be starting
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
 
@@ -935,13 +925,45 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	fn init_new_epoch(
+		new_epoch: EpochIndex,
+		new_authorities: &[ValidatorIdOf<T>],
+		new_bond: T::Amount,
+		backup_triage: RuntimeBackupTriage<T>,
+	) {
+		CurrentAuthorities::<T>::put(new_authorities);
+		Bond::<T>::set(new_bond);
+
+		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
+			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as AuthorityCount);
+		});
+
+		EpochAuthorityCount::<T>::insert(new_epoch, new_authorities.len() as AuthorityCount);
+
+		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
+
+		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
+
+		// Save the bond for each epoch
+		HistoricalBonds::<T>::insert(new_epoch, new_bond);
+
+		for authority in new_authorities {
+			EpochHistory::<T>::activate_epoch(authority, new_epoch);
+			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
+		}
+
+		// We've got new validators, which means the backups and passives may have changed.
+		BackupValidatorTriage::<T>::put(backup_triage);
+	}
+
 	fn set_rotation_status(new_status: RotationPhase<T>) {
+		log::debug!(target: "cf-validator", "Advancing rotation phase to: {new_status:?}");
 		CurrentRotationPhase::<T>::put(new_status.clone());
 		Self::deposit_event(Event::RotationStatusUpdated(new_status));
 	}
 
-	fn backup_set_target_size<A>(authorites: &[A], backup_node_percentage: Percentage) -> usize {
-		Percent::from_percent(backup_node_percentage) * authorites.len()
+	fn backup_set_target_size(num_authorities: usize, backup_node_percentage: Percentage) -> usize {
+		Percent::from_percent(backup_node_percentage) * num_authorities
 	}
 
 	fn start_authority_rotation() {
@@ -1043,10 +1065,9 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 		}
 	}
 
-	/// We provide an implementation for this as we already have a set of validators with keys at
-	/// genesis
+	/// These Validators' keys must be registered as part of the session pallet genesis.
 	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
-		None
+		Some(Self::current_authorities())
 	}
 
 	/// The current session is ending
@@ -1055,7 +1076,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
 		if let RotationPhase::SessionRotating(rotation_status) = CurrentRotationPhase::<T>::get() {
-			Pallet::<T>::start_new_epoch(rotation_status)
+			Pallet::<T>::transition_to_next_epoch(rotation_status)
 		}
 	}
 }

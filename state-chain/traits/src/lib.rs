@@ -660,7 +660,7 @@ pub trait HistoricalEpoch {
 	fn active_epochs_for_authority(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
 	/// Removes an epoch from an authority's list of active epochs.
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
-	/// Add an epoch to a authority's list of active epochs.
+	/// Add an epoch to an authority's list of active epochs.
 	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
 	///  Returns the amount of a authority's stake that is currently bonded.
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;

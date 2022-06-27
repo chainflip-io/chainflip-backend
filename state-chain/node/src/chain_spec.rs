@@ -555,6 +555,7 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 		},
 		validator: ValidatorConfig {
+			genesis_authorities: genesis_stakers.clone(),
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_node_percentage: 20,

@@ -602,9 +602,9 @@ mod tests {
 					expiry_span: EXPIRY_SPAN_IN_SECONDS,
 				},
 				validator: ValidatorConfig {
+					genesis_authorities: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 					blocks_per_epoch: self.blocks_per_epoch,
-					// TODO Fix this
-					bond: self.accounts[0].1,
+					bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
 					claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 					backup_node_percentage: 34,
 					authority_set_min_size: self.min_authorities as u8,
