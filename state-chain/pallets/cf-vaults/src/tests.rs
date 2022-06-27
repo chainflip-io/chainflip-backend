@@ -7,7 +7,7 @@ use cf_chains::mocks::MockThresholdSignature;
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
-	VaultRotator,
+	RotationError, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::collections::btree_set::BTreeSet;
@@ -39,7 +39,10 @@ const MOCK_THRESHOLD_SIG: MockThresholdSignature<[u8; 4], [u8; 4]> =
 #[test]
 fn no_candidates_is_noop_and_error() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]), ());
+		assert_noop!(
+			<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]),
+			RotationError::RotationInProgress
+		);
 	});
 }
 
@@ -70,7 +73,7 @@ fn only_one_concurrent_request_per_chain() {
 		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
 		assert_noop!(
 			<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()),
-			()
+			RotationError::RotationInProgress
 		);
 	});
 }

@@ -200,13 +200,19 @@ pub trait BackupNodes {
 	fn backup_nodes() -> Vec<Self::ValidatorId>;
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RotationError {
+	/// No candidates provided.
+	NoCandidates,
+	/// A rotation is already in progress.
+	RotationInProgress,
+}
+
 pub trait VaultRotator {
 	type ValidatorId;
 
 	/// Start a vault rotation with the provided `candidates`.
-	///
-	/// A return value of `Err` indicates that another rotation is still in progress.
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), ()>;
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError>;
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;

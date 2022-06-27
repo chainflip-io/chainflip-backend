@@ -1,5 +1,5 @@
 use super::{MockPallet, MockPalletStorage};
-use crate::{AsyncResult, VaultRotator};
+use crate::{AsyncResult, RotationError, VaultRotator};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct MockVaultRotator;
@@ -49,9 +49,9 @@ impl MockVaultRotator {
 impl VaultRotator for MockVaultRotator {
 	type ValidatorId = u64;
 
-	fn start_vault_rotation(_candidates: Vec<Self::ValidatorId>) -> Result<(), ()> {
+	fn start_vault_rotation(_candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError> {
 		if Self::get_error_on_start() {
-			return Err(())
+			return Err(RotationError::RotationInProgress)
 		}
 
 		Self::put_storage(ROTATION_OUTCOME, b"", AsyncResult::<MockVaultOutcome>::Pending);

@@ -995,14 +995,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_vault_rotation(rotation_status: RuntimeRotationStatus<T>) {
-		if T::VaultRotator::start_vault_rotation(rotation_status.authority_candidates()).is_ok() {
-			log::info!(target: "cf-validator", "Vault rotation initiated.");
-			Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
-		} else {
-			log::warn!(
-				target: "cf-validator",
-				"Vault rotation already in progress.",
-			);
+		match T::VaultRotator::start_vault_rotation(rotation_status.authority_candidates()) {
+			Ok(()) => {
+				log::info!(target: "cf-validator", "Vault rotation initiated.");
+				Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
+			}
+			Err(e) => {
+				log::warn!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
+			}
 		}
 	}
 }

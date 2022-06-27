@@ -7,8 +7,8 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
 	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
-	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SystemStateManager,
-	VaultRotator,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RotationError,
+	SystemStateManager, VaultRotator,
 };
 use frame_support::{
 	dispatch::DispatchResult,
@@ -779,10 +779,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), ()> {
-		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), ());
-		ensure!(Self::get_vault_rotation_outcome() != AsyncResult::Pending, ());
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError> {
+		ensure!(!candidates.is_empty(), RotationError::NoCandidates);
+		ensure!(
+			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
+			RotationError::RotationInProgress
+		);
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
