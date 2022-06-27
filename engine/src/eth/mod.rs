@@ -14,6 +14,7 @@ pub mod utils;
 use anyhow::{Context, Result};
 use cf_traits::EpochIndex;
 use regex::Regex;
+use state_chain_runtime::CfeSettings;
 
 use crate::{
     common::{make_periodic_tick, read_clean_and_decode_hex_str_file},
@@ -45,7 +46,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::{broadcast, oneshot},
+    sync::{broadcast, oneshot, watch},
     task::JoinHandle,
 };
 use web3::{
@@ -219,8 +220,8 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
     eth_rpc: &EthRpcClient,
     state_chain_client: Arc<StateChainClient<ScRpcClient>>,
     mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
+    cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
     poll_interval: Duration,
-    priority_fee_percentile: u8,
     logger: &slog::Logger,
 ) where
     EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
@@ -283,6 +284,7 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
                         let eth_rpc = eth_rpc.clone();
                         let logger = logger.clone();
                         let tracked_data_sender = tracked_data_sender.clone();
+                        let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
 
                         async move {
                             util::bounded(
@@ -301,13 +303,13 @@ pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
                                 let logger = logger.clone();
                                 let tracked_data_sender = tracked_data_sender.clone();
 
+                                let priority_fee = cfe_settings_update_receiver
+                                    .borrow()
+                                    .eth_priority_fee_percentile;
+
                                 async move {
-                                    match get_tracked_data(
-                                        &eth_rpc_c,
-                                        block_number,
-                                        priority_fee_percentile,
-                                    )
-                                    .await
+                                    match get_tracked_data(&eth_rpc_c, block_number, priority_fee)
+                                        .await
                                     {
                                         Ok(tracked_data) => {
                                             tracked_data_sender.send(tracked_data).await.unwrap()
@@ -1601,6 +1603,9 @@ mod witnesser_tests {
 
         let eth_rpc = ClonableRpc::new(eth_rpc);
         let sc_client = Arc::new(StateChainClient::create_test_sc_client(sc_rpc));
+
+        let (_, cfe_settings_update_receiver) =
+            watch::channel::<CfeSettings>(CfeSettings::default());
         let h = tokio::spawn({
             let eth_rpc = eth_rpc.clone();
             let logger = logger.clone();
@@ -1609,8 +1614,8 @@ mod witnesser_tests {
                     &eth_rpc,
                     sc_client,
                     instruction_receiver,
+                    cfe_settings_update_receiver,
                     Duration::from_millis(10),
-                    50,
                     &logger,
                 )
                 .await

@@ -14,8 +14,8 @@ use sp_core::{
     H256, U256,
 };
 use sp_runtime::{AccountId32, Digest};
-use state_chain_runtime::{EthereumInstance, Header, Runtime};
-use tokio::sync::broadcast;
+use state_chain_runtime::{CfeSettings, EthereumInstance, Header, Runtime};
+use tokio::sync::{broadcast, watch};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -134,6 +134,9 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         tokio::sync::mpsc::unbounded_channel();
 
     let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -141,6 +144,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )
@@ -185,6 +189,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
     let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -192,6 +198,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )
@@ -235,6 +242,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         tokio::sync::mpsc::unbounded_channel();
 
     let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
     sc_observer::start(
         state_chain_client,
@@ -243,6 +251,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )
@@ -351,6 +360,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         mock_state_chain_rpc_client,
     ));
 
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -358,6 +369,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )
@@ -477,6 +489,8 @@ async fn not_historical_to_authority_on_new_epoch() {
         mock_state_chain_rpc_client,
     ));
 
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -484,6 +498,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )
@@ -597,6 +612,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
     let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -604,6 +621,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )
@@ -719,6 +737,8 @@ async fn only_encodes_and_signs_when_specified() {
 
     let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
 
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -726,6 +746,7 @@ async fn only_encodes_and_signs_when_specified() {
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )
@@ -762,6 +783,8 @@ async fn run_the_sc_observer() {
 
     let (instruction_sender, _) = broadcast::channel(10);
 
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
     sc_observer::start(
         state_chain_client,
         block_stream,
@@ -769,6 +792,7 @@ async fn run_the_sc_observer() {
         multisig_client,
         account_peer_mapping_change_sender,
         instruction_sender,
+        cfe_settings_update_sender,
         initial_block_hash,
         &logger,
     )

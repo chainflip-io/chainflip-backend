@@ -146,6 +146,9 @@ async fn main() {
         .await
         .expect("Should get on chain CFE settings from SC");
 
+    let (cfe_settings_update_sender, cfe_settings_update_receiver) =
+        tokio::sync::watch::channel(cfe_settings);
+
     let stake_manager_address = state_chain_client
         .get_storage_value::<pallet_cf_environment::StakeManagerAddress::<
             state_chain_runtime::Runtime,
@@ -199,6 +202,7 @@ async fn main() {
             eth_multisig_client,
             account_peer_mapping_change_sender,
             witnessing_instruction_sender,
+            cfe_settings_update_sender,
             latest_block_hash,
             &root_logger
         ),
@@ -223,8 +227,8 @@ async fn main() {
             &eth_dual_rpc,
             state_chain_client.clone(),
             witnessing_instruction_receiver_3,
+            cfe_settings_update_receiver,
             eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
-            cfe_settings.eth_priority_fee_percentile,
             &root_logger
         )
     );
