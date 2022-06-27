@@ -9,7 +9,8 @@ use chainflip_engine::{
         stake_manager::StakeManager,
         EthBroadcaster,
     },
-    health, logging,
+    health::HealthChecker,
+    logging,
     multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
     multisig_p2p,
     settings::{CommandLineOptions, Settings},
@@ -36,7 +37,7 @@ fn main() -> anyhow::Result<()> {
         async {
 
             if let Some(health_check_settings) = &settings.health_check {
-                scope.spawn(health::start(health_check_settings, &root_logger));
+                scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
             }
 
             // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
