@@ -321,10 +321,6 @@ async fn set_vanity_name(
             "Name too long. Max length is {} characters.",
             MAX_LENGTH_FOR_VANITY_NAME,
         ));
-    } else if std::str::from_utf8(name.as_bytes()).is_err() {
-        return Err(anyhow!(
-            "Name contains invalid characters. Must be valid UTF-8.",
-        ));
     }
 
     let (_, _, state_chain_client) =
