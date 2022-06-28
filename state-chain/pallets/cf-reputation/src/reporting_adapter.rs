@@ -40,7 +40,16 @@ where
 	/// Since `O` is a trait object, we can't use the report ID tuple as a storage key directly. We
 	/// need to explicity encode the key we want to use.
 	fn report_id(offender: &T::ValidatorId) -> ReportId {
-		(O::ID, offender).using_encoded(<Blake2_128Concat as StorageHasher>::hash)
+		(O::ID, offender).using_encoded(<Twox64Concat as StorageHasher>::hash)
+	}
+
+	/// Returns true iff, for this offender, we have already recorded another offence with a later
+	/// time slot.
+	fn is_time_slot_stale(offender: &T::ValidatorId, time_slot: &O::TimeSlot) -> bool {
+		OffenceTimeSlotTracker::<T>::get(Self::report_id(offender))
+			.and_then(|bytes| O::TimeSlot::decode(&mut &bytes[..]).ok())
+			.map(|last_reported_time_slot| time_slot <= &last_reported_time_slot)
+			.unwrap_or_default()
 	}
 }
 
@@ -56,40 +65,33 @@ where
 	/// This implementation assumes that the reporting authority is irrelevant, and will always be
 	/// the current block author. This assumption holds for our runtime since we don't allow
 	/// unsolicited offence reports (ie. there is no 'fisherman' role is with polkadot).
+	///
+	/// Another assumption is that reports are submitted for a single offender only. This assumption
+	/// holds eg. for GRANDPA but would have to be verified for any other components that wish to
+	/// use this function.
 	fn report_offence(
 		_reporters: Vec<T::ValidatorId>,
 		offence: O,
 	) -> Result<(), sp_staking::offence::OffenceError> {
-		let offenders = offence
-			.offenders()
-			.into_iter()
-			.filter_map(|(offender, _)| {
-				let report_id = Self::report_id(&offender);
-				OffenceTimeSlotTracker::<T>::try_mutate(
-					report_id,
-					|maybe_last_reported_time_slot| {
-						if let Some(Ok(last_reported_time_slot)) = maybe_last_reported_time_slot
-							.as_mut()
-							.map(|bytes| O::TimeSlot::decode(&mut &bytes[..]))
-						{
-							if last_reported_time_slot >= offence.time_slot() {
-								return Err(())
-							}
-						}
-						*maybe_last_reported_time_slot = Some(offence.time_slot().encode());
-						Ok(offender)
-					},
-				)
-				.ok()
-			})
-			.collect::<Vec<_>>();
+		let offenders = offence.offenders();
+		ensure!(offenders.len() == 1, sp_staking::offence::OffenceError::Other(0xcf));
+		let (offender, _) = offence.offenders().pop().expect("len == 1; qed");
 
-		ensure!(!offenders.is_empty(), sp_staking::offence::OffenceError::DuplicateReport);
+		ensure!(
+			!Self::is_time_slot_stale(&offender, &offence.time_slot()),
+			sp_staking::offence::OffenceError::DuplicateReport
+		);
 
-		Pallet::<T>::report_many(offence, &offenders[..]);
-		for offender in &offenders {
-			T::Slasher::slash(offender, 1u32.into());
-		}
+		OffenceTimeSlotTracker::<T>::insert(
+			Self::report_id(&offender),
+			offence.time_slot().encode(),
+		);
+
+		// TODO: Reconsider the slashing rate here. For now we assume we are reporting the node
+		// for equivocation, and that each report corresponds to equivocation on a single block.
+		T::Slasher::slash(&offender, 1u32.into());
+
+		Pallet::<T>::report(offence, offender);
 		Ok(())
 	}
 
@@ -103,12 +105,9 @@ where
 		offenders: &[IdentificationTuple<T, FullIdentification>],
 		time_slot: &O::TimeSlot,
 	) -> bool {
-		offenders.iter().any(|(offender, _)| {
-			OffenceTimeSlotTracker::<T>::get(Self::report_id(offender))
-				.and_then(|bytes| O::TimeSlot::decode(&mut &bytes[..]).ok())
-				.map(|last_reported_time_slot| time_slot <= &last_reported_time_slot)
-				.unwrap_or_default()
-		})
+		offenders
+			.iter()
+			.any(|(offender, _)| Self::is_time_slot_stale(offender, time_slot))
 	}
 }
 
