@@ -977,7 +977,7 @@ impl<T: Config> Pallet<T> {
 		log::info!(target: "cf-validator", "Starting rotation");
 		match T::Auctioneer::resolve_auction() {
 			Ok(auction_outcome) => {
-				debug_assert!(auction_outcome.winners.len() > 0);
+				debug_assert!(!auction_outcome.winners.is_empty());
 				log::info!(
 					target: "cf-validator",
 					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",

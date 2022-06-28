@@ -16,9 +16,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 pub use auction_resolver::*;
-use cf_traits::{
-	AuctionOutcome, Auctioneer, BidderProvider, Chainflip, EpochInfo, QualifyNode,
-};
+use cf_traits::{AuctionOutcome, Auctioneer, BidderProvider, Chainflip, EpochInfo, QualifyNode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},

@@ -44,7 +44,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 				// candidates.
 				.filter_map(|bid| {
 					if backups.contains(&bid.bidder_id) || authorities.contains(&bid.bidder_id) {
-						Some(bid.bidder_id.clone())
+						Some(bid.bidder_id)
 					} else {
 						None
 					}
