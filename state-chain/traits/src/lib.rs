@@ -17,7 +17,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, MaybeSerializeDeserialize, UniqueSaturatedFrom},
+	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::{marker::PhantomData, prelude::*};
@@ -300,7 +300,7 @@ pub trait Issuance {
 
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
-	type Balance: UniqueSaturatedFrom<BlockNumber> + AtLeast32BitUnsigned;
+	type Balance;
 	/// An implementation of the issuance trait.
 	type Issuance: Issuance;
 

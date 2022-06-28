@@ -10,7 +10,7 @@ use sp_std::{cmp::min, prelude::*};
 pub fn calculate_backup_rewards<Id, Amount>(
 	backup_nodes: Vec<(Id, u128)>,
 	minimum_active_bid: u128,
-	heartbeat_block_interval: u128,
+	reward_interwal: u128,
 	backup_node_emission_per_block: u128,
 	current_authority_emission_per_block: u128,
 	current_authority_count: u128,
@@ -29,11 +29,10 @@ where
 		backup_nodes.into_iter().map(|(id, stake)| (id, stake / QUANTISATION_FACTOR));
 
 	// Our emission cap for this heartbeat interval
-	let emissions_cap = backup_node_emission_per_block.saturating_mul(heartbeat_block_interval);
+	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interwal);
 
 	// Emissions for this heartbeat interval for the active set
-	let authority_rewards =
-		current_authority_emission_per_block.saturating_mul(heartbeat_block_interval);
+	let authority_rewards = current_authority_emission_per_block.saturating_mul(reward_interwal);
 
 	// The average authority emission
 	let average_authority_reward = authority_rewards.checked_div(current_authority_count).unwrap();

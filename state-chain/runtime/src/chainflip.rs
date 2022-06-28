@@ -73,7 +73,6 @@ impl RewardsDistribution for BackupNodeEmissions {
 		let backup_node_emission_per_block = Emissions::backup_node_emission_per_block();
 		let current_authority_emission_per_block =
 			Emissions::current_authority_emission_per_block();
-		// The average authority emission
 		let current_authority_count =
 			Self::Balance::unique_saturated_from(Validator::current_authority_count());
 
