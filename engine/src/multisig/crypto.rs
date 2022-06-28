@@ -19,8 +19,10 @@ pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 
 /// Used as a unique identifier when serializing/deserializing chain specific data.
 /// The values are explicitly given and should never be changed.
+/// NOTE: we use serde_repr to ensure that the serialization matches
+/// the integer value it is represented by in memory
 #[repr(u16)]
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Clone, Copy)]
 pub enum ChainTag {
     Ethereum = 0x0000,
     Polkadot = 0x0001,

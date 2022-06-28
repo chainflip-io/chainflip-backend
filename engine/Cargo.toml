@@ -79,6 +79,7 @@ typenum = "1.15"
 # We might eventually update, but for now let's just
 # use the same version as polkadot. 
 schnorrkel = "0.9.1"
+serde_repr = "0.1"
 
 
 # Local deps
