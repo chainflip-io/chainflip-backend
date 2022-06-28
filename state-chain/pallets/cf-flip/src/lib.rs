@@ -140,7 +140,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Slashing Rate is a percentage. It, therefore, has to be between 0 and 100
+		/// Slashing Rate is a percentage. It, therefore, has to be between 0 and 100.
 		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(
 			origin: OriginFor<T>,
