@@ -3,50 +3,51 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{ready, stream::FuturesUnordered, Future, FutureExt, Stream, StreamExt};
+use futures::{ready, stream::FuturesUnordered, Future, Stream, StreamExt};
 use futures_core::FusedStream;
 use tokio::{
-    runtime::Handle,
-    sync::{
-        mpsc::{UnboundedReceiver, UnboundedSender},
-        oneshot::{self, Receiver},
-    },
+    sync::{mpsc, oneshot},
     task::{JoinError, JoinHandle},
 };
 
+/// Allows a parent closure/future to spawn child tasks, such that if the pa
+/// Note: This funtion is unsafe as if the function is called with TASKS_HAVE_STATIC_LIFETIMES=false
+/// and the call to this async function is "cancelled" it may cause spawned tasks to do invalid memory accesses
 async unsafe fn inner_with_task_scope<
-    'a,
-    C: for<'b> FnOnce(
-        &'b Scope<'a, anyhow::Result<()>, STATIC>,
-    ) -> futures::future::BoxFuture<'b, anyhow::Result<T>>,
+    'env,
+    C: for<'scope> FnOnce(
+        &'scope Scope<'env, anyhow::Result<()>, TASKS_HAVE_STATIC_LIFETIMES>,
+    ) -> futures::future::BoxFuture<'scope, anyhow::Result<T>>, // Box is needed to link the lifetime of the reference passed to the closure to the lifetime of the returned future
     T,
-    const STATIC: bool,
+    const TASKS_HAVE_STATIC_LIFETIMES: bool,
 >(
     c: C,
 ) -> anyhow::Result<T> {
-    let (scope, mut scope_result_stream) = new_task_scope();
+    let (scope, mut child_task_result_stream) = new_task_scope();
 
     // try_join ensures if the parent returns an error we immediately drop child_task_result_stream cancelling all children and vice versa
     tokio::try_join!(
         async move {
-            while let Some(thread_result) = scope_result_stream.next().await {
-                match thread_result {
+            while let Some(child_task_result) = child_task_result_stream.next().await {
+                match child_task_result {
                     Err(error) => {
                         if let Ok(reason) = error.try_into_panic() {
+                            // Note we drop the child_task_result_stream on unwind causing all tasks to be cancelled/aborted
                             std::panic::resume_unwind(reason)
                         } else {
                             panic!(
                                 "THERE IS A MISTAKE IN THE CALLING CODE IF THIS HAPPENS. \
-                                The tokio runtime has been dropped causing spawned task to be cancelled. \
-                                This can only happen if the runtime was dropped before this call finished, \
+                                The tokio runtime has been dropped causing child tasks to be cancelled. \
+                                This can only happen if the runtime was dropped before this function finished, \
                                 which should be impossible if all tasks are spawned via this mechanism \
                                 and the runtime is not manually dropped."
                             )
                         }
                     }
-                    Ok(future_result) => future_result?,
+                    Ok(child_future_result) => child_future_result?,
                 }
             }
+            // child_task_result_stream has eneded meaning scope has been dropped and all children have finished running
             Ok(())
         },
         // This async scope ensures scope is dropped when c and its returned future finish (Instead of when this function exits)
@@ -56,8 +57,10 @@ async unsafe fn inner_with_task_scope<
     ).map(|(_, t)| t)
 }
 
-fn new_task_scope<'a, TaskResult, const STATIC: bool>(
-) -> (Scope<'a, TaskResult, STATIC>, ScopeResultStream<TaskResult>) {
+fn new_task_scope<'env, TaskResult, const TASKS_HAVE_STATIC_LIFETIMES: bool>() -> (
+    Scope<'env, TaskResult, TASKS_HAVE_STATIC_LIFETIMES>,
+    ScopeResultStream<TaskResult>,
+) {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
     (
@@ -74,8 +77,8 @@ fn new_task_scope<'a, TaskResult, const STATIC: bool>(
     )
 }
 
-/// When this object is dropped it will cancel/abort the associated tokio thread
-/// The tokio thread will continue to run after the cancel/abort until it hits an await.
+/// When this object is dropped it will cancel/abort the associated tokio task
+/// The tokio task will continue to run after the cancel/abort until it hits an await.
 struct CancellingJoinHandle<T> {
     handle: JoinHandle<T>,
 }
@@ -97,16 +100,22 @@ impl<T> Future for CancellingJoinHandle<T> {
     }
 }
 
-/// An object used to spawn threads into the associated scope
-pub struct Scope<'a, T, const STATIC: bool> {
-    spawner: Handle,
-    sender: UnboundedSender<CancellingJoinHandle<T>>,
-    _phantom: std::marker::PhantomData<&'a mut &'a ()>,
+/// An object used to spawn tasks into the associated scope
+/// The spawned task's futures are either required to have a
+/// static lifetime if TASKS_HAVE_STATIC_LIFETIMES, otherwise
+/// they are required to have a lifetime of 'env
+pub struct Scope<'env, T, const TASKS_HAVE_STATIC_LIFETIMES: bool> {
+    spawner: tokio::runtime::Handle,
+    sender: mpsc::UnboundedSender<CancellingJoinHandle<T>>,
+    /// This PhantomData pattern "&'env mut &'env ()"" is required to stop multiple
+    /// spawned tasks capturing the same state and mutating it asynchronously
+    /// by making the type Scope invariant wrt 'env
+    _phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
 
-/// This allows code to spawn a thread, and await on the thread to exit by await'ing on the thread's ScopedJoinHandle
+/// This struct allows code to await on the task to exit
 pub struct ScopedJoinHandle<T> {
-    receiver: Receiver<T>,
+    receiver: oneshot::Receiver<T>,
 }
 
 impl<T> Future for ScopedJoinHandle<T> {
@@ -123,9 +132,10 @@ impl<T> Future for ScopedJoinHandle<T> {
     }
 }
 
-// A stream of spawned thread exit reasons (Ok, Err, panic)
+/// A stream of spawned task exit reasons (Ok, Err, or panic)
+/// This stream will only end once the associated Scope object is dropped
 struct ScopeResultStream<T> {
-    receiver: UnboundedReceiver<CancellingJoinHandle<T>>,
+    receiver: mpsc::UnboundedReceiver<CancellingJoinHandle<T>>,
     receiver_closed: bool,
     join_handles: FuturesUnordered<CancellingJoinHandle<T>>,
 }
@@ -161,14 +171,16 @@ impl<T> FusedStream for ScopeResultStream<T> {
 }
 
 macro_rules! impl_spawn_ops {
-    ($env_lifetime:lifetime, $stat:literal, $thread_lifetime:lifetime) => {
+    ($env_lifetime:lifetime, $stat:literal, $task_lifetime:lifetime) => {
         impl<$env_lifetime, T: 'static + Send> Scope<$env_lifetime, T, $stat> {
-            /// The returned handle should only ever be await'ed on inside of the task scope this spawn is associated with, or any sub-task scopes (Otherwise the await will never complete in the Error case)
+            /// The returned handle should only ever be await'ed on inside of the task scope
+            /// this spawn is associated with, or any sub-task scopes. Otherwise the await
+            /// will never complete in the Error case.
             fn spawn_with_custom_error_handling<
                 R,
                 V: 'static + Send,
-                F: $thread_lifetime + Future<Output = R> + Send,
-                ErrorHandler: $thread_lifetime + FnOnce(R) -> (T, Option<V>) + Send,
+                F: $task_lifetime + Future<Output = R> + Send,
+                ErrorHandler: $task_lifetime + FnOnce(R) -> (T, Option<V>) + Send,
             >(
                 &self,
                 error_handler: ErrorHandler,
@@ -193,10 +205,11 @@ macro_rules! impl_spawn_ops {
         }
 
         impl<$env_lifetime> Scope<$env_lifetime, anyhow::Result<()>, $stat> {
-            /// Spawns a thread and gives you a handle to receive the Result::Ok of the thread by await on the returned handle (If this thread errors/panics the scope will exit with the error/panic)
+            /// Spawns a task and gives you a handle to receive the Result::Ok of the task by await
+            /// on the returned handle (If the task errors/panics the scope will exit with the error/panic)
             pub fn spawn_with_handle<
                 V: 'static + Send,
-                F: $thread_lifetime + Future<Output = anyhow::Result<V>> + Send,
+                F: $task_lifetime + Future<Output = anyhow::Result<V>> + Send,
             >(
                 &self,
                 f: F,
@@ -210,10 +223,12 @@ macro_rules! impl_spawn_ops {
                 )
             }
 
-            /// Spawns a thread and gives you a handle to receive the Result of the thread by awaiting on the returned handle (If this thread panics the scope will exit with the panic)
-            pub fn spawn_without_error_handling<
+            /// Spawns a task and gives you a handle to receive the Result of the task by awaiting
+            /// on the returned handle (If the task panics the scope will exit by panicking, but
+            /// if the task returns an error the scope will not exit)
+            pub fn spawn_with_manual_error_handling<
                 V: 'static + Send,
-                F: $thread_lifetime + Future<Output = anyhow::Result<V>> + Send,
+                F: $task_lifetime + Future<Output = anyhow::Result<V>> + Send,
             >(
                 &self,
                 f: F,
@@ -221,31 +236,20 @@ macro_rules! impl_spawn_ops {
                 self.spawn_with_custom_error_handling(|t| (Ok(()), Some(t)), f)
             }
         }
-
-        impl<$env_lifetime> Scope<$env_lifetime, (), $stat> {
-            // Spawns a thread and gives you a handle to wait for the thread to exit by await on the returned handle (If this thread errors/panics the scope will exit with the error/panic)
-            pub fn spawn_with_handle<
-                V: 'static + Send,
-                F: $thread_lifetime + Future<Output = V> + Send,
-            >(
-                &self,
-                f: F,
-            ) -> ScopedJoinHandle<V> {
-                self.spawn_with_custom_error_handling(|t| ((), Some(t)), f)
-            }
-        }
     };
 }
 
-/// This function guarantees all threads spawned using its scope object will finish before this function exits.
-/// Thereby making accessing data outside of this scope from inside this scope via a reference is safe.
-/// Which is why the closures/futures provided to Scope::spawn don't need static lifetimes.
+/// This function allows a parent task to spawn child tasks such that if any tasks panic or error,
+/// all other tasks will be cancelled.
+/// It guarantees all tasks spawned using its scope object will finish before this function exits.
+/// Thereby making accessing data outside of this scope from inside this scope via a reference safe.
+/// This is why the closures/futures provided to Scope::spawn don't need static lifetimes.
 #[tokio::main]
 pub async fn with_main_task_scope<
-    'a,
-    C: for<'b> FnOnce(
-        &'b Scope<'a, anyhow::Result<()>, false>,
-    ) -> futures::future::BoxFuture<'b, anyhow::Result<T>>,
+    'env,
+    C: for<'scope> FnOnce(
+        &'scope Scope<'env, anyhow::Result<()>, false>,
+    ) -> futures::future::BoxFuture<'scope, anyhow::Result<T>>,
     T,
 >(
     c: C,
@@ -254,13 +258,12 @@ pub async fn with_main_task_scope<
     unsafe { inner_with_task_scope(c).await }
 }
 
-impl<'a, T: Send + 'static> Scope<'a, T, false> {
-    /// Spawn a thread that is guaranteed to exit or cancel/abort before the associated scope exits
-    pub fn spawn<F: 'a + Future<Output = T> + Send>(&self, f: F) {
-        // If this result is an error (I.e. the channel receiver was dropped then the stream was closed, and so we want to drop the handle to cancel the thread we just spawned)
-        // This can only relevant for non-main scopes, because this can ony happen if the tokio::runtime is dropped early or the future the scope is in is dropped while running (i.e. via a timeout).
+impl<'env, T: Send + 'static> Scope<'env, T, false> {
+    /// Spawn a task that is guaranteed to exit or cancel/abort before the associated scope exits
+    pub fn spawn<F: 'env + Future<Output = T> + Send>(&self, f: F) {
+        // If this result is an error (I.e. the channel receiver was dropped then the stream was closed, and so we want to drop the handle to cancel the task we just spawned)
         let _result = self.sender.send(CancellingJoinHandle::new({
-            let future: Pin<Box<dyn 'a + Future<Output = T> + Send>> = Box::pin(f);
+            let future: Pin<Box<dyn 'env + Future<Output = T> + Send>> = Box::pin(f);
             let future: Pin<Box<dyn 'static + Future<Output = T> + Send>> =
                 unsafe { std::mem::transmute(future) };
             self.spawner.spawn(future)
@@ -268,8 +271,13 @@ impl<'a, T: Send + 'static> Scope<'a, T, false> {
     }
 }
 
-impl_spawn_ops!('a, false, 'a);
+impl_spawn_ops!('env, false, 'env);
 
+/// This function allows a parent task to spawn child tasks such that if any tasks panic or error,
+/// all other tasks will be cancelled.
+/// Unlike with_main_task_scope this doesn't guarantee all child tasks have finished running once
+/// this function exists, only that have will have been cancelled. This is why child tasks must
+/// have static lifetimes.
 pub async fn with_task_scope<
     'a,
     C: for<'b> FnOnce(
@@ -284,57 +292,161 @@ pub async fn with_task_scope<
 }
 
 impl<'a, T: Send + 'static> Scope<'a, T, true> {
-    /// Spawn a thread that is guaranteed to exit or cancel/abort before the associated scope exits
+    /// Spawn a task that is guaranteed to exit/cancel/abort before the associated scope exits
     pub fn spawn<F: 'static + Future<Output = T> + Send>(&self, f: F) {
-        // If this result is an error (I.e. the channel receiver was dropped then the stream was closed, and so we want to drop the handle to cancel the thread we just spawned)
-        // This can only relevant for non-main scopes, because this can ony happen if the tokio::runtime is dropped early or the future the scope is in is dropped while running (i.e. via a timeout).
+        // If this result is an error (I.e. the channel receiver was dropped) then the stream was closed, and so we want to drop the handle to cancel the task we just spawned.
         let _result = self
             .sender
             .send(CancellingJoinHandle::new(self.spawner.spawn(Box::pin(f))));
     }
 }
 
-impl_spawn_ops!('a, true, 'static);
+impl_spawn_ops!('env, true, 'static);
 
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::Ordering;
 
+    use futures::FutureExt;
+
+    use crate::testing::assert_err;
+
     use super::*;
 
+    async fn wait_forever() {
+        let (_sender, receiver) = oneshot::channel::<()>();
+        let _result = receiver.await; // wait forever
+    }
+
     #[test]
-    fn main_task_scope_will_always_wait_for_all_scoped_threads() {
+    fn main_task_scope_in_panic_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting() {
+        inner_main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting(|| panic!());
+    }
+
+    #[test]
+    fn main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting() {
+        inner_main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting(|| Err(anyhow::Error::msg("")));
+    }
+
+    fn inner_main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting<
+        F: Fn() -> anyhow::Result<()> + Send + Sync + 'static,
+    >(
+        error: F,
+    ) {
         for _i in 0..100 {
-            const COUNT: u32 = 10;
-
-            let a = std::sync::atomic::AtomicU32::new(0);
-
-            let thread_start_count = std::sync::atomic::AtomicU32::new(0);
+            // Do this a few times as tokio's scheduling of tasks is not deterministic
+            let task_end_count = std::sync::atomic::AtomicU32::new(0);
+            let task_start_count = std::sync::atomic::AtomicU32::new(0);
 
             let _result =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> anyhow::Result<()> {
                     with_main_task_scope(|scope| {
                         async {
-                            //scope.spawn(async { panic!() });
-                            for _i in 0..COUNT {
+                            for _i in 0..10 {
                                 scope.spawn(async {
-                                    thread_start_count.fetch_add(1, Ordering::Relaxed);
+                                    task_start_count.fetch_add(1, Ordering::Relaxed);
                                     std::thread::sleep(std::time::Duration::from_millis(10));
-                                    a.fetch_add(1, Ordering::Relaxed);
+                                    task_end_count.fetch_add(1, Ordering::Relaxed);
                                     Ok(())
                                 });
                             }
-                            while 10 != thread_start_count.load(Ordering::Relaxed) {
-                                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-                            }
-                            panic!();
+                            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                            error()
                         }
                         .boxed()
                     })
-                }));
+                }))
+                .map(|result| result.unwrap_err()); // with_main_task_scope should either panic or error
 
-            assert_eq!(thread_start_count.load(Ordering::Relaxed), COUNT);
-            assert_eq!(a.load(Ordering::Relaxed), COUNT);
+            // These aren't neccesarily equal to COUNT as tokio is allowed to not start
+            // spawned tasks if they have been cancelled before starting
+            assert_eq!(
+                task_start_count.load(Ordering::Relaxed),
+                task_end_count.load(Ordering::Relaxed)
+            );
         }
+    }
+
+    #[test]
+    fn join_handles_return_value_correctly() {
+        const VALUE: u32 = 40;
+        with_main_task_scope(|scope| {
+            async {
+                let handle = scope.spawn_with_handle(async { Ok(VALUE) });
+
+                assert_eq!(handle.await, VALUE);
+
+                Ok(())
+            }
+            .boxed()
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn join_handles_handle_errors() {
+        with_main_task_scope::<'_, _, ()>(|scope| {
+            async {
+                let handle =
+                    scope.spawn_with_handle::<(), _>(async { Err(anyhow::Error::msg("")) });
+
+                handle.await;
+                panic!()
+            }
+            .boxed()
+        })
+        .unwrap_err();
+    }
+
+    #[test]
+    fn task_scope_cancels_all_tasks_when_exiting() {
+        with_main_task_scope(|_scope| {
+            async {
+                let mut receivers = vec![];
+
+                with_task_scope(|scope| {
+                    async {
+                        receivers = (0..10)
+                            .map(|_i| {
+                                let (sender, receiver) = oneshot::channel::<()>();
+                                scope.spawn(async move {
+                                    let _sender = sender;
+                                    wait_forever().await;
+                                    Ok(())
+                                });
+                                receiver
+                            })
+                            .collect::<Vec<_>>();
+
+                        // Exit scope with error to cause children to be cancelled
+                        anyhow::Result::<()>::Err(anyhow::Error::msg(""))
+                    }
+                    .boxed()
+                })
+                .await
+                .unwrap_err();
+
+                for receiver in receivers {
+                    assert_err!(receiver.await);
+                }
+
+                Ok(())
+            }
+            .boxed()
+        })
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancelling_join_handle() {
+        let (sender, receiver) = oneshot::channel::<()>();
+        let handle = CancellingJoinHandle::new(tokio::spawn(async move {
+            let _sender = sender; // move into task
+            wait_forever().await;
+        }));
+
+        drop(handle);
+
+        receiver.await.unwrap_err(); // we expect sender to be dropped when task is cancelled
     }
 }
