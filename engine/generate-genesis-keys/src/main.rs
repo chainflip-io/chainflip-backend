@@ -82,7 +82,7 @@ fn main() {
     // output to stdout - CI can read the json from stdout
     println!(
         "{}",
-        serde_json::to_string_pretty(&serde_json::json!({ "eth_agg_key": eth_key_id }))
+        serde_json::to_string_pretty(&serde_json::json!({ "eth_agg_key": eth_key_id.to_string() }))
             .expect("Should prettify_json")
     );
 }
