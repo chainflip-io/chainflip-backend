@@ -71,24 +71,13 @@ pub struct PercentageRange {
 type RuntimeRotationStatus<T> =
 	RotationStatus<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
 	Idle,
 	VaultsRotating(RuntimeRotationStatus<T>),
 	VaultsRotated(RuntimeRotationStatus<T>),
 	SessionRotating(RuntimeRotationStatus<T>),
-}
-
-impl<T: Config> sp_std::fmt::Debug for RotationPhase<T> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		match self {
-			RotationPhase::Idle => write!(f, "Idle"),
-			RotationPhase::VaultsRotating(..) => write!(f, "VaultsRotating(..)"),
-			RotationPhase::VaultsRotated(..) => write!(f, "VaultsRotated(..)"),
-			RotationPhase::SessionRotating(..) => write!(f, "SessionRotating(..)"),
-		}
-	}
 }
 
 impl<T: Config> Default for RotationPhase<T> {
