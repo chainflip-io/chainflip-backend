@@ -87,3 +87,8 @@ impl CeremonyCommon {
         self.all_idxs.contains(&idx)
     }
 }
+
+pub trait PreProcessStageDataCheck {
+    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool;
+    fn is_first_stage(&self) -> bool;
+}

@@ -112,7 +112,7 @@ where
                     }
                     _ = check_timeouts_tick.tick() => {
                         slog::trace!(logger, "Checking for expired multisig states");
-                        ceremony_manager.check_timeouts();
+                        ceremony_manager.check_all_timeouts();
                     }
                 }
             }

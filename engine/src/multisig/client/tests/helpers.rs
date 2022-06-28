@@ -196,13 +196,6 @@ pub trait CeremonyRunnerStrategy {
         <Self as CeremonyRunnerStrategy>::Output,
         <Self as CeremonyRunnerStrategy>::FailureReason,
     >;
-
-    fn inner_distribute_message(
-        &mut self,
-        sender_id: &AccountId,
-        receiver_id: &AccountId,
-        stage_data: Self::CeremonyData,
-    );
 }
 
 pub struct CeremonyRunner<CeremonyRunnerData> {
@@ -263,7 +256,18 @@ where
         stage_data: StageData,
     ) {
         assert_ne!(receiver_id, sender_id);
-        self.inner_distribute_message(sender_id, receiver_id, stage_data.into());
+
+        self.nodes
+            .get_mut(receiver_id)
+            .unwrap()
+            .ceremony_manager
+            .process_p2p_message(
+                sender_id.clone(),
+                MultisigMessage {
+                    ceremony_id: self.ceremony_id,
+                    data: stage_data.into().into(),
+                },
+            );
     }
 
     pub fn distribute_messages_with_non_sender<
@@ -634,19 +638,6 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
             .unwrap()
             .request_keygen(keygen_ceremony_details)
     }
-
-    fn inner_distribute_message(
-        &mut self,
-        sender_id: &AccountId,
-        receiver_id: &AccountId,
-        stage_data: Self::CeremonyData,
-    ) {
-        self.nodes
-            .get_mut(receiver_id)
-            .unwrap()
-            .ceremony_manager
-            .process_keygen_data(sender_id.clone(), self.ceremony_id, stage_data);
-    }
 }
 impl KeygenCeremonyRunner {
     pub fn new(nodes: HashMap<AccountId, Node>, ceremony_id: CeremonyId, rng: Rng) -> Self {
@@ -712,19 +703,6 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
             .get_mut(node_id)
             .unwrap()
             .request_signing(signing_ceremony_details)
-    }
-
-    fn inner_distribute_message(
-        &mut self,
-        sender_id: &AccountId,
-        receiver_id: &AccountId,
-        stage_data: Self::CeremonyData,
-    ) {
-        self.nodes
-            .get_mut(receiver_id)
-            .unwrap()
-            .ceremony_manager
-            .process_signing_data(sender_id.clone(), self.ceremony_id, stage_data);
     }
 }
 impl SigningCeremonyRunner {
@@ -1196,7 +1174,7 @@ const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 impl Node {
     pub fn force_stage_timeout(&mut self) {
         self.ceremony_manager.expire_all();
-        self.ceremony_manager.check_timeouts();
+        self.ceremony_manager.check_all_timeouts();
     }
 
     pub fn ensure_ceremony_at_signing_stage(

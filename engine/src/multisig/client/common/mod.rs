@@ -2,7 +2,9 @@ pub mod broadcast;
 mod broadcast_verification;
 mod ceremony_stage;
 
-pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+pub use ceremony_stage::{
+    CeremonyCommon, CeremonyStage, PreProcessStageDataCheck, ProcessMessageResult, StageResult,
+};
 
 pub use broadcast_verification::BroadcastVerificationMessage;
 use state_chain_runtime::AccountId;
