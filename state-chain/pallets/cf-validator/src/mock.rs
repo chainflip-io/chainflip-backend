@@ -6,7 +6,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	Chainflip, ChainflipAccountData, IsOnline, QualifyNode, RuntimeAuctionOutcome,
+	BackupNodes, Chainflip, ChainflipAccountData, IsOnline, QualifyNode, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -101,6 +101,7 @@ impl pallet_session::Config for Test {
 pub struct MockAuctioneer;
 
 pub const AUCTION_WINNERS: [ValidatorId; 5] = [0, 1, 2, 3, 4];
+pub const WINNING_BIDS: [Amount; 5] = [120, 120, 110, 105, 100];
 pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
 pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
 pub const BOND: Amount = 100;
@@ -212,7 +213,6 @@ pub struct MockBonder;
 
 impl Bonding for MockBonder {
 	type ValidatorId = ValidatorId;
-
 	type Amount = Amount;
 
 	fn update_bond(_: &Self::ValidatorId, _: Self::Amount) {}
@@ -221,20 +221,36 @@ impl Bonding for MockBonder {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
 
+pub struct MockBidderProvider;
+
+impl BidderProvider for MockBidderProvider {
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
+
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+		AUCTION_WINNERS
+			.zip(WINNING_BIDS)
+			.into_iter()
+			.chain(AUCTION_LOSERS.zip(LOSING_BIDS))
+			.collect()
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Offence = PalletOffence;
-	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
+	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
 	type Auctioneer = MockAuctioneer;
-	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type VaultRotator = MockVaultRotator;
 	type ChainflipAccount = MockChainflipAccount;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type Bonder = MockBonder;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
+	type BidderProvider = MockBidderProvider;
 	type OffenceReporter = MockOffenceReporter;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
 }
 
@@ -247,6 +263,7 @@ pub(crate) struct TestExternalitiesWithCheck {
 	ext: sp_io::TestExternalities,
 }
 
+#[macro_export]
 macro_rules! assert_invariants {
 	() => {
 		assert_eq!(
@@ -256,6 +273,13 @@ macro_rules! assert_invariants {
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
 		);
+		let current_authorities =
+			ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<_>>();
+		let current_backups = ValidatorPallet::backup_nodes().into_iter().collect::<BTreeSet<_>>();
+		assert!(
+			current_authorities.is_disjoint(&current_backups),
+			"Backup nodes and validators should not overlap",
+		)
 	};
 }
 

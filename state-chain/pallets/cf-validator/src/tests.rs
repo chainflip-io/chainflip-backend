@@ -5,7 +5,7 @@ use cf_traits::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
 		vault_rotation::MockVaultRotator,
 	},
-	AuctionOutcome, SystemStateInfo, VaultRotator,
+	AuctionOutcome, BackupNodes, SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
@@ -25,14 +25,30 @@ fn assert_epoch_number(n: EpochIndex) {
 	);
 }
 
+macro_rules! assert_default_auction_outcome {
+	() => {
+		assert_epoch_number(GENESIS_EPOCH + 1);
+		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
+		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), AUCTION_WINNERS.to_vec());
+		assert_eq!(
+			ValidatorPallet::backup_nodes(),
+			AUCTION_LOSERS[..ValidatorPallet::backup_set_target_size(
+				AUCTION_WINNERS.len(),
+				BackupNodePercentage::<Test>::get()
+			)]
+				.to_vec()
+		);
+	};
+}
+
 fn simple_rotation_status(
 	auction_winners: Vec<u64>,
 	bond: Option<u128>,
 ) -> RuntimeRotationStatus<Test> {
-	RuntimeRotationStatus::<Test>::from_auction_outcome::<ValidatorPallet>(AuctionOutcome {
+	RuntimeRotationStatus::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 		winners: auction_winners,
 		bond: bond.unwrap_or(100),
-		losers: vec![],
+		losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
 	})
 }
 
@@ -88,23 +104,28 @@ fn should_request_emergency_rotation() {
 #[test]
 fn should_retry_rotation_until_success_with_failing_auctions() {
 	new_test_ext().execute_with(|| {
+		// store this for later:
+		let auction_outcome = MockAuctioneer::resolve_auction().unwrap();
 		MockAuctioneer::set_next_auction_outcome(Err("auction failed"));
 		run_to_block(EPOCH_DURATION);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
-		assert_eq!(
-			<ValidatorPallet as EpochInfo>::epoch_index(),
-			GENESIS_EPOCH,
-			"we should still be in the first epoch"
-		);
+		assert_epoch_number(GENESIS_EPOCH);
+		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
+
 		// The auction now runs
-		MockAuctioneer::set_next_auction_outcome(Ok(Default::default()));
+		MockAuctioneer::set_next_auction_outcome(Ok(auction_outcome));
 
 		move_forward_blocks(1);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::VaultsRotating(..)
-		))
+		));
+
+		while CurrentRotationPhase::<Test>::get() != RotationPhase::<Test>::Idle {
+			move_forward_blocks(1);
+		}
+		assert_epoch_number(GENESIS_EPOCH + 1);
 	});
 }
 
@@ -146,19 +167,14 @@ fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 		// vaults on_initialise runs *after* the validator pallet's on_initialise.
 		// TODO: Address this as part of issue [#1702](https://github.com/chainflip-io/chainflip-backend/issues/1702)
 		move_forward_blocks(5);
-		assert_epoch_number(GENESIS_EPOCH + 1);
+		assert_default_auction_outcome!();
 	});
 }
 
 #[test]
 fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().execute_with(|| {
-		MockAuctioneer::set_next_auction_outcome(Ok(Default::default()));
-		run_to_block(EPOCH_DURATION);
-		assert!(matches!(
-			ValidatorPallet::current_rotation_phase(),
-			RotationPhase::VaultsRotating(..)
-		));
+		ValidatorPallet::start_authority_rotation();
 		assert_noop!(
 			ValidatorPallet::force_rotation(Origin::root()),
 			Error::<Test>::RotationInProgress
@@ -203,35 +219,21 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		while <ValidatorPallet as EpochInfo>::epoch_index() == GENESIS_EPOCH {
 			move_forward_blocks(1);
 		}
-		assert_epoch_number(GENESIS_EPOCH + 1);
-		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_authorities(),
-			AUCTION_WINNERS,
-			"the new authorities are now validating"
-		);
-		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
-
-		// Expect new_authorities to be auction winners as well
-		assert_eq!(ValidatorPallet::current_authorities(), AUCTION_WINNERS.to_vec());
+		assert_default_auction_outcome!();
 	});
 }
 
 #[test]
 fn genesis() {
 	new_test_ext().execute_with(|| {
-		// We should have a set of validators on genesis with a minimum bid set
 		assert_eq!(
 			CurrentAuthorities::<Test>::get(),
 			GENESIS_VALIDATORS,
 			"We should have a set of validators at genesis"
 		);
 		assert_eq!(Bond::<Test>::get(), GENESIS_BOND, "We should have a minimum bid at genesis");
-		assert_eq!(
-			<ValidatorPallet as EpochInfo>::epoch_index(),
-			GENESIS_EPOCH,
-			"we should be in the genesis epoch({})",
-			GENESIS_EPOCH
-		);
+		assert_epoch_number(GENESIS_EPOCH);
+		assert_invariants!();
 	});
 }
 
@@ -598,6 +600,8 @@ fn test_reputation_reset() {
 #[test]
 fn backup_set_size_calculation() {
 	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 20u8), 30);
+	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 33u8), 49);
+	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 34u8), 51);
 	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 0u8), 0);
 	// Saturates at 100%.
 	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 200u8), 150);
