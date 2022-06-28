@@ -198,11 +198,11 @@ where
 			.runtime_api()
 			.cf_accounts(&at)
 			.expect("The runtime API should not return error.")
-			.iter()
+			.into_iter()
 			.map(|(account_id, vanity_name_bytes)| {
 				// we can use from_utf8_lossy here because we're guaranteed utf8 when we
 				// save the vanity name on the chain
-				(account_id.clone(), String::from_utf8_lossy(vanity_name_bytes).into_owned())
+				(account_id, String::from_utf8_lossy(&vanity_name_bytes).into_owned())
 			})
 			.collect())
 	}
