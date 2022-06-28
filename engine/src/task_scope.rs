@@ -26,7 +26,8 @@ async unsafe fn inner_with_task_scope<
 ) -> anyhow::Result<T> {
     let (scope, mut scope_result_stream) = new_task_scope();
 
-    let (result, main_result) = tokio::join!(
+    // try_join ensures if the parent returns an error we immediately drop child_task_result_stream cancelling all children and vice versa
+    tokio::try_join!(
         async move {
             while let Some(thread_result) = scope_result_stream.next().await {
                 match thread_result {
@@ -48,17 +49,11 @@ async unsafe fn inner_with_task_scope<
             }
             Ok(())
         },
-        std::panic::AssertUnwindSafe(async move {
-            // async scope ensures scope is dropped when c finished or panics
+        // This async scope ensures scope is dropped when c and its returned future finish (Instead of when this function exits)
+        async move {
             c(&scope).await
-        })
-        .catch_unwind() // Ensures we join all spawned tasks before resuming unwind
-    );
-
-    result.and(match main_result {
-        Ok(main_result) => main_result,
-        Err(panic) => std::panic::resume_unwind(panic),
-    })
+        }
+    ).map(|(_, t)| t)
 }
 
 fn new_task_scope<'a, TaskResult, const STATIC: bool>(
