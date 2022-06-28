@@ -163,12 +163,20 @@ async fn main() {
 
     use crate::multisig::eth::EthSigning;
 
+    let latest_ceremony_id = state_chain_client
+        .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
+            latest_block_hash,
+        )
+        .await
+        .expect("Should get CeremonyIdCounter from SC");
+
     let (eth_multisig_client, eth_multisig_client_backend_future) =
         multisig::start_client::<EthSigning>(
             state_chain_client.our_account_id.clone(),
             KeyStore::new(db),
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
+            latest_ceremony_id,
             &root_logger,
         );
 

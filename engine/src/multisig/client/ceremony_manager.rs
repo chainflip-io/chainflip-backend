@@ -1,7 +1,9 @@
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Display;
 use std::sync::Arc;
 
+use crate::constants::CEREMONY_ID_WINDOW;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::crypto::{CryptoScheme, Rng};
@@ -47,6 +49,7 @@ pub struct CeremonyManager<C: CryptoScheme> {
         KeygenFailureReason,
     >,
     allowing_high_pubkey: bool,
+    latest_ceremony_id: CeremonyId,
     logger: slog::Logger,
 }
 
@@ -54,6 +57,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn new(
         my_account_id: AccountId,
         outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+        latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) -> Self {
         CeremonyManager {
@@ -62,6 +66,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             signing_states: CeremonyStates::new(),
             keygen_states: CeremonyStates::new(),
             allowing_high_pubkey: false,
+            latest_ceremony_id,
             logger: logger.clone(),
         }
     }
@@ -112,6 +117,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>, KeygenFailureReason>,
     ) {
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+
+        // Update the latest_ceremony_id
+        self.latest_ceremony_id = ceremony_id;
 
         let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
@@ -183,6 +191,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
+
+        // Update the latest_ceremony_id
+        self.latest_ceremony_id = ceremony_id;
 
         // Check that the number of signers is enough
         let minimum_signers_needed = key_info.params.threshold + 1;
@@ -272,6 +283,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
+                self.latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "keygen")),
@@ -283,6 +295,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
+                self.latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "signing")),
@@ -410,13 +423,31 @@ where
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: CeremonyData,
+        latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
 
         // Only stage 1 messages can create unauthorised ceremonies
         let state = if data.is_first_stage() {
-            self.get_state_or_create_unauthorized(ceremony_id, logger)
+            match self.inner.entry(ceremony_id) {
+                Entry::Vacant(entry) => {
+                    // Only a valid ceremony id (within the ceremony id window) can create unauthorised ceremonies
+                    if ceremony_id > latest_ceremony_id
+                        && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
+                    {
+                        entry.insert(StateRunner::new_unauthorised(ceremony_id, logger))
+                    } else {
+                        slog::debug!(
+                            logger,
+                            "Ignoring data: initial stage data with invalid ceremony id {}",
+                            ceremony_id
+                        );
+                        return;
+                    }
+                }
+                Entry::Occupied(entry) => entry.into_mut(),
+            }
         } else {
             match self.inner.get_mut(&ceremony_id) {
                 Some(state) => {

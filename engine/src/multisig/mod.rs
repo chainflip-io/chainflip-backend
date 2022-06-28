@@ -12,6 +12,7 @@ pub use crypto::{eth, Rng};
 #[cfg(test)]
 mod tests;
 
+use pallet_cf_threshold_signature::CeremonyId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
@@ -53,6 +54,7 @@ pub fn start_client<C>(
     key_store: KeyStore<C>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+    latest_ceremony_id: CeremonyId,
     logger: &slog::Logger,
 ) -> (
     Arc<MultisigClient<C>>,
@@ -81,8 +83,12 @@ where
     let multisig_client_backend_future = {
         use crate::multisig::client::ceremony_manager::CeremonyManager;
 
-        let mut ceremony_manager =
-            CeremonyManager::<C>::new(my_account_id, outgoing_p2p_message_sender, &logger);
+        let mut ceremony_manager = CeremonyManager::<C>::new(
+            my_account_id,
+            outgoing_p2p_message_sender,
+            latest_ceremony_id,
+            &logger,
+        );
 
         async move {
             // Stream outputs () approximately every ten seconds

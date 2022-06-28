@@ -94,7 +94,7 @@ pub fn new_node(account_id: AccountId, allow_high_pubkey: bool) -> Node {
         tokio::sync::mpsc::unbounded_channel();
 
     let mut ceremony_manager =
-        CeremonyManager::new(account_id, outgoing_p2p_message_sender, &logger);
+        CeremonyManager::new(account_id, outgoing_p2p_message_sender, 0, &logger);
     if allow_high_pubkey {
         ceremony_manager.allow_high_pubkey();
     }

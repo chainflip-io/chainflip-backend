@@ -2,6 +2,10 @@ use std::time::Duration;
 
 pub use state_chain_runtime::constants::common::eth::BLOCK_SAFETY_MARGIN as ETH_BLOCK_SAFETY_MARGIN;
 
+/// The number of ceremonies ahead of the latest authorized ceremony that
+/// are allowed to create unauthorized ceremonies (delayed messages)
+pub const CEREMONY_ID_WINDOW: u64 = 6000;
+
 // ======= State chain client =======
 
 /// Number of times to retry after incrementing the nonce on a nonce error
