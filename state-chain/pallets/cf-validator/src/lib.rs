@@ -241,7 +241,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
-			log::debug!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
+			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
 
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
