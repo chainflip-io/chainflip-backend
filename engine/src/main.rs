@@ -185,9 +185,9 @@ fn main() -> anyhow::Result<()> {
                     &root_logger,
                 )
             );
-            scope.spawn(async move {
-                eth_multisig_client_backend_future.await;
-                Ok(()) // TODO Handle errors/panics from backend
+            // TODO Handle errors/panics from backend
+            tokio::task::spawn_blocking(move || {
+                tokio::runtime::Handle::current().block_on(eth_multisig_client_backend_future)
             });
 
             // Start eth observers
@@ -238,7 +238,6 @@ fn main() -> anyhow::Result<()> {
                 sc_observer_future.await;
                 Ok(()) // TODO Handle errors/panics from sc_observer
             });
-
 
             Ok(())
         }.boxed()
