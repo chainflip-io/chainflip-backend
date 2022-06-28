@@ -169,6 +169,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type OffenceReporter = Reputation;
 	type ReputationResetter = Reputation;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 }
 
 impl pallet_cf_environment::Config for Runtime {

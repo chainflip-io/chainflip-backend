@@ -20,11 +20,11 @@ mod rotation_status;
 
 pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bonding,
-	Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, EmergencyRotation,
-	EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch,
-	MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo,
-	VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BidderProvider,
+	Bonding, Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore,
+	EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
+	SystemStateInfo, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -163,6 +163,12 @@ pub mod pallet {
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
 
+		/// Used to get the list of bidding nodes in order initialise the backup set post-rotation.
+		type BidderProvider: BidderProvider<
+			ValidatorId = <Self as Chainflip>::ValidatorId,
+			Amount = Self::Amount,
+		>;
+
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
 			ValidatorId = ValidatorIdOf<Self>,
@@ -270,17 +276,7 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(Err(offenders)) => {
 							rotation_status.ban(offenders);
-							if rotation_status.candidate_count() >=
-								AuthoritySetMinSize::<T>::get().into()
-							{
-								Self::start_vault_rotation(rotation_status);
-							} else {
-								log::warn!(
-									target: "cf-validator",
-									"Not enough auction candidates left - aborting rotation."
-								);
-								Self::set_rotation_status(RotationPhase::Idle);
-							}
+							Self::start_vault_rotation(rotation_status);
 						},
 						AsyncResult::Void => {
 							log::error!(target: "cf-validator", "no vault rotation pending");
@@ -892,7 +888,17 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_status.bond,
-			rotation_status.into_backup_triage::<T::ChainflipAccount>(
+			RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
+				T::BidderProvider::get_bidders()
+					.into_iter()
+					.filter_map(|bid| {
+						if !new_authorities.contains(&bid.0) {
+							Some(bid.into())
+						} else {
+							None
+						}
+					})
+					.collect(),
 				Self::backup_set_target_size(
 					new_authorities.len(),
 					BackupNodePercentage::<T>::get(),
@@ -971,6 +977,7 @@ impl<T: Config> Pallet<T> {
 		log::info!(target: "cf-validator", "Starting rotation");
 		match T::Auctioneer::resolve_auction() {
 			Ok(auction_outcome) => {
+				debug_assert!(auction_outcome.winners.len() > 0);
 				log::info!(
 					target: "cf-validator",
 					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
@@ -979,7 +986,7 @@ impl<T: Config> Pallet<T> {
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
 						10u128.pow(18),
 				);
-				Self::start_vault_rotation(RotationStatus::from_auction_outcome::<Self>(
+				Self::start_vault_rotation(RotationStatus::from_auction_outcome::<T>(
 					auction_outcome,
 				));
 			},
@@ -989,14 +996,23 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_vault_rotation(rotation_status: RuntimeRotationStatus<T>) {
-		match T::VaultRotator::start_vault_rotation(rotation_status.authority_candidates()) {
-			Ok(()) => {
-				log::info!(target: "cf-validator", "Vault rotation initiated.");
-				Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
-			},
-			Err(e) => {
-				log::warn!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
-			},
+		let candidates: Vec<_> = rotation_status.authority_candidates();
+		if candidates.len() < AuthoritySetMinSize::<T>::get().into() {
+			log::warn!(
+				target: "cf-validator",
+				"Not enough auction candidates left - aborting rotation."
+			);
+			Self::set_rotation_status(RotationPhase::Idle);
+		} else {
+			match T::VaultRotator::start_vault_rotation(candidates) {
+				Ok(()) => {
+					log::info!(target: "cf-validator", "Vault rotation initiated.");
+					Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
+				},
+				Err(e) => {
+					log::warn!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
+				},
+			}
 		}
 	}
 }
