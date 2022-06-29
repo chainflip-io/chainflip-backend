@@ -6,8 +6,8 @@ use sp_std::cmp::Reverse;
 /// Tracker for backup and passive validators.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct BackupTriage<Id, Amount> {
-	pub backup: Vec<Bid<Id, Amount>>,
-	pub passive: Vec<Bid<Id, Amount>>,
+	backup: Vec<Bid<Id, Amount>>,
+	passive: Vec<Bid<Id, Amount>>,
 	backup_group_size_target: u32,
 }
 
@@ -92,17 +92,15 @@ where
 		Id: IsType<AccountState::AccountId>,
 	{
 		if new_bid_amount.is_zero() {
-			let _ = self
-				.passive
-				.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id))
-				.map(|i| {
-					self.passive.remove(i);
+			let find_and_remove_bidder_from = |bids: &mut Vec<Bid<Id, Amount>>| {
+				bids.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)).map(|i| {
+					bids.remove(i);
 				})
-				.or_else(|_| {
-					self.backup.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)).map(|i| {
-						self.backup.remove(i);
-					})
-				});
+			};
+
+			let _ = find_and_remove_bidder_from(&mut self.passive)
+				.or_else(|_| find_and_remove_bidder_from(&mut self.backup));
+
 			AccountState::set_backup_or_passive(bidder_id.into_ref(), BackupOrPassive::Passive);
 		} else {
 			// Cache these here before we start mutating the sets.
@@ -196,9 +194,11 @@ where
 	}
 
 	fn sort_all_by_validator_id(&mut self) {
-		self.backup.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id));
-		self.passive
-			.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id));
+		let sort = |bids: &mut [Bid<Id, Amount>]| {
+			bids.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id))
+		};
+		sort(&mut self.backup);
+		sort(&mut self.passive);
 	}
 }
 
@@ -212,9 +212,8 @@ impl<T: Config> BackupNodes for Pallet<T> {
 
 #[cfg(test)]
 mod test_backup_triage {
-	use crate::mock::ValidatorId;
-
 	use super::*;
+	use crate::mock::ValidatorId;
 	use cf_traits::mocks::chainflip_account::MockChainflipAccount;
 	use sp_std::collections::btree_set::BTreeSet;
 
