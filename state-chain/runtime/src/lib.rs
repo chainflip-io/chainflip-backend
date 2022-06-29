@@ -1,6 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
+#![feature(iter_zip)]
+#![feature(int_abs_diff)]
 pub mod chainflip;
 pub mod constants;
 mod migrations;
@@ -213,7 +215,7 @@ impl pallet_session::Config for Runtime {
 	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = ConvertInto;
-	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::pallet_session::SubstrateWeight<Runtime>;
 }
 
 impl pallet_session::historical::Config for Runtime {
@@ -480,6 +482,13 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type KeyProvider = EthereumVault;
 }
 
+impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Ethereum;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -508,6 +517,7 @@ construct_runtime!(
 		Reputation: pallet_cf_reputation,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
+		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 	}
 );
 
@@ -574,6 +584,7 @@ mod benches {
 		[pallet_cf_flip, Flip]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_staking, Staking]
+		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
 		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
@@ -583,6 +594,7 @@ mod benches {
 		[pallet_cf_reputation, Reputation]
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
+		[pallet_cf_chain_tracking, EthereumChainTracking]
 	);
 }
 
@@ -847,6 +859,7 @@ impl_runtime_apis! {
 			use frame_benchmarking::{baseline, Benchmarking, BenchmarkList};
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
+			use cf_session_benchmarking::Pallet as SessionBench;
 			use baseline::Pallet as BaselineBench;
 
 			let mut list = Vec::<BenchmarkList>::new();
@@ -865,7 +878,9 @@ impl_runtime_apis! {
 
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
+			use cf_session_benchmarking::Pallet as SessionBench;
 
+			impl cf_session_benchmarking::Config for Runtime {}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 

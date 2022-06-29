@@ -5,7 +5,7 @@ use crate::state_chain::client::StateChainClient;
 use std::sync::Arc;
 
 use crate::{
-    eth::{utils, SignatureAndEvent},
+    eth::{utils, EthRpcApi, SignatureAndEvent},
     state_chain::client::StateChainRpcApi,
 };
 
@@ -93,14 +93,16 @@ impl EthObserver for StakeManager {
         "StakeManager"
     }
 
-    async fn handle_event<RpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
+        _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        EthRpcClient: EthRpcApi + Sync + Send,
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {

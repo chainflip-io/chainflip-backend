@@ -101,7 +101,7 @@ fn generate_dkg_challenge<P: ECPoint>(
 
     let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-    P::Scalar::from_bytes(&x)
+    P::Scalar::from_bytes_mod_order(&x)
 }
 
 /// Generate ZKP (zero-knowledge proof) of `secret`

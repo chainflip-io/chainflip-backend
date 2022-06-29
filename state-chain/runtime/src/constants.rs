@@ -89,4 +89,11 @@ pub mod common {
 	///
 	/// See https://github.com/chainflip-io/chainflip-backend/issues/1629
 	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
+
+	pub mod eth {
+		use cf_chains::{Chain, Ethereum};
+
+		/// Number of blocks to wait until we deem the block to be safe.
+		pub const BLOCK_SAFETY_MARGIN: <Ethereum as Chain>::ChainBlockNumber = 4;
+	}
 }

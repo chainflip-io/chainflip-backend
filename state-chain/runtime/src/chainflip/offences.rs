@@ -16,8 +16,6 @@ pub enum Offence {
 	ParticipateKeygenFailed,
 	/// An invalid transaction was authored.
 	InvalidTransactionAuthored,
-	/// A transaction failed on transmission.
-	TransactionFailedOnTransmission,
 	/// Authority reported they could not sign an ethereum transaction.
 	FailedToSignTransaction,
 	/// An authority missed their authorship slot.
@@ -52,8 +50,6 @@ impl From<pallet_cf_broadcast::PalletOffence> for Offence {
 		match offences {
 			pallet_cf_broadcast::PalletOffence::InvalidTransactionAuthored =>
 				Self::InvalidTransactionAuthored,
-			pallet_cf_broadcast::PalletOffence::TransactionFailedOnTransmission =>
-				Self::TransactionFailedOnTransmission,
 			pallet_cf_broadcast::PalletOffence::FailedToSignTransaction =>
 				Self::FailedToSignTransaction,
 		}

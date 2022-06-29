@@ -1,4 +1,3 @@
-#![cfg_attr(not(feature = "std"), no_std)]
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
 	/// Returns a value suitable for running against benchmarks.

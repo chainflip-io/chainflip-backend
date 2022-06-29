@@ -5,7 +5,7 @@ use slog::o;
 use tokio::time::Interval;
 use web3::types::U64;
 
-use crate::{common::make_periodic_tick, eth::rpc::EthHttpRpcApi, logging::COMPONENT_KEY};
+use crate::{common::make_periodic_tick, logging::COMPONENT_KEY};
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -20,7 +20,7 @@ pub async fn safe_polling_http_head_stream<HttpRpc>(
     logger: &slog::Logger,
 ) -> impl Stream<Item = EthNumberBloom>
 where
-    HttpRpc: EthHttpRpcApi + EthRpcApi,
+    HttpRpc: EthRpcApi,
 {
     struct StreamState<HttpRpc> {
         option_last_block_yielded: Option<U64>,
@@ -48,7 +48,7 @@ where
                 logger,
             } = &mut state;
 
-            async fn get_unsafe_block_number<HttpRpc: EthHttpRpcApi + EthRpcApi>(
+            async fn get_unsafe_block_number<HttpRpc: EthRpcApi>(
                 eth_http_rpc: &HttpRpc,
                 poll_interval: &mut Interval,
                 logger: &slog::Logger,

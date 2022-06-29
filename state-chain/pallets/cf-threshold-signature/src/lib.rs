@@ -56,6 +56,7 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
+#[cfg(feature = "std")]
 const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
 
 #[frame_support::pallet]

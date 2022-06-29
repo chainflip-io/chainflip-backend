@@ -14,7 +14,9 @@ use super::CeremonyFailureReason;
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result, FailureReason> {
     /// Ceremony proceeds to the next stage
-    NextStage(Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason>>),
+    NextStage(
+        Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason> + Send>,
+    ),
     /// Ceremony aborted (contains parties to report)
     Error(
         BTreeSet<AuthorityCount>,
@@ -84,4 +86,9 @@ impl CeremonyCommon {
     pub fn is_idx_valid(&self, idx: AuthorityCount) -> bool {
         self.all_idxs.contains(&idx)
     }
+}
+
+pub trait PreProcessStageDataCheck {
+    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool;
+    fn is_first_stage(&self) -> bool;
 }

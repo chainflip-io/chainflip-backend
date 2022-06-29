@@ -3,17 +3,34 @@ mod helpers;
 pub mod curve25519_ristretto;
 pub mod eth;
 pub mod polkadot;
-pub mod secp255k1;
+pub mod secp256k1;
 
 use generic_array::{typenum::Unsigned, ArrayLength};
 
-pub use curv::{arithmetic::traits::Converter as BigIntConverter, BigInt};
 use zeroize::{DefaultIsZeroes, ZeroizeOnDrop};
 
 use std::fmt::Debug;
 
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
+
+/// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
+pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
+
+/// Used as a unique identifier when serializing/deserializing chain specific data.
+/// The values are explicitly given and should never be changed.
+#[repr(u16)]
+#[derive(Clone, Copy)]
+pub enum ChainTag {
+    Ethereum = 0x0000,
+    Polkadot = 0x0001,
+}
+
+impl ChainTag {
+    pub fn to_bytes(self) -> [u8; CHAIN_TAG_SIZE] {
+        (self as u16).to_be_bytes()
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeyShare<P: ECPoint> {
@@ -61,6 +78,10 @@ pub trait ECPoint:
     }
 
     // Only relevant for ETH contract keys
+    // TODO: this is a property of a signing scheme
+    // rather than the underlying curve, so this
+    // should be moved to `CryptoScheme` before we
+    // add Bitcoin or any other secp256k1 scheme
     fn is_compatible(&self) -> bool {
         true
     }
@@ -76,6 +97,13 @@ pub trait CryptoScheme: 'static {
         + for<'de> serde::Deserialize<'de>
         + Sync
         + Send;
+
+    /// Friendly name of the scheme used for logging
+    const NAME: &'static str;
+
+    /// A unique tag used to identify the chain.
+    /// Used in both p2p and database storage.
+    const CHAIN_TAG: ChainTag;
 
     fn build_signature(
         z: <Self::Point as ECPoint>::Scalar,
@@ -117,7 +145,7 @@ pub trait ECScalar:
 {
     fn random(rng: &mut Rng) -> Self;
 
-    fn from_bytes(x: &[u8; 32]) -> Self;
+    fn from_bytes_mod_order(x: &[u8; 32]) -> Self;
 
     fn zero() -> Self;
 

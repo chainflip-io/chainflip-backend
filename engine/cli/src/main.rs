@@ -19,7 +19,8 @@ use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
 
 mod settings;
@@ -66,6 +67,7 @@ async fn run_cli() -> Result<()> {
         Retire {} => retire_account(&cli_settings, &logger).await,
         Activate {} => activate_account(&cli_settings, &logger).await,
         Query { block_hash } => request_block(block_hash, &cli_settings).await,
+        VanityName { name } => set_vanity_name(name, &cli_settings, &logger).await,
     }
 }
 
@@ -306,6 +308,33 @@ async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Resu
         .await
         .expect("Could not activate account");
     println!("Account activated at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+async fn set_vanity_name(
+    name: String,
+    settings: &CLISettings,
+    logger: &slog::Logger,
+) -> Result<()> {
+    if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
+        return Err(anyhow!(
+            "Name too long. Max length is {} characters.",
+            MAX_LENGTH_FOR_VANITY_NAME,
+        ));
+    }
+
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
+    let tx_hash = state_chain_client
+        .submit_signed_extrinsic(
+            pallet_cf_validator::Call::set_vanity_name {
+                name: name.as_bytes().to_vec(),
+            },
+            logger,
+        )
+        .await
+        .expect("Could not set vanity name for your account");
+    println!("Vanity name set at tx {:#x}.", tx_hash);
     Ok(())
 }
 

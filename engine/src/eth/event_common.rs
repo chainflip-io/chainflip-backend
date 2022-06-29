@@ -71,13 +71,13 @@ mod tests {
 
     use sp_core::H160;
 
-    use crate::eth::{key_manager::KeyManager, rpc::mocks::MockEthHttpRpcClient, EthObserver};
+    use crate::eth::{key_manager::KeyManager, EthObserver};
 
     use super::*;
 
     #[tokio::test]
     async fn common_event_info_decoded_correctly() {
-        let key_manager = KeyManager::new(H160::default(), MockEthHttpRpcClient::new()).unwrap();
+        let key_manager = KeyManager::new(H160::default()).unwrap();
 
         let transaction_hash =
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")

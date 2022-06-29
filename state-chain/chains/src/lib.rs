@@ -1,14 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use crate::benchmarking_value::BenchmarkValue;
-use codec::{FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	Parameter,
+	Parameter, RuntimeDebug,
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::{One, Saturating};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Saturating};
+use sp_std::{
+	convert::{Into, TryFrom},
+	fmt::Debug,
+	prelude::*,
+};
 
 pub mod benchmarking_value;
 
@@ -22,10 +26,9 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ MaybeSerializeDeserialize
-		+ Default
-		+ One
-		+ Saturating
-		+ From<u64>;
+		+ AtLeast32BitUnsigned
+		+ From<u64>
+		+ MaxEncodedLen;
 
 	type ChainAmount: Member
 		+ Parameter
@@ -34,7 +37,16 @@ pub trait Chain: Member + Parameter {
 		+ Into<u128>
 		+ From<u128>
 		+ Saturating
-		+ FullCodec;
+		+ FullCodec
+		+ MaxEncodedLen;
+
+	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+}
+
+/// Measures the age of items associated with the Chain.
+pub trait Age<C: Chain> {
+	/// The creation block of this item.
+	fn birth_block(&self) -> C::ChainBlockNumber;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -85,7 +97,10 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter + MaxEncodedLen {
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
 	/// The call, encoded as a vector of bytes using the chain's native encoding.
-	fn encoded(&self) -> Vec<u8>;
+	fn abi_encoded(&self) -> Vec<u8>;
+
+	/// Checks we have updated the sig data to non-default values
+	fn is_signed(&self) -> bool;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -129,29 +144,13 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
-macro_rules! impl_chains {
-	( $( $chain:ident { type ChainBlockNumber = $chain_block_number:ty; type ChainAmount = $chain_amount:ty; }, ),+ $(,)? ) => {
-		use codec::{Decode, Encode};
-		use sp_runtime::RuntimeDebug;
+#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct Ethereum;
 
-		$(
-			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-			pub struct $chain;
-
-			impl Chain for $chain {
-				type ChainBlockNumber = $chain_block_number;
-				type ChainAmount = $chain_amount;
-			}
-		)+
-	};
-}
-
-impl_chains! {
-	Ethereum {
-		type ChainBlockNumber = u64;
-		// TODO: Review the choice of u128 for the ChainAmount.
-		type ChainAmount = u128;
-	},
+impl Chain for Ethereum {
+	type ChainBlockNumber = u64;
+	type ChainAmount = u128;
+	type TrackedData = eth::TrackedData<Self>;
 }
 
 impl ChainCrypto for Ethereum {
@@ -177,12 +176,32 @@ pub mod mocks {
 
 	use crate::{eth::api::EthereumReplayProtection, *};
 
+	#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct MockEthereum;
+
 	// Chain implementation used for testing.
-	impl_chains! {
-		MockEthereum {
-			type ChainBlockNumber = u64;
-			type ChainAmount = u128;
-		},
+	impl Chain for MockEthereum {
+		type ChainBlockNumber = u64;
+		type ChainAmount = u128;
+		type TrackedData = MockTrackedData;
+	}
+
+	#[derive(
+		Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+	)]
+	pub struct MockTrackedData(pub u64);
+
+	impl Age<MockEthereum> for MockTrackedData {
+		fn birth_block(&self) -> u64 {
+			self.0
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	impl BenchmarkValue for MockTrackedData {
+		fn benchmark_value() -> Self {
+			Self(1_000)
+		}
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
@@ -304,8 +323,12 @@ pub mod mocks {
 			Self(self.0, Some(threshold_signature.clone()))
 		}
 
-		fn encoded(&self) -> Vec<u8> {
+		fn abi_encoded(&self) -> Vec<u8> {
 			self.encode()
+		}
+
+		fn is_signed(&self) -> bool {
+			self.1.is_some()
 		}
 	}
 

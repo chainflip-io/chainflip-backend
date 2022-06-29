@@ -1,37 +1,37 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::multisig::{crypto::ECPoint, db::persistent::PersistentKeyDB, KeyId};
+use crate::multisig::{crypto::CryptoScheme, db::persistent::PersistentKeyDB, KeyId};
 
 use super::KeygenResultInfo;
 
 // Successfully generated multisig keys live here
-pub struct KeyStore<P>
+pub struct KeyStore<C>
 where
-    P: ECPoint,
+    C: CryptoScheme,
 {
-    keys: HashMap<KeyId, KeygenResultInfo<P>>,
-    db: PersistentKeyDB<P>,
+    keys: HashMap<KeyId, KeygenResultInfo<C::Point>>,
+    db: Arc<PersistentKeyDB>,
 }
 
-impl<P> KeyStore<P>
+impl<C> KeyStore<C>
 where
-    P: ECPoint,
+    C: CryptoScheme,
 {
     /// Load the keys from persistent memory and put them into a new keystore
-    pub fn new(db: PersistentKeyDB<P>) -> Self {
-        let keys = db.load_keys();
+    pub fn new(db: Arc<PersistentKeyDB>) -> Self {
+        let keys = db.load_keys::<C>();
 
         KeyStore { keys, db }
     }
 
     /// Get the key for the given key id
-    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo<P>> {
+    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo<C::Point>> {
         self.keys.get(key_id)
     }
 
     /// Save or update the key data and write it to persistent memory
-    pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<P>) {
-        self.db.update_key(&key_id, &key);
+    pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C::Point>) {
+        self.db.update_key::<C>(&key_id, &key);
         self.keys.insert(key_id, key);
     }
 }

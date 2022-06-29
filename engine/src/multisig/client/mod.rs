@@ -1,7 +1,7 @@
 #[macro_use]
 mod utils;
 mod common;
-mod key_store;
+pub mod key_store;
 pub mod keygen;
 pub mod signing;
 mod state_runner;
@@ -49,7 +49,7 @@ pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
 
 use super::{
     crypto::{CryptoScheme, ECPoint},
-    MessageHash, PersistentKeyDB, Rng,
+    MessageHash, Rng,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -187,7 +187,7 @@ pub struct MultisigClient<C: CryptoScheme> {
     my_account_id: AccountId,
     keygen_request_sender: KeygenRequestSender<C::Point>,
     signing_request_sender: SigningRequestSender<C>,
-    key_store: std::sync::Mutex<KeyStore<C::Point>>,
+    key_store: std::sync::Mutex<KeyStore<C>>,
     logger: slog::Logger,
 }
 
@@ -202,14 +202,14 @@ where
 {
     pub fn new(
         my_account_id: AccountId,
-        db: PersistentKeyDB<C::Point>,
+        key_store: KeyStore<C>,
         keygen_request_sender: KeygenRequestSender<C::Point>,
         signing_request_sender: SigningRequestSender<C>,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
             my_account_id,
-            key_store: std::sync::Mutex::new(KeyStore::new(db)),
+            key_store: std::sync::Mutex::new(key_store),
             keygen_request_sender,
             signing_request_sender,
             logger: logger.clone(),
@@ -239,7 +239,7 @@ where
         slog::info!(
             self.logger,
             "Received a keygen request";
-            "participants" => format!("{}",format_iterator(&participants)),
+            "participants" => format_iterator(&participants).to_string(),
             CEREMONY_ID_KEY => ceremony_id
         );
 
@@ -313,8 +313,8 @@ where
         slog::debug!(
             self.logger,
             "Received a request to sign";
-            "message_hash" => format!("{}",data),
-            "signers" => format!("{}",format_iterator(&signers)),
+            "message_hash" => data.to_string(),
+            "signers" => format_iterator(&signers).to_string(),
             CEREMONY_ID_KEY => ceremony_id
         );
 

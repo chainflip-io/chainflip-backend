@@ -26,7 +26,7 @@ pub use client::{MultisigClient, MultisigMessage};
 
 pub use db::PersistentKeyDB;
 
-use self::crypto::CryptoScheme;
+use self::{client::key_store::KeyStore, crypto::CryptoScheme};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
@@ -50,11 +50,14 @@ impl std::fmt::Display for KeyId {
 /// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<C>(
     my_account_id: AccountId,
-    db: PersistentKeyDB<C::Point>,
+    key_store: KeyStore<C>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     logger: &slog::Logger,
-) -> (Arc<MultisigClient<C>>, impl futures::Future)
+) -> (
+    Arc<MultisigClient<C>>,
+    impl futures::Future<Output = ()> + Send,
+)
 where
     C: CryptoScheme,
 {
@@ -69,7 +72,7 @@ where
 
     let multisig_client = Arc::new(MultisigClient::new(
         my_account_id.clone(),
-        db,
+        key_store,
         keygen_request_sender,
         signing_request_sender,
         &logger,
@@ -109,7 +112,7 @@ where
                     }
                     _ = check_timeouts_tick.tick() => {
                         slog::trace!(logger, "Checking for expired multisig states");
-                        ceremony_manager.check_timeouts();
+                        ceremony_manager.check_all_timeouts();
                     }
                 }
             }

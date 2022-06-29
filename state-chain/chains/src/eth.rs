@@ -4,6 +4,7 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -22,7 +23,6 @@ use sp_runtime::{
 };
 use sp_std::{
 	convert::{TryFrom, TryInto},
-	prelude::*,
 	str, vec,
 };
 
@@ -37,6 +37,22 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 //--------------------------//
 pub trait Tokenizable {
 	fn tokenize(self) -> Token;
+}
+
+#[derive(
+	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+#[codec(mel_bound())]
+pub struct TrackedData<C: Chain> {
+	pub block_height: C::ChainBlockNumber,
+	pub base_fee: C::ChainAmount,
+	pub priority_fee: C::ChainAmount,
+}
+
+impl<C: Chain> Age<C> for TrackedData<C> {
+	fn birth_block(&self) -> <C as Chain>::ChainBlockNumber {
+		self.block_height
+	}
 }
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.
@@ -105,6 +121,10 @@ impl SigData {
 			s: self.sig.into(),
 			k_times_g_address: self.k_times_g_address.into(),
 		}
+	}
+
+	pub fn is_signed(&self) -> bool {
+		self.sig != Default::default() && self.k_times_g_address != Default::default()
 	}
 }
 

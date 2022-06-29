@@ -1,5 +1,5 @@
-use super::curve25519_ristretto::Point;
 use super::CryptoScheme;
+use super::{curve25519_ristretto::Point, ChainTag};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -35,8 +35,10 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 
 impl CryptoScheme for PolkadotSigning {
     type Point = Point;
-
     type Signature = PolkadotSignature;
+
+    const NAME: &'static str = "Polkadot";
+    const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
 
     fn build_signature(
         z: <Self::Point as super::ECPoint>::Scalar,
