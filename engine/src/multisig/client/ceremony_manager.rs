@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Display;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use crate::constants::CEREMONY_ID_WINDOW;
@@ -49,7 +50,7 @@ pub struct CeremonyManager<C: CryptoScheme> {
         KeygenFailureReason,
     >,
     allowing_high_pubkey: bool,
-    latest_ceremony_id: CeremonyId,
+    latest_ceremony_id: Arc<AtomicU64>,
     logger: slog::Logger,
 }
 
@@ -57,7 +58,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn new(
         my_account_id: AccountId,
         outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-        latest_ceremony_id: CeremonyId,
+        latest_ceremony_id: Arc<AtomicU64>,
         logger: &slog::Logger,
     ) -> Self {
         CeremonyManager {
@@ -117,9 +118,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>, KeygenFailureReason>,
     ) {
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
-
-        // Update the latest_ceremony_id
-        self.latest_ceremony_id = ceremony_id;
 
         let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
@@ -191,9 +189,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
-
-        // Update the latest_ceremony_id
-        self.latest_ceremony_id = ceremony_id;
 
         // Check that the number of signers is enough
         let minimum_signers_needed = key_info.params.threshold + 1;
@@ -275,6 +270,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         sender_id: AccountId,
         message: MultisigMessage<C::Point>,
     ) {
+        let latest_ceremony_id = self
+            .latest_ceremony_id
+            .load(std::sync::atomic::Ordering::SeqCst);
+
         match message {
             MultisigMessage {
                 ceremony_id,
@@ -283,7 +282,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
-                self.latest_ceremony_id,
+                latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "keygen")),
@@ -295,7 +294,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
-                self.latest_ceremony_id,
+                latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "signing")),
@@ -432,7 +431,7 @@ where
         let state = if data.is_first_stage() {
             match self.inner.entry(ceremony_id) {
                 Entry::Vacant(entry) => {
-                    // Only a valid ceremony id (within the ceremony id window) can create unauthorised ceremonies
+                    // Only a ceremony id that is within the ceremony id window can create unauthorised ceremonies
                     if ceremony_id > latest_ceremony_id
                         && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
                     {
@@ -440,7 +439,7 @@ where
                     } else {
                         slog::debug!(
                             logger,
-                            "Ignoring data: initial stage data with invalid ceremony id {}",
+                            "Ignoring data: initial stage data with unexpected ceremony id {}",
                             ceremony_id
                         );
                         return;

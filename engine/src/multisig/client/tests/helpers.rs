@@ -3,6 +3,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     fmt::Display,
     pin::Pin,
+    sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
 
@@ -93,8 +94,12 @@ pub fn new_node(account_id: AccountId, allow_high_pubkey: bool) -> Node {
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let mut ceremony_manager =
-        CeremonyManager::new(account_id, outgoing_p2p_message_sender, 0, &logger);
+    let mut ceremony_manager = CeremonyManager::new(
+        account_id,
+        outgoing_p2p_message_sender,
+        Arc::new(AtomicU64::new(0)), // Start latest_ceremony_id at 0 for tests
+        &logger,
+    );
     if allow_high_pubkey {
         ceremony_manager.allow_high_pubkey();
     }

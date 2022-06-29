@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU64, Arc};
 
 use cf_chains::{
     eth::{AggKey, UnsignedTransaction},
@@ -142,6 +142,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;
@@ -193,6 +194,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;
@@ -244,6 +246,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;
@@ -359,6 +362,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;
@@ -485,6 +489,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;
@@ -605,6 +610,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;
@@ -727,6 +733,7 @@ async fn only_encodes_and_signs_when_specified() {
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;
@@ -770,6 +777,7 @@ async fn run_the_sc_observer() {
         account_peer_mapping_change_sender,
         instruction_sender,
         initial_block_hash,
+        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
         &logger,
     )
     .await;

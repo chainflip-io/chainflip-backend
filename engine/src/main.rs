@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU64, Arc};
 
 use chainflip_engine::{
     eth::{
@@ -163,12 +163,12 @@ async fn main() {
 
     use crate::multisig::eth::EthSigning;
 
-    let latest_ceremony_id = state_chain_client
+    let latest_ceremony_id = Arc::new(AtomicU64::new(state_chain_client
         .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
             latest_block_hash,
         )
         .await
-        .expect("Should get CeremonyIdCounter from SC");
+        .expect("Should get CeremonyIdCounter from SC")));
 
     let (eth_multisig_client, eth_multisig_client_backend_future) =
         multisig::start_client::<EthSigning>(
@@ -176,7 +176,7 @@ async fn main() {
             KeyStore::new(db),
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
-            latest_ceremony_id,
+            latest_ceremony_id.clone(),
             &root_logger,
         );
 
@@ -207,6 +207,7 @@ async fn main() {
             account_peer_mapping_change_sender,
             witnessing_instruction_sender,
             latest_block_hash,
+            latest_ceremony_id,
             &root_logger
         ),
         // Start eth observers

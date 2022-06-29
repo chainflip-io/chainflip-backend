@@ -12,12 +12,14 @@ pub use crypto::{eth, Rng};
 #[cfg(test)]
 mod tests;
 
-use pallet_cf_threshold_signature::CeremonyId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
+};
 
 use crate::{common, logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
 use slog::o;
@@ -54,7 +56,7 @@ pub fn start_client<C>(
     key_store: KeyStore<C>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    latest_ceremony_id: CeremonyId,
+    latest_ceremony_id: Arc<AtomicU64>,
     logger: &slog::Logger,
 ) -> (
     Arc<MultisigClient<C>>,
