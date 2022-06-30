@@ -383,6 +383,31 @@ pub enum ChainflipAccountState {
 	BackupOrPassive(BackupOrPassive),
 }
 
+impl ChainflipAccountState {
+	pub fn is_authority(&self) -> bool {
+		match self {
+			ChainflipAccountState::CurrentAuthority => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_backup(&self) -> bool {
+		match self {
+			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup) |
+			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup) => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_passive(&self) -> bool {
+		match self {
+			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive) |
+			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive) => true,
+			_ => false,
+		}
+	}
+}
+
 // TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -426,6 +451,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	}
 
 	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
+		log::debug!("Setting {:?} to {:?}", account_id, state);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
 			ChainflipAccountState::CurrentAuthority => {
 				log::warn!("Attempted to set backup or passive on a current authority account");
@@ -442,6 +468,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 
 	/// Set the last epoch number and set the account state to Validator
 	fn set_current_authority(account_id: &Self::AccountId) {
+		log::debug!("Setting current authority {:?}", account_id);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = ChainflipAccountState::CurrentAuthority;
 		})

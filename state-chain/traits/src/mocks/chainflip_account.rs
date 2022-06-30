@@ -4,6 +4,10 @@ thread_local! {
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
 }
 
+/// An implementation of ChainflipAccount that stores data in a thread-local variable. Useful
+/// for running tests outside of an externalities environment.
+///
+/// If running inside an externalities environment, use [cf_traits::ChainflipAccountStore] instead.
 pub struct MockChainflipAccount;
 
 impl MockChainflipAccount {

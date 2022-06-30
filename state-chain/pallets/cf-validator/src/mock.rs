@@ -2,10 +2,9 @@ use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::{
 	mocks::{
-		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, qualify_node::QualifyAll,
-		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
-		vault_rotation::MockVaultRotator,
+		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
+		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
+		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
 	BackupNodes, Chainflip, ChainflipAccountData, IsOnline, QualifyNode, RuntimeAuctionOutcome,
 };
@@ -248,7 +247,7 @@ impl Config for Test {
 	type ValidatorWeightInfo = ();
 	type Auctioneer = MockAuctioneer;
 	type VaultRotator = MockVaultRotator;
-	type ChainflipAccount = MockChainflipAccount;
+	type ChainflipAccount = ChainflipAccountStore<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
@@ -284,7 +283,37 @@ macro_rules! assert_invariants {
 		assert!(
 			current_authorities.is_disjoint(&current_backups),
 			"Backup nodes and validators should not overlap",
-		)
+		);
+		assert!(
+			ValidatorPallet::current_authorities()
+				.iter()
+				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_authority()),
+			"All authorities should have their account state set accordingly. Got: {:?}",
+			ValidatorPallet::current_authorities()
+				.iter()
+				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
+				.collect::<Vec<_>>(),
+		);
+		assert!(
+			ValidatorPallet::backup_nodes()
+				.iter()
+				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_backup()),
+			"All backup nodes should have their account state set accordingly. Got: {:?}",
+			ValidatorPallet::backup_nodes()
+				.iter()
+				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
+				.collect::<Vec<_>>(),
+		);
+		assert!(
+			BackupValidatorTriage::<Test>::get()
+				.passive_nodes()
+				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_passive()),
+			"All passive nodes should have their account state set accordingly. Got: {:?}",
+			BackupValidatorTriage::<Test>::get()
+				.passive_nodes()
+				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
+				.collect::<Vec<_>>(),
+		);
 	};
 }
 
@@ -293,8 +322,11 @@ impl TestExternalitiesWithCheck {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
 			QualifyAll::<u64>::except(UNQUALIFIED_NODE);
+			log::debug!("Pre-test invariant check.");
 			assert_invariants!();
+			log::debug!("Pre-test invariant check passed.");
 			let r = execute();
+			log::debug!("Post-test invariant check.");
 			assert_invariants!();
 			r
 		})
@@ -318,6 +350,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 		.env()
 		.init();
 
+	log::debug!("Initializing test GenesisConfig.");
 	let config = GenesisConfig {
 		system: SystemConfig::default(),
 		session: SessionConfig {
