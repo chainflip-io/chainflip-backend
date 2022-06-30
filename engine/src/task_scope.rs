@@ -358,7 +358,7 @@ mod tests {
                 }))
                 .map(|result| result.unwrap_err()); // with_main_task_scope should either panic or error
 
-            // These aren't neccesarily equal to COUNT as tokio is allowed to not start
+            // These aren't necessarily equal to COUNT as tokio is allowed to not start
             // spawned tasks if they have been cancelled before starting
             assert_eq!(
                 task_start_count.load(Ordering::Relaxed),
