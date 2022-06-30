@@ -10,8 +10,9 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 
-/// Allows a parent closure/future to spawn child tasks, such that if the pa
-/// Note: This funtion is unsafe as if the function is called with TASKS_HAVE_STATIC_LIFETIMES=false
+/// Allows a parent closure/future to spawn child tasks, such that if the parent or child fail, they
+/// will all be cancelled, and the panic/Error will be propagated by this function.
+/// Note: This function is unsafe as if the function is called with TASKS_HAVE_STATIC_LIFETIMES=false
 /// and the call to this async function is "cancelled" it may cause spawned tasks to do invalid memory accesses
 async unsafe fn inner_with_task_scope<
     'env,
@@ -173,9 +174,9 @@ impl<T> FusedStream for ScopeResultStream<T> {
 macro_rules! impl_spawn_ops {
     ($env_lifetime:lifetime, $stat:literal, $task_lifetime:lifetime) => {
         impl<$env_lifetime, T: 'static + Send> Scope<$env_lifetime, T, $stat> {
-            /// The returned handle should only ever be await'ed on inside of the task scope
-            /// this spawn is associated with, or any sub-task scopes. Otherwise the await
-            /// will never complete in the Error case.
+            // The returned handle should only ever be awaited on inside of the task scope
+            // this spawn is associated with, or any sub-task scopes. Otherwise the await
+            // will never complete in the Error case.
             fn spawn_with_custom_error_handling<
                 R,
                 V: 'static + Send,
@@ -205,7 +206,7 @@ macro_rules! impl_spawn_ops {
         }
 
         impl<$env_lifetime> Scope<$env_lifetime, anyhow::Result<()>, $stat> {
-            /// Spawns a task and gives you a handle to receive the Result::Ok of the task by await
+            /// Spawns a task and gives you a handle to receive the Result::Ok of the task by awaiting
             /// on the returned handle (If the task errors/panics the scope will exit with the error/panic)
             pub fn spawn_with_handle<
                 V: 'static + Send,
@@ -240,7 +241,7 @@ macro_rules! impl_spawn_ops {
 }
 
 /// This function allows a parent task to spawn child tasks such that if any tasks panic or error,
-/// all other tasks will be cancelled.
+/// all other tasks will be cancelled, and the panic or error will be propagated by this function.
 /// It guarantees all tasks spawned using its scope object will finish before this function exits.
 /// Thereby making accessing data outside of this scope from inside this scope via a reference safe.
 /// This is why the closures/futures provided to Scope::spawn don't need static lifetimes.
@@ -315,26 +316,27 @@ mod tests {
 
     async fn wait_forever() {
         let (_sender, receiver) = oneshot::channel::<()>();
-        let _result = receiver.await; // wait forever
+        let _result = receiver.await;
     }
 
     #[test]
-    fn main_task_scope_in_panic_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting() {
-        inner_main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting(|| panic!());
+    fn check_waits_for_tasks_to_end_when_panicking() {
+        inner_check_waits_for_task_to_end(|| panic!());
     }
 
     #[test]
-    fn main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting() {
-        inner_main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting(|| Err(anyhow::Error::msg("")));
+    fn check_waits_for_tasks_to_end_when_error() {
+        inner_check_waits_for_task_to_end(|| Err(anyhow::Error::msg("")));
     }
 
-    fn inner_main_task_scope_in_error_case_will_wait_for_tasks_to_end_or_reach_await_before_exiting<
-        F: Fn() -> anyhow::Result<()> + Send + Sync + 'static,
-    >(
+    fn inner_check_waits_for_task_to_end<F: Fn() -> anyhow::Result<()> + Send + Sync + 'static>(
         error: F,
     ) {
+        // Do this a few times as tokio's scheduling of tasks is not deterministic
+        // It is not possible to guarantee a spawned task has started
         for _i in 0..100 {
-            // Do this a few times as tokio's scheduling of tasks is not deterministic
+            const COUNT: u32 = 10;
+
             let task_end_count = std::sync::atomic::AtomicU32::new(0);
             let task_start_count = std::sync::atomic::AtomicU32::new(0);
 
@@ -342,7 +344,7 @@ mod tests {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> anyhow::Result<()> {
                     with_main_task_scope(|scope| {
                         async {
-                            for _i in 0..10 {
+                            for _i in 0..COUNT {
                                 scope.spawn(async {
                                     task_start_count.fetch_add(1, Ordering::Relaxed);
                                     std::thread::sleep(std::time::Duration::from_millis(10));
@@ -391,7 +393,7 @@ mod tests {
                     scope.spawn_with_handle::<(), _>(async { Err(anyhow::Error::msg("")) });
 
                 handle.await;
-                panic!()
+                unreachable!()
             }
             .boxed()
         })
