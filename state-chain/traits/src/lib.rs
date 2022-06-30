@@ -385,26 +385,23 @@ pub enum ChainflipAccountState {
 
 impl ChainflipAccountState {
 	pub fn is_authority(&self) -> bool {
-		match self {
-			ChainflipAccountState::CurrentAuthority => true,
-			_ => false,
-		}
+		matches!(self, ChainflipAccountState::CurrentAuthority)
 	}
 
 	pub fn is_backup(&self) -> bool {
-		match self {
+		matches!(
+			self,
 			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup) |
-			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup) => true,
-			_ => false,
-		}
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
+		)
 	}
 
 	pub fn is_passive(&self) -> bool {
-		match self {
+		matches!(
+			self,
 			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive) |
-			ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive) => true,
-			_ => false,
-		}
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
+		)
 	}
 }
 
