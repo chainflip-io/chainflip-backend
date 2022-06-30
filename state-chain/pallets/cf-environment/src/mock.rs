@@ -71,8 +71,11 @@ pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
 pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
 
-pub const CFE_SETTINGS: cfe::CfeSettings =
-	cfe::CfeSettings { eth_block_safety_margin: 1, max_ceremony_stage_duration: 1 };
+pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
+	eth_block_safety_margin: 1,
+	max_ceremony_stage_duration: 1,
+	eth_priority_fee_percentile: 50,
+};
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
