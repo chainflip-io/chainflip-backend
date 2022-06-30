@@ -159,19 +159,12 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 /// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct AuctionOutcome<Id, Amount> {
-	/// The auction winners, sorted by in descending order.
+	/// The auction winners, sorted by in descending bid order.
 	pub winners: Vec<Id>,
-	/// The auction losers and their bids, sorted in descending order.
+	/// The auction losers and their bids, sorted in descending bid order.
 	pub losers: Vec<Bid<Id, Amount>>,
 	/// The resulting bond for the next epoch.
 	pub bond: Amount,
-}
-
-impl<T, BidAmount: Copy + AtLeast32BitUnsigned> AuctionOutcome<T, BidAmount> {
-	/// The total collateral locked if this auction outcome is confirmed.
-	pub fn projected_total_collateral(&self) -> BidAmount {
-		self.bond * BidAmount::from(self.winners.len() as u32)
-	}
 }
 
 pub type RuntimeAuctionOutcome<T> =
