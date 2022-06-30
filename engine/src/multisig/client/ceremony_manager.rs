@@ -270,10 +270,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         sender_id: AccountId,
         message: MultisigMessage<C::Point>,
     ) {
-        let latest_ceremony_id = self
-            .latest_ceremony_id
-            .load(std::sync::atomic::Ordering::SeqCst);
-
         match message {
             MultisigMessage {
                 ceremony_id,
@@ -282,7 +278,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
-                latest_ceremony_id,
+                &self.latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "keygen")),
@@ -294,7 +290,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
-                latest_ceremony_id,
+                &self.latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "signing")),
@@ -422,7 +418,7 @@ where
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: CeremonyData,
-        latest_ceremony_id: CeremonyId,
+        latest_ceremony_id: &Arc<AtomicU64>,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
@@ -431,6 +427,9 @@ where
         let state = if data.is_first_stage() {
             match self.inner.entry(ceremony_id) {
                 Entry::Vacant(entry) => {
+                    let latest_ceremony_id =
+                        latest_ceremony_id.load(std::sync::atomic::Ordering::SeqCst);
+
                     // Only a ceremony id that is within the ceremony id window can create unauthorised ceremonies
                     if ceremony_id > latest_ceremony_id
                         && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
