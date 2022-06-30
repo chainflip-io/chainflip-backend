@@ -3,8 +3,9 @@ use crate as pallet_cf_validator;
 use cf_traits::{
 	mocks::{
 		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, reputation_resetter::MockReputationResetter,
-		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
+		epoch_info::MockEpochInfo, qualify_node::QualifyAll,
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
 	},
 	BackupNodes, Chainflip, ChainflipAccountData, IsOnline, QualifyNode, RuntimeAuctionOutcome,
 };
@@ -103,6 +104,8 @@ pub struct MockAuctioneer;
 pub const AUCTION_WINNERS: [ValidatorId; 5] = [0, 1, 2, 3, 4];
 pub const WINNING_BIDS: [Amount; 5] = [120, 120, 110, 105, 100];
 pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
+pub const UNQUALIFIED_NODE: ValidatorId = 8;
+pub const UNQUALIFIED_NODE_BID: Amount = 200;
 pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
 pub const BOND: Amount = 100;
 
@@ -232,6 +235,7 @@ impl BidderProvider for MockBidderProvider {
 			.zip(WINNING_BIDS)
 			.into_iter()
 			.chain(AUCTION_LOSERS.zip(LOSING_BIDS))
+			.chain(sp_std::iter::once((UNQUALIFIED_NODE, UNQUALIFIED_NODE_BID)))
 			.collect()
 	}
 }
@@ -252,6 +256,7 @@ impl Config for Test {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
+	type QualifyBackupNode = QualifyAll<ValidatorId>;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -287,6 +292,7 @@ impl TestExternalitiesWithCheck {
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
+			QualifyAll::<u64>::except(UNQUALIFIED_NODE);
 			assert_invariants!();
 			let r = execute();
 			assert_invariants!();
@@ -297,6 +303,7 @@ impl TestExternalitiesWithCheck {
 	pub fn execute_with_unchecked_invariants<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
+			QualifyAll::<u64>::except(UNQUALIFIED_NODE);
 			execute()
 		})
 	}

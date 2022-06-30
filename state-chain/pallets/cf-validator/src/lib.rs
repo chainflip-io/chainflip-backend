@@ -152,7 +152,7 @@ pub mod pallet {
 		type Auctioneer: Auctioneer<Self>;
 
 		/// The lifecycle of a vault rotation
-		type VaultRotator: VaultRotator<ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For looking up Chainflip Account data.
 		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
@@ -168,6 +168,9 @@ pub mod pallet {
 			ValidatorId = <Self as Chainflip>::ValidatorId,
 			Amount = Self::Amount,
 		>;
+
+		/// Criteria that need to be fulfilled to qualify as a backup node.
+		type QualifyBackupNode: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -867,17 +870,19 @@ impl<T: Config> Pallet<T> {
 		);
 
 		// Update current / historical authority status.
-		let new_authorities = rotation_status.authority_candidates::<BTreeSet<_>>();
-		let old_authorities =
+		let new_authorities_lookup = rotation_status.authority_candidates::<BTreeSet<_>>();
+		let old_authorities_lookup =
 			BTreeSet::<ValidatorIdOf<T>>::from_iter(CurrentAuthorities::<T>::get().into_iter());
-		for outgoing_authority in
-			old_authorities.iter().filter(|authority| !new_authorities.contains(authority))
+		for outgoing_authority in old_authorities_lookup
+			.iter()
+			.filter(|authority| !new_authorities_lookup.contains(authority))
 		{
 			ChainflipAccountStore::<T>::set_historical_authority(outgoing_authority.into_ref());
 		}
 
-		for incoming_authority in
-			new_authorities.iter().filter(|authority| !old_authorities.contains(authority))
+		for incoming_authority in new_authorities_lookup
+			.iter()
+			.filter(|authority| !old_authorities_lookup.contains(authority))
 		{
 			ChainflipAccountStore::<T>::set_current_authority(incoming_authority.into_ref());
 		}
@@ -892,7 +897,9 @@ impl<T: Config> Pallet<T> {
 				T::BidderProvider::get_bidders()
 					.into_iter()
 					.filter_map(|bid| {
-						if !new_authorities.contains(&bid.0) {
+						if !new_authorities_lookup.contains(&bid.0) &&
+							T::QualifyBackupNode::is_qualified(&bid.0)
+						{
 							Some(bid.into())
 						} else {
 							None
@@ -900,7 +907,7 @@ impl<T: Config> Pallet<T> {
 					})
 					.collect(),
 				Self::backup_set_target_size(
-					new_authorities.len(),
+					new_authorities_lookup.len(),
 					BackupNodePercentage::<T>::get(),
 				),
 			),
@@ -1171,9 +1178,10 @@ impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
 		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
 			return
 		}
-
-		BackupValidatorTriage::<T>::mutate(|backup_triage| {
-			backup_triage.adjust_bid::<T::ChainflipAccount>(validator_id.clone(), amount);
-		});
+		if T::QualifyBackupNode::is_qualified(validator_id) {
+			BackupValidatorTriage::<T>::mutate(|backup_triage| {
+				backup_triage.adjust_bid::<T::ChainflipAccount>(validator_id.clone(), amount);
+			});
+		}
 	}
 }

@@ -61,7 +61,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 		}
 	}
 
-	fn authority_candidates_iter(&self) -> impl Iterator<Item = &Id> {
+	pub fn authority_candidates_iter(&self) -> impl Iterator<Item = &Id> {
 		self.primary_candidates
 			.iter()
 			.chain(&self.secondary_candidates)

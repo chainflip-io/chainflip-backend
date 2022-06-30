@@ -956,8 +956,8 @@ mod tests {
 						);
 					}
 
-					// A late staker comes along, they should become a backup node as they have
-					// everything in place
+					// A late staker comes along, they should become a backup node as long as they
+					// are sufficiently staked and have
 					testnet.stake_manager_contract.stake(
 						late_staker.clone(),
 						stake_amount,
@@ -969,7 +969,15 @@ mod tests {
 
 					setup_account_and_peer_mapping(&late_staker);
 					network::Cli::activate_account(&late_staker);
+					// TODO [issue #1849]: We currently need to stake again in order to trigger
+					// an update of the backup node status.
+					testnet.stake_manager_contract.stake(
+						late_staker.clone(),
+						1u128,
+						GENESIS_EPOCH + 1,
+					);
 
+					// Trigger backup triage.
 					testnet.move_forward_blocks(1);
 
 					assert_eq!(

@@ -157,19 +157,20 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
-	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
+	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
 	type VaultRotator = EthereumVault;
-	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
-	type OffenceReporter = Reputation;
-	type ReputationResetter = Reputation;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type QualifyBackupNode = <Self as pallet_cf_auction::Config>::AuctionQualification;
+	type OffenceReporter = Reputation;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type Bonder = Bonder<Runtime>;
+	type ReputationResetter = Reputation;
 }
 
 impl pallet_cf_environment::Config for Runtime {

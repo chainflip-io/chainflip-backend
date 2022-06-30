@@ -36,7 +36,8 @@ macro_rules! assert_default_auction_outcome {
 				AUCTION_WINNERS.len(),
 				BackupNodePercentage::<Test>::get()
 			)]
-				.to_vec()
+				.to_vec(),
+			"backup nodes should be updated and should not include the unqualified node"
 		);
 	};
 }
