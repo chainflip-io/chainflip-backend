@@ -78,9 +78,6 @@ impl From<&PeerId> for PeerIdTransferable {
 }
 
 pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
-	/// Runs concurrently in the background and manages receiving (from the senders in
-	/// "p2p_message_rpc_subscribers") and then actually sending P2PEvents to the Rpc subscribers
-	notification_rpc_subscription_manager: SubscriptionManager,
 	message_sender_spawner: sc_service::SpawnTaskHandle,
 	state: Arc<RwLock<P2PValidatorNetworkNodeState>>,
 	p2p_network_service: Arc<P2PNetworkService>,
@@ -173,26 +170,6 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	/// Disconnect from a authority
 	#[rpc(name = "p2p_remove_peer")]
 	fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64>;
-
-	/// Send a message to authorities returning a HTTP status code
-	#[rpc(name = "p2p_send_message")]
-	fn send_message(&self, peer_ids: Vec<PeerIdTransferable>, message: Vec<u8>) -> Result<u64>;
-
-	/// Subscribe to receive p2p messages
-	#[pubsub(subscription = "cf_p2p_messages", subscribe, name = "cf_p2p_subscribeMessages")]
-	fn subscribe_messages(
-		&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<(PeerIdTransferable, Vec<u8>)>,
-	);
-
-	/// Unsubscribe from receiving p2p messages
-	#[pubsub(subscription = "cf_p2p_messages", unsubscribe, name = "cf_p2p_unsubscribeMessages")]
-	fn unsubscribe_messages(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> Result<bool>;
 }
 
 impl<
@@ -258,7 +235,6 @@ pub fn new_p2p_network_node<
 >(
 	p2p_network_service: Arc<PN>,
 	message_sender_spawner: sc_service::SpawnTaskHandle,
-	subscription_task_executor: impl Spawn + Send + Sync + 'static,
 	retry_send_period: Duration,
 ) -> (RpcRequestHandler<MetaData, PN>, impl futures::Future<Output = ()>) {
 	let state = Arc::new(RwLock::new(P2PValidatorNetworkNodeState::default()));
@@ -355,99 +331,12 @@ pub fn new_p2p_network_node<
 						)))
 					}
 				}
-
-				/// Send message to peer
-				fn send_message(
-					&self,
-					peers: Vec<PeerIdTransferable>,
-					message: Vec<u8>,
-				) -> Result<u64> {
-					let peers = peers
-						.into_iter()
-						.map(PeerIdTransferable::try_into)
-						.collect::<std::result::Result<BTreeSet<_>, _>>()?;
-
-					let state = self.state.read().unwrap();
-					if peers.iter().all(|peer| state.reserved_peers.contains_key(peer)) {
-						for peer_id in peers {
-							let (_, _, message_sender) =
-								state.reserved_peers.get(&peer_id).unwrap();
-							match message_sender.try_send(message.clone()) {
-								Ok(_) => (),
-								Err(TrySendError::Full(_)) => {
-									log::info!("Dropping message for peer {}", peer_id);
-								},
-								Err(_) => panic!(),
-							}
-						}
-						Ok(200)
-					} else {
-						Err(jsonrpc_core::Error::invalid_params(
-							"Request to send message to an unset peer",
-						))
-					}
-				}
-
-				/// Subscribe to receive P2PEvents
-				fn subscribe_messages(
-					&self,
-					_metadata: Self::Metadata,
-					subscriber: Subscriber<(PeerIdTransferable, Vec<u8>)>,
-				) {
-					let (sender, receiver) = unbounded();
-					let subscription_id = self.notification_rpc_subscription_manager.add(
-						subscriber,
-						move |sink| async move {
-							sink.sink_map_err(|e| {
-								log::warn!("Error sending notifications: {:?}", e)
-							})
-							.send_all(
-								&mut receiver.map(Ok::<_, jsonrpc_core::Error>).map(Ok::<_, ()>),
-							)
-							.map(|_| ())
-							.await
-						},
-					);
-					self.state
-						.write()
-						.unwrap()
-						.p2p_message_rpc_subscribers
-						.insert(subscription_id, sender);
-				}
-
-				/// Unsubscribe to stop receiving P2PEvents
-				fn unsubscribe_messages(
-					&self,
-					_metadata: Option<Self::Metadata>,
-					id: SubscriptionId,
-				) -> jsonrpc_core::Result<bool> {
-					Ok(if self.notification_rpc_subscription_manager.cancel(id.clone()) {
-						self.state
-							.write()
-							.unwrap()
-							.p2p_message_rpc_subscribers
-							.remove(&id)
-							.unwrap();
-						true
-					} else {
-						assert!(!self
-							.state
-							.read()
-							.unwrap()
-							.p2p_message_rpc_subscribers
-							.contains_key(&id));
-						false
-					})
-				}
 			}
 
 			RpcRequestHandler {
 				state: state.clone(),
 				p2p_network_service: p2p_network_service.clone(),
 				message_sender_spawner,
-				notification_rpc_subscription_manager: SubscriptionManager::new(Arc::new(
-					subscription_task_executor,
-				)),
 				retry_send_period,
 				_phantom: std::marker::PhantomData::<MetaData>::default(),
 			}
@@ -608,7 +497,6 @@ mod tests {
 		let (rpc_request_handler, p2p_message_handler_future) = new_p2p_network_node(
 			network_expectations.clone(),
 			message_sender_spawn_handle,
-			sc_rpc::testing::TaskExecutor,
 			Duration::from_secs(0),
 		);
 

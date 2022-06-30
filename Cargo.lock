@@ -960,7 +960,7 @@ dependencies = [
  "chrono",
  "clap",
  "config",
- "crossbeam-channel",
+ "crossbeam-channel 0.5.4",
  "csv",
  "curve25519-dalek 2.1.3",
  "custom-rpc",
@@ -977,6 +977,7 @@ dependencies = [
  "generic-array 0.14.5",
  "hex",
  "httparse",
+ "ipc-channel",
  "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -1380,6 +1381,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b540bd8bc810d3885c6ea91e2018302f68baba2129ab3e88f32389ee9370880d"
 dependencies = [
  "cfg-if 1.0.0",
+]
+
+[[package]]
+name = "crossbeam-channel"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b153fe7cbef478c567df0f972e02e6d736db11affe43dfc9c56a9374d1adfb87"
+dependencies = [
+ "crossbeam-utils 0.7.2",
+ "maybe-uninit",
 ]
 
 [[package]]
@@ -3219,6 +3230,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa2f047c0a98b2f299aa5d6d7088443570faae494e9ae1305e48be000c9e0eb1"
 
 [[package]]
+name = "ipc-channel"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cb1d9211085f0ea6f1379d944b93c4d07e8207aa3bcf49f37eda12b85081887"
+dependencies = [
+ "bincode",
+ "crossbeam-channel 0.4.4",
+ "fnv",
+ "lazy_static",
+ "libc",
+ "mio 0.6.23",
+ "rand 0.7.3",
+ "serde",
+ "tempfile",
+ "uuid",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "ipconfig"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4639,6 +4669,7 @@ dependencies = [
  "bincode",
  "bs58",
  "futures 0.3.21",
+ "ipc-channel",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -6383,7 +6414,7 @@ version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f51245e1e62e1f1629cbfec37b5793bbabcaeb90f30e94d2ba03564687353e4"
 dependencies = [
- "crossbeam-channel",
+ "crossbeam-channel 0.5.4",
  "crossbeam-deque",
  "crossbeam-utils 0.8.8",
  "num_cpus",
@@ -8120,7 +8151,7 @@ version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "766c59b252e62a34651412870ff55d8c4e6d04df19b43eecb2703e417b097ffe"
 dependencies = [
- "crossbeam-channel",
+ "crossbeam-channel 0.5.4",
  "slog",
  "take_mut",
  "thread_local",
@@ -9883,6 +9914,15 @@ name = "utilities"
 version = "0.1.0"
 dependencies = [
  "hex",
+]
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.6",
 ]
 
 [[package]]

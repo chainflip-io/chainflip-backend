@@ -312,16 +312,27 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer_mapping_on_chain
     );
 
-    let mut incoming_p2p_message_stream = client
+    let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new()?;
+
+    tokio::try_join!(
+        async move {
+            client.setup_ipc_connections(server_name).await.map_err(rpc_error_into_anyhow_error)?
+        },
+        async move {
+            server.accept().await
+        },
+    );
+
+    /*let mut incoming_p2p_message_stream = client
         .subscribe_messages()
         .map_err(rpc_error_into_anyhow_error)?
-        .map_err(rpc_error_into_anyhow_error);
+        .map_err(rpc_error_into_anyhow_error);*/
 
     let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
 
     loop {
         tokio::select! {
-            Some(result_p2p_message) = incoming_p2p_message_stream.next() => {
+            /*Some(result_p2p_message) = incoming_p2p_message_stream.next() => {
                 match result_p2p_message.and_then(|(peer_id, serialised_message)| {
                     let peer_id: PeerId = peer_id.try_into()?;
                     if let Some(account_id) = peer_to_account_mapping_on_chain.get(&peer_id) {
@@ -337,7 +348,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     Ok(account_id) => slog::info!(logger, "Received P2P message from: {}", account_id),
                     Err(error) => slog::error!(logger, "Failed to receive P2P message: {}", error)
                 }
-            }
+            }*/
             Some(messages) = outgoing_p2p_message_receiver.recv() => {
                 async fn send_messages<'a, AccountIds: 'a + IntoIterator<Item = &'a AccountId> + Clone>(
                     client: &P2PRpcClient,
@@ -348,7 +359,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                 ) {
 
                     // If we can't get peer id for some accounts, should we still try to send messages to the rest?
-                    match async {
+                    /*match async {
                         account_ids.clone().into_iter().map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
                             Some((peer_id, _, _)) => Ok(peer_id.into()),
                             None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
@@ -361,7 +372,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     }).await {
                         Ok(_) => slog::info!(logger, "Sent P2P message to: {}", format_iterator(account_ids)),
                         Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", format_iterator(account_ids), error)
-                    }
+                    }*/
                 }
 
                 match messages {
