@@ -67,7 +67,7 @@ where
 	/// unsolicited offence reports (ie. there is no 'fisherman' role is with polkadot).
 	///
 	/// Another assumption is that reports are submitted for a single offender only. This assumption
-	/// holds eg. for GRANDPA but would have to be verified for any other components that wish to
+	/// holds for GRANDPA but would have to be verified for any other components that wish to
 	/// use this function.
 	fn report_offence(
 		_reporters: Vec<T::ValidatorId>,
