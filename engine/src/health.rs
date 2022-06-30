@@ -17,8 +17,8 @@ pub struct HealthChecker {
     listener: TcpListener,
 }
 
+// Split running of health checker into new and run so we can ensure TcpListener is active before proceeding in tests
 impl HealthChecker {
-    // Split running of health checker into new and run so we can ensure TcpListener is active before proceeding in tests
     pub async fn new(
         health_check_settings: &settings::HealthCheck,
         logger: &slog::Logger,
