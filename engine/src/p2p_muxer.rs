@@ -1,5 +1,5 @@
+use anyhow::{anyhow, Result};
 use futures::Future;
-use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -16,34 +16,71 @@ pub struct P2PMuxer {
 }
 
 /// Top-level protocol message, encapsulates all others
-#[derive(Serialize, Deserialize)]
 struct VersionedMessage<'a> {
     version: u16,
     payload: &'a [u8],
 }
 
+fn split_header<const HEADER_LEN: usize>(buffer: &[u8]) -> Result<(&[u8; HEADER_LEN], &[u8])> {
+    if buffer.len() >= HEADER_LEN {
+        let (header, payload) = buffer.split_at(HEADER_LEN);
+        let header: &[u8; HEADER_LEN] = header.try_into().expect("unexpected size");
+        Ok((header, payload))
+    } else {
+        Err(anyhow!("unexpected buffer len: {}", buffer.len()))
+    }
+}
+
+impl<'a> VersionedMessage<'a> {
+    fn serialize(&self) -> Vec<u8> {
+        [&self.version.to_be_bytes()[..], self.payload].concat()
+    }
+
+    fn deserialize(bytes: &'a [u8]) -> Result<Self> {
+        const VERSION_LEN: usize = std::mem::size_of::<u16>();
+
+        let (version, payload) = split_header::<VERSION_LEN>(bytes)?;
+
+        Ok(VersionedMessage {
+            version: u16::from_be_bytes(*version),
+            payload,
+        })
+    }
+}
+
 /// Messages in protocol version 1 have this payload
-#[derive(Serialize, Deserialize)]
-struct TagPlusMessage {
+struct TagPlusMessage<'a> {
     tag: ChainTag,
-    payload: Vec<u8>,
+    payload: &'a [u8],
+}
+
+impl<'a> TagPlusMessage<'a> {
+    fn serialize(&self) -> Vec<u8> {
+        [&self.tag.to_bytes()[..], self.payload].concat()
+    }
+
+    fn deserialize(bytes: &'a [u8]) -> Result<Self> {
+        const TAG_LEN: usize = std::mem::size_of::<u16>();
+
+        let (tag, payload) = split_header::<TAG_LEN>(bytes)?;
+
+        let tag = bincode::deserialize(tag).map_err(|_| anyhow!("unknown tag: {:?}", &tag))?;
+
+        Ok(TagPlusMessage { tag, payload })
+    }
 }
 
 /// The most recent (current) wire protocol version
 const PROTOCOL_VERSION: u16 = 1;
 
-fn add_tag_and_current_version(data: &mut Vec<u8>, tag: ChainTag) {
-    let with_tag = bincode::serialize(&TagPlusMessage {
-        tag,
-        payload: std::mem::take(data),
-    })
-    .expect("serialization should not fail");
-    let with_version = bincode::serialize(&VersionedMessage {
+fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
+    let with_tag = TagPlusMessage { tag, payload: data }.serialize();
+
+    VersionedMessage {
         version: PROTOCOL_VERSION,
         payload: &with_tag,
-    })
-    .expect("serialization should not fail");
-    *data = with_version;
+    }
+    .serialize()
 }
 
 impl P2PMuxer {
@@ -73,14 +110,14 @@ impl P2PMuxer {
     }
 
     async fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
-        if let Ok(VersionedMessage { version, payload }) = bincode::deserialize(&data) {
+        if let Ok(VersionedMessage { version, payload }) = VersionedMessage::deserialize(&data) {
             // only version 1 is expected/supported
             if version == PROTOCOL_VERSION {
-                if let Ok(TagPlusMessage { tag, payload }) = bincode::deserialize(payload) {
+                if let Ok(TagPlusMessage { tag, payload }) = TagPlusMessage::deserialize(payload) {
                     match tag {
                         ChainTag::Ethereum => {
                             self.eth_incoming_sender
-                                .send((account_id, payload))
+                                .send((account_id, payload.to_owned()))
                                 .expect("eth receiver dropped");
                         }
                         ChainTag::Polkadot => {
@@ -108,11 +145,11 @@ impl P2PMuxer {
     ) {
         match &mut messages {
             OutgoingMultisigStageMessages::Broadcast(_, data) => {
-                add_tag_and_current_version(data, tag);
+                *data = add_tag_and_current_version(data, tag);
             }
             OutgoingMultisigStageMessages::Private(messages) => {
                 for (_, data) in messages {
-                    add_tag_and_current_version(data, tag);
+                    *data = add_tag_and_current_version(data, tag);
                 }
             }
         };
@@ -144,8 +181,17 @@ mod tests {
     use crate::engine_utils::test_utils::expect_recv_with_timeout;
     use crate::multisig_p2p::OutgoingMultisigStageMessages;
 
+    const ACC_1: AccountId = AccountId::new([b'A'; 32]);
+    const ACC_2: AccountId = AccountId::new([b'B'; 32]);
+
+    const DATA_1: &[u8] = &[0, 1, 2];
+    const DATA_2: &[u8] = &[3, 4, 5];
+
+    const TAG_PREFIX: &[u8] = &ChainTag::Ethereum.to_bytes();
+    const VERSION_PREFIX: &[u8] = &PROTOCOL_VERSION.to_be_bytes();
+
     #[tokio::test]
-    async fn correctly_prepends_chain_tag() {
+    async fn correctly_prepends_chain_tag_broadcast() {
         let logger = crate::logging::test_utils::new_test_logger();
 
         let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
@@ -157,24 +203,81 @@ mod tests {
 
         let _jh = tokio::task::spawn(muxer_future);
 
-        let message = OutgoingMultisigStageMessages::Broadcast(
-            vec![AccountId::new([b'A'; 32]), AccountId::new([b'B'; 32])],
-            vec![0, 1, 2],
-        );
+        let message = OutgoingMultisigStageMessages::Broadcast(vec![ACC_1, ACC_2], DATA_1.to_vec());
 
         eth_outgoing_sender.send(message).unwrap();
 
-        let message = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
+        let received = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
 
         let expected = {
-            let expected_data = [&ChainTag::Ethereum.to_bytes()[..], &[0u8, 1, 2][..]].concat();
+            let expected_data = [VERSION_PREFIX, TAG_PREFIX, DATA_1].concat();
 
-            OutgoingMultisigStageMessages::Broadcast(
-                vec![AccountId::new([b'A'; 32]), AccountId::new([b'B'; 32])],
-                expected_data,
-            )
+            OutgoingMultisigStageMessages::Broadcast(vec![ACC_1, ACC_2], expected_data)
         };
 
-        assert_eq!(expected, message);
+        assert_eq!(expected, received);
+    }
+
+    #[tokio::test]
+    async fn correctly_prepends_chain_tag_private() {
+        let logger = crate::logging::test_utils::new_test_logger();
+
+        let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
+        let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let (eth_outgoing_sender, _, muxer_future) =
+            P2PMuxer::init(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+
+        let _jh = tokio::task::spawn(muxer_future);
+
+        let message = OutgoingMultisigStageMessages::Private(vec![
+            (ACC_1.clone(), DATA_1.to_vec()),
+            (ACC_2.clone(), DATA_2.to_vec()),
+        ]);
+
+        let expected = OutgoingMultisigStageMessages::Private(vec![
+            (ACC_1, [VERSION_PREFIX, TAG_PREFIX, DATA_1].concat()),
+            (ACC_2, [VERSION_PREFIX, TAG_PREFIX, DATA_2].concat()),
+        ]);
+
+        eth_outgoing_sender.send(message).unwrap();
+
+        let received = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
+
+        assert_eq!(expected, received);
+    }
+
+    /// Ensure that tag and version serialization produces the exact
+    /// bytes that we expect
+    #[tokio::test]
+    async fn check_tag_and_version_serialization() {
+        let res = add_tag_and_current_version(DATA_1, ChainTag::Ethereum);
+
+        let version_bytes = [0x00, 0x01];
+        let tag_bytes = [0x00, 0x00];
+
+        assert_eq!(res, [&version_bytes, &tag_bytes, DATA_1].concat());
+    }
+
+    #[tokio::test]
+    async fn should_parse_and_remove_headers() {
+        let logger = crate::logging::test_utils::new_test_logger();
+
+        let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let (_eth_outgoing_sender, mut eth_incoming_receiver, muxer_future) =
+            P2PMuxer::init(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+
+        tokio::spawn(muxer_future);
+
+        let bytes = [&[0x00, 0x01, 0x00, 0x00], DATA_1].concat();
+
+        p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
+
+        let received = expect_recv_with_timeout(&mut eth_incoming_receiver).await;
+
+        assert_eq!(received, (ACC_1, DATA_1.to_vec()));
     }
 }

@@ -29,7 +29,7 @@ pub enum ChainTag {
 }
 
 impl ChainTag {
-    pub fn to_bytes(self) -> [u8; CHAIN_TAG_SIZE] {
+    pub const fn to_bytes(self) -> [u8; CHAIN_TAG_SIZE] {
         (self as u16).to_be_bytes()
     }
 }
