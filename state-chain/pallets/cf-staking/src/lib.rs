@@ -40,7 +40,7 @@ use sp_runtime::{
 };
 
 use frame_support::pallet_prelude::Weight;
-const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {

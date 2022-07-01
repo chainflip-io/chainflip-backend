@@ -3,15 +3,71 @@
 
 use super::*;
 
+use pallet_cf_online::Config as OnlineConfig;
+use pallet_cf_staking::Config as StakingConfig;
+use pallet_session::Config as SessionConfig;
+
+// use sp_runtime::app_crypto::RuntimePublic;
+use sp_application_crypto::RuntimeAppPublic;
+
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::dispatch::UnfilteredDispatchable;
-use frame_system::RawOrigin;
+use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
+use frame_system::{pallet_prelude::OriginFor, RawOrigin};
+
+mod benchmark_crypto {
+	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
+	pub const PEER_ID_KEY: KeyTypeId = KeyTypeId(*b"peer");
+	app_crypto!(ed25519, PEER_ID_KEY);
+}
+
+pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + OnlineConfig {}
+
+impl<T: Config + StakingConfig + SessionConfig + OnlineConfig> RuntimeConfig for T {}
+
+/// Initialises bidders by staking each one, registering session keys and peer ids.
+pub fn init_bidders<T: RuntimeConfig>(n: u32) {
+	for (i, bidder) in (0..n).map(|i| account::<T::AccountId>("auction-bidders", i, 0)).enumerate()
+	{
+		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
+		assert_ok!(pallet_cf_staking::Pallet::<T>::staked(
+			T::EnsureWitnessed::successful_origin(),
+			bidder.clone(),
+			(100_000u128 * 10u128.pow(18)).unique_saturated_into(),
+			pallet_cf_staking::ETH_ZERO_ADDRESS,
+			Default::default()
+		));
+		assert_ok!(pallet_cf_staking::Pallet::<T>::activate_account(bidder_origin.clone(),));
+
+		assert_ok!(pallet_session::Pallet::<T>::set_keys(
+			bidder_origin.clone(),
+			T::Keys::decode(&mut &i.to_be_bytes().repeat(128 / 4)[..]).unwrap(),
+			vec![],
+		));
+
+		let public_key: benchmark_crypto::Public = RuntimeAppPublic::generate_pair(None);
+		let signature = public_key.sign(&bidder.encode()).unwrap();
+		assert_ok!(Pallet::<T>::register_peer_id(
+			bidder_origin.clone(),
+			public_key.try_into().unwrap(),
+			1337,
+			1u128,
+			signature.try_into().unwrap(),
+		));
+
+		assert_ok!(pallet_cf_online::Pallet::<T>::heartbeat(bidder_origin.clone(),));
+	}
+}
 
 benchmarks! {
+	where_clause {
+		where
+			T: RuntimeConfig
+	}
+
 	set_blocks_for_epoch {
 		let b = 2_u32;
 		let call = Call::<T>::set_blocks_for_epoch { number_of_blocks: b.into() };
-		let o = T::EnsureGovernance::successful_origin();
+		let o = <T as Config>::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -20,7 +76,7 @@ benchmarks! {
 	}
 	set_backup_node_percentage {
 		let call = Call::<T>::set_backup_node_percentage { percentage: 20 };
-		let o = T::EnsureGovernance::successful_origin();
+		let o = <T as Config>::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -29,22 +85,22 @@ benchmarks! {
 	}
 	set_authority_set_min_size {
 		let call = Call::<T>::set_authority_set_min_size { min_size: 20 };
-		let o = T::EnsureGovernance::successful_origin();
+		let o = <T as Config>::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
 	verify {
 		assert_eq!(Pallet::<T>::authority_set_min_size(), 20u8)
 	}
-	force_rotation {
-		let call = Call::<T>::force_rotation {};
-		let o = T::EnsureGovernance::successful_origin();
-	}: {
-		call.dispatch_bypass_filter(o)?
-	}
-	verify {
-		assert!(matches!(Pallet::<T>::current_rotation_phase(), RotationPhase::VaultsRotating(..)));
-	}
+	// force_rotation {
+	// 	let call = Call::<T>::force_rotation {};
+	// 	let o = <T as Config>::EnsureGovernance::successful_origin();
+	// }: {
+	// 	call.dispatch_bypass_filter(o)?
+	// }
+	// verify {
+	// 	assert!(matches!(Pallet::<T>::current_rotation_phase(), RotationPhase::VaultsRotating(..)));
+	// }
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
 		let version = SemVer {
@@ -93,6 +149,29 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), name.clone())
 	verify {
 		assert_eq!(VanityNames::<T>::get().get(&caller.into()), Some(&name));
+	}
+
+	rotation_phase_idle {
+		assert!(T::MissedAuthorshipSlots::missed_slots().is_empty());
+
+	}: {
+		Pallet::<T>::on_initialize(1u32.into());
+	}
+	verify {
+		assert_eq!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle);
+	}
+
+	start_authority_rotation {
+		let a in 3 .. 400;
+		init_bidders::<T>(a);
+	}: {
+		Pallet::<T>::start_authority_rotation();
+	}
+	verify {
+		assert!(matches!(
+			CurrentRotationPhase::<T>::get(),
+			RotationPhase::VaultsRotating(..)
+		));
 	}
 }
 
