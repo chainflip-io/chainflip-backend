@@ -23,19 +23,23 @@ pub struct MissedAuraSlots;
 
 impl MissedAuthorshipSlots for MissedAuraSlots {
 	fn missed_slots() -> sp_std::ops::Range<u64> {
-		let authored = System::digest()
-			.logs()
-			.iter()
-			.find_map(extract_slot_from_digest_item)
-			.expect("Aura is not enabled;");
+		let maybe_authored = System::digest().logs().iter().find_map(extract_slot_from_digest_item);
 
 		let maybe_expected = LastSeenSlot::get().map(|last_seen| last_seen.saturating_add(1u64));
-		LastSeenSlot::put(authored);
-		if let Some(expected) = maybe_expected {
-			(*expected)..(*authored)
-		} else {
-			log::info!("Not expecting any current slot.");
-			Default::default()
+
+		match (maybe_authored, maybe_expected) {
+			(None, _) => {
+				log::warn!("No Aura block author slot can be determined");
+				Default::default()
+			},
+			(Some(authored), None) => {
+				log::info!("Not expecting any current Aura author slot, got {:?}.", authored);
+				Default::default()
+			},
+			(Some(authored), Some(expected)) => {
+				log::debug!("Expected Aura slot {:?}, got {:?}.", expected, authored);
+				(*expected)..(*authored)
+			},
 		}
 	}
 }
