@@ -8,9 +8,9 @@ mod tests {
 	use state_chain_runtime::{
 		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
 		AuctionConfig, Emissions, EmissionsConfig, EthereumVault, EthereumVaultConfig, Flip,
-		FlipConfig, Governance, GovernanceConfig, Online, Origin, Reputation, ReputationConfig,
-		Runtime, Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator,
-		ValidatorConfig,
+		FlipConfig, Governance, GovernanceConfig, Online, OnlineConfig, Origin, Reputation,
+		ReputationConfig, Runtime, Session, SessionConfig, Staking, StakingConfig, System,
+		Timestamp, Validator, ValidatorConfig,
 	};
 
 	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance, IsOnline};
@@ -617,6 +617,9 @@ mod tests {
 				emissions: EmissionsConfig {
 					current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 					backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
+				},
+				online: OnlineConfig {
+					genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 				},
 				..state_chain_runtime::GenesisConfig::default()
 			}

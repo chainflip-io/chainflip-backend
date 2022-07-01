@@ -12,22 +12,21 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
+use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState, QualifyNode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
 };
 pub use pallet::*;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{Saturating, Zero};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, EpochInfo, Heartbeat, IsOnline, NetworkState, QualifyNode};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::Saturating;
 
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
@@ -122,29 +121,54 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> Pallet<T> {
-		/// Partitions the validators based on whether they are considered online or offline.
-		fn current_network_state() -> NetworkState<T::ValidatorId> {
-			let (online, offline) =
-				T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub genesis_nodes: Vec<T::ValidatorId>,
+	}
 
-			NetworkState { online, offline }
-		}
-
-		fn is_online_at(block_number: T::BlockNumber, validator_id: &T::ValidatorId) -> bool {
-			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
-				block_number.saturating_sub(last_heartbeat) < T::HeartbeatBlockInterval::get()
-			} else {
-				false
-			}
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { genesis_nodes: Default::default() }
 		}
 	}
 
-	impl<T: Config> QualifyNode for Pallet<T> {
-		type ValidatorId = T::ValidatorId;
-
-		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-			Self::is_online(validator_id)
+	// The build of genesis for the pallet.
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			for validator_id in &self.genesis_nodes {
+				LastHeartbeat::<T>::insert(
+					validator_id,
+					frame_system::Pallet::<T>::current_block_number(),
+				);
+			}
 		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Partitions the validators based on whether they are considered online or offline.
+	fn current_network_state() -> NetworkState<T::ValidatorId> {
+		let (online, offline) =
+			T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
+
+		NetworkState { online, offline }
+	}
+
+	fn is_online_at(block_number: T::BlockNumber, validator_id: &T::ValidatorId) -> bool {
+		if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+			block_number.saturating_sub(last_heartbeat) < T::HeartbeatBlockInterval::get()
+		} else {
+			false
+		}
+	}
+}
+
+impl<T: Config> QualifyNode for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		Self::is_online(validator_id)
 	}
 }
