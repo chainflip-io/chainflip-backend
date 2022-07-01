@@ -73,8 +73,16 @@ where
 		_reporters: Vec<T::ValidatorId>,
 		offence: O,
 	) -> Result<(), sp_staking::offence::OffenceError> {
+		const CF_ERROR_EXPECTED_SINGLE_OFFENDER: u8 = 0xcf;
+
 		let offenders = offence.offenders();
-		ensure!(offenders.len() == 1, sp_staking::offence::OffenceError::Other(0xcf));
+		ensure!(offenders.len() == 1, {
+			log::warn!(
+				"Offence report {:?} received for multiple offenders: this is unsupported.",
+				O::ID
+			);
+			sp_staking::offence::OffenceError::Other(CF_ERROR_EXPECTED_SINGLE_OFFENDER)
+		});
 		let (offender, _) = offence.offenders().pop().expect("len == 1; qed");
 
 		ensure!(
