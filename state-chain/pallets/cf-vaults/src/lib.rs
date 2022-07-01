@@ -380,7 +380,7 @@ pub mod pallet {
 						Err(KeygenError::Failure(offenders)) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							let offenders = if (offenders.len() as AuthorityCount) <
-								utilities::threshold_from_share_count(candidate_count)
+								utilities::failure_threshold_from_share_count(candidate_count)
 							{
 								offenders
 							} else {
