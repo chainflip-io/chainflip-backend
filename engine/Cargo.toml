@@ -79,7 +79,7 @@ typenum = "1.15"
 # We might eventually update, but for now let's just
 # use the same version as polkadot. 
 schnorrkel = "0.9.1"
-
+rayon = "1.5"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
