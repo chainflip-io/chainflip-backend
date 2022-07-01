@@ -26,7 +26,7 @@ pub fn success_threshold_from_share_count(share_count: u32) -> u32 {
 /// Returns the number of bad parties required for a threshold signature
 /// ceremony to *fail*.
 pub fn failure_threshold_from_share_count(share_count: u32) -> u32 {
-    share_count - success_threshold_from_share_count(share_count)
+    share_count - threshold_from_share_count(share_count)
 }
 
 #[test]
@@ -43,11 +43,11 @@ fn check_threshold_calculation() {
     assert_eq!(success_threshold_from_share_count(3), 2);
     assert_eq!(success_threshold_from_share_count(4), 3);
 
-    assert_eq!(failure_threshold_from_share_count(150), 50);
-    assert_eq!(failure_threshold_from_share_count(100), 33);
-    assert_eq!(failure_threshold_from_share_count(90), 30);
-    assert_eq!(failure_threshold_from_share_count(3), 1);
-    assert_eq!(failure_threshold_from_share_count(4), 1);
+    assert_eq!(failure_threshold_from_share_count(150), 51);
+    assert_eq!(failure_threshold_from_share_count(100), 34);
+    assert_eq!(failure_threshold_from_share_count(90), 31);
+    assert_eq!(failure_threshold_from_share_count(3), 2);
+    assert_eq!(failure_threshold_from_share_count(4), 2);
 }
 
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
