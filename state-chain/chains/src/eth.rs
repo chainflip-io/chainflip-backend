@@ -32,6 +32,7 @@ use self::api::EthereumReplayProtection;
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_RINKEBY: u64 = 4;
+pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 //--------------------------//
