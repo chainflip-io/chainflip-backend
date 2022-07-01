@@ -4,6 +4,8 @@ mod async_result;
 pub mod mocks;
 pub mod offence_reporting;
 
+use core::fmt::Debug;
+
 pub use async_result::AsyncResult;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
@@ -640,13 +642,23 @@ where
 	A: QualifyNode<ValidatorId = B::ValidatorId>,
 	B: QualifyNode,
 	C: QualifyNode<ValidatorId = B::ValidatorId>,
+	B::ValidatorId: Debug,
 {
 	type ValidatorId = A::ValidatorId;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-		A::is_qualified(validator_id) &&
-			B::is_qualified(validator_id) &&
-			C::is_qualified(validator_id)
+		if !A::is_qualified(validator_id) {
+			// log::warn!("{:?} failed qualification A", validator_id);
+			false
+		} else if !B::is_qualified(validator_id) {
+			// log::warn!("{:?} failed qualification B", validator_id);
+			false
+		} else if !C::is_qualified(validator_id) {
+			// log::warn!("{:?} failed qualification C", validator_id);
+			false
+		} else {
+			true
+		}
 	}
 }
 /// Handles the check of execution conditions
