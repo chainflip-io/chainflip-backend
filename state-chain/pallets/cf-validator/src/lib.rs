@@ -200,10 +200,10 @@ pub mod pallet {
 		NewEpoch(EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
-		/// Rotation phase updated \[rotation_phase\]
-		RotationPhaseUpdated(RotationPhase<T>),
-		/// An emergency rotation has been requested
-		EmergencyRotationRequested(),
+		/// Rotation phase updated.
+		RotationPhaseUpdated { new_phase: RotationPhase<T> },
+		/// An emergency rotation has been initiated.
+		EmergencyRotationInitiated,
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
 		CFEVersionUpdated(ValidatorIdOf<T>, Version, Version),
 		/// An authority has register her current PeerId \[account_id, public_key, port,
@@ -1009,7 +1009,7 @@ impl<T: Config> Pallet<T> {
 	fn set_rotation_phase(new_phase: RotationPhase<T>) {
 		log::debug!(target: "cf-validator", "Advancing rotation phase to: {new_phase:?}");
 		CurrentRotationPhase::<T>::put(new_phase.clone());
-		Self::deposit_event(Event::RotationPhaseUpdated(new_phase));
+		Self::deposit_event(Event::RotationPhaseUpdated { new_phase });
 	}
 
 	fn backup_set_target_size(num_authorities: usize, backup_node_percentage: Percentage) -> usize {
@@ -1180,7 +1180,7 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 impl<T: Config> EmergencyRotation for Pallet<T> {
 	fn request_emergency_rotation() {
 		if CurrentRotationPhase::<T>::get() == RotationPhase::<T>::Idle {
-			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
+			Pallet::<T>::deposit_event(Event::EmergencyRotationInitiated);
 			Self::start_authority_rotation();
 		}
 	}
