@@ -1,9 +1,9 @@
 use crate::{
 	mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet, SUPPLY_UPDATE_INTERVAL_DEFAULT,
 };
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Issuance, RewardsDistribution};
-use frame_support::traits::{Imbalance, OnInitialize};
-use pallet_cf_flip::{FlipIssuance, Pallet as Flip};
+use cf_traits::mocks::system_state_info::MockSystemStateInfo;
+use frame_support::traits::OnInitialize;
+use pallet_cf_flip::Pallet as Flip;
 
 type Emissions = Pallet<Test>;
 
@@ -67,11 +67,7 @@ mod test_block_rewards {
 
 #[test]
 fn test_duplicate_emission_should_be_noop() {
-	const EMISSION_RATE: u128 = 10;
-
 	new_test_ext(vec![1, 2], None).execute_with(|| {
-		//const BLOCK_NUMBER: u64 = 5;
-
 		Emissions::update_authority_block_emission(EMISSION_RATE);
 
 		let before = Flip::<Test>::total_issuance();
@@ -104,18 +100,6 @@ fn should_mint_but_not_broadcast() {
 		let prev_supply_update_block = LastSupplyUpdateBlock::<Test>::get();
 		Emissions::mint_rewards_for_block();
 		assert_eq!(prev_supply_update_block, LastSupplyUpdateBlock::<Test>::get());
-	});
-}
-
-#[test]
-fn test_reward_distribution() {
-	new_test_ext(vec![1, 2], None).execute_with(|| {
-		let before = Flip::<Test>::total_issuance();
-		let reward = FlipIssuance::mint(1_000);
-		assert!(reward.peek() > 0);
-		<MockRewardsDistribution as RewardsDistribution>::distribute(reward);
-		let after = Flip::<Test>::total_issuance();
-		assert!(after > before, "Expected {:?} > {:?}", after, before);
 	});
 }
 

@@ -302,11 +302,11 @@ pub trait Issuance {
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
-	/// An imbalance representing an unallocated surplus of funds.
-	type Surplus: Imbalance<Self::Balance>;
+	/// An implementation of the issuance trait.
+	type Issuance: Issuance;
 
 	/// Distribute some rewards.
-	fn distribute(rewards: Self::Surplus);
+	fn distribute();
 }
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {

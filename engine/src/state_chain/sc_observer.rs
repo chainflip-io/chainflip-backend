@@ -4,12 +4,12 @@ use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{AccountId, CfeSettings};
 use std::{
     collections::BTreeSet,
     sync::{atomic::AtomicU64, Arc},
 };
-use tokio::sync::{broadcast, mpsc::UnboundedSender};
+use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
     eth::{rpc::EthRpcApi, EthBroadcaster, ObserveInstruction},
@@ -104,6 +104,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     )>,
 
     witnessing_instruction_sender: broadcast::Sender<ObserveInstruction>,
+    cfe_settings_update_sender: watch::Sender<CfeSettings>,
     initial_block_hash: H256,
     latest_ceremony_id: Arc<AtomicU64>,
     logger: &slog::Logger,
@@ -412,6 +413,13 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             );
                                                         }
                                                     };
+                                                }
+                                                state_chain_runtime::Event::Environment(
+                                                    pallet_cf_environment::Event::CfeSettingsUpdated {
+                                                        new_cfe_settings
+                                                    }
+                                                ) => {
+                                                    cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                                 }
                                                 ignored_event => {
                                                     // ignore events we don't care about

@@ -40,6 +40,9 @@ pub mod cfe {
 	pub struct CfeSettings {
 		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
 		pub eth_block_safety_margin: u32,
+		/// The percentile of priority fee we want to fetch from fee_history (expressed
+		/// as a number between 0 and 100)
+		pub eth_priority_fee_percentile: u8,
 		/// Maximum duration a ceremony stage can last
 		pub max_ceremony_stage_duration: u32,
 	}
@@ -47,7 +50,11 @@ pub mod cfe {
 	/// Sensible default values for the CFE setting.
 	impl Default for CfeSettings {
 		fn default() -> Self {
-			Self { eth_block_safety_margin: 6, max_ceremony_stage_duration: 300 }
+			Self {
+				eth_block_safety_margin: 6,
+				eth_priority_fee_percentile: 50,
+				max_ceremony_stage_duration: 300,
+			}
 		}
 	}
 }
@@ -78,6 +85,9 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The network is currently paused.
 		NetworkIsInMaintenance,
+
+		/// The settings provided were invalid
+		InvalidCfeSettings,
 	}
 
 	#[pallet::pallet]
@@ -119,8 +129,11 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The system state has been changed \[system_state\]
-		SystemStateHasBeenChanged(SystemState),
+		/// The system state has been updated
+		SystemStateUpdated { new_system_state: SystemState },
+
+		/// The on-chain CFE settings have been updated
+		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 	}
 
 	#[pallet::call]
@@ -129,7 +142,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SystemStateHasBeenChanged](Event::SystemStateHasBeenChanged)
+		/// - [SystemStateUpdated](Event::SystemStateUpdated)
 		///
 		/// ## Errors
 		///
@@ -141,6 +154,30 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			SystemStateProvider::<T>::set_system_state(state);
+			Ok(().into())
+		}
+
+		/// Sets the current on-chain CFE settings
+		///
+		/// ## Events
+		///
+		/// - [CfeSettingsUpdated](Event::CfeSettingsUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::set_cfe_settings())]
+		pub fn set_cfe_settings(
+			origin: OriginFor<T>,
+			cfe_settings: cfe::CfeSettings,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(
+				cfe_settings.eth_priority_fee_percentile <= 100,
+				Error::<T>::InvalidCfeSettings
+			);
+			CfeSettings::<T>::put(cfe_settings);
+			Self::deposit_event(Event::<T>::CfeSettingsUpdated { new_cfe_settings: cfe_settings });
 			Ok(().into())
 		}
 	}
@@ -185,7 +222,7 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 	fn set_system_state(state: SystemState) {
 		if CurrentSystemState::<T>::get() != state {
 			CurrentSystemState::<T>::put(&state);
-			Pallet::<T>::deposit_event(Event::<T>::SystemStateHasBeenChanged(state));
+			Pallet::<T>::deposit_event(Event::<T>::SystemStateUpdated { new_system_state: state });
 		}
 	}
 	fn set_maintenance_mode() {
