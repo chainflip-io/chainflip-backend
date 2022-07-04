@@ -210,9 +210,10 @@ pub struct SystemStateProvider<T>(PhantomData<T>);
 
 impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
 	fn ensure_no_maintenance() -> frame_support::sp_runtime::DispatchResult {
-		if <pallet::CurrentSystemState<T>>::get() == SystemState::Maintenance {
-			return Err(Error::<T>::NetworkIsInMaintenance.into())
-		}
+		ensure!(
+			<pallet::CurrentSystemState<T>>::get() != SystemState::Maintenance,
+			Error::<T>::NetworkIsInMaintenance
+		);
 		Ok(())
 	}
 }
