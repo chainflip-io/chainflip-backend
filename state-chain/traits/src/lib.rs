@@ -738,13 +738,15 @@ pub trait SystemStateInfo {
 	fn is_maintenance_mode() -> bool {
 		Self::ensure_no_maintenance().is_err()
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_maintenance_mode() {
+		unimplemented!()
+	}
 }
 
 /// Something that can manipulate the system state.
 pub trait SystemStateManager {
-	type SystemState;
-	/// Set the system state.
-	fn set_system_state(state: Self::SystemState);
 	/// Turn system maintenance on.
 	fn activate_maintenance_mode();
 }
