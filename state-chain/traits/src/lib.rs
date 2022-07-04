@@ -715,5 +715,5 @@ pub trait SystemStateManager {
 	/// Set the system state.
 	fn set_system_state(state: Self::SystemState);
 	/// Turn system maintenance on.
-	fn set_maintenance_mode();
+	fn activate_maintenance_mode();
 }

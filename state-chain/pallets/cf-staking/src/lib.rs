@@ -572,50 +572,32 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_pending_claims_at(expiries_len)
 	}
 
-	/// Logs an failed stake attempt
-	fn log_failed_stake_attempt(
-		account_id: &AccountId<T>,
-		withdrawal_address: EthereumAddress,
-		amount: T::Balance,
-	) -> Result<(), Error<T>> {
-		FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
-			staking_attempts.push((withdrawal_address, amount));
-		});
-		Self::deposit_event(Event::FailedStakeAttempt(
-			account_id.clone(),
-			withdrawal_address,
-			amount,
-		));
-		Err(Error::<T>::WithdrawalAddressRestricted)
-	}
-
 	/// Checks the withdrawal address requirements and saves the address if provided
 	fn check_withdrawal_address(
 		account_id: &AccountId<T>,
 		withdrawal_address: EthereumAddress,
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
+		if withdrawal_address == ETH_ZERO_ADDRESS {
+			return Ok(())
+		}
 		if frame_system::Pallet::<T>::account_exists(account_id) {
-			let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
-			match existing_withdrawal_address {
-				// User account exists and both addresses hold a value - the value of both addresses
-				// is different and not null
-				Some(existing)
-					if withdrawal_address != existing && withdrawal_address != ETH_ZERO_ADDRESS =>
-					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?,
-				// Only the provided address exists:
-				// We only want to add a new withdrawal address if this is the first staking
-				// attempt, ie. the account doesn't exist.
-				None if withdrawal_address != ETH_ZERO_ADDRESS =>
-					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?,
-				_ => (),
+			match WithdrawalAddresses::<T>::get(&account_id) {
+				Some(existing) if withdrawal_address == existing => Ok(()),
+				_ => {
+					FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
+					Self::deposit_event(Event::FailedStakeAttempt(
+						account_id.clone(),
+						withdrawal_address,
+						amount,
+					));
+					Err(Error::<T>::WithdrawalAddressRestricted)
+				},
 			}
-		}
-		// Save the withdrawal address if provided
-		if withdrawal_address != ETH_ZERO_ADDRESS {
+		} else {
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
+			Ok(())
 		}
-		Ok(())
 	}
 
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the
