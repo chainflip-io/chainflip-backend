@@ -10,7 +10,6 @@ mod mock;
 mod tests;
 
 pub mod weights;
-
 pub use weights::WeightInfo;
 
 mod backup_triage;
@@ -21,11 +20,11 @@ mod rotation_status;
 
 pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BidderProvider,
-	Bonding, Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore,
-	EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
-	SystemStateInfo, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BackupNodes,
+	BidderProvider, Bonding, Chainflip, ChainflipAccount, ChainflipAccountData,
+	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
+	StakeHandler, SystemStateInfo, VaultRotator,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -146,9 +145,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// Benchmark stuff
-		type ValidatorWeightInfo: WeightInfo;
-
 		/// Resolves auctions.
 		type Auctioneer: Auctioneer<Self>;
 
@@ -189,6 +185,9 @@ pub mod pallet {
 
 		/// This is used to reset the validator's reputation
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
+
+		/// Benchmark weights.
+		type ValidatorWeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -246,6 +245,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
+			let mut weight = 0;
 
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
@@ -268,40 +268,48 @@ pub mod pallet {
 				}
 			}
 
-			match CurrentRotationPhase::<T>::get() {
+			weight += match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
 						BlocksPerEpoch::<T>::get()
 					{
-						Self::start_authority_rotation();
+						Self::start_authority_rotation()
+					} else {
+						T::ValidatorWeightInfo::rotation_phase_idle()
 					}
 				},
 				RotationPhase::VaultsRotating(mut rotation_status) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(Ok(_)) => {
 							Self::set_rotation_phase(RotationPhase::VaultsRotated(rotation_status));
+							0
 						},
 						AsyncResult::Ready(Err(offenders)) => {
 							rotation_status.ban(offenders);
 							Self::start_vault_rotation(rotation_status);
+							0
 						},
 						AsyncResult::Void => {
 							debug_assert!(false, "Void state should be unreachable.");
 							log::error!(target: "cf-validator", "no vault rotation pending");
 							Self::set_rotation_phase(RotationPhase::Idle);
+							0
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
+							0
 						},
 					},
 				RotationPhase::VaultsRotated(rotation_status) => {
 					Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
+					0
 				},
 				RotationPhase::SessionRotating(_) => {
 					Self::set_rotation_phase(RotationPhase::Idle);
+					0
 				},
-			}
-			0
+			};
+			weight
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -396,7 +404,14 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [RotationInProgress](Error::RotationInProgress)
-		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
+		///
+		/// ## Weight
+		///
+		/// The weight is related to the number of bidders. Getting that number is quite expensive
+		/// so we use 2 * authority_count as an approximation.
+		#[pallet::weight(T::ValidatorWeightInfo::start_authority_rotation(
+			<Pallet<T> as EpochInfo>::current_authority_count() * 2
+		))]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
@@ -1014,13 +1029,13 @@ impl<T: Config> Pallet<T> {
 		Percent::from_percent(backup_node_percentage) * num_authorities
 	}
 
-	fn start_authority_rotation() {
+	fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
 			log::info!(
 				target: "cf-validator",
 				"Can't start rotation. System is in maintenance mode."
 			);
-			return
+			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 		match T::Auctioneer::resolve_auction() {
@@ -1039,12 +1054,27 @@ impl<T: Config> Pallet<T> {
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
 						10u128.pow(18),
 				);
+
+				// Without reading the full list of bidders we can't know the real number.
+				// Use the winners and losers as an approximation.
+				let weight = T::ValidatorWeightInfo::start_authority_rotation(
+					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
+				);
+
 				Self::start_vault_rotation(RotationStatus::from_auction_outcome::<T>(
 					auction_outcome,
 				));
+
+				weight
 			},
-			Err(e) =>
-				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
+			Err(e) => {
+				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
+				// Use an approximation again - see comment above.
+				T::ValidatorWeightInfo::start_authority_rotation(
+					Self::current_authority_count() +
+						<Self as BackupNodes>::backup_nodes().len() as u32,
+				)
+			},
 		}
 	}
 

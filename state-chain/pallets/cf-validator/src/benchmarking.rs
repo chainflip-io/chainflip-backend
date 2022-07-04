@@ -21,12 +21,14 @@ mod p2p_crypto {
 
 pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + OnlineConfig {}
 
-impl<T: Config + StakingConfig + SessionConfig + OnlineConfig> RuntimeConfig for T {}
+
+pub fn auction_bidder<T: RuntimeConfig, I: Into<u32>>(i: I) -> T::AccountId {
+	account::<T::AccountId>("auction-bidders", i.into(), 0)
+}
 
 /// Initialises bidders by staking each one, registering session keys and peer ids.
 pub fn init_bidders<T: RuntimeConfig>(n: u32) {
-	for (i, bidder) in (0..n).map(|i| account::<T::AccountId>("auction-bidders", i, 0)).enumerate()
-	{
+	for (i, bidder) in (0..n).map(auction_bidder::<T, _>).enumerate() {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
 		assert_ok!(pallet_cf_staking::Pallet::<T>::staked(
 			T::EnsureWitnessed::successful_origin(),
@@ -39,6 +41,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32) {
 
 		assert_ok!(pallet_session::Pallet::<T>::set_keys(
 			bidder_origin.clone(),
+			// 128 / 4 because u32 is 4 bytes.
 			T::Keys::decode(&mut &i.to_be_bytes().repeat(128 / 4)[..]).unwrap(),
 			vec![],
 		));
@@ -83,13 +86,13 @@ benchmarks! {
 		assert_eq!(Pallet::<T>::backup_node_percentage(), 20u8)
 	}
 	set_authority_set_min_size {
-		let call = Call::<T>::set_authority_set_min_size { min_size: 20 };
+		let call = Call::<T>::set_authority_set_min_size { min_size: 1 };
 		let o = <T as Config>::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
 	verify {
-		assert_eq!(Pallet::<T>::authority_set_min_size(), 20u8)
+		assert_eq!(Pallet::<T>::authority_set_min_size(), 1u8)
 	}
 	// force_rotation {
 	// 	let call = Call::<T>::force_rotation {};
@@ -133,7 +136,6 @@ benchmarks! {
 
 	rotation_phase_idle {
 		assert!(T::MissedAuthorshipSlots::missed_slots().is_empty());
-
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());
 	}
@@ -142,15 +144,21 @@ benchmarks! {
 	}
 
 	start_authority_rotation {
+		// a = number of bidders.
 		let a in 3 .. 400;
 		init_bidders::<T>(a);
+	}: {
+		Pallet::<T>::start_authority_rotation();
+	}
+	start_authority_rotation_in_maintenance_mode {
+		T::SystemState::activate_maintenance_mode();
 	}: {
 		Pallet::<T>::start_authority_rotation();
 	}
 	verify {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::VaultsRotating(..)
+			RotationPhase::Idle
 		));
 	}
 }
