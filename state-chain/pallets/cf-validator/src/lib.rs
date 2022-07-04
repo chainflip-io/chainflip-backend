@@ -926,7 +926,6 @@ impl<T: Config> Pallet<T> {
 			ChainflipAccountStore::<T>::set_current_authority(incoming_authority.into_ref());
 		}
 
-		// Initialise the new epoch.
 		let new_authorities = rotation_status.authority_candidates::<Vec<_>>();
 		Self::initialise_new_epoch(
 			new_epoch,
@@ -982,6 +981,7 @@ impl<T: Config> Pallet<T> {
 		backup_triage: RuntimeBackupTriage<T>,
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
+		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
 		Bond::<T>::set(new_bond);
 
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
@@ -991,8 +991,6 @@ impl<T: Config> Pallet<T> {
 		EpochAuthorityCount::<T>::insert(new_epoch, new_authorities.len() as AuthorityCount);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
 
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
@@ -1055,7 +1053,9 @@ impl<T: Config> Pallet<T> {
 		if candidates.len() < AuthoritySetMinSize::<T>::get().into() {
 			log::warn!(
 				target: "cf-validator",
-				"Not enough auction candidates left - aborting rotation."
+				"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}. - aborting rotation.",
+				candidates.len(),
+				AuthoritySetMinSize::<T>::get()
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
