@@ -596,8 +596,10 @@ impl<T: Config> Pallet<T> {
 					return Err(Error::<T>::WithdrawalAddressRestricted)
 				},
 			}
+		} else {
+			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
 		}
-		WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
+
 		Ok(())
 	}
 
