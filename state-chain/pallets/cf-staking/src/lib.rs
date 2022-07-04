@@ -572,23 +572,6 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_pending_claims_at(expiries_len)
 	}
 
-	/// Logs an failed stake attempt
-	fn log_failed_stake_attempt(
-		account_id: &AccountId<T>,
-		withdrawal_address: EthereumAddress,
-		amount: T::Balance,
-	) -> Result<(), Error<T>> {
-		FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
-			staking_attempts.push((withdrawal_address, amount));
-		});
-		Self::deposit_event(Event::FailedStakeAttempt(
-			account_id.clone(),
-			withdrawal_address,
-			amount,
-		));
-		Err(Error::<T>::WithdrawalAddressRestricted)
-	}
-
 	/// Checks the withdrawal address requirements and saves the address if provided
 	fn check_withdrawal_address(
 		account_id: &AccountId<T>,
@@ -601,7 +584,17 @@ impl<T: Config> Pallet<T> {
 		if frame_system::Pallet::<T>::account_exists(account_id) {
 			match WithdrawalAddresses::<T>::get(&account_id) {
 				Some(existing) if withdrawal_address == existing => (),
-				_ => Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?,
+				_ => {
+					FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
+						staking_attempts.push((withdrawal_address, amount));
+					});
+					Self::deposit_event(Event::FailedStakeAttempt(
+						account_id.clone(),
+						withdrawal_address,
+						amount,
+					));
+					return Err(Error::<T>::WithdrawalAddressRestricted)
+				},
 			}
 		}
 		WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
