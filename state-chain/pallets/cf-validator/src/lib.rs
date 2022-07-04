@@ -910,11 +910,11 @@ impl<T: Config> Pallet<T> {
 		let new_authorities_lookup = rotation_status.authority_candidates::<BTreeSet<_>>();
 		let old_authorities_lookup =
 			BTreeSet::<ValidatorIdOf<T>>::from_iter(CurrentAuthorities::<T>::get().into_iter());
-		for outgoing_authority in old_authorities_lookup
+		for historical_authority in old_authorities_lookup
 			.iter()
 			.filter(|authority| !new_authorities_lookup.contains(authority))
 		{
-			ChainflipAccountStore::<T>::set_historical_authority(outgoing_authority.into_ref());
+			ChainflipAccountStore::<T>::set_historical_authority(historical_authority.into_ref());
 		}
 
 		for incoming_authority in new_authorities_lookup
@@ -1130,7 +1130,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 			!genesis_authorities.is_empty(),
 			"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet."
 		);
-		Some(Self::current_authorities())
+		Some(genesis_authorities)
 	}
 
 	/// The current session is ending
