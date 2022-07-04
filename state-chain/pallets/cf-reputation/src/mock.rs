@@ -22,7 +22,7 @@ use cf_traits::{
 };
 
 thread_local! {
-	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
+	pub static SLASHES: RefCell<Vec<(u64, u64)>> = RefCell::new(Default::default());
 }
 
 construct_runtime!(
@@ -80,6 +80,8 @@ pub const ACCRUAL_RATE: (i32, u64) = (1, 10);
 pub const MAX_REPUTATION_POINT_ACCRUED: ReputationPoints = 15;
 
 pub const MISSED_HEARTBEAT_PENALTY_POINTS: ReputationPoints = 2;
+pub const GRANDPA_EQUIVOCATION_PENALTY_POINTS: ReputationPoints = 50;
+pub const GRANDPA_SUSPENSION_DURATION: u64 = HEARTBEAT_BLOCK_INTERVAL * 10;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
@@ -90,15 +92,22 @@ parameter_types! {
 
 // Mocking the `Slasher` trait
 pub struct MockSlasher;
+
+impl MockSlasher {
+	pub fn slash_count(validator_id: u64) -> usize {
+		SLASHES
+			.with(|slashes| slashes.borrow().iter().filter(|(id, _)| *id == validator_id).count())
+	}
+}
+
 impl Slashing for MockSlasher {
 	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) {
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Count those slashes
-		SLASH_COUNT.with(|count| {
-			let mut c = count.borrow_mut();
-			*c += 1
+		SLASHES.with(|count| {
+			count.borrow_mut().push((*validator_id, blocks_offline));
 		});
 	}
 }
@@ -123,6 +132,7 @@ pub enum AllOffences {
 	MissedHeartbeat,
 	NotLockingYourComputer,
 	ForgettingYourYubiKey,
+	UpsettingGrandpa,
 }
 
 impl From<PalletOffence> for AllOffences {
@@ -153,6 +163,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 				(AllOffences::MissedHeartbeat, (MISSED_HEARTBEAT_PENALTY_POINTS, 0)),
 				(AllOffences::ForgettingYourYubiKey, (15, HEARTBEAT_BLOCK_INTERVAL)),
 				(AllOffences::NotLockingYourComputer, (15, HEARTBEAT_BLOCK_INTERVAL)),
+				(
+					AllOffences::UpsettingGrandpa,
+					(GRANDPA_EQUIVOCATION_PENALTY_POINTS, GRANDPA_SUSPENSION_DURATION),
+				),
 			],
 		},
 	};

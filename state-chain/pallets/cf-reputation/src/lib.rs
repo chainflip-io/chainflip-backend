@@ -32,9 +32,11 @@ use sp_std::{
 mod benchmarking;
 mod migrations;
 
+mod reporting_adapter;
 mod reputation;
 mod suspensions;
 
+pub use reporting_adapter::*;
 pub use reputation::*;
 pub use suspensions::*;
 
@@ -189,6 +191,11 @@ pub mod pallet {
 	#[pallet::getter(fn penalties)]
 	/// The penalty to be applied for each offence.
 	pub type Penalties<T: Config> = StorageMap<_, Twox64Concat, T::Offence, Penalty<T>>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn offence_time_slot_tracker)]
+	/// The penalty to be applied for each offence.
+	pub type OffenceTimeSlotTracker<T: Config> = StorageMap<_, Identity, ReportId, OpaqueTimeSlot>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]

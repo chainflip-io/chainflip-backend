@@ -1,6 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
 use pallet_cf_reputation::{GetValidatorsExcludedFor, OffenceList};
+use pallet_grandpa::GrandpaEquivocationOffence;
 use scale_info::TypeInfo;
 
 use crate::Runtime;
@@ -21,6 +22,8 @@ pub enum Offence {
 	MissedAuthorshipSlot,
 	/// A node has missed a heartbeat submission.
 	MissedHeartbeat,
+	/// Grandpa equivocation detected.
+	GrandpaEquivocation,
 }
 
 pub type ExclusionSetFor<L> = GetValidatorsExcludedFor<Runtime, L>;
@@ -85,5 +88,11 @@ impl From<pallet_cf_validator::PalletOffence> for Offence {
 		match offences {
 			pallet_cf_validator::PalletOffence::MissedAuthorshipSlot => Self::MissedAuthorshipSlot,
 		}
+	}
+}
+
+impl<T> From<GrandpaEquivocationOffence<T>> for Offence {
+	fn from(_: GrandpaEquivocationOffence<T>) -> Self {
+		Self::GrandpaEquivocation
 	}
 }

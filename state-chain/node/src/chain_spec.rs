@@ -133,6 +133,7 @@ const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	// they get excluded from signing the same broadcast attempt again anyway
 	// but we want them to be included in the nomination of next broadcast attempt
 	(Offence::FailedToSignTransaction, (10, 0)),
+	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
 ];
 
 /// Generate an Aura authority key.
