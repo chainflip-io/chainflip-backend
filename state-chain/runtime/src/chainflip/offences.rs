@@ -76,9 +76,8 @@ impl From<pallet_cf_threshold_signature::PalletOffence> for Offence {
 impl From<pallet_cf_vaults::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
 		match offences {
-			pallet_cf_vaults::PalletOffence::ParticipateKeygenFailed =>
-				Self::ParticipateKeygenFailed,
-			pallet_cf_vaults::PalletOffence::SigningOffence => Self::ParticipateSigningFailed,
+			// Failing keygen should carry the same consequences as failing a signing ceremony.
+			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateSigningFailed,
 		}
 	}
 }

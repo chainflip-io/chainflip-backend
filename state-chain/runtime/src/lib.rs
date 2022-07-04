@@ -63,7 +63,7 @@ pub use cf_traits::{
 	ChainflipAccountStore, EpochInfo, FlipBalance, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
+use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
@@ -138,7 +138,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
-	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type AuctionQualification = (
 		Online,
 		pallet_cf_validator::PeerMapping<Self>,
@@ -147,8 +146,6 @@ impl pallet_cf_auction::Config for Runtime {
 			pallet_session::Pallet<Self>,
 		>,
 	);
-	type EmergencyRotation = Validator;
-	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -163,17 +160,19 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
-	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
+	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
 	type VaultRotator = EthereumVault;
-	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type ValidatorQualification = <Self as pallet_cf_auction::Config>::AuctionQualification;
 	type OffenceReporter = Reputation;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type Bonder = Bonder<Runtime>;
 	type ReputationResetter = Reputation;
 }
 
@@ -504,11 +503,11 @@ construct_runtime!(
 		Emissions: pallet_cf_emissions,
 		Staking: pallet_cf_staking,
 		TransactionPayment: pallet_transaction_payment,
-		Session: pallet_session,
-		Historical: session_historical::{Pallet},
 		Witnesser: pallet_cf_witnesser,
 		Auction: pallet_cf_auction,
 		Validator: pallet_cf_validator,
+		Session: pallet_session,
+		Historical: session_historical::{Pallet},
 		Aura: pallet_aura,
 		Authorship: pallet_authorship,
 		Grandpa: pallet_grandpa,

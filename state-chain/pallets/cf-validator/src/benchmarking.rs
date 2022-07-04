@@ -27,6 +27,15 @@ benchmarks! {
 	verify {
 		assert_eq!(Pallet::<T>::backup_node_percentage(), 20u8)
 	}
+	set_authority_set_min_size {
+		let call = Call::<T>::set_authority_set_min_size { min_size: 20 };
+		let o = T::EnsureGovernance::successful_origin();
+	}: {
+		call.dispatch_bypass_filter(o)?
+	}
+	verify {
+		assert_eq!(Pallet::<T>::authority_set_min_size(), 20u8)
+	}
 	force_rotation {
 		let call = Call::<T>::force_rotation {};
 		let o = T::EnsureGovernance::successful_origin();
@@ -34,7 +43,7 @@ benchmarks! {
 		call.dispatch_bypass_filter(o)?
 	}
 	verify {
-		assert_eq!(Pallet::<T>::rotation_phase(), RotationStatus::RunAuction)
+		assert!(matches!(Pallet::<T>::current_rotation_phase(), RotationPhase::VaultsRotating(..)));
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
