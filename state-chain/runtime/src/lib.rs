@@ -68,6 +68,7 @@ use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
+use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
 // Make the WASM binary available.
@@ -598,13 +599,20 @@ impl_runtime_apis! {
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
 		}
+		fn cf_eth_vault() -> ([u8; 33], BlockNumber) {
+			let epoch_index = Self::cf_current_epoch();
+			// We should always have a Vault for the current epoch, but in case we do
+			// not, just return an empty Vault.
+			let vault: Vault<Ethereum> = EthereumVault::vaults(&epoch_index).unwrap_or_default();
+			(vault.public_key.to_pubkey_compressed(), vault.active_from_block.unique_saturated_into())
+		}
 		fn cf_auction_parameters() -> (u32, u32) {
 			let auction_params = Auction::auction_parameters();
 			(auction_params.min_size, auction_params.max_size)
 		}
 		fn cf_min_stake() -> u64 {
 			MinimumStake::<Runtime>::get().unique_saturated_into()
-	}
+		}
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
 		}

@@ -43,6 +43,8 @@ decl_runtime_apis!(
 		fn cf_eth_stake_manager_address() -> [u8; 20];
 		fn cf_eth_key_manager_address() -> [u8; 20];
 		fn cf_eth_chain_id() -> u64;
+		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
+		fn cf_eth_vault() -> ([u8; 33], u32);
 		/// Returns the Auction params in the form [min_set_size, max_set_size]
 		fn cf_auction_parameters() -> (u32, u32);
 		fn cf_min_stake() -> u64;

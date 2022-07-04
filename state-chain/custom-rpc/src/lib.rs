@@ -53,6 +53,9 @@ pub trait CustomApi {
 	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_chain_id")]
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
+	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
+	#[rpc(name = "cf_eth_vault")]
+	fn cf_eth_vault(&self) -> Result<(String, u32), jsonrpc_core::Error>;
 	#[rpc(name = "cf_tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
@@ -134,6 +137,16 @@ where
 			.runtime_api()
 			.cf_eth_chain_id(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_eth_vault(&self) -> Result<(String, u32), jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		let eth_vault = self
+			.client
+			.runtime_api()
+			.cf_eth_vault(&at)
+			.expect("The runtime API should not return error.");
+
+		Ok((hex::encode(eth_vault.0), eth_vault.1))
 	}
 	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error> {
 		Ok(TX_FEE_MULTIPLIER
