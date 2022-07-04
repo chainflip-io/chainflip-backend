@@ -215,24 +215,28 @@ pub mod pallet {
 		VanityNameSet(T::AccountId, VanityName),
 		/// The backup node percentage has been updated \[percentage\].
 		BackupNodePercentageUpdated(Percentage),
+		/// The minimum authority set size has been updated.
+		AuthoritySetMinSizeUpdated { min_size: u8 },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Epoch block number supplied is invalid
+		/// Epoch block number supplied is invalid.
 		InvalidEpoch,
-		/// A rotation is in progress
+		/// A rotation is in progress.
 		RotationInProgress,
-		/// Validator Peer mapping overlaps with an existing mapping
+		/// Validator Peer mapping overlaps with an existing mapping.
 		AccountPeerMappingOverlap,
-		/// Invalid signature
+		/// Invalid signature.
 		InvalidAccountPeerMappingSignature,
-		/// Invalid claim period
+		/// Invalid claim period.
 		InvalidClaimPeriod,
-		/// Vanity name length exceeds the limit of 64 characters
+		/// Vanity name length exceeds the limit of 64 characters.
 		NameTooLong,
-		/// Invalid characters in the name
+		/// Invalid characters in the name.
 		InvalidCharactersInName,
+		/// Invalid minimum authority set size.
+		InvalidAuthoritySetMinSize,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -592,6 +596,39 @@ pub mod pallet {
 			BackupNodePercentage::<T>::put(percentage);
 
 			Self::deposit_event(Event::BackupNodePercentageUpdated(percentage));
+			Ok(().into())
+		}
+
+		/// Allow governance to set the minimum size of the authority set.
+		///
+		/// The dispatch origin of this function must be governance.
+		///
+		/// ## Events
+		///
+		/// - [BackupNodePercentageUpdated](Event::BackupNodePercentageUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// - [InvalidAuthoritySetSize](Error::InvalidAuthoritySetSize)
+		///
+		/// ## Dependencies
+		///
+		/// - [EnsureGovernance]
+		#[pallet::weight(T::ValidatorWeightInfo::set_authority_set_min_size())]
+		pub fn set_authority_set_min_size(
+			origin: OriginFor<T>,
+			min_size: u8,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(
+				u32::from(min_size) <= <Self as EpochInfo>::current_authority_count(),
+				Error::<T>::InvalidAuthoritySetMinSize
+			);
+
+			AuthoritySetMinSize::<T>::put(min_size);
+
+			Self::deposit_event(Event::AuthoritySetMinSizeUpdated { min_size });
 			Ok(().into())
 		}
 	}
