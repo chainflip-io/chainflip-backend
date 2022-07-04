@@ -208,6 +208,15 @@ pub mod pallet {
 
 pub struct SystemStateProvider<T>(PhantomData<T>);
 
+impl<T: Config> SystemStateProvider<T> {
+	fn set_system_state(new_system_state: SystemState) {
+		if CurrentSystemState::<T>::get() != new_system_state {
+			CurrentSystemState::<T>::put(&new_system_state);
+			Pallet::<T>::deposit_event(Event::<T>::SystemStateUpdated { new_system_state });
+		}
+	}
+}
+
 impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
 	fn ensure_no_maintenance() -> frame_support::sp_runtime::DispatchResult {
 		ensure!(
@@ -216,16 +225,14 @@ impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
 		);
 		Ok(())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_maintenance_mode() {
+		<Self as SystemStateManager>::activate_maintenance_mode();
+	}
 }
 
 impl<T: Config> SystemStateManager for SystemStateProvider<T> {
-	type SystemState = SystemState;
-	fn set_system_state(state: SystemState) {
-		if CurrentSystemState::<T>::get() != state {
-			CurrentSystemState::<T>::put(&state);
-			Pallet::<T>::deposit_event(Event::<T>::SystemStateUpdated { new_system_state: state });
-		}
-	}
 	fn activate_maintenance_mode() {
 		Self::set_system_state(SystemState::Maintenance);
 	}
