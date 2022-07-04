@@ -1058,7 +1058,8 @@ impl<T: Config> Pallet<T> {
 					Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_status));
 				},
 				Err(e) => {
-					log::warn!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
+					log::error!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
+					debug_assert!(false, "Unable to start vault rotation");
 				},
 			}
 		}
