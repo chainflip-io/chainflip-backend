@@ -115,7 +115,7 @@ fn keygen_failure() {
 		);
 
 		MockOffenceReporter::assert_reported(
-			PalletOffence::SigningOffence,
+			PalletOffence::FailedKeygen,
 			BAD_CANDIDATES.iter().cloned(),
 		);
 	});
@@ -489,7 +489,7 @@ fn keygen_report_failure() {
 			AsyncResult::Ready(Err(vec![CHARLIE]))
 		);
 
-		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![CHARLIE]);
+		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![CHARLIE]);
 
 		assert_last_event!(crate::Event::KeygenFailure(..));
 
@@ -523,7 +523,7 @@ fn test_keygen_timeout_period() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 
 		// Too many candidates failed to report, so we report nobody.
-		MockOffenceReporter::assert_reported(PalletOffence::SigningOffence, vec![]);
+		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![]);
 	});
 }
 
