@@ -583,24 +583,21 @@ impl<T: Config> Pallet<T> {
 		}
 		if frame_system::Pallet::<T>::account_exists(account_id) {
 			match WithdrawalAddresses::<T>::get(&account_id) {
-				Some(existing) if withdrawal_address == existing => (),
+				Some(existing) if withdrawal_address == existing => Ok(()),
 				_ => {
-					FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
-						staking_attempts.push((withdrawal_address, amount));
-					});
+					FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
 					Self::deposit_event(Event::FailedStakeAttempt(
 						account_id.clone(),
 						withdrawal_address,
 						amount,
 					));
-					return Err(Error::<T>::WithdrawalAddressRestricted)
+					Err(Error::<T>::WithdrawalAddressRestricted)
 				},
 			}
 		} else {
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
+			Ok(())
 		}
-
-		Ok(())
 	}
 
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the
