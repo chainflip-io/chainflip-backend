@@ -32,7 +32,7 @@ where
 	where
 		Id: IsType<AccountState::AccountId>,
 	{
-		let mut triage_result = if backup_group_size_target > backup_candidates.len() {
+		let mut triage_result = if backup_group_size_target >= backup_candidates.len() {
 			Self {
 				backup: backup_candidates,
 				passive: Vec::new(),
