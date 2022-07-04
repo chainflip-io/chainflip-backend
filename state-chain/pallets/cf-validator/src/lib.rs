@@ -796,7 +796,7 @@ pub mod pallet {
 			for id in &self.genesis_authorities {
 				ChainflipAccountStore::<T>::set_current_authority(id.into_ref());
 			}
-			Pallet::<T>::init_new_epoch(
+			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
 				self.bond,
@@ -926,7 +926,7 @@ impl<T: Config> Pallet<T> {
 
 		// Initialise the new epoch.
 		let new_authorities = rotation_status.authority_candidates::<Vec<_>>();
-		Self::init_new_epoch(
+		Self::initialise_new_epoch(
 			new_epoch,
 			&new_authorities,
 			rotation_status.bond,
@@ -969,7 +969,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn init_new_epoch(
+	/// Does all state updates related to the *new* epoch. Is also called at genesis to initialise
+	/// pallet state. Should not update any external state that is not managed by the validator
+	/// pallet, ie. should not call `on_new_epoch`. Also does not need to concern itself with
+	/// expiries etc. that relate to the state of previous epochs.
+	fn initialise_new_epoch(
 		new_epoch: EpochIndex,
 		new_authorities: &[ValidatorIdOf<T>],
 		new_bond: T::Amount,
