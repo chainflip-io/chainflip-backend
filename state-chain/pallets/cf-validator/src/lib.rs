@@ -1223,7 +1223,7 @@ impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type Amount = T::Amount;
 
-	fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
+	fn on_stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
 		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
 			return
 		}

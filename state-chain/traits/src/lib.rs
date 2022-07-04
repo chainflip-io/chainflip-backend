@@ -237,12 +237,13 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
-/// Provide feedback on staking
 pub trait StakeHandler {
 	type ValidatorId;
 	type Amount;
-	/// A node has updated their stake and now has a new total amount
-	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
+
+	/// A callback that is triggered after some validator's stake has changed, either by staking
+	/// more Flip, or by executing a claim.
+	fn on_stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
 pub trait StakeTransfer {
