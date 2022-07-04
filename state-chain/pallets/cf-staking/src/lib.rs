@@ -595,26 +595,16 @@ impl<T: Config> Pallet<T> {
 		withdrawal_address: EthereumAddress,
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
+		if withdrawal_address == ETH_ZERO_ADDRESS {
+			return Ok(())
+		}
 		if frame_system::Pallet::<T>::account_exists(account_id) {
-			let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
-			match existing_withdrawal_address {
-				// User account exists and both addresses hold a value - the value of both addresses
-				// is different and not null
-				Some(existing)
-					if withdrawal_address != existing && withdrawal_address != ETH_ZERO_ADDRESS =>
-					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?,
-				// Only the provided address exists:
-				// We only want to add a new withdrawal address if this is the first staking
-				// attempt, ie. the account doesn't exist.
-				None if withdrawal_address != ETH_ZERO_ADDRESS =>
-					Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?,
-				_ => (),
+			match WithdrawalAddresses::<T>::get(&account_id) {
+				Some(existing) if withdrawal_address == existing => (),
+				_ => Self::log_failed_stake_attempt(account_id, withdrawal_address, amount)?,
 			}
 		}
-		// Save the withdrawal address if provided
-		if withdrawal_address != ETH_ZERO_ADDRESS {
-			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
-		}
+		WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
 		Ok(())
 	}
 
