@@ -198,8 +198,8 @@ pub mod pallet {
 		NewEpoch(EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
-		/// Rotation status updated \[rotation_status\]
-		RotationStatusUpdated(RotationPhase<T>),
+		/// Rotation phase updated \[rotation_phase\]
+		RotationPhaseUpdated(RotationPhase<T>),
 		/// An emergency rotation has been requested
 		EmergencyRotationRequested(),
 		/// The CFE version has been updated \[Validator, Old Version, New Version]
@@ -273,9 +273,7 @@ pub mod pallet {
 				RotationPhase::VaultsRotating(mut rotation_status) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(Ok(_)) => {
-							Self::set_rotation_status(RotationPhase::VaultsRotated(
-								rotation_status,
-							));
+							Self::set_rotation_phase(RotationPhase::VaultsRotated(rotation_status));
 						},
 						AsyncResult::Ready(Err(offenders)) => {
 							rotation_status.ban(offenders);
@@ -284,17 +282,17 @@ pub mod pallet {
 						AsyncResult::Void => {
 							debug_assert!(false, "Void state should be unreachable.");
 							log::error!(target: "cf-validator", "no vault rotation pending");
-							Self::set_rotation_status(RotationPhase::Idle);
+							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
 						},
 					},
 				RotationPhase::VaultsRotated(rotation_status) => {
-					Self::set_rotation_status(RotationPhase::SessionRotating(rotation_status));
+					Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
 				},
 				RotationPhase::SessionRotating(_) => {
-					Self::set_rotation_status(RotationPhase::Idle);
+					Self::set_rotation_phase(RotationPhase::Idle);
 				},
 			}
 			0
@@ -965,10 +963,10 @@ impl<T: Config> Pallet<T> {
 		BackupValidatorTriage::<T>::put(backup_triage);
 	}
 
-	fn set_rotation_status(new_status: RotationPhase<T>) {
-		log::debug!(target: "cf-validator", "Advancing rotation phase to: {new_status:?}");
-		CurrentRotationPhase::<T>::put(new_status.clone());
-		Self::deposit_event(Event::RotationStatusUpdated(new_status));
+	fn set_rotation_phase(new_phase: RotationPhase<T>) {
+		log::debug!(target: "cf-validator", "Advancing rotation phase to: {new_phase:?}");
+		CurrentRotationPhase::<T>::put(new_phase.clone());
+		Self::deposit_event(Event::RotationPhaseUpdated(new_phase));
 	}
 
 	fn backup_set_target_size(num_authorities: usize, backup_node_percentage: Percentage) -> usize {
@@ -1011,12 +1009,12 @@ impl<T: Config> Pallet<T> {
 				target: "cf-validator",
 				"Not enough auction candidates left - aborting rotation."
 			);
-			Self::set_rotation_status(RotationPhase::Idle);
+			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
 			match T::VaultRotator::start_vault_rotation(candidates) {
 				Ok(()) => {
 					log::info!(target: "cf-validator", "Vault rotation initiated.");
-					Self::set_rotation_status(RotationPhase::VaultsRotating(rotation_status));
+					Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_status));
 				},
 				Err(e) => {
 					log::warn!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
