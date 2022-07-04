@@ -70,10 +70,6 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 			.take(self.target_set_size as usize)
 	}
 
-	pub fn candidate_count(&self) -> usize {
-		self.authority_candidates_iter().count()
-	}
-
 	pub fn authority_candidates<I: FromIterator<Id>>(&self) -> I {
 		self.authority_candidates_iter().cloned().collect::<I>()
 	}
