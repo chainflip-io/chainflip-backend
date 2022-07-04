@@ -1,5 +1,5 @@
 use crate::*;
-use cf_traits::{AuctionOutcome, BackupNodes};
+use cf_traits::{AuctionOutcome, BackupNodes, Bid};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -43,9 +43,9 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 				.into_iter()
 				// We only allow current authorities or backup validators to be secondary
 				// candidates.
-				.filter_map(|bid| {
-					if backups.contains(&bid.bidder_id) || authorities.contains(&bid.bidder_id) {
-						Some(bid.bidder_id)
+				.filter_map(|Bid { bidder_id, .. }| {
+					if backups.contains(&bidder_id) || authorities.contains(&bidder_id) {
+						Some(bidder_id)
 					} else {
 						None
 					}
