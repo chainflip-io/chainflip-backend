@@ -226,7 +226,7 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 			Pallet::<T>::deposit_event(Event::<T>::SystemStateUpdated { new_system_state: state });
 		}
 	}
-	fn set_maintenance_mode() {
+	fn activate_maintenance_mode() {
 		Self::set_system_state(SystemState::Maintenance);
 	}
 }
