@@ -3,6 +3,8 @@ use cf_traits::{AuctionOutcome, BackupNodes};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
 
+const BACKUP_CANDIDATE_FRACTION: usize = 3;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct RotationStatus<Id, Amount> {
 	primary_candidates: Vec<Id>,
@@ -33,7 +35,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 		let authorities = Pallet::<T>::current_authorities().into_iter().collect::<BTreeSet<_>>();
 
 		// Limit the number of secondary candidates according to the size of the backup set.
-		let max_secondary_candidates = backups.len() / 3;
+		let max_secondary_candidates = backups.len() / BACKUP_CANDIDATE_FRACTION;
 
 		Self::new(
 			auction_outcome.winners,
