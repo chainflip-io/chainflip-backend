@@ -282,7 +282,9 @@ pub mod pallet {
 							Self::start_vault_rotation(rotation_status);
 						},
 						AsyncResult::Void => {
+							debug_assert!(false, "Void state should be unreachable.");
 							log::error!(target: "cf-validator", "no vault rotation pending");
+							Self::set_rotation_status(RotationPhase::Idle);
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
@@ -1130,8 +1132,8 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 
 impl<T: Config> EmergencyRotation for Pallet<T> {
 	fn request_emergency_rotation() {
-		Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
 		if CurrentRotationPhase::<T>::get() == RotationPhase::<T>::Idle {
+			Pallet::<T>::deposit_event(Event::EmergencyRotationRequested());
 			Self::start_authority_rotation();
 		}
 	}
