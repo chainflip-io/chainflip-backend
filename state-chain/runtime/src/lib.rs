@@ -166,7 +166,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type QualifyBackupNode = <Self as pallet_cf_auction::Config>::AuctionQualification;
+	type ValidatorQualification = <Self as pallet_cf_auction::Config>::AuctionQualification;
 	type OffenceReporter = Reputation;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = Bonder<Runtime>;

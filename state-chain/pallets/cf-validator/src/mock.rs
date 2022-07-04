@@ -255,7 +255,7 @@ impl Config for Test {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
-	type QualifyBackupNode = QualifyAll<ValidatorId>;
+	type ValidatorQualification = QualifyAll<ValidatorId>;
 }
 
 /// Session pallet requires a set of validators at genesis.

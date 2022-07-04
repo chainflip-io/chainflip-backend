@@ -169,8 +169,9 @@ pub mod pallet {
 			Amount = Self::Amount,
 		>;
 
-		/// Criteria that need to be fulfilled to qualify as a backup node.
-		type QualifyBackupNode: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
+		/// Criteria that need to be fulfilled to qualify as a validator node (authority, backup or
+		/// passive).
+		type ValidatorQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -935,7 +936,7 @@ impl<T: Config> Pallet<T> {
 					.into_iter()
 					.filter_map(|bid| {
 						if !new_authorities_lookup.contains(&bid.0) &&
-							T::QualifyBackupNode::is_qualified(&bid.0)
+							T::ValidatorQualification::is_qualified(&bid.0)
 						{
 							Some(bid.into())
 						} else {
@@ -1220,7 +1221,7 @@ impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
 		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
 			return
 		}
-		if T::QualifyBackupNode::is_qualified(validator_id) {
+		if T::ValidatorQualification::is_qualified(validator_id) {
 			BackupValidatorTriage::<T>::mutate(|backup_triage| {
 				backup_triage.adjust_bid::<T::ChainflipAccount>(validator_id.clone(), amount);
 			});
