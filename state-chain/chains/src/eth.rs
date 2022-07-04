@@ -212,9 +212,17 @@ impl From<ParityBit> for Uint {
 	}
 }
 
+impl Default for ParityBit {
+	/// Default ParityBit is even (zero)
+	fn default() -> Self {
+		ParityBit::Even
+	}
+}
+
 /// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(
+	Default,
 	Encode,
 	Decode,
 	TypeInfo,
