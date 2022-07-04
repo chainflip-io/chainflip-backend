@@ -16,7 +16,6 @@ pub struct RotationStatus<Id, Amount> {
 
 impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Amount> {
 	pub fn new(primary_candidates: Vec<Id>, secondary_candidates: Vec<Id>, bond: Amount) -> Self {
-		// TODO: debug_assert that the candidates are sorted by descending bid.
 		let target_set_size = primary_candidates.len() as u8;
 		Self {
 			primary_candidates,

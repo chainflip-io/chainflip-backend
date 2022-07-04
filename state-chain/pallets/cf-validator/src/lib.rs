@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 #![feature(array_zip)]
+#![feature(is_sorted)]
 
 #[cfg(test)]
 mod mock;
@@ -1027,6 +1028,11 @@ impl<T: Config> Pallet<T> {
 		match T::Auctioneer::resolve_auction() {
 			Ok(auction_outcome) => {
 				debug_assert!(!auction_outcome.winners.is_empty());
+				debug_assert!({
+					let bids =
+						T::BidderProvider::get_bidders().into_iter().collect::<BTreeMap<_, _>>();
+					auction_outcome.winners.iter().map(|id| bids.get(id)).is_sorted_by_key(Reverse)
+				});
 				log::info!(
 					target: "cf-validator",
 					"Auction resolved with {} winners and {} losers. Bond will be {}FLIP.",
