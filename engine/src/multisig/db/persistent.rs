@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::HashMap, fs, path::Path};
 
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
 
 use crate::{
@@ -21,6 +21,7 @@ pub const LATEST_SCHEMA_VERSION: u32 = 0;
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
+pub const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
 
 /// A static length prefix is used on the `DATA_COLUMN`
 pub const PREFIX_SIZE: usize = 10;
@@ -46,8 +47,12 @@ pub struct PersistentKeyDB {
 }
 impl PersistentKeyDB {
     /// Create a new persistent key database. If the database exists and the schema version
-    /// is below the latest, it will attempt to migrate the data to the latest version
-    pub fn new_and_migrate_to_latest(db_path: &Path, logger: &slog::Logger) -> Result<Self> {
+    /// is below the latest, it will attempt to migrate the data to the latest version.
+    pub fn new_and_migrate_to_latest(
+        db_path: &Path,
+        genesis_hash: Option<state_chain_runtime::Hash>,
+        logger: &slog::Logger,
+    ) -> Result<Self> {
         // Use a prefix extractor on the data column
         let mut cfopts_for_prefix = Options::default();
         cfopts_for_prefix
@@ -104,11 +109,11 @@ impl PersistentKeyDB {
 
         let p_kdb = if is_existing_db {
             // Perform migrations and update schema version
-            migrate_db_to_latest(db, db_path, logger)
+            migrate_db_to_latest(db, db_path, genesis_hash,logger)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?
         } else {
             // It's a new db, so just write the latest schema version
-            PersistentKeyDB::new_from_db_and_set_schema_version_to_latest(db, logger)?
+            PersistentKeyDB::new_from_db_and_write_metadata(db, genesis_hash, logger)?
         };
 
         Ok(p_kdb)
@@ -121,18 +126,30 @@ impl PersistentKeyDB {
         }
     }
 
-    // Create a new `PersistentKeyDB` and write the latest schema version
-    pub fn new_from_db_and_set_schema_version_to_latest(
+    /// Create a new `PersistentKeyDB` with the latest schema version and genesis hash.
+    /// The genesis hash is optional because it is not known during the genesis keys process.
+    pub fn new_from_db_and_write_metadata(
         db: DB,
+        genesis_hash: Option<state_chain_runtime::Hash>,
         logger: &slog::Logger,
     ) -> Result<Self, anyhow::Error> {
-        // Update version data
-        db.put_cf(
+        let mut batch = WriteBatch::default();
+
+        batch.put_cf(
             get_metadata_column_handle(&db),
             DB_SCHEMA_VERSION_KEY,
             LATEST_SCHEMA_VERSION.to_be_bytes(),
-        )
-        .context("Failed to write schema version to db")?;
+        );
+
+        if let Some(genesis_hash) = genesis_hash {
+            batch.put_cf(
+                get_metadata_column_handle(&db),
+                GENESIS_HASH_KEY,
+                genesis_hash,
+            );
+        }
+
+        db.write(batch).context("Failed to write metadata to db")?;
 
         Ok(PersistentKeyDB::new_from_db(db, logger))
     }
@@ -287,15 +304,57 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
         .ok_or_else(|| anyhow::Error::msg("Could not find db schema version"))
 }
 
+/// Check that the genesis in the db file matches the one provided.
+/// If None is found and Some is provided, it will add it to the db.
+fn check_or_set_genesis_hash(
+    db: &DB,
+    genesis_hash: Option<state_chain_runtime::Hash>,
+) -> Result<()> {
+    let existing_hash = db
+        .get_cf(get_metadata_column_handle(db), GENESIS_HASH_KEY)
+        .context("Failed to get metadata column when trying to read the genesis hash")?;
+
+    match (existing_hash, genesis_hash) {
+        (Some(existing_hash), Some(genesis_hash)) => {
+            if existing_hash != genesis_hash.as_bytes() {
+                Err(anyhow::Error::msg(
+                    "Genesis hash mismatch. Have you changed Chainflip network?",
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        (Some(_), None) => Err(anyhow::Error::msg(
+            "Database has a genesis hash but None was expected",
+        )),
+        (None, Some(genesis_hash)) => {
+            // Write the genesis hash
+            db.put_cf(
+                get_metadata_column_handle(db),
+                GENESIS_HASH_KEY,
+                genesis_hash,
+            )
+            .context("Failed to write genesis hash to db")?;
+
+            Ok(())
+        }
+        (None, None) => Ok(()),
+    }
+}
+
 /// Reads the schema version and migrates the db to the latest schema version if required
 fn migrate_db_to_latest(
     db: DB,
     path: &Path,
+    genesis_hash: Option<state_chain_runtime::Hash>,
     logger: &slog::Logger,
 ) -> Result<PersistentKeyDB, anyhow::Error> {
     // Read the schema version from the db
     let version =
         read_schema_version(&db, logger).context("Failed to read schema version on existing db")?;
+
+    // Read the genesis hash and write it if none is found
+    check_or_set_genesis_hash(&db, genesis_hash)?;
 
     // Check if the db version is up-to-date or we need to do migrations
     match version.cmp(&LATEST_SCHEMA_VERSION) {
@@ -416,18 +475,22 @@ mod tests {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
+            &db_path, None, &logger
         ));
         assert!(db_path.exists());
     }
 
     #[test]
-    fn new_db_is_created_with_latest_schema_version() {
+    fn new_db_is_created_with_correct_metadata() {
         let logger = new_test_logger();
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        // Create a fresh db. This will also write the schema version
+        let starting_genesis_hash: state_chain_runtime::Hash = sp_core::H256::random();
+
+        // Create a fresh db. This will write the schema version and genesis hash
         assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
+            &db_path,
+            Some(starting_genesis_hash),
+            &logger
         ));
 
         assert!(db_path.exists());
@@ -436,7 +499,7 @@ mod tests {
             let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
 
-            // Get version number
+            // Check version number
             let db_schema_version = db
                 .get_cf(get_metadata_column_handle(&db), DB_SCHEMA_VERSION_KEY)
                 .expect("Should get from metadata column")
@@ -445,6 +508,16 @@ mod tests {
                 .try_into()
                 .expect("Version should be a u32");
             assert_eq!(u32::from_be_bytes(db_schema_version), LATEST_SCHEMA_VERSION);
+
+            // Check that we can turn the genesis hash back into a `state_chain_runtime::Hash`
+            // and that it matches the hash we started the db with.
+            let db_genesis_hash = db
+                .get_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY)
+                .expect("Should get from metadata column")
+                .expect("No genesis hash found");
+            let db_genesis_hash: state_chain_runtime::Hash =
+                sp_core::H256::from_slice(&db_genesis_hash[..]);
+            assert_eq!(db_genesis_hash, starting_genesis_hash);
         }
     }
 
@@ -454,6 +527,7 @@ mod tests {
         open_db_and_write_version_data(&db_path, LATEST_SCHEMA_VERSION);
         assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
             &db_path,
+            None,
             &new_test_logger()
         ));
     }
@@ -470,7 +544,7 @@ mod tests {
         {
             let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
                 .expect("Should open db file");
-            assert!(migrate_db_to_latest(db, &db_path, &new_test_logger()).is_err());
+            assert!(migrate_db_to_latest(db, &db_path, None, &new_test_logger()).is_err());
         }
     }
 
@@ -484,13 +558,13 @@ mod tests {
         let key_id = KeyId(TEST_KEY.into());
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
             p_db.update_key::<Scheme>(&key_id, &secret_share);
         }
 
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
             let keys = p_db.load_keys::<Scheme>();
             let key = keys.get(&key_id).expect("Should have an entry for key");
             // single party keygen has a threshold of 0
@@ -506,7 +580,7 @@ mod tests {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         let key_id = KeyId(vec![0; 33]);
 
-        let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+        let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
         let keys_before = p_db.load_keys::<Scheme>();
         // there should be no key [0; 33] yet
@@ -525,7 +599,7 @@ mod tests {
         let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
         // Create a normal db
         assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
+            &db_path, None, &logger
         ));
 
         // Backup up the db to a specified directory.
@@ -547,7 +621,7 @@ mod tests {
 
         // Create a normal db
         assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
+            &db_path, None, &logger
         ));
         // Do a backup of the db,
         assert_ok!(create_backup(&db_path, LATEST_SCHEMA_VERSION));
@@ -577,7 +651,7 @@ mod tests {
 
         // Create a normal db and save a key in it
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
             let keygen_result_info = generate_key_share_for_test::<Scheme>();
             p_db.update_key::<Scheme>(&key_id, &keygen_result_info);
         }
@@ -596,7 +670,7 @@ mod tests {
 
             // Should be able to open the backup and load the key
             let p_db =
-                PersistentKeyDB::new_and_migrate_to_latest(backups.first().unwrap(), &logger)
+                PersistentKeyDB::new_and_migrate_to_latest(backups.first().unwrap(), None, &logger)
                     .unwrap();
 
             assert!(p_db.load_keys::<Scheme>().get(&key_id).is_some());
@@ -615,7 +689,7 @@ mod tests {
 
         // Create a normal db and save multiple keys to it of different crypto schemes
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
             p_db.update_key::<Scheme1>(&scheme_1_key_id, &generate_key_share_for_test::<Scheme1>());
             p_db.update_key::<Scheme2>(&scheme_2_key_id, &generate_key_share_for_test::<Scheme2>());
@@ -623,7 +697,7 @@ mod tests {
 
         // Open the db and load the keys of both types
         {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
+            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
             let scheme_1_keys = p_db.load_keys::<Scheme1>();
             assert_eq!(scheme_1_keys.len(), 1, "Incorrect number of keys loaded");
@@ -638,6 +712,67 @@ mod tests {
                 scheme_2_keys.get(&scheme_2_key_id).is_some(),
                 "Incorrect key id"
             );
+        }
+    }
+
+    #[test]
+    fn should_add_genesis_hash_if_missing() {
+        let logger = new_test_logger();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+        let genesis_hash_added_later: state_chain_runtime::Hash = sp_core::H256::random();
+
+        // Create a fresh db with no genesis hash
+        open_db_and_write_version_data(&db_path, LATEST_SCHEMA_VERSION);
+
+        // Open the db normally, so the genesis hash will be added
+        {
+            assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+                &db_path,
+                Some(genesis_hash_added_later),
+                &logger
+            ));
+        }
+
+        assert!(db_path.exists());
+        {
+            // Open the db file manually
+            let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
+                .expect("Should open db file");
+
+            // Check that the genesis hash was added and is correct
+            let db_genesis_hash = db
+                .get_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY)
+                .expect("Should get from metadata column")
+                .expect("No genesis hash found");
+            assert_eq!(db_genesis_hash, genesis_hash_added_later.as_bytes());
+        }
+    }
+
+    #[test]
+    fn should_error_if_genesis_hash_is_different() {
+        let logger = new_test_logger();
+        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+        let genesis_hash_1 = sp_core::H256::from_low_u64_be(1);
+        let genesis_hash_2 = sp_core::H256::from_low_u64_be(2);
+        assert_ne!(genesis_hash_1, genesis_hash_2);
+
+        // Open the db, so hash 1 is written
+        {
+            assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+                &db_path,
+                Some(genesis_hash_1),
+                &logger
+            ));
+        }
+
+        // Open the db again, but with hash 2, so it should compare them and return an error
+        {
+            assert!(PersistentKeyDB::new_and_migrate_to_latest(
+                &db_path,
+                Some(genesis_hash_2),
+                &logger
+            )
+            .is_err());
         }
     }
 }

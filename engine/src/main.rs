@@ -43,14 +43,6 @@ async fn main() {
             .await;
     }
 
-    let db = Arc::new(
-        PersistentKeyDB::new_and_migrate_to_latest(
-            settings.signing.db_file.as_path(),
-            &root_logger,
-        )
-        .expect("Failed to open database"),
-    );
-
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
     let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
@@ -172,6 +164,15 @@ async fn main() {
         KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
 
     use crate::multisig::eth::EthSigning;
+
+    let db = Arc::new(
+        PersistentKeyDB::new_and_migrate_to_latest(
+            settings.signing.db_file.as_path(),
+            Some(state_chain_client.get_genesis_hash()),
+            &root_logger,
+        )
+        .expect("Failed to open database"),
+    );
 
     let (eth_multisig_client, eth_multisig_client_backend_future) =
         multisig::start_client::<EthSigning>(
