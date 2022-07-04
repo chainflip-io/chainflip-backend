@@ -275,8 +275,7 @@ pub struct Vault<T: ChainAbi> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
-	/// Failing keygen is equivalent to a regular signing offence.
-	SigningOffence,
+	FailedKeygen,
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
@@ -767,7 +766,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	// Called once there's consensus between the authorities that the keygen was unsuccessful
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
-		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
+		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.to_vec(),
 		});
