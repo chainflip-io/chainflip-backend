@@ -8,7 +8,7 @@ Validator nodes fall into different categories:
   is bonded and may be slashed according to the reputation system. Authorities earn Flip rewards at a rate that is
   fixed for the duration of the epoch.
 - **Backup** Nodes are incentivised to remain available to participate in the next keygen ceremony.
-- **Passive** Nodes are
+- **Passive** Nodes have lower stake than Backup nodes and therefore earn no rewards.
 
 To qualify as a Validator Node, the following conditions must be met:
 
