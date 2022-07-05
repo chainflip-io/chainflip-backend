@@ -29,7 +29,7 @@ use std::{
 	marker::Send,
 	net::Ipv6Addr,
 	pin::Pin,
-	time::Duration,
+	time::Duration, fmt::Display,
 };
 use tokio::sync::mpsc::{error::TrySendError, Sender};
 
@@ -88,9 +88,6 @@ pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 /// Shared state to allow Rpc to send P2P Messages, and the P2P to send Rpc notifcations
 #[derive(Default)]
 struct P2PValidatorNetworkNodeState {
-	/// Store all local rpc subscriber senders
-	p2p_message_rpc_subscribers:
-		HashMap<SubscriptionId, UnboundedSender<(PeerIdTransferable, Vec<u8>)>>,
 	reserved_peers: BTreeMap<PeerId, (u16, Ipv6Addr, Sender<Vec<u8>>)>,
 }
 
@@ -170,6 +167,9 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	/// Disconnect from a authority
 	#[rpc(name = "p2p_remove_peer")]
 	fn remove_peer(&self, peer_id: PeerIdTransferable) -> Result<u64>;
+	
+	#[rpc(name = "p2p_setup_ipc_connections")]
+	fn setup_ipc_connections(&self, server_name: String) -> Result<u64>;
 }
 
 impl<
@@ -331,6 +331,28 @@ pub fn new_p2p_network_node<
 						)))
 					}
 				}
+
+				fn setup_ipc_connections(&self, server_name: String) -> Result<u64> {
+
+					fn map_to_json_error<T, E: Display>(result: std::result::Result<T, E>, message: &str) -> Result<T> {
+						result.map_err(|error| {
+							jsonrpc_core::Error {
+								code: jsonrpc_core::ErrorCode::ServerError(1),
+								message: format!("{message}: {error}"),
+								data: None
+							}
+						})
+					}; 
+
+					let (_incoming_sender, incoming_receiver) =
+						map_to_json_error(ipc_channel::ipc::channel::<(PeerIdTransferable, Vec<u8>)>(), "Failed to create incoming p2p message ipc channel")?;
+					let (outgoing_sender, _outgoing_receiver) =
+						map_to_json_error(ipc_channel::ipc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>(), "Failed to create outgoing p2p message ipc channel")?;
+
+					map_to_json_error(map_to_json_error(ipc_channel::ipc::IpcSender::connect(server_name), "Failed to connect to oneshot ipc channel")?.send((outgoing_sender, incoming_receiver)), "Failed to setup ipc channels")?;
+
+					Ok(200)
+				}
 			}
 
 			RpcRequestHandler {
@@ -390,7 +412,7 @@ pub fn new_p2p_network_node<
 								})
 								.peekable();
 							if messages.peek().is_some() {
-								let state = state.read().unwrap();
+								/*let state = state.read().unwrap();
 								let remote: PeerIdTransferable = From::from(&remote);
 								for message in messages {
 									let message = message.into_iter().collect::<Vec<u8>>();
@@ -404,7 +426,7 @@ pub fn new_p2p_network_node<
 											);
 										}
 									}
-								}
+								}*/
 							}
 						},
 						_ => {},
@@ -415,6 +437,7 @@ pub fn new_p2p_network_node<
 	)
 }
 
+/*
 #[cfg(test)]
 mod tests {
 	use std::time::Duration;
@@ -997,3 +1020,4 @@ mod tests {
 		));
 	}
 }
+*/
