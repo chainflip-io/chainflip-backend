@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod persistent_key_db_tests;
 
-use std::{cmp::Ordering, collections::HashMap, fs, path::Path};
+use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
@@ -111,12 +111,31 @@ impl PersistentKeyDB {
                 .context(format!("Failed to open database at: {}", db_path.display()))?;
 
         let p_kdb = if is_existing_db {
-            // Perform migrations and update schema version
+            // An existing db, so perform migrations and update the metadata
             migrate_db_to_latest(db, db_path, genesis_hash,logger)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?
         } else {
-            // It's a new db, so just write the latest schema version
-            PersistentKeyDB::new_from_db_and_write_metadata(db, genesis_hash, logger)?
+            // It's a new db, so create a new `PersistentKeyDB` with the latest schema version and genesis hash
+            let mut batch = WriteBatch::default();
+
+            batch.put_cf(
+                get_metadata_column_handle(&db),
+                DB_SCHEMA_VERSION_KEY,
+                LATEST_SCHEMA_VERSION.to_be_bytes(),
+            );
+
+            if let Some(genesis_hash) = genesis_hash {
+                batch.put_cf(
+                    get_metadata_column_handle(&db),
+                    GENESIS_HASH_KEY,
+                    genesis_hash,
+                );
+            }
+
+            db.write(batch)
+                .context("Failed to write metadata to new db")?;
+
+            PersistentKeyDB::new_from_db(db, logger)
         };
 
         Ok(p_kdb)
@@ -127,34 +146,6 @@ impl PersistentKeyDB {
             db,
             logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
         }
-    }
-
-    /// Create a new `PersistentKeyDB` with the latest schema version and genesis hash.
-    /// The genesis hash is optional because it is not known during the genesis keys process.
-    pub fn new_from_db_and_write_metadata(
-        db: DB,
-        genesis_hash: Option<state_chain_runtime::Hash>,
-        logger: &slog::Logger,
-    ) -> Result<Self, anyhow::Error> {
-        let mut batch = WriteBatch::default();
-
-        batch.put_cf(
-            get_metadata_column_handle(&db),
-            DB_SCHEMA_VERSION_KEY,
-            LATEST_SCHEMA_VERSION.to_be_bytes(),
-        );
-
-        if let Some(genesis_hash) = genesis_hash {
-            batch.put_cf(
-                get_metadata_column_handle(&db),
-                GENESIS_HASH_KEY,
-                genesis_hash,
-            );
-        }
-
-        db.write(batch).context("Failed to write metadata to db")?;
-
-        Ok(PersistentKeyDB::new_from_db(db, logger))
     }
 
     /// Write the keyshare to the db, indexed by the key id
@@ -297,7 +288,7 @@ fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
 /// Get the schema version from the metadata column in the db.
 fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
     db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
-        .context("Failed to get metadata column when trying to read the schema version")?
+        .context("Failed to get metadata column")?
         .map(|version| {
             let version: [u8; 4] = version.try_into().expect("Version should be a u32");
             let version = u32::from_be_bytes(version);
@@ -307,31 +298,30 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
         .ok_or_else(|| anyhow::Error::msg("Could not find db schema version"))
 }
 
-/// Check that the genesis in the db file matches the one provided.
-/// If None is found and Some is provided, it will add it to the db.
-fn check_or_set_genesis_hash(
-    db: &DB,
-    genesis_hash: Option<state_chain_runtime::Hash>,
-) -> Result<()> {
-    let existing_hash = db
+/// Get the genesis hash from the metadata column in the db.
+fn read_genesis_hash(db: &DB) -> Result<Option<state_chain_runtime::Hash>> {
+    match db
         .get_cf(get_metadata_column_handle(db), GENESIS_HASH_KEY)
-        .context("Failed to get metadata column when trying to read the genesis hash")?;
-
-    match (existing_hash, genesis_hash) {
-        (Some(existing_hash), Some(genesis_hash)) => {
-            if existing_hash != genesis_hash.as_bytes() {
-                Err(anyhow::Error::msg(
-                    "Genesis hash mismatch. Have you changed Chainflip network?",
-                ))
-            } else {
-                Ok(())
-            }
+        .context("Failed to get metadata column")?
+    {
+        Some(hash) if hash.len() != size_of::<state_chain_runtime::Hash>() => {
+            Err(anyhow!("Incorrect length of Genesis hash"))
         }
-        (Some(_), None) => Err(anyhow::Error::msg(
-            "Database has a genesis hash but None was expected",
+        Some(hash) => Ok(Some(sp_core::H256::from_slice(&hash[..]))),
+        None => Ok(None),
+    }
+}
+
+/// Check that the genesis in the db file matches the one provided.
+/// If None is found, it will be added to the db.
+fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -> Result<()> {
+    let existing_hash = read_genesis_hash(db)?;
+
+    match existing_hash {
+        Some(existing_hash) if existing_hash != genesis_hash => Err(anyhow!(
+            "Genesis hash mismatch. Have you changed Chainflip network?",
         )),
-        (None, Some(genesis_hash)) => {
-            // Write the genesis hash
+        None => {
             db.put_cf(
                 get_metadata_column_handle(db),
                 GENESIS_HASH_KEY,
@@ -341,7 +331,8 @@ fn check_or_set_genesis_hash(
 
             Ok(())
         }
-        (None, None) => Ok(()),
+        // The genesis hashes match.
+        _ => Ok(()),
     }
 }
 
@@ -352,12 +343,12 @@ fn migrate_db_to_latest(
     genesis_hash: Option<state_chain_runtime::Hash>,
     logger: &slog::Logger,
 ) -> Result<PersistentKeyDB, anyhow::Error> {
-    // Read the schema version from the db
-    let version =
-        read_schema_version(&db, logger).context("Failed to read schema version on existing db")?;
+    let version = read_schema_version(&db, logger)
+        .context("Failed to read schema version from existing db")?;
 
-    // Read the genesis hash and write it if none is found
-    check_or_set_genesis_hash(&db, genesis_hash)?;
+    if let Some(expected_genesis_hash) = genesis_hash {
+        check_or_set_genesis_hash(&db, expected_genesis_hash)?;
+    }
 
     // Check if the db version is up-to-date or we need to do migrations
     match version.cmp(&LATEST_SCHEMA_VERSION) {

@@ -12,7 +12,7 @@ use crate::{
         crypto::{polkadot::PolkadotSigning, CryptoScheme, Rng},
         db::persistent::{
             create_backup, create_backup_with_directory_name, migrate_db_to_latest,
-            GENESIS_HASH_KEY, LATEST_SCHEMA_VERSION,
+            LATEST_SCHEMA_VERSION,
         },
         eth::EthSigning,
         KeyId, PersistentKeyDB,
@@ -102,25 +102,19 @@ fn new_db_is_created_with_correct_metadata() {
         let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
             .expect("Should open db file");
 
-        // Check version number
-        let db_schema_version = db
-            .get_cf(get_metadata_column_handle(&db), DB_SCHEMA_VERSION_KEY)
-            .expect("Should get from metadata column")
-            .expect("No version data found");
-        let db_schema_version: [u8; 4] = db_schema_version
-            .try_into()
-            .expect("Version should be a u32");
-        assert_eq!(u32::from_be_bytes(db_schema_version), LATEST_SCHEMA_VERSION);
+        // Check the schema version is at the latest
+        assert_eq!(
+            read_schema_version(&db, &logger).expect("Should read schema version"),
+            LATEST_SCHEMA_VERSION
+        );
 
-        // Check that we can turn the genesis hash back into a `state_chain_runtime::Hash`
-        // and that it matches the hash we started the db with.
-        let db_genesis_hash = db
-            .get_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY)
-            .expect("Should get from metadata column")
-            .expect("No genesis hash found");
-        let db_genesis_hash: state_chain_runtime::Hash =
-            sp_core::H256::from_slice(&db_genesis_hash[..]);
-        assert_eq!(db_genesis_hash, starting_genesis_hash);
+        // Check the genesis hash exists and matches the one we provided
+        assert_eq!(
+            read_genesis_hash(&db)
+                .expect("Should read genesis hash")
+                .expect("Should find genesis hash"),
+            starting_genesis_hash
+        );
     }
 }
 
@@ -343,11 +337,12 @@ fn should_add_genesis_hash_if_missing() {
             .expect("Should open db file");
 
         // Check that the genesis hash was added and is correct
-        let db_genesis_hash = db
-            .get_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY)
-            .expect("Should get from metadata column")
-            .expect("No genesis hash found");
-        assert_eq!(db_genesis_hash, genesis_hash_added_later.as_bytes());
+        assert_eq!(
+            read_genesis_hash(&db)
+                .expect("Should read genesis hash")
+                .expect("Should find genesis hash"),
+            genesis_hash_added_later
+        );
     }
 }
 
