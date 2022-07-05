@@ -304,10 +304,13 @@ fn read_genesis_hash(db: &DB) -> Result<Option<state_chain_runtime::Hash>> {
         .get_cf(get_metadata_column_handle(db), GENESIS_HASH_KEY)
         .context("Failed to get metadata column")?
     {
-        Some(hash) if hash.len() != size_of::<state_chain_runtime::Hash>() => {
-            Err(anyhow!("Incorrect length of Genesis hash"))
+        Some(hash) => {
+            if hash.len() != size_of::<state_chain_runtime::Hash>() {
+                Err(anyhow!("Incorrect length of Genesis hash"))
+            } else {
+                Ok(Some(sp_core::H256::from_slice(&hash[..])))
+            }
         }
-        Some(hash) => Ok(Some(sp_core::H256::from_slice(&hash[..]))),
         None => Ok(None),
     }
 }
