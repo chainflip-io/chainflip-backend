@@ -62,11 +62,11 @@ code. Advancement through each of the rotation phases is driven by the `on_initi
 - Auction: The period during which claims are disabled.
 - Auction Resolution: The method for resolving an auction. Based on validator's bids at the time of resolution, the
   auction resolution will determine the set of auction winners.
-- Authority candidates: The set of validator nodes that will participate in the next keygen ceremony in an attempt to
+- Authority Candidates: The set of validator nodes that will participate in the next keygen ceremony in an attempt to
   join the next authority set. Any candidates that fail keygen are banned and replaced with candidates from the pool
   of secondary candidates.
 - Primary Candidates are the auction winners.
-- Secondary candidates are a number of highest-staked auction losers. At the time of writing this number is determined
+- Secondary Candidates are a number of highest-staked auction losers. At the time of writing this number is determined
   as 1/3 the number of backup validators.
 - Session: A session as defined by the `session` pallet. We have two sessions; Epoch which has
   a fixed number of blocks set with `set_blocks_for_epoch` and an Auction session which is of an
