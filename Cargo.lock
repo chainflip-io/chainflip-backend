@@ -990,6 +990,7 @@ dependencies = [
  "mockall",
  "multisig-p2p-transport",
  "num-bigint 0.4.3",
+ "num-derive",
  "num-traits",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
@@ -1018,7 +1019,6 @@ dependencies = [
  "secp256k1 0.21.3",
  "serde",
  "serde_json",
- "serde_repr",
  "sha2 0.9.9",
  "slog",
  "slog-async",
@@ -4812,6 +4812,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "num-format"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7907,17 +7918,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e44969a61f5d316be20a42ff97816efb3b407a924d06824c3d8a49fa8450de0e"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "serde_repr"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2ad84e47328a31223de7fed7a4f5087f2d6ddfe586cf3ca25b7a165bc0a5aed"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

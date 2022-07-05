@@ -60,6 +60,7 @@ tokio-stream = "0.1.5"
 url = "1.7.2"
 num-bigint = "0.4"
 num-traits = "0.2"
+num-derive = "0.3"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['signing']}
 zeroize = "1.5.4"
 libp2p = "0.40"
@@ -79,7 +80,6 @@ typenum = "1.15"
 # We might eventually update, but for now let's just
 # use the same version as polkadot. 
 schnorrkel = "0.9.1"
-serde_repr = "0.1"
 
 
 # Local deps

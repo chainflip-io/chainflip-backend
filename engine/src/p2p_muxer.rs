@@ -64,7 +64,10 @@ impl<'a> TagPlusMessage<'a> {
 
         let (tag, payload) = split_header::<TAG_LEN>(bytes)?;
 
-        let tag = bincode::deserialize(tag).map_err(|_| anyhow!("unknown tag: {:?}", &tag))?;
+        let tag_num = u16::from_be_bytes(*tag);
+
+        let tag: ChainTag = num_traits::FromPrimitive::from_u16(tag_num)
+            .ok_or_else(|| anyhow!("unknown tag: {:?}", &tag_num))?;
 
         Ok(TagPlusMessage { tag, payload })
     }
@@ -114,23 +117,25 @@ impl P2PMuxer {
             // only version 1 is expected/supported
             if version == PROTOCOL_VERSION {
                 match TagPlusMessage::deserialize(payload) {
-                    Ok(TagPlusMessage { tag, payload }) => {
-                        match tag {
-                            ChainTag::Ethereum => {
-                                self.eth_incoming_sender
-                                    .send((account_id, payload.to_owned()))
-                                    .expect("eth receiver dropped");
-                            }
-                            ChainTag::Polkadot => {
-                                slog::trace!(
-                                    self.logger,
-                                    "ignoring p2p message: polkadot scheme not yet supported",
-                                )
-                            }
+                    Ok(TagPlusMessage { tag, payload }) => match tag {
+                        ChainTag::Ethereum => {
+                            self.eth_incoming_sender
+                                .send((account_id, payload.to_owned()))
+                                .expect("eth receiver dropped");
                         }
-                    }
+                        ChainTag::Polkadot => {
+                            slog::trace!(
+                                self.logger,
+                                "ignoring p2p message: polkadot scheme not yet supported",
+                            )
+                        }
+                    },
                     Err(err) => {
-                        slog::trace!(self.logger, "Could not deserialize tagged p2p message: {:?}", err);
+                        slog::trace!(
+                            self.logger,
+                            "Could not deserialize tagged p2p message: {:?}",
+                            err
+                        );
                     }
                 }
             } else {
@@ -277,7 +282,7 @@ mod tests {
 
         tokio::spawn(muxer_future);
 
-        let bytes = [&VERSION_PREFIX, &ETH_TAG_PREFIX, DATA_1].concat();
+        let bytes = [VERSION_PREFIX, ETH_TAG_PREFIX, DATA_1].concat();
 
         p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
 
