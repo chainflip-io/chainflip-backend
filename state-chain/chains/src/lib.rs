@@ -110,7 +110,13 @@ where
 	Call: ApiCall<Abi>,
 {
 	/// Construct the unsigned outbound transaction from the *signed* api call.
+	/// Doesn't include any time/chain specific data e.g. gas price
 	fn build_transaction(signed_call: &Call) -> Abi::UnsignedTransaction;
+
+	/// Update any time-sensitive data e.g. gas price
+	fn update_unsigned_transaction(
+		unsigned_tx: Abi::UnsignedTransaction,
+	) -> Option<Abi::UnsignedTransaction>;
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -339,6 +345,12 @@ pub mod mocks {
 	{
 		fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::UnsignedTransaction {
 			Default::default()
+		}
+
+		fn update_unsigned_transaction(
+			_unsigned_tx: <Abi as ChainAbi>::UnsignedTransaction,
+		) -> Option<<Abi as ChainAbi>::UnsignedTransaction> {
+			Some(Default::default())
 		}
 	}
 }

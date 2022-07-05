@@ -8,11 +8,13 @@ pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
+use sp_core::U256;
 
 use crate::{
 	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, Flip, FlipBalance, Reputation, Runtime, System, Validator,
+	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
+
 use cf_chains::{
 	eth::{
 		self,
@@ -25,6 +27,7 @@ use cf_traits::{
 	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, StakeTransfer,
 };
 use frame_support::traits::Get;
+use pallet_cf_chain_tracking::ChainState;
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
@@ -138,27 +141,29 @@ pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainAbi>::UnsignedTransaction {
-		let data = signed_call.abi_encoded();
-		match signed_call {
-			EthereumApi::SetAggKeyWithAggKey(_) => eth::UnsignedTransaction {
-				chain_id: Environment::ethereum_chain_id(),
-				contract: Environment::key_manager_address().into(),
-				data,
-				..Default::default()
+		eth::UnsignedTransaction {
+			chain_id: Environment::ethereum_chain_id(),
+			contract: match signed_call {
+				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
+				EthereumApi::RegisterClaim(_) => Environment::stake_manager_address().into(),
+				EthereumApi::UpdateFlipSupply(_) => Environment::flip_token_address().into(),
 			},
-			EthereumApi::RegisterClaim(_) => eth::UnsignedTransaction {
-				chain_id: Environment::ethereum_chain_id(),
-				contract: Environment::stake_manager_address().into(),
-				data,
-				..Default::default()
-			},
-			EthereumApi::UpdateFlipSupply(_) => eth::UnsignedTransaction {
-				chain_id: Environment::ethereum_chain_id(),
-				contract: Environment::flip_token_address().into(),
-				data,
-				..Default::default()
-			},
+			data: signed_call.abi_encoded(),
+			..Default::default()
 		}
+	}
+
+	fn update_unsigned_transaction(
+		mut unsigned_tx: <Ethereum as ChainAbi>::UnsignedTransaction,
+	) -> Option<<Ethereum as ChainAbi>::UnsignedTransaction> {
+		let chain_data = ChainState::<Runtime, EthereumInstance>::get()?;
+
+		// double the last block's base fee. This way we know it'll be selectable for at least 6
+		// blocks (12.5% increase on each block)
+		let max_fee_per_gas = chain_data.base_fee * 2 + chain_data.priority_fee;
+		unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+		unsigned_tx.max_priority_fee_per_gas = Some(U256::from(chain_data.priority_fee));
+		Some(unsigned_tx)
 	}
 }
 

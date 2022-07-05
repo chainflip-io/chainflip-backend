@@ -733,7 +733,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 	}
 
-	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
+	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
+		if let Some(updated_unsigned) = T::TransactionBuilder::update_unsigned_transaction(
+			broadcast_attempt.unsigned_tx.clone(),
+		) {
+			broadcast_attempt.unsigned_tx = updated_unsigned;
+		} else {
+			Self::schedule_retry(broadcast_attempt);
+			return
+		}
+
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
