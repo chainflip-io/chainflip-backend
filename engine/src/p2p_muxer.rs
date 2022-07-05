@@ -60,7 +60,7 @@ impl<'a> TagPlusMessage<'a> {
     }
 
     fn deserialize(bytes: &'a [u8]) -> Result<Self> {
-        const TAG_LEN: usize = std::mem::size_of::<u16>();
+        const TAG_LEN: usize = std::mem::size_of::<ChainTag>();
 
         let (tag, payload) = split_header::<TAG_LEN>(bytes)?;
 
@@ -113,19 +113,24 @@ impl P2PMuxer {
         if let Ok(VersionedMessage { version, payload }) = VersionedMessage::deserialize(&data) {
             // only version 1 is expected/supported
             if version == PROTOCOL_VERSION {
-                if let Ok(TagPlusMessage { tag, payload }) = TagPlusMessage::deserialize(payload) {
-                    match tag {
-                        ChainTag::Ethereum => {
-                            self.eth_incoming_sender
-                                .send((account_id, payload.to_owned()))
-                                .expect("eth receiver dropped");
+                match TagPlusMessage::deserialize(payload) {
+                    Ok(TagPlusMessage { tag, payload }) => {
+                        match tag {
+                            ChainTag::Ethereum => {
+                                self.eth_incoming_sender
+                                    .send((account_id, payload.to_owned()))
+                                    .expect("eth receiver dropped");
+                            }
+                            ChainTag::Polkadot => {
+                                slog::trace!(
+                                    self.logger,
+                                    "ignoring p2p message: polkadot scheme not yet supported",
+                                )
+                            }
                         }
-                        ChainTag::Polkadot => {
-                            slog::trace!(
-                                self.logger,
-                                "ignoring p2p message: polkadot scheme not yet supported",
-                            )
-                        }
+                    }
+                    Err(err) => {
+                        slog::trace!(self.logger, "Could not deserialize tagged p2p message: {:?}", err);
                     }
                 }
             } else {
@@ -187,7 +192,7 @@ mod tests {
     const DATA_1: &[u8] = &[0, 1, 2];
     const DATA_2: &[u8] = &[3, 4, 5];
 
-    const TAG_PREFIX: &[u8] = &ChainTag::Ethereum.to_bytes();
+    const ETH_TAG_PREFIX: &[u8] = &ChainTag::Ethereum.to_bytes();
     const VERSION_PREFIX: &[u8] = &PROTOCOL_VERSION.to_be_bytes();
 
     #[tokio::test]
@@ -210,7 +215,7 @@ mod tests {
         let received = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
 
         let expected = {
-            let expected_data = [VERSION_PREFIX, TAG_PREFIX, DATA_1].concat();
+            let expected_data = [VERSION_PREFIX, ETH_TAG_PREFIX, DATA_1].concat();
 
             OutgoingMultisigStageMessages::Broadcast(vec![ACC_1, ACC_2], expected_data)
         };
@@ -237,8 +242,8 @@ mod tests {
         ]);
 
         let expected = OutgoingMultisigStageMessages::Private(vec![
-            (ACC_1, [VERSION_PREFIX, TAG_PREFIX, DATA_1].concat()),
-            (ACC_2, [VERSION_PREFIX, TAG_PREFIX, DATA_2].concat()),
+            (ACC_1, [VERSION_PREFIX, ETH_TAG_PREFIX, DATA_1].concat()),
+            (ACC_2, [VERSION_PREFIX, ETH_TAG_PREFIX, DATA_2].concat()),
         ]);
 
         eth_outgoing_sender.send(message).unwrap();
@@ -272,7 +277,7 @@ mod tests {
 
         tokio::spawn(muxer_future);
 
-        let bytes = [&[0x00, 0x01, 0x00, 0x00], DATA_1].concat();
+        let bytes = [&VERSION_PREFIX, &ETH_TAG_PREFIX, DATA_1].concat();
 
         p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
 
