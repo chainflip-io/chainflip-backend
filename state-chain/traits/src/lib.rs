@@ -717,3 +717,17 @@ pub trait SystemStateManager {
 	/// Turn system maintenance on.
 	fn set_maintenance_mode();
 }
+
+pub trait FeePayment {
+	type Amount;
+	type AccountId;
+
+	fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> Result<(), ()>;
+}
+
+pub trait StakingInfo {
+	type AccountId;
+	type Balance;
+    fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance;
+	fn onchain_funds() -> Self::Balance;
+}
