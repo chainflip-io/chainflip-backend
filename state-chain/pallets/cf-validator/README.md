@@ -48,8 +48,8 @@ Epoch session.
 Authorities are rotated when any of three conditions are met:
 
 1. The duration of the current epoch exceeds the target **epoch duration**.
-2. The governance-gated **`force_rotation`** extrinsic is called.
-3. An **emergency rotation** is triggered because network liveness has dropped below the liveness threshold.
+2. An **emergency rotation** is triggered because network liveness has dropped below the liveness threshold.
+3. The governance-gated **`force_rotation`** extrinsic is called.
 
 The above diagram is a high-level illustration of how we resolve authority rotations. For more detail, refer to the
 code. Advancement through each of the rotation phases is driven by the `on_initialize` hook.
