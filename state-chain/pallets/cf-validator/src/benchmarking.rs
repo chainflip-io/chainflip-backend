@@ -151,6 +151,13 @@ benchmarks! {
 	}: {
 		Pallet::<T>::start_authority_rotation();
 	}
+	verify {
+		assert!(matches!(
+			CurrentRotationPhase::<T>::get(),
+			RotationPhase::VaultsRotating(..)
+		));
+	}
+
 	start_authority_rotation_in_maintenance_mode {
 		T::SystemState::activate_maintenance_mode();
 	}: {
