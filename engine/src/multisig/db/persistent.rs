@@ -311,6 +311,9 @@ fn read_genesis_hash(db: &DB) -> Result<Option<state_chain_runtime::Hash>> {
                 Ok(Some(sp_core::H256::from_slice(&hash[..])))
             }
         }
+        // None is expected because the genesis hash is not known during the generate genesis keys process,
+        // so the genesis databases will not have the genesis hash,
+        // it will be added during `check_or_set_genesis_hash` on first time startup.
         None => Ok(None),
     }
 }
