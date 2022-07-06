@@ -281,8 +281,12 @@ pub mod pallet {
 				RotationPhase::VaultsRotating(mut rotation_status) =>
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(Ok(_)) => {
+							let weight =
+								T::ValidatorWeightInfo::rotation_phase_vaults_rotating_success(
+									rotation_status.weight_params(),
+								);
 							Self::set_rotation_phase(RotationPhase::VaultsRotated(rotation_status));
-							0
+							weight
 						},
 						AsyncResult::Ready(Err(offenders)) => {
 							let num_offenders = offenders.len();
@@ -296,7 +300,10 @@ pub mod pallet {
 							debug_assert!(false, "Void state should be unreachable.");
 							log::error!(target: "cf-validator", "no vault rotation pending");
 							Self::set_rotation_phase(RotationPhase::Idle);
-							0
+							// Use the weight of the pending phase.
+							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
+								rotation_status.weight_params(),
+							)
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
