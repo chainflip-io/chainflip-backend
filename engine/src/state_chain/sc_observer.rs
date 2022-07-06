@@ -2,8 +2,8 @@ use futures::{stream, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::KeygenError;
 use slog::o;
-use sp_core::{Hasher, H256};
-use sp_runtime::{traits::Keccak256, AccountId32};
+use sp_core::H256;
+use sp_runtime::AccountId32;
 use state_chain_runtime::{AccountId, CfeSettings};
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
@@ -322,15 +322,15 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                 }
                                                 state_chain_runtime::Event::EthereumBroadcaster(
                                                     pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                                        attempt_id,
+                                                        broadcast_attempt_id,
                                                         validator_id,
                                                         unsigned_tx,
                                                     ),
                                                 ) if validator_id == state_chain_client.our_account_id => {
                                                     slog::debug!(
                                                         logger,
-                                                        "Received signing request with attempt_id {} for transaction: {:?}",
-                                                        attempt_id,
+                                                        "Received signing request with broadcast_attempt_id {} for transaction: {:?}",
+                                                        broadcast_attempt_id,
                                                         unsigned_tx,
                                                     );
                                                     match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
@@ -338,13 +338,17 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             let _result = state_chain_client.submit_signed_extrinsic(
                                                                 state_chain_runtime::Call::EthereumBroadcaster(
                                                                     pallet_cf_broadcast::Call::transaction_ready_for_transmission {
-                                                                        broadcast_attempt_id: attempt_id,
-                                                                        signed_tx: raw_signed_tx.0,
+                                                                        broadcast_attempt_id,
+                                                                        signed_tx: raw_signed_tx.0.clone(),
                                                                         signer_id: eth_broadcaster.address,
                                                                     },
                                                                 ),
                                                                 &logger,
                                                             ).await;
+
+                                                            // We want to transmit here to decrease the delay between getting a gas price estimate
+                                                            // and
+                                                            eth_broadcaster.send_for_broadcast_attempt(raw_signed_tx.0, broadcast_attempt_id).await
                                                         }
                                                         Err(e) => {
                                                             // Note: this error case should only occur if there is a problem with the
@@ -357,14 +361,14 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             slog::error!(
                                                                 logger,
                                                                 "TransactionSigningRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
+                                                                broadcast_attempt_id,
                                                                 e
                                                             );
 
                                                             let _result = state_chain_client.submit_signed_extrinsic(
                                                                 state_chain_runtime::Call::EthereumBroadcaster(
                                                                     pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                                        broadcast_attempt_id: attempt_id,
+                                                                        broadcast_attempt_id,
                                                                     },
                                                                 ),
                                                                 &logger,
@@ -378,29 +382,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                         signed_tx,
                                                     ),
                                                 ) => {
-                                                    let expected_broadcast_tx_hash = Keccak256::hash(&signed_tx[..]);
-                                                    match eth_broadcaster
-                                                        .send(signed_tx)
-                                                        .await
-                                                    {
-                                                        Ok(tx_hash) => {
-                                                            slog::debug!(
-                                                                logger,
-                                                                "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
-                                                                broadcast_attempt_id,
-                                                                tx_hash
-                                                            );
-                                                            assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
-                                                        }
-                                                        Err(e) => {
-                                                            slog::info!(
-                                                                logger,
-                                                                "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
-                                                                broadcast_attempt_id,
-                                                                e
-                                                            );
-                                                        }
-                                                    };
+                                                    eth_broadcaster
+                                                        .send_for_broadcast_attempt(signed_tx, broadcast_attempt_id).await
                                                 }
                                                 state_chain_runtime::Event::Environment(
                                                     pallet_cf_environment::Event::CfeSettingsUpdated {

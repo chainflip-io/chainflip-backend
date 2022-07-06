@@ -13,7 +13,9 @@ pub mod utils;
 
 use anyhow::{Context, Result};
 use cf_traits::EpochIndex;
+use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
+use sp_runtime::traits::Keccak256;
 use state_chain_runtime::CfeSettings;
 
 use crate::{
@@ -35,7 +37,7 @@ use chain_data_witnessing::*;
 use ethbloom::{Bloom, Input};
 use futures::{stream, FutureExt, StreamExt};
 use slog::o;
-use sp_core::{H160, U256};
+use sp_core::{Hasher, H160, U256};
 use std::{
     cmp::Ordering,
     fmt::{self, Debug},
@@ -470,6 +472,37 @@ where
             .send_raw_transaction(raw_signed_tx.into())
             .await
             .context("Failed to broadcast ETH transaction to network")
+    }
+
+    /// Does a `send` but with extra logging and error handling, related to a broadcast
+    pub async fn send_for_broadcast_attempt(
+        &self,
+        raw_signed_tx: Vec<u8>,
+        broadcast_attempt_id: BroadcastAttemptId,
+    ) {
+        let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx[..]);
+        match self.send(raw_signed_tx).await {
+            Ok(tx_hash) => {
+                slog::debug!(
+                    self.logger,
+                    "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
+                    broadcast_attempt_id,
+                    tx_hash
+                );
+                assert_eq!(
+                    tx_hash, expected_broadcast_tx_hash,
+                    "tx_hash returned from `send` does not match expected hash"
+                );
+            }
+            Err(e) => {
+                slog::info!(
+                    self.logger,
+                    "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
+                    broadcast_attempt_id,
+                    e
+                );
+            }
+        }
     }
 }
 
