@@ -5307,6 +5307,7 @@ dependencies = [
  "log 0.4.17",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-vaults",
  "pallet-session",
  "parity-scale-codec",
  "scale-info",

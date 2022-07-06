@@ -5,9 +5,11 @@ use super::*;
 use cf_traits::{AuctionOutcome, Bid};
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_cf_staking::Config as StakingConfig;
+use pallet_cf_vaults::Config as VaultsConfig;
 use pallet_session::Config as SessionConfig;
 
 use sp_application_crypto::RuntimeAppPublic;
+use sp_std::cmp::min;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
@@ -23,11 +25,11 @@ pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + ReputationConf
 
 impl<T: Config + StakingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
 
-pub fn bidder_account_id<T: RuntimeConfig, I: Into<u32>>(i: I) -> T::AccountId {
+pub fn bidder_account_id<T: frame_system::Config, I: Into<u32>>(i: I) -> T::AccountId {
 	account::<T::AccountId>("auction-bidder", i.into(), 0)
 }
 
-pub fn bidder_validator_id<T: RuntimeConfig, I: Into<u32>>(i: I) -> <T as Chainflip>::ValidatorId {
+pub fn bidder_validator_id<T: Chainflip, I: Into<u32>>(i: I) -> T::ValidatorId {
 	bidder_account_id::<T, I>(i).into()
 }
 
@@ -63,6 +65,25 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32) {
 
 		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(bidder_origin.clone(),));
 	}
+}
+
+pub fn setup_vault_rotation<T: Config>(num_primary_candidates: u32, num_secondary_candidates: u32) {
+	let winners = (0..num_primary_candidates).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
+	let losers = (num_primary_candidates..num_primary_candidates + num_secondary_candidates)
+		.map(|i| Bid::from((bidder_validator_id::<T, _>(i), 90u32.into())))
+		.collect::<Vec<_>>();
+
+	// In order to be considered as secondary candidates, a validator must either a curret backup
+	// or authority. Making them authorities is easier.
+	CurrentAuthorities::<T>::put(
+		losers.iter().map(|bid| bid.bidder_id.clone()).collect::<Vec<_>>(),
+	);
+
+	Pallet::<T>::start_vault_rotation(RotationStatus::from_auction_outcome::<T>(AuctionOutcome {
+		winners,
+		losers,
+		bond: 100u32.into(),
+	}));
 }
 
 benchmarks! {
@@ -184,16 +205,39 @@ benchmarks! {
 		// a = authority set target size
 		let a in 3 .. 150;
 
-		let winners = (0..a).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
-		let losers = (a..a + 50)
-			.map(|i| Bid::from((bidder_validator_id::<T, _>(i), 90u32.into())))
-			.collect::<Vec<_>>();
+		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just have to be
+		// enough to fill up available secondary slots).
+		setup_vault_rotation::<T>(a, 50);
 
-		Pallet::<T>::start_vault_rotation(RotationStatus::from_auction_outcome::<T>(AuctionOutcome {
-			winners,
-			losers,
-			bond: 100u32.into(),
-		}));
+		// This assertion ensures we are using the correct weight parameter.
+		assert_eq!(
+			match CurrentRotationPhase::<T>::get() {
+				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.weight_params()),
+				_ => None,
+			}.expect("phase should be VaultsRotating"),
+			a
+		);
+	}: {
+		assert!(matches!(
+			CurrentRotationPhase::<T>::get(),
+			RotationPhase::VaultsRotating(..)
+		));
+		Pallet::<T>::on_initialize(1u32.into());
+	}
+	verify {
+		assert_eq!(T::VaultRotator::get_vault_rotation_outcome(), AsyncResult::Pending);
+	}
+
+	rotation_phase_vaults_rotating_success {
+		// a = authority set target size
+		let a in 3 .. 150;
+
+		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just have to be
+		// enough to fill up available secondary slots).
+		setup_vault_rotation::<T>(a, 50);
+
+		// Simulate success.
+		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Ok(())));
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
@@ -207,7 +251,10 @@ benchmarks! {
 		Pallet::<T>::on_initialize(1u32.into());
 	}
 	verify {
-		assert_eq!(T::VaultRotator::get_vault_rotation_outcome(), AsyncResult::Pending);
+		assert!(matches!(
+			CurrentRotationPhase::<T>::get(),
+			RotationPhase::VaultsRotated(..)
+		));
 	}
 }
 

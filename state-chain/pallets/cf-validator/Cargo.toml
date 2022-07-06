@@ -16,8 +16,11 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
+
+# Used for benchmarking
 pallet-cf-staking = { path = '../cf-staking', optional = true, default-features = false }
 pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
+pallet-cf-vaults = { path = '../cf-vaults', optional = true, default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 
@@ -113,6 +116,7 @@ runtime-benchmarks = [
     'frame-system/runtime-benchmarks',
     'pallet-cf-staking',
     'pallet-cf-reputation',
+    'pallet-cf-vaults',
     'sp-application-crypto',
 ]
 try-runtime = [

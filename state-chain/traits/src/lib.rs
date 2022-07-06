@@ -211,6 +211,11 @@ pub trait VaultRotator {
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+		unimplemented!()
+	}
 }
 
 /// Handler for Epoch life cycle events.
