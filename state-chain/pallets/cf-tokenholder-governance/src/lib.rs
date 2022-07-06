@@ -9,7 +9,8 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{ChainAbi, SetAggKeyWithAggKey};
+	use cf_chains::SetGovKey;
+use cf_chains::{ChainAbi, SetAggKeyWithAggKey};
 	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 	use frame_support::{
 		pallet_prelude::*,
@@ -60,7 +61,7 @@ pub mod pallet {
 
 		type Chain: ChainAbi;
 
-		type SetGovKeyWithAggKeyApiCall: SetAggKeyWithAggKey<Self::Chain>;
+		type SetGovKeyWithAggKeyApiCall: SetGovKey<Self::Chain>;
 
 		type SetCommKeyWithAggKeyApiCall: SetAggKeyWithAggKey<Self::Chain>;
 

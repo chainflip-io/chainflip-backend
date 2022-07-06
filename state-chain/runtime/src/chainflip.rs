@@ -197,6 +197,12 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				data,
 				..Default::default()
 			},
+			EthereumApi::SetGovKey(_) => eth::UnsignedTransaction {
+				chain_id: Environment::ethereum_chain_id(),
+				contract: Environment::key_manager_address().into(),
+				data,
+				..Default::default()
+			}
 		}
 	}
 }
