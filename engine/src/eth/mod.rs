@@ -423,6 +423,8 @@ where
             data: unsigned_tx.data.clone().into(),
             chain_id: Some(unsigned_tx.chain_id),
             value: unsigned_tx.value,
+            max_fee_per_gas: unsigned_tx.max_fee_per_gas,
+            max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
             transaction_type: Some(web3::types::U64::from(2u64)),
             // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
             // input at least as much gas as the estimate will return (stupid? yes)
