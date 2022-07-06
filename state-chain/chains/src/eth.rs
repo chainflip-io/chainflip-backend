@@ -32,6 +32,7 @@ use self::api::EthereumReplayProtection;
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_RINKEBY: u64 = 4;
+pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 //--------------------------//
@@ -211,9 +212,17 @@ impl From<ParityBit> for Uint {
 	}
 }
 
+impl Default for ParityBit {
+	/// Default ParityBit is even (zero)
+	fn default() -> Self {
+		ParityBit::Even
+	}
+}
+
 /// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(
+	Default,
 	Encode,
 	Decode,
 	TypeInfo,

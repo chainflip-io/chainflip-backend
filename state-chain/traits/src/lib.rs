@@ -158,20 +158,13 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 
 /// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub struct AuctionOutcome<CandidateId, BidAmount> {
-	/// The auction winners.
-	pub winners: Vec<CandidateId>,
-	/// The auction losers and their bids.
-	pub losers: Vec<Bid<CandidateId, BidAmount>>,
+pub struct AuctionOutcome<Id, Amount> {
+	/// The auction winners, sorted by in descending bid order.
+	pub winners: Vec<Id>,
+	/// The auction losers and their bids, sorted in descending bid order.
+	pub losers: Vec<Bid<Id, Amount>>,
 	/// The resulting bond for the next epoch.
-	pub bond: BidAmount,
-}
-
-impl<T, BidAmount: Copy + AtLeast32BitUnsigned> AuctionOutcome<T, BidAmount> {
-	/// The total collateral locked if this auction outcome is confirmed.
-	pub fn projected_total_collateral(&self) -> BidAmount {
-		self.bond * BidAmount::from(self.winners.len() as u32)
-	}
+	pub bond: Amount,
 }
 
 pub type RuntimeAuctionOutcome<T> =
@@ -196,26 +189,26 @@ pub trait Auctioneer<T: Chainflip> {
 pub trait BackupNodes {
 	type ValidatorId;
 
-	/// The current set of backup nodes.  The set may change on any stake or claim event
+	/// The current set of backup nodes. The set may change on any stake or claim event.
 	fn backup_nodes() -> Vec<Self::ValidatorId>;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SuccessOrFailure {
-	Success,
-	Failure,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RotationError {
+	/// No candidates provided.
+	NoCandidates,
+	/// A rotation is already in progress.
+	RotationInProgress,
 }
 
-/// Rotating vaults
 pub trait VaultRotator {
 	type ValidatorId;
-	type RotationError: Into<DispatchError>;
 
-	/// Start a vault rotation with the following `candidates`
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError>;
+	/// Start a vault rotation with the provided `candidates`.
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError>;
 
-	/// Get the status of the current key generation
-	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure>;
+	/// Poll for the vault rotation outcome.
+	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
 }
 
 /// Handler for Epoch life cycle events.
@@ -244,12 +237,13 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
-/// Provide feedback on staking
 pub trait StakeHandler {
 	type ValidatorId;
 	type Amount;
-	/// A node has updated their stake and now has a new total amount
-	fn stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
+
+	/// A callback that is triggered after some validator's stake has changed, either by staking
+	/// more Flip, or by executing a claim.
+	fn on_stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
 pub trait StakeTransfer {
@@ -302,11 +296,11 @@ pub trait Issuance {
 /// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	type Balance;
-	/// An imbalance representing an unallocated surplus of funds.
-	type Surplus: Imbalance<Self::Balance>;
+	/// An implementation of the issuance trait.
+	type Issuance: Issuance;
 
 	/// Distribute some rewards.
-	fn distribute(rewards: Self::Surplus);
+	fn distribute();
 }
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
@@ -366,10 +360,6 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
 	fn request_emergency_rotation();
-	/// Is there an emergency rotation in progress
-	fn emergency_rotation_in_progress() -> bool;
-	/// Signal that the emergency rotation has completed
-	fn emergency_rotation_completed();
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
@@ -385,6 +375,28 @@ pub enum ChainflipAccountState {
 	CurrentAuthority,
 	HistoricalAuthority(BackupOrPassive),
 	BackupOrPassive(BackupOrPassive),
+}
+
+impl ChainflipAccountState {
+	pub fn is_authority(&self) -> bool {
+		matches!(self, ChainflipAccountState::CurrentAuthority)
+	}
+
+	pub fn is_backup(&self) -> bool {
+		matches!(
+			self,
+			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup) |
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
+		)
+	}
+
+	pub fn is_passive(&self) -> bool {
+		matches!(
+			self,
+			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive) |
+				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
+		)
+	}
 }
 
 // TODO: Just use the AccountState
@@ -430,6 +442,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	}
 
 	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
+		log::debug!("Setting {:?} to {:?}", account_id, state);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
 			ChainflipAccountState::CurrentAuthority => {
 				log::warn!("Attempted to set backup or passive on a current authority account");
@@ -446,6 +459,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 
 	/// Set the last epoch number and set the account state to Validator
 	fn set_current_authority(account_id: &Self::AccountId) {
+		log::debug!("Setting current authority {:?}", account_id);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			(*account_data).state = ChainflipAccountState::CurrentAuthority;
 		})
@@ -670,7 +684,7 @@ pub trait HistoricalEpoch {
 	fn active_epochs_for_authority(id: &Self::ValidatorId) -> Vec<Self::EpochIndex>;
 	/// Removes an epoch from an authority's list of active epochs.
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
-	/// Add an epoch to a authority's list of active epochs.
+	/// Add an epoch to an authority's list of active epochs.
 	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
 	///  Returns the amount of a authority's stake that is currently bonded.
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
@@ -707,6 +721,11 @@ pub trait MissedAuthorshipSlots {
 pub trait SystemStateInfo {
 	/// Ensure that the network is **not** in maintenance mode.
 	fn ensure_no_maintenance() -> DispatchResult;
+
+	/// Check if the network is in maintenance mode.
+	fn is_maintenance_mode() -> bool {
+		Self::ensure_no_maintenance().is_err()
+	}
 }
 
 /// Something that can manipulate the system state.
@@ -715,7 +734,7 @@ pub trait SystemStateManager {
 	/// Set the system state.
 	fn set_system_state(state: Self::SystemState);
 	/// Turn system maintenance on.
-	fn set_maintenance_mode();
+	fn activate_maintenance_mode();
 }
 
 pub trait FeePayment {

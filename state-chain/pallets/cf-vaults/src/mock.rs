@@ -66,7 +66,7 @@ impl SystemStateManager for MockSystemStateManager {
 			*cell.borrow_mut() = state;
 		});
 	}
-	fn set_maintenance_mode() {
+	fn activate_maintenance_mode() {
 		Self::set_system_state(SystemState::Maintenance);
 	}
 }

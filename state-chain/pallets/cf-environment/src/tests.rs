@@ -25,9 +25,9 @@ fn change_network_state() {
 				.pop()
 				.expect("Event should be emitted!")
 				.event,
-			crate::mock::Event::Environment(crate::Event::SystemStateHasBeenChanged(
-				SystemState::Maintenance
-			)),
+			crate::mock::Event::Environment(crate::Event::SystemStateUpdated {
+				new_system_state: SystemState::Maintenance
+			}),
 			"System state is not Maintenance!"
 		);
 		assert_eq!(frame_system::Pallet::<Test>::events().len(), 1);
@@ -43,9 +43,9 @@ fn change_network_state() {
 				.pop()
 				.expect("Event should be emitted!")
 				.event,
-			crate::mock::Event::Environment(crate::Event::SystemStateHasBeenChanged(
-				SystemState::Normal
-			)),
+			crate::mock::Event::Environment(crate::Event::SystemStateUpdated {
+				new_system_state: SystemState::Normal
+			}),
 			"System state is not Normal!"
 		);
 		assert_eq!(frame_system::Pallet::<Test>::events().len(), 2);

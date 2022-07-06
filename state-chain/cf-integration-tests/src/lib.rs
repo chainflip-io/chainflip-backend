@@ -592,7 +592,6 @@ mod tests {
 					min_size: self.min_authorities,
 					max_size: self.max_authorities,
 					max_expansion: self.max_authorities,
-					max_contraction: self.max_authorities,
 				},
 				reputation: ReputationConfig {
 					accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
@@ -603,11 +602,12 @@ mod tests {
 					expiry_span: EXPIRY_SPAN_IN_SECONDS,
 				},
 				validator: ValidatorConfig {
+					genesis_authorities: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 					blocks_per_epoch: self.blocks_per_epoch,
-					// TODO Fix this
-					bond: self.accounts[0].1,
+					bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
 					claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 					backup_node_percentage: 34,
+					authority_set_min_size: self.min_authorities as u8,
 				},
 				ethereum_vault: EthereumVaultConfig {
 					vault_key: ethereum_vault_key,
@@ -756,7 +756,7 @@ mod tests {
 			BackupOrPassive, BidderProvider, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo,
 		};
-		use pallet_cf_validator::RotationStatus;
+		use pallet_cf_validator::RotationPhase;
 		use state_chain_runtime::Validator;
 
 		#[test]
@@ -807,15 +807,20 @@ mod tests {
 					// Run to the next epoch to start the auction
 					testnet.move_to_next_epoch(EPOCH_BLOCKS);
 
-					// Move to start of auction
+					assert!(
+						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
+						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						Validator::current_rotation_phase(),
+					);
+
+					// Next block, no progress.
 					testnet.move_forward_blocks(1);
 
-					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
-
-					// Next block, another auction
-					testnet.move_forward_blocks(1);
-
-					assert_eq!(Validator::rotation_phase(), RotationStatus::RunAuction);
+					assert!(
+						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
+						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						Validator::current_rotation_phase(),
+					);
 
 					for node in &offline_nodes {
 						testnet.set_active(node, true);
@@ -827,10 +832,14 @@ mod tests {
 					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 					// The rotation can now continue to the next phase.
-					assert!(matches!(
-						Validator::rotation_phase(),
-						RotationStatus::AwaitingVaults(..)
-					));
+					assert!(
+						matches!(
+							Validator::current_rotation_phase(),
+							RotationPhase::VaultsRotating(..)
+						),
+						"Expected RotationPhase::VaultsRotated, got: {:?}.",
+						Validator::current_rotation_phase(),
+					);
 				});
 		}
 
@@ -904,8 +913,8 @@ mod tests {
 					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
 
 					assert!(matches!(
-						Validator::rotation_phase(),
-						RotationStatus::AwaitingVaults(..)
+						Validator::current_rotation_phase(),
+						RotationPhase::VaultsRotating(..)
 					));
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
@@ -947,8 +956,8 @@ mod tests {
 						);
 					}
 
-					// A late staker comes along, they should become a backup node as they have
-					// everything in place
+					// A late staker comes along, they should become a backup node as long as they
+					// are sufficiently staked and have
 					testnet.stake_manager_contract.stake(
 						late_staker.clone(),
 						stake_amount,
@@ -960,7 +969,15 @@ mod tests {
 
 					setup_account_and_peer_mapping(&late_staker);
 					network::Cli::activate_account(&late_staker);
+					// TODO [issue #1849]: We currently need to stake again in order to trigger
+					// an update of the backup node status.
+					testnet.stake_manager_contract.stake(
+						late_staker.clone(),
+						1u128,
+						GENESIS_EPOCH + 1,
+					);
 
+					// Trigger backup triage.
 					testnet.move_forward_blocks(1);
 
 					assert_eq!(
