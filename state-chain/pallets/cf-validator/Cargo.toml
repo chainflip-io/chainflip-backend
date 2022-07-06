@@ -15,8 +15,11 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+
+# Used for benchmarking
 pallet-cf-staking = { path = '../cf-staking', optional = true, default-features = false }
 pallet-cf-online = { path = '../cf-online', optional = true, default-features = false }
+pallet-cf-vaults = { path = '../cf-vaults', optional = true, default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 
@@ -111,6 +114,7 @@ runtime-benchmarks = [
     'frame-system/runtime-benchmarks',
     'pallet-cf-staking',
     'pallet-cf-online',
+    'pallet-cf-vaults',
     'sp-application-crypto',
 ]
 try-runtime = [
