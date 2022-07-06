@@ -297,7 +297,9 @@ pub mod pallet {
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
-							0
+							T::ValidatorWeightInfo::rotation_phase_vaults_rotating(
+								rotation_status.weight_params(),
+							)
 						},
 					},
 				RotationPhase::VaultsRotated(rotation_status) => {

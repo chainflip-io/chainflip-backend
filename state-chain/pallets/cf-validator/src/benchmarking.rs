@@ -2,11 +2,11 @@
 
 use super::*;
 
+use cf_traits::{AuctionOutcome, Bid};
 use pallet_cf_online::Config as OnlineConfig;
 use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
-// use sp_runtime::app_crypto::RuntimePublic;
 use sp_application_crypto::RuntimeAppPublic;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
@@ -21,14 +21,19 @@ mod p2p_crypto {
 
 pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + OnlineConfig {}
 
+impl<T: Config + StakingConfig + SessionConfig + OnlineConfig> RuntimeConfig for T {}
 
-pub fn auction_bidder<T: RuntimeConfig, I: Into<u32>>(i: I) -> T::AccountId {
-	account::<T::AccountId>("auction-bidders", i.into(), 0)
+pub fn bidder_account_id<T: RuntimeConfig, I: Into<u32>>(i: I) -> T::AccountId {
+	account::<T::AccountId>("auction-bidder", i.into(), 0)
+}
+
+pub fn bidder_validator_id<T: RuntimeConfig, I: Into<u32>>(i: I) -> <T as Chainflip>::ValidatorId {
+	bidder_account_id::<T, I>(i).into()
 }
 
 /// Initialises bidders by staking each one, registering session keys and peer ids.
 pub fn init_bidders<T: RuntimeConfig>(n: u32) {
-	for (i, bidder) in (0..n).map(auction_bidder::<T, _>).enumerate() {
+	for (i, bidder) in (0..n).map(bidder_account_id::<T, _>).enumerate() {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
 		assert_ok!(pallet_cf_staking::Pallet::<T>::staked(
 			T::EnsureWitnessed::successful_origin(),
@@ -134,6 +139,10 @@ benchmarks! {
 		assert_eq!(VanityNames::<T>::get().get(&caller.into()), Some(&name));
 	}
 
+	/**** Rotation Benchmarks ****/
+
+	/**** 1. RotationPhase::Idle ****/
+
 	rotation_phase_idle {
 		assert!(T::MissedAuthorshipSlots::missed_slots().is_empty());
 	}: {
@@ -167,6 +176,38 @@ benchmarks! {
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::Idle
 		));
+	}
+
+	/**** 2. RotationPhase::VaultsRotating ****/
+
+	rotation_phase_vaults_rotating {
+		// a = authority set target size
+		let a in 3 .. 150;
+
+		let winners = (0..a).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
+		let losers = (a..a + 50)
+			.map(|i| Bid::from((bidder_validator_id::<T, _>(i), 90u32.into())))
+			.collect::<Vec<_>>();
+
+		Pallet::<T>::start_vault_rotation(RotationStatus::from_auction_outcome::<T>(AuctionOutcome {
+			winners,
+			losers,
+			bond: 100u32.into(),
+		}));
+
+		// This assertion ensures we are using the correct weight parameter.
+		assert_eq!(
+			match CurrentRotationPhase::<T>::get() {
+				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.weight_params()),
+				_ => None,
+			}.expect("phase should be VaultsRotating"),
+			a
+		);
+	}: {
+		Pallet::<T>::on_initialize(1u32.into());
+	}
+	verify {
+		assert_eq!(T::VaultRotator::get_vault_rotation_outcome(), AsyncResult::Pending);
 	}
 }
 
