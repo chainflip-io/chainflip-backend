@@ -10,14 +10,14 @@ use crate::eth::SigData;
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct SetGovKey {
+pub struct SetCommunityKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The new public key.
 	pub new_key: AggKey,
 }
 
-impl SetGovKey {
+impl SetCommunityKey {
     pub fn new_unsigned<Key: Into<AggKey>>(
 		replay_protection: EthereumReplayProtection,
 		new_key: Key,
@@ -29,7 +29,7 @@ impl SetGovKey {
 	}
     fn get_function(&self) -> ethabi::Function {
 		ethabi_function(
-			"setGovKey",
+			"SetCommunityKey",
 			vec![
 				ethabi_param(
 					"sigData",
@@ -51,7 +51,7 @@ impl SetGovKey {
 	}
 }
 
-impl ApiCall<Ethereum> for SetGovKey {
+impl ApiCall<Ethereum> for SetCommunityKey {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		self.sig_data.msg_hash
 	}
