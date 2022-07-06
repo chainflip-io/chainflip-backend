@@ -66,10 +66,11 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32) {
 	}
 }
 
-/// Simulates the start of a rotation.
-///
-/// Skips the auction, doesn't stake anyone.
-pub fn setup_vault_rotation<T: Config>(num_primary_candidates: u32, num_secondary_candidates: u32) {
+/// Builds a RotationStatus with the desired numbers of candidates.
+pub fn new_rotation_status<T: Config>(
+	num_primary_candidates: u32,
+	num_secondary_candidates: u32,
+) -> RuntimeRotationStatus<T> {
 	let winners = (0..num_primary_candidates).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
 	let losers = (num_primary_candidates..num_primary_candidates + num_secondary_candidates)
 		.map(|i| Bid::from((bidder_validator_id::<T, _>(i), 90u32.into())))
@@ -81,11 +82,21 @@ pub fn setup_vault_rotation<T: Config>(num_primary_candidates: u32, num_secondar
 		losers.iter().map(|bid| bid.bidder_id.clone()).collect::<Vec<_>>(),
 	);
 
-	Pallet::<T>::start_vault_rotation(RotationStatus::from_auction_outcome::<T>(AuctionOutcome {
+	RotationStatus::from_auction_outcome::<T>(AuctionOutcome {
 		winners,
 		losers,
 		bond: 100u32.into(),
-	}));
+	})
+}
+
+pub fn setup_and_start_vault_rotation<T: Config>(
+	num_primary_candidates: u32,
+	num_secondary_candidates: u32,
+) {
+	Pallet::<T>::start_vault_rotation(new_rotation_status::<T>(
+		num_primary_candidates,
+		num_secondary_candidates,
+	));
 }
 
 benchmarks! {
@@ -209,7 +220,7 @@ benchmarks! {
 
 		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just have to be
 		// enough to fill up available secondary slots).
-		setup_vault_rotation::<T>(a, 50);
+		setup_and_start_vault_rotation::<T>(a, 50);
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
@@ -236,7 +247,7 @@ benchmarks! {
 
 		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just have to be
 		// enough to fill up available secondary slots).
-		setup_vault_rotation::<T>(a, 50);
+		setup_and_start_vault_rotation::<T>(a, 50);
 
 		// Simulate success.
 		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Ok(())));
@@ -265,7 +276,7 @@ benchmarks! {
 		let o in 1 .. { 150 / 3 };
 
 		// Set up a vault rotation.
-		setup_vault_rotation::<T>(150, 50);
+		setup_and_start_vault_rotation::<T>(150, 50);
 
 		// Simulate failure.
 		let offenders = (0..o).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
@@ -288,6 +299,39 @@ benchmarks! {
 			"Offenders should not be authority candidates."
 		);
 	}
+
+	/**** 3. RotationPhase::VaultsRotated ****/
+
+	rotation_phase_vaults_rotated {
+		// a = authority set target size
+		let a in 3 .. 150;
+
+		// Set up a vault rotation.
+		let rotation_status = new_rotation_status::<T>(a, 50);
+		CurrentRotationPhase::<T>::put(RotationPhase::VaultsRotated(rotation_status));
+
+		// This assertion ensures we are using the correct weight parameter.
+		assert_eq!(
+			match CurrentRotationPhase::<T>::get() {
+				RotationPhase::VaultsRotated(rotation_status) => Some(rotation_status.weight_params()),
+				_ => None,
+			}.expect("phase should be VaultsRotated"),
+			a,
+			"Incorrect weight parameters."
+		);
+	}: {
+		Pallet::<T>::on_initialize(1u32.into());
+	}
+	verify {
+		assert!(
+			matches!(
+				CurrentRotationPhase::<T>::get(),
+				RotationPhase::SessionRotating(..),
+			),
+		);
+	}
+
+	/**** 4. RotationPhase::SessionRotating ****/
 }
 
 // impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

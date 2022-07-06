@@ -289,12 +289,13 @@ pub mod pallet {
 							weight
 						},
 						AsyncResult::Ready(Err(offenders)) => {
-							let num_offenders = offenders.len();
+							let weight =
+								T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
+									offenders.len() as u32,
+								);
 							rotation_status.ban(offenders);
 							Self::start_vault_rotation(rotation_status);
-							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
-								num_offenders as u32,
-							)
+							weight
 						},
 						AsyncResult::Void => {
 							debug_assert!(false, "Void state should be unreachable.");
@@ -313,8 +314,11 @@ pub mod pallet {
 						},
 					},
 				RotationPhase::VaultsRotated(rotation_status) => {
+					let weight = T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
+						rotation_status.weight_params(),
+					);
 					Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
-					0
+					weight
 				},
 				RotationPhase::SessionRotating(_) => {
 					Self::set_rotation_phase(RotationPhase::Idle);
