@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use futures::TryStreamExt;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use multisig_p2p_transport::{PeerId, PeerIdTransferable};
@@ -19,7 +18,6 @@ use state_chain_runtime::AccountId;
 
 use codec::Encode;
 
-use futures::{StreamExt, TryFutureExt};
 use zeroize::Zeroizing;
 
 use frame_support::StoragePrefixedMap;
@@ -314,7 +312,10 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 
     let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new()?;
 
-    client.setup_ipc_connections(server_name).await.map_err(rpc_error_into_anyhow_error)?;
+    client
+        .setup_ipc_connections(server_name)
+        .await
+        .map_err(rpc_error_into_anyhow_error)?;
 
     type Channels = (
         ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>,
@@ -325,8 +326,9 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 
     let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
 
-    let (internal_incoming_sender, mut internal_incoming_receiver) = tokio::sync::mpsc::unbounded_channel::<(PeerId, Vec<u8>)>();
-    tokio::task::spawn_blocking(move || -> anyhow::Result<()>{
+    let (internal_incoming_sender, mut internal_incoming_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<(PeerId, Vec<u8>)>();
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         loop {
             let (peer_id, serialised_message) = ipc_incoming_receiver.recv()?;
             let peer_id: PeerId = peer_id.try_into()?;
@@ -334,10 +336,11 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         }
     });
 
-    let (internal_outgoing_sender, internal_outgoing_receiver) = std::sync::mpsc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>();
+    let (internal_outgoing_sender, internal_outgoing_receiver) =
+        std::sync::mpsc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>();
     tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         while let Ok((peer_ids, message)) = internal_outgoing_receiver.recv() {
-            ipc_outgoing_sender.send((peer_ids, message)).map_err(anyhow::Error::new)?;
+            ipc_outgoing_sender.send((peer_ids, message)).unwrap();
         }
         Ok(())
     });
