@@ -286,9 +286,12 @@ pub mod pallet {
 							0
 						},
 						AsyncResult::Ready(Err(offenders)) => {
+							let num_offenders = offenders.len();
 							rotation_status.ban(offenders);
 							Self::start_vault_rotation(rotation_status);
-							0
+							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
+								num_offenders as u32,
+							)
 						},
 						AsyncResult::Void => {
 							debug_assert!(false, "Void state should be unreachable.");
@@ -298,7 +301,7 @@ pub mod pallet {
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
-							T::ValidatorWeightInfo::rotation_phase_vaults_rotating(
+							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
 								rotation_status.weight_params(),
 							)
 						},

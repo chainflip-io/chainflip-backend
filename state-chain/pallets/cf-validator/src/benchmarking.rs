@@ -5,11 +5,9 @@ use super::*;
 use cf_traits::{AuctionOutcome, Bid};
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_cf_staking::Config as StakingConfig;
-use pallet_cf_vaults::Config as VaultsConfig;
 use pallet_session::Config as SessionConfig;
 
 use sp_application_crypto::RuntimeAppPublic;
-use sp_std::cmp::min;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
@@ -33,7 +31,8 @@ pub fn bidder_validator_id<T: Chainflip, I: Into<u32>>(i: I) -> T::ValidatorId {
 	bidder_account_id::<T, I>(i).into()
 }
 
-/// Initialises bidders by staking each one, registering session keys and peer ids.
+/// Initialises bidders for the auction by staking each one, registering session keys and peer ids
+/// and submitting heartbeats.
 pub fn init_bidders<T: RuntimeConfig>(n: u32) {
 	for (i, bidder) in (0..n).map(bidder_account_id::<T, _>).enumerate() {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
@@ -67,6 +66,9 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32) {
 	}
 }
 
+/// Simulates the start of a rotation.
+///
+/// Skips the auction, doesn't stake anyone.
 pub fn setup_vault_rotation<T: Config>(num_primary_candidates: u32, num_secondary_candidates: u32) {
 	let winners = (0..num_primary_candidates).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
 	let losers = (num_primary_candidates..num_primary_candidates + num_secondary_candidates)
@@ -201,7 +203,7 @@ benchmarks! {
 
 	/**** 2. RotationPhase::VaultsRotating ****/
 
-	rotation_phase_vaults_rotating {
+	rotation_phase_vaults_rotating_pending {
 		// a = authority set target size
 		let a in 3 .. 150;
 
@@ -245,7 +247,8 @@ benchmarks! {
 				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.weight_params()),
 				_ => None,
 			}.expect("phase should be VaultsRotating"),
-			a
+			a,
+			"Incorrect weight parameters."
 		);
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());
@@ -255,6 +258,35 @@ benchmarks! {
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::VaultsRotated(..)
 		));
+	}
+
+	rotation_phase_vaults_rotating_failure {
+		// o = number of offenders - can be at most 1/3 of the set size.
+		let o in 1 .. { 150 / 3 };
+
+		// Set up a vault rotation.
+		setup_vault_rotation::<T>(150, 50);
+
+		// Simulate failure.
+		let offenders = (0..o).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
+		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Err(offenders.clone())));
+
+		// This assertion ensures we are using the correct weight parameters.
+		assert_eq!(offenders.len() as u32, o, "Incorrect weight parameters.");
+	}: {
+		Pallet::<T>::on_initialize(1u32.into());
+	}
+	verify {
+		assert!(
+			matches!(
+				CurrentRotationPhase::<T>::get(),
+				RotationPhase::VaultsRotating(rotation_status)
+					if rotation_status.authority_candidates::<BTreeSet<_>>().is_disjoint(
+						&offenders.clone().into_iter().collect::<BTreeSet<_>>()
+					)
+			),
+			"Offenders should not be authority candidates."
+		);
 	}
 }
 

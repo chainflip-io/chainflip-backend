@@ -213,7 +213,7 @@ pub trait VaultRotator {
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
 		unimplemented!()
 	}
 }
