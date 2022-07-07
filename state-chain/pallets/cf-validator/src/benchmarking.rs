@@ -173,6 +173,15 @@ benchmarks! {
 		assert_eq!(VanityNames::<T>::get().get(&caller.into()), Some(&name));
 	}
 
+	// expire_epoch {
+
+	// }: {
+
+	// }
+	// verify {
+
+	// }
+
 	/**** Rotation Benchmarks ****/
 
 	/**** 1. RotationPhase::Idle ****/

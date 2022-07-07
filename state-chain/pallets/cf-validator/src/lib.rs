@@ -1118,6 +1118,7 @@ impl<T: Config> Pallet<T> {
 				},
 				Err(e) => {
 					log::error!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
+					#[cfg(not(test))]
 					debug_assert!(false, "Unable to start vault rotation");
 				},
 			}
@@ -1182,7 +1183,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
 				Some(next_authorities)
 			},
-			RotationPhase::SessionRotating(rotation_status) => {
+			RotationPhase::SessionRotating(_) => {
 				Self::set_rotation_phase(RotationPhase::Idle);
 				None
 			},

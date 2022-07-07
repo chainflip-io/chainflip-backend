@@ -123,7 +123,10 @@ impl Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default() };
+	let config = GenesisConfig {
+		system: Default::default(),
+		online_pallet: OnlinePalletConfig { genesis_nodes: vec![ALICE] },
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
