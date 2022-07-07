@@ -6,7 +6,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use futures::TryStreamExt;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use multisig_p2p_transport::{PeerId, PeerIdTransferable};
@@ -19,7 +18,6 @@ use state_chain_runtime::AccountId;
 
 use codec::Encode;
 
-use futures::{StreamExt, TryFutureExt};
 use zeroize::Zeroizing;
 
 use frame_support::StoragePrefixedMap;
@@ -312,27 +310,50 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer_mapping_on_chain
     );
 
-    let mut incoming_p2p_message_stream = client
-        .subscribe_messages()
-        .map_err(rpc_error_into_anyhow_error)?
-        .map_err(rpc_error_into_anyhow_error);
+    let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new()?;
+
+    client
+        .setup_ipc_connections(server_name)
+        .await
+        .map_err(rpc_error_into_anyhow_error)?;
+
+    type Channels = (
+        ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>,
+        ipc_channel::ipc::IpcReceiver<(PeerIdTransferable, Vec<u8>)>,
+    );
+
+    let (_, (ipc_outgoing_sender, ipc_incoming_receiver)): (_, Channels) = server.accept().unwrap();
 
     let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
 
+    let (internal_incoming_sender, mut internal_incoming_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<(PeerId, Vec<u8>)>();
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+        loop {
+            let (peer_id, serialised_message) = ipc_incoming_receiver.recv()?;
+            let peer_id: PeerId = peer_id.try_into()?;
+            let _result = internal_incoming_sender.send((peer_id, serialised_message));
+        }
+    });
+
+    let (internal_outgoing_sender, internal_outgoing_receiver) =
+        std::sync::mpsc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>();
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+        while let Ok((peer_ids, message)) = internal_outgoing_receiver.recv() {
+            ipc_outgoing_sender.send((peer_ids, message)).unwrap();
+        }
+        Ok(())
+    });
+
     loop {
         tokio::select! {
-            Some(result_p2p_message) = incoming_p2p_message_stream.next() => {
-                match result_p2p_message.and_then(|(peer_id, serialised_message)| {
-                    let peer_id: PeerId = peer_id.try_into()?;
-                    if let Some(account_id) = peer_to_account_mapping_on_chain.get(&peer_id) {
-                        incoming_p2p_message_sender.send((
-                            account_id.clone(),
-                            serialised_message
-                        )).map_err(anyhow::Error::new).with_context(|| "Failed to send message via channel".to_string())?;
-                        Ok(account_id)
-                    } else {
-                        Err(anyhow::Error::msg(format!("Missing Account Id mapping for Peer Id: {}", peer_id)))
-                    }
+            Some((peer_id, serialised_message)) = internal_incoming_receiver.recv() => {
+                match peer_to_account_mapping_on_chain.get(&peer_id).ok_or_else(|| anyhow::anyhow!("Missing Account Id mapping for Peer Id: {peer_id}")).and_then(|account_id| {
+                    incoming_p2p_message_sender.send((
+                        account_id.clone(),
+                        serialised_message
+                    )).map_err(|error| anyhow::anyhow!("Failed to send message via channel: {error}"))?;
+                    Ok(account_id)
                 }) {
                     Ok(account_id) => slog::info!(logger, "Received P2P message from: {}", account_id),
                     Err(error) => slog::error!(logger, "Failed to receive P2P message: {}", error)
@@ -340,7 +361,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
             }
             Some(messages) = outgoing_p2p_message_receiver.recv() => {
                 async fn send_messages<'a, AccountIds: 'a + IntoIterator<Item = &'a AccountId> + Clone>(
-                    client: &P2PRpcClient,
+                    internal_outgoing_sender: &std::sync::mpsc::Sender<(Vec<PeerIdTransferable>, Vec<u8>)>,
                     account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
                     account_ids: AccountIds,
                     message: Vec<u8>,
@@ -348,17 +369,14 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                 ) {
 
                     // If we can't get peer id for some accounts, should we still try to send messages to the rest?
-                    match async {
+                    match {
                         account_ids.clone().into_iter().map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
                             Some((peer_id, _, _)) => Ok(peer_id.into()),
                             None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
                         }).collect::<Result<Vec<_>, _>>()
                     }.and_then(|peer_ids| {
-                        client.send_message(
-                            peer_ids,
-                            message
-                        ).map_err(rpc_error_into_anyhow_error)
-                    }).await {
+                        internal_outgoing_sender.send((peer_ids, message)).map_err(anyhow::Error::new)
+                    }) {
                         Ok(_) => slog::info!(logger, "Sent P2P message to: {}", format_iterator(account_ids)),
                         Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", format_iterator(account_ids), error)
                     }
@@ -366,11 +384,11 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 
                 match messages {
                     OutgoingMultisigStageMessages::Broadcast(account_ids, message) => {
-                        send_messages(&client, &account_to_peer_mapping_on_chain, account_ids.iter(), message, &logger).await;
+                        send_messages(&internal_outgoing_sender, &account_to_peer_mapping_on_chain, account_ids.iter(), message, &logger).await;
                     },
                     OutgoingMultisigStageMessages::Private(messages) => {
                         for (account_id, message) in messages {
-                            send_messages(&client, &account_to_peer_mapping_on_chain, std::iter::once(&account_id), message, &logger).await;
+                            send_messages(&internal_outgoing_sender, &account_to_peer_mapping_on_chain, std::iter::once(&account_id), message, &logger).await;
                         }
                     }
                 }
