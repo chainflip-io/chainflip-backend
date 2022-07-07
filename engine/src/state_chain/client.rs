@@ -244,6 +244,12 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     state_chain_rpc_client: RpcClient,
 }
 
+impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
+    pub fn get_genesis_hash(&self) -> state_chain_runtime::Hash {
+        self.genesis_hash
+    }
+}
+
 // use this events key, to save creating chain metadata in the tests
 #[cfg(test)]
 pub fn mock_events_key() -> StorageKey {

@@ -1,6 +1,9 @@
-use std::{cmp::Ordering, collections::HashMap, fs, path::Path};
+#[cfg(test)]
+mod persistent_key_db_tests;
 
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, DB};
+use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
+
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
 
 use crate::{
@@ -12,7 +15,7 @@ use crate::{
     },
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
@@ -21,6 +24,7 @@ pub const LATEST_SCHEMA_VERSION: u32 = 0;
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
+pub const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
 
 /// A static length prefix is used on the `DATA_COLUMN`
 pub const PREFIX_SIZE: usize = 10;
@@ -46,8 +50,12 @@ pub struct PersistentKeyDB {
 }
 impl PersistentKeyDB {
     /// Create a new persistent key database. If the database exists and the schema version
-    /// is below the latest, it will attempt to migrate the data to the latest version
-    pub fn new_and_migrate_to_latest(db_path: &Path, logger: &slog::Logger) -> Result<Self> {
+    /// is below the latest, it will attempt to migrate the data to the latest version.
+    pub fn new_and_migrate_to_latest(
+        db_path: &Path,
+        genesis_hash: Option<state_chain_runtime::Hash>,
+        logger: &slog::Logger,
+    ) -> Result<Self> {
         // Use a prefix extractor on the data column
         let mut cfopts_for_prefix = Options::default();
         cfopts_for_prefix
@@ -103,12 +111,31 @@ impl PersistentKeyDB {
                 .context(format!("Failed to open database at: {}", db_path.display()))?;
 
         let p_kdb = if is_existing_db {
-            // Perform migrations and update schema version
-            migrate_db_to_latest(db, db_path, logger)
+            // An existing db, so perform migrations and update the metadata
+            migrate_db_to_latest(db, db_path, genesis_hash,logger)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?
         } else {
-            // It's a new db, so just write the latest schema version
-            PersistentKeyDB::new_from_db_and_set_schema_version_to_latest(db, logger)?
+            // It's a new db, so create a new `PersistentKeyDB` with the latest schema version and genesis hash
+            let mut batch = WriteBatch::default();
+
+            batch.put_cf(
+                get_metadata_column_handle(&db),
+                DB_SCHEMA_VERSION_KEY,
+                LATEST_SCHEMA_VERSION.to_be_bytes(),
+            );
+
+            if let Some(genesis_hash) = genesis_hash {
+                batch.put_cf(
+                    get_metadata_column_handle(&db),
+                    GENESIS_HASH_KEY,
+                    genesis_hash,
+                );
+            }
+
+            db.write(batch)
+                .context("Failed to write metadata to new db")?;
+
+            PersistentKeyDB::new_from_db(db, logger)
         };
 
         Ok(p_kdb)
@@ -119,22 +146,6 @@ impl PersistentKeyDB {
             db,
             logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
         }
-    }
-
-    // Create a new `PersistentKeyDB` and write the latest schema version
-    pub fn new_from_db_and_set_schema_version_to_latest(
-        db: DB,
-        logger: &slog::Logger,
-    ) -> Result<Self, anyhow::Error> {
-        // Update version data
-        db.put_cf(
-            get_metadata_column_handle(&db),
-            DB_SCHEMA_VERSION_KEY,
-            LATEST_SCHEMA_VERSION.to_be_bytes(),
-        )
-        .context("Failed to write schema version to db")?;
-
-        Ok(PersistentKeyDB::new_from_db(db, logger))
     }
 
     /// Write the keyshare to the db, indexed by the key id
@@ -277,7 +288,7 @@ fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
 /// Get the schema version from the metadata column in the db.
 fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
     db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
-        .context("Failed to get metadata column when trying to read the schema version")?
+        .context("Failed to get metadata column")?
         .map(|version| {
             let version: [u8; 4] = version.try_into().expect("Version should be a u32");
             let version = u32::from_be_bytes(version);
@@ -287,15 +298,67 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
         .ok_or_else(|| anyhow::Error::msg("Could not find db schema version"))
 }
 
+/// Get the genesis hash from the metadata column in the db.
+fn read_genesis_hash(db: &DB) -> Result<Option<state_chain_runtime::Hash>> {
+    match db
+        .get_cf(get_metadata_column_handle(db), GENESIS_HASH_KEY)
+        .context("Failed to get metadata column")?
+    {
+        Some(hash) => {
+            if hash.len() != size_of::<state_chain_runtime::Hash>() {
+                Err(anyhow!("Incorrect length of Genesis hash"))
+            } else {
+                Ok(Some(sp_core::H256::from_slice(&hash[..])))
+            }
+        }
+        // None is expected because the genesis hash is not known during the generate genesis keys process,
+        // so the genesis databases will not have the genesis hash,
+        // it will be added during `check_or_set_genesis_hash` on first time startup.
+        None => Ok(None),
+    }
+}
+
+/// Check that the genesis in the db file matches the one provided.
+/// If None is found, it will be added to the db.
+fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -> Result<()> {
+    let existing_hash = read_genesis_hash(db)?;
+
+    match existing_hash {
+        Some(existing_hash) => {
+            if existing_hash == genesis_hash {
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "Genesis hash mismatch. Have you changed Chainflip network?",
+                ))
+            }
+        }
+        None => {
+            db.put_cf(
+                get_metadata_column_handle(db),
+                GENESIS_HASH_KEY,
+                genesis_hash,
+            )
+            .context("Failed to write genesis hash to db")?;
+
+            Ok(())
+        }
+    }
+}
+
 /// Reads the schema version and migrates the db to the latest schema version if required
 fn migrate_db_to_latest(
     db: DB,
     path: &Path,
+    genesis_hash: Option<state_chain_runtime::Hash>,
     logger: &slog::Logger,
 ) -> Result<PersistentKeyDB, anyhow::Error> {
-    // Read the schema version from the db
-    let version =
-        read_schema_version(&db, logger).context("Failed to read schema version on existing db")?;
+    let version = read_schema_version(&db, logger)
+        .context("Failed to read schema version from existing db")?;
+
+    if let Some(expected_genesis_hash) = genesis_hash {
+        check_or_set_genesis_hash(&db, expected_genesis_hash)?;
+    }
 
     // Check if the db version is up-to-date or we need to do migrations
     match version.cmp(&LATEST_SCHEMA_VERSION) {
@@ -337,307 +400,6 @@ fn migrate_db_to_latest(
 
             // No migrations exist yet so just panic
             panic!("Invalid migration from schema version {}", version);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use std::path::PathBuf;
-
-    use crate::multisig::crypto::polkadot::PolkadotSigning;
-    use crate::multisig::{client::keygen::generate_key_data_until_compatible, crypto::Rng};
-    use sp_runtime::AccountId32;
-    use tempfile::TempDir;
-
-    use super::*;
-
-    use crate::multisig::crypto::eth::EthSigning;
-
-    use crate::{
-        logging::test_utils::new_test_logger,
-        testing::{assert_ok, new_temp_directory_with_nonexistent_file},
-    };
-
-    fn generate_key_share_for_test<C: CryptoScheme>() -> KeygenResultInfo<C::Point> {
-        use rand_legacy::FromEntropy;
-        let rng = Rng::from_entropy();
-        let account_id = AccountId32::new([0; 32]);
-        let (_key_id, key_shares) =
-            generate_key_data_until_compatible(&[account_id.clone()], 20, rng);
-        key_shares[&account_id].clone()
-    }
-
-    const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
-
-    fn open_db_and_write_version_data(path: &Path, schema_version: u32) {
-        let mut opts = Options::default();
-        opts.create_missing_column_families(true);
-        opts.create_if_missing(true);
-        let db = DB::open_cf(&opts, &path, COLUMN_FAMILIES).expect("Should open db file");
-
-        // Write the schema version
-        db.put_cf(
-            get_metadata_column_handle(&db),
-            DB_SCHEMA_VERSION_KEY,
-            schema_version.to_be_bytes(),
-        )
-        .expect("Should write DB_SCHEMA_VERSION");
-    }
-
-    fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
-        let backups_path = temp_dir.path().join(BACKUPS_DIRECTORY);
-
-        let backups: Vec<PathBuf> = fs::read_dir(&backups_path)?
-            .collect::<Result<Vec<std::fs::DirEntry>, std::io::Error>>()?
-            .iter()
-            .filter_map(|entry| {
-                let file_path = entry.path();
-                if file_path.is_dir() && file_path != *db_path {
-                    Some(file_path)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        Ok(backups)
-    }
-
-    // Just a random key
-    const TEST_KEY: [u8; 33] = [
-        3, 3, 94, 73, 229, 219, 117, 193, 0, 143, 51, 247, 54, 138, 135, 255, 177, 63, 13, 132, 93,
-        195, 249, 200, 151, 35, 228, 224, 122, 6, 111, 38, 103,
-    ];
-
-    #[test]
-    fn can_create_new_database() {
-        let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
-        ));
-        assert!(db_path.exists());
-    }
-
-    #[test]
-    fn new_db_is_created_with_latest_schema_version() {
-        let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        // Create a fresh db. This will also write the schema version
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
-        ));
-
-        assert!(db_path.exists());
-        {
-            // Open the db file manually
-            let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
-                .expect("Should open db file");
-
-            // Get version number
-            let db_schema_version = db
-                .get_cf(get_metadata_column_handle(&db), DB_SCHEMA_VERSION_KEY)
-                .expect("Should get from metadata column")
-                .expect("No version data found");
-            let db_schema_version: [u8; 4] = db_schema_version
-                .try_into()
-                .expect("Version should be a u32");
-            assert_eq!(u32::from_be_bytes(db_schema_version), LATEST_SCHEMA_VERSION);
-        }
-    }
-
-    #[test]
-    fn new_db_returns_db_when_db_data_version_is_latest() {
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        open_db_and_write_version_data(&db_path, LATEST_SCHEMA_VERSION);
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path,
-            &new_test_logger()
-        ));
-    }
-
-    #[test]
-    fn should_not_migrate_backwards() {
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        // Create a db with schema version + 1
-        {
-            open_db_and_write_version_data(&db_path, LATEST_SCHEMA_VERSION + 1);
-        }
-
-        // Open the db and make sure the migration errors
-        {
-            let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
-                .expect("Should open db file");
-            assert!(migrate_db_to_latest(db, &db_path, &new_test_logger()).is_err());
-        }
-    }
-
-    #[test]
-    fn can_load_keys_with_current_keygen_info() {
-        type Scheme = EthSigning;
-
-        let secret_share = generate_key_share_for_test::<Scheme>();
-        let logger = new_test_logger();
-
-        let key_id = KeyId(TEST_KEY.into());
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-
-            p_db.update_key::<Scheme>(&key_id, &secret_share);
-        }
-
-        {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-            let keys = p_db.load_keys::<Scheme>();
-            let key = keys.get(&key_id).expect("Should have an entry for key");
-            // single party keygen has a threshold of 0
-            assert_eq!(key.params.threshold, 0);
-        }
-    }
-
-    #[test]
-    fn can_update_key() {
-        type Scheme = EthSigning;
-
-        let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        let key_id = KeyId(vec![0; 33]);
-
-        let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-
-        let keys_before = p_db.load_keys::<Scheme>();
-        // there should be no key [0; 33] yet
-        assert!(keys_before.get(&key_id).is_none());
-
-        let keygen_result_info = generate_key_share_for_test::<Scheme>();
-        p_db.update_key::<Scheme>(&key_id, &keygen_result_info);
-
-        let keys_before = p_db.load_keys::<Scheme>();
-        assert!(keys_before.get(&key_id).is_some());
-    }
-
-    #[test]
-    fn backup_should_fail_if_already_exists() {
-        let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        // Create a normal db
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
-        ));
-
-        // Backup up the db to a specified directory.
-        // We cannot use the normal backup directory because it has a timestamp in it.
-        let backup_dir_name = "test".to_string();
-        assert_ok!(create_backup_with_directory_name(
-            &db_path,
-            backup_dir_name.clone()
-        ));
-
-        // Try and back it up again to the same directory and it should fail
-        assert!(create_backup_with_directory_name(&db_path, backup_dir_name).is_err());
-    }
-
-    #[test]
-    fn backup_should_fail_if_cant_copy_files() {
-        let logger = new_test_logger();
-        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
-
-        // Create a normal db
-        assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
-            &db_path, &logger
-        ));
-        // Do a backup of the db,
-        assert_ok!(create_backup(&db_path, LATEST_SCHEMA_VERSION));
-
-        // Change the backups folder to readonly
-        let backups_path = directory.path().join(BACKUPS_DIRECTORY);
-        assert!(backups_path.exists());
-        let mut permissions = backups_path.metadata().unwrap().permissions();
-        permissions.set_readonly(true);
-        assert_ok!(fs::set_permissions(&backups_path, permissions));
-        assert!(
-            backups_path.metadata().unwrap().permissions().readonly(),
-            "Readonly permissions were not set"
-        );
-
-        // Try and backup the db again, it should fail with permissions denied due to readonly
-        assert!(create_backup(&db_path, LATEST_SCHEMA_VERSION).is_err());
-    }
-
-    #[test]
-    fn can_load_key_from_backup() {
-        type Scheme = EthSigning;
-
-        let logger = new_test_logger();
-        let (directory, db_path) = new_temp_directory_with_nonexistent_file();
-        let key_id = KeyId(vec![0; 33]);
-
-        // Create a normal db and save a key in it
-        {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-            let keygen_result_info = generate_key_share_for_test::<Scheme>();
-            p_db.update_key::<Scheme>(&key_id, &keygen_result_info);
-        }
-
-        // Do a backup of the db,
-        assert_ok!(create_backup(&db_path, LATEST_SCHEMA_VERSION));
-
-        // Try and open the backup to make sure it still works
-        {
-            let backups = find_backups(&directory, db_path).unwrap();
-            assert!(
-                backups.len() == 1,
-                "Incorrect number of backups found in {}",
-                BACKUPS_DIRECTORY
-            );
-
-            // Should be able to open the backup and load the key
-            let p_db =
-                PersistentKeyDB::new_and_migrate_to_latest(backups.first().unwrap(), &logger)
-                    .unwrap();
-
-            assert!(p_db.load_keys::<Scheme>().get(&key_id).is_some());
-        }
-    }
-
-    #[test]
-    fn can_use_multiple_crypto_schemes() {
-        type Scheme1 = EthSigning;
-        type Scheme2 = PolkadotSigning;
-
-        let logger = new_test_logger();
-        let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-        let scheme_1_key_id = KeyId(vec![0; 33]);
-        let scheme_2_key_id = KeyId(vec![1; 33]);
-
-        // Create a normal db and save multiple keys to it of different crypto schemes
-        {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-
-            p_db.update_key::<Scheme1>(&scheme_1_key_id, &generate_key_share_for_test::<Scheme1>());
-            p_db.update_key::<Scheme2>(&scheme_2_key_id, &generate_key_share_for_test::<Scheme2>());
-        }
-
-        // Open the db and load the keys of both types
-        {
-            let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, &logger).unwrap();
-
-            let scheme_1_keys = p_db.load_keys::<Scheme1>();
-            assert_eq!(scheme_1_keys.len(), 1, "Incorrect number of keys loaded");
-            assert!(
-                scheme_1_keys.get(&scheme_1_key_id).is_some(),
-                "Incorrect key id"
-            );
-
-            let scheme_2_keys = p_db.load_keys::<Scheme2>();
-            assert_eq!(scheme_2_keys.len(), 1, "Incorrect number of keys loaded");
-            assert!(
-                scheme_2_keys.get(&scheme_2_key_id).is_some(),
-                "Incorrect key id"
-            );
         }
     }
 }
