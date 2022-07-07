@@ -4,7 +4,7 @@ use web3::{
     signing::SecretKeyRef,
     types::{
         Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
-        SignedTransaction, SyncState, Transaction, TransactionId, TransactionParameters, U64,
+        SignedTransaction, SyncState, TransactionParameters, TransactionReceipt, U64,
     },
     Web3,
 };
@@ -71,7 +71,7 @@ pub trait EthRpcApi: Send + Sync {
 
     async fn chain_id(&self) -> Result<U256>;
 
-    async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
+    async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
 
     /// Gets block, returning error when either:
     /// - Request fails
@@ -157,10 +157,10 @@ where
         ))
     }
 
-    async fn transaction(&self, tx_hash: H256) -> Result<Transaction> {
+    async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
         self.web3
             .eth()
-            .transaction(TransactionId::Hash(tx_hash))
+            .transaction_receipt(tx_hash)
             .await
             .context(format!(
                 "{} client: Failed to fetch ETH transaction",
@@ -169,7 +169,7 @@ where
             .and_then(|opt_block| {
                 opt_block.ok_or_else(|| {
                     anyhow::Error::msg(format!(
-                        "{} client: Getting ETH transaction with tx_hash {} returned None",
+                        "{} client: Getting ETH transaction receipt with tx_hash {} returned None",
                         T::transport_protocol(),
                         tx_hash
                     ))
@@ -364,8 +364,8 @@ impl EthRpcApi for EthDualRpcClient {
         dual_call_rpc!(self, chain_id,)
     }
 
-    async fn transaction(&self, tx_hash: H256) -> Result<Transaction> {
-        dual_call_rpc!(self, transaction, tx_hash)
+    async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
+        dual_call_rpc!(self, transaction_receipt, tx_hash)
     }
 
     async fn block(&self, block_number: U64) -> Result<Block<H256>> {
@@ -398,7 +398,7 @@ pub mod mocks {
 
     use mockall::mock;
     use sp_core::H256;
-    use web3::types::{Block, Bytes, Filter, Log, Transaction};
+    use web3::types::{Block, Bytes, Filter, Log};
 
     mock!(
         // becomes MockEthHttpRpcClient
@@ -420,7 +420,7 @@ pub mod mocks {
 
             async fn chain_id(&self) -> Result<U256>;
 
-            async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
+            async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
-    types::{Transaction, H160, H256},
+    types::{TransactionReceipt, H160, H256},
 };
 
 use anyhow::Result;
@@ -271,14 +271,18 @@ impl EthObserver for KeyManager {
             }
             KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
                 let tx_fee = {
-                    // TODO: get gas paid from receipt instead of transaction.
-                    let Transaction { gas_price, gas, .. } = eth_rpc
-                        .transaction(event.tx_hash)
+                    let TransactionReceipt {
+                        gas_used,
+                        effective_gas_price,
+                        ..
+                    } = eth_rpc
+                        .transaction_receipt(event.tx_hash)
                         .await
                         .expect("Failed to get transaction");
-                    let gas_price =
-                        gas_price.expect("Could not get ETH gas price from transaction");
-                    gas * gas_price
+                    let gas_used = gas_used.expect("TransactionReceipt should have gas_used");
+                    let effective_gas_price =
+                        effective_gas_price.expect("TransactionReceipt should have gas used");
+                    gas_used.saturating_mul(effective_gas_price)
                 };
                 let _result = state_chain_client
                     .submit_signed_extrinsic(

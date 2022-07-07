@@ -1527,6 +1527,7 @@ mod witnesser_tests {
     use crate::logging::test_utils::new_test_logger;
     use crate::state_chain::client::MockStateChainRpcApi;
     use tokio::time::timeout;
+    use web3::types::TransactionReceipt;
 
     #[tokio::test]
     async fn test_start_chain_data_witnesser() {
@@ -1574,8 +1575,8 @@ mod witnesser_tests {
                 self.0.chain_id().await
             }
 
-            async fn transaction(&self, tx_hash: H256) -> Result<web3::types::Transaction> {
-                self.0.transaction(tx_hash).await
+            async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
+                self.0.transaction_receipt(tx_hash).await
             }
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>> {
