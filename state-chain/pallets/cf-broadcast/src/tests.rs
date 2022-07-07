@@ -114,9 +114,7 @@ impl MockCfe {
 							assert_ok!(MockBroadcast::signature_accepted(
 								Origin::root(),
 								MockThresholdSignature::default(),
-								Validity::Valid,
 								200,
-								10,
 								[0xcf; 4],
 							));
 						},
@@ -383,9 +381,7 @@ fn test_invalid_sigdata_is_noop() {
 			MockBroadcast::signature_accepted(
 				RawOrigin::Signed(0).into(),
 				MockThresholdSignature::default(),
-				Validity::Valid,
 				0,
-				10,
 				[0u8; 4],
 			),
 			Error::<Test, Instance1>::InvalidPayload
@@ -544,9 +540,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
-			Validity::Valid,
 			FEE_PAID,
-			10,
 			ETH_TX_HASH,
 		));
 
@@ -615,9 +609,7 @@ fn signature_accepted_signed_by_non_nominated_signer_with_same_tx_hash_refunds_n
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
-			Validity::Invalid,
 			FEE_PAID,
-			10,
 			// we still have the same hash => same tx parameters, just signed by someone else.
 			ETH_TX_HASH,
 		));
@@ -678,9 +670,7 @@ fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
-			Validity::Valid,
 			FEE_PAID,
-			10,
 			bad_eth_tx_hash,
 		));
 

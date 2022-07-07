@@ -587,9 +587,7 @@ pub mod pallet {
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
 			signature: ThresholdSignatureFor<T, I>,
-			_tx_signer: SignerIdFor<T, I>,
 			tx_fee: ChainAmountFor<T, I>,
-			_block_number: u64,
 			tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;

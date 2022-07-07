@@ -269,7 +269,7 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
-            KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
+            KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
                 let tx_fee = {
                     // TODO: get gas paid from receipt instead of transaction.
                     let Transaction { gas_price, gas, .. } = eth_rpc
@@ -289,11 +289,9 @@ impl EthObserver for KeyManager {
                                         s: sig_data.sig.into(),
                                         k_times_g_address: sig_data.k_times_g_address.into(),
                                     },
-                                    tx_signer: signer,
                                     tx_fee: tx_fee
                                         .try_into()
                                         .expect("Failed to convert tx fee to u128"),
-                                    block_number: event.block_number,
                                     tx_hash: event.tx_hash,
                                 }
                                 .into(),

@@ -132,9 +132,7 @@ benchmarks_instance_pallet! {
 		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_value(), 1);
 		let call = Call::<T, I>::signature_accepted{
 			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
-			tx_signer: SignerIdFor::<T, I>::benchmark_value(),
 			tx_fee: ChainAmountFor::<T, I>::default(),
-			block_number: 1,
 			tx_hash,
 		};
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
