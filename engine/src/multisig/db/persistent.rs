@@ -324,9 +324,15 @@ fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -
     let existing_hash = read_genesis_hash(db)?;
 
     match existing_hash {
-        Some(existing_hash) if existing_hash != genesis_hash => Err(anyhow!(
-            "Genesis hash mismatch. Have you changed Chainflip network?",
-        )),
+        Some(existing_hash) => {
+            if existing_hash == genesis_hash {
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "Genesis hash mismatch. Have you changed Chainflip network?",
+                ))
+            }
+        }
         None => {
             db.put_cf(
                 get_metadata_column_handle(db),
@@ -337,8 +343,6 @@ fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -
 
             Ok(())
         }
-        // The genesis hashes match.
-        _ => Ok(()),
     }
 }
 
