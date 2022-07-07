@@ -269,6 +269,7 @@ pub mod pallet {
 				}
 			}
 
+			// Progress the authority rotation if necessary.
 			weight += match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
@@ -279,7 +280,7 @@ pub mod pallet {
 						T::ValidatorWeightInfo::rotation_phase_idle()
 					}
 				},
-				RotationPhase::VaultsRotating(mut rotation_status) =>
+				RotationPhase::VaultsRotating(mut rotation_status) => {
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(Ok(_)) => {
 							let weight =
@@ -313,18 +314,16 @@ pub mod pallet {
 								rotation_status.weight_params(),
 							)
 						},
-					},
-				RotationPhase::VaultsRotated(rotation_status) => {
-					let weight = T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
+					}
+				},
+				RotationPhase::VaultsRotated(rotation_status) =>
+					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
 						rotation_status.weight_params(),
-					);
-					Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
-					weight
-				},
-				RotationPhase::SessionRotating(_) => {
-					Self::set_rotation_phase(RotationPhase::Idle);
-					0
-				},
+					),
+				RotationPhase::SessionRotating(rotation_status) =>
+					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
+						rotation_status.weight_params(),
+					),
 			};
 			weight
 		}
@@ -1177,8 +1176,15 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	/// activates the queued validators.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
-			RotationPhase::VaultsRotated(rotation_status) =>
-				Some(rotation_status.authority_candidates()),
+			RotationPhase::VaultsRotated(rotation_status) => {
+				let next_authorities = rotation_status.authority_candidates();
+				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
+				Some(next_authorities)
+			},
+			RotationPhase::SessionRotating(rotation_status) => {
+				Self::set_rotation_phase(RotationPhase::Idle);
+				None
+			},
 			_ => None,
 		}
 	}
