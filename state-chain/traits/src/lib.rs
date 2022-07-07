@@ -652,8 +652,8 @@ where
 	type ValidatorId = A::ValidatorId;
 
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-		A::is_qualified(validator_id) ||
-			B::is_qualified(validator_id) ||
+		A::is_qualified(validator_id) &&
+			B::is_qualified(validator_id) &&
 			C::is_qualified(validator_id)
 	}
 }
