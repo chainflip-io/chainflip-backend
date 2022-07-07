@@ -645,13 +645,15 @@ pub fn verify_transaction(
 	unsigned: &UnsignedTransaction,
 	#[allow(clippy::ptr_arg)] signed: &RawSignedTransaction,
 	address: &Address,
-) -> Result<(), TransactionVerificationError> {
+) -> Result<H256, TransactionVerificationError> {
 	let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
 		Some(0x01) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP2930),
 		Some(0x02) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP1559),
 		_ => rlp::decode(&signed[..]).map(ethereum::TransactionV2::Legacy),
 	}
 	.map_err(|_| TransactionVerificationError::InvalidRlp)?;
+
+	let tx_hash = decoded_tx.hash();
 
 	let message_hash = match decoded_tx {
 		ethereum::TransactionV2::Legacy(ref tx) =>
@@ -694,7 +696,9 @@ pub fn verify_transaction(
 		return Err(TransactionVerificationError::NoMatch)
 	}
 
-	unsigned.match_against_recovered(decoded_tx)
+	unsigned.match_against_recovered(decoded_tx)?;
+
+	Ok(tx_hash)
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Default)]
@@ -896,12 +900,11 @@ mod verification_tests {
 				web3::block_on(web3_api.accounts().sign_transaction(web3_tx.clone(), &key))
 					.expect("web tx signing failed");
 
-			// let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
 			let signed_tx_bytes = signed_tx.raw_transaction;
 
 			let verificaton_result =
 				verify_transaction(&unsigned, &signed_tx_bytes.0, &key_ref.address().0.into());
-			assert_eq!(verificaton_result, Ok(()),);
+			assert_eq!(verificaton_result, Ok(signed_tx.transaction_hash),);
 		}
 	}
 
@@ -956,7 +959,7 @@ mod verification_tests {
 				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
 			assert_eq!(
 				verificaton_result,
-				Ok(()),
+				Ok(signed_tx.hash()),
 				"Unable to verify tx signed by key {:?}",
 				hex::encode(key.serialize_secret())
 			);
