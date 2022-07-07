@@ -4,17 +4,17 @@ use futures::{future, stream, Stream, StreamExt};
 use sp_runtime::traits::Bounded;
 use tokio::sync::oneshot;
 
-use crate::common::make_periodic_tick;
-
 /// Returns a stream that yields `()` at regular intervals. Uses tokio's [MissedTickBehavior::Delay] tick strategy,
 /// meaning ticks will always be at least `interval` duration apart.
 ///
-/// Suitable for polling.
+/// The first tick yields immediately. Suitable for polling.
 ///
 /// Note that in order for this to work as expected, due to the underlying implementation of [Interval::poll_tick], the
 /// polling interval should be >> 5ms.
 pub fn periodic_tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
-    stream::unfold(make_periodic_tick(tick_interval), |mut interval| async {
+    let mut interval = tokio::time::interval(tick_interval);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    stream::unfold(interval, |mut interval| async {
         interval.tick().await;
         Some(((), interval))
     })

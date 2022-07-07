@@ -165,6 +165,8 @@ mod tests_read_clean_and_decode_hex_str_file {
 /// it will immediately output a single tick on the next call to tick() and resume ticking every duration.
 ///
 /// The supplied duration should be >> 5ms due to the underlying implementation of [Intervall::poll_tick].
+///
+/// The first tick will yield after the first `duration` has passed.
 pub fn make_periodic_tick(duration: Duration) -> tokio::time::Interval {
     let mut interval = tokio::time::interval_at(Instant::now() + duration, duration);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
