@@ -153,7 +153,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 		}
 	}
 
-	fn update_unsigned_transaction(
+	fn refresh_unsigned_transaction(
 		mut unsigned_tx: <Ethereum as ChainAbi>::UnsignedTransaction,
 	) -> Option<<Ethereum as ChainAbi>::UnsignedTransaction> {
 		let chain_data = ChainState::<Runtime, EthereumInstance>::get()?;

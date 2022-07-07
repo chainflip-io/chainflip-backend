@@ -113,8 +113,8 @@ where
 	/// Doesn't include any time/chain specific data e.g. gas price
 	fn build_transaction(signed_call: &Call) -> Abi::UnsignedTransaction;
 
-	/// Update any time-sensitive data e.g. gas price
-	fn update_unsigned_transaction(
+	/// Refresh any time-sensitive data e.g. gas price
+	fn refresh_unsigned_transaction(
 		unsigned_tx: Abi::UnsignedTransaction,
 	) -> Option<Abi::UnsignedTransaction>;
 }
@@ -347,7 +347,7 @@ pub mod mocks {
 			Default::default()
 		}
 
-		fn update_unsigned_transaction(
+		fn refresh_unsigned_transaction(
 			_unsigned_tx: <Abi as ChainAbi>::UnsignedTransaction,
 		) -> Option<<Abi as ChainAbi>::UnsignedTransaction> {
 			Some(Default::default())

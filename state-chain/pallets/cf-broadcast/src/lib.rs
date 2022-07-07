@@ -734,7 +734,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
-		if let Some(updated_unsigned) = T::TransactionBuilder::update_unsigned_transaction(
+		if let Some(updated_unsigned) = T::TransactionBuilder::refresh_unsigned_transaction(
 			broadcast_attempt.unsigned_tx.clone(),
 		) {
 			broadcast_attempt.unsigned_tx = updated_unsigned;
