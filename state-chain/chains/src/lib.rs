@@ -99,7 +99,7 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter + MaxEncodedLen {
 	/// The call, encoded as a vector of bytes using the chain's native encoding.
 	fn abi_encoded(&self) -> Vec<u8>;
 
-	/// Checks we have updated the sig data to non-default values
+	/// Checks we have updated the sig data to non-default values.
 	fn is_signed(&self) -> bool;
 }
 
@@ -110,10 +110,10 @@ where
 	Call: ApiCall<Abi>,
 {
 	/// Construct the unsigned outbound transaction from the *signed* api call.
-	/// Doesn't include any time/chain specific data e.g. gas price
+	/// Doesn't include any time-sensitive data e.g. gas price.
 	fn build_transaction(signed_call: &Call) -> Abi::UnsignedTransaction;
 
-	/// Refresh any time-sensitive data e.g. gas price
+	/// Refresh any time-sensitive data e.g. gas price.
 	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
 }
 

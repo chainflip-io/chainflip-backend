@@ -347,7 +347,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                             ).await;
 
                                                             // We want to transmit here to decrease the delay between getting a gas price estimate
-                                                            // and
+                                                            // and transmitting it to the Ethereum network
                                                             eth_broadcaster.send_for_broadcast_attempt(raw_signed_tx.0, broadcast_attempt_id).await
                                                         }
                                                         Err(e) => {
