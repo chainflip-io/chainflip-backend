@@ -301,6 +301,8 @@ benchmarks! {
 	}
 
 	/**** 3. RotationPhase::VaultsRotated ****/
+	/**** 4. RotationPhase::SessionRotating ****/
+	/**** (Both phases have equal weight) ****/
 
 	rotation_phase_vaults_rotated {
 		// a = authority set target size
@@ -326,12 +328,11 @@ benchmarks! {
 		assert!(
 			matches!(
 				CurrentRotationPhase::<T>::get(),
-				RotationPhase::SessionRotating(..),
+				RotationPhase::VaultsRotated(..),
 			),
 		);
 	}
 
-	/**** 4. RotationPhase::SessionRotating ****/
 }
 
 // impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
