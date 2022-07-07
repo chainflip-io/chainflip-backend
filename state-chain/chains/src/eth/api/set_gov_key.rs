@@ -1,6 +1,6 @@
-use crate::{eth::{Tokenizable, AggKey}, ApiCall, ChainAbi, ChainCrypto, Ethereum};
+use crate::{eth::{Tokenizable, self}, ApiCall, ChainAbi, ChainCrypto, Ethereum};
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{ParamType};
+use ethabi::{ParamType, Token};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::vec;
@@ -14,13 +14,13 @@ pub struct SetGovKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The new public key.
-	pub new_key: AggKey,
+	pub new_key: eth::Address,
 }
 
 impl SetGovKey {
-    pub fn new_unsigned<Key: Into<AggKey>>(
+    pub fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		new_key: Key,
+		new_key: eth::Address,
 	) -> Self {
 		let mut calldata =
 			Self { sig_data: SigData::new_empty(replay_protection), new_key: new_key.into() };
@@ -63,7 +63,7 @@ impl ApiCall<Ethereum> for SetGovKey {
 
 	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		self.get_function()
-			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
+			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_key)])
 			.expect(
 				r#"
 						This can only fail if the parameter types don't match the function signature encoded below.

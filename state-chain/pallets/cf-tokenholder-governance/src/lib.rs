@@ -9,8 +9,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::SetGovKey;
-use cf_chains::{ChainAbi, SetAggKeyWithAggKey};
+    use cf_chains::{ChainAbi};
 	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 	use frame_support::{
 		pallet_prelude::*,
@@ -30,15 +29,14 @@ use cf_chains::{ChainAbi, SetAggKeyWithAggKey};
 	use sp_std::{vec::Vec};
 
 	pub type ProposalId = u32;
-	pub type PublicKey = [u8; 32];
 
-	#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(Encode, Decode, TypeInfo, Clone, Debug, PartialEq, Eq)]
 	pub enum Proposal {
-		SetGovernanceKey(PublicKey),
-		SetCommunityKey(PublicKey),
+		SetGovernanceKey(cf_chains::eth::Address),
+		SetCommunityKey(cf_chains::eth::Address),
 	}
 
-	#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct ProposalInner {
 		proposal: Proposal,
 		id: ProposalId,
@@ -61,18 +59,9 @@ use cf_chains::{ChainAbi, SetAggKeyWithAggKey};
 
 		type Chain: ChainAbi;
 
-		type SetGovKeyWithAggKeyApiCall: SetGovKey<Self::Chain>;
-
-		type SetCommKeyWithAggKeyApiCall: SetAggKeyWithAggKey<Self::Chain>;
-
-		type BroadcasterSetCommKeyWithAggKey: Broadcaster<
+		type Broadcaster: Broadcaster<
 			Self::Chain,
-			ApiCall = Self::SetCommKeyWithAggKeyApiCall,
-		>;
-
-		type BroadcasterSetGovKeyWithAggKey: Broadcaster<
-			Self::Chain,
-			ApiCall = Self::SetGovKeyWithAggKeyApiCall,
+			ApiCall = cf_chains::eth::api::EthereumApi,
 		>;
 
 		/// The Flip token implementation.
@@ -154,7 +143,7 @@ use cf_chains::{ChainAbi, SetAggKeyWithAggKey};
 			let proposal_id =  Self::generate_next_id();
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get(),
-				ProposalInner { proposal, id: proposal_id },
+				ProposalInner { proposal: proposal.clone(), id: proposal_id },
 			);
 			Self::deposit_event(Event::<T>::ProposalSubmitted(proposal_id, proposal));
 			Ok(().into())
@@ -182,7 +171,6 @@ use cf_chains::{ChainAbi, SetAggKeyWithAggKey};
 			let total_baked: u128 = Bakers::<T>::take(proposal.id)
 				.iter()
 				.map(|baker| {
-					// TODO: Call into the staking pallet
 					T::Flip::total_balance_of(baker).into()
 				})
 				.sum::<u128>();

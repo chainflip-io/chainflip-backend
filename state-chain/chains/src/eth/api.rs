@@ -56,7 +56,7 @@ impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
 impl SetGovKey<Ethereum> for EthereumApi {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		new_key: <Ethereum as ChainCrypto>::AggKey,
+		new_key: eth::Address,
 	) -> Self {
 		Self::SetGovKey(set_gov_key::SetGovKey::new_unsigned(
 			replay_protection,
@@ -68,7 +68,7 @@ impl SetGovKey<Ethereum> for EthereumApi {
 impl SetCommunityKey<Ethereum> for EthereumApi {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		new_key: <Ethereum as ChainCrypto>::AggKey,
+		new_key: eth::Address,
 	) -> Self {
 		Self::SetCommunityKey(set_community_key::SetCommunityKey::new_unsigned(
 			replay_protection,
