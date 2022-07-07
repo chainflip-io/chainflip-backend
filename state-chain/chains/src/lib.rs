@@ -114,9 +114,7 @@ where
 	fn build_transaction(signed_call: &Call) -> Abi::UnsignedTransaction;
 
 	/// Refresh any time-sensitive data e.g. gas price
-	fn refresh_unsigned_transaction(
-		unsigned_tx: Abi::UnsignedTransaction,
-	) -> Option<Abi::UnsignedTransaction>;
+	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -347,10 +345,8 @@ pub mod mocks {
 			Default::default()
 		}
 
-		fn refresh_unsigned_transaction(
-			_unsigned_tx: <Abi as ChainAbi>::UnsignedTransaction,
-		) -> Option<<Abi as ChainAbi>::UnsignedTransaction> {
-			Some(Default::default())
+		fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::UnsignedTransaction) {
+			// refresh nothing
 		}
 	}
 }

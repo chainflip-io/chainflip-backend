@@ -153,17 +153,15 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 		}
 	}
 
-	fn refresh_unsigned_transaction(
-		mut unsigned_tx: <Ethereum as ChainAbi>::UnsignedTransaction,
-	) -> Option<<Ethereum as ChainAbi>::UnsignedTransaction> {
-		let chain_data = ChainState::<Runtime, EthereumInstance>::get()?;
-
-		// double the last block's base fee. This way we know it'll be selectable for at least 6
-		// blocks (12.5% increase on each block)
-		let max_fee_per_gas = chain_data.base_fee * 2 + chain_data.priority_fee;
-		unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-		unsigned_tx.max_priority_fee_per_gas = Some(U256::from(chain_data.priority_fee));
-		Some(unsigned_tx)
+	fn refresh_unsigned_transaction(unsigned_tx: &mut <Ethereum as ChainAbi>::UnsignedTransaction) {
+		if let Some(chain_state) = ChainState::<Runtime, EthereumInstance>::get() {
+			// double the last block's base fee. This way we know it'll be selectable for at least 6
+			// blocks (12.5% increase on each block)
+			let max_fee_per_gas = chain_state.base_fee * 2 + chain_state.priority_fee;
+			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(chain_state.priority_fee));
+		}
+		// if we don't have ChainState, we leave it unmodified
 	}
 }
 
