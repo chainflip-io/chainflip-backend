@@ -922,8 +922,15 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Starting a new epoch we update the storage, emit the event and call
-	/// `EpochTransitionHandler::on_new_epoch`
+	/// Makes the transition to the next epoch.
+	///
+	/// Among other things, updates the authority, backup and passive sets.
+	///
+	/// Also triggers [T::EpochTransitionHandler::on_new_epoch] which may call into other pallets.
+	///
+	/// Note this function is not benchmarked - it is only ever triggered via the session pallet,
+	/// which at the time of writing uses `T::BlockWeights::get().max_block` ie. it implicitly fills
+	/// the block.
 	fn transition_to_next_epoch(rotation_status: RuntimeRotationStatus<T>) {
 		log::debug!(target: "cf-validator", "Starting new epoch");
 
