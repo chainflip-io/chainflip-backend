@@ -699,7 +699,7 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert!(!Online::is_online(account), "node should have not sent a heartbeat");
+					assert!(Online::is_online(account), "Genesis nodes are considered online.");
 				}
 
 				assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
@@ -805,6 +805,7 @@ mod tests {
 
 					for node in &offline_nodes {
 						testnet.set_active(node, false);
+						pallet_cf_online::LastHeartbeat::<Runtime>::remove(node);
 					}
 
 					// Run to the next epoch to start the auction
@@ -812,7 +813,7 @@ mod tests {
 
 					assert!(
 						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
-						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						"Expected RotationPhase::Idle, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
 
@@ -821,7 +822,7 @@ mod tests {
 
 					assert!(
 						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
-						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						"Expected RotationPhase::Idle, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
 
