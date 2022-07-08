@@ -246,12 +246,13 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned + Unpin> Stream for IpcRe
 		mut self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Option<Self::Item>> {
-		if self.last_poll_received ||
-			unsafe { Pin::new_unchecked(&mut self.ticker) }.poll_tick(cx).is_ready()
+		if unsafe { Pin::new_unchecked(&mut self.ticker) }.poll_tick(cx).is_ready() ||
+			self.last_poll_received
 		{
 			match self.ipc_receiver.try_recv() {
 				Ok(t) => {
 					self.last_poll_received = true;
+					cx.waker().wake_by_ref();
 					std::task::Poll::Ready(Some(t))
 				},
 				Err(ipc_channel::ipc::TryRecvError::Empty) => {
@@ -270,8 +271,15 @@ impl<T> IpcReceiverStream<T> {
 	pub fn new(ipc_receiver: ipc_channel::ipc::IpcReceiver<T>) -> Self {
 		Self {
 			ipc_receiver,
-			last_poll_received: true,
-			ticker: tokio::time::interval(std::time::Duration::from_millis(250)),
+			last_poll_received: false,
+			ticker: {
+				let mut interval = tokio::time::interval_at(
+					tokio::time::Instant::now(),
+					std::time::Duration::from_millis(250),
+				);
+				interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+				interval
+			},
 		}
 	}
 }
