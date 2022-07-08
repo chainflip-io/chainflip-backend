@@ -118,14 +118,14 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Store the list of staked accounts and whether or not they are retired
+	/// Store the list of staked accounts and whether or not they are retired.
 	#[pallet::storage]
 	pub type AccountRetired<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
 	/// PendingClaims can be in one of two states:
-	/// - Pending threshold signature to allow registration of the claim
-	/// - Pending execution of the claim on ETH
+	/// - Pending threshold signature to allow registration of the claim.
+	/// - Pending execution of the claim on ETH.
 	#[pallet::storage]
 	pub type PendingClaims<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
@@ -135,13 +135,18 @@ pub mod pallet {
 	pub type WithdrawalAddresses<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
 
+	/// Currently just used to record failed staking attempts so that if necessary in the future we
+	/// can use it to recover user funds.
 	#[pallet::storage]
 	pub type FailedStakeAttempts<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<StakeAttempt<T::Balance>>, ValueQuery>;
 
+	/// List of pairs, mapping the time (in secs since Unix Epoch) at which the PendingClaim of a
+	/// particular AccountId expires.
 	#[pallet::storage]
 	pub type ClaimExpiries<T: Config> = StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
 
+	/// The minimum amount a user can stake, and therefore the minimum amount they can claim.
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
