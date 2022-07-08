@@ -130,7 +130,7 @@ pub mod pallet {
 	pub type PendingClaims<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
 
-	/// Locks a particular accounts ability to claim to a particular ETH address.
+	/// Locks a particular account'ss ability to claim to a particular ETH address.
 	#[pallet::storage]
 	pub type WithdrawalAddresses<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
@@ -146,7 +146,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ClaimExpiries<T: Config> = StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
 
-	/// The minimum amount a user can stake, and therefore the minimum amount they can claim.
+	/// The minimum amount a user can stake, and therefore the minimum amount they can have remaining
+	/// after they claim.
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
