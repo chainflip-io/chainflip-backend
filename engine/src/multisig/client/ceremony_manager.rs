@@ -503,7 +503,8 @@ where
     #[cfg(test)]
     fn expire_all(&mut self) {
         for state in self.inner.values_mut() {
-            state.set_expiry_time(std::time::Instant::now());
+            let one_second_ago = std::time::Instant::now() - std::time::Duration::from_secs(1);
+            state.set_expiry_time(one_second_ago);
         }
     }
 

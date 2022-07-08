@@ -341,7 +341,10 @@ pub fn derive_local_pubkeys_for_parties<P: ECPoint>(
     // I.e. y_i = G * f_1(i) + G * f_2(i) + ... G * f_n(i), where
     // G * f_j(i) = G * s_j + G * c_j_1(i) + G * c_j_2(i) + ... + c_j_{t-1}(i)
 
+    use rayon::prelude::*;
+
     (1..=n)
+        .into_par_iter()
         .map(|idx| {
             (1..=n)
                 .map(|j| {

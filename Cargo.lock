@@ -1009,6 +1009,7 @@ dependencies = [
  "public-ip",
  "rand 0.6.5",
  "rand 0.8.5",
+ "rayon",
  "regex",
  "reqwest",
  "rocksdb",
