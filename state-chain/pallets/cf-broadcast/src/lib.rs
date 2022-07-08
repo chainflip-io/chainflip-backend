@@ -279,7 +279,7 @@ pub mod pallet {
 	/// refund if that transaction succeeds.
 	#[pallet::storage]
 	pub type TransactionHashWhitelist<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TransactionHashFor<T, I>, T::AccountId>;
+		StorageMap<_, Identity, TransactionHashFor<T, I>, T::AccountId>;
 
 	/// The signer id to send refunds to for a given account id.
 	#[pallet::storage]
