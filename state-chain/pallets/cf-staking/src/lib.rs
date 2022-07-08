@@ -123,6 +123,9 @@ pub mod pallet {
 	pub type AccountRetired<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
+	/// PendingClaims can be in one of two states:
+	/// - Pending threshold signature to allow registration of the claim
+	/// - Pending execution of the claim on ETH
 	#[pallet::storage]
 	pub type PendingClaims<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
