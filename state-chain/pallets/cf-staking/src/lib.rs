@@ -646,7 +646,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(
 			remaining == Zero::zero() || remaining >= MinimumStake::<T>::get(),
-			DispatchError::from(Error::<T>::BelowMinimumStake)
+			Error::<T>::BelowMinimumStake
 		);
 
 		// Throw an error if the staker tries to claim too much. Otherwise decrement the stake by
