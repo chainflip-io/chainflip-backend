@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Display;
 use std::sync::Arc;
@@ -298,53 +299,15 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.keygen_states.expire_all();
     }
 
-    pub fn get_signing_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
-        self.signing_states.get_stage_for(&ceremony_id)
-    }
 
     pub fn get_signing_states_len(&self) -> usize {
         self.signing_states.len()
-    }
-
-    pub fn get_keygen_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
-        self.keygen_states.get_stage_for(&ceremony_id)
     }
 
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
     }
 
-    // TODO: remove these process_xxx_data functions once the ceremony manager unit tests are refactored,
-    // Simplify ceremony manager unit tests #1731
-    pub fn process_keygen_data(
-        &mut self,
-        sender_id: AccountId,
-        ceremony_id: CeremonyId,
-        data: KeygenData<<C as CryptoScheme>::Point>,
-    ) {
-        self.process_p2p_message(
-            sender_id,
-            MultisigMessage {
-                ceremony_id,
-                data: MultisigData::Keygen(data),
-            },
-        );
-    }
-
-    pub fn process_signing_data(
-        &mut self,
-        sender_id: AccountId,
-        ceremony_id: CeremonyId,
-        data: SigningData<<C as CryptoScheme>::Point>,
-    ) {
-        self.process_p2p_message(
-            sender_id,
-            MultisigMessage {
-                ceremony_id,
-                data: MultisigData::Signing(data),
-            },
-        );
-    }
 
     /// This should not be used in production as it could
     /// result in pubkeys incompatible with the KeyManager
@@ -360,6 +323,61 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
     pub fn get_delayed_signing_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
         self.signing_states.get_delayed_messages_len(ceremony_id)
+    }
+
+    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9)
+    pub fn ensure_ceremony_at_keygen_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: CeremonyId,
+    ) -> Result<()> {
+        let stage = self.keygen_states.get_stage_for(&ceremony_id);
+        let is_at_stage = match stage_number {
+            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<CoefficientCommitments3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast4>"),
+            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage5>"),
+            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage6>"),
+            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage7>"),
+            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage8>"),
+            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage9>"),
+            _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
+        }
+    }
+
+    /// Check is the ceremony is at the specified signing BroadcastStage (0-4)
+    pub fn ensure_ceremony_at_signing_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: CeremonyId,
+    ) -> Result<()> {
+        let stage = self.signing_states.get_stage_for(&ceremony_id);
+        let is_at_stage = match stage_number {
+            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
+            _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
+        }
     }
 }
 

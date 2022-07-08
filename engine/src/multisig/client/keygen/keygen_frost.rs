@@ -544,6 +544,19 @@ pub mod genesis {
         }
     }
 
+    /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for signers[0].
+    #[cfg(test)]
+    pub fn get_key_data_for_test<P: ECPoint>(signers: &[AccountId]) -> KeygenResultInfo<P> {
+        use crate::multisig::client::tests::DEFAULT_KEYGEN_SEED;
+        use rand_legacy::SeedableRng;
+
+        generate_key_data_until_compatible(signers, 20, Rng::from_seed(DEFAULT_KEYGEN_SEED))
+            .1
+            .get(&signers[0])
+            .expect("should get keygen for an account")
+            .to_owned()
+    }
+
     fn generate_key_data<P: ECPoint>(
         signers: &[AccountId],
         rng: &mut Rng,

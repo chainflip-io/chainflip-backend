@@ -3,7 +3,9 @@ mod keygen_frost;
 mod keygen_stages;
 
 #[cfg(test)]
-pub use keygen_frost::{generate_shares_and_commitment, DKGUnverifiedCommitment};
+pub use keygen_frost::{
+    generate_shares_and_commitment, genesis::get_key_data_for_test, DKGUnverifiedCommitment,
+};
 
 pub use keygen_data::{
     BlameResponse8, CoeffComm3, Complaints6, HashComm1, KeygenData, SecretShare5,
