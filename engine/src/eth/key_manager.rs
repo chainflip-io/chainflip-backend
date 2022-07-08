@@ -279,9 +279,9 @@ impl EthObserver for KeyManager {
                         .transaction_receipt(event.tx_hash)
                         .await
                         .expect("Failed to get transaction");
-                    let gas_used = gas_used.expect("TransactionReceipt should have gas_used");
-                    let effective_gas_price =
-                        effective_gas_price.expect("TransactionReceipt should have gas used");
+                    let gas_used = gas_used.expect("TransactionReceipt should have gas_used. This might be due to using a light client.");
+                    let effective_gas_price = effective_gas_price
+                        .expect("TransactionReceipt should have effective gas price");
                     gas_used.saturating_mul(effective_gas_price)
                 };
                 let _result = state_chain_client

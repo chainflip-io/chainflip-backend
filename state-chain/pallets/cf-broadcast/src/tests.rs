@@ -567,7 +567,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 }
 
 #[test]
-fn signature_accepted_signed_by_non_nominated_signer_with_same_tx_hash_refunds_nominee() {
+fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
@@ -610,7 +610,6 @@ fn signature_accepted_signed_by_non_nominated_signer_with_same_tx_hash_refunds_n
 			Origin::root(),
 			MockThresholdSignature::default(),
 			FEE_PAID,
-			// we still have the same hash => same tx parameters, just signed by someone else.
 			ETH_TX_HASH,
 		));
 
@@ -653,7 +652,7 @@ fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 			tx_sig_request.nominee
 		);
 
-		// The mapping from account id to signer id should be updated
+		// The refund mapping from account id to signer id should be updated
 		assert_eq!(
 			RefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
 			Validity::Valid
@@ -665,8 +664,6 @@ fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 		bad_eth_tx_hash[0] = ETH_TX_HASH[0] + 1;
 
 		const FEE_PAID: u128 = 200;
-		// now we respond with signature accepted from the invalid signer since they weren't
-		// whitelisted
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),

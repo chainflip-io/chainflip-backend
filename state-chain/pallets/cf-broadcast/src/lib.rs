@@ -275,8 +275,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, ChainAmountFor<T, I>>;
 
 	/// A mapping of the transaction hash we expect to witness
-	/// to the account id of the authority who we successfully submitted
-	/// transaction_ready_for_transmission extrinsic as the nominated signer
+	/// to the account id of the authority who will receive a fee
+	/// refund if that transaction succeeds.
 	#[pallet::storage]
 	pub type TransactionHashWhitelist<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TransactionHashFor<T, I>, T::AccountId>;
