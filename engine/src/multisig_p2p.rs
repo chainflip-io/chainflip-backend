@@ -371,7 +371,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                     // TODO: If we can't get peer id for some accounts, should we still try to send messages to the rest?
                     match
                         account_ids
-                            .into_iter()
+                            .iter()
                             .map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
                                 Some((peer_id, _, _)) => Ok(peer_id.into()),
                                 None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
