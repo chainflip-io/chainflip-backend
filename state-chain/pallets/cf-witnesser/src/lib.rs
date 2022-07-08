@@ -80,9 +80,6 @@ pub mod pallet {
 	/// Convenience alias for a collection of bits representing the votes of each authority.
 	pub(super) type VoteMask = BitSlice<Msb0, u8>;
 
-	/// The type used for tallying votes.
-	pub(super) type VoteCount = u32;
-
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
@@ -103,14 +100,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Some external event has been witnessed [call_sig, who, num_votes]
-		WitnessReceived(CallHash, T::ValidatorId, VoteCount),
-
-		/// The witness threshold has been reached [call_sig, num_votes]
-		ThresholdReached(CallHash, VoteCount),
-
-		/// A witness call has been executed [call_sig, result].
-		WitnessExecuted(CallHash, DispatchResult),
+		/// A witness call has failed [call_sig, result].
+		WitnessExecutionFailed(CallHash, DispatchResult),
 	}
 
 	#[pallet::error]
@@ -141,9 +132,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [WitnessReceived](Event::WitnessReceived)
-		/// - [ThresholdReached](Event::ThresholdReached)
-		/// - [WitnessExecuted](Event::WitnessExecuted)
+		/// - [WitnessExecutionFailed](Event::WitnessExecutionFailed)
 		///
 		/// ## Errors
 		///
@@ -169,9 +158,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [WitnessReceived](Event::WitnessReceived)
-		/// - [ThresholdReached](Event::ThresholdReached)
-		/// - [WitnessExecuted](Event::WitnessExecuted)
+		/// - [WitnessExecutionFailed](Event::WitnessExecutionFailed)
 		///
 		/// ## Errors
 		///
@@ -234,7 +221,7 @@ impl<T: Config> Pallet<T> {
 		let num_authorities =
 			T::EpochInfo::authority_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
 
-		let index = T::EpochInfo::authority_index(epoch_index, &who.clone().into())
+		let index = T::EpochInfo::authority_index(epoch_index, &who.into())
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
@@ -275,17 +262,10 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		Self::deposit_event(Event::<T>::WitnessReceived(
-			call_hash,
-			who.into(),
-			num_votes as VoteCount,
-		));
-
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
 			CallHashExecuted::<T>::get(&call_hash).is_none()
 		{
-			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch_bypass_filter(
 				(if epoch_index == T::EpochInfo::epoch_index() {
 					RawOrigin::CurrentEpochWitnessThreshold
@@ -294,10 +274,12 @@ impl<T: Config> Pallet<T> {
 				})
 				.into(),
 			);
-			Self::deposit_event(Event::<T>::WitnessExecuted(
-				call_hash,
-				result.map(|_| ()).map_err(|e| e.error),
-			));
+			if result.is_err() {
+				Self::deposit_event(Event::<T>::WitnessExecutionFailed(
+					call_hash,
+					result.map(|_| ()).map_err(|e| e.error),
+				));
+			}
 			CallHashExecuted::<T>::insert(&call_hash, ());
 		}
 
