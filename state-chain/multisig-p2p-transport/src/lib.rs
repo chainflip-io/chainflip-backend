@@ -503,7 +503,6 @@ pub fn new_p2p_network_node<
 			let (internal_incoming_sender, internal_incoming_receiver) = std::sync::mpsc::channel();
 
 			message_sender_spawner.spawn_blocking("IPCSender", "IPC", {
-				let shared_state = shared_state.clone();
 				async move {
 					while let Ok((peer_id, message)) = internal_incoming_receiver.recv() {
 						if let Some(ipc_state) = &*shared_state.ipc_state.lock().unwrap() {
