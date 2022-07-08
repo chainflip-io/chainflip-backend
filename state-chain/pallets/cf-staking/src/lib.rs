@@ -127,6 +127,7 @@ pub mod pallet {
 	pub type PendingClaims<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
 
+	/// Locks a particular accounts ability to claim to a particular ETH address.
 	#[pallet::storage]
 	pub type WithdrawalAddresses<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
