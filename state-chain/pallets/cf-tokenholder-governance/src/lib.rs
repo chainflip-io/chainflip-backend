@@ -5,12 +5,18 @@ use frame_support::{
 };
 pub use frame_system::pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+    use cf_chains::eth::api::EthereumReplayProtection;
     use cf_chains::{ChainAbi};
-	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
+	use cf_traits::ReplayProtectionProvider;
+	use cf_chains::eth::api::set_gov_key::SetGovKey;
+    use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 	use frame_support::{
 		pallet_prelude::*,
 	};
@@ -36,12 +42,6 @@ pub mod pallet {
 		SetCommunityKey(cf_chains::eth::Address),
 	}
 
-	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-	pub struct ProposalInner {
-		proposal: Proposal,
-		id: ProposalId,
-	}
-
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -56,6 +56,9 @@ pub mod pallet {
 			+ From<u128>;
 
 		type FeePayment: FeePayment<Amount = Self::Balance, AccountId = Self::AccountId>;
+
+		/// Something that can provide a nonce for the threshold signature.
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		type Chain: ChainAbi;
 
@@ -89,25 +92,28 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub(super) type Proposals<T> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, ProposalInner>;
+	pub(super) type Proposals<T> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn execution_pipeline)]
-	pub(super) type ExecutionPipeline<T> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal, OptionQuery>;
+	#[pallet::getter(fn backers)]
+	pub(super) type Backers<T: Config> =
+		StorageMap<_, Twox64Concat, Proposal, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn bakers)]
-	pub(super) type Bakers<T: Config> =
-		StorageMap<_, Twox64Concat, ProposalId, Vec<T::AccountId>, ValueQuery>;
+	#[pallet::getter(fn gov_enactment)]
+	pub type GovKeyUpdateAwaitingEnactment<T> = StorageValue<_, (BlockNumberFor<T>, cf_chains::eth::Address), OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn community_enactment)]
+	pub type CommKeyUpdateAwaitingEnactment<T> = StorageValue<_, (BlockNumberFor<T>, cf_chains::eth::Address), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		ProposalSubmitted(ProposalId, Proposal),
-		ProposalPassed(ProposalId),
-		ProposalRejected(ProposalId),
-		ProposalEnacted(ProposalId),
+		ProposalSubmitted(Proposal),
+		ProposalPassed(Proposal),
+		ProposalRejected(Proposal),
+		ProposalEnacted(Proposal),
 	}
 
 	#[pallet::error]
@@ -118,14 +124,19 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			if let Some(proposal) = ExecutionPipeline::<T>::take(n) {
-				match proposal {
-					SetGovernanceKey(_) => {
-						// TODO: Broadcast new Governance-Key
-					},
-					SetCommunityKey(_) => {
-						// TODO: Broadcast new Community-Key
-					},
+			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
+				if gov_key.0 == n {
+					// TODO: Start the broadcast
+					// let replay_protection = T::ReplayProtectionProvider::replay_protection();
+					// let api_call = cf_chains::SetGovKey::new_unsigned(replay_protection as EthereumReplayProtection, gov_key.1);
+					// T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					GovKeyUpdateAwaitingEnactment::<T>::kill();
+				}
+			}
+			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
+				if comm_key.0 == n {
+					// TODO: Start the broadcast
+					CommKeyUpdateAwaitingEnactment::<T>::kill();
 				}
 			}
 			0
@@ -140,22 +151,22 @@ pub mod pallet {
 			proposal: Proposal,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			let proposal_id =  Self::generate_next_id();
+			// TOOD: Burn FLIP
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get(),
-				ProposalInner { proposal: proposal.clone(), id: proposal_id },
+				proposal.clone(),
 			);
-			Self::deposit_event(Event::<T>::ProposalSubmitted(proposal_id, proposal));
+			Self::deposit_event(Event::<T>::ProposalSubmitted(proposal));
 			Ok(().into())
 		}
 
 		#[pallet::weight(10_000)]
 		pub fn back_proposal(
 			origin: OriginFor<T>,
-			proposal_id: ProposalId,
+			proposal: Proposal,
 		) -> DispatchResultWithPostInfo {
 			let baker = ensure_signed(origin)?;
-			Bakers::<T>::mutate(proposal_id, |bakers| {
+			Backers::<T>::mutate(proposal, |bakers| {
 				if bakers.contains(&baker) {
 					return Err(Error::<T>::AlreadyBacked)
 				}
@@ -167,8 +178,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn resolve_vote(proposal: ProposalInner) {
-			let total_baked: u128 = Bakers::<T>::take(proposal.id)
+		pub fn resolve_vote(proposal: Proposal) {
+			let total_baked: u128 = Backers::<T>::take(proposal.clone())
 				.iter()
 				.map(|baker| {
 					T::Flip::total_balance_of(baker).into()
@@ -176,16 +187,18 @@ pub mod pallet {
 				.sum::<u128>();
 			let total_stake: u128 = T::Flip::onchain_funds().into();
 			if total_baked > total_stake / 2 {
-				ExecutionPipeline::<T>::insert(<frame_system::Pallet<T>>::block_number() + EnactmentDelay::<T>::get(), proposal.proposal);
-				Self::deposit_event(Event::<T>::ProposalPassed(proposal.id));
+				match proposal {
+					SetGovernanceKey(key) => {
+						GovKeyUpdateAwaitingEnactment::<T>::put((<frame_system::Pallet<T>>::block_number() + EnactmentDelay::<T>::get(), key));
+					},
+					SetCommunityKey(key) => {
+						CommKeyUpdateAwaitingEnactment::<T>::put((<frame_system::Pallet<T>>::block_number() + EnactmentDelay::<T>::get(), key));
+					}
+				}
+				Self::deposit_event(Event::<T>::ProposalPassed(proposal));
 			} else {
-				Self::deposit_event(Event::<T>::ProposalRejected(proposal.id));
+				Self::deposit_event(Event::<T>::ProposalRejected(proposal));
 			}
-		}
-		fn generate_next_id() -> ProposalId {
-			let next_id = ProposalCount::<T>::get().saturating_add(1);
-			ProposalCount::<T>::set(next_id);
-			next_id
 		}
 	}
 }

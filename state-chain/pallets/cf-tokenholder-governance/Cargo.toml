@@ -2,7 +2,7 @@
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 name = 'pallet-cf-tokenholder-governance'
 version = '0.1.0'
-description = 'FRAME pallet providing governance for the Chainflip statechain'
+description = 'FRAME pallet providing tokenholder governance for Chainflip'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
