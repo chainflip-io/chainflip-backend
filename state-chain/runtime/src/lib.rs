@@ -627,7 +627,7 @@ impl_runtime_apis! {
 			let auction_params = Auction::auction_parameters();
 			(auction_params.min_size, auction_params.max_size)
 		}
-		fn cf_min_stake() -> u64 {
+		fn cf_min_stake() -> u128 {
 			MinimumStake::<Runtime>::get().unique_saturated_into()
 		}
 		fn cf_current_epoch() -> u32 {
@@ -636,11 +636,11 @@ impl_runtime_apis! {
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
 		}
-		fn cf_authority_emission_per_block() -> u64 {
-			Emissions::current_authority_emission_per_block().unique_saturated_into()
+		fn cf_authority_emission_per_block() -> u128 {
+			Emissions::current_authority_emission_per_block()
 		}
-		fn cf_backup_emission_per_block() -> u64 {
-			Emissions::backup_node_emission_per_block().unique_saturated_into()
+		fn cf_backup_emission_per_block() -> u128 {
+			Emissions::backup_node_emission_per_block()
 		}
 		fn cf_flip_supply() -> (u128, u128) {
 			(Flip::total_issuance(), Flip::offchain_funds())
