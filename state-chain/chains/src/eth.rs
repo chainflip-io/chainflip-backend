@@ -10,10 +10,7 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint,
 };
-use libsecp256k1::{
-	curve::{Affine, Field, Jacobian, Scalar},
-	PublicKey, SecretKey, ECMULT_CONTEXT,
-};
+use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -284,6 +281,8 @@ impl AggKey {
 	}
 
 	/// Compute the message challenge e according to the format expected by the ethereum contracts.
+	/// Note that the result is not reduced to group order at this point, so we need to be careful
+	/// when converting the result to a scalar.
 	///
 	/// From the [Schnorr verification contract]
 	/// (https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol):
@@ -308,6 +307,19 @@ impl AggKey {
 		.into()
 	}
 
+	fn message_challenge_scalar(
+		&self,
+		msg_hash: &[u8; 32],
+		k_times_g_address: &[u8; 20],
+	) -> Scalar {
+		let challenge = self.message_challenge(msg_hash, k_times_g_address);
+		let mut s = Scalar::default();
+		// Even if this "overflows", the scalar is reduced to the group order,
+		// which is what the signature scheme (the contract) expects
+		let _overflowed = s.set_b32(&challenge);
+		s
+	}
+
 	/// Sign a message, using a secret key, and a signature nonce
 	#[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, sig_nonce: &SecretKey) -> [u8; 32] {
@@ -315,14 +327,7 @@ impl AggKey {
 
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
-		let e = {
-			let challenge = self.message_challenge(msg_hash, &k_times_g_address);
-			let mut s = Scalar::default();
-			let mut bytes = [0u8; 32];
-			bytes.copy_from_slice(&challenge);
-			let _overflowed = s.set_b32(&bytes);
-			s
-		};
+		let e = self.message_challenge_scalar(msg_hash, &k_times_g_address);
 
 		let d: Scalar = (*secret).into();
 		let k: Scalar = (*sig_nonce).into();
@@ -332,8 +337,6 @@ impl AggKey {
 	}
 
 	/// Verify a signature against a given message hash for this public key.
-	///
-	/// **TODO: In-depth review to ensure correctness.**
 	pub fn verify(
 		&self,
 		msg_hash: &[u8; 32],
@@ -360,51 +363,32 @@ impl AggKey {
 		let challenge_times_pubkey = {
 			// Derive the public key point equivalent from the AggKey: effectively the inverse of
 			// AggKey::from_pubkey_compressed();
-			let public_key_point = {
-				let mut point = Affine::default();
-				let mut x = Field::default();
-				if !x.set_b32(&self.pub_key_x) {
-					return Err(AggKeyVerificationError::InvalidPubkey)
-				}
-				point.set_xo_var(&x, self.pub_key_y_parity.is_odd());
-				point
-			};
+			let mut pubkey = PublicKey::parse_compressed(&self.to_pubkey_compressed())
+				.map_err(|_| AggKeyVerificationError::InvalidPubkey)?;
 
-			// Convert the message challenge to a Scalar value so it can be multiplied with the
+			// Convert the message challenge to a Secret Key value so it can be multiplied with the
 			// point.
-			let msg_challenge = self.message_challenge(msg_hash, &sig.k_times_g_address);
-			let msg_challenge_scalar = {
-				let mut e = Scalar::default();
-				let mut bytes = [0u8; 32];
-				bytes.copy_from_slice(msg_challenge.as_ref());
-				// Question: Is it ok that this prevents overflow?
-				let _overflowed = e.set_b32(&bytes);
-				e
-			};
+			let challenge = self.message_challenge_scalar(msg_hash, &sig.k_times_g_address);
+			// This will fail for a "zero" challenge, which is not expected and we might as well
+			// consider the signature invalid
+			let challenge_sk = SecretKey::try_from(challenge)
+				.map_err(|_| AggKeyVerificationError::InvalidSignature)?;
 
-			// Some mathematical magic - multiplies the point and scalar value.
-			let mut res = Jacobian::default();
-			ECMULT_CONTEXT.ecmult(
-				&mut res,
-				&Jacobian::from_ge(&public_key_point),
-				&msg_challenge_scalar,
-				&Scalar::default(),
-			);
-			res
+			// Multiply scalar and point. This can only fail if challenge is "zero",
+			// which it can't be by construction above
+			pubkey.tweak_mul_assign(&challenge_sk).expect("challenge can't be zero");
+			pubkey
 		};
 
-		// k_times_g_recovered ~ challenge_times_pubkey + s_times_g
-		let mut k_times_g_recovered =
-			Affine::from_gej(&challenge_times_pubkey.add_ge(&s_times_g.into()));
-		k_times_g_recovered.x.normalize();
-		k_times_g_recovered.y.normalize();
+		// Add two pubkeys. The signature is considered invalid if the result is
+		// a point at infinity (which is the only way `combine` can fail)
+		let k_times_g_recovered = PublicKey::combine(&[challenge_times_pubkey, s_times_g])
+			.map_err(|_| AggKeyVerificationError::InvalidSignature)?;
 
 		// We now have the recovered value for k_times_g, however we only have a
-		// k_times_g_addressess to compare against. So we need to convert our recovered k_times_g to
+		// k_times_g_address to compare against. So we need to convert our recovered k_times_g to
 		// an Ethereum address to compare against our expected value.
-		let k_times_g_hash_recovered = Keccak256::hash(
-			[k_times_g_recovered.x.b32(), k_times_g_recovered.y.b32()].concat().as_ref(),
-		);
+		let k_times_g_hash_recovered = Keccak256::hash(&k_times_g_recovered.serialize()[1..]);
 
 		// The signature is valid if the recovered value matches the provided one.
 		if k_times_g_hash_recovered[12..] == sig.k_times_g_address {

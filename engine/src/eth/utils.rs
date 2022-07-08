@@ -22,7 +22,7 @@ pub fn pubkey_to_eth_addr(pubkey: secp256k1::PublicKey) -> [u8; 20] {
         .try_into()
         .expect("Should be a valid pubkey");
 
-    let pubkey_hash = Keccak256::hash(&pubkey_bytes).as_bytes().to_owned();
+    let pubkey_hash = Keccak256::hash(&pubkey_bytes);
 
     // take the last 160bits (20 bytes)
     let addr: [u8; 20] = pubkey_hash[12..]
