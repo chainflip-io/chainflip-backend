@@ -365,11 +365,12 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 
-			let claim_details =
-				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
-
 			ensure!(
-				claimed_amount == claim_details.amount().into(),
+				claimed_amount ==
+					PendingClaims::<T>::get(&account_id)
+						.ok_or(Error::<T>::NoPendingClaim)?
+						.amount()
+						.into(),
 				Error::<T>::InvalidClaimDetails
 			);
 
