@@ -100,8 +100,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A witness call has failed [call_sig, result].
-		WitnessExecutionFailed(CallHash, DispatchResult),
+		/// A witness call has failed.
+		WitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
 	}
 
 	#[pallet::error]
@@ -266,20 +266,21 @@ impl<T: Config> Pallet<T> {
 		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
 			CallHashExecuted::<T>::get(&call_hash).is_none()
 		{
-			let result = call.dispatch_bypass_filter(
-				(if epoch_index == T::EpochInfo::epoch_index() {
-					RawOrigin::CurrentEpochWitnessThreshold
-				} else {
-					RawOrigin::HistoricalActiveEpochWitnessThreshold
-				})
-				.into(),
-			);
-			if result.is_err() {
-				Self::deposit_event(Event::<T>::WitnessExecutionFailed(
-					call_hash,
-					result.map(|_| ()).map_err(|e| e.error),
-				));
-			}
+			let _result = call
+				.dispatch_bypass_filter(
+					(if epoch_index == T::EpochInfo::epoch_index() {
+						RawOrigin::CurrentEpochWitnessThreshold
+					} else {
+						RawOrigin::HistoricalActiveEpochWitnessThreshold
+					})
+					.into(),
+				)
+				.map_err(|e| {
+					Self::deposit_event(Event::<T>::WitnessExecutionFailed {
+						call_hash,
+						error: e.error,
+					});
+				});
 			CallHashExecuted::<T>::insert(&call_hash, ());
 		}
 
