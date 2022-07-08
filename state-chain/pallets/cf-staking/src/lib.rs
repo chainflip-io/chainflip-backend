@@ -220,9 +220,6 @@ pub mod pallet {
 		/// The claimant tried to claim despite having a claim already pending.
 		PendingClaim,
 
-		/// An account tried to post a signature to an already-signed claim.
-		SignatureAlreadyIssued,
-
 		/// Can't retire an account if it's already retired.
 		AlreadyRetired,
 
@@ -231,9 +228,6 @@ pub mod pallet {
 
 		/// We are in the auction phase
 		AuctionPhase,
-
-		/// Failed to encode the signed claim payload.
-		ClaimEncodingFailed,
 
 		/// A withdrawal address is provided, but the account has a different withdrawal address
 		/// already associated.
