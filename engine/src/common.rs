@@ -165,10 +165,16 @@ mod tests_read_clean_and_decode_hex_str_file {
 /// it will immediately output a single tick on the next call to tick() and resume ticking every duration.
 ///
 /// The supplied duration should be >> 5ms due to the underlying implementation of [Intervall::poll_tick].
-///
-/// The first tick will yield after the first `duration` has passed.
-pub fn make_periodic_tick(duration: Duration) -> tokio::time::Interval {
-    let mut interval = tokio::time::interval_at(Instant::now() + duration, duration);
+pub fn make_periodic_tick(duration: Duration, yield_immediately: bool) -> tokio::time::Interval {
+    let mut interval = tokio::time::interval_at(
+        Instant::now()
+            + if yield_immediately {
+                Duration::ZERO
+            } else {
+                duration
+            },
+        duration,
+    );
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     interval
 }
@@ -183,7 +189,7 @@ mod tests_make_periodic_tick {
     async fn skips_ticks_test() {
         const PERIOD: f32 = 0.25;
 
-        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD));
+        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD), false);
 
         // Skip two ticks
         tokio::time::sleep(Duration::from_secs_f32(PERIOD * 2.5)).await;
@@ -206,7 +212,7 @@ mod tests_make_periodic_tick {
     async fn period_test() {
         const PERIOD: f32 = 0.25;
 
-        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD));
+        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD), false);
 
         for _i in 0..4 {
             assert!(

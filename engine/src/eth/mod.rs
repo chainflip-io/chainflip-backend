@@ -734,13 +734,13 @@ pub trait EthObserver {
         let init_state = StreamState::<BlockEventsStreamWs, BlockEventsStreamHttp> {
             ws_state: ProtocolState {
                 last_block_pulled: 0,
-                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL),
+                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
                 protocol: TransportProtocol::Ws,
             },
             ws_stream: safe_ws_block_events_stream,
             http_state: ProtocolState {
                 last_block_pulled: 0,
-                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL),
+                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
                 protocol: TransportProtocol::Http,
             },
             http_stream: safe_http_block_events_stream,
