@@ -674,7 +674,6 @@ impl<T: Config> Pallet<T> {
 			expiry,
 		);
 
-		// Emit a threshold signature request.
 		T::ThresholdSigner::request_signature_with_callback(
 			call.threshold_signature_payload(),
 			|id| {
