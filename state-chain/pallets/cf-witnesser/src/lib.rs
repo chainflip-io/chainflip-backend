@@ -20,9 +20,7 @@ use bitvec::prelude::*;
 use cf_traits::{EpochIndex, EpochInfo};
 use codec::FullCodec;
 use frame_support::{
-	dispatch::{
-		DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable,
-	},
+	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
 	pallet_prelude::Member,
 	traits::EnsureOrigin,
