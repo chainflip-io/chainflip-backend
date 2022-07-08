@@ -299,6 +299,17 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.keygen_states.expire_all();
     }
 
+    pub fn add_keygen_state(
+        &mut self,
+        ceremony_id: CeremonyId,
+        state: StateRunner<
+            KeygenData<<C as CryptoScheme>::Point>,
+            KeygenResultInfo<<C as CryptoScheme>::Point>,
+            KeygenFailureReason,
+        >,
+    ) {
+        self.keygen_states.add_state(ceremony_id, state);
+    }
 
     pub fn get_signing_states_len(&self) -> usize {
         self.signing_states.len()
@@ -308,6 +319,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.keygen_states.len()
     }
 
+    pub fn get_keygen_awaited_messages_for(
+        &self,
+        ceremony_id: &CeremonyId,
+    ) -> Option<AuthorityCount> {
+        self.keygen_states.get_awaited_messages_for(ceremony_id)
+    }
 
     /// This should not be used in production as it could
     /// result in pubkeys incompatible with the KeyManager
@@ -534,6 +551,22 @@ where
     #[cfg(test)]
     pub fn get_stage_for(&self, ceremony_id: &CeremonyId) -> Option<String> {
         self.inner.get(ceremony_id).and_then(|s| s.get_stage())
+    }
+
+    #[cfg(test)]
+    pub fn get_awaited_messages_for(&self, ceremony_id: &CeremonyId) -> Option<AuthorityCount> {
+        self.inner
+            .get(ceremony_id)
+            .and_then(|s| s.get_awaited_messages())
+    }
+
+    #[cfg(test)]
+    pub fn add_state(
+        &mut self,
+        ceremony_id: CeremonyId,
+        state: StateRunner<CeremonyData, CeremonyResult, FailureReason>,
+    ) {
+        self.inner.insert(ceremony_id, state);
     }
 
     #[cfg(test)]

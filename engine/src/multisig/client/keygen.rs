@@ -5,6 +5,7 @@ mod keygen_stages;
 #[cfg(test)]
 pub use keygen_frost::{
     generate_shares_and_commitment, genesis::get_key_data_for_test, DKGUnverifiedCommitment,
+    OutgoingShares,
 };
 
 pub use keygen_data::{
@@ -15,4 +16,4 @@ pub use keygen_data::{
 pub use keygen_frost::genesis::generate_key_data_until_compatible;
 pub use keygen_frost::HashContext;
 
-pub use keygen_stages::HashCommitments1;
+pub use keygen_stages::{HashCommitments1, VerifyHashCommitmentsBroadcast2};

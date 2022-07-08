@@ -18,7 +18,6 @@ use super::*;
 
 use rand_legacy::SeedableRng;
 
-use itertools::Itertools;
 use utilities::assert_ok;
 
 // Data for any stage that arrives one stage too early should be properly delayed

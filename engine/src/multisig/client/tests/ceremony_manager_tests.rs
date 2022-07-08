@@ -1,47 +1,31 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::BTreeSet;
 
-use super::{
-    helpers::gen_invalid_keygen_comm1, keygen_data_tests::gen_keygen_data_verify_hash_comm2, *,
-};
+use super::{keygen_data_tests::gen_keygen_data_verify_hash_comm2, *};
 use crate::{
     logging::test_utils::new_test_logger,
     multisig::{
         client::{
             self,
             ceremony_manager::CeremonyManager,
-            common::{
-                broadcast::BroadcastStage, BroadcastVerificationMessage, CeremonyCommon,
-                SigningFailureReason,
-            },
-            keygen::{
-                get_key_data_for_test, HashContext, KeygenData, OutgoingShares,
-                VerifyHashCommitmentsBroadcast2,
-            },
-            state_runner::StateRunner,
-            tests::helpers::get_invalid_hash_comm,
-            CeremonyFailureReason, MultisigData, PartyIdxMapping,
+            common::SigningFailureReason,
+            keygen::{get_key_data_for_test, KeygenData},
+            tests::helpers::gen_invalid_keygen_stage_2_state,
+            CeremonyFailureReason, MultisigData,
         },
         crypto::Rng,
         eth::EthSigning,
         tests::fixtures::MESSAGE_HASH,
     },
-    testing::assert_ok,
 };
-use cf_traits::AuthorityCount;
 use client::MultisigMessage;
 use rand_legacy::SeedableRng;
 use tokio::sync::oneshot;
-use utilities::threshold_from_share_count;
+use utilities::{assert_ok, threshold_from_share_count};
 
 // This test is for MultisigData::Keygen but also covers the test for signing
 // because the code is common.
 #[test]
 fn should_ignore_non_first_stage_data_before_request() {
-    let mut rng = Rng::from_seed(DEFAULT_KEYGEN_SEED);
-
     // Create a new ceremony manager
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
@@ -51,11 +35,7 @@ fn should_ignore_non_first_stage_data_before_request() {
 
     // Process a stage 2 message
     let stage_2_data =
-        MultisigData::Keygen(KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
-            data: (0..ACCOUNT_IDS.len())
-                .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
-                .collect(),
-        }));
+        MultisigData::Keygen(gen_keygen_data_verify_hash_comm2(ACCOUNT_IDS.len() as u32));
     ceremony_manager.process_p2p_message(
         ACCOUNT_IDS[0].clone(),
         MultisigMessage {
@@ -269,9 +249,6 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
 
 #[tokio::test]
 async fn should_ignore_rts_with_duplicate_signer() {
-    // Generate a key to use in this test
-    let keygen_result_info = get_key_data_for_test(&ACCOUNT_IDS);
-
     // Create a list of signers with a duplicate id
     let mut participants = ACCOUNT_IDS.clone();
     participants[1] = participants[2].clone();
@@ -289,7 +266,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
         DEFAULT_SIGNING_CEREMONY_ID,
         participants,
         MESSAGE_HASH.clone(),
-        keygen_result_info,
+        get_key_data_for_test(&ACCOUNT_IDS),
         Rng::from_seed(DEFAULT_SIGNING_SEED),
         result_sender,
     );
@@ -308,9 +285,6 @@ async fn should_ignore_rts_with_duplicate_signer() {
 
 #[tokio::test]
 async fn should_ignore_rts_with_insufficient_number_of_signers() {
-    // Generate a key to use in this test
-    let keygen_result_info = get_key_data_for_test(&ACCOUNT_IDS);
-
     // Create a list of signers that is equal to the threshold (not enough to generate a signature)
     let threshold = threshold_from_share_count(ACCOUNT_IDS.len() as u32) as usize;
     let not_enough_participants = ACCOUNT_IDS[0..threshold].to_vec();
@@ -328,7 +302,7 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
         DEFAULT_SIGNING_CEREMONY_ID,
         not_enough_participants,
         MESSAGE_HASH.clone(),
-        keygen_result_info,
+        get_key_data_for_test(&ACCOUNT_IDS),
         Rng::from_seed(DEFAULT_SIGNING_SEED),
         result_sender,
     );
@@ -347,12 +321,13 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
 
 #[tokio::test]
 async fn should_ignore_rts_with_unknown_signer_id() {
-    // Generate a key to use in this test using the ACCOUNT_IDS
-    let keygen_result_info = get_key_data_for_test(&ACCOUNT_IDS);
+    // The id that we replace must not be our own id or the test will be invalid
+    let our_account_id_index = 0;
+    let account_id_index_to_replace = 1;
 
     // Create a new ceremony manager with an account id that is in ACCOUNT_IDS
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
-        ACCOUNT_IDS[0].clone(),
+        ACCOUNT_IDS[our_account_id_index].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
         &new_test_logger(),
     );
@@ -361,7 +336,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let unknown_signer_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&unknown_signer_id));
     let mut participants = ACCOUNT_IDS.clone();
-    participants[1] = unknown_signer_id;
+    participants[account_id_index_to_replace] = unknown_signer_id;
 
     // Send a signing request with the modified participants
     let (result_sender, mut result_receiver) = oneshot::channel();
@@ -369,7 +344,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
         DEFAULT_SIGNING_CEREMONY_ID,
         participants,
         MESSAGE_HASH.clone(),
-        keygen_result_info,
+        get_key_data_for_test(&ACCOUNT_IDS),
         Rng::from_seed(DEFAULT_SIGNING_SEED),
         result_sender,
     );
@@ -386,3 +361,45 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     );
 }
 
+// This test is for MultisigData::Keygen but also covers the test for signing
+// because the code is common.
+#[tokio::test]
+async fn should_ignore_stage_data_with_incorrect_size() {
+    let logger = new_test_logger();
+    let rng = Rng::from_seed(DEFAULT_KEYGEN_SEED);
+    let num_of_participants = ACCOUNT_IDS.len() as u32;
+    let ceremony_id = DEFAULT_KEYGEN_CEREMONY_ID;
+
+    // Create a new ceremony manager
+    let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+        ACCOUNT_IDS[0].clone(),
+        tokio::sync::mpsc::unbounded_channel().0,
+        &logger,
+    );
+
+    // This test only works on message stage data that can have incorrect size (ie. not first stage),
+    // so we must create a stage 2 state and add it to the ceremony managers keygen states,
+    // allowing us to process a stage 2 message.
+    ceremony_manager.add_keygen_state(
+        ceremony_id,
+        gen_invalid_keygen_stage_2_state(ceremony_id, &ACCOUNT_IDS[..], rng, logger.clone()),
+    );
+
+    // Built a stage 2 message that has the incorrect number of elements
+    let stage_2_data = gen_keygen_data_verify_hash_comm2(num_of_participants + 1);
+
+    // Process the bad message and it should get rejected
+    ceremony_manager.process_p2p_message(
+        ACCOUNT_IDS[0].clone(),
+        MultisigMessage {
+            ceremony_id,
+            data: MultisigData::Keygen(stage_2_data),
+        },
+    );
+
+    // Check that the bad message was ignored, so the stage is still awaiting all num_of_participants messages.
+    assert_eq!(
+        ceremony_manager.get_keygen_awaited_messages_for(&ceremony_id),
+        Some(num_of_participants)
+    );
+}

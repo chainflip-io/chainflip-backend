@@ -65,6 +65,7 @@ pub trait CeremonyStage: std::fmt::Display {
     fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
+    #[cfg(test)]
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
 }
 

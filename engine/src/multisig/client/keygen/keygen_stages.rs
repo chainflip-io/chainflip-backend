@@ -117,6 +117,27 @@ pub struct VerifyHashCommitmentsBroadcast2<P: ECPoint> {
     context: HashContext,
 }
 
+#[cfg(test)]
+impl<P: ECPoint> VerifyHashCommitmentsBroadcast2<P> {
+    pub fn new(
+        common: CeremonyCommon,
+        allow_high_pubkey: bool,
+        own_commitment: DKGUnverifiedCommitment<P>,
+        hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
+        shares_to_send: OutgoingShares<P>,
+        context: HashContext,
+    ) -> Self {
+        Self {
+            common,
+            allow_high_pubkey,
+            own_commitment,
+            hash_commitments,
+            shares_to_send,
+            context,
+        }
+    }
+}
+
 derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<P: ECPoint>);
 
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>

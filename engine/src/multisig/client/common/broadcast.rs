@@ -1,8 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Display,
-    marker::PhantomData,
-};
+use std::{collections::BTreeMap, fmt::Display, marker::PhantomData};
 
 use cf_traits::AuthorityCount;
 
@@ -236,8 +232,9 @@ where
         self.processor.process(messages)
     }
 
-    fn awaited_parties(&self) -> BTreeSet<AuthorityCount> {
-        let mut awaited = BTreeSet::new();
+    #[cfg(test)]
+    fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {
+        let mut awaited = std::collections::BTreeSet::new();
 
         for idx in &self.common.all_idxs {
             if !self.messages.contains_key(idx) {

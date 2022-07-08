@@ -1,8 +1,9 @@
 use std::{
     any::Any,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Display,
     pin::Pin,
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -14,6 +15,7 @@ use itertools::{Either, Itertools};
 use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
+use slog::Logger;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
 
@@ -22,9 +24,14 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
-            common::{CeremonyFailureReason, KeygenFailureReason, SigningFailureReason},
-            keygen::{HashComm1, HashContext, SecretShare5},
-            signing, KeygenResultInfo, MultisigData, ThresholdParameters,
+            common::{
+                broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
+                KeygenFailureReason, SigningFailureReason,
+            },
+            keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
+            signing,
+            state_runner::StateRunner,
+            KeygenResultInfo, MultisigData, PartyIdxMapping, ThresholdParameters,
         },
         crypto::{ECPoint, Rng},
         KeyId, MessageHash,
@@ -1126,10 +1133,10 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(
+pub fn gen_invalid_keygen_comm1<P: ECPoint>(
     rng: &mut Rng,
     share_count: AuthorityCount,
-) -> DKGUnverifiedCommitment<Point> {
+) -> DKGUnverifiedCommitment<P> {
     let (_, fake_comm1) = generate_shares_and_commitment(
         rng,
         // The commitment is only invalid because of the invalid context
@@ -1191,4 +1198,43 @@ pub fn verify_sig_with_aggkey(sig: &EthSchnorrSignature, key_id: &KeyId) -> Resu
         .map_err(|e| anyhow::Error::msg(format!("Failed to verify signature: {:?}", e)))?;
 
     Ok(())
+}
+
+pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
+    ceremony_id: CeremonyId,
+    account_ids: &[AccountId],
+    mut rng: Rng,
+    logger: Logger,
+) -> StateRunner<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
+    let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(account_ids));
+    let common = CeremonyCommon {
+        ceremony_id,
+        own_idx: 0,
+        all_idxs: BTreeSet::from_iter((0..account_ids.len()).into_iter().map(|id| id as u32)),
+        outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
+        validator_mapping: validator_mapping.clone(),
+        rng: rng.clone(),
+        logger: logger.clone(),
+    };
+
+    let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
+    let processor = VerifyHashCommitmentsBroadcast2::new(
+        common.clone(),
+        true,
+        commitment,
+        account_ids.iter().map(|_| (0, None)).collect(),
+        keygen::OutgoingShares(BTreeMap::new()),
+        HashContext([0; 32]),
+    );
+
+    let stage = Box::new(BroadcastStage::new(processor, common));
+
+    StateRunner::new_authorised(
+        ceremony_id,
+        stage,
+        validator_mapping,
+        oneshot::channel().0,
+        account_ids.len() as u32,
+        logger,
+    )
 }

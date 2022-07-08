@@ -70,6 +70,36 @@ where
         }
     }
 
+    #[cfg(test)]
+    pub fn new_authorised(
+        ceremony_id: CeremonyId,
+        stage: Box<
+            dyn CeremonyStage<
+                    Message = CeremonyData,
+                    Result = CeremonyResult,
+                    FailureReason = FailureReason,
+                > + Send,
+        >,
+        idx_mapping: Arc<PartyIdxMapping>,
+        result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
+        num_of_participants: AuthorityCount,
+        logger: slog::Logger,
+    ) -> Self {
+        let inner = Some(StateAuthorised {
+            stage: Some(stage),
+            idx_mapping,
+            result_sender,
+            num_of_participants,
+        });
+
+        StateRunner {
+            inner,
+            delayed_messages: Default::default(),
+            should_expire_at: Instant::now() + MAX_STAGE_DURATION,
+            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+        }
+    }
+
     /// Process ceremony request from the State Chain, which allows
     /// the state machine to make progress
     pub fn on_ceremony_request(
@@ -323,6 +353,15 @@ where
         self.inner
             .as_ref()
             .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
+    }
+
+    #[cfg(test)]
+    pub fn get_awaited_messages(&self) -> Option<AuthorityCount> {
+        self.inner.as_ref().and_then(|s| {
+            s.stage
+                .as_ref()
+                .map(|s| s.awaited_parties().len() as AuthorityCount)
+        })
     }
 
     #[cfg(test)]
