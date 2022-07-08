@@ -783,7 +783,6 @@ mod verification_tests {
 	use crate::eth::sig_constants::{AGG_KEY_PRIV, AGG_KEY_PUB, MSG_HASH, SIG, SIG_NONCE};
 
 	use super::*;
-	use ethereum::{LegacyTransaction, LegacyTransactionMessage, TransactionV2};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
 	use rand::{prelude::*, SeedableRng};
@@ -861,109 +860,6 @@ mod verification_tests {
 			),
 			AggKeyVerificationError::NoMatch
 		);
-	}
-
-	#[test]
-	fn test_ethereum_signature_verification() {
-		let unsigned = UnsignedTransaction {
-			chain_id: 42,
-			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
-			gas_limit: U256::from(21_000u32).into(),
-			contract: [0xcf; 20].into(),
-			value: 0.into(),
-			data: b"do_something()".to_vec(),
-			..Default::default()
-		};
-
-		let web3_tx = web3::types::TransactionParameters {
-			nonce: Some(0.into()),
-			to: Some(unsigned.contract),
-			gas: unsigned.gas_limit.unwrap(),
-			gas_price: Default::default(),
-			value: unsigned.value,
-			data: unsigned.data.clone().into(),
-			chain_id: Some(unsigned.chain_id),
-			transaction_type: Some(ethabi::ethereum_types::U64::from(2)),
-			access_list: Some(Vec::new()),
-			max_fee_per_gas: unsigned.max_fee_per_gas,
-			max_priority_fee_per_gas: unsigned.max_priority_fee_per_gas,
-		};
-
-		for seed in 0..10 {
-			let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-			let key = secp256k1::SecretKey::from_slice(&arr[..]).unwrap();
-			let key_ref = web3::signing::SecretKeyRef::new(&key);
-
-			use web3::signing::Key;
-			let web3_api = web3::Web3::new(web3::transports::test::TestTransport::default());
-			let signed_tx =
-				web3::block_on(web3_api.accounts().sign_transaction(web3_tx.clone(), &key))
-					.expect("web tx signing failed");
-
-			let signed_tx_bytes = signed_tx.raw_transaction;
-
-			let verificaton_result =
-				verify_transaction(&unsigned, &signed_tx_bytes.0, &key_ref.address().0.into());
-			assert_eq!(verificaton_result, Ok(signed_tx.transaction_hash),);
-		}
-	}
-
-	#[test]
-	fn test_legacy_ethereum_signature_verification() {
-		let unsigned = UnsignedTransaction {
-			chain_id: 42,
-			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
-			gas_limit: U256::from(21_000u32).into(),
-			contract: [0xcf; 20].into(),
-			value: 0u32.into(),
-			data: b"do_something()".to_vec(),
-			..Default::default()
-		};
-
-		let msg = LegacyTransactionMessage {
-			chain_id: Some(unsigned.chain_id),
-			nonce: 0u32.into(),
-			gas_limit: unsigned.gas_limit.unwrap(),
-			gas_price: U256::from(1_000_000_000u32),
-			action: ethereum::TransactionAction::Call(unsigned.contract),
-			value: unsigned.value,
-			input: unsigned.data.clone(),
-		};
-
-		for seed in 0..10 {
-			let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-			let key = secp256k1::SecretKey::from_slice(&arr[..]).unwrap();
-			let key_ref = web3::signing::SecretKeyRef::new(&key);
-
-			use web3::signing::Key;
-			let sig = key_ref.sign(msg.hash().as_bytes(), unsigned.chain_id.into()).unwrap();
-
-			let signed_tx = TransactionV2::Legacy(LegacyTransaction {
-				nonce: msg.nonce,
-				gas_price: msg.gas_price,
-				gas_limit: msg.gas_limit,
-				action: msg.action,
-				value: msg.value,
-				input: msg.input.clone(),
-				signature: ethereum::TransactionSignature::new(
-					sig.v,
-					sig.r.0.into(),
-					sig.s.0.into(),
-				)
-				.unwrap(),
-			});
-
-			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
-
-			let verificaton_result =
-				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
-			assert_eq!(
-				verificaton_result,
-				Ok(signed_tx.hash()),
-				"Unable to verify tx signed by key {:?}",
-				hex::encode(key.serialize_secret())
-			);
-		}
 	}
 
 	#[test]

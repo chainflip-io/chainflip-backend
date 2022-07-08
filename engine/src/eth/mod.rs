@@ -12,6 +12,7 @@ pub mod rpc;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use cf_chains::eth::UnsignedTransaction;
 use cf_traits::EpochIndex;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
@@ -78,6 +79,8 @@ use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
 
 pub const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
+const EIP1559_TX_ID: u64 = 2;
+
 // TODO: Not possible to fix the clippy warning here. At the moment we
 // need to ignore it on a global level.
 #[derive(Error, Debug)]
@@ -120,6 +123,26 @@ pub fn build_broadcast_channel<T: Clone, const S: usize>(
     let (sender, _) = broadcast::channel(capacity);
     let receivers = [0; S].map(|_| sender.subscribe());
     (sender, receivers)
+}
+
+pub fn from_unsigned_to_transaction_parameters(
+    unsigned_tx: &UnsignedTransaction,
+) -> TransactionParameters {
+    TransactionParameters {
+        to: Some(unsigned_tx.contract),
+        data: unsigned_tx.data.clone().into(),
+        chain_id: Some(unsigned_tx.chain_id),
+        value: unsigned_tx.value,
+        max_fee_per_gas: unsigned_tx.max_fee_per_gas,
+        max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
+        transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
+        // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
+        // input at least as much gas as the estimate will return (stupid? yes)
+        gas: unsigned_tx
+            .gas_limit
+            .unwrap_or_else(|| U256::from(15_000_000u64)),
+        ..Default::default()
+    }
 }
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
@@ -420,19 +443,7 @@ where
         &self,
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
-        let mut tx_params = TransactionParameters {
-            to: Some(unsigned_tx.contract),
-            data: unsigned_tx.data.clone().into(),
-            chain_id: Some(unsigned_tx.chain_id),
-            value: unsigned_tx.value,
-            max_fee_per_gas: unsigned_tx.max_fee_per_gas,
-            max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
-            transaction_type: Some(web3::types::U64::from(2u64)),
-            // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
-            // input at least as much gas as the estimate will return (stupid? yes)
-            gas: U256::from(15_000_000u64),
-            ..Default::default()
-        };
+        let mut tx_params = from_unsigned_to_transaction_parameters(&unsigned_tx);
         // query for the gas estimate if the SC didn't provide it
         let gas_estimate = if let Some(gas_limit) = unsigned_tx.gas_limit {
             gas_limit

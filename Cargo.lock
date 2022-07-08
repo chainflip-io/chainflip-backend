@@ -761,7 +761,6 @@ dependencies = [
  "serde",
  "sp-runtime",
  "sp-std",
- "web3",
 ]
 
 [[package]]
@@ -967,6 +966,7 @@ dependencies = [
  "dyn-clone",
  "env_logger 0.9.0",
  "ethbloom",
+ "ethereum",
  "frame-metadata",
  "frame-support",
  "frame-system",
@@ -1012,6 +1012,7 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest",
+ "rlp",
  "rocksdb",
  "sc-rpc-api",
  "schnorrkel",
