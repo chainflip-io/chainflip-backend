@@ -13,7 +13,7 @@ use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
-    types::{Transaction, H160, H256},
+    types::{TransactionReceipt, H160, H256},
 };
 
 use anyhow::Result;
@@ -269,16 +269,20 @@ impl EthObserver for KeyManager {
                     )
                     .await;
             }
-            KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
+            KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
                 let tx_fee = {
-                    // TODO: get gas paid from receipt instead of transaction.
-                    let Transaction { gas_price, gas, .. } = eth_rpc
-                        .transaction(event.tx_hash)
+                    let TransactionReceipt {
+                        gas_used,
+                        effective_gas_price,
+                        ..
+                    } = eth_rpc
+                        .transaction_receipt(event.tx_hash)
                         .await
                         .expect("Failed to get transaction");
-                    let gas_price =
-                        gas_price.expect("Could not get ETH gas price from transaction");
-                    gas * gas_price
+                    let gas_used = gas_used.expect("TransactionReceipt should have gas_used. This might be due to using a light client.");
+                    let effective_gas_price = effective_gas_price
+                        .expect("TransactionReceipt should have effective gas price");
+                    gas_used.saturating_mul(effective_gas_price)
                 };
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
@@ -289,11 +293,9 @@ impl EthObserver for KeyManager {
                                         s: sig_data.sig.into(),
                                         k_times_g_address: sig_data.k_times_g_address.into(),
                                     },
-                                    tx_signer: signer,
                                     tx_fee: tx_fee
                                         .try_into()
                                         .expect("Failed to convert tx fee to u128"),
-                                    block_number: event.block_number,
                                     tx_hash: event.tx_hash,
                                 }
                                 .into(),
