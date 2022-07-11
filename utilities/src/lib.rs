@@ -89,6 +89,34 @@ mod with_std {
     pub fn rpc_error_into_anyhow_error(error: jsonrpc_core_client::RpcError) -> anyhow::Error {
         anyhow::Error::msg(error.to_string())
     }
+
+    pub mod mockall_utilities {
+        use mockall::Predicate;
+        use predicates::reflection::PredicateReflection;
+
+        // Allows equality predicate between differing types
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub struct EqPredicate<T> {
+            constant: T,
+        }
+        impl<T: std::fmt::Debug, P: ?Sized> Predicate<P> for EqPredicate<T>
+        where
+            P: std::fmt::Debug + PartialEq<T>,
+        {
+            fn eval(&self, variable: &P) -> bool {
+                variable.eq(&self.constant)
+            }
+        }
+        impl<T: std::fmt::Debug> PredicateReflection for EqPredicate<T> {}
+        impl<T: std::fmt::Debug> std::fmt::Display for EqPredicate<T> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "var {:?}", self.constant)
+            }
+        }
+        pub fn eq<T>(constant: T) -> EqPredicate<T> {
+            EqPredicate { constant }
+        }
+    }
 }
 
 #[cfg(feature = "std")]

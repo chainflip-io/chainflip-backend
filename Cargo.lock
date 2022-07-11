@@ -9918,6 +9918,8 @@ dependencies = [
  "anyhow",
  "hex",
  "jsonrpc-core-client",
+ "mockall",
+ "predicates",
 ]
 
 [[package]]

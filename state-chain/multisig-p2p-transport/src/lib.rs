@@ -600,35 +600,12 @@ mod tests {
 	use std::time::Duration;
 
 	use super::*;
+	use cf_utilities::mockall_utilities::eq;
 	use futures::Future;
 	use jsonrpc_core::MetaIoHandler;
 	use jsonrpc_core_client::transports::local;
-	use mockall::{Predicate, Sequence};
-	use predicates::reflection::PredicateReflection;
+	use mockall::Sequence;
 	use tokio::sync::{Mutex, MutexGuard};
-
-	// Allows equality predicate between differing types
-	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-	pub struct EqPredicate<T> {
-		constant: T,
-	}
-	impl<T: std::fmt::Debug, P: ?Sized> Predicate<P> for EqPredicate<T>
-	where
-		P: std::fmt::Debug + PartialEq<T>,
-	{
-		fn eval(&self, variable: &P) -> bool {
-			variable.eq(&self.constant)
-		}
-	}
-	impl<T: std::fmt::Debug> PredicateReflection for EqPredicate<T> {}
-	impl<T: std::fmt::Debug> std::fmt::Display for EqPredicate<T> {
-		fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-			write!(f, "var {:?}", self.constant)
-		}
-	}
-	fn eq<T>(constant: T) -> EqPredicate<T> {
-		EqPredicate { constant }
-	}
 
 	struct LockedMockPeerNetwork(Mutex<MockPeerNetwork>);
 	impl LockedMockPeerNetwork {
