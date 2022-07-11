@@ -103,7 +103,6 @@ fn cleans_eth_address() {
 mod with_std {
     use core::{fmt::Display, time::Duration};
     use futures::{stream, Stream};
-    use tokio;
 
     /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for some time)
     /// it will immediately output a single tick on the next call to tick() and resume ticking every duration.
