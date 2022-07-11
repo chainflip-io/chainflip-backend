@@ -576,7 +576,6 @@ pub fn new_p2p_network_node<
 	)
 }
 
-/*
 #[cfg(test)]
 mod tests {
 	use std::time::Duration;
@@ -640,7 +639,7 @@ mod tests {
 	async fn new_p2p_network_node_with_test_probes() -> (
 		tokio::sync::mpsc::UnboundedSender<Event>,
 		P2PRpcClient,
-		Arc<RwLock<P2PValidatorNetworkNodeState>>,
+		Arc<SharedState>,
 		Arc<LockedMockPeerNetwork>,
 		sc_service::TaskManager,
 	) {
@@ -662,7 +661,7 @@ mod tests {
 			Duration::from_secs(0),
 		);
 
-		let internal_state = rpc_request_handler.state.clone();
+		let shared_state = rpc_request_handler.shared_state.clone();
 
 		let (client, server) = local::connect_with_pubsub::<P2PRpcClient, _>(Arc::new({
 			let mut io = MetaIoHandler::default();
@@ -675,11 +674,11 @@ mod tests {
 
 		network_expectations.lock().checkpoint();
 
-		(event_sender, client, internal_state, network_expectations, task_manager)
+		(event_sender, client, shared_state, network_expectations, task_manager)
 	}
 
 	async fn expect_reserve_peer_changes_during_closure<F: Future, C: FnOnce() -> F>(
-		internal_state: Arc<RwLock<P2PValidatorNetworkNodeState>>,
+		shared_state: Arc<SharedState>,
 		network_expectations: Arc<LockedMockPeerNetwork>,
 		replaces: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
 		removes: Vec<PeerIdTransferable>,
@@ -727,10 +726,10 @@ mod tests {
 		c().await;
 		network_expectations.lock().checkpoint();
 		assert_eq!(
-			internal_state
-				.read()
-				.unwrap()
+			shared_state
 				.reserved_peers
+				.try_lock()
+				.unwrap()
 				.iter()
 				.map(|(peer_id, (port, ip_address, _))| (*peer_id, (*port, *ip_address)))
 				.collect::<BTreeMap<_, _>>(),
@@ -746,7 +745,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn add_and_remove_peers() {
-		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
+		let (_event_sender, client, shared_state, network_expectations, _task_manager) =
 			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
@@ -768,9 +767,9 @@ mod tests {
 			 peers: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>| {
 				let network_expectations = network_expectations.clone();
 				let client = client.clone();
-				let internal_state = internal_state.clone();
+				let shared_state = shared_state.clone();
 				expect_reserve_peer_changes_during_closure(
-					internal_state,
+					shared_state,
 					network_expectations,
 					replaces,
 					removes,
@@ -790,9 +789,9 @@ mod tests {
 			 peers: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>| {
 				let network_expectations = network_expectations.clone();
 				let client = client.clone();
-				let internal_state = internal_state.clone();
+				let shared_state = shared_state.clone();
 				expect_reserve_peer_changes_during_closure(
-					internal_state,
+					shared_state,
 					network_expectations,
 					replaces,
 					removes,
@@ -898,7 +897,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn set_peers() {
-		let (_event_sender, client, internal_state, network_expectations, _task_manager) =
+		let (_event_sender, client, shared_state, network_expectations, _task_manager) =
 			new_p2p_network_node_with_test_probes().await;
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
@@ -918,9 +917,9 @@ mod tests {
 			 adds: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>| {
 				let network_expectations = network_expectations.clone();
 				let client = client.clone();
-				let internal_state = internal_state.clone();
+				let shared_state = shared_state.clone();
 				expect_reserve_peer_changes_during_closure(
-					internal_state,
+					shared_state,
 					network_expectations,
 					replaces,
 					removes,
@@ -992,7 +991,7 @@ mod tests {
 		.await;
 	}
 
-	#[tokio::test]
+	/*#[tokio::test]
 	async fn send_message() {
 		let (_event_sender, client, _internal_state, network_expectations, _task_manager) =
 			new_p2p_network_node_with_test_probes().await;
@@ -1157,6 +1156,5 @@ mod tests {
 			tokio::time::timeout(Duration::from_millis(20), message_stream.next()).await,
 			Err(_)
 		));
-	}
+	}*/
 }
-*/
