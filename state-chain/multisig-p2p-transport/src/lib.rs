@@ -254,7 +254,7 @@ pub fn new_ipc_stream<T: serde::Serialize + serde::de::DeserializeOwned>(
 				}
 			},
 		)
-		.filter_map(|option_t| std::future::ready(option_t)),
+		.filter_map(std::future::ready),
 	)
 }
 
