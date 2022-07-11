@@ -36,10 +36,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
+use crate::common::read_clean_and_decode_hex_str_file;
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
+use utilities::rpc_error_into_anyhow_error;
 
 mod signer;
 

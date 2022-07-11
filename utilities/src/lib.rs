@@ -82,3 +82,14 @@ fn cleans_eth_address() {
     let input = "B29aB9EbDb421CE48b70699758a6e9a3DBD609C5";
     assert!(clean_eth_address(input).is_ok());
 }
+
+#[cfg(feature = "std")]
+mod with_std {
+    // Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
+    pub fn rpc_error_into_anyhow_error(error: jsonrpc_core_client::RpcError) -> anyhow::Error {
+        anyhow::Error::msg(error.to_string())
+    }
+}
+
+#[cfg(feature = "std")]
+pub use with_std::*;

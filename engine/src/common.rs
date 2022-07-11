@@ -7,7 +7,6 @@ use std::{
 
 use anyhow::Context;
 use itertools::Itertools;
-use jsonrpc_core_client::RpcError;
 use tokio::time::Instant;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -98,11 +97,6 @@ mod tests {
         }
         mutex.lock().await;
     }
-}
-
-// Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
-pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
-    anyhow::Error::msg(error.to_string())
 }
 
 pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(

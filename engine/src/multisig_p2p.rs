@@ -24,13 +24,13 @@ use zeroize::Zeroizing;
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{
-        self, format_iterator, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error,
-    },
+    common::{self, format_iterator, read_clean_and_decode_hex_str_file},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
+
+use utilities::rpc_error_into_anyhow_error;
 
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
@@ -311,19 +311,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer_mapping_on_chain
     );
 
-    let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new()?;
-
-    client
-        .setup_ipc_connections(server_name)
-        .await
-        .map_err(rpc_error_into_anyhow_error)?;
-
-    type Channels = (
-        ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>,
-        ipc_channel::ipc::IpcReceiver<(PeerIdTransferable, Vec<u8>)>,
-    );
-
-    let (_, (ipc_outgoing_sender, ipc_incoming_receiver)): (_, Channels) = server.accept().unwrap();
+    let (ipc_outgoing_sender, ipc_incoming_receiver) =
+        multisig_p2p_transport::setup_ipc_connections(&client).await?;
 
     let mut check_listener_address_tick =
         common::make_periodic_tick(Duration::from_secs(60), false);

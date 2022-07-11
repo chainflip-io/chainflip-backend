@@ -5,6 +5,7 @@
 //! process Rpc requests, and we create and run a background future that processes incoming p2p
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
+use cf_utilities::rpc_error_into_anyhow_error;
 pub use gen_client::Client as P2PRpcClient;
 pub use sc_network::PeerId;
 
@@ -576,6 +577,22 @@ pub fn new_p2p_network_node<
 	)
 }
 
+type Channels = (
+	ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>,
+	ipc_channel::ipc::IpcReceiver<(PeerIdTransferable, Vec<u8>)>,
+);
+
+pub async fn setup_ipc_connections(client: &P2PRpcClient) -> anyhow::Result<Channels> {
+	let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new()?;
+
+	client
+		.setup_ipc_connections(server_name)
+		.await
+		.map_err(rpc_error_into_anyhow_error)?;
+
+	Ok(server.accept()?.1)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::time::Duration;
@@ -991,7 +1008,7 @@ mod tests {
 		.await;
 	}
 
-	/*#[tokio::test]
+	#[tokio::test]
 	async fn send_message() {
 		let (_event_sender, client, _internal_state, network_expectations, _task_manager) =
 			new_p2p_network_node_with_test_probes().await;
@@ -1011,6 +1028,9 @@ mod tests {
 		let ip_address_1: std::net::Ipv6Addr = 1.into();
 
 		let message = vec![4, 5, 6, 7, 8];
+
+		let (ipc_outgoing_sender, _ipc_incoming_receiver) =
+			setup_ipc_connections(&client).await.unwrap();
 
 		network_expectations.lock().expect_reserve_peer().times(2).return_const(());
 		client
@@ -1039,15 +1059,10 @@ mod tests {
 			.with(eq(peer_1), eq(message.clone()))
 			.times(1)
 			.return_const(true);
-		assert!(matches!(
-			client
-				.send_message(
-					vec![peer_0_transferable.clone(), peer_1_transferable.clone()],
-					message.clone()
-				)
-				.await,
-			Ok(_)
-		));
+
+		ipc_outgoing_sender
+			.send((vec![peer_0_transferable.clone(), peer_1_transferable.clone()], message.clone()))
+			.unwrap();
 
 		tokio::time::sleep(Duration::from_millis(50)).await; // See below
 
@@ -1059,10 +1074,9 @@ mod tests {
 			.with(eq(peer_0), eq(message.clone()))
 			.times(1)
 			.return_const(true);
-		assert!(matches!(
-			client.send_message(vec![peer_0_transferable.clone()], message.clone()).await,
-			Ok(_)
-		));
+		ipc_outgoing_sender
+			.send((vec![peer_0_transferable.clone()], message.clone()))
+			.unwrap();
 
 		tokio::time::sleep(Duration::from_millis(50)).await; // See below
 
@@ -1080,37 +1094,30 @@ mod tests {
 			.with(eq(peer_0), eq(message.clone()))
 			.times(1)
 			.return_const(true);
-		assert!(matches!(
-			client.send_message(vec![peer_0_transferable.clone()], message.clone()).await,
-			Ok(_)
-		));
+		ipc_outgoing_sender
+			.send((vec![peer_0_transferable.clone()], message.clone()))
+			.unwrap();
 
 		tokio::time::sleep(Duration::from_millis(50)).await; // See below
 
 		// Partially unreserved peers cause message to be not be sent
 
-		assert!(matches!(
-			client
-				.send_message(
-					vec![peer_0_transferable.clone(), peer_2_transferable.clone()],
-					message.clone()
-				)
-				.await,
-			Err(_)
-		));
+		ipc_outgoing_sender
+			.send((vec![peer_0_transferable.clone(), peer_2_transferable.clone()], message.clone()))
+			.unwrap();
 
 		// Unreserved peer cause message to be not be sent
 
-		assert!(matches!(
-			client.send_message(vec![peer_2_transferable.clone()], message.clone()).await,
-			Err(_)
-		));
+		ipc_outgoing_sender
+			.send((vec![peer_2_transferable.clone()], message.clone()))
+			.unwrap();
 
 		// Need to make sure async spawned senders finish sending before checking expectations, we
 		// currently don't have a better method
 		tokio::time::sleep(Duration::from_millis(50)).await;
 	}
 
+	/*
 	#[tokio::test]
 	async fn rpc_subscribe() {
 		let (event_sender, client, _internal_state, _expectations, _task_manager) =
@@ -1156,5 +1163,6 @@ mod tests {
 			tokio::time::timeout(Duration::from_millis(20), message_stream.next()).await,
 			Err(_)
 		));
-	}*/
+	}
+	*/
 }
