@@ -74,6 +74,25 @@ impl From<&PeerId> for PeerIdTransferable {
 	}
 }
 
+// TODO: Use elsewhere into node rpc interface
+trait JsonResultExt {
+	type T;
+
+	fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T>;
+}
+
+impl<T, E: Display> JsonResultExt for std::result::Result<T, E> {
+	type T = T;
+
+	fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T> {
+		self.map_err(|error| jsonrpc_core::Error {
+			code: jsonrpc_core::ErrorCode::ServerError(1),
+			message: format!("{message}: {error}"),
+			data: None,
+		})
+	}
+}
+
 pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	message_sender_spawner: sc_service::SpawnTaskHandle,
 	shared_state: Arc<SharedState>,
@@ -388,38 +407,21 @@ pub fn new_p2p_network_node<
 				}
 
 				fn setup_ipc_connections(&self, server_name: String) -> Result<u64> {
-					fn new_json_error(message: String) -> jsonrpc_core::Error {
-						jsonrpc_core::Error {
-							code: jsonrpc_core::ErrorCode::ServerError(1),
-							message,
-							data: None,
-						}
-					}
+					let (incoming_ipc_sender, incoming_ipc_receiver) =
+						ipc_channel::ipc::channel::<(PeerIdTransferable, Vec<u8>)>()
+							.map_to_json_error(
+								"Failed to create incoming p2p message IPC channel",
+							)?;
+					let (outgoing_ipc_sender, outgoing_ipc_receiver) =
+						ipc_channel::ipc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>()
+							.map_to_json_error(
+								"Failed to create outgoing p2p message IPC channel",
+							)?;
 
-					fn map_to_json_error<T, E: Display>(
-						result: std::result::Result<T, E>,
-						message: &str,
-					) -> Result<T> {
-						result.map_err(|error| new_json_error(format!("{message}: {error}")))
-					}
-
-					let (incoming_ipc_sender, incoming_ipc_receiver) = map_to_json_error(
-						ipc_channel::ipc::channel::<(PeerIdTransferable, Vec<u8>)>(),
-						"Failed to create incoming p2p message IPC channel",
-					)?;
-					let (outgoing_ipc_sender, outgoing_ipc_receiver) = map_to_json_error(
-						ipc_channel::ipc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>(),
-						"Failed to create outgoing p2p message IPC channel",
-					)?;
-
-					map_to_json_error(
-						map_to_json_error(
-							ipc_channel::ipc::IpcSender::connect(server_name),
-							"Failed to connect to oneshot IPC channel",
-						)?
-						.send((outgoing_ipc_sender, incoming_ipc_receiver)),
-						"Failed to setup IPC channels",
-					)?;
+					ipc_channel::ipc::IpcSender::connect(server_name)
+						.map_to_json_error("Failed to connect to oneshot IPC channel")?
+						.send((outgoing_ipc_sender, incoming_ipc_receiver))
+						.map_to_json_error("Failed to setup IPC channels")?;
 
 					*self.shared_state.ipc_state.lock().unwrap() = Some({
 						let (
