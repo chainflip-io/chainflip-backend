@@ -935,10 +935,10 @@ impl<T: Config> Pallet<T> {
 				T::BidderProvider::get_bidders()
 					.into_iter()
 					.filter_map(|bid| {
-						if !new_authorities_lookup.contains(&bid.0) &&
-							T::ValidatorQualification::is_qualified(&bid.0)
+						if !new_authorities_lookup.contains(&bid.bidder_id) &&
+							T::ValidatorQualification::is_qualified(&bid.bidder_id)
 						{
-							Some(bid.into())
+							Some(bid)
 						} else {
 							None
 						}
@@ -1027,8 +1027,10 @@ impl<T: Config> Pallet<T> {
 			Ok(auction_outcome) => {
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
-					let bids =
-						T::BidderProvider::get_bidders().into_iter().collect::<BTreeMap<_, _>>();
+					let bids = T::BidderProvider::get_bidders()
+						.into_iter()
+						.map(|bid| (bid.bidder_id, bid.amount))
+						.collect::<BTreeMap<_, _>>();
 					auction_outcome.winners.iter().map(|id| bids.get(id)).is_sorted_by_key(Reverse)
 				});
 				log::info!(
