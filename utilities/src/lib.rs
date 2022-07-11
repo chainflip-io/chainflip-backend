@@ -182,10 +182,13 @@ mod with_std {
     /// Note that in order for this to work as expected, due to the underlying implementation of [Interval::poll_tick], the
     /// polling interval should be >> 5ms.
     pub fn periodic_tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
-        stream::unfold(make_periodic_tick(tick_interval, true), |mut interval| async {
-            interval.tick().await;
-            Some(((), interval))
-        })
+        stream::unfold(
+            make_periodic_tick(tick_interval, true),
+            |mut interval| async {
+                interval.tick().await;
+                Some(((), interval))
+            },
+        )
     }
 
     #[cfg(test)]

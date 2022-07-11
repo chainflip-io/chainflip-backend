@@ -112,11 +112,8 @@ where
 	}
 	fn cf_eth_flip_token_address(&self) -> Result<String, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let eth_flip_token_address = self
-			.client
-			.runtime_api()
-			.cf_eth_flip_token_address(&at)
-			.map_to_json_error()?;   
+		let eth_flip_token_address =
+			self.client.runtime_api().cf_eth_flip_token_address(&at).map_to_json_error()?;
 		Ok(hex::encode(eth_flip_token_address))
 	}
 	fn cf_eth_stake_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
@@ -130,11 +127,8 @@ where
 	}
 	fn cf_eth_key_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let eth_key_manager_address = self
-			.client
-			.runtime_api()
-			.cf_eth_key_manager_address(&at)
-			.map_to_json_error()?;
+		let eth_key_manager_address =
+			self.client.runtime_api().cf_eth_key_manager_address(&at).map_to_json_error()?;
 		Ok(hex::encode(eth_key_manager_address))
 	}
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error> {
@@ -162,11 +156,7 @@ where
 	}
 	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let min_stake = self
-			.client
-			.runtime_api()
-			.cf_min_stake(&at)
-			.map_to_json_error()?;
+		let min_stake = self.client.runtime_api().cf_min_stake(&at).map_to_json_error()?;
 		Ok(min_stake.into())
 	}
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
