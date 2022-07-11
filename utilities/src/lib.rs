@@ -98,15 +98,19 @@ mod with_std {
         fn map_to_json_error(self) -> jsonrpc_core::Result<Self::T>;
     }
 
+    pub fn new_json_error<E: Display>(error: E) -> jsonrpc_core::Error {
+        jsonrpc_core::Error {
+            code: jsonrpc_core::ErrorCode::ServerError(1),
+            message: error.to_string(),
+            data: None,
+        }
+    }
+
     impl<T, E: Display> JsonResultExt for std::result::Result<T, E> {
         type T = T;
 
         fn map_to_json_error(self) -> jsonrpc_core::Result<Self::T> {
-            self.map_err(|error| jsonrpc_core::Error {
-                code: jsonrpc_core::ErrorCode::ServerError(1),
-                message: error.to_string(),
-                data: None,
-            })
+            self.map_err(new_json_error)
         }
     }
 

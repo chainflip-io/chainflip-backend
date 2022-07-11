@@ -6,7 +6,7 @@
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
 use anyhow::Context;
-use cf_utilities::{rpc_error_into_anyhow_error, JsonResultExt};
+use cf_utilities::{rpc_error_into_anyhow_error, JsonResultExt, new_json_error};
 pub use gen_client::Client as P2PRpcClient;
 pub use sc_network::PeerId;
 
@@ -65,7 +65,7 @@ impl TryInto<PeerId> for PeerIdTransferable {
 
 	fn try_into(self) -> std::result::Result<PeerId, Self::Error> {
 		PeerId::from_bytes(&self.0[..])
-			.map_err(|err| jsonrpc_core::Error::invalid_params(err.to_string()))
+			.map_to_json_error()
 	}
 }
 
@@ -360,7 +360,7 @@ pub fn new_p2p_network_node<
 						);
 						Ok(200)
 					} else {
-						Err(jsonrpc_core::Error::invalid_params(format!(
+						Err(new_json_error(format!(
 							"Tried to add peer {} which is already reserved",
 							peer_id
 						)))
@@ -381,7 +381,7 @@ pub fn new_p2p_network_node<
 						);
 						Ok(200)
 					} else {
-						Err(jsonrpc_core::Error::invalid_params(format!(
+						Err(new_json_error(format!(
 							"Tried to remove peer {} which is not reserved",
 							peer_id
 						)))
