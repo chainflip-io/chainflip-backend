@@ -579,7 +579,7 @@ pub fn new_p2p_network_node<
 
 type Channels = (
 	ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>,
-	ipc_channel::ipc::IpcReceiver<(PeerIdTransferable, Vec<u8>)>,
+	IpcReceiverStream<(PeerIdTransferable, Vec<u8>)>,
 );
 
 pub async fn setup_ipc_connections(client: &P2PRpcClient) -> anyhow::Result<Channels> {
@@ -590,7 +590,9 @@ pub async fn setup_ipc_connections(client: &P2PRpcClient) -> anyhow::Result<Chan
 		.await
 		.map_err(rpc_error_into_anyhow_error)?;
 
-	Ok(server.accept()?.1)
+	let (ipc_outgoing_sender, ipc_incoming_receiver) = server.accept()?.1;
+
+	Ok((ipc_outgoing_sender, IpcReceiverStream::new(ipc_incoming_receiver)))
 }
 
 #[cfg(test)]
@@ -1029,7 +1031,7 @@ mod tests {
 
 		let message = vec![4, 5, 6, 7, 8];
 
-		let (ipc_outgoing_sender, _ipc_incoming_receiver) =
+		let (ipc_outgoing_sender, _ipc_incoming_stream) =
 			setup_ipc_connections(&client).await.unwrap();
 
 		network_expectations.lock().expect_reserve_peer().times(2).return_const(());
@@ -1117,9 +1119,8 @@ mod tests {
 		tokio::time::sleep(Duration::from_millis(50)).await;
 	}
 
-	/*
 	#[tokio::test]
-	async fn rpc_subscribe() {
+	async fn incoming_messages_are_forwarded() {
 		let (event_sender, client, _internal_state, _expectations, _task_manager) =
 			new_p2p_network_node_with_test_probes().await;
 
@@ -1129,7 +1130,8 @@ mod tests {
 		let message = vec![4, 5, 6, 7, 8];
 		let other_message = vec![2, 3, 4, 5, 6];
 
-		let mut message_stream = client.subscribe_messages().unwrap();
+		let (_ipc_outgoing_sender, mut ipc_incoming_stream) =
+			setup_ipc_connections(&client).await.unwrap();
 
 		// Tests
 
@@ -1155,14 +1157,13 @@ mod tests {
 			.unwrap();
 
 		assert_eq!(
-			message_stream.next().await.unwrap().unwrap(),
-			(peer_0_transferable.clone(), message.clone())
+			ipc_incoming_stream.next().await,
+			Some((peer_0_transferable.clone(), message.clone()))
 		);
 
 		assert!(matches!(
-			tokio::time::timeout(Duration::from_millis(20), message_stream.next()).await,
+			tokio::time::timeout(Duration::from_millis(20), ipc_incoming_stream.next()).await,
 			Err(_)
-		));
+		))
 	}
-	*/
 }

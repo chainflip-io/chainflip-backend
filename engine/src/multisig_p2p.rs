@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use futures::stream::StreamExt;
 use itertools::Itertools;
 use lazy_format::lazy_format;
-use multisig_p2p_transport::{IpcReceiverStream, PeerId, PeerIdTransferable};
+use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use slog::o;
 use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -311,7 +311,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer_mapping_on_chain
     );
 
-    let (ipc_outgoing_sender, ipc_incoming_receiver) =
+    let (ipc_outgoing_sender, mut ipc_incoming_stream) =
         multisig_p2p_transport::setup_ipc_connections(&client).await?;
 
     let mut check_listener_address_tick =
@@ -320,8 +320,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     let (internal_incoming_sender, mut internal_incoming_receiver) =
         tokio::sync::mpsc::unbounded_channel::<(PeerId, Vec<u8>)>();
     tokio::task::spawn(async move {
-        let mut incoming_ipc_stream = IpcReceiverStream::new(ipc_incoming_receiver);
-        while let Some((peer_id, serialised_message)) = incoming_ipc_stream.next().await {
+        while let Some((peer_id, serialised_message)) = ipc_incoming_stream.next().await {
             let peer_id: PeerId = peer_id.try_into()?;
             let _result = internal_incoming_sender.send((peer_id, serialised_message));
         }
