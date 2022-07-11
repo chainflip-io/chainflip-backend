@@ -5,7 +5,7 @@
 //! process Rpc requests, and we create and run a background future that processes incoming p2p
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
-use cf_utilities::rpc_error_into_anyhow_error;
+use cf_utilities::{rpc_error_into_anyhow_error, JsonResultExt};
 pub use gen_client::Client as P2PRpcClient;
 pub use sc_network::PeerId;
 
@@ -72,25 +72,6 @@ impl TryInto<PeerId> for PeerIdTransferable {
 impl From<&PeerId> for PeerIdTransferable {
 	fn from(peer_id: &PeerId) -> Self {
 		Self(peer_id.to_bytes())
-	}
-}
-
-// TODO: Use elsewhere into node rpc interface
-trait JsonResultExt {
-	type T;
-
-	fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T>;
-}
-
-impl<T, E: Display> JsonResultExt for std::result::Result<T, E> {
-	type T = T;
-
-	fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T> {
-		self.map_err(|error| jsonrpc_core::Error {
-			code: jsonrpc_core::ErrorCode::ServerError(1),
-			message: format!("{message}: {error}"),
-			data: None,
-		})
 	}
 }
 

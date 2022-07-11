@@ -9917,6 +9917,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "hex",
+ "jsonrpc-core",
  "jsonrpc-core-client",
  "mockall",
  "predicates",

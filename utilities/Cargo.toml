@@ -11,6 +11,7 @@ version = '0.1.0'
 [dependencies]
 hex = {version = "0.4.3", default-features = false}
 anyhow = '1.0'
+jsonrpc-core = "18.0.0"
 jsonrpc-core-client = '18.0.0'
 predicates = "2.1.1"
 mockall = "0.11.0"

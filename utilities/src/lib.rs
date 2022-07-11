@@ -85,9 +85,29 @@ fn cleans_eth_address() {
 
 #[cfg(feature = "std")]
 mod with_std {
+    use core::fmt::Display;
+
     // Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
     pub fn rpc_error_into_anyhow_error(error: jsonrpc_core_client::RpcError) -> anyhow::Error {
         anyhow::Error::msg(error.to_string())
+    }
+
+    pub trait JsonResultExt {
+        type T;
+    
+        fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T>;
+    }
+    
+    impl<T, E: Display> JsonResultExt for std::result::Result<T, E> {
+        type T = T;
+    
+        fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T> {
+            self.map_err(|error| jsonrpc_core::Error {
+                code: jsonrpc_core::ErrorCode::ServerError(1),
+                message: format!("{message}: {error}"),
+                data: None,
+            })
+        }
     }
 
     pub mod mockall_utilities {
