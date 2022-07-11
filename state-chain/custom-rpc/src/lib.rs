@@ -223,7 +223,7 @@ where
 			.client
 			.runtime_api()
 			.cf_flip_supply(&at)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;
 		Ok((issuance.into(), offchain.into()))
 	}
 	fn cf_accounts(&self) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error> {
@@ -232,7 +232,7 @@ where
 			.client
 			.runtime_api()
 			.cf_accounts(&at)
-			.expect("The runtime API should not return error.")
+			.map_to_json_error()?
 			.into_iter()
 			.map(|(account_id, vanity_name_bytes)| {
 				// we can use from_utf8_lossy here because we're guaranteed utf8 when we
@@ -250,7 +250,7 @@ where
 			.client
 			.runtime_api()
 			.cf_account_info(&at, account_id)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;
 
 		Ok(RpcAccountInfo {
 			stake: account_info.stake.into(),
@@ -271,7 +271,7 @@ where
 			.client
 			.runtime_api()
 			.cf_pending_claim(&at, account_id)
-			.map_err(|_| jsonrpc_core::Error::internal_error())?
+			.map_to_json_error()?
 		{
 			Some(pending_claim) => pending_claim,
 			None => return Ok(None),
@@ -290,8 +290,7 @@ where
 			.client
 			.runtime_api()
 			.cf_penalties(&at)
-			.map_to_json_error()
-			.expect("The runtime API should not return error.")
+			.map_to_json_error()?
 			.iter()
 			.map(|(offence, runtime_api_penalty)| {
 				(
