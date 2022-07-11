@@ -3,26 +3,29 @@ use codec::{Decode};
 use frame_support::{
 	dispatch::{Weight},
 };
-pub use frame_system::pallet::*;
+
+pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-pub use pallet::*;
+#[cfg(test)]
+mod mock;
+
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
-    use cf_chains::eth::api::EthereumReplayProtection;
     use cf_chains::{ChainAbi};
 	use cf_traits::ReplayProtectionProvider;
-	use cf_chains::eth::api::set_gov_key::SetGovKey;
     use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 	use frame_support::{
 		pallet_prelude::*,
 	};
 
-	use crate::Proposal::SetGovernanceKey;
-	use crate::Proposal::SetCommunityKey;
+	use cf_chains::SetGovKey as SetGovKeyApiCall;
+	use cf_chains::SetCommunityKey as SetCommunityKeyApiCall;
+
+	use crate::pallet::Proposal::SetGovernanceKey;
+	use crate::pallet::Proposal::SetCommunityKey;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -57,21 +60,24 @@ pub mod pallet {
 
 		type FeePayment: FeePayment<Amount = Self::Balance, AccountId = Self::AccountId>;
 
-		/// Something that can provide a nonce for the threshold signature.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
-
 		type Chain: ChainAbi;
 
-		type Broadcaster: Broadcaster<
-			Self::Chain,
-			ApiCall = cf_chains::eth::api::EthereumApi,
-		>;
+		type SetGovKeyApiCall: SetGovKeyApiCall<Self::Chain>;
+
+		type SetCommunityKeyApiCall: SetCommunityKeyApiCall<Self::Chain>;
+
+		/// Something that can provide a nonce for the threshold signature.
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		/// The Flip token implementation.
 		type Flip: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
 		>;
+
+		type GovKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetGovKeyApiCall>;
+
+		type CommKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetCommunityKeyApiCall>;
 	}
 
 	#[pallet::storage]
@@ -127,15 +133,14 @@ pub mod pallet {
 			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
 				if gov_key.0 == n {
 					// TODO: Start the broadcast
-					// let replay_protection = T::ReplayProtectionProvider::replay_protection();
-					// let api_call = cf_chains::SetGovKey::new_unsigned(replay_protection as EthereumReplayProtection, gov_key.1);
-					// T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					T::GovKeyBroadcaster::threshold_sign_and_broadcast(cf_chains::SetGovKey::new_unsigned(T::ReplayProtectionProvider::replay_protection(), gov_key.1));
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 				}
 			}
 			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if comm_key.0 == n {
 					// TODO: Start the broadcast
+					// T::CommKeyBroadcaster::threshold_sign_and_broadcast(cf_chains::SetCommunityKey::new_unsigned(T::ReplayProtectionProvider::replay_protection(), comm_key.1));
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 				}
 			}

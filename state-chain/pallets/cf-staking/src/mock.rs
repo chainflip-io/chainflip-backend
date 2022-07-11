@@ -125,7 +125,6 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 		}
 	}
 }
-
 pub struct MockThresholdSigner;
 
 thread_local! {
