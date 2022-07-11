@@ -18,6 +18,7 @@ use sp_runtime::{
 };
 
 use cf_chains::SetCommunityKey;
+use cf_traits::AuthorityKeys;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -86,7 +87,6 @@ impl system::Config for Test {
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 pub struct MockFeePayment;
-
 pub struct MockStakingInfo;
 
 impl StakingInfo for MockStakingInfo {
@@ -231,6 +231,13 @@ impl FeePayment for MockFeePayment {
     }
 }
 
+pub struct MockKeys;
+
+impl AuthorityKeys for MockKeys {
+	type Gov = [u8; 32];
+	type Comm = [u8; 32];
+}
+
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
@@ -253,14 +260,15 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type GovKeyBroadcaster = MockBroadcastGov;
 	type SetCommunityKeyApiCall = MockSetCommKey;
 	type CommKeyBroadcaster = MockBroadcastComm;
+	type Keys = MockKeys;
 }
 
-// pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-// pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-// pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
-// pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
-// pub const PETER: <Test as frame_system::Config>::AccountId = 988u64;
-// pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
+pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
+pub const PETER: <Test as frame_system::Config>::AccountId = 988u64;
+pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {

@@ -750,3 +750,8 @@ pub trait StakingInfo {
     fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance;
 	fn onchain_funds() -> Self::Balance;
 }
+
+pub trait AuthorityKeys {
+	type Gov;
+	type Comm;
+}

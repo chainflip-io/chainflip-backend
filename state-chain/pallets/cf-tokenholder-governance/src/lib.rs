@@ -4,47 +4,50 @@ use frame_support::{
 	dispatch::{Weight},
 };
 
-pub use pallet::*;
+use frame_support::{
+	pallet_prelude::*,
+};
 
+use cf_traits::AuthorityKeys;
+use codec::Encode;
+use frame_support::RuntimeDebugNoBound;
+
+pub use pallet::*;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-
 #[cfg(test)]
 mod mock;
 
+pub type ProposalId = u32;
+
+type GovKey<T> = <<T as Config>::Keys as AuthorityKeys>::Gov;
+type CommKey<T> = <<T as Config>::Keys as AuthorityKeys>::Comm;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum Proposal {
+	SetGovernanceKey(cf_chains::eth::Address),
+	SetCommunityKey(cf_chains::eth::Address),
+}
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
     use cf_chains::{ChainAbi};
 	use cf_traits::ReplayProtectionProvider;
     use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
-	use frame_support::{
-		pallet_prelude::*,
-	};
 
 	use cf_chains::SetGovKey as SetGovKeyApiCall;
 	use cf_chains::SetCommunityKey as SetCommunityKeyApiCall;
 
 	use crate::pallet::Proposal::SetGovernanceKey;
 	use crate::pallet::Proposal::SetCommunityKey;
-
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	use codec::Encode;
 	use frame_system::{pallet_prelude::*};
 	use sp_runtime::traits::AtLeast32BitUnsigned;
 	use sp_std::{vec::Vec};
-
-	pub type ProposalId = u32;
-
-	#[derive(Encode, Decode, TypeInfo, Clone, Debug, PartialEq, Eq)]
-	pub enum Proposal {
-		SetGovernanceKey(cf_chains::eth::Address),
-		SetCommunityKey(cf_chains::eth::Address),
-	}
-
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -78,6 +81,8 @@ pub mod pallet {
 		type GovKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetGovKeyApiCall>;
 
 		type CommKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetCommunityKeyApiCall>;
+
+		type Keys: AuthorityKeys;
 	}
 
 	#[pallet::storage]
@@ -98,7 +103,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub(super) type Proposals<T> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal>;
+	pub(super) type Proposals<T: Config> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
@@ -132,15 +137,13 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
 				if gov_key.0 == n {
-					// TODO: Start the broadcast
 					T::GovKeyBroadcaster::threshold_sign_and_broadcast(cf_chains::SetGovKey::new_unsigned(T::ReplayProtectionProvider::replay_protection(), gov_key.1));
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 				}
 			}
 			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if comm_key.0 == n {
-					// TODO: Start the broadcast
-					// T::CommKeyBroadcaster::threshold_sign_and_broadcast(cf_chains::SetCommunityKey::new_unsigned(T::ReplayProtectionProvider::replay_protection(), comm_key.1));
+					T::CommKeyBroadcaster::threshold_sign_and_broadcast(cf_chains::SetCommunityKey::new_unsigned(T::ReplayProtectionProvider::replay_protection(), comm_key.1));
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 				}
 			}
