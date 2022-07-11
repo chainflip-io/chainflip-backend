@@ -65,6 +65,8 @@ pub trait CustomApi {
 	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch")]
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error>;
+	#[rpc(name = "cf_epoch_duration")]
+	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch_started_at")]
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_authority_emission_per_block")]
@@ -180,6 +182,13 @@ where
 		self.client
 			.runtime_api()
 			.cf_current_epoch(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_epoch_duration(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error> {
