@@ -934,14 +934,9 @@ impl<T: Config> Pallet<T> {
 			RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
 				T::BidderProvider::get_bidders()
 					.into_iter()
-					.filter_map(|bid| {
-						if !new_authorities_lookup.contains(&bid.bidder_id) &&
+					.filter(|bid| {
+						!new_authorities_lookup.contains(&bid.bidder_id) &&
 							T::ValidatorQualification::is_qualified(&bid.bidder_id)
-						{
-							Some(bid)
-						} else {
-							None
-						}
 					})
 					.collect(),
 				Self::backup_set_target_size(
