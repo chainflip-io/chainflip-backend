@@ -9917,11 +9917,13 @@ name = "utilities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "futures 0.3.21",
  "hex",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "mockall",
  "predicates",
+ "tokio",
 ]
 
 [[package]]

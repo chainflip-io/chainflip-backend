@@ -245,6 +245,7 @@ mod tests {
     use hex;
     use lazy_static::lazy_static;
     use std::str::FromStr;
+    use utilities::assert_ok;
     use web3::types::{H256, U256};
 
     lazy_static! {

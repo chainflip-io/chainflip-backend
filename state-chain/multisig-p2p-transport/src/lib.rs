@@ -6,12 +6,15 @@
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
 use anyhow::Context;
-use cf_utilities::{rpc_error_into_anyhow_error, JsonResultExt, new_json_error};
+use cf_utilities::{
+	make_periodic_tick, new_json_error, rpc_error_into_anyhow_error, JsonResultExt,
+};
 pub use gen_client::Client as P2PRpcClient;
+use ipc_channel::ipc::TryRecvError;
 pub use sc_network::PeerId;
 
 use async_trait::async_trait;
-use futures::{Stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use sc_network::{multiaddr, Event, ExHashT, NetworkService};
@@ -64,8 +67,7 @@ impl TryInto<PeerId> for PeerIdTransferable {
 	type Error = jsonrpc_core::Error;
 
 	fn try_into(self) -> std::result::Result<PeerId, Self::Error> {
-		PeerId::from_bytes(&self.0[..])
-			.map_to_json_error()
+		PeerId::from_bytes(&self.0[..]).map_to_json_error()
 	}
 }
 
@@ -234,55 +236,26 @@ impl<
 	}
 }
 
-pub struct IpcReceiverStream<T> {
+pub fn new_ipc_stream<T: serde::Serialize + serde::de::DeserializeOwned>(
 	ipc_receiver: ipc_channel::ipc::IpcReceiver<T>,
-	last_poll_received: bool,
-	ticker: tokio::time::Interval,
-}
-
-impl<T: serde::Serialize + serde::de::DeserializeOwned + Unpin> Stream for IpcReceiverStream<T> {
-	type Item = T;
-
-	fn poll_next(
-		mut self: Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-	) -> std::task::Poll<Option<Self::Item>> {
-		if unsafe { Pin::new_unchecked(&mut self.ticker) }.poll_tick(cx).is_ready() ||
-			self.last_poll_received
-		{
-			match self.ipc_receiver.try_recv() {
-				Ok(t) => {
-					self.last_poll_received = true;
-					cx.waker().wake_by_ref();
-					std::task::Poll::Ready(Some(t))
-				},
-				Err(ipc_channel::ipc::TryRecvError::Empty) => {
-					self.last_poll_received = false;
-					std::task::Poll::Pending
-				},
-				_ => std::task::Poll::Ready(None),
-			}
-		} else {
-			std::task::Poll::Pending
-		}
-	}
-}
-
-impl<T> IpcReceiverStream<T> {
-	pub fn new(ipc_receiver: ipc_channel::ipc::IpcReceiver<T>) -> Self {
-		Self {
-			ipc_receiver,
-			last_poll_received: false,
-			ticker: {
-				let mut interval = tokio::time::interval_at(
-					tokio::time::Instant::now(),
-					std::time::Duration::from_millis(250),
-				);
-				interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-				interval
+) -> impl Unpin + Stream<Item = T> {
+	Box::pin(
+		stream::unfold(
+			(false, make_periodic_tick(Duration::from_millis(100), true), ipc_receiver),
+			|(last_received, mut periodic_tick_stream, ipc_receiver)| async move {
+				if !last_received {
+					periodic_tick_stream.tick().await;
+				}
+				match ipc_receiver.try_recv() {
+					Ok(t) => Some((Some(t), (true, periodic_tick_stream, ipc_receiver))),
+					Err(TryRecvError::Empty) =>
+						Some((None, (false, periodic_tick_stream, ipc_receiver))),
+					Err(TryRecvError::IpcError(_)) => None,
+				}
 			},
-		}
-	}
+		)
+		.filter_map(|option_t| std::future::ready(option_t)),
+	)
 }
 
 pub fn new_p2p_network_node<
@@ -413,8 +386,7 @@ pub fn new_p2p_network_node<
 
 						let shared_state = self.shared_state.clone();
 						self.message_sender_spawner.spawn("IPCReceiver", "IPC", async move {
-							let mut outgoing_ipc_stream =
-								IpcReceiverStream::new(outgoing_ipc_receiver);
+							let mut outgoing_ipc_stream = new_ipc_stream(outgoing_ipc_receiver);
 
 							loop {
 								tokio::select! {
@@ -558,12 +530,11 @@ pub fn new_p2p_network_node<
 	)
 }
 
-type Channels = (
-	ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>,
-	IpcReceiverStream<(PeerIdTransferable, Vec<u8>)>,
-);
+type OutgoingSender = ipc_channel::ipc::IpcSender<(Vec<PeerIdTransferable>, Vec<u8>)>;
 
-pub async fn setup_ipc_connections(client: &P2PRpcClient) -> anyhow::Result<Channels> {
+pub async fn setup_ipc_connections(
+	client: &P2PRpcClient,
+) -> anyhow::Result<(OutgoingSender, impl futures::Stream<Item = (PeerIdTransferable, Vec<u8>)>)> {
 	let (server, server_name) = ipc_channel::ipc::IpcOneShotServer::new()?;
 
 	client
@@ -573,7 +544,7 @@ pub async fn setup_ipc_connections(client: &P2PRpcClient) -> anyhow::Result<Chan
 
 	let (ipc_outgoing_sender, ipc_incoming_receiver) = server.accept()?.1;
 
-	Ok((ipc_outgoing_sender, IpcReceiverStream::new(ipc_incoming_receiver)))
+	Ok((ipc_outgoing_sender, new_ipc_stream(ipc_incoming_receiver)))
 }
 
 #[cfg(test)]

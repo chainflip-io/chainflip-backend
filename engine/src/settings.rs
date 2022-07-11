@@ -332,7 +332,7 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
 
-    use crate::testing::assert_ok;
+    use utilities::assert_ok;
 
     use super::*;
 

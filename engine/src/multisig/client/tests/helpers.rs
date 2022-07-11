@@ -16,7 +16,7 @@ use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
-use utilities::{success_threshold_from_share_count, threshold_from_share_count};
+use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
 
 use crate::{
     common::{all_same, split_at},
@@ -32,8 +32,6 @@ use crate::{
     },
     multisig_p2p::OutgoingMultisigStageMessages,
 };
-
-use crate::testing::assert_ok;
 
 use signing::frost::{self, LocalSig3, SigningCommitment, SigningData};
 

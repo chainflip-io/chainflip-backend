@@ -17,11 +17,12 @@ use crate::{
         eth::EthSigning,
         KeyId, PersistentKeyDB,
     },
-    testing::{assert_ok, new_temp_directory_with_nonexistent_file},
+    testing::new_temp_directory_with_nonexistent_file,
 };
 use rocksdb::{Options, DB};
 use sp_runtime::AccountId32;
 use tempfile::TempDir;
+use utilities::assert_ok;
 
 fn generate_key_share_for_test<C: CryptoScheme>() -> KeygenResultInfo<C::Point> {
     use rand_legacy::FromEntropy;

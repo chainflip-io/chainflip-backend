@@ -1201,8 +1201,9 @@ mod tests {
     use crate::{
         logging::{self, test_utils::new_test_logger},
         settings::{CommandLineOptions, Settings},
-        testing::assert_ok,
     };
+
+    use utilities::assert_ok;
 
     use super::*;
 

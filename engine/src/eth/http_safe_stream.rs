@@ -3,9 +3,10 @@ use std::time::Duration;
 use futures::{stream, Stream};
 use slog::o;
 use tokio::time::Interval;
+use utilities::make_periodic_tick;
 use web3::types::U64;
 
-use crate::{common::make_periodic_tick, logging::COMPONENT_KEY};
+use crate::logging::COMPONENT_KEY;
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 

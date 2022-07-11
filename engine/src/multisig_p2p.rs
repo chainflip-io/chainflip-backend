@@ -30,7 +30,7 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-use utilities::rpc_error_into_anyhow_error;
+use utilities::{make_periodic_tick, rpc_error_into_anyhow_error};
 
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
@@ -314,8 +314,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     let (ipc_outgoing_sender, mut ipc_incoming_stream) =
         multisig_p2p_transport::setup_ipc_connections(&client).await?;
 
-    let mut check_listener_address_tick =
-        common::make_periodic_tick(Duration::from_secs(60), false);
+    let mut check_listener_address_tick = make_periodic_tick(Duration::from_secs(60), false);
 
     let (internal_incoming_sender, mut internal_incoming_receiver) =
         tokio::sync::mpsc::unbounded_channel::<(PeerId, Vec<u8>)>();

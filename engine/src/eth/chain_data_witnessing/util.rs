@@ -1,25 +1,6 @@
-use std::time::Duration;
-
-use futures::{future, stream, Stream, StreamExt};
+use futures::{future, Stream, StreamExt};
 use sp_runtime::traits::Bounded;
 use tokio::sync::oneshot;
-
-use crate::common::make_periodic_tick;
-
-/// Returns a stream that yields `()` at regular intervals. Uses tokio's [MissedTickBehavior::Delay] tick strategy,
-/// meaning ticks will always be at least `interval` duration apart.
-///
-/// The first tick yields immediately. Suitable for polling.
-///
-/// Note that in order for this to work as expected, due to the underlying implementation of [Interval::poll_tick], the
-/// polling interval should be >> 5ms.
-pub fn periodic_tick_stream(tick_interval: Duration) -> impl Stream<Item = ()> {
-    let interval = make_periodic_tick(tick_interval, true);
-    stream::unfold(interval, |mut interval| async {
-        interval.tick().await;
-        Some(((), interval))
-    })
-}
 
 /// Bounds a stream of ordered items such that the first item is greater than `start`. Returns another stream and a
 /// Sender that can be used to push an `end` item. The stream will continue yielding so long as:
@@ -74,33 +55,9 @@ pub fn strictly_increasing<Item: Bounded + Ord + Clone + Send + Sync>(
 #[cfg(test)]
 mod test {
 
+    use futures::stream;
+
     use super::*;
-
-    #[tokio::test]
-    async fn test_tick_stream() {
-        const INTERVAL_MS: u64 = 10;
-        const REPETITIONS: usize = 10;
-        // 10 ticks is equivalent to 9 intervals.
-        const EXPECTED_DURATION_MS: u64 = INTERVAL_MS * (REPETITIONS - 1) as u64;
-
-        let start = std::time::Instant::now();
-        let result = periodic_tick_stream(Duration::from_millis(INTERVAL_MS))
-            .scan(0, |count, _| {
-                *count += 1;
-                future::ready(Some(*count))
-            })
-            .take(REPETITIONS)
-            .collect::<Vec<_>>()
-            .await;
-        let end = std::time::Instant::now();
-        assert!(
-            end - start >= Duration::from_millis(EXPECTED_DURATION_MS),
-            "Expected {:?} >= {:?} ms.",
-            (end - start).as_millis(),
-            EXPECTED_DURATION_MS,
-        );
-        assert_eq!(result, (1..=REPETITIONS).collect::<Vec<_>>());
-    }
 
     #[tokio::test]
     async fn test_bounded() {

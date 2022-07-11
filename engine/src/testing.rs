@@ -7,22 +7,7 @@ use std::{
 
 use futures::{Future, FutureExt};
 use tempfile::{self, TempDir};
-
-/// Simply unwraps the value. Advantage of this is to make it clear in tests
-/// what we are testing
-macro_rules! assert_ok {
-    ($result:expr) => {
-        $result.unwrap()
-    };
-}
-pub(crate) use assert_ok;
-
-macro_rules! assert_err {
-    ($result:expr) => {
-        $result.unwrap_err()
-    };
-}
-pub(crate) use assert_err;
+use utilities::assert_ok;
 
 /// Checks that a given future yields without producing a result (yet) / is blocked by something
 pub fn assert_future_awaits(f: impl Future) {
@@ -50,6 +35,8 @@ pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
 }
 
 mod tests {
+    use utilities::assert_ok;
+
     #[test]
     fn test_assert_ok_unwrap_ok() {
         fn works() -> Result<i32, i32> {
