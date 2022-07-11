@@ -100,7 +100,7 @@ mod with_std {
 
     pub fn new_json_error<E: Display>(error: E) -> jsonrpc_core::Error {
         jsonrpc_core::Error {
-            code: jsonrpc_core::ErrorCode::ServerError(1),
+            code: jsonrpc_core::ErrorCode::ServerError(0),
             message: error.to_string(),
             data: None,
         }

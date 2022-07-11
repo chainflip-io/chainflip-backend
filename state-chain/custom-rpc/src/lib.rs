@@ -9,6 +9,7 @@ use state_chain_runtime::{
 	ChainflipAccountState,
 };
 use std::{marker::PhantomData, sync::Arc};
+use cf_utilities::JsonResultExt;
 
 pub use self::gen_client::Client as CustomClient;
 
@@ -110,7 +111,7 @@ where
 		self.client
 			.runtime_api()
 			.cf_is_auction_phase(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_to_json_error()
 	}
 	fn cf_eth_flip_token_address(&self) -> Result<String, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -118,7 +119,7 @@ where
 			.client
 			.runtime_api()
 			.cf_eth_flip_token_address(&at)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;   
 		Ok(hex::encode(eth_flip_token_address))
 	}
 	fn cf_eth_stake_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
@@ -127,7 +128,7 @@ where
 			.client
 			.runtime_api()
 			.cf_eth_stake_manager_address(&at)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;
 		Ok(hex::encode(eth_stake_manager_address))
 	}
 	fn cf_eth_key_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
@@ -136,7 +137,7 @@ where
 			.client
 			.runtime_api()
 			.cf_eth_key_manager_address(&at)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;
 		Ok(hex::encode(eth_key_manager_address))
 	}
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error> {
@@ -144,7 +145,7 @@ where
 		self.client
 			.runtime_api()
 			.cf_eth_chain_id(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_to_json_error()
 	}
 	fn cf_eth_vault(&self) -> Result<(String, u32), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -166,7 +167,7 @@ where
 		self.client
 			.runtime_api()
 			.cf_auction_parameters(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_to_json_error()
 	}
 	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -174,7 +175,7 @@ where
 			.client
 			.runtime_api()
 			.cf_min_stake(&at)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;
 		Ok(min_stake.into())
 	}
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
@@ -182,7 +183,7 @@ where
 		self.client
 			.runtime_api()
 			.cf_current_epoch(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_to_json_error()
 	}
 	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -196,7 +197,7 @@ where
 		self.client
 			.runtime_api()
 			.cf_current_epoch_started_at(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_to_json_error()
 	}
 	fn cf_authority_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -204,7 +205,7 @@ where
 			.client
 			.runtime_api()
 			.cf_authority_emission_per_block(&at)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;
 		Ok(authority_emission_per_block.into())
 	}
 	fn cf_backup_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
@@ -213,7 +214,7 @@ where
 			.client
 			.runtime_api()
 			.cf_backup_emission_per_block(&at)
-			.expect("The runtime API should not return error.");
+			.map_to_json_error()?;
 		Ok(backup_emission_per_block.into())
 	}
 	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
@@ -289,7 +290,7 @@ where
 			.client
 			.runtime_api()
 			.cf_penalties(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_to_json_error()
 			.expect("The runtime API should not return error.")
 			.iter()
 			.map(|(offence, runtime_api_penalty)| {
@@ -308,6 +309,6 @@ where
 		self.client
 			.runtime_api()
 			.cf_suspensions(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_to_json_error()
 	}
 }

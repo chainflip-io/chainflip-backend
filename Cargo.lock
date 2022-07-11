@@ -1601,6 +1601,7 @@ dependencies = [
  "sp-rpc",
  "sp-runtime",
  "state-chain-runtime",
+ "utilities",
 ]
 
 [[package]]
