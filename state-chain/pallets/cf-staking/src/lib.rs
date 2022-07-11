@@ -18,8 +18,8 @@ mod tests;
 
 use cf_chains::{ApiCall, RegisterClaim};
 use cf_traits::{
-	BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider, StakeTransfer,
-	ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
+	StakeTransfer, ThresholdSigner,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -760,14 +760,14 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = <T as frame_system::Config>::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AccountRetired::<T>::iter()
-			.filter_map(|(acct, retired)| {
+			.filter_map(|(bidder_id, retired)| {
 				if retired {
 					None
 				} else {
-					let stake = T::Flip::staked_balance(&acct);
-					Some((acct, stake))
+					let amount = T::Flip::staked_balance(&bidder_id);
+					Some(Bid { bidder_id, amount })
 				}
 			})
 			.collect()

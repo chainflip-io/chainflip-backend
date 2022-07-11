@@ -6,7 +6,8 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	BackupNodes, Chainflip, ChainflipAccountData, IsOnline, QualifyNode, RuntimeAuctionOutcome,
+	BackupNodes, Bid, Chainflip, ChainflipAccountData, IsOnline, QualifyNode,
+	RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -229,12 +230,13 @@ impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AUCTION_WINNERS
 			.zip(WINNING_BIDS)
 			.into_iter()
 			.chain(AUCTION_LOSERS.zip(LOSING_BIDS))
 			.chain(sp_std::iter::once((UNQUALIFIED_NODE, UNQUALIFIED_NODE_BID)))
+			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 			.collect()
 	}
 }
