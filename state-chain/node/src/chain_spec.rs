@@ -133,6 +133,7 @@ const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	// they get excluded from signing the same broadcast attempt again anyway
 	// but we want them to be included in the nomination of next broadcast attempt
 	(Offence::FailedToSignTransaction, (10, 0)),
+	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
 ];
 
 /// Generate an Aura authority key.
@@ -560,10 +561,12 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 		},
 		validator: ValidatorConfig {
+			genesis_authorities: initial_authorities.iter().map(|(id, ..)| id.clone()).collect(),
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_node_percentage: 20,
 			bond: genesis_stake_amount,
+			authority_set_min_size: min_authorities as u8,
 		},
 		session: SessionConfig {
 			keys: initial_authorities
@@ -584,7 +587,6 @@ fn testnet_genesis(
 			min_size: min_authorities,
 			max_size: MAX_AUTHORITIES,
 			max_expansion: MAX_AUTHORITIES,
-			max_contraction: MAX_AUTHORITIES,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },

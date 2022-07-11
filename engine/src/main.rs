@@ -19,6 +19,8 @@ use clap::Parser;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 
+use crate::multisig::eth::EthSigning;
+
 #[allow(clippy::eval_order_dependence)]
 #[tokio::main]
 async fn main() {
@@ -42,14 +44,6 @@ async fn main() {
             .run()
             .await;
     }
-
-    let db = Arc::new(
-        PersistentKeyDB::new_and_migrate_to_latest(
-            settings.signing.db_file.as_path(),
-            &root_logger,
-        )
-        .expect("Failed to open database"),
-    );
 
     // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
     // we connect to the SC (which requires the user to be staked)
@@ -171,14 +165,21 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
 
-    use crate::multisig::eth::EthSigning;
-
     let latest_ceremony_id = Arc::new(AtomicU64::new(state_chain_client
-        .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
-            latest_block_hash,
+            .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
+                latest_block_hash,
+            )
+            .await
+            .expect("Should get CeremonyIdCounter from SC")));
+
+    let db = Arc::new(
+        PersistentKeyDB::new_and_migrate_to_latest(
+            settings.signing.db_file.as_path(),
+            Some(state_chain_client.get_genesis_hash()),
+            &root_logger,
         )
-        .await
-        .expect("Should get CeremonyIdCounter from SC")));
+        .expect("Failed to open database"),
+    );
 
     let (eth_multisig_client, eth_multisig_client_backend_future) =
         multisig::start_client::<EthSigning>(

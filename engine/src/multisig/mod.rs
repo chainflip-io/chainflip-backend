@@ -94,7 +94,8 @@ where
 
         async move {
             // Stream outputs () approximately every ten seconds
-            let mut check_timeouts_tick = common::make_periodic_tick(Duration::from_secs(10));
+            let mut check_timeouts_tick =
+                common::make_periodic_tick(Duration::from_secs(10), false);
 
             loop {
                 tokio::select! {

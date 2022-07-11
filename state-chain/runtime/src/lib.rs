@@ -24,7 +24,7 @@ pub use frame_support::{
 		ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo,
 	},
 	weights::{
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, WEIGHT_PER_SECOND},
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	StorageValue,
@@ -63,11 +63,12 @@ pub use cf_traits::{
 	ChainflipAccountStore, EpochInfo, FlipBalance, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, KeygenOffences};
+use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
+use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
 // Make the WASM binary available.
@@ -137,7 +138,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
-	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type AuctionQualification = (
 		Online,
 		pallet_cf_validator::PeerMapping<Self>,
@@ -146,8 +146,6 @@ impl pallet_cf_auction::Config for Runtime {
 			pallet_session::Pallet<Self>,
 		>,
 	);
-	type EmergencyRotation = Validator;
-	type KeygenExclusionSet = chainflip::ExclusionSetFor<KeygenOffences>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -162,17 +160,19 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
-	type MinEpoch = MinEpoch;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
+	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
 	type VaultRotator = EthereumVault;
-	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type Bonder = Bonder<Runtime>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type ValidatorQualification = <Self as pallet_cf_auction::Config>::AuctionQualification;
 	type OffenceReporter = Reputation;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type Bonder = Bonder<Runtime>;
 	type ReputationResetter = Reputation;
 }
 
@@ -268,7 +268,7 @@ impl frame_system::Config for Runtime {
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
 	/// The weight of database operations that the runtime can invoke.
-	type DbWeight = RocksDbWeight;
+	type DbWeight = weights::rocksdb_weights::constants::RocksDbWeight;
 	/// Version of the runtime.
 	type Version = Version;
 	/// Converts a module to the index of the module in `construct_runtime!`.
@@ -278,8 +278,11 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount =
-		(pallet_cf_flip::BurnFlipAccount<Self>, pallet_cf_validator::DeletePeerMapping<Self>);
+	type OnKilledAccount = (
+		pallet_cf_flip::BurnFlipAccount<Self>,
+		pallet_cf_validator::DeletePeerMapping<Self>,
+		GrandpaOffenceReporter<Self>,
+	);
 	/// The data to be stored in an account.
 	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
@@ -304,17 +307,32 @@ impl pallet_aura::Config for Runtime {
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
 
+parameter_types! {
+	pub storage BlocksPerEpoch: u64 = Validator::epoch_number_of_blocks().into();
+}
+
+type KeyOwnerIdentification<T, Id> =
+	<T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::IdentificationTuple;
+type KeyOwnerProof<T, Id> = <T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::Proof;
+type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReportingAdapter<
+	T,
+	pallet_grandpa::GrandpaEquivocationOffence<
+		<T as pallet_grandpa::Config>::KeyOwnerIdentification,
+	>,
+	<T as pallet_session::historical::Config>::FullIdentification,
+>;
+
 impl pallet_grandpa::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type KeyOwnerProofSystem = Historical;
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		GrandpaId,
-	)>>::IdentificationTuple;
-	type HandleEquivocation = ();
+	type KeyOwnerProof = KeyOwnerProof<Historical, GrandpaId>;
+	type KeyOwnerIdentification = KeyOwnerIdentification<Historical, GrandpaId>;
+	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
+		Self::KeyOwnerIdentification,
+		GrandpaOffenceReporter<Self>,
+		BlocksPerEpoch,
+	>;
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
@@ -485,11 +503,11 @@ construct_runtime!(
 		Emissions: pallet_cf_emissions,
 		Staking: pallet_cf_staking,
 		TransactionPayment: pallet_transaction_payment,
-		Session: pallet_session,
-		Historical: session_historical::{Pallet},
 		Witnesser: pallet_cf_witnesser,
 		Auction: pallet_cf_auction,
 		Validator: pallet_cf_validator,
+		Session: pallet_session,
+		Historical: session_historical::{Pallet},
 		Aura: pallet_aura,
 		Authorship: pallet_authorship,
 		Grandpa: pallet_grandpa,
@@ -598,24 +616,31 @@ impl_runtime_apis! {
 		fn cf_eth_chain_id() -> u64 {
 			Environment::ethereum_chain_id()
 		}
+		fn cf_eth_vault() -> ([u8; 33], BlockNumber) {
+			let epoch_index = Self::cf_current_epoch();
+			// We should always have a Vault for the current epoch, but in case we do
+			// not, just return an empty Vault.
+			let vault: Vault<Ethereum> = EthereumVault::vaults(&epoch_index).unwrap_or_default();
+			(vault.public_key.to_pubkey_compressed(), vault.active_from_block.unique_saturated_into())
+		}
 		fn cf_auction_parameters() -> (u32, u32) {
 			let auction_params = Auction::auction_parameters();
 			(auction_params.min_size, auction_params.max_size)
 		}
-		fn cf_min_stake() -> u64 {
+		fn cf_min_stake() -> u128 {
 			MinimumStake::<Runtime>::get().unique_saturated_into()
-	}
+		}
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
 		}
-		fn cf_authority_emission_per_block() -> u64 {
-			Emissions::current_authority_emission_per_block().unique_saturated_into()
+		fn cf_authority_emission_per_block() -> u128 {
+			Emissions::current_authority_emission_per_block()
 		}
-		fn cf_backup_emission_per_block() -> u64 {
-			Emissions::backup_node_emission_per_block().unique_saturated_into()
+		fn cf_backup_emission_per_block() -> u128 {
+			Emissions::backup_node_emission_per_block()
 		}
 		fn cf_flip_supply() -> (u128, u128) {
 			(Flip::total_issuance(), Flip::offchain_funds())

@@ -4,7 +4,7 @@ use web3::{
     signing::SecretKeyRef,
     types::{
         Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
-        SignedTransaction, SyncState, Transaction, TransactionId, TransactionParameters, U64,
+        SignedTransaction, SyncState, TransactionParameters, TransactionReceipt, U64,
     },
     Web3,
 };
@@ -71,7 +71,7 @@ pub trait EthRpcApi: Send + Sync {
 
     async fn chain_id(&self) -> Result<U256>;
 
-    async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
+    async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
 
     /// Gets block, returning error when either:
     /// - Request fails
@@ -157,10 +157,10 @@ where
         ))
     }
 
-    async fn transaction(&self, tx_hash: H256) -> Result<Transaction> {
+    async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
         self.web3
             .eth()
-            .transaction(TransactionId::Hash(tx_hash))
+            .transaction_receipt(tx_hash)
             .await
             .context(format!(
                 "{} client: Failed to fetch ETH transaction",
@@ -169,7 +169,7 @@ where
             .and_then(|opt_block| {
                 opt_block.ok_or_else(|| {
                     anyhow::Error::msg(format!(
-                        "{} client: Getting ETH transaction with tx_hash {} returned None",
+                        "{} client: Getting ETH transaction receipt with tx_hash {} returned None",
                         T::transport_protocol(),
                         tx_hash
                     ))
@@ -364,8 +364,8 @@ impl EthRpcApi for EthDualRpcClient {
         dual_call_rpc!(self, chain_id,)
     }
 
-    async fn transaction(&self, tx_hash: H256) -> Result<Transaction> {
-        dual_call_rpc!(self, transaction, tx_hash)
+    async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
+        dual_call_rpc!(self, transaction_receipt, tx_hash)
     }
 
     async fn block(&self, block_number: U64) -> Result<Block<H256>> {
@@ -398,7 +398,7 @@ pub mod mocks {
 
     use mockall::mock;
     use sp_core::H256;
-    use web3::types::{Block, Bytes, Filter, Log, Transaction};
+    use web3::types::{Block, Bytes, Filter, Log};
 
     mock!(
         // becomes MockEthHttpRpcClient
@@ -420,7 +420,7 @@ pub mod mocks {
 
             async fn chain_id(&self) -> Result<U256>;
 
-            async fn transaction(&self, tx_hash: H256) -> Result<Transaction>;
+            async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
@@ -434,4 +434,143 @@ pub mod mocks {
             async fn block_number(&self) -> Result<U64>;
         }
     );
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::eth::from_unsigned_to_transaction_parameters;
+
+    use super::*;
+
+    use cf_chains::eth::{verify_transaction, UnsignedTransaction};
+    use ethereum::{LegacyTransaction, LegacyTransactionMessage, TransactionV2};
+    use futures::future::BoxFuture;
+    use rand::{prelude::StdRng, Rng, SeedableRng};
+    use web3::{signing::Key, Transport};
+
+    // The web3 test transport is not Send, so we create this just to satisfy the EthRpc.
+    // We don't actually need to make any RPC calls (if the necessary parameters are supplied when `sign_transaction`
+    // is called) so we just use this dummy
+    #[derive(Debug, Clone, Default)]
+    struct DummyTransport {}
+
+    impl EthTransport for DummyTransport {
+        fn transport_protocol() -> TransportProtocol {
+            // arbitrary value, doesn't matter for these tests
+            TransportProtocol::Http
+        }
+    }
+
+    impl Transport for DummyTransport {
+        type Out = BoxFuture<'static, std::result::Result<serde_json::Value, web3::Error>>;
+
+        fn prepare(
+            &self,
+            _method: &str,
+            _params: Vec<jsonrpc_core::Value>,
+        ) -> (web3::RequestId, jsonrpc_core::Call) {
+            panic!("You did not supply the appropriate parameters. Unnecessary RPC calls were attempted.")
+        }
+
+        fn send(&self, _id: web3::RequestId, _request: jsonrpc_core::Call) -> Self::Out {
+            panic!("You did not supply the appropriate parameters. Unnecessary RPC calls were attempted.")
+        }
+    }
+
+    type TestEthRpcClient = EthRpcClient<DummyTransport>;
+    impl TestEthRpcClient {
+        fn new() -> Self {
+            let web3 = web3::Web3::new(DummyTransport::default());
+            Self { web3 }
+        }
+    }
+
+    fn test_unsigned_transaction() -> UnsignedTransaction {
+        UnsignedTransaction {
+            chain_id: 42,
+            max_fee_per_gas: U256::from(1_000_000_000u32).into(),
+            gas_limit: U256::from(21_000u32).into(),
+            contract: [0xcf; 20].into(),
+            value: 0.into(),
+            data: b"do_something()".to_vec(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_eip1559_signature_verification() {
+        let unsigned_tx = test_unsigned_transaction();
+
+        let mut tx_params = from_unsigned_to_transaction_parameters(&unsigned_tx);
+        // set this manually so we don't need an RPC request within web3's `sign_transaction`
+        tx_params.nonce = Some(U256::from(2));
+        for seed in 0..10 {
+            let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+            let key = SecretKey::from_slice(&arr[..]).unwrap();
+            let address = web3::signing::SecretKeyRef::new(&key).address();
+
+            let test_eth_rpc_client = TestEthRpcClient::new();
+            let signed_tx = test_eth_rpc_client
+                .sign_transaction(tx_params.clone(), &key)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                verify_transaction(&unsigned_tx, &signed_tx.raw_transaction.0, &address),
+                Ok(signed_tx.transaction_hash),
+            );
+        }
+    }
+
+    #[test]
+    fn test_legacy_signature_verification() {
+        let unsigned_tx = test_unsigned_transaction();
+
+        let msg = LegacyTransactionMessage {
+            chain_id: Some(unsigned_tx.chain_id),
+            nonce: 0u32.into(),
+            gas_limit: unsigned_tx.gas_limit.unwrap(),
+            gas_price: U256::from(1_000_000_000u32),
+            action: ethereum::TransactionAction::Call(unsigned_tx.contract),
+            value: unsigned_tx.value,
+            input: unsigned_tx.data.clone(),
+        };
+
+        for seed in 0..10 {
+            let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+            let key = SecretKey::from_slice(&arr[..]).unwrap();
+            let key_ref = web3::signing::SecretKeyRef::new(&key);
+
+            let sig = key_ref
+                .sign(msg.hash().as_bytes(), unsigned_tx.chain_id.into())
+                .unwrap();
+
+            let signed_tx = TransactionV2::Legacy(LegacyTransaction {
+                nonce: msg.nonce,
+                gas_price: msg.gas_price,
+                gas_limit: msg.gas_limit,
+                action: msg.action,
+                value: msg.value,
+                input: msg.input.clone(),
+                signature: ethereum::TransactionSignature::new(
+                    sig.v,
+                    sig.r.0.into(),
+                    sig.s.0.into(),
+                )
+                .unwrap(),
+            });
+
+            assert_eq!(
+                verify_transaction(
+                    &unsigned_tx,
+                    &rlp::encode(&signed_tx).to_vec(),
+                    &key_ref.address()
+                ),
+                Ok(signed_tx.hash()),
+                "Unable to verify tx signed by key {:?}",
+                hex::encode(key.serialize_secret())
+            );
+        }
+    }
 }

@@ -75,10 +75,10 @@ benchmarks_instance_pallet! {
 		Pallet::<T, I>::on_initialize(5u32.into());
 	}
 	verify {
-		assert_eq!(
+		assert!(matches!(
 			<Pallet::<T, I> as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(SuccessOrFailure::Failure)
-		);
+			AsyncResult::Ready(Err(..))
+		));
 	}
 	on_initialize_success {
 		let current_block: T::BlockNumber = 0u32.into();

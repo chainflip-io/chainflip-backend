@@ -11,9 +11,9 @@ use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::{Vault, Vaults};
 use sp_core::{
     storage::{StorageData, StorageKey},
-    H256, U256,
+    Hasher, H256, U256,
 };
-use sp_runtime::{AccountId32, Digest};
+use sp_runtime::{traits::Keccak256, AccountId32, Digest};
 use state_chain_runtime::{CfeSettings, EthereumInstance, Header, Runtime};
 use tokio::sync::{broadcast, watch};
 use web3::types::{Bytes, SignedTransaction};
@@ -676,6 +676,11 @@ async fn only_encodes_and_signs_when_specified() {
                 transaction_hash: H256::default(),
             })
         });
+
+    eth_rpc_mock
+        .expect_send_raw_transaction()
+        .times(1)
+        .returning(|tx| Ok(Keccak256::hash(&tx.0[..])));
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(

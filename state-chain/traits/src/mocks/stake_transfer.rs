@@ -24,7 +24,7 @@ macro_rules! impl_mock_stake_transfer {
 			type ValidatorId = $account_id;
 			type Amount = $balance;
 
-			fn stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
+			fn on_stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
 				STAKE_UPDATES.with(|cell| {
 					cell.borrow_mut().insert(validator_id.clone(), amount)
 				});

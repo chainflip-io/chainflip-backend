@@ -12,8 +12,11 @@ pub mod rpc;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use cf_chains::eth::UnsignedTransaction;
 use cf_traits::EpochIndex;
+use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
+use sp_runtime::traits::Keccak256;
 use state_chain_runtime::CfeSettings;
 
 use crate::{
@@ -35,7 +38,7 @@ use chain_data_witnessing::*;
 use ethbloom::{Bloom, Input};
 use futures::{stream, FutureExt, StreamExt};
 use slog::o;
-use sp_core::{H160, U256};
+use sp_core::{Hasher, H160, U256};
 use std::{
     cmp::Ordering,
     fmt::{self, Debug},
@@ -75,6 +78,8 @@ pub struct EthNumberBloom {
 use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
 
 pub const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
+
+const EIP1559_TX_ID: u64 = 2;
 
 // TODO: Not possible to fix the clippy warning here. At the moment we
 // need to ignore it on a global level.
@@ -118,6 +123,26 @@ pub fn build_broadcast_channel<T: Clone, const S: usize>(
     let (sender, _) = broadcast::channel(capacity);
     let receivers = [0; S].map(|_| sender.subscribe());
     (sender, receivers)
+}
+
+pub fn from_unsigned_to_transaction_parameters(
+    unsigned_tx: &UnsignedTransaction,
+) -> TransactionParameters {
+    TransactionParameters {
+        to: Some(unsigned_tx.contract),
+        data: unsigned_tx.data.clone().into(),
+        chain_id: Some(unsigned_tx.chain_id),
+        value: unsigned_tx.value,
+        max_fee_per_gas: unsigned_tx.max_fee_per_gas,
+        max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
+        transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
+        // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
+        // input at least as much gas as the estimate will return (stupid? yes)
+        gas: unsigned_tx
+            .gas_limit
+            .unwrap_or_else(|| U256::from(15_000_000u64)),
+        ..Default::default()
+    }
 }
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
@@ -418,17 +443,7 @@ where
         &self,
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
-        let mut tx_params = TransactionParameters {
-            to: Some(unsigned_tx.contract),
-            data: unsigned_tx.data.clone().into(),
-            chain_id: Some(unsigned_tx.chain_id),
-            value: unsigned_tx.value,
-            transaction_type: Some(web3::types::U64::from(2u64)),
-            // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
-            // input at least as much gas as the estimate will return (stupid? yes)
-            gas: U256::from(15_000_000u64),
-            ..Default::default()
-        };
+        let mut tx_params = from_unsigned_to_transaction_parameters(&unsigned_tx);
         // query for the gas estimate if the SC didn't provide it
         let gas_estimate = if let Some(gas_limit) = unsigned_tx.gas_limit {
             gas_limit
@@ -468,6 +483,37 @@ where
             .send_raw_transaction(raw_signed_tx.into())
             .await
             .context("Failed to broadcast ETH transaction to network")
+    }
+
+    /// Does a `send` but with extra logging and error handling, related to a broadcast
+    pub async fn send_for_broadcast_attempt(
+        &self,
+        raw_signed_tx: Vec<u8>,
+        broadcast_attempt_id: BroadcastAttemptId,
+    ) {
+        let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx[..]);
+        match self.send(raw_signed_tx).await {
+            Ok(tx_hash) => {
+                slog::debug!(
+                    self.logger,
+                    "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
+                    broadcast_attempt_id,
+                    tx_hash
+                );
+                assert_eq!(
+                    tx_hash, expected_broadcast_tx_hash,
+                    "tx_hash returned from `send` does not match expected hash"
+                );
+            }
+            Err(e) => {
+                slog::info!(
+                    self.logger,
+                    "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
+                    broadcast_attempt_id,
+                    e
+                );
+            }
+        }
     }
 }
 
@@ -734,13 +780,13 @@ pub trait EthObserver {
         let init_state = StreamState::<BlockEventsStreamWs, BlockEventsStreamHttp> {
             ws_state: ProtocolState {
                 last_block_pulled: 0,
-                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL),
+                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
                 protocol: TransportProtocol::Ws,
             },
             ws_stream: safe_ws_block_events_stream,
             http_state: ProtocolState {
                 last_block_pulled: 0,
-                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL),
+                log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
                 protocol: TransportProtocol::Http,
             },
             http_stream: safe_http_block_events_stream,
@@ -1492,6 +1538,7 @@ mod witnesser_tests {
     use crate::logging::test_utils::new_test_logger;
     use crate::state_chain::client::MockStateChainRpcApi;
     use tokio::time::timeout;
+    use web3::types::TransactionReceipt;
 
     #[tokio::test]
     async fn test_start_chain_data_witnesser() {
@@ -1539,8 +1586,8 @@ mod witnesser_tests {
                 self.0.chain_id().await
             }
 
-            async fn transaction(&self, tx_hash: H256) -> Result<web3::types::Transaction> {
-                self.0.transaction(tx_hash).await
+            async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
+                self.0.transaction_receipt(tx_hash).await
             }
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>> {

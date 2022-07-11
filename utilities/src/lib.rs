@@ -7,7 +7,6 @@
 /// we are using and in the corresponding literature.
 ///
 /// For the *success* threshold, use [success_threshold_from_share_count].
-
 pub fn threshold_from_share_count(share_count: u32) -> u32 {
     if 0 == share_count {
         0
@@ -18,11 +17,16 @@ pub fn threshold_from_share_count(share_count: u32) -> u32 {
 
 /// Returns the number of parties required for a threshold signature
 /// ceremony to *succeed*.
-
 pub fn success_threshold_from_share_count(share_count: u32) -> u32 {
     threshold_from_share_count(share_count)
         .checked_add(1)
         .unwrap()
+}
+
+/// Returns the number of bad parties required for a threshold signature
+/// ceremony to *fail*.
+pub fn failure_threshold_from_share_count(share_count: u32) -> u32 {
+    share_count - threshold_from_share_count(share_count)
 }
 
 #[test]
@@ -32,6 +36,18 @@ fn check_threshold_calculation() {
     assert_eq!(threshold_from_share_count(90), 59);
     assert_eq!(threshold_from_share_count(3), 1);
     assert_eq!(threshold_from_share_count(4), 2);
+
+    assert_eq!(success_threshold_from_share_count(150), 100);
+    assert_eq!(success_threshold_from_share_count(100), 67);
+    assert_eq!(success_threshold_from_share_count(90), 60);
+    assert_eq!(success_threshold_from_share_count(3), 2);
+    assert_eq!(success_threshold_from_share_count(4), 3);
+
+    assert_eq!(failure_threshold_from_share_count(150), 51);
+    assert_eq!(failure_threshold_from_share_count(100), 34);
+    assert_eq!(failure_threshold_from_share_count(90), 31);
+    assert_eq!(failure_threshold_from_share_count(3), 2);
+    assert_eq!(failure_threshold_from_share_count(4), 2);
 }
 
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {

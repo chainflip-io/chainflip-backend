@@ -7,11 +7,11 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
 	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
-	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SuccessOrFailure,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RotationError,
 	SystemStateManager, VaultRotator,
 };
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
+	dispatch::DispatchResult,
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
 };
@@ -252,7 +252,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// The key has been successfully updated on the contract.
 	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionHash },
 	/// The rotation has failed at one of the above stages.
-	Failed,
+	Failed { offenders: Vec<T::ValidatorId> },
 }
 
 impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
@@ -265,7 +265,7 @@ impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
 }
 
 /// A single vault.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct Vault<T: ChainAbi> {
 	/// The vault's public key.
 	pub public_key: T::AggKey,
@@ -275,10 +275,7 @@ pub struct Vault<T: ChainAbi> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
-	/// Failing a keygen ceremony carries its own consequences.
-	ParticipateKeygenFailed,
-	/// In addition, failing keygen is considered a regular signing offence.
-	SigningOffence,
+	FailedKeygen,
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
@@ -374,13 +371,15 @@ pub mod pallet {
 							Self::on_keygen_success(keygen_ceremony_id, new_public_key);
 						},
 						Err(KeygenError::Incompatible) => {
-							PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+							PendingVaultRotation::<T, I>::put(
+								VaultRotationStatus::<T, I>::Failed { offenders: Vec::new() },
+							);
 							Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
 						},
 						Err(KeygenError::Failure(offenders)) => {
 							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 							let offenders = if (offenders.len() as AuthorityCount) <
-								utilities::success_threshold_from_share_count(candidate_count)
+								utilities::failure_threshold_from_share_count(candidate_count)
 							{
 								offenders
 							} else {
@@ -685,7 +684,7 @@ pub mod pallet {
 			);
 
 			// Put the system into maintenance mode.
-			T::SystemStateManager::set_maintenance_mode();
+			T::SystemStateManager::activate_maintenance_mode();
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 
@@ -767,12 +766,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	// Called once there's consensus between the authorities that the keygen was unsuccessful
 	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
-		// TODO: We should combine this reporting to include both, so we only send a
-		// single: partipate keygen failure report, and the report handles both
-		// cases.
-		T::OffenceReporter::report_many(PalletOffence::ParticipateKeygenFailed, offenders);
-		T::OffenceReporter::report_many(PalletOffence::SigningOffence, offenders);
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed);
+		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
+			offenders: offenders.to_vec(),
+		});
 		Self::deposit_event(Event::KeygenFailure(ceremony_id));
 	}
 }
@@ -780,14 +777,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 // TODO: Implement this on Runtime instead of pallet so that we can rotate multiple vaults.
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
-	type RotationError = DispatchError;
 
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), Self::RotationError> {
-		// Main entry point for the pallet
-		ensure!(!candidates.is_empty(), Error::<T, I>::EmptyAuthoritySet);
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError> {
+		ensure!(!candidates.is_empty(), RotationError::NoCandidates);
 		ensure!(
 			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
-			Error::<T, I>::DuplicateRotationRequest
+			RotationError::RotationInProgress
 		);
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
@@ -806,14 +801,17 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	/// Get the status of the current key generation
-	fn get_vault_rotation_outcome() -> AsyncResult<SuccessOrFailure> {
+	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<T::ValidatorId>>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::Complete) =>
-				AsyncResult::Ready(SuccessOrFailure::Success),
-			Some(VaultRotationStatusVariant::Failed) =>
-				AsyncResult::Ready(SuccessOrFailure::Failure),
+			Some(VaultRotationStatusVariant::Complete) => AsyncResult::Ready(Ok(())),
+			Some(VaultRotationStatusVariant::Failed) => match PendingVaultRotation::<T, I>::get() {
+				Some(VaultRotationStatus::Failed { offenders }) =>
+					AsyncResult::Ready(Err(offenders)),
+				_ =>
+					unreachable!("Unreachable because we are in the branch for the Failed variant."),
+			},
 			None => AsyncResult::Void,
 		}
 	}
@@ -849,7 +847,6 @@ impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
-		T::OffenceReporter::forgive_all(PalletOffence::ParticipateKeygenFailed);
 	}
 }
 
