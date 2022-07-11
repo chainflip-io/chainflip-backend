@@ -94,17 +94,17 @@ mod with_std {
 
     pub trait JsonResultExt {
         type T;
-    
-        fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T>;
+
+        fn map_to_json_error(self) -> jsonrpc_core::Result<Self::T>;
     }
-    
+
     impl<T, E: Display> JsonResultExt for std::result::Result<T, E> {
         type T = T;
-    
-        fn map_to_json_error(self, message: &str) -> jsonrpc_core::Result<Self::T> {
+
+        fn map_to_json_error(self) -> jsonrpc_core::Result<Self::T> {
             self.map_err(|error| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::ServerError(1),
-                message: format!("{message}: {error}"),
+                message: error.to_string(),
                 data: None,
             })
         }

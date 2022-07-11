@@ -5,6 +5,7 @@
 //! process Rpc requests, and we create and run a background future that processes incoming p2p
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
+use anyhow::Context;
 use cf_utilities::{rpc_error_into_anyhow_error, JsonResultExt};
 pub use gen_client::Client as P2PRpcClient;
 pub use sc_network::PeerId;
@@ -19,7 +20,6 @@ use sp_runtime::{sp_std::sync::Arc, traits::Block as BlockT};
 use std::{
 	borrow::Cow,
 	collections::{BTreeMap, BTreeSet},
-	fmt::Display,
 	marker::Send,
 	net::Ipv6Addr,
 	pin::Pin,
@@ -391,19 +391,19 @@ pub fn new_p2p_network_node<
 				fn setup_ipc_connections(&self, server_name: String) -> Result<u64> {
 					let (incoming_ipc_sender, incoming_ipc_receiver) =
 						ipc_channel::ipc::channel::<(PeerIdTransferable, Vec<u8>)>()
-							.map_to_json_error(
-								"Failed to create incoming p2p message IPC channel",
-							)?;
+							.context("Failed to create incoming p2p message IPC channel")
+							.map_to_json_error()?;
 					let (outgoing_ipc_sender, outgoing_ipc_receiver) =
 						ipc_channel::ipc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>()
-							.map_to_json_error(
-								"Failed to create outgoing p2p message IPC channel",
-							)?;
+							.context("Failed to create outgoing p2p message IPC channel")
+							.map_to_json_error()?;
 
 					ipc_channel::ipc::IpcSender::connect(server_name)
-						.map_to_json_error("Failed to connect to oneshot IPC channel")?
+						.context("Failed to connect to oneshot IPC channel")
+						.map_to_json_error()?
 						.send((outgoing_ipc_sender, incoming_ipc_receiver))
-						.map_to_json_error("Failed to setup IPC channels")?;
+						.context("Failed to setup IPC channels")
+						.map_to_json_error()?;
 
 					*self.shared_state.ipc_state.lock().unwrap() = Some({
 						let (
