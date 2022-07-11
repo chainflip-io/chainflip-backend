@@ -633,6 +633,9 @@ impl_runtime_apis! {
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
 		}
+		fn cf_epoch_duration() -> u32 {
+			Validator::epoch_number_of_blocks()
+		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
 		}
