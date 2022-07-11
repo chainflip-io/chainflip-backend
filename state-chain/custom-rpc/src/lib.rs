@@ -1,4 +1,5 @@
 use cf_chains::eth::SigData;
+use cf_utilities::JsonResultExt;
 use jsonrpc_core::serde::{Deserialize, Serialize};
 use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
@@ -9,7 +10,6 @@ use state_chain_runtime::{
 	ChainflipAccountState,
 };
 use std::{marker::PhantomData, sync::Arc};
-use cf_utilities::JsonResultExt;
 
 pub use self::gen_client::Client as CustomClient;
 
@@ -108,10 +108,7 @@ where
 {
 	fn cf_is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
-			.runtime_api()
-			.cf_is_auction_phase(&at)
-			.map_to_json_error()
+		self.client.runtime_api().cf_is_auction_phase(&at).map_to_json_error()
 	}
 	fn cf_eth_flip_token_address(&self) -> Result<String, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -142,10 +139,7 @@ where
 	}
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
-			.runtime_api()
-			.cf_eth_chain_id(&at)
-			.map_to_json_error()
+		self.client.runtime_api().cf_eth_chain_id(&at).map_to_json_error()
 	}
 	fn cf_eth_vault(&self) -> Result<(String, u32), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -164,10 +158,7 @@ where
 	}
 	fn cf_auction_parameters(&self) -> Result<(u32, u32), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
-			.runtime_api()
-			.cf_auction_parameters(&at)
-			.map_to_json_error()
+		self.client.runtime_api().cf_auction_parameters(&at).map_to_json_error()
 	}
 	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -180,10 +171,7 @@ where
 	}
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
-			.runtime_api()
-			.cf_current_epoch(&at)
-			.map_to_json_error()
+		self.client.runtime_api().cf_current_epoch(&at).map_to_json_error()
 	}
 	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -194,10 +182,7 @@ where
 	}
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
-			.runtime_api()
-			.cf_current_epoch_started_at(&at)
-			.map_to_json_error()
+		self.client.runtime_api().cf_current_epoch_started_at(&at).map_to_json_error()
 	}
 	fn cf_authority_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -219,11 +204,8 @@ where
 	}
 	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let (issuance, offchain) = self
-			.client
-			.runtime_api()
-			.cf_flip_supply(&at)
-			.map_to_json_error()?;
+		let (issuance, offchain) =
+			self.client.runtime_api().cf_flip_supply(&at).map_to_json_error()?;
 		Ok((issuance.into(), offchain.into()))
 	}
 	fn cf_accounts(&self) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error> {
@@ -246,11 +228,8 @@ where
 		account_id: AccountId32,
 	) -> Result<RpcAccountInfo, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let account_info = self
-			.client
-			.runtime_api()
-			.cf_account_info(&at, account_id)
-			.map_to_json_error()?;
+		let account_info =
+			self.client.runtime_api().cf_account_info(&at, account_id).map_to_json_error()?;
 
 		Ok(RpcAccountInfo {
 			stake: account_info.stake.into(),
@@ -305,9 +284,6 @@ where
 	}
 	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
-			.runtime_api()
-			.cf_suspensions(&at)
-			.map_to_json_error()
+		self.client.runtime_api().cf_suspensions(&at).map_to_json_error()
 	}
 }
