@@ -155,7 +155,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: T::BlockNumber) -> Weight {
-			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
+			if Self::blocks_since_new_interval(current_block) == Zero::zero() {
 				let network_state = Self::current_network_state();
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
@@ -339,10 +339,8 @@ pub mod pallet {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
-			let dist_from_start_of_interval =
-				current_block_number % T::HeartbeatBlockInterval::get();
-
-			let start_of_new_interval = current_block_number - dist_from_start_of_interval;
+			let start_of_new_interval =
+				current_block_number - Self::blocks_since_new_interval(current_block_number);
 
 			let has_submitted_this_interval =
 				LastHeartbeat::<T>::get(&validator_id).unwrap_or_default() > start_of_new_interval;
@@ -375,6 +373,12 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Returns the number of blocks that have elapsed since the new HeartbeatBlockInterval
+		/// if this is 0 it means we kick off the new interval
+		pub fn blocks_since_new_interval(block_number: T::BlockNumber) -> T::BlockNumber {
+			block_number % T::HeartbeatBlockInterval::get()
+		}
+
 		/// Partitions the validators based on whether they are considered online or offline.
 		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
 			let (online, offline) =
