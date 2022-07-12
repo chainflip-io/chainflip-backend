@@ -545,6 +545,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(ceremony_id, attempt),
 			T::EpochInfo::epoch_index(),
 		) {
+			log::trace!(
+				target: "threshold-signing",
+				"Threshold set selected for request {}, requesting signature ceremony {}.",
+				request_id,
+				ceremony_id
+			);
+
 			// Store the context.
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
@@ -564,6 +571,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				payload,
 			));
 		} else {
+			log::trace!(
+				target: "threshold-signing",
+				"Not enough signers for request {} at attempt {}, scheduling retry.",
+				request_id,
+				attempt,
+			);
+
 			// Store the context, schedule a retry for the next block.
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
