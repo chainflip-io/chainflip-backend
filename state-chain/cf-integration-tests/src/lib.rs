@@ -8,9 +8,9 @@ mod tests {
 	use state_chain_runtime::{
 		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
 		AuctionConfig, Emissions, EmissionsConfig, EthereumVault, EthereumVaultConfig, Flip,
-		FlipConfig, Governance, GovernanceConfig, Online, Origin, Reputation, ReputationConfig,
-		Runtime, Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator,
-		ValidatorConfig,
+		FlipConfig, Governance, GovernanceConfig, Online, OnlineConfig, Origin, Reputation,
+		ReputationConfig, Runtime, Session, SessionConfig, Staking, StakingConfig, System,
+		Timestamp, Validator, ValidatorConfig,
 	};
 
 	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance, IsOnline};
@@ -618,6 +618,9 @@ mod tests {
 					current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 					backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 				},
+				online: OnlineConfig {
+					genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
+				},
 				..state_chain_runtime::GenesisConfig::default()
 			}
 			.assimilate_storage(&mut storage)
@@ -696,7 +699,7 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert!(!Online::is_online(account), "node should have not sent a heartbeat");
+					assert!(Online::is_online(account), "Genesis nodes are considered online.");
 				}
 
 				assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
@@ -802,6 +805,7 @@ mod tests {
 
 					for node in &offline_nodes {
 						testnet.set_active(node, false);
+						pallet_cf_online::LastHeartbeat::<Runtime>::remove(node);
 					}
 
 					// Run to the next epoch to start the auction
@@ -809,7 +813,7 @@ mod tests {
 
 					assert!(
 						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
-						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						"Expected RotationPhase::Idle, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
 
@@ -818,7 +822,7 @@ mod tests {
 
 					assert!(
 						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
-						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						"Expected RotationPhase::Idle, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
 

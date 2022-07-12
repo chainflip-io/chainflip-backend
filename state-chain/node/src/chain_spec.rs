@@ -7,8 +7,8 @@ use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
 	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
 	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig,
-	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
-	SystemConfig, ValidatorConfig, WASM_BINARY,
+	GovernanceConfig, GrandpaConfig, OnlineConfig, ReputationConfig, SessionConfig, Signature,
+	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
@@ -168,15 +168,13 @@ pub fn development_config() -> Result<ChainSpec, String> {
 			testnet_genesis(
 				wasm_binary,
 				// Initial PoA authorities
-				vec![authority_keys_from_seed("Alice")],
+				["Alice", "Bob"].map(authority_keys_from_seed).to_vec(),
 				// Governance account
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				// Stakers at genesis
 				vec![
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
-					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
 				EnvironmentConfig {
@@ -610,6 +608,7 @@ fn testnet_genesis(
 			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 		},
 		transaction_payment: Default::default(),
+		online: OnlineConfig { genesis_nodes: genesis_stakers.clone() },
 	}
 }
 

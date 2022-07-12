@@ -3,7 +3,7 @@ use cf_traits::{AuctionOutcome, BackupNodes, Bid};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
 
-const SECONDARY_CANDIDATE_FRACTION: usize = 3;
+pub(crate) const SECONDARY_CANDIDATE_FRACTION: usize = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct RotationStatus<Id, Amount> {
@@ -72,5 +72,9 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 
 	pub fn authority_candidates<I: FromIterator<Id>>(&self) -> I {
 		self.authority_candidates_iter().cloned().collect::<I>()
+	}
+
+	pub fn num_primary_candidates(&self) -> u32 {
+		self.primary_candidates.len() as u32
 	}
 }

@@ -4,6 +4,8 @@ mod async_result;
 pub mod mocks;
 pub mod offence_reporting;
 
+use core::fmt::Debug;
+
 pub use async_result::AsyncResult;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
@@ -209,6 +211,11 @@ pub trait VaultRotator {
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+		unimplemented!()
+	}
 }
 
 /// Handler for Epoch life cycle events.
@@ -649,6 +656,7 @@ where
 	A: QualifyNode<ValidatorId = B::ValidatorId>,
 	B: QualifyNode,
 	C: QualifyNode<ValidatorId = B::ValidatorId>,
+	B::ValidatorId: Debug,
 {
 	type ValidatorId = A::ValidatorId;
 
@@ -726,13 +734,15 @@ pub trait SystemStateInfo {
 	fn is_maintenance_mode() -> bool {
 		Self::ensure_no_maintenance().is_err()
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_maintenance_mode() {
+		unimplemented!()
+	}
 }
 
 /// Something that can manipulate the system state.
 pub trait SystemStateManager {
-	type SystemState;
-	/// Set the system state.
-	fn set_system_state(state: Self::SystemState);
 	/// Turn system maintenance on.
 	fn activate_maintenance_mode();
 }
