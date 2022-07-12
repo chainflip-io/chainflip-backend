@@ -170,14 +170,6 @@ impl<T: Config> Pallet<T> {
 
 		NetworkState { online, offline }
 	}
-
-	fn is_online_at(block_number: T::BlockNumber, validator_id: &T::ValidatorId) -> bool {
-		if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
-			block_number.saturating_sub(last_heartbeat) < T::HeartbeatBlockInterval::get()
-		} else {
-			false
-		}
-	}
 }
 
 impl<T: Config> QualifyNode for Pallet<T> {
