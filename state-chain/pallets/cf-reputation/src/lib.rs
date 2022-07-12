@@ -160,11 +160,9 @@ pub mod pallet {
 				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(network_state);
 
-				// TODO: Reinstate benchmark
-				return 0 as Weight
+				return T::WeightInfo::submit_network_state()
 			}
-			// TODO: reinstate benchmark
-			0 as Weight
+			T::WeightInfo::on_initialize_no_action()
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -336,8 +334,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		// TODO: Reinstate benchmark
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();

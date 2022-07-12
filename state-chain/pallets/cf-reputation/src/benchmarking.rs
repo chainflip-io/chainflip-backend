@@ -4,8 +4,8 @@
 use super::*;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_system::RawOrigin;
 use frame_support::dispatch::UnfilteredDispatchable;
+use frame_system::RawOrigin;
 
 // TODO: Centralise these constants
 const MAX_VALIDATOR_COUNT: u32 = 150;
