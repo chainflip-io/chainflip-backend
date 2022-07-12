@@ -134,11 +134,7 @@ pub fn from_unsigned_to_transaction_parameters(
         max_fee_per_gas: unsigned_tx.max_fee_per_gas,
         max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
         transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
-        // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
-        // input at least as much gas as the estimate will return (stupid? yes)
-        gas: unsigned_tx
-            .gas_limit
-            .unwrap_or_else(|| U256::from(15_000_000u64)),
+        gas: unsigned_tx.gas_limit.unwrap_or_else(|| 0.into()),
         ..Default::default()
     }
 }
@@ -457,7 +453,16 @@ where
         let gas_estimate = if let Some(gas_limit) = unsigned_tx.gas_limit {
             gas_limit
         } else {
-            let call_request: CallRequest = tx_params.clone().into();
+            let mut call_request: CallRequest = tx_params.clone().into();
+            // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
+            // input at least as much gas as the estimate will return
+            call_request.gas = Some(U256::from(15_000_000u64));
+            // Set the gas prices to zero for the estimate, so we don't get
+            // rejected for not having enough ETH
+            let zero = Some(U256::from(0u64));
+            call_request.gas_price = zero;
+            call_request.max_fee_per_gas = zero;
+            call_request.max_priority_fee_per_gas = zero;
             self.eth_rpc
                 .estimate_gas(call_request, None)
                 .await
