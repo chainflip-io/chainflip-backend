@@ -259,7 +259,7 @@ pub mod pallet {
 			points: ReputationPoints,
 			online_credits: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
 				points <= T::MaximumReputationPointAccrued::get() && online_credits > Zero::zero(),
 				Error::<T>::InvalidAccrualRatio
@@ -281,7 +281,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			value: ReputationPenaltyRate<BlockNumberFor<T>>,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let ReputationPenaltyRate { points, per_blocks } = value;
 			let interval: u16 = T::HeartbeatBlockInterval::get().unique_saturated_into();
@@ -307,7 +307,7 @@ pub mod pallet {
 			offence: T::Offence,
 			penalty: Penalty<T>,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let old = Penalties::<T>::mutate(&offence, |maybe_penalty| {
 				let old = maybe_penalty.clone().unwrap_or_default();
