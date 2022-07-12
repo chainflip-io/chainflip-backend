@@ -4,6 +4,7 @@ use cf_traits::{
 	NetworkState,
 };
 use frame_support::{assert_noop, assert_ok};
+use frame_system::RawOrigin;
 
 fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> ReputationPoints {
 	ReputationPallet::reputation(who).reputation_points
@@ -12,8 +13,7 @@ fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> Reputat
 #[test]
 fn submitting_heartbeat_should_reward_reputation_points() {
 	new_test_ext().execute_with(|| {
-		let ignored = 0;
-		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, ignored);
+		ReputationPallet::heartbeat(RawOrigin::Signed(ALICE).into()).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 	});
 }
@@ -45,7 +45,6 @@ fn offline_nodes_get_slashed_if_reputation_is_negative() {
 #[test]
 fn updating_accrual_rate_should_affect_reputation_points() {
 	new_test_ext().execute_with(|| {
-		let ignored = 0;
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
 				Origin::root(),
@@ -68,7 +67,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		assert_eq!(ReputationPallet::accrual_ratio(), ACCRUAL_RATE);
 
-		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, ignored);
+		submit_heartbeat_for_current_interval(&[ALICE]);
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT);
 
 		// Double the accrual rate.
@@ -78,7 +77,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATE.1,
 		));
 
-		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, ignored);
+		submit_heartbeat_for_current_interval(&[ALICE]);
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 3);
 
 		// Halve the divisor, equivalent to double the initial rate.
@@ -88,7 +87,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATE.1 / 2,
 		));
 
-		<ReputationPallet as Heartbeat>::heartbeat_submitted(&ALICE, ignored);
+		submit_heartbeat_for_current_interval(&[ALICE]);
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 5);
 	});
 }

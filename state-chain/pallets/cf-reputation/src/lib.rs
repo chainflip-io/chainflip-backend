@@ -349,7 +349,9 @@ pub mod pallet {
 
 			if !has_submitted_this_interval {
 				LastHeartbeat::<T>::insert(&validator_id, current_block_number);
-				T::Heartbeat::heartbeat_submitted(&validator_id, current_block_number);
+				Reputations::<T>::mutate(&validator_id, |rep| {
+					rep.boost_reputation(Self::online_credit_reward());
+				});
 			}
 
 			Ok(().into())
@@ -452,12 +454,6 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 impl<T: Config> Heartbeat for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type BlockNumber = T::BlockNumber;
-
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
-		Reputations::<T>::mutate(&validator_id, |rep| {
-			rep.boost_reputation(Self::online_credit_reward());
-		});
-	}
 
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 		<Self as OffenceReporter>::report_many(

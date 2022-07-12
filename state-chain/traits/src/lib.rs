@@ -601,8 +601,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 pub trait Heartbeat {
 	type ValidatorId;
 	type BlockNumber;
-	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber);
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }

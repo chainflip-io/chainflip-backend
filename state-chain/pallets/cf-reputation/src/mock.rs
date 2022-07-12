@@ -129,7 +129,6 @@ impl Chainflip for Test {
 }
 
 thread_local! {
-	pub static VALIDATOR_HEARTBEAT: RefCell<ValidatorId> = RefCell::new(0);
 	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
 		NetworkState {
 			offline: vec![],
@@ -142,10 +141,6 @@ pub struct MockHeartbeat;
 impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
-
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
-		VALIDATOR_HEARTBEAT.with(|cell| *cell.borrow_mut() = *validator_id);
-	}
 
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 		NETWORK_STATE.with(|cell| *cell.borrow_mut() = network_state);
