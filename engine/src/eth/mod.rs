@@ -470,10 +470,10 @@ where
                     Some(gas_limit) => gas_limit,
                 };
                 // increase the estimate by 50%
-                let uint256_2 = U256::from(2u64);
                 let gas = gas_estimate
-                    .saturating_mul(uint256_2)
-                    .saturating_sub(gas_estimate.checked_div(uint256_2).unwrap());
+                    .saturating_mul(U256::from(3u64))
+                    .checked_div(U256::from(2u64))
+                    .unwrap();
 
                 slog::debug!(
                     self.logger,
