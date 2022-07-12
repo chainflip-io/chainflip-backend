@@ -95,17 +95,17 @@ fn main() -> anyhow::Result<()> {
                         latest_block_hash,
                     )
                     .await
-                    .context("failed to get EthereumChainId from SC")?);
+                    .context("Failed to get EthereumChainId from SC")?);
 
                 let chain_id_from_eth_ws = eth_ws_rpc_client
                     .chain_id()
                     .await
-                    .context("failed to fetch chain id")?;
+                    .context("Failed to fetch chain id")?;
 
                 let chain_id_from_eth_http = eth_http_rpc_client
                     .chain_id()
                     .await
-                    .context("failed to fetch chain id")?;
+                    .context("Failed to fetch chain id")?;
 
                 let ws_wrong_network = chain_id_from_sc != chain_id_from_eth_ws;
                 let http_wrong_network = chain_id_from_sc != chain_id_from_eth_http;
