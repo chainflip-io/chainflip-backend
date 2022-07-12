@@ -460,7 +460,6 @@ where
             // Set the gas prices to zero for the estimate, so we don't get
             // rejected for not having enough ETH
             let zero = Some(U256::from(0u64));
-            call_request.gas_price = zero;
             call_request.max_fee_per_gas = zero;
             call_request.max_priority_fee_per_gas = zero;
             self.eth_rpc
