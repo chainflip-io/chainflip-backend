@@ -11,7 +11,6 @@ pub mod add_flip_contract_address;
 pub mod migrate_backup_triage;
 pub mod migrate_claims;
 pub mod migrate_contract_addresses;
-pub mod refactor_offences;
 
 /// A runtime storage migration that will only be applied if the `SPEC_VERSION` matches the
 /// post-upgrade runtime's spec version.

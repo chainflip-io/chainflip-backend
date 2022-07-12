@@ -783,7 +783,6 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
- "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
@@ -997,7 +996,6 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
- "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
@@ -5190,23 +5188,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-online"
-version = "0.1.0"
-dependencies = [
- "cf-runtime-upgrade-utilities",
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
@@ -5259,7 +5240,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "log 0.4.17",
- "pallet-cf-online",
+ "pallet-cf-reputation",
  "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
@@ -8907,7 +8888,6 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
- "pallet-cf-online",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",

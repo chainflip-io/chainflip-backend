@@ -8,8 +8,8 @@ mod tests {
 	use state_chain_runtime::{
 		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
 		AuctionConfig, Emissions, EmissionsConfig, EthereumVault, EthereumVaultConfig, Flip,
-		FlipConfig, Governance, GovernanceConfig, Online, Origin, Reputation, ReputationConfig,
-		Runtime, Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator,
+		FlipConfig, Governance, GovernanceConfig, Origin, Reputation, ReputationConfig, Runtime,
+		Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator,
 		ValidatorConfig,
 	};
 
@@ -309,8 +309,7 @@ mod tests {
 				if self.live {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HEARTBEAT_BLOCK_INTERVAL / 2) == 0 {
-						// Online pallet
-						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
+						let _result = Reputation::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
 						));
 					}
@@ -451,7 +450,6 @@ mod tests {
 					System::initialize(&block_number, &System::block_hash(block_number), &digest);
 					System::on_initialize(block_number);
 					Session::on_initialize(block_number);
-					Online::on_initialize(block_number);
 					Flip::on_initialize(block_number);
 					Staking::on_initialize(block_number);
 					Auction::on_initialize(block_number);
@@ -696,7 +694,10 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert!(!Online::is_online(account), "node should have not sent a heartbeat");
+					assert!(
+						!Reputation::is_online(account),
+						"node should have not sent a heartbeat"
+					);
 				}
 
 				assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");

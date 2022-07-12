@@ -20,7 +20,7 @@ log = { version = '0.4.14', default-features = false }
 
 # Required for bechmarking
 pallet-cf-validator = { path = '../cf-validator', optional = true, default-features = false }
-pallet-cf-online = { path = '../cf-online', optional = true, default-features = false }
+pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -94,6 +94,6 @@ runtime-benchmarks = [
 	'cf-traits/runtime-benchmarks',
 	'cf-chains/runtime-benchmarks',
 	'pallet-cf-validator',
-	'pallet-cf-online',
+	'pallet-cf-reputation',
 ]
 try-runtime = ['frame-support/try-runtime']

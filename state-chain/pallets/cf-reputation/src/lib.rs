@@ -100,6 +100,8 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::{EpochInfo, IsOnline, QualifyNode};
+	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -108,6 +110,7 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
+	// TODO: Look at this trait bound, Chainflip already has the system::Config bound
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
@@ -130,6 +133,9 @@ pub mod pallet {
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
+		/// A Heartbeat
+		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
+
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
@@ -148,6 +154,19 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: T::BlockNumber) -> Weight {
+			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
+				let network_state = Self::current_network_state();
+				// Provide feedback via the `Heartbeat` trait on each interval
+				T::Heartbeat::on_heartbeat_interval(network_state);
+
+				// TODO: Reinstate benchmark
+				return 0 as Weight
+			}
+			// TODO: reinstate benchmark
+			0 as Weight
+		}
+
 		fn on_runtime_upgrade() -> Weight {
 			migrations::PalletMigration::<T>::on_runtime_upgrade();
 			T::WeightInfo::on_runtime_upgrade()
@@ -196,6 +215,12 @@ pub mod pallet {
 	#[pallet::getter(fn offence_time_slot_tracker)]
 	/// The penalty to be applied for each offence.
 	pub type OffenceTimeSlotTracker<T: Config> = StorageMap<_, Identity, ReportId, OpaqueTimeSlot>;
+
+	/// The last block numbers at which validators submitted a heartbeat.
+	#[pallet::storage]
+	#[pallet::getter(fn last_heartbeat)]
+	pub type LastHeartbeat<T: Config> =
+		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -296,6 +321,75 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::PenaltyUpdated(offence, old, penalty));
 
 			Ok(().into())
+		}
+
+		/// A heartbeat is used to measure the liveness of a node. It is measured in blocks.
+		/// For every interval we expect at least one heartbeat from all nodes of the network.
+		/// Failing this they would be considered offline. Suspended validators can continue to
+		/// submit heartbeats so that when their suspension has expired they would be considered
+		/// online again.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		// TODO: Reinstate benchmark
+		#[pallet::weight(0)]
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+			let current_block_number = frame_system::Pallet::<T>::current_block_number();
+
+			let dist_from_start_of_interval =
+				current_block_number % T::HeartbeatBlockInterval::get();
+
+			let start_of_new_interval = current_block_number - dist_from_start_of_interval;
+
+			let has_submitted_this_interval =
+				LastHeartbeat::<T>::get(&validator_id).unwrap_or_default() > start_of_new_interval;
+
+			if !has_submitted_this_interval {
+				LastHeartbeat::<T>::insert(&validator_id, current_block_number);
+				T::Heartbeat::heartbeat_submitted(&validator_id, current_block_number);
+			}
+
+			Ok(().into())
+		}
+	}
+
+	/// A node is considered online if fewer than [T::HeartbeatBlockInterval] blocks
+	/// have elapsed since their last heartbeat submission.
+	impl<T: Config> IsOnline for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+
+		fn is_online(validator_id: &Self::ValidatorId) -> bool {
+			use sp_runtime::traits::Saturating;
+			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
+					T::HeartbeatBlockInterval::get()
+			} else {
+				false
+			}
+		}
+	}
+
+	impl<T: Config> QualifyNode for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+
+		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+			Self::is_online(validator_id)
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		/// Partitions the validators based on whether they are considered online or offline.
+		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
+			let (online, offline) =
+				T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
+
+			NetworkState { online, offline }
 		}
 	}
 

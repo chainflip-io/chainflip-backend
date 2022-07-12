@@ -39,7 +39,6 @@ pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = fal
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
-pallet-cf-online = { path = "../pallets/cf-online", default-features = false }
 pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature", default-features = false }
 pallet-cf-broadcast = { path = "../pallets/cf-broadcast", default-features = false }
 pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
@@ -208,7 +207,6 @@ runtime-benchmarks = [
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-online/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
@@ -240,7 +238,6 @@ std = [
   'pallet-cf-environment/std',
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
-  'pallet-cf-online/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',
   'pallet-cf-threshold-signature/std',
@@ -279,7 +276,6 @@ try-runtime = [
   "pallet-cf-validator/try-runtime",
   "pallet-cf-vaults/try-runtime",
   "pallet-cf-reputation/try-runtime",
-  "pallet-cf-online/try-runtime",
   "pallet-cf-emissions/try-runtime",
   "pallet-cf-environment/try-runtime",
 ]
