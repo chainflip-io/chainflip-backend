@@ -69,20 +69,9 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 
     Ok(TrackedData::<Ethereum> {
         block_height: block_number,
-        base_fee: fee_history
-            .base_fee_per_gas
-            .first()
-            .expect("Requested, so should be present.")
-            .as_u128(),
+        base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
         priority_fee: round_wei_to_gwei(
-            fee_history
-                .reward
-                .expect("Requested, so should be present.")
-                .first()
-                .expect("Requested, so should be present.")
-                .first()
-                .expect("Requested, so should be present.")
-                .as_u128(),
+            context!(context!(context!(fee_history.reward)?.first())?.first())?.as_u128(),
         ),
     })
 }
