@@ -43,6 +43,22 @@ fn offline_nodes_get_slashed_if_reputation_is_negative() {
 }
 
 #[test]
+fn only_one_heartbeat_per_interval_earns_reputation() {
+	new_test_ext().execute_with(|| {
+		ReputationPallet::heartbeat(RawOrigin::Signed(ALICE).into()).unwrap();
+		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
+		// submit again, then move forward
+		submit_heartbeat_for_current_interval(&[ALICE]);
+		// no change in reputation, because we're on the same block, therefore in the same
+		// heartbeat block interval
+		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
+		// we've move forward a block interval, so now we should have the extra rep
+		ReputationPallet::heartbeat(RawOrigin::Signed(ALICE).into()).unwrap();
+		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 2,);
+	})
+}
+
+#[test]
 fn updating_accrual_rate_should_affect_reputation_points() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
