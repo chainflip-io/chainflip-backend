@@ -1,8 +1,5 @@
 use crate::{mock::*, *};
-use cf_traits::{
-	mocks::epoch_info::MockEpochInfo, offence_reporting::*, EpochInfo, Heartbeat, NetworkState,
-	QualifyNode,
-};
+use cf_traits::{mocks::epoch_info::MockEpochInfo, offence_reporting::*, EpochInfo, QualifyNode};
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
 
@@ -21,11 +18,7 @@ fn submitting_heartbeat_should_reward_reputation_points() {
 #[test]
 fn missing_a_heartbeat_deducts_penalty_points() {
 	new_test_ext().execute_with(|| {
-		ReputationPallet::on_heartbeat_interval(NetworkState {
-			offline: vec![ALICE],
-			..Default::default()
-		});
-
+		ReputationPallet::penalise_offline_authorities(vec![ALICE]);
 		assert_eq!(reputation_points(&ALICE), -MISSED_HEARTBEAT_PENALTY_POINTS);
 	});
 }
@@ -34,10 +27,7 @@ fn missing_a_heartbeat_deducts_penalty_points() {
 fn offline_nodes_get_slashed_if_reputation_is_negative() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(reputation_points(&ALICE), 0);
-		ReputationPallet::on_heartbeat_interval(NetworkState {
-			offline: vec![ALICE],
-			..Default::default()
-		});
+		ReputationPallet::penalise_offline_authorities(vec![ALICE]);
 		assert_eq!(MockSlasher::slash_count(ALICE), 1);
 	});
 }

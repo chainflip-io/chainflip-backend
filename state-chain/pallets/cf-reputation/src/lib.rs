@@ -447,29 +447,6 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	}
 }
 
-impl<T: Config> Heartbeat for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type BlockNumber = T::BlockNumber;
-
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
-		<Self as OffenceReporter>::report_many(
-			PalletOffence::MissedHeartbeat,
-			network_state.offline.as_slice(),
-		);
-		for validator_id in network_state.offline {
-			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
-				rep.reset_online_credits();
-				rep.reputation_points
-			});
-
-			if reputation_points < 0 {
-				// At this point we slash the node by the amount of blocks offline
-				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
-			}
-		}
-	}
-}
-
 pub trait OffenceList<T: Config> {
 	const OFFENCES: &'static [T::Offence];
 }
@@ -487,6 +464,24 @@ impl<T: Config, L: OffenceList<T>> Get<BTreeSet<T::ValidatorId>>
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn penalise_offline_authorities(offline_authorities: Vec<T::ValidatorId>) {
+		<Self as OffenceReporter>::report_many(
+			PalletOffence::MissedHeartbeat,
+			offline_authorities.as_slice(),
+		);
+		for validator_id in offline_authorities {
+			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
+				rep.reset_online_credits();
+				rep.reputation_points
+			});
+
+			if reputation_points < 0 {
+				// At this point we slash the node by the amount of blocks offline
+				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
+			}
+		}
+	}
+
 	/// Return number of online credits for reward
 	fn online_credit_reward() -> T::BlockNumber {
 		// Equivalent to the number of blocks used for the heartbeat

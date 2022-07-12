@@ -104,7 +104,7 @@ impl Heartbeat for ChainflipHeartbeat {
 
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 		// Reputation depends on heartbeats
-		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
+		Reputation::penalise_offline_authorities(network_state.offline.clone());
 
 		BackupNodeEmissions::distribute();
 
