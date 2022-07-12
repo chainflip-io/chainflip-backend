@@ -133,7 +133,7 @@ pub mod pallet {
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
-		/// A Heartbeat
+		/// Handle to allow us to trigger across any pallet on a heartbeat interval
 		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// Implementation of EnsureOrigin trait for governance
