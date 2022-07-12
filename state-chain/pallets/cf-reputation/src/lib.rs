@@ -361,23 +361,9 @@ pub mod pallet {
 	impl<T: Config> QualifyNode for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
+		/// A node is considered online, and therefore qualified if fewer than
+		/// [T::HeartbeatBlockInterval] blocks have elapsed since their last heartbeat submission.
 		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-			Self::is_online(validator_id)
-		}
-	}
-
-	impl<T: Config> Pallet<T> {
-		/// Partitions the validators based on whether they are considered online or offline.
-		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
-			let (online, offline) =
-				T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
-
-			NetworkState { online, offline }
-		}
-
-		/// A node is considered online if fewer than [T::HeartbeatBlockInterval] blocks
-		/// have elapsed since their last heartbeat submission.
-		pub fn is_online(validator_id: &T::ValidatorId) -> bool {
 			use sp_runtime::traits::Saturating;
 			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
 				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
@@ -385,6 +371,16 @@ pub mod pallet {
 			} else {
 				false
 			}
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		/// Partitions the validators based on whether they are considered online or offline.
+		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
+			let (online, offline) =
+				T::EpochInfo::current_authorities().into_iter().partition(Self::is_qualified);
+
+			NetworkState { online, offline }
 		}
 	}
 

@@ -635,7 +635,7 @@ mod tests {
 
 		use super::*;
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
+			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, QualifyNode,
 			StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
@@ -695,7 +695,7 @@ mod tests {
 
 				for account in accounts.iter() {
 					assert!(
-						!Reputation::is_online(account),
+						!Reputation::is_qualified(account),
 						"node should have not sent a heartbeat"
 					);
 				}
