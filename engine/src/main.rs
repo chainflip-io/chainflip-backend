@@ -142,8 +142,7 @@ fn main() -> anyhow::Result<()> {
                 >>(latest_block_hash)
                 .await
                 .context("Failed to get StakeManager address from SC")?;
-            let stake_manager_contract = StakeManager::new(stake_manager_address.into())
-                .expect("Failed to create StakeManager contract");
+            let stake_manager_contract = StakeManager::new(stake_manager_address.into());
 
             let key_manager_address = state_chain_client
                 .get_storage_value::<pallet_cf_environment::KeyManagerAddress::<
@@ -153,7 +152,7 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to get KeyManager address from SC")?;
 
             let key_manager_contract =
-                KeyManager::new(key_manager_address.into()).expect("Failed to create KeyManager contract");
+                KeyManager::new(key_manager_address.into());
 
             use crate::multisig::eth::EthSigning;
 

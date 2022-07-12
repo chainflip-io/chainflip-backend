@@ -416,11 +416,12 @@ impl EthObserver for KeyManager {
 
 impl KeyManager {
     /// Loads the contract abi to get the event definitions
-    pub fn new(deployed_address: H160) -> Result<Self> {
-        Ok(Self {
+    pub fn new(deployed_address: H160) -> Self {
+        Self {
             deployed_address,
-            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
-        })
+            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())
+                .unwrap(),
+        }
     }
 }
 
@@ -475,7 +476,7 @@ mod tests {
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
 
     fn new_test_key_manager() -> KeyManager {
-        KeyManager::new(H160::default()).unwrap()
+        KeyManager::new(H160::default())
     }
 
     // 🔑 Aggregate Key sets the new Aggregate Key 🔑

@@ -37,8 +37,7 @@ pub async fn test_all_stake_manager_events() {
     let eth_http_rpc_client = EthHttpRpcClient::new(&settings.eth, &root_logger)
         .expect("Couldn't create EthHttpRpcClient");
 
-    let stake_manager =
-        StakeManager::new(integration_test_settings.eth.stake_manager_address).unwrap();
+    let stake_manager = StakeManager::new(integration_test_settings.eth.stake_manager_address);
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.

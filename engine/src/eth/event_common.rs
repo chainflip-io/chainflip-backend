@@ -46,7 +46,9 @@ impl<EventParameters: Debug> EventWithCommon<EventParameters> {
             tx_hash: log
                 .transaction_hash
                 .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?,
-            log_index: log.log_index.ok_or_else(|| anyhow::Error::msg("Could not get log index from ETH log"))?,
+            log_index: log
+                .log_index
+                .ok_or_else(|| anyhow::Error::msg("Could not get log index from ETH log"))?,
             base_fee_per_gas,
             block_number,
             event_parameters: decode_log(
@@ -75,7 +77,7 @@ mod tests {
 
     #[tokio::test]
     async fn common_event_info_decoded_correctly() {
-        let key_manager = KeyManager::new(H160::default()).unwrap();
+        let key_manager = KeyManager::new(H160::default());
 
         let transaction_hash =
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
