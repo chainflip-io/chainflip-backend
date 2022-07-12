@@ -335,9 +335,7 @@ pub mod pallet {
 				}
 			}
 
-			// TODO: replace this with benchmark results.
-			num_retries as u64 *
-				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
+			T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries)
 		}
 	}
 

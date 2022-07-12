@@ -5,9 +5,12 @@ use super::*;
 
 use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
+use frame_support::{
+	assert_ok,
+	dispatch::UnfilteredDispatchable,
+	traits::{IsType, OnInitialize},
+};
 use frame_system::RawOrigin;
-use pallet_cf_reputation::Call as ReputationCall;
 use pallet_cf_validator::CurrentAuthorities;
 
 const SEED: u32 = 0;
@@ -23,9 +26,9 @@ where
 	for validator_id in authorities {
 		let account_id = validator_id.into_ref();
 		whitelist_account!(account_id);
-		ReputationCall::<T>::heartbeat {}
-			.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into())
-			.unwrap();
+		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(
+			RawOrigin::Signed(account_id.clone()).into()
+		));
 	}
 }
 
@@ -37,6 +40,7 @@ benchmarks_instance_pallet! {
 			+ pallet_cf_reputation::Config
 	}
 
+	// Note: this benchmark does not include the cost of the dispatched extrinsic.
 	signature_success {
 		let all_accounts = (0..150).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED));
 
@@ -47,7 +51,7 @@ benchmarks_instance_pallet! {
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
 		let last_event = frame_system::Pallet::<T>::events().pop().unwrap().event;
-		let expected: <T as crate::Config<I>>::Event = Event::<T, I>::ThresholdDispatchComplete(ceremony_id, Ok(())).into();
+		let expected: <T as crate::Config<I>>::Event = Event::<T, I>::ThresholdSignatureSuccess(ceremony_id).into();
 		assert_eq!(last_event, *expected.into_ref());
 	}
 	report_signature_failed {
@@ -65,7 +69,6 @@ benchmarks_instance_pallet! {
 			.try_into()
 			.expect("Benchmark threshold should not exceed BTreeSet bounds");
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
-	on_initialize {} : {}
 	determine_offenders {
 		let a in 1 .. 200;
 
@@ -94,6 +97,37 @@ benchmarks_instance_pallet! {
 	} : { call.dispatch_bypass_filter(<T as Config<I>>::EnsureGovernance::successful_origin())? }
 	verify {
 		assert_eq!(ThresholdSignatureResponseTimeout::<T, I>::get(), new_timeout);
+	}
+
+	on_initialize {
+		// a: number of authorities
+		let a in 10..150;
+		// r: number of retries
+		let r in 0..50;
+
+		T::KeyProvider::set_key(<T::TargetChain as ChainCrypto>::AggKey::benchmark_value());
+		CurrentAuthorities::<T>::put(Vec::<<T as Chainflip>::ValidatorId>::new());
+
+		// These attempts will fail because there are no authorities to do the signing.
+		for _ in 0..r {
+			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1);
+		}
+		assert_eq!(
+			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
+			r as usize,
+		);
+
+		// Now we add the authorities
+		add_authorities::<T, _>((0..a).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED)));
+
+	}: {
+		Pallet::<T, I>::on_initialize(T::CeremonyRetryDelay::get())
+	}
+	verify {
+		assert_eq!(
+			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
+			0 as usize,
+		);
 	}
 }
 
