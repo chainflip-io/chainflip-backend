@@ -132,7 +132,7 @@ fn main() -> anyhow::Result<()> {
                 )
                 .await
                 .context("Failed to get on chain CFE settings from SC")?;
-                
+
             let (cfe_settings_update_sender, cfe_settings_update_receiver) =
                 tokio::sync::watch::channel(cfe_settings);
 
@@ -165,7 +165,7 @@ fn main() -> anyhow::Result<()> {
                 )
                 .context("Failed to open database")?,
             );
-            
+
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(
                     state_chain_client.our_account_id.clone(),
