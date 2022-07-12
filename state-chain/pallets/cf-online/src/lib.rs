@@ -85,7 +85,12 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			Self::is_online_at(frame_system::Pallet::<T>::current_block_number(), validator_id)
+			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
+					T::HeartbeatBlockInterval::get()
+			} else {
+				false
+			}
 		}
 	}
 
@@ -129,14 +134,6 @@ pub mod pallet {
 				T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
 
 			NetworkState { online, offline }
-		}
-
-		fn is_online_at(block_number: T::BlockNumber, validator_id: &T::ValidatorId) -> bool {
-			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
-				block_number.saturating_sub(last_heartbeat) < T::HeartbeatBlockInterval::get()
-			} else {
-				false
-			}
 		}
 	}
 
