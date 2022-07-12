@@ -680,6 +680,7 @@ pub trait EthObserver {
                                             EventWithCommon::<Self::EventParameters>::new_from_unparsed_logs(
                                                 &decode_log_fn,
                                                 unparsed_log,
+                                                block_number,
                                                 base_fee_per_gas,
                                             )
                                         },
