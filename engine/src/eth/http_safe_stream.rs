@@ -34,7 +34,7 @@ where
         option_last_block_yielded: None,
         option_last_head_fetched: None,
         eth_http_rpc,
-        poll_interval: make_periodic_tick(poll_interval),
+        poll_interval: make_periodic_tick(poll_interval, false),
         logger: logger.new(o!(COMPONENT_KEY => "ETH_HTTPSafeStream")),
     };
 

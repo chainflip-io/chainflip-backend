@@ -84,7 +84,12 @@ pub mod pallet {
 		type ValidatorId = T::ValidatorId;
 
 		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			Self::is_online_at(frame_system::Pallet::<T>::current_block_number(), validator_id)
+			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
+					T::HeartbeatBlockInterval::get()
+			} else {
+				false
+			}
 		}
 	}
 
@@ -114,9 +119,19 @@ pub mod pallet {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
-			LastHeartbeat::<T>::insert(&validator_id, current_block_number);
+			let dist_from_start_of_interval =
+				current_block_number % T::HeartbeatBlockInterval::get();
 
-			T::Heartbeat::heartbeat_submitted(&validator_id, current_block_number);
+			let start_of_new_interval = current_block_number - dist_from_start_of_interval;
+
+			let has_submitted_this_interval =
+				LastHeartbeat::<T>::get(&validator_id).unwrap_or_default() > start_of_new_interval;
+
+			if !has_submitted_this_interval {
+				LastHeartbeat::<T>::insert(&validator_id, current_block_number);
+				T::Heartbeat::heartbeat_submitted(&validator_id, current_block_number);
+			}
+
 			Ok(().into())
 		}
 	}

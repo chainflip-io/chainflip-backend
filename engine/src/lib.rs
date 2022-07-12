@@ -10,6 +10,7 @@ pub mod multisig;
 pub mod multisig_p2p;
 pub mod settings;
 pub mod state_chain;
+pub mod task_scope;
 
 #[macro_use]
 pub mod testing;

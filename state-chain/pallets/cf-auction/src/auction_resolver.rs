@@ -56,7 +56,7 @@ impl SetSizeMaximisingAuctionResolver {
 
 	pub fn resolve_auction<CandidateId: Clone, BidAmount: Copy + AtLeast32BitUnsigned>(
 		&self,
-		mut auction_candidates: Vec<(CandidateId, BidAmount)>,
+		mut auction_candidates: Vec<Bid<CandidateId, BidAmount>>,
 	) -> Result<AuctionOutcome<CandidateId, BidAmount>, AuctionError> {
 		ensure!(auction_candidates.len() as u32 >= self.parameters.min_size, {
 			log::error!(
@@ -72,7 +72,7 @@ impl SetSizeMaximisingAuctionResolver {
 			self.current_size.saturating_add(self.parameters.max_expansion),
 		);
 
-		auction_candidates.sort_unstable_by_key(|&(_, amount)| Reverse(amount));
+		auction_candidates.sort_unstable_by_key(|&Bid { amount, .. }| Reverse(amount));
 
 		let losers = auction_candidates
 			.split_off(min(target_size as usize, auction_candidates.len()))
@@ -81,9 +81,9 @@ impl SetSizeMaximisingAuctionResolver {
 			.collect();
 		let bond = auction_candidates
 			.last()
-			.map(|&(_, amount)| amount)
+			.map(|bid| bid.amount)
 			.expect("Can't run auction with no candidates, and candidates must be staked > 0.");
-		let winners = auction_candidates.into_iter().map(|(id, _)| id).collect();
+		let winners = auction_candidates.into_iter().map(|bid| bid.bidder_id).collect();
 
 		Ok(AuctionOutcome { winners, losers, bond })
 	}
@@ -154,7 +154,7 @@ mod test_auction_resolution {
 					.chain(losers.iter().map(|bid| &bid.bidder_id))
 					.cloned()
 					.collect::<BTreeSet<_>>(),
-				$candidates.iter().map(|(id, _)| id).cloned().collect::<BTreeSet<_>>(),
+				$candidates.iter().map(|bid| bid.bidder_id).collect::<BTreeSet<_>>(),
 				"Winners and losers together must make up all candidates."
 			);
 
@@ -188,7 +188,9 @@ mod test_auction_resolution {
 			SetSizeMaximisingAuctionResolver::try_new(CURRENT_SIZE, AUCTION_PARAMETERS).unwrap();
 
 		// All candidates bid the same amount.
-		let candidates = (0u64..1000).map(|i| (i, 100u128)).collect::<Vec<_>>();
+		let candidates = (0u64..1000)
+			.map(|bidder_id| Bid { bidder_id, amount: 100u128 })
+			.collect::<Vec<_>>();
 
 		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
 
@@ -207,7 +209,9 @@ mod test_auction_resolution {
 			SetSizeMaximisingAuctionResolver::try_new(CURRENT_SIZE, AUCTION_PARAMETERS).unwrap();
 
 		// All candidates bid the same amount.
-		let candidates = (0u64..1000).map(|i| (i, 100u128)).collect::<Vec<_>>();
+		let candidates = (0u64..1000)
+			.map(|bidder_id| Bid { bidder_id, amount: 100u128 })
+			.collect::<Vec<_>>();
 
 		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
 
