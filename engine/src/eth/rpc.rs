@@ -439,7 +439,7 @@ pub mod mocks {
 #[cfg(test)]
 mod tests {
 
-    use crate::eth::from_unsigned_to_transaction_parameters;
+    use crate::eth::EIP1559_TX_ID;
 
     use super::*;
 
@@ -502,7 +502,17 @@ mod tests {
     async fn test_eip1559_signature_verification() {
         let unsigned_tx = test_unsigned_transaction();
 
-        let mut tx_params = from_unsigned_to_transaction_parameters(&unsigned_tx);
+        let mut tx_params = TransactionParameters {
+            to: Some(unsigned_tx.contract),
+            data: unsigned_tx.data.clone().into(),
+            chain_id: Some(unsigned_tx.chain_id),
+            value: unsigned_tx.value,
+            max_fee_per_gas: unsigned_tx.max_fee_per_gas,
+            max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
+            transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
+            gas: unsigned_tx.gas_limit.unwrap(),
+            ..Default::default()
+        };
         // set this manually so we don't need an RPC request within web3's `sign_transaction`
         tx_params.nonce = Some(U256::from(2));
         for seed in 0..10 {
