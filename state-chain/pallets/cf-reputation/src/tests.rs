@@ -307,9 +307,9 @@ fn go_to_interval(interval: u64) {
 fn submitting_heartbeat_more_than_once_in_an_interval() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-		assert!(<ReputationPallet as IsOnline>::is_online(&ALICE), "Alice should be online");
+		assert!(ReputationPallet::is_online(&ALICE), "Alice should be online");
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-		assert!(<ReputationPallet as IsOnline>::is_online(&ALICE), "Alice should be online");
+		assert!(ReputationPallet::is_online(&ALICE), "Alice should be online");
 		go_to_interval(1);
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 	});
@@ -320,15 +320,15 @@ fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		go_to_interval(1);
-		assert!(!<ReputationPallet as IsOnline>::is_online(&ALICE), "Alice should be offline");
+		assert!(!ReputationPallet::is_online(&ALICE), "Alice should be offline");
 		submit_heartbeat_for_current_interval(&[ALICE]);
 		assert!(
-			<ReputationPallet as IsOnline>::is_online(&ALICE),
+			ReputationPallet::is_online(&ALICE),
 			"Alice should be back online after submitting heartbeat"
 		);
 		go_to_interval(2);
 		assert!(
-			!<ReputationPallet as IsOnline>::is_online(&ALICE),
+			!ReputationPallet::is_online(&ALICE),
 			"Alice goes offline after two heartbeat intervals"
 		);
 	});
@@ -338,7 +338,7 @@ fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
 fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-		assert!(<ReputationPallet as IsOnline>::is_online(&ALICE), "Alice should be online");
+		assert!(ReputationPallet::is_online(&ALICE), "Alice should be online");
 		go_to_interval(2);
 		assert_eq!(
 			ReputationPallet::current_network_state().offline,
@@ -371,15 +371,15 @@ fn non_validators_should_not_appear_in_network_state() {
 			"Alice should be an authority"
 		);
 
-		assert!(<ReputationPallet as IsOnline>::is_online(&BOB), "Bob should be online");
+		assert!(ReputationPallet::is_online(&BOB), "Bob should be online");
 
-		assert!(<ReputationPallet as IsOnline>::is_online(&ALICE), "Alice should be online");
+		assert!(ReputationPallet::is_online(&ALICE), "Alice should be online");
 
 		go_to_interval(3);
 
-		assert!(!<ReputationPallet as IsOnline>::is_online(&BOB), "Bob should be offline");
+		assert!(!ReputationPallet::is_online(&BOB), "Bob should be offline");
 
-		assert!(!<ReputationPallet as IsOnline>::is_online(&ALICE), "Alice should be offline");
+		assert!(!ReputationPallet::is_online(&ALICE), "Alice should be offline");
 
 		assert!(
 			ReputationPallet::current_network_state().online.is_empty(),
