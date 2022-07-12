@@ -285,7 +285,7 @@ pub mod pallet {
 						AsyncResult::Ready(Ok(_)) => {
 							let weight =
 								T::ValidatorWeightInfo::rotation_phase_vaults_rotating_success(
-									rotation_status.weight_params(),
+									rotation_status.num_primary_candidates(),
 								);
 							Self::set_rotation_phase(RotationPhase::VaultsRotated(rotation_status));
 							weight
@@ -305,24 +305,24 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::Idle);
 							// Use the weight of the pending phase.
 							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-								rotation_status.weight_params(),
+								rotation_status.num_primary_candidates(),
 							)
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
 							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-								rotation_status.weight_params(),
+								rotation_status.num_primary_candidates(),
 							)
 						},
 					}
 				},
 				RotationPhase::VaultsRotated(rotation_status) =>
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
-						rotation_status.weight_params(),
+						rotation_status.num_primary_candidates(),
 					),
 				RotationPhase::SessionRotating(rotation_status) =>
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
-						rotation_status.weight_params(),
+						rotation_status.num_primary_candidates(),
 					),
 			};
 			weight

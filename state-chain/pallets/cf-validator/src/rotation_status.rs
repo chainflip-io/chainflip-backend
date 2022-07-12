@@ -74,7 +74,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Am
 		self.authority_candidates_iter().cloned().collect::<I>()
 	}
 
-	pub fn weight_params(&self) -> u32 {
+	pub fn num_primary_candidates(&self) -> u32 {
 		self.primary_candidates.len() as u32
 	}
 }

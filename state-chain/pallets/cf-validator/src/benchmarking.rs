@@ -234,16 +234,16 @@ benchmarks! {
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.weight_params()),
+				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.num_primary_candidates()),
 				_ => None,
 			}.expect("phase should be VaultsRotating"),
 			a
 		);
-	}: {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::VaultsRotating(..)
 		));
+	}: {
 		Pallet::<T>::on_initialize(1u32.into());
 	}
 	verify {
@@ -264,7 +264,7 @@ benchmarks! {
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.weight_params()),
+				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.num_primary_candidates()),
 				_ => None,
 			}.expect("phase should be VaultsRotating"),
 			a,
@@ -324,7 +324,7 @@ benchmarks! {
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotated(rotation_status) => Some(rotation_status.weight_params()),
+				RotationPhase::VaultsRotated(rotation_status) => Some(rotation_status.num_primary_candidates()),
 				_ => None,
 			}.expect("phase should be VaultsRotated"),
 			a,
