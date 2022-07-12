@@ -21,7 +21,7 @@ fn submitting_heartbeat_should_reward_reputation_points() {
 #[test]
 fn missing_a_heartbeat_deducts_penalty_points() {
 	new_test_ext().execute_with(|| {
-		<ReputationPallet as Heartbeat>::on_heartbeat_interval(NetworkState {
+		ReputationPallet::on_heartbeat_interval(NetworkState {
 			offline: vec![ALICE],
 			..Default::default()
 		});
@@ -34,7 +34,7 @@ fn missing_a_heartbeat_deducts_penalty_points() {
 fn offline_nodes_get_slashed_if_reputation_is_negative() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(reputation_points(&ALICE), 0);
-		<ReputationPallet as Heartbeat>::on_heartbeat_interval(NetworkState {
+		ReputationPallet::on_heartbeat_interval(NetworkState {
 			offline: vec![ALICE],
 			..Default::default()
 		});
