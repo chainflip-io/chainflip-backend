@@ -11,6 +11,6 @@ macro_rules! context {
     ($e:expr) => {{
         use anyhow::Context;
 
-        $e.with_context(|| format!("Error: {} at {}", stringify!($e), here!()))
+        $e.with_context(|| format!("Error: '{}' failed {}", stringify!($e), here!()))
     }};
 }
