@@ -680,6 +680,7 @@ pub trait EthObserver {
                                             EventWithCommon::<Self::EventParameters>::new_from_unparsed_logs(
                                                 &decode_log_fn,
                                                 unparsed_log,
+                                                block_number,
                                                 base_fee_per_gas,
                                             )
                                         },
@@ -1108,7 +1109,7 @@ mod merged_stream_tests {
 
     // Arbitrariily chosen one of the EthRpc's for these tests
     fn test_km_contract() -> KeyManager {
-        KeyManager::new(H160::default()).unwrap()
+        KeyManager::new(H160::default())
     }
 
     fn key_change(block_number: u64, log_index: u8) -> EventWithCommon<KeyManagerEvent> {
