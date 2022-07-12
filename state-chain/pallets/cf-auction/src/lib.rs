@@ -16,7 +16,9 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 pub use auction_resolver::*;
-use cf_traits::{AuctionOutcome, Auctioneer, BidderProvider, Chainflip, EpochInfo, QualifyNode};
+use cf_traits::{
+	AuctionOutcome, Auctioneer, Bid, BidderProvider, Chainflip, EpochInfo, QualifyNode,
+};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -153,7 +155,7 @@ impl<T: Config> Auctioneer<T> for Pallet<T> {
 	fn resolve_auction() -> Result<AuctionOutcome<T::ValidatorId, T::Amount>, Error<T>> {
 		let mut bids = T::BidderProvider::get_bidders();
 		// Determine if this node is qualified for bidding
-		bids.retain(|(validator_id, _)| T::AuctionQualification::is_qualified(validator_id));
+		bids.retain(|Bid { bidder_id, .. }| T::AuctionQualification::is_qualified(bidder_id));
 
 		let outcome = SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),

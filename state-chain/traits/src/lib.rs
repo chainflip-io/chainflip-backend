@@ -234,7 +234,7 @@ pub trait BidderProvider {
 	type Amount;
 	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
 	/// greater than zero
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
 pub trait StakeHandler {

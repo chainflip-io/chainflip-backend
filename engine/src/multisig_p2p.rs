@@ -317,7 +317,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
 
-    let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
+    let mut check_listener_address_tick =
+        common::make_periodic_tick(Duration::from_secs(60), false);
 
     loop {
         tokio::select! {

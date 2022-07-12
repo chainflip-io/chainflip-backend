@@ -46,11 +46,11 @@ pub trait CustomApi {
 	#[rpc(name = "cf_is_auction_phase")]
 	fn cf_is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_key_manager_address")]
-	fn cf_eth_key_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
+	fn cf_eth_key_manager_address(&self) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_stake_manager_address")]
-	fn cf_eth_stake_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
+	fn cf_eth_stake_manager_address(&self) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_flip_token_address")]
-	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error>;
+	fn cf_eth_flip_token_address(&self) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_chain_id")]
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
@@ -62,15 +62,17 @@ pub trait CustomApi {
 	#[rpc(name = "cf_auction_parameters")]
 	fn cf_auction_parameters(&self) -> Result<(u32, u32), jsonrpc_core::Error>;
 	#[rpc(name = "cf_min_stake")]
-	fn cf_min_stake(&self) -> Result<u64, jsonrpc_core::Error>;
+	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch")]
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error>;
+	#[rpc(name = "cf_epoch_duration")]
+	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch_started_at")]
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_authority_emission_per_block")]
-	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
+	fn cf_authority_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_backup_emission_per_block")]
-	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error>;
+	fn cf_backup_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_flip_supply")]
 	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
 	#[rpc(name = "cf_accounts")]
@@ -110,26 +112,32 @@ where
 			.cf_is_auction_phase(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn cf_eth_flip_token_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
+	fn cf_eth_flip_token_address(&self) -> Result<String, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
+		let eth_flip_token_address = self
+			.client
 			.runtime_api()
 			.cf_eth_flip_token_address(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.");
+		Ok(hex::encode(eth_flip_token_address))
 	}
-	fn cf_eth_stake_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
+	fn cf_eth_stake_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
+		let eth_stake_manager_address = self
+			.client
 			.runtime_api()
 			.cf_eth_stake_manager_address(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.");
+		Ok(hex::encode(eth_stake_manager_address))
 	}
-	fn cf_eth_key_manager_address(&self) -> Result<[u8; 20], jsonrpc_core::Error> {
+	fn cf_eth_key_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
+		let eth_key_manager_address = self
+			.client
 			.runtime_api()
 			.cf_eth_key_manager_address(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.");
+		Ok(hex::encode(eth_key_manager_address))
 	}
 	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
@@ -160,18 +168,27 @@ where
 			.cf_auction_parameters(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn cf_min_stake(&self) -> Result<u64, jsonrpc_core::Error> {
+	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
+		let min_stake = self
+			.client
 			.runtime_api()
 			.cf_min_stake(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.");
+		Ok(min_stake.into())
 	}
 	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
 		self.client
 			.runtime_api()
 			.cf_current_epoch(&at)
+			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+	}
+	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error> {
+		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		self.client
+			.runtime_api()
+			.cf_epoch_duration(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
 	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error> {
@@ -181,19 +198,23 @@ where
 			.cf_current_epoch_started_at(&at)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn cf_authority_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {
+	fn cf_authority_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
+		let authority_emission_per_block = self
+			.client
 			.runtime_api()
 			.cf_authority_emission_per_block(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.");
+		Ok(authority_emission_per_block.into())
 	}
-	fn cf_backup_emission_per_block(&self) -> Result<u64, jsonrpc_core::Error> {
+	fn cf_backup_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client
+		let backup_emission_per_block = self
+			.client
 			.runtime_api()
 			.cf_backup_emission_per_block(&at)
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.expect("The runtime API should not return error.");
+		Ok(backup_emission_per_block.into())
 	}
 	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
 		let at = sp_api::BlockId::hash(self.client.info().best_hash);

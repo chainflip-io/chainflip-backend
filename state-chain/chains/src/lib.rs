@@ -83,7 +83,7 @@ pub trait ChainAbi: ChainCrypto {
 		unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
 		signer_credential: &Self::SignerCredential,
-	) -> Result<(), Self::ValidationError>;
+	) -> Result<Self::TransactionHash, Self::ValidationError>;
 }
 
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
@@ -279,6 +279,8 @@ pub mod mocks {
 	impl_default_benchmark_value!(u32);
 	impl_default_benchmark_value!(MockUnsignedTransaction);
 
+	pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionHash = [0xbc; 4];
+
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;
 		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
@@ -290,12 +292,12 @@ pub mod mocks {
 			unsigned_tx: &Self::UnsignedTransaction,
 			signed_tx: &Self::SignedTransaction,
 			signer_credential: &Self::SignerCredential,
-		) -> Result<(), Self::ValidationError> {
+		) -> Result<Self::TransactionHash, Self::ValidationError> {
 			if *unsigned_tx == signed_tx.transaction &&
 				signed_tx.signature.is_valid() &&
 				signer_credential.is_valid()
 			{
-				Ok(())
+				Ok(ETH_TX_HASH)
 			} else {
 				Err("MockEthereum::ValidationError")
 			}
