@@ -1,7 +1,6 @@
 use crate::{mock::*, *};
 use cf_traits::{
-	mocks::epoch_info::MockEpochInfo, offence_reporting::*, EpochInfo, Heartbeat, IsOnline,
-	NetworkState,
+	mocks::epoch_info::MockEpochInfo, offence_reporting::*, EpochInfo, Heartbeat, NetworkState,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;

@@ -13,7 +13,7 @@ mod tests {
 		ValidatorConfig,
 	};
 
-	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance, IsOnline};
+	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use rand::{prelude::*, SeedableRng};

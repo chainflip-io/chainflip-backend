@@ -100,7 +100,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, IsOnline, QualifyNode};
+	use cf_traits::{EpochInfo, QualifyNode};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 
@@ -358,22 +358,6 @@ pub mod pallet {
 		}
 	}
 
-	/// A node is considered online if fewer than [T::HeartbeatBlockInterval] blocks
-	/// have elapsed since their last heartbeat submission.
-	impl<T: Config> IsOnline for Pallet<T> {
-		type ValidatorId = T::ValidatorId;
-
-		fn is_online(validator_id: &Self::ValidatorId) -> bool {
-			use sp_runtime::traits::Saturating;
-			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
-				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
-					T::HeartbeatBlockInterval::get()
-			} else {
-				false
-			}
-		}
-	}
-
 	impl<T: Config> QualifyNode for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
@@ -389,6 +373,18 @@ pub mod pallet {
 				T::EpochInfo::current_authorities().into_iter().partition(Self::is_online);
 
 			NetworkState { online, offline }
+		}
+
+		/// A node is considered online if fewer than [T::HeartbeatBlockInterval] blocks
+		/// have elapsed since their last heartbeat submission.
+		pub fn is_online(validator_id: &T::ValidatorId) -> bool {
+			use sp_runtime::traits::Saturating;
+			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
+					T::HeartbeatBlockInterval::get()
+			} else {
+				false
+			}
 		}
 	}
 

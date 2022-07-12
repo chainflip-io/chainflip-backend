@@ -321,13 +321,6 @@ pub trait EthEnvironmentProvider {
 	fn chain_id() -> u64;
 }
 
-pub trait IsOnline {
-	/// The validator id used
-	type ValidatorId;
-	/// The online status of the node
-	fn is_online(validator_id: &Self::ValidatorId) -> bool;
-}
-
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
