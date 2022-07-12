@@ -616,7 +616,10 @@ fn testnet_genesis(
 pub fn chainflip_properties() -> Properties {
 	let mut properties = Properties::new();
 	// TODO - https://github.com/chainflip-io/chainflip-backend/issues/911
-	properties.insert("ss58Format".into(), 42.into());
+	properties.insert(
+		"ss58Format".into(),
+		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
+	);
 	properties.insert("tokenDecimals".into(), 18.into());
 	properties.insert("tokenSymbol".into(), "FLIP".into());
 	properties.insert("color".into(), "#61CFAA".into());
