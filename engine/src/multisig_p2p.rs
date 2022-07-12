@@ -225,7 +225,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(
         &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| {
             format!(
-                "Should be valid ws endpoint: {}",
+                "Invalid ws endpoint: {}",
                 settings.state_chain.ws_endpoint
             )
         })?,
