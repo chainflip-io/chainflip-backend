@@ -373,7 +373,6 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// Returns the number of blocks that have elapsed since the new HeartbeatBlockInterval
-		/// if this is 0 it means we kick off the new interval
 		pub fn blocks_since_new_interval(block_number: T::BlockNumber) -> T::BlockNumber {
 			block_number % T::HeartbeatBlockInterval::get()
 		}
