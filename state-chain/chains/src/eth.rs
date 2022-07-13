@@ -10,10 +10,7 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint,
 };
-use libsecp256k1::{
-	curve::{Affine, Field, Jacobian, Scalar},
-	PublicKey, SecretKey, ECMULT_CONTEXT,
-};
+use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -32,6 +29,7 @@ use self::api::EthereumReplayProtection;
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_RINKEBY: u64 = 4;
+pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 //--------------------------//
@@ -211,9 +209,17 @@ impl From<ParityBit> for Uint {
 	}
 }
 
+impl Default for ParityBit {
+	/// Default ParityBit is even (zero)
+	fn default() -> Self {
+		ParityBit::Even
+	}
+}
+
 /// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(
+	Default,
 	Encode,
 	Decode,
 	TypeInfo,
@@ -275,6 +281,8 @@ impl AggKey {
 	}
 
 	/// Compute the message challenge e according to the format expected by the ethereum contracts.
+	/// Note that the result is not reduced to group order at this point, so we need to be careful
+	/// when converting the result to a scalar.
 	///
 	/// From the [Schnorr verification contract]
 	/// (https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol):
@@ -299,6 +307,19 @@ impl AggKey {
 		.into()
 	}
 
+	fn message_challenge_scalar(
+		&self,
+		msg_hash: &[u8; 32],
+		k_times_g_address: &[u8; 20],
+	) -> Scalar {
+		let challenge = self.message_challenge(msg_hash, k_times_g_address);
+		let mut s = Scalar::default();
+		// Even if this "overflows", the scalar is reduced to the group order,
+		// which is what the signature scheme (the contract) expects
+		let _overflowed = s.set_b32(&challenge);
+		s
+	}
+
 	/// Sign a message, using a secret key, and a signature nonce
 	#[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 	pub fn sign(&self, msg_hash: &[u8; 32], secret: &SecretKey, sig_nonce: &SecretKey) -> [u8; 32] {
@@ -306,14 +327,7 @@ impl AggKey {
 
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
-		let e = {
-			let challenge = self.message_challenge(msg_hash, &k_times_g_address);
-			let mut s = Scalar::default();
-			let mut bytes = [0u8; 32];
-			bytes.copy_from_slice(&challenge);
-			let _overflowed = s.set_b32(&bytes);
-			s
-		};
+		let e = self.message_challenge_scalar(msg_hash, &k_times_g_address);
 
 		let d: Scalar = (*secret).into();
 		let k: Scalar = (*sig_nonce).into();
@@ -323,8 +337,6 @@ impl AggKey {
 	}
 
 	/// Verify a signature against a given message hash for this public key.
-	///
-	/// **TODO: In-depth review to ensure correctness.**
 	pub fn verify(
 		&self,
 		msg_hash: &[u8; 32],
@@ -351,51 +363,32 @@ impl AggKey {
 		let challenge_times_pubkey = {
 			// Derive the public key point equivalent from the AggKey: effectively the inverse of
 			// AggKey::from_pubkey_compressed();
-			let public_key_point = {
-				let mut point = Affine::default();
-				let mut x = Field::default();
-				if !x.set_b32(&self.pub_key_x) {
-					return Err(AggKeyVerificationError::InvalidPubkey)
-				}
-				point.set_xo_var(&x, self.pub_key_y_parity.is_odd());
-				point
-			};
+			let mut pubkey = PublicKey::parse_compressed(&self.to_pubkey_compressed())
+				.map_err(|_| AggKeyVerificationError::InvalidPubkey)?;
 
-			// Convert the message challenge to a Scalar value so it can be multiplied with the
+			// Convert the message challenge to a Secret Key value so it can be multiplied with the
 			// point.
-			let msg_challenge = self.message_challenge(msg_hash, &sig.k_times_g_address);
-			let msg_challenge_scalar = {
-				let mut e = Scalar::default();
-				let mut bytes = [0u8; 32];
-				bytes.copy_from_slice(msg_challenge.as_ref());
-				// Question: Is it ok that this prevents overflow?
-				let _overflowed = e.set_b32(&bytes);
-				e
-			};
+			let challenge = self.message_challenge_scalar(msg_hash, &sig.k_times_g_address);
+			// This will fail for a "zero" challenge, which is not expected and we might as well
+			// consider the signature invalid
+			let challenge_sk = SecretKey::try_from(challenge)
+				.map_err(|_| AggKeyVerificationError::InvalidSignature)?;
 
-			// Some mathematical magic - multiplies the point and scalar value.
-			let mut res = Jacobian::default();
-			ECMULT_CONTEXT.ecmult(
-				&mut res,
-				&Jacobian::from_ge(&public_key_point),
-				&msg_challenge_scalar,
-				&Scalar::default(),
-			);
-			res
+			// Multiply scalar and point. This can only fail if challenge is "zero",
+			// which it can't be by construction above
+			pubkey.tweak_mul_assign(&challenge_sk).expect("challenge can't be zero");
+			pubkey
 		};
 
-		// k_times_g_recovered ~ challenge_times_pubkey + s_times_g
-		let mut k_times_g_recovered =
-			Affine::from_gej(&challenge_times_pubkey.add_ge(&s_times_g.into()));
-		k_times_g_recovered.x.normalize();
-		k_times_g_recovered.y.normalize();
+		// Add two pubkeys. The signature is considered invalid if the result is
+		// a point at infinity (which is the only way `combine` can fail)
+		let k_times_g_recovered = PublicKey::combine(&[challenge_times_pubkey, s_times_g])
+			.map_err(|_| AggKeyVerificationError::InvalidSignature)?;
 
 		// We now have the recovered value for k_times_g, however we only have a
-		// k_times_g_addressess to compare against. So we need to convert our recovered k_times_g to
+		// k_times_g_address to compare against. So we need to convert our recovered k_times_g to
 		// an Ethereum address to compare against our expected value.
-		let k_times_g_hash_recovered = Keccak256::hash(
-			[k_times_g_recovered.x.b32(), k_times_g_recovered.y.b32()].concat().as_ref(),
-		);
+		let k_times_g_hash_recovered = Keccak256::hash(&k_times_g_recovered.serialize()[1..]);
 
 		// The signature is valid if the recovered value matches the provided one.
 		if k_times_g_hash_recovered[12..] == sig.k_times_g_address {
@@ -652,13 +645,15 @@ pub fn verify_transaction(
 	unsigned: &UnsignedTransaction,
 	#[allow(clippy::ptr_arg)] signed: &RawSignedTransaction,
 	address: &Address,
-) -> Result<(), TransactionVerificationError> {
+) -> Result<H256, TransactionVerificationError> {
 	let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
 		Some(0x01) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP2930),
 		Some(0x02) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP1559),
 		_ => rlp::decode(&signed[..]).map(ethereum::TransactionV2::Legacy),
 	}
 	.map_err(|_| TransactionVerificationError::InvalidRlp)?;
+
+	let tx_hash = decoded_tx.hash();
 
 	let message_hash = match decoded_tx {
 		ethereum::TransactionV2::Legacy(ref tx) =>
@@ -701,7 +696,9 @@ pub fn verify_transaction(
 		return Err(TransactionVerificationError::NoMatch)
 	}
 
-	unsigned.match_against_recovered(decoded_tx)
+	unsigned.match_against_recovered(decoded_tx)?;
+
+	Ok(tx_hash)
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Default)]
@@ -786,7 +783,6 @@ mod verification_tests {
 	use crate::eth::sig_constants::{AGG_KEY_PRIV, AGG_KEY_PUB, MSG_HASH, SIG, SIG_NONCE};
 
 	use super::*;
-	use ethereum::{LegacyTransaction, LegacyTransactionMessage, TransactionV2};
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
 	use rand::{prelude::*, SeedableRng};
@@ -864,110 +860,6 @@ mod verification_tests {
 			),
 			AggKeyVerificationError::NoMatch
 		);
-	}
-
-	#[test]
-	fn test_ethereum_signature_verification() {
-		let unsigned = UnsignedTransaction {
-			chain_id: 42,
-			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
-			gas_limit: U256::from(21_000u32).into(),
-			contract: [0xcf; 20].into(),
-			value: 0.into(),
-			data: b"do_something()".to_vec(),
-			..Default::default()
-		};
-
-		let web3_tx = web3::types::TransactionParameters {
-			nonce: Some(0.into()),
-			to: Some(unsigned.contract),
-			gas: unsigned.gas_limit.unwrap(),
-			gas_price: Default::default(),
-			value: unsigned.value,
-			data: unsigned.data.clone().into(),
-			chain_id: Some(unsigned.chain_id),
-			transaction_type: Some(ethabi::ethereum_types::U64::from(2)),
-			access_list: Some(Vec::new()),
-			max_fee_per_gas: unsigned.max_fee_per_gas,
-			max_priority_fee_per_gas: unsigned.max_priority_fee_per_gas,
-		};
-
-		for seed in 0..10 {
-			let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-			let key = secp256k1::SecretKey::from_slice(&arr[..]).unwrap();
-			let key_ref = web3::signing::SecretKeyRef::new(&key);
-
-			use web3::signing::Key;
-			let web3_api = web3::Web3::new(web3::transports::test::TestTransport::default());
-			let signed_tx =
-				web3::block_on(web3_api.accounts().sign_transaction(web3_tx.clone(), &key))
-					.expect("web tx signing failed");
-
-			// let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
-			let signed_tx_bytes = signed_tx.raw_transaction;
-
-			let verificaton_result =
-				verify_transaction(&unsigned, &signed_tx_bytes.0, &key_ref.address().0.into());
-			assert_eq!(verificaton_result, Ok(()),);
-		}
-	}
-
-	#[test]
-	fn test_legacy_ethereum_signature_verification() {
-		let unsigned = UnsignedTransaction {
-			chain_id: 42,
-			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
-			gas_limit: U256::from(21_000u32).into(),
-			contract: [0xcf; 20].into(),
-			value: 0u32.into(),
-			data: b"do_something()".to_vec(),
-			..Default::default()
-		};
-
-		let msg = LegacyTransactionMessage {
-			chain_id: Some(unsigned.chain_id),
-			nonce: 0u32.into(),
-			gas_limit: unsigned.gas_limit.unwrap(),
-			gas_price: U256::from(1_000_000_000u32),
-			action: ethereum::TransactionAction::Call(unsigned.contract),
-			value: unsigned.value,
-			input: unsigned.data.clone(),
-		};
-
-		for seed in 0..10 {
-			let arr: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-			let key = secp256k1::SecretKey::from_slice(&arr[..]).unwrap();
-			let key_ref = web3::signing::SecretKeyRef::new(&key);
-
-			use web3::signing::Key;
-			let sig = key_ref.sign(msg.hash().as_bytes(), unsigned.chain_id.into()).unwrap();
-
-			let signed_tx = TransactionV2::Legacy(LegacyTransaction {
-				nonce: msg.nonce,
-				gas_price: msg.gas_price,
-				gas_limit: msg.gas_limit,
-				action: msg.action,
-				value: msg.value,
-				input: msg.input.clone(),
-				signature: ethereum::TransactionSignature::new(
-					sig.v,
-					sig.r.0.into(),
-					sig.s.0.into(),
-				)
-				.unwrap(),
-			});
-
-			let signed_tx_bytes = rlp::encode(&signed_tx).to_vec();
-
-			let verificaton_result =
-				verify_transaction(&unsigned, &signed_tx_bytes, &key_ref.address().0.into());
-			assert_eq!(
-				verificaton_result,
-				Ok(()),
-				"Unable to verify tx signed by key {:?}",
-				hex::encode(key.serialize_secret())
-			);
-		}
 	}
 
 	#[test]

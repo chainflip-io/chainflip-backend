@@ -80,7 +80,7 @@ typenum = "1.15"
 # We might eventually update, but for now let's just
 # use the same version as polkadot. 
 schnorrkel = "0.9.1"
-
+rayon = "1.5"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
@@ -158,8 +158,8 @@ env_logger = "0.9.0"
 jsonrpc-pubsub = "18.0.0"
 log = "0.4.14"
 mockall = "0.11.0"
-# only used for tests - because they are easy calls to make - no real side effects
-pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
 rand = "0.8.4"
 csv = "1.1.6"
 tempfile = "3.3.0"
+ethereum = "0.12"
+rlp = "0.5"

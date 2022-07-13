@@ -73,6 +73,8 @@ fn main() {
                     .unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id)),
             )
             .with_extension(DB_EXTENSION),
+            // The genesis hash is unknown at this time, it will be written when the node runs for the first time.
+            None,
             &new_discard_logger(),
         )
         .expect("Should create database at latest version")

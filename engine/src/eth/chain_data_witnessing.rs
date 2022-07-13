@@ -13,9 +13,6 @@ use slog::o;
 use sp_core::U256;
 use web3::types::{BlockNumber, U64};
 
-/// The percentile at which we want to request the Ethereum priority fee, expressed as float between 0 and 1.
-const ETH_PRIORITY_FEE_PERCENTILE: f64 = 0.5;
-
 /// Returns a stream of latest eth block numbers by polling at regular intervals.
 ///
 /// Uses polling.
@@ -60,31 +57,21 @@ fn round_wei_to_gwei(number: u128) -> u128 {
 pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
     rpc: &EthRpcClient,
     block_number: u64,
+    priority_fee_percentile: u8,
 ) -> anyhow::Result<TrackedData<Ethereum>> {
     let fee_history = rpc
         .fee_history(
             U256::one(),
             BlockNumber::Number(U64::from(block_number)),
-            Some(vec![ETH_PRIORITY_FEE_PERCENTILE]),
+            Some(vec![priority_fee_percentile as f64 / 100_f64]),
         )
         .await?;
 
     Ok(TrackedData::<Ethereum> {
         block_height: block_number,
-        base_fee: fee_history
-            .base_fee_per_gas
-            .first()
-            .expect("Requested, so should be present.")
-            .as_u128(),
+        base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
         priority_fee: round_wei_to_gwei(
-            fee_history
-                .reward
-                .expect("Requested, so should be present.")
-                .first()
-                .expect("Requested, so should be present.")
-                .first()
-                .expect("Requested, so should be present.")
-                .as_u128(),
+            context!(context!(context!(fee_history.reward)?.first())?.first())?.as_u128(),
         ),
     })
 }
@@ -134,7 +121,7 @@ mod tests {
         // ** Rpc Api Assumptions **
 
         assert_eq!(
-            get_tracked_data(&rpc, BLOCK_HEIGHT).await.unwrap(),
+            get_tracked_data(&rpc, BLOCK_HEIGHT, 50).await.unwrap(),
             TrackedData {
                 block_height: BLOCK_HEIGHT,
                 base_fee: BASE_FEE,

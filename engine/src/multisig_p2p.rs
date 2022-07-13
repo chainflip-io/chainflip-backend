@@ -224,10 +224,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     // Use StateChainClient's RpcChannel
     let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(
         &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| {
-            format!(
-                "Should be valid ws endpoint: {}",
-                settings.state_chain.ws_endpoint
-            )
+            format!("Invalid ws endpoint: {}", settings.state_chain.ws_endpoint)
         })?,
     )
     .await
@@ -317,7 +314,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         .map_err(rpc_error_into_anyhow_error)?
         .map_err(rpc_error_into_anyhow_error);
 
-    let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
+    let mut check_listener_address_tick =
+        common::make_periodic_tick(Duration::from_secs(60), false);
 
     loop {
         tokio::select! {

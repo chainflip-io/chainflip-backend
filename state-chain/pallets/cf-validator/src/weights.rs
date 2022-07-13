@@ -34,6 +34,7 @@ pub trait WeightInfo {
 	fn cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
 	fn set_vanity_name() -> Weight;
+	fn set_authority_set_min_size() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -49,6 +50,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: Validator BackupNodePercentage (r:0 w:1)
 	fn set_backup_node_percentage() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(13_000_000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	fn set_authority_set_min_size() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(13_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -96,6 +102,11 @@ impl WeightInfo for () {
 	}
 	// Storage: Validator BackupNodePercentage (r:0 w:1)
 	fn set_backup_node_percentage() -> Weight {
+		#[allow(clippy::unnecessary_cast)]
+		(13_000_000 as Weight)
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn set_authority_set_min_size() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(13_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))

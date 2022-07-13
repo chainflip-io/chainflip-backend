@@ -2,11 +2,11 @@ use futures::{stream, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::KeygenError;
 use slog::o;
-use sp_core::{Hasher, H256};
-use sp_runtime::{traits::Keccak256, AccountId32};
-use state_chain_runtime::AccountId;
+use sp_core::H256;
+use sp_runtime::AccountId32;
+use state_chain_runtime::{AccountId, CfeSettings};
 use std::{collections::BTreeSet, sync::Arc};
-use tokio::sync::{broadcast, mpsc::UnboundedSender};
+use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
     eth::{rpc::EthRpcApi, EthBroadcaster, ObserveInstruction},
@@ -101,6 +101,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     )>,
 
     witnessing_instruction_sender: broadcast::Sender<ObserveInstruction>,
+    cfe_settings_update_sender: watch::Sender<CfeSettings>,
     initial_block_hash: H256,
     logger: &slog::Logger,
 ) where
@@ -199,258 +200,252 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
 
     let mut sc_block_stream = Box::pin(sc_block_stream);
     loop {
-        tokio::select! {
-            option_result_block_header = sc_block_stream.next() => {
-                match option_result_block_header {
-                    Some(result_block_header) => {
-                        match result_block_header {
-                            Ok(current_block_header) => {
-                                let current_block_hash = current_block_header.hash();
-                                slog::debug!(
-                                    logger,
-                                    "Processing SC block {} with block hash: {:#x}",
-                                    current_block_header.number,
-                                    current_block_hash
-                                );
+        match sc_block_stream.next().await {
+            Some(result_block_header) => {
+                match result_block_header {
+                    Ok(current_block_header) => {
+                        let current_block_hash = current_block_header.hash();
+                        slog::debug!(
+                            logger,
+                            "Processing SC block {} with block hash: {:#x}",
+                            current_block_header.number,
+                            current_block_hash
+                        );
 
-                                // Process this block's events
-                                match state_chain_client.get_events(current_block_hash).await {
-                                    Ok(events) => {
-                                        for (_phase, event, _topics) in events {
+                        // Process this block's events
+                        match state_chain_client.get_events(current_block_hash).await {
+                            Ok(events) => {
+                                for (_phase, event, _topics) in events {
+                                    slog::debug!(
+                                        logger,
+                                        "Received event at block {}: {:?}",
+                                        current_block_header.number,
+                                        &event
+                                    );
 
-                                            slog::debug!(logger, "Received event at block {}: {:?}", current_block_header.number, &event);
+                                    match event {
+                                        state_chain_runtime::Event::Validator(
+                                            pallet_cf_validator::Event::NewEpoch(new_epoch),
+                                        ) => {
+                                            let current_block_hash = current_block_header.hash();
 
-                                            match event {
-                                                state_chain_runtime::Event::Validator(
-                                                    pallet_cf_validator::Event::NewEpoch(new_epoch),
-                                                ) => {
-                                                    let current_block_hash = current_block_header.hash();
+                                            if active_in_current_epoch {
+                                                assert!(try_end_previous_epoch_observation!(state_chain_client, current_block_hash, new_epoch));
+                                            }
 
-                                                    if active_in_current_epoch {
-                                                        assert!(try_end_previous_epoch_observation!(state_chain_client, current_block_hash, new_epoch));
-                                                    }
+                                            active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
+                                                current_block_hash,
+                                                &new_epoch,
+                                                &state_chain_client.our_account_id
+                                            ).await.unwrap().is_some();
 
-                                                    active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
-                                                        current_block_hash,
-                                                        &new_epoch,
-                                                        &state_chain_client.our_account_id
-                                                    ).await.unwrap().is_some();
-
-                                                    if active_in_current_epoch {
-                                                        start_epoch_observation!(state_chain_client, current_block_hash, new_epoch);
-                                                    }
-                                                }
-                                                state_chain_runtime::Event::Validator(
-                                                    pallet_cf_validator::Event::PeerIdRegistered(
-                                                        account_id,
-                                                        peer_id,
+                                            if active_in_current_epoch {
+                                                start_epoch_observation!(state_chain_client, current_block_hash, new_epoch);
+                                            }
+                                        }
+                                        state_chain_runtime::Event::Validator(
+                                            pallet_cf_validator::Event::PeerIdRegistered(
+                                                account_id,
+                                                peer_id,
+                                                port,
+                                                ip_address,
+                                            ),
+                                        ) => {
+                                            account_peer_mapping_change_sender
+                                                .send((
+                                                    account_id,
+                                                    peer_id,
+                                                    AccountPeerMappingChange::Registered(
                                                         port,
-                                                        ip_address,
+                                                        ip_address.into(),
                                                     ),
-                                                ) => {
-                                                    account_peer_mapping_change_sender
-                                                        .send((
-                                                            account_id,
-                                                            peer_id,
-                                                            AccountPeerMappingChange::Registered(
-                                                                port,
-                                                                ip_address.into(),
-                                                            ),
-                                                        ))
-                                                        .unwrap();
-                                                }
-                                                state_chain_runtime::Event::Validator(
-                                                    pallet_cf_validator::Event::PeerIdUnregistered(
-                                                        account_id,
-                                                        peer_id,
-                                                    ),
-                                                ) => {
-                                                    account_peer_mapping_change_sender
-                                                        .send((
-                                                            account_id,
-                                                            peer_id,
-                                                            AccountPeerMappingChange::Unregistered,
-                                                        ))
-                                                        .unwrap();
-                                                }
-                                                state_chain_runtime::Event::EthereumVault(
-                                                    pallet_cf_vaults::Event::KeygenRequest(
-                                                        ceremony_id,
-                                                        validator_candidates,
-                                                    ),
-                                                ) if validator_candidates.contains(&state_chain_client.our_account_id) => {
-                                                    handle_keygen_request(multisig_client.clone(), state_chain_client.clone(), ceremony_id, validator_candidates, logger.clone()).await;
-                                                }
-                                                state_chain_runtime::Event::EthereumThresholdSigner(
-                                                    pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
-                                                        ceremony_id,
-                                                        key_id,
-                                                        validators,
-                                                        payload,
-                                                    ),
-                                                ) if validators.contains(&state_chain_client.our_account_id) => {
-                                                    let multisig_client = multisig_client.clone();
-                                                    let state_chain_client = state_chain_client.clone();
-                                                    let logger = logger.clone();
-                                                    tokio::spawn(async move {
-                                                        match multisig_client.sign(ceremony_id, KeyId(key_id), validators, MessageHash(payload.to_fixed_bytes())).await {
-                                                            Ok(signature) => {
-                                                                let _result = state_chain_client
-                                                                    .submit_unsigned_extrinsic(
-                                                                        pallet_cf_threshold_signature::Call::signature_success {
-                                                                            ceremony_id,
-                                                                            signature: signature.into()
-                                                                        },
-                                                                        &logger,
-                                                                    )
-                                                                    .await;
-                                                            }
-                                                            Err((bad_account_ids, _reason)) => {
-                                                                let _result = state_chain_client
-                                                                    .submit_signed_extrinsic(
-                                                                        pallet_cf_threshold_signature::Call::report_signature_failed {
-                                                                            id: ceremony_id,
-                                                                            offenders: BTreeSet::from_iter(bad_account_ids),
-                                                                        },
-                                                                        &logger,
-                                                                    )
-                                                                    .await;
-                                                            }
-                                                        }
-                                                    });
-                                                }
-                                                state_chain_runtime::Event::EthereumBroadcaster(
-                                                    pallet_cf_broadcast::Event::TransactionSigningRequest(
-                                                        attempt_id,
-                                                        validator_id,
-                                                        unsigned_tx,
-                                                    ),
-                                                ) if validator_id == state_chain_client.our_account_id => {
-                                                    slog::debug!(
-                                                        logger,
-                                                        "Received signing request with attempt_id {} for transaction: {:?}",
-                                                        attempt_id,
-                                                        unsigned_tx,
-                                                    );
-                                                    match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
-                                                        Ok(raw_signed_tx) => {
-                                                            let _result = state_chain_client.submit_signed_extrinsic(
-                                                                state_chain_runtime::Call::EthereumBroadcaster(
-                                                                    pallet_cf_broadcast::Call::transaction_ready_for_transmission {
-                                                                        broadcast_attempt_id: attempt_id,
-                                                                        signed_tx: raw_signed_tx.0,
-                                                                        signer_id: eth_broadcaster.address,
-                                                                    },
-                                                                ),
+                                                ))
+                                                .unwrap();
+                                        }
+                                        state_chain_runtime::Event::Validator(
+                                            pallet_cf_validator::Event::PeerIdUnregistered(
+                                                account_id,
+                                                peer_id,
+                                            ),
+                                        ) => {
+                                            account_peer_mapping_change_sender
+                                                .send((
+                                                    account_id,
+                                                    peer_id,
+                                                    AccountPeerMappingChange::Unregistered,
+                                                ))
+                                                .unwrap();
+                                        }
+                                        state_chain_runtime::Event::EthereumVault(
+                                            pallet_cf_vaults::Event::KeygenRequest(
+                                                ceremony_id,
+                                                validator_candidates,
+                                            ),
+                                        ) if validator_candidates.contains(&state_chain_client.our_account_id) => {
+                                            handle_keygen_request(multisig_client.clone(), state_chain_client.clone(), ceremony_id, validator_candidates, logger.clone()).await;
+                                        }
+                                        state_chain_runtime::Event::EthereumThresholdSigner(
+                                            pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
+                                                ceremony_id,
+                                                key_id,
+                                                validators,
+                                                payload,
+                                            ),
+                                        ) if validators.contains(&state_chain_client.our_account_id) => {
+                                            let multisig_client = multisig_client.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            let logger = logger.clone();
+                                            tokio::spawn(async move {
+                                                match multisig_client.sign(ceremony_id, KeyId(key_id), validators, MessageHash(payload.to_fixed_bytes())).await {
+                                                    Ok(signature) => {
+                                                        let _result = state_chain_client
+                                                            .submit_unsigned_extrinsic(
+                                                                pallet_cf_threshold_signature::Call::signature_success {
+                                                                    ceremony_id,
+                                                                    signature: signature.into()
+                                                                },
                                                                 &logger,
-                                                            ).await;
-                                                        }
-                                                        Err(e) => {
-                                                            // Note: this error case should only occur if there is a problem with the
-                                                            // local ethereum node, which would mean the web3 lib is unable to fill in
-                                                            // the tranaction params, mainly the gas limit.
-                                                            // In the long run all transaction parameters will be provided by the state
-                                                            // chain and the above eth_broadcaster.sign_tx method can be made
-                                                            // infallible.
-
-                                                            slog::error!(
-                                                                logger,
-                                                                "TransactionSigningRequest attempt_id {} failed: {:?}",
-                                                                attempt_id,
-                                                                e
-                                                            );
-
-                                                            let _result = state_chain_client.submit_signed_extrinsic(
-                                                                state_chain_runtime::Call::EthereumBroadcaster(
-                                                                    pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                                        broadcast_attempt_id: attempt_id,
-                                                                    },
-                                                                ),
+                                                            )
+                                                            .await;
+                                                    }
+                                                    Err((bad_account_ids, _reason)) => {
+                                                        let _result = state_chain_client
+                                                            .submit_signed_extrinsic(
+                                                                pallet_cf_threshold_signature::Call::report_signature_failed {
+                                                                    id: ceremony_id,
+                                                                    offenders: BTreeSet::from_iter(bad_account_ids),
+                                                                },
                                                                 &logger,
-                                                            ).await;
-                                                        }
+                                                            )
+                                                            .await;
                                                     }
                                                 }
-                                                state_chain_runtime::Event::EthereumBroadcaster(
-                                                    pallet_cf_broadcast::Event::TransmissionRequest(
-                                                        broadcast_attempt_id,
-                                                        signed_tx,
-                                                    ),
-                                                ) => {
-                                                    let expected_broadcast_tx_hash = Keccak256::hash(&signed_tx[..]);
-                                                    match eth_broadcaster
-                                                        .send(signed_tx)
-                                                        .await
-                                                    {
-                                                        Ok(tx_hash) => {
-                                                            slog::debug!(
-                                                                logger,
-                                                                "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
+                                            });
+                                        }
+                                        state_chain_runtime::Event::EthereumBroadcaster(
+                                            pallet_cf_broadcast::Event::TransactionSigningRequest(
+                                                broadcast_attempt_id,
+                                                validator_id,
+                                                unsigned_tx,
+                                            ),
+                                        ) if validator_id == state_chain_client.our_account_id => {
+                                            slog::debug!(
+                                                logger,
+                                                "Received signing request with broadcast_attempt_id {} for transaction: {:?}",
+                                                broadcast_attempt_id,
+                                                unsigned_tx,
+                                            );
+                                            match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
+                                                Ok(raw_signed_tx) => {
+                                                    let _result = state_chain_client.submit_signed_extrinsic(
+                                                        state_chain_runtime::Call::EthereumBroadcaster(
+                                                            pallet_cf_broadcast::Call::transaction_ready_for_transmission {
                                                                 broadcast_attempt_id,
-                                                                tx_hash
-                                                            );
-                                                            assert_eq!(tx_hash, expected_broadcast_tx_hash, "tx_hash returned from `send` does not match expected hash");
-                                                        }
-                                                        Err(e) => {
-                                                            slog::info!(
-                                                                logger,
-                                                                "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
-                                                                broadcast_attempt_id,
-                                                                e
-                                                            );
-                                                        }
-                                                    };
+                                                                signed_tx: raw_signed_tx.0.clone(),
+                                                                signer_id: eth_broadcaster.address,
+                                                            },
+                                                        ),
+                                                        &logger,
+                                                    ).await;
+
+                                                    // We want to transmit here to decrease the delay between getting a gas price estimate
+                                                    // and transmitting it to the Ethereum network
+                                                    eth_broadcaster.send_for_broadcast_attempt(raw_signed_tx.0, broadcast_attempt_id).await
                                                 }
-                                                ignored_event => {
-                                                    // ignore events we don't care about
-                                                    slog::trace!(
+                                                Err(e) => {
+                                                    // Note: this error case should only occur if there is a problem with the
+                                                    // local ethereum node, which would mean the web3 lib is unable to fill in
+                                                    // the tranaction params, mainly the gas limit.
+                                                    // In the long run all transaction parameters will be provided by the state
+                                                    // chain and the above eth_broadcaster.sign_tx method can be made
+                                                    // infallible.
+
+                                                    slog::error!(
                                                         logger,
-                                                        "Ignoring event at block {}: {:?}",
-                                                        current_block_header.number,
-                                                        ignored_event
+                                                        "TransactionSigningRequest attempt_id {} failed: {:?}",
+                                                        broadcast_attempt_id,
+                                                        e
                                                     );
+
+                                                    let _result = state_chain_client.submit_signed_extrinsic(
+                                                        state_chain_runtime::Call::EthereumBroadcaster(
+                                                            pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                broadcast_attempt_id,
+                                                            },
+                                                        ),
+                                                        &logger,
+                                                    ).await;
                                                 }
                                             }
                                         }
+                                        state_chain_runtime::Event::EthereumBroadcaster(
+                                            pallet_cf_broadcast::Event::TransmissionRequest(
+                                                broadcast_attempt_id,
+                                                signed_tx,
+                                            ),
+                                        ) => {
+                                            eth_broadcaster
+                                                .send_for_broadcast_attempt(signed_tx, broadcast_attempt_id).await
+                                        }
+                                        state_chain_runtime::Event::Environment(
+                                            pallet_cf_environment::Event::CfeSettingsUpdated {
+                                                new_cfe_settings
+                                            }
+                                        ) => {
+                                            cfe_settings_update_sender.send(new_cfe_settings).unwrap();
+                                        }
+                                        ignored_event => {
+                                            // ignore events we don't care about
+                                            slog::trace!(
+                                                logger,
+                                                "Ignoring event at block {}: {:?}",
+                                                current_block_header.number,
+                                                ignored_event
+                                            );
+                                        }
                                     }
-                                    Err(error) => {
-                                        slog::error!(
-                                            logger,
-                                            "Failed to decode events at block {}. {}",
-                                            current_block_header.number,
-                                            error,
-                                        );
-                                    }
-                                }
-
-                                // All nodes must send a heartbeat regardless of their validator status (at least for now).
-                                // We send it in the middle of the online interval (so any node sync issues don't
-                                // cause issues (if we tried to send on one of the interval boundaries)
-                                if (current_block_header.number + (state_chain_client.heartbeat_block_interval / 2))
-                                    % blocks_per_heartbeat
-                                    == 0
-                                {
-                                    slog::info!(
-                                        logger,
-                                        "Sending heartbeat at block: {}",
-                                        current_block_header.number
-                                    );
-                                    let _result = state_chain_client
-                                        .submit_signed_extrinsic(pallet_cf_online::Call::heartbeat {}, &logger)
-                                        .await;
                                 }
                             }
                             Err(error) => {
-                                slog::error!(logger, "Failed to decode block header: {}", error,);
+                                slog::error!(
+                                    logger,
+                                    "Failed to decode events at block {}. {}",
+                                    current_block_header.number,
+                                    error,
+                                );
                             }
                         }
-                    },
-                    None => {
-                        slog::error!(logger, "Exiting as State Chain block stream ended");
-                        break
+
+                        // All nodes must send a heartbeat regardless of their validator status (at least for now).
+                        // We send it in the middle of the online interval (so any node sync issues don't
+                        // cause issues (if we tried to send on one of the interval boundaries)
+                        if (current_block_header.number
+                            + (state_chain_client.heartbeat_block_interval / 2))
+                            % blocks_per_heartbeat
+                            == 0
+                        {
+                            slog::info!(
+                                logger,
+                                "Sending heartbeat at block: {}",
+                                current_block_header.number
+                            );
+                            let _result = state_chain_client
+                                .submit_signed_extrinsic(
+                                    pallet_cf_online::Call::heartbeat {},
+                                    &logger,
+                                )
+                                .await;
+                        }
+                    }
+                    Err(error) => {
+                        slog::error!(logger, "Failed to decode block header: {}", error,);
                     }
                 }
-            },
+            }
+            None => {
+                slog::error!(logger, "Exiting as State Chain block stream ended");
+                break;
+            }
         }
     }
 }

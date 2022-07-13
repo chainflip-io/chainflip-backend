@@ -274,11 +274,12 @@ pub mod pallet {
 	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::AccountId, ChainAmountFor<T, I>>;
 
-	/// A mapping of signer id to the the account id of the authority that registered the signer.
-	/// through a transaction_ready_for_transmission extrinsic.
+	/// A mapping of the transaction hash we expect to witness
+	/// to the account id of the authority who will receive a fee
+	/// refund if that transaction succeeds.
 	#[pallet::storage]
-	pub type SignerIdToAccountId<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, T::AccountId>;
+	pub type TransactionHashWhitelist<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, TransactionHashFor<T, I>, T::AccountId>;
 
 	/// The signer id to send refunds to for a given account id.
 	#[pallet::storage]
@@ -327,7 +328,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		/// The `on_initialize` hook for this pallet handles scheduled retries and expiries.
+		/// The `on_initialize` hook for this pallet handles scheduled expiries.
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let expiries = Expiries::<T, I>::take(block_number);
 			for (stage, attempt_id) in expiries.iter() {
@@ -439,13 +440,11 @@ pub mod pallet {
 			// it's no longer being signed, it's being broadcast
 			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
 
-			if T::TargetChain::verify_signed_transaction(
+			if let Ok(tx_hash) = T::TargetChain::verify_signed_transaction(
 				&signing_attempt.broadcast_attempt.unsigned_tx,
 				&signed_tx,
 				&signer_id,
-			)
-			.is_ok()
-			{
+			) {
 				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
 				if !TransactionFeeDeficit::<T, I>::contains_key(&extrinsic_signer) {
 					TransactionFeeDeficit::<T, I>::insert(
@@ -454,11 +453,9 @@ pub mod pallet {
 					);
 				}
 
-				// white list the signer id, so if we receive SignatureAccepted events from this
-				// signer id, we can refund the fee to that authority
-				if !SignerIdToAccountId::<T, I>::contains_key(&signer_id) {
-					SignerIdToAccountId::<T, I>::insert(&signer_id, &extrinsic_signer);
-				}
+				// Whitelist the transaction hash. This ensures that we only refund txs that were
+				// precommitted to by nominated signers - so we can refund accordingly.
+				TransactionHashWhitelist::<T, I>::insert(tx_hash, &extrinsic_signer);
 
 				// store the latest signer id used by an authority
 				if RefundSignerId::<T, I>::get(&extrinsic_signer) != Some(signer_id.clone()) {
@@ -590,18 +587,17 @@ pub mod pallet {
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
 			signature: ThresholdSignatureFor<T, I>,
-			tx_signer: SignerIdFor<T, I>,
 			tx_fee: ChainAmountFor<T, I>,
-			_block_number: u64,
-			_tx_hash: TransactionHashFor<T, I>,
+			tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
 			Self::clean_up_brodcast_attempt_storage(broadcast_id);
 			// Add fee deficits only when we know everything else is ok
-			// if this has been whitelisted, we can add the fee deficit to the authority's account
-			if let Some(account_id) = SignerIdToAccountId::<T, I>::get(tx_signer) {
+			// if this tx hash has been whitelisted, we can add the fee deficit to the authority's
+			// account
+			if let Some(account_id) = TransactionHashWhitelist::<T, I>::take(&tx_hash) {
 				TransactionFeeDeficit::<T, I>::mutate(account_id, |fee_deficit| {
 					if let Some(fee_deficit) = fee_deficit.as_mut() {
 						*fee_deficit = fee_deficit.saturating_add(tx_fee);
@@ -733,7 +729,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 	}
 
-	fn start_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
+	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
+		T::TransactionBuilder::refresh_unsigned_transaction(&mut broadcast_attempt.unsigned_tx);
+
 		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();

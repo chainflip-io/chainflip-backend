@@ -3,11 +3,10 @@ use crate as pallet_cf_auction;
 use cf_traits::{
 	impl_mock_online,
 	mocks::{
-		chainflip_account::MockChainflipAccount, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, keygen_exclusion::MockKeygenExclusion,
+		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		system_state_info::MockSystemStateInfo,
 	},
-	Chainflip, ChainflipAccountData, EmergencyRotation, IsOnline,
+	Chainflip, ChainflipAccountData, IsOnline,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;
@@ -27,13 +26,11 @@ pub type ValidatorId = u64;
 pub const MIN_AUTHORITY_SIZE: u32 = 1;
 pub const MAX_AUTHORITY_SIZE: u32 = 3;
 pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 2;
-pub const MAX_AUTHORITY_SET_CONTRACTION: u32 = 2;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
-	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+	pub static BIDDER_SET: RefCell<Vec<Bid<ValidatorId, Amount>>> = RefCell::new(vec![]);
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
-	pub static EMERGENCY_ROTATION: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -78,20 +75,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-pub struct MockEmergencyRotation;
-
-impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation() {
-		EMERGENCY_ROTATION.with(|cell| *cell.borrow_mut() = true);
-	}
-
-	fn emergency_rotation_in_progress() -> bool {
-		EMERGENCY_ROTATION.with(|cell| *cell.borrow())
-	}
-
-	fn emergency_rotation_completed() {}
-}
-
 impl_mock_online!(ValidatorId);
 
 pub struct MockQualifyValidator;
@@ -117,10 +100,7 @@ impl Chainflip for Test {
 impl Config for Test {
 	type Event = Event;
 	type BidderProvider = MockBidderProvider;
-	type ChainflipAccount = MockChainflipAccount;
-	type KeygenExclusionSet = MockKeygenExclusion<Self>;
 	type WeightInfo = ();
-	type EmergencyRotation = MockEmergencyRotation;
 	type AuctionQualification = MockQualifyValidator;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
@@ -136,7 +116,7 @@ pub struct MockBidderProvider;
 impl MockBidderProvider {
 	// Create a set of descending bids, including an invalid bid of amount 0
 	// offset the ids to create unique bidder groups.  By default all bidders are online.
-	pub fn set_bids(bids: &[(ValidatorId, Amount)]) {
+	pub fn set_bids(bids: &[Bid<ValidatorId, Amount>]) {
 		BIDDER_SET.with(|cell| {
 			*cell.borrow_mut() = bids.to_vec();
 		});
@@ -147,7 +127,7 @@ impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }
@@ -159,7 +139,6 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 			min_size: MIN_AUTHORITY_SIZE,
 			max_size: MAX_AUTHORITY_SIZE,
 			max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-			max_contraction: MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	};
 

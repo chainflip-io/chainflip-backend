@@ -131,6 +131,8 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// Not enough reserves.
 		InsufficientReserves,
+		/// Invalid Slashing Rate: Has to be between 0 and 100
+		InvalidSlashingRate,
 	}
 
 	#[pallet::hooks]
@@ -138,6 +140,23 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Set the Slashing Rate. Slashing Rate is a percentage. It, therefore, has to be between 0
+		/// and 100.
+		///
+		/// The dispatch origin of this function must be governance
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// - [InvalidSlashingRate](Error::InvalidSlashingRate)
+		///
+		/// ## Dependencies
+		///
+		/// - [EnsureGovernance]
 		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(
 			origin: OriginFor<T>,
@@ -145,6 +164,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(slashing_rate <= T::Balance::from(100u32), Error::<T>::InvalidSlashingRate);
 			// Set the slashing rate
 			SlashingRate::<T>::set(slashing_rate);
 			Ok(().into())
@@ -412,7 +432,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
-		T::StakeHandler::stake_updated(account_id, Self::staked_balance(account_id));
+		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 		Self::total_balance_of(account_id)
 	}
 
@@ -423,7 +443,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		);
 
 		Self::settle(account_id, Self::bridge_out(amount).into());
-		T::StakeHandler::stake_updated(account_id, Self::staked_balance(account_id));
+		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 
 		Ok(())
 	}
@@ -434,7 +454,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
 		Self::settle(account_id, Self::bridge_in(amount).into());
-		T::StakeHandler::stake_updated(account_id, Self::staked_balance(account_id));
+		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 		// claim reverts automatically when dropped
 	}
 }
