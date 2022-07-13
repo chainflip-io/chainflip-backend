@@ -228,13 +228,14 @@ impl EthObserver for StakeManager {
 
 impl StakeManager {
     /// Loads the contract abi to get the event definitions
-    pub fn new(deployed_address: H160) -> Result<Self> {
-        Ok(Self {
+    pub fn new(deployed_address: H160) -> Self {
+        Self {
             deployed_address,
             contract: ethabi::Contract::load(
                 std::include_bytes!("abis/StakeManager.json").as_ref(),
-            )?,
-        })
+            )
+            .unwrap(),
+        }
     }
 }
 
@@ -258,12 +259,12 @@ mod tests {
     #[test]
     fn test_load_contract() {
         let address = H160::default();
-        assert_ok!(StakeManager::new(address));
+        StakeManager::new(address);
     }
 
     #[test]
     fn test_staked_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
+        let stake_manager = StakeManager::new(H160::default());
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let staked_event_signature =
@@ -301,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_claim_registered_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
+        let stake_manager = StakeManager::new(H160::default());
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_register_event_signature =
@@ -351,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_claim_executed_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
+        let stake_manager = StakeManager::new(H160::default());
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_executed_event_signature =
@@ -391,7 +392,7 @@ mod tests {
 
     #[test]
     fn min_stake_changed_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
+        let stake_manager = StakeManager::new(H160::default());
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let min_stake_changed_event_signature =
@@ -423,7 +424,7 @@ mod tests {
 
     #[test]
     fn gov_withdrawal_log_parsing() {
-        let stake_manager = StakeManager::new(H160::default()).unwrap();
+        let stake_manager = StakeManager::new(H160::default());
         let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let event_signature =
