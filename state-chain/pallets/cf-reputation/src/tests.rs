@@ -305,9 +305,10 @@ fn submitting_heartbeat_more_than_once_in_an_interval() {
 #[test]
 fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 	new_test_ext().execute_with(|| {
+		let init_block_number = System::block_number();
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
-		run_to_block(2 * HEARTBEAT_BLOCK_INTERVAL);
+		run_to_block(HEARTBEAT_BLOCK_INTERVAL + init_block_number);
 		assert_eq!(
 			ReputationPallet::current_network_state().offline,
 			vec![ALICE],
