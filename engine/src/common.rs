@@ -2,13 +2,10 @@ use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
     path::Path,
-    time::Duration,
 };
 
 use anyhow::Context;
 use itertools::Itertools;
-use jsonrpc_core_client::RpcError;
-use tokio::time::Instant;
 
 struct MutexStateAndPoisonFlag<T> {
     poisoned: bool,
@@ -100,11 +97,6 @@ mod tests {
     }
 }
 
-// Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
-pub fn rpc_error_into_anyhow_error(error: RpcError) -> anyhow::Error {
-    anyhow::Error::msg(error.to_string())
-}
-
 pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(
     file: &Path,
     context: &str,
@@ -128,7 +120,8 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 
 #[cfg(test)]
 mod tests_read_clean_and_decode_hex_str_file {
-    use crate::testing::{assert_ok, with_file};
+    use crate::testing::with_file;
+    use utilities::assert_ok;
 
     use super::*;
 
@@ -158,70 +151,6 @@ mod tests_read_clean_and_decode_hex_str_file {
                 "h\" \'ex".to_string()
             );
         });
-    }
-}
-
-/// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for some time)
-/// it will immediately output a single tick on the next call to tick() and resume ticking every duration.
-///
-/// The supplied duration should be >> 5ms due to the underlying implementation of [Intervall::poll_tick].
-pub fn make_periodic_tick(duration: Duration, yield_immediately: bool) -> tokio::time::Interval {
-    let mut interval = tokio::time::interval_at(
-        Instant::now()
-            + if yield_immediately {
-                Duration::ZERO
-            } else {
-                duration
-            },
-        duration,
-    );
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    interval
-}
-
-#[cfg(test)]
-mod tests_make_periodic_tick {
-    use crate::testing::{assert_err, assert_ok};
-
-    use super::*;
-
-    #[tokio::test]
-    async fn skips_ticks_test() {
-        const PERIOD: f32 = 0.25;
-
-        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD), false);
-
-        // Skip two ticks
-        tokio::time::sleep(Duration::from_secs_f32(PERIOD * 2.5)).await;
-
-        // Next tick outputs immediately
-        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(0.01), tick.tick()).await);
-
-        // We skip ticks instead of bursting ticks.
-        assert_err!(tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.9), tick.tick()).await);
-        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.1), tick.tick()).await);
-
-        // Ticks continue to be in sync with duration.
-        assert_err!(
-            tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.95), tick.tick()).await
-        );
-        assert_ok!(tokio::time::timeout(Duration::from_secs_f32(PERIOD), tick.tick()).await);
-    }
-
-    #[tokio::test]
-    async fn period_test() {
-        const PERIOD: f32 = 0.25;
-
-        let mut tick = make_periodic_tick(Duration::from_secs_f32(PERIOD), false);
-
-        for _i in 0..4 {
-            assert!(
-                tokio::time::timeout(Duration::from_secs_f32(PERIOD * 0.8), tick.tick())
-                    .await
-                    .is_err()
-            );
-            tick.tick().await;
-        }
     }
 }
 

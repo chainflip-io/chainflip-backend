@@ -2,6 +2,7 @@ use cf_traits::AuthorityCount;
 use rand_legacy::{FromEntropy, SeedableRng};
 use std::collections::BTreeSet;
 use tokio::sync::oneshot;
+use utilities::assert_ok;
 
 use crate::multisig::{
     client::{
@@ -22,8 +23,6 @@ use crate::multisig::{
     },
     crypto::Rng,
 };
-
-use crate::testing::assert_ok;
 
 use super::*;
 

@@ -35,11 +35,13 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use utilities::Port;
 
-use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
+use crate::common::read_clean_and_decode_hex_str_file;
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
+use utilities::rpc_error_into_anyhow_error;
 
 mod signer;
 
@@ -766,7 +768,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect()
     }
 
-    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, u16, Ipv6Addr)>> {
+    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, Port, Ipv6Addr)>> {
         self.state_chain_rpc_client
             .local_listen_addresses()
             .await?
@@ -1200,8 +1202,9 @@ mod tests {
     use crate::{
         logging::{self, test_utils::new_test_logger},
         settings::{CommandLineOptions, Settings},
-        testing::assert_ok,
     };
+
+    use utilities::assert_ok;
 
     use super::*;
 

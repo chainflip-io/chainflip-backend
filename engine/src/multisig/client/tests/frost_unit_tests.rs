@@ -1,21 +1,17 @@
-use crate::{
-    multisig::{
-        client::{
-            common::{
-                BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason,
-                SigningFailureReason,
-            },
-            signing::frost,
-            tests::helpers::{
-                for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
-                new_signing_ceremony_with_keygen, run_keygen, run_stages, split_messages_for,
-                standard_signing, standard_signing_coroutine, SigningCeremonyRunner,
-            },
+use crate::multisig::{
+    client::{
+        common::{
+            BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, SigningFailureReason,
         },
-        crypto::Rng,
-        tests::fixtures::MESSAGE_HASH,
+        signing::frost,
+        tests::helpers::{
+            for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
+            new_signing_ceremony_with_keygen, run_keygen, run_stages, split_messages_for,
+            standard_signing, standard_signing_coroutine, SigningCeremonyRunner,
+        },
     },
-    testing::assert_ok,
+    crypto::Rng,
+    tests::fixtures::MESSAGE_HASH,
 };
 
 use super::*;
@@ -23,6 +19,7 @@ use super::*;
 use rand_legacy::SeedableRng;
 
 use itertools::Itertools;
+use utilities::assert_ok;
 
 // Data for any stage that arrives one stage too early should be properly delayed
 // and processed after the stage transition is made
