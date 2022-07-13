@@ -39,7 +39,7 @@ pub enum AccountPeerMappingChange {
 }
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for peering
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum OutgoingMultisigStageMessages {
     Broadcast(Vec<AccountId>, Vec<u8>),
     Private(Vec<(AccountId, Vec<u8>)>),
