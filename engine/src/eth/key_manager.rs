@@ -416,11 +416,12 @@ impl EthObserver for KeyManager {
 
 impl KeyManager {
     /// Loads the contract abi to get the event definitions
-    pub fn new(deployed_address: H160) -> Result<Self> {
-        Ok(Self {
+    pub fn new(deployed_address: H160) -> Self {
+        Self {
             deployed_address,
-            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
-        })
+            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())
+                .unwrap(),
+        }
     }
 }
 
@@ -437,8 +438,7 @@ impl KeyManager {
 // sig_accepted: 0x38045dba3d9ee1fee641ad521bd1cf34c28562f6658772ee04678edf17b9a3bc
 #[test]
 fn generate_signatures() {
-    let contract =
-        ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref()).unwrap();
+    let contract = KeyManager::new(H160::default()).contract;
 
     let ak_set_by_ak = SignatureAndEvent::new(&contract, "AggKeySetByAggKey").unwrap();
     println!("ak_set_by_ak: {:?}", ak_set_by_ak.signature);
@@ -475,7 +475,7 @@ mod tests {
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
 
     fn new_test_key_manager() -> KeyManager {
-        KeyManager::new(H160::default()).unwrap()
+        KeyManager::new(H160::default())
     }
 
     // 🔑 Aggregate Key sets the new Aggregate Key 🔑

@@ -12,7 +12,7 @@ pub mod rpc;
 pub mod utils;
 
 use anyhow::{Context, Result};
-use cf_chains::eth::UnsignedTransaction;
+
 use cf_traits::EpochIndex;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
@@ -122,26 +122,6 @@ pub fn build_broadcast_channel<T: Clone, const S: usize>(
     let (sender, _) = broadcast::channel(capacity);
     let receivers = [0; S].map(|_| sender.subscribe());
     (sender, receivers)
-}
-
-pub fn from_unsigned_to_transaction_parameters(
-    unsigned_tx: &UnsignedTransaction,
-) -> TransactionParameters {
-    TransactionParameters {
-        to: Some(unsigned_tx.contract),
-        data: unsigned_tx.data.clone().into(),
-        chain_id: Some(unsigned_tx.chain_id),
-        value: unsigned_tx.value,
-        max_fee_per_gas: unsigned_tx.max_fee_per_gas,
-        max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
-        transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
-        // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
-        // input at least as much gas as the estimate will return (stupid? yes)
-        gas: unsigned_tx
-            .gas_limit
-            .unwrap_or_else(|| U256::from(15_000_000u64)),
-        ..Default::default()
-    }
 }
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
@@ -453,31 +433,61 @@ where
         &self,
         unsigned_tx: cf_chains::eth::UnsignedTransaction,
     ) -> Result<Bytes> {
-        let mut tx_params = from_unsigned_to_transaction_parameters(&unsigned_tx);
-        // query for the gas estimate if the SC didn't provide it
-        let gas_estimate = if let Some(gas_limit) = unsigned_tx.gas_limit {
-            gas_limit
-        } else {
-            let call_request: CallRequest = tx_params.clone().into();
-            self.eth_rpc
-                .estimate_gas(call_request, None)
-                .await
-                .context("Failed to estimate gas")?
+        let tx_params = TransactionParameters {
+            to: Some(unsigned_tx.contract),
+            data: unsigned_tx.data.clone().into(),
+            chain_id: Some(unsigned_tx.chain_id),
+            value: unsigned_tx.value,
+            max_fee_per_gas: unsigned_tx.max_fee_per_gas,
+            max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
+            transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
+            gas: {
+                let gas_estimate = match unsigned_tx.gas_limit {
+                    None => {
+                        // query for the gas estimate if the SC didn't provide it
+                        let zero = Some(U256::from(0u64));
+                        let call_request = CallRequest {
+                            from: None,
+                            to: unsigned_tx.contract.into(),
+                            // Set the gas really high (~half gas in a block) for the estimate, since the estimation call requires you to
+                            // input at least as much gas as the estimate will return
+                            gas: Some(U256::from(15_000_000u64)),
+                            gas_price: None,
+                            value: unsigned_tx.value.into(),
+                            data: Some(unsigned_tx.data.clone().into()),
+                            transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
+                            // Set the gas prices to zero for the estimate, so we don't get
+                            // rejected for not having enough ETH
+                            max_fee_per_gas: zero,
+                            max_priority_fee_per_gas: zero,
+                            ..Default::default()
+                        };
+
+                        self.eth_rpc
+                            .estimate_gas(call_request, None)
+                            .await
+                            .context("Failed to estimate gas")?
+                    }
+                    Some(gas_limit) => gas_limit,
+                };
+                // increase the estimate by 50%
+                let gas = gas_estimate
+                    .saturating_mul(U256::from(3u64))
+                    .checked_div(U256::from(2u64))
+                    .unwrap();
+
+                slog::debug!(
+                    self.logger,
+                    "Gas estimate for unsigned tx: {:?} is {}. Setting 50% higher at: {}",
+                    unsigned_tx,
+                    gas_estimate,
+                    gas
+                );
+
+                gas
+            },
+            ..Default::default()
         };
-
-        // increase the estimate by 50%
-        let uint256_2 = U256::from(2u64);
-        tx_params.gas = gas_estimate
-            .saturating_mul(uint256_2)
-            .saturating_sub(gas_estimate.checked_div(uint256_2).unwrap());
-
-        slog::debug!(
-            self.logger,
-            "Gas estimate for unsigned tx: {:?} is {}. Setting 50% higher at: {}",
-            unsigned_tx,
-            gas_estimate,
-            tx_params.gas
-        );
 
         Ok(self
             .eth_rpc
@@ -681,6 +691,7 @@ pub trait EthObserver {
                                             EventWithCommon::<Self::EventParameters>::new_from_unparsed_logs(
                                                 &decode_log_fn,
                                                 unparsed_log,
+                                                block_number,
                                                 base_fee_per_gas,
                                             )
                                         },
@@ -1109,7 +1120,7 @@ mod merged_stream_tests {
 
     // Arbitrariily chosen one of the EthRpc's for these tests
     fn test_km_contract() -> KeyManager {
-        KeyManager::new(H160::default()).unwrap()
+        KeyManager::new(H160::default())
     }
 
     fn key_change(block_number: u64, log_index: u8) -> EventWithCommon<KeyManagerEvent> {
