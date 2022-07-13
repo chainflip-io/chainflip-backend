@@ -34,28 +34,6 @@ pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
     (tempdir, tempfile)
 }
 
-mod tests {
-    use utilities::assert_ok;
-
-    #[test]
-    fn test_assert_ok_unwrap_ok() {
-        fn works() -> Result<i32, i32> {
-            Ok(1)
-        }
-        let result = assert_ok!(works());
-        assert_eq!(result, 1);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_assert_ok_err() {
-        fn works() -> Result<i32, i32> {
-            Err(0)
-        }
-        assert_ok!(works());
-    }
-}
-
 #[test]
 fn test_stuff() {
     println!("Here's the file and line number: {} : {}", file!(), line!())

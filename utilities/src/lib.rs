@@ -18,6 +18,27 @@ macro_rules! assert_err {
     };
 }
 
+mod test_asserts {
+
+    #[test]
+    fn test_assert_ok_unwrap_ok() {
+        fn works() -> Result<i32, i32> {
+            Ok(1)
+        }
+        let result = assert_ok!(works());
+        assert_eq!(result, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_assert_ok_err() {
+        fn works() -> Result<i32, i32> {
+            Err(0)
+        }
+        assert_ok!(works());
+    }
+}
+
 /// Note that the resulting `threshold` is the maximum number
 /// of parties *not* enough to generate a signature,
 /// i.e. at least `t+1` parties are required.
