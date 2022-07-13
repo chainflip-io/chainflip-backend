@@ -319,6 +319,12 @@ fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 			1,
 			"We should have one node"
 		);
+		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert_eq!(
+			ReputationPallet::current_network_state().online,
+			vec![ALICE],
+			"Alice should be offline after missing one heartbeat"
+		);
 	});
 }
 
