@@ -30,7 +30,7 @@ fn go_to_interval(interval: u64) {
 }
 
 #[test]
-fn submitting_heartbeat_should_reward_reputation_points() {
+fn submitting_heartbeat_for_heartbeat_block_interval_should_reward_reputation_points() {
 	new_test_ext().execute_with(|| {
 		ReputationPallet::heartbeat(RawOrigin::Signed(ALICE).into()).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
