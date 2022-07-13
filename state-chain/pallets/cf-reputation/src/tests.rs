@@ -9,7 +9,6 @@ fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> Reputat
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {
-		ReputationPallet::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		ReputationPallet::on_initialize(System::block_number());
 	}
@@ -21,12 +20,12 @@ fn submit_heartbeat_for_current_interval(nodes: &[<Test as frame_system::Config>
 	for node in nodes {
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(*node)));
 	}
-	run_to_block(start_block_number + HEARTBEAT_BLOCK_INTERVAL - 1);
+	run_to_block(start_block_number + HEARTBEAT_BLOCK_INTERVAL);
 }
 
 // Move a heartbeat intervals forward with no heartbeat sent
 fn go_to_interval(interval: u64) {
-	run_to_block((interval * HEARTBEAT_BLOCK_INTERVAL) + 1);
+	run_to_block(interval * HEARTBEAT_BLOCK_INTERVAL);
 }
 
 #[test]
@@ -303,25 +302,6 @@ fn submitting_heartbeat_more_than_once_in_an_interval() {
 		go_to_interval(1);
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
-	});
-}
-
-#[test]
-fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-		go_to_interval(1);
-		assert!(!ReputationPallet::is_qualified(&ALICE), "Alice should be offline");
-		submit_heartbeat_for_current_interval(&[ALICE]);
-		assert!(
-			ReputationPallet::is_qualified(&ALICE),
-			"Alice should be back online after submitting heartbeat"
-		);
-		go_to_interval(2);
-		assert!(
-			!ReputationPallet::is_qualified(&ALICE),
-			"Alice goes offline after two heartbeat intervals"
-		);
 	});
 }
 

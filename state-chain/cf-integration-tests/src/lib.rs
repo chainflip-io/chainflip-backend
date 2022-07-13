@@ -594,6 +594,7 @@ mod tests {
 				reputation: ReputationConfig {
 					accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 					penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
+					genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 				},
 				governance: GovernanceConfig {
 					members: self.root.iter().cloned().collect(),
@@ -694,10 +695,7 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert!(
-						!Reputation::is_qualified(account),
-						"node should have not sent a heartbeat"
-					);
+					assert!(Reputation::is_qualified(account), "Genesis nodes start online");
 				}
 
 				assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
@@ -803,6 +801,7 @@ mod tests {
 
 					for node in &offline_nodes {
 						testnet.set_active(node, false);
+						pallet_cf_reputation::LastHeartbeat::<Runtime>::remove(node);
 					}
 
 					// Run to the next epoch to start the auction
@@ -1137,9 +1136,9 @@ mod tests {
 		};
 		use cf_traits::{
 			AuthorityCount, BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
-			ChainflipAccountStore, EpochInfo, FlipBalance, StakeTransfer,
+			ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode, StakeTransfer,
 		};
-		use state_chain_runtime::{Flip, Runtime, Validator};
+		use state_chain_runtime::{Flip, Reputation, Runtime, Validator};
 		use std::collections::HashMap;
 
 		#[test]

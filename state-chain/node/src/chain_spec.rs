@@ -594,6 +594,7 @@ fn testnet_genesis(
 		reputation: ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 			penalties: PENALTIES.to_vec(),
+			genesis_nodes: genesis_stakers,
 		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {

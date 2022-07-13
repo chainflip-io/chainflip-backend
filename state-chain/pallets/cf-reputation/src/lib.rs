@@ -338,18 +338,23 @@ pub mod pallet {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
-			let start_of_new_interval =
+			let start_of_this_interval =
 				current_block_number - Self::blocks_since_new_interval(current_block_number);
 
-			let has_submitted_this_interval =
-				LastHeartbeat::<T>::get(&validator_id).unwrap_or_default() > start_of_new_interval;
-
-			if !has_submitted_this_interval {
-				LastHeartbeat::<T>::insert(&validator_id, current_block_number);
-				Reputations::<T>::mutate(&validator_id, |rep| {
-					rep.boost_reputation(Self::online_credit_reward());
-				});
-			}
+			// Interval range is [start, end), so if we have a heartbeat block interval of 150-300
+			// and 300-450 and we submit on 300, it counts as a heartbeat for the latter interval.
+			// Since it's effecively [150, 299] -> [300, 449]
+			match LastHeartbeat::<T>::get(&validator_id) {
+				Some(last_heartbeat) if last_heartbeat > start_of_this_interval => {
+					// we have already submitted a heartbeat for this interval
+				},
+				_ => {
+					LastHeartbeat::<T>::insert(&validator_id, current_block_number);
+					Reputations::<T>::mutate(&validator_id, |rep| {
+						rep.boost_reputation(Self::online_credit_reward());
+					});
+				},
+			};
 
 			Ok(().into())
 		}
@@ -391,12 +396,17 @@ pub mod pallet {
 		pub accrual_ratio: (ReputationPoints, T::BlockNumber),
 		#[allow(clippy::type_complexity)]
 		pub penalties: Vec<(T::Offence, (ReputationPoints, T::BlockNumber))>,
+		pub genesis_nodes: Vec<T::ValidatorId>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { accrual_ratio: (Zero::zero(), Zero::zero()), penalties: Default::default() }
+			Self {
+				accrual_ratio: (Zero::zero(), Zero::zero()),
+				penalties: Default::default(),
+				genesis_nodes: Default::default(),
+			}
 		}
 	}
 
@@ -409,6 +419,10 @@ pub mod pallet {
 					offence,
 					Penalty::<T> { reputation: *reputation, suspension: *suspension },
 				);
+			}
+			let current_block_number = frame_system::Pallet::<T>::current_block_number();
+			for node in &self.genesis_nodes {
+				LastHeartbeat::<T>::insert(node, current_block_number);
 			}
 		}
 	}
