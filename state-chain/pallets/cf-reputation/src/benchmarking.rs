@@ -7,9 +7,7 @@ use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
-// TODO: Centralise these constants
 const MAX_VALIDATOR_COUNT: u32 = 150;
-const HEARTBEAT_BLOCK_INTERVAL: u32 = 150;
 
 benchmarks! {
 	update_accrual_ratio {
@@ -46,13 +44,16 @@ benchmarks! {
 			let caller: T::AccountId  = account("doogle", b, b);
 			let validator_id: T::ValidatorId = caller.into();
 		}
+		let interval = T::HeartbeatBlockInterval::get();
 		// TODO: set the generated validators as active validators
 	} : {
-		Pallet::<T>::on_initialize(HEARTBEAT_BLOCK_INTERVAL.into());
+		Pallet::<T>::on_initialize(interval);
 	}
 	on_initialize_no_action {
+		let interval = T::HeartbeatBlockInterval::get();
+		let next_block_number = interval + 1u32.into();
 	} : {
-		Pallet::<T>::on_initialize((HEARTBEAT_BLOCK_INTERVAL + 1).into());
+		Pallet::<T>::on_initialize((next_block_number).into());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
