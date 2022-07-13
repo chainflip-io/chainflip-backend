@@ -1,13 +1,14 @@
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Display;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use crate::constants::CEREMONY_ID_WINDOW;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
-use crate::multisig::crypto::{CryptoScheme, Rng};
+use crate::multisig::client::keygen::generate_key_data_until_compatible;
+use crate::multisig::crypto::ECScalar;
+use crate::multisig::crypto::{CryptoScheme, ECPoint, Rng};
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
@@ -50,7 +51,7 @@ pub struct CeremonyManager<C: CryptoScheme> {
         KeygenFailureReason,
     >,
     allowing_high_pubkey: bool,
-    latest_ceremony_id: Arc<AtomicU64>,
+    latest_ceremony_id: CeremonyId,
     logger: slog::Logger,
 }
 
@@ -58,7 +59,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn new(
         my_account_id: AccountId,
         outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-        latest_ceremony_id: Arc<AtomicU64>,
+        latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) -> Self {
         CeremonyManager {
@@ -118,6 +119,13 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>, KeygenFailureReason>,
     ) {
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+
+        slog::debug!(logger_with_ceremony_id, "Processing a keygen request");
+
+        if participants.len() == 1 {
+            let _result = result_sender.send(Ok(self.single_party_keygen(rng)));
+            return;
+        }
 
         let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
@@ -189,6 +197,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
+
+        if signers.len() == 1 {
+            let _result = result_sender.send(Ok(self.single_party_signing(data, key_info, rng)));
+            return;
+        }
 
         // Check that the number of signers is enough
         let minimum_signers_needed = key_info.params.threshold + 1;
@@ -278,7 +291,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
-                &self.latest_ceremony_id,
+                self.latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "keygen")),
@@ -290,12 +303,46 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 sender_id,
                 ceremony_id,
                 data,
-                &self.latest_ceremony_id,
+                self.latest_ceremony_id,
                 &self
                     .logger
                     .new(slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "signing")),
             ),
         }
+    }
+
+    /// Override the latest ceremony id. Used to limit the spamming of unauthorised ceremonies.
+    pub fn update_latest_ceremony_id(&mut self, ceremony_id: CeremonyId) {
+        self.latest_ceremony_id = ceremony_id;
+    }
+
+    fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
+        slog::info!(self.logger, "Performing solo keygen");
+
+        let (_key_id, key_data) =
+            generate_key_data_until_compatible(&[self.my_account_id.clone()], 30, rng);
+        key_data[&self.my_account_id].clone()
+    }
+
+    fn single_party_signing(
+        &self,
+        data: MessageHash,
+        keygen_result_info: KeygenResultInfo<C::Point>,
+        mut rng: Rng,
+    ) -> C::Signature {
+        slog::info!(self.logger, "Performing solo signing");
+
+        let key = &keygen_result_info.key.key_share;
+
+        let nonce = <C::Point as ECPoint>::Scalar::random(&mut rng);
+
+        let r = C::Point::from_scalar(&nonce);
+
+        let sigma = client::signing::frost::generate_schnorr_response::<C>(
+            &key.x_i, key.y, r, nonce, &data.0,
+        );
+
+        C::build_signature(sigma, r)
     }
 }
 
@@ -418,7 +465,7 @@ where
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: CeremonyData,
-        latest_ceremony_id: &Arc<AtomicU64>,
+        latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
@@ -427,9 +474,6 @@ where
         let state = if data.is_first_stage() {
             match self.inner.entry(ceremony_id) {
                 Entry::Vacant(entry) => {
-                    let latest_ceremony_id =
-                        latest_ceremony_id.load(std::sync::atomic::Ordering::SeqCst);
-
                     // Only a ceremony id that is within the ceremony id window can create unauthorised ceremonies
                     if ceremony_id > latest_ceremony_id
                         && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW

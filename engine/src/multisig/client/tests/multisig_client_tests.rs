@@ -11,6 +11,7 @@ use crate::{
             self,
             common::{CeremonyFailureReason, SigningFailureReason},
             key_store::KeyStore,
+            CeremonyRequestDetails,
         },
         eth::EthSigning,
         KeyId, MessageHash, PersistentKeyDB,
@@ -32,16 +33,14 @@ async fn should_ignore_rts_for_unknown_key() {
     let key_id = KeyId(Vec::from([0u8; 32]));
 
     // Create a client
-    let (keygen_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
-    let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
+    let (ceremony_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let client = MultisigClient::<EthSigning>::new(
         account_id.clone(),
         KeyStore::new(Arc::new(
             PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
                 .expect("Failed to open database"),
         )),
-        keygen_request_sender,
-        signing_request_sender,
+        ceremony_request_sender,
         &logger,
     );
 
@@ -78,17 +77,15 @@ async fn should_save_key_after_keygen() {
 
     {
         // Create a client
-        let (keygen_request_sender, mut keygen_request_receiver) =
+        let (ceremony_request_sender, mut ceremony_request_receiver) =
             tokio::sync::mpsc::unbounded_channel();
-        let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
         let client = MultisigClient::<EthSigning>::new(
             ACCOUNT_IDS[0].clone(),
             KeyStore::new(Arc::new(
                 PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
                     .expect("Failed to open database"),
             )),
-            keygen_request_sender,
-            signing_request_sender,
+            ceremony_request_sender,
             &logger,
         );
 
@@ -98,13 +95,15 @@ async fn should_save_key_after_keygen() {
 
         // Get the oneshot channel that is linked to the keygen request
         // and send a successful keygen result
-        keygen_request_receiver
-            .recv()
-            .await
-            .unwrap()
-            .3
-            .send(Ok(keygen_result_info))
-            .unwrap();
+        let request = ceremony_request_receiver.recv().await.unwrap();
+        match request.details.unwrap() {
+            CeremonyRequestDetails::Keygen(details) => {
+                details.result_sender.send(Ok(keygen_result_info)).unwrap();
+            }
+            _ => {
+                panic!("Unexpected ceremony request");
+            }
+        }
 
         // Complete the keygen request
         assert_ok!(keygen_request_fut.await);
@@ -141,16 +140,14 @@ async fn should_load_keys_on_creation() {
     }
 
     // Create the client using the existing db file
-    let (keygen_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
-    let (signing_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
+    let (ceremony_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
     let client = MultisigClient::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         KeyStore::new(Arc::new(
             PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
                 .expect("Failed to open database"),
         )),
-        keygen_request_sender,
-        signing_request_sender,
+        ceremony_request_sender,
         &new_test_logger(),
     );
 

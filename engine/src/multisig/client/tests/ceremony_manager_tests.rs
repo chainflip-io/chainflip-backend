@@ -1,5 +1,3 @@
-use std::sync::{atomic::AtomicU64, Arc};
-
 use super::*;
 use crate::{
     constants::CEREMONY_ID_WINDOW,
@@ -28,7 +26,7 @@ fn should_ignore_non_first_stage_keygen_data_before_request() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
-        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
+        0, /* latest_ceremony_id */
         &new_test_logger(),
     );
 
@@ -83,7 +81,7 @@ fn should_ignore_non_first_stage_signing_data_before_request() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
-        Arc::new(AtomicU64::new(0)), /* latest_ceremony_id */
+        0, /* latest_ceremony_id */
         &new_test_logger(),
     );
 
@@ -154,7 +152,7 @@ fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
-        Arc::new(AtomicU64::new(latest_ceremony_id)),
+        latest_ceremony_id,
         &new_test_logger(),
     );
 

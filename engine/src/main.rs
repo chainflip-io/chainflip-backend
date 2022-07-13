@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::Arc;
 
 use chainflip_engine::{
     eth::{
@@ -165,12 +165,12 @@ async fn main() {
     let key_manager_contract =
         KeyManager::new(key_manager_address.into()).expect("Should create KeyManager contract");
 
-    let latest_ceremony_id = Arc::new(AtomicU64::new(state_chain_client
-            .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
-                latest_block_hash,
-            )
-            .await
-            .expect("Should get CeremonyIdCounter from SC")));
+    let latest_ceremony_id = state_chain_client
+        .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
+            latest_block_hash,
+        )
+        .await
+        .expect("Should get CeremonyIdCounter from SC");
 
     let db = Arc::new(
         PersistentKeyDB::new_and_migrate_to_latest(
@@ -187,7 +187,7 @@ async fn main() {
             KeyStore::new(db),
             incoming_p2p_message_receiver,
             outgoing_p2p_message_sender,
-            latest_ceremony_id.clone(),
+            latest_ceremony_id,
             &root_logger,
         );
 
@@ -219,7 +219,6 @@ async fn main() {
             witnessing_instruction_sender,
             cfe_settings_update_sender,
             latest_block_hash,
-            latest_ceremony_id,
             &root_logger
         ),
         // Start eth observers
