@@ -57,6 +57,7 @@ pub trait ChainCrypto: Chain {
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 	type TransactionHash: Member + Parameter + Default;
+	type GovKey: Member + Parameter + Copy;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -124,14 +125,14 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait SetGovKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		new_key: eth::Address,
+		new_key: <Abi as ChainCrypto>::GovKey,
 	) -> Self;
 }
 
 pub trait SetCommunityKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		new_key: eth::Address,
+		new_key: <Abi as ChainCrypto>::GovKey,
 	) -> Self;
 }
 
@@ -172,6 +173,7 @@ impl ChainCrypto for Ethereum {
 	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionHash = eth::H256;
+	type GovKey = eth::Address;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -273,6 +275,7 @@ pub mod mocks {
 		type Payload = [u8; 4];
 		type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 		type TransactionHash = [u8; 4];
+		type GovKey = [u8; 32];
 
 		fn verify_threshold_signature(
 			agg_key: &Self::AggKey,

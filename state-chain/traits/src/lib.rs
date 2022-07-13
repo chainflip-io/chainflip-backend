@@ -741,7 +741,7 @@ pub trait FeePayment {
 	type Amount;
 	type AccountId;
 
-	fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> Result<(), ()>;
+	fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
 pub trait StakingInfo {
@@ -749,9 +749,4 @@ pub trait StakingInfo {
 	type Balance;
     fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance;
 	fn onchain_funds() -> Self::Balance;
-}
-
-pub trait AuthorityKeys {
-	type Gov;
-	type Comm;
 }

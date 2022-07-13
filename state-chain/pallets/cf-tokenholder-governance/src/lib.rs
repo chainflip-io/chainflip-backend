@@ -8,25 +8,30 @@ use frame_support::{
 	pallet_prelude::*,
 };
 
-use cf_traits::AuthorityKeys;
+use cf_chains::{ChainCrypto};
+
 use codec::Encode;
 use frame_support::RuntimeDebugNoBound;
+use sp_std::cmp::PartialEq;
 
 pub use pallet::*;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
 mod mock;
+#[cfg(test)]
+mod tests;
 
 pub type ProposalId = u32;
 
-type GovKey<T> = <<T as Config>::Keys as AuthorityKeys>::Gov;
-type CommKey<T> = <<T as Config>::Keys as AuthorityKeys>::Comm;
+// type GovKey<T> = <<T as Config>::Keys as AuthorityKeys>::Gov;
+// type CommKey<T> = <<T as Config>::Keys as AuthorityKeys>::Comm;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum Proposal {
-	SetGovernanceKey(cf_chains::eth::Address),
-	SetCommunityKey(cf_chains::eth::Address),
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[scale_info(skip_type_params(T))]
+pub enum Proposal<T: Config> {
+	SetGovernanceKey(<<T as Config>::Chain as ChainCrypto>::GovKey),
+	SetCommunityKey(<<T as Config>::Chain as ChainCrypto>::GovKey),
 }
 #[frame_support::pallet]
 pub mod pallet {
@@ -81,8 +86,6 @@ pub mod pallet {
 		type GovKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetGovKeyApiCall>;
 
 		type CommKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetCommunityKeyApiCall>;
-
-		type Keys: AuthorityKeys;
 	}
 
 	#[pallet::storage]
@@ -99,51 +102,55 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_fee)]
-	pub(super) type ProposalFee<T> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub(super) type ProposalFee<T> = StorageValue<_, <T as Config>::Balance, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub(super) type Proposals<T: Config> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal>;
+	pub(super) type Proposals<T: Config> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal<T>>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
 	pub(super) type Backers<T: Config> =
-		StorageMap<_, Twox64Concat, Proposal, Vec<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Proposal<T>, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn gov_enactment)]
-	pub type GovKeyUpdateAwaitingEnactment<T> = StorageValue<_, (BlockNumberFor<T>, cf_chains::eth::Address), OptionQuery>;
+	pub type GovKeyUpdateAwaitingEnactment<T> = StorageValue<_, (BlockNumberFor<T>, <<T as Config>::Chain as ChainCrypto>::GovKey), OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn community_enactment)]
-	pub type CommKeyUpdateAwaitingEnactment<T> = StorageValue<_, (BlockNumberFor<T>, cf_chains::eth::Address), OptionQuery>;
+	pub type CommKeyUpdateAwaitingEnactment<T> = StorageValue<_, (BlockNumberFor<T>, <<T as Config>::Chain as ChainCrypto>::GovKey), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		ProposalSubmitted(Proposal),
-		ProposalPassed(Proposal),
-		ProposalRejected(Proposal),
-		ProposalEnacted(Proposal),
+		ProposalSubmitted(Proposal<T>),
+		ProposalPassed(Proposal<T>),
+		ProposalRejected(Proposal<T>),
+		ProposalEnacted(Proposal<T>),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		AlreadyBacked,
+		ProposalDosentExists,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			if let Some(proposal) = Proposals::<T>::get(n) {
+				Self::resolve_vote(proposal);
+			}
 			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
 				if gov_key.0 == n {
-					T::GovKeyBroadcaster::threshold_sign_and_broadcast(cf_chains::SetGovKey::new_unsigned(T::ReplayProtectionProvider::replay_protection(), gov_key.1));
+					T::GovKeyBroadcaster::threshold_sign_and_broadcast(T::SetGovKeyApiCall::new_unsigned(T::ReplayProtectionProvider::replay_protection(), gov_key.1));
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 				}
 			}
 			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if comm_key.0 == n {
-					T::CommKeyBroadcaster::threshold_sign_and_broadcast(cf_chains::SetCommunityKey::new_unsigned(T::ReplayProtectionProvider::replay_protection(), comm_key.1));
+					T::CommKeyBroadcaster::threshold_sign_and_broadcast(T::SetCommunityKeyApiCall::new_unsigned(T::ReplayProtectionProvider::replay_protection(), comm_key.1));
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 				}
 			}
@@ -156,10 +163,10 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn submit_proposal(
 			origin: OriginFor<T>,
-			proposal: Proposal,
+			proposal: Proposal<T>,
 		) -> DispatchResultWithPostInfo {
-			let _ = ensure_signed(origin)?;
-			// TOOD: Burn FLIP
+			let proposer = ensure_signed(origin)?;
+			T::FeePayment::try_burn_fee(proposer, ProposalFee::<T>::get())?;
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get(),
 				proposal.clone(),
@@ -171,9 +178,10 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn back_proposal(
 			origin: OriginFor<T>,
-			proposal: Proposal,
+			proposal: Proposal<T>,
 		) -> DispatchResultWithPostInfo {
 			let baker = ensure_signed(origin)?;
+			// ensure!(Backers::<T>::contains_key(proposal.clone()), Error::<T>::ProposalDosentExists);
 			Backers::<T>::mutate(proposal, |bakers| {
 				if bakers.contains(&baker) {
 					return Err(Error::<T>::AlreadyBacked)
@@ -186,7 +194,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn resolve_vote(proposal: Proposal) {
+		pub fn resolve_vote(proposal: Proposal<T>) {
 			let total_baked: u128 = Backers::<T>::take(proposal.clone())
 				.iter()
 				.map(|baker| {
@@ -194,7 +202,7 @@ pub mod pallet {
 				})
 				.sum::<u128>();
 			let total_stake: u128 = T::Flip::onchain_funds().into();
-			if total_baked > total_stake / 2 {
+			if total_baked > (total_stake / 3) * 2 {
 				match proposal {
 					SetGovernanceKey(key) => {
 						GovKeyUpdateAwaitingEnactment::<T>::put((<frame_system::Pallet<T>>::block_number() + EnactmentDelay::<T>::get(), key));

@@ -18,7 +18,6 @@ use sp_runtime::{
 };
 
 use cf_chains::SetCommunityKey;
-use cf_traits::AuthorityKeys;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -95,23 +94,29 @@ impl StakingInfo for MockStakingInfo {
     type Balance = u128;
 
     fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance {
-        todo!()
+		match account_id {
+			&ALICE => 3000,
+			&BOB => 2000,
+			&CHARLES => 3000,
+			&EVE => 2000,
+			_ => 0
+		}
     }
 
     fn onchain_funds() -> Self::Balance {
-        todo!()
+        10000
     }
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetGovKey {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-	pub new_key: cf_chains::eth::Address,
+	pub new_key: <MockEthereum as ChainCrypto>::GovKey,
 }
 
 impl SetGovKey<MockEthereum> for MockSetGovKey {
 	fn new_unsigned(
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: cf_chains::eth::Address,
+		new_key: <MockEthereum as ChainCrypto>::GovKey,
 	) -> Self {
 		Self {
 			nonce,
@@ -166,13 +171,13 @@ impl Broadcaster<MockEthereum> for MockBroadcastGov {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetCommKey {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-	pub new_key: cf_chains::eth::Address,
+	pub new_key: <MockEthereum as ChainCrypto>::GovKey,
 }
 
 impl SetCommunityKey<MockEthereum> for MockSetCommKey {
 	fn new_unsigned(
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: cf_chains::eth::Address,
+		new_key: <MockEthereum as ChainCrypto>::GovKey,
 	) -> Self {
 		Self {
 			nonce,
@@ -226,16 +231,10 @@ impl Broadcaster<MockEthereum> for MockBroadcastComm {
 impl FeePayment for MockFeePayment {
     type AccountId = AccountId;
     type Amount = u128;
-    fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> Result<(), ()> {
+    fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> Result<(), sp_runtime::DispatchError> {
+		// TODO: Provide a mock case in which the account dosen't has enough funds
         Ok(().into())
     }
-}
-
-pub struct MockKeys;
-
-impl AuthorityKeys for MockKeys {
-	type Gov = [u8; 32];
-	type Comm = [u8; 32];
 }
 
 impl Chainflip for Test {
@@ -260,15 +259,12 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type GovKeyBroadcaster = MockBroadcastGov;
 	type SetCommunityKeyApiCall = MockSetCommKey;
 	type CommKeyBroadcaster = MockBroadcastComm;
-	type Keys = MockKeys;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
 pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
-pub const PETER: <Test as frame_system::Config>::AccountId = 988u64;
-pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -279,7 +275,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
-		// This is required to log events.
 		System::set_block_number(1);
 	});
 

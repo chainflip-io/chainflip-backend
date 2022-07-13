@@ -1,12 +1,32 @@
+use frame_support::{assert_noop, assert_ok};
+
 use crate::{mock::*, *};
 
 const GOV_KEY_PROPOSAL: [u8; 32] = [1u8; 32];
 const COMM_KEY_PROPOSAL: [u8; 32] = [1u8; 32];
 
+/// This is a more complex test scenraio in which we prove the following things:
+/// - Submit a proposal
+/// - Back a proposal
+/// - Proof an proposal can not be backed several times
+/// - ...
 #[test]
-fn can_submit_a_proposal() {
+fn update_gov_key_via_onchain_proposal() {
     new_test_ext().execute_with(|| {
+        // Try to bake a not existing proposal
+        // assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::ProposalDosentExists);
+        // Submit a proposal
         assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        assert!(Proposals::<T>::exists(<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get()));
+        assert!(Proposals::<Test>::contains_key(<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get()));
+        // Back a proposal
+        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
+        // Try to back the same proposal again
+        assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::AlreadyBacked);
+        // Back the proposal to ensure threshold
+        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
+        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(CHARLES), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
+        // Jump to the block in which we expect the proposal
+        TokenholderGovernance::on_initialize(<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get());
+        assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
     });
 }
