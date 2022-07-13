@@ -110,9 +110,9 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
-	// TODO: Look at this trait bound, Chainflip already has the system::Config bound
 	#[pallet::config]
-	pub trait Config: frame_system::Config + Chainflip {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
