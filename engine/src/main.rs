@@ -169,7 +169,7 @@ fn main() -> anyhow::Result<()> {
             let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
                 tokio::sync::mpsc::unbounded_channel();
 
-            let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::init(
+            let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::start(
                 incoming_p2p_message_receiver,
                 outgoing_p2p_message_sender,
                 &root_logger,

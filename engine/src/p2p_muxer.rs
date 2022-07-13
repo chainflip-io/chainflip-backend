@@ -87,7 +87,7 @@ fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 }
 
 impl P2PMuxer {
-    pub fn init(
+    pub fn start(
         all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
         all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
         logger: &slog::Logger,
@@ -209,7 +209,7 @@ mod tests {
         let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let (eth_outgoing_sender, _, muxer_future) =
-            P2PMuxer::init(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+            P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
 
         let _jh = tokio::task::spawn(muxer_future);
 
@@ -237,7 +237,7 @@ mod tests {
         let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let (eth_outgoing_sender, _, muxer_future) =
-            P2PMuxer::init(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+            P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
 
         let _jh = tokio::task::spawn(muxer_future);
 
@@ -278,7 +278,7 @@ mod tests {
         let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         let (_eth_outgoing_sender, mut eth_incoming_receiver, muxer_future) =
-            P2PMuxer::init(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+            P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
 
         tokio::spawn(muxer_future);
 
