@@ -27,6 +27,7 @@ use cf_traits::{
 	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
 	SystemStateInfo, VaultRotator,
 };
+use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{EstimateNextSessionRotation, OnKilledAccount, OnRuntimeUpgrade, StorageVersion},
@@ -208,7 +209,7 @@ pub mod pallet {
 		CFEVersionUpdated(ValidatorIdOf<T>, Version, Version),
 		/// An authority has register her current PeerId \[account_id, public_key, port,
 		/// ip_address\]
-		PeerIdRegistered(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 		/// A authority has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 		/// Ratio of claim period updated \[percentage\]
@@ -454,7 +455,7 @@ pub mod pallet {
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
-			port: u16,
+			port: Port,
 			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
 		) -> DispatchResultWithPostInfo {
@@ -700,7 +701,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		(T::AccountId, Ed25519PublicKey, u16, Ipv6Addr),
+		(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 	>;
 
 	/// Peers that are associated with account ids

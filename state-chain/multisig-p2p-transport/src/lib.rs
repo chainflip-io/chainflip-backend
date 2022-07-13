@@ -7,7 +7,7 @@
 
 use anyhow::Context;
 use cf_utilities::{
-	make_periodic_tick, new_json_error, rpc_error_into_anyhow_error, JsonResultExt,
+	make_periodic_tick, new_json_error, rpc_error_into_anyhow_error, JsonResultExt, Port,
 };
 pub use gen_client::Client as P2PRpcClient;
 use ipc_channel::ipc::TryRecvError;
@@ -85,7 +85,7 @@ pub struct RpcRequestHandler<MetaData, P2PNetworkService: PeerNetwork> {
 	_phantom: std::marker::PhantomData<MetaData>,
 }
 
-type ReservedPeers = BTreeMap<PeerId, (u16, Ipv6Addr, TokioSender<Vec<u8>>)>;
+type ReservedPeers = BTreeMap<PeerId, (Port, Ipv6Addr, TokioSender<Vec<u8>>)>;
 
 struct IpcState {
 	incoming_ipc_sender: ipc_channel::ipc::IpcSender<(PeerIdTransferable, Vec<u8>)>,
@@ -103,7 +103,7 @@ struct SharedState {
 #[async_trait]
 pub trait PeerNetwork {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
-	fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr);
+	fn reserve_peer(&self, peer_id: PeerId, port: Port, address: Ipv6Addr);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_reserved_peer(&self, peer_id: PeerId);
 	/// Write notification to network to peer id, over protocol
@@ -115,7 +115,7 @@ pub trait PeerNetwork {
 /// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
 #[async_trait]
 impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
-	fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr) {
+	fn reserve_peer(&self, peer_id: PeerId, port: Port, address: Ipv6Addr) {
 		if let Err(err) = self.add_peers_to_reserved_set(
 			CHAINFLIP_P2P_PROTOCOL_NAME,
 			std::iter::once(
@@ -165,11 +165,11 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 
 	/// Connect to authorities and disconnect from old authorities
 	#[rpc(name = "p2p_set_peers")]
-	fn set_peers(&self, peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>) -> Result<u64>;
+	fn set_peers(&self, peers: Vec<(PeerIdTransferable, Port, Ipv6Addr)>) -> Result<u64>;
 
 	/// Connect to a authority
 	#[rpc(name = "p2p_add_peer")]
-	fn add_peer(&self, peer_id: PeerIdTransferable, port: u16, address: Ipv6Addr) -> Result<u64>;
+	fn add_peer(&self, peer_id: PeerIdTransferable, port: Port, address: Ipv6Addr) -> Result<u64>;
 
 	/// Disconnect from a authority
 	#[rpc(name = "p2p_remove_peer")]
@@ -188,7 +188,7 @@ impl<
 		&self,
 		reserved_peers: &mut std::sync::MutexGuard<ReservedPeers>,
 		peer_id: PeerId,
-		port: u16,
+		port: Port,
 		ip_address: Ipv6Addr,
 	) -> bool {
 		if let Some((existing_port, existing_ip_address, _message_sender)) =
@@ -281,7 +281,7 @@ pub fn new_p2p_network_node<
 				/// Connect to authorities
 				fn set_peers(
 					&self,
-					peers: Vec<(PeerIdTransferable, u16, Ipv6Addr)>,
+					peers: Vec<(PeerIdTransferable, Port, Ipv6Addr)>,
 				) -> Result<u64> {
 					let peers = peers
 						.into_iter()
@@ -319,7 +319,7 @@ pub fn new_p2p_network_node<
 				fn add_peer(
 					&self,
 					peer_id: PeerIdTransferable,
-					port: u16,
+					port: Port,
 					ip_address: Ipv6Addr,
 				) -> Result<u64> {
 					let peer_id: PeerId = peer_id.try_into()?;
@@ -567,7 +567,7 @@ mod tests {
 	}
 	#[async_trait]
 	impl PeerNetwork for LockedMockPeerNetwork {
-		fn reserve_peer(&self, peer_id: PeerId, port: u16, address: Ipv6Addr) {
+		fn reserve_peer(&self, peer_id: PeerId, port: Port, address: Ipv6Addr) {
 			self.lock().reserve_peer(peer_id, port, address)
 		}
 
@@ -628,10 +628,10 @@ mod tests {
 	async fn expect_reserve_peer_changes_during_closure<F: Future, C: FnOnce() -> F>(
 		shared_state: Arc<SharedState>,
 		network_expectations: Arc<LockedMockPeerNetwork>,
-		replaces: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
+		replaces: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
 		removes: Vec<PeerIdTransferable>,
-		adds: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
-		final_state: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
+		adds: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
+		final_state: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
 		c: C,
 	) {
 		network_expectations.lock().checkpoint();
@@ -699,20 +699,20 @@ mod tests {
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
 
-		let port_0: u16 = 0;
-		let port_1: u16 = 1;
+		let port_0: Port = 0;
+		let port_1: Port = 1;
 
 		let ip_address_0: std::net::Ipv6Addr = 0.into();
 		let ip_address_1: std::net::Ipv6Addr = 1.into();
 
 		let test_add_peer =
 			|peer: PeerIdTransferable,
-			 port: u16,
+			 port: Port,
 			 ip_address: std::net::Ipv6Addr,
-			 replaces: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
+			 replaces: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
 			 removes: Vec<PeerIdTransferable>,
-			 adds: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
-			 peers: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>| {
+			 adds: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
+			 peers: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>| {
 				let network_expectations = network_expectations.clone();
 				let client = client.clone();
 				let shared_state = shared_state.clone();
@@ -731,10 +731,10 @@ mod tests {
 
 		let test_remove_peer =
 			|peer: PeerIdTransferable,
-			 replaces: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
+			 replaces: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
 			 removes: Vec<PeerIdTransferable>,
-			 adds: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
-			 peers: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>| {
+			 adds: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
+			 peers: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>| {
 				let network_expectations = network_expectations.clone();
 				let client = client.clone();
 				let shared_state = shared_state.clone();
@@ -852,17 +852,17 @@ mod tests {
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
 		let peer_2 = PeerIdTransferable::from(&PeerId::random());
 
-		let port_0: u16 = 0;
-		let port_1: u16 = 1;
+		let port_0: Port = 0;
+		let port_1: Port = 1;
 
 		let ip_address_0: std::net::Ipv6Addr = 0.into();
 		let ip_address_1: std::net::Ipv6Addr = 1.into();
 
 		let test_set_peers =
-			|peers: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
-			 replaces: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>,
+			|peers: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
+			 replaces: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>,
 			 removes: Vec<PeerIdTransferable>,
-			 adds: Vec<(PeerIdTransferable, u16, std::net::Ipv6Addr)>| {
+			 adds: Vec<(PeerIdTransferable, Port, std::net::Ipv6Addr)>| {
 				let network_expectations = network_expectations.clone();
 				let client = client.clone();
 				let shared_state = shared_state.clone();
@@ -952,8 +952,8 @@ mod tests {
 		let peer_1_transferable = PeerIdTransferable::from(&peer_1);
 		let peer_2_transferable = PeerIdTransferable::from(&peer_2);
 
-		let port_0: u16 = 0;
-		let port_1: u16 = 1;
+		let port_0: Port = 0;
+		let port_1: Port = 1;
 
 		let ip_address_0: std::net::Ipv6Addr = 0.into();
 		let ip_address_1: std::net::Ipv6Addr = 1.into();

@@ -30,11 +30,11 @@ use crate::{
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
-use utilities::{make_periodic_tick, rpc_error_into_anyhow_error};
+use utilities::{make_periodic_tick, rpc_error_into_anyhow_error, Port};
 
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
-    Registered(u16, Ipv6Addr),
+    Registered(Port, Ipv6Addr),
     Unregistered,
 }
 
@@ -56,7 +56,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     peer_id_from_cfe_config: &PeerId,
     peer_keypair_from_cfe_config: &libp2p::identity::ed25519::Keypair,
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
-    account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
+    account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, Port, Ipv6Addr)>,
     logger: &slog::Logger,
 ) -> Result<()> {
     // TODO Don't Register Private Ips on Live chains
@@ -233,7 +233,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     .map_err(rpc_error_into_anyhow_error)?;
 
     let mut account_to_peer_mapping_on_chain = state_chain_client
-        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
+        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, Port, pallet_cf_validator::Ipv6Addr)>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()

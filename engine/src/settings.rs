@@ -12,6 +12,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
+use utilities::Port;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct P2P {
@@ -55,7 +56,7 @@ impl Eth {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq)]
 pub struct HealthCheck {
     pub hostname: String,
-    pub port: u16,
+    pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -123,7 +124,7 @@ pub struct CommandLineOptions {
     #[clap(long = "health_check.hostname")]
     health_check_hostname: Option<String>,
     #[clap(long = "health_check.port")]
-    health_check_port: Option<u16>,
+    health_check_port: Option<Port>,
 
     // Signing Settings
     #[clap(long = "signing.db_file", parse(from_os_str))]

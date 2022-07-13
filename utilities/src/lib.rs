@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub type Port = u16;
+
 /// Simply unwraps the value. Advantage of this is to make it clear in tests
 /// what we are testing
 #[macro_export]
