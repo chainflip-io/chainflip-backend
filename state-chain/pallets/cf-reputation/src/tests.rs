@@ -302,6 +302,7 @@ fn submitting_heartbeat_more_than_once_in_an_interval() {
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 		go_to_interval(1);
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 	});
 }
 
