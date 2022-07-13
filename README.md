@@ -50,12 +50,12 @@ The following commands should be executed from the repo root directory.
   - `cargo fmt -- <filename>`
   - `cargo fmt --all` (format all packages)
 - Run clippy with the same settings as the CI:<br>
-  `sh clippy.sh`
+  `cargo cf-clippy`
 - Check the state-chain and cfe compile:
-  - `cargo check --all-targets`
-  - `cargo check --all-targets --all-features` (This is used by the CI, but you don't typically need it)
+  - `cargo cf-check-all`
+  - `cargo cf-check-all-ci` (This is used by the CI, but you don't typically need it)
 - Run all unit tests:<br>
-  `cargo test --lib`
+  `cargo cf-test`
 - Expand macros for a given part of the code. You'll need to pipe output to a file.<br>
   Requires _cargo-expand_ (`cargo install cargo-expand`):<br>
   `cargo expand <options>`
