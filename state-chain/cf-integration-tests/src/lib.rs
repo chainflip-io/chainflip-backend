@@ -1136,9 +1136,9 @@ mod tests {
 		};
 		use cf_traits::{
 			AuthorityCount, BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
-			ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode, StakeTransfer,
+			ChainflipAccountStore, EpochInfo, FlipBalance, StakeTransfer,
 		};
-		use state_chain_runtime::{Flip, Reputation, Runtime, Validator};
+		use state_chain_runtime::{Flip, Runtime, Validator};
 		use std::collections::HashMap;
 
 		#[test]

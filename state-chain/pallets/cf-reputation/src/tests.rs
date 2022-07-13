@@ -15,17 +15,14 @@ pub fn run_to_block(n: u64) {
 }
 
 // Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
-fn submit_heartbeat_for_current_interval(nodes: &[<Test as frame_system::Config>::AccountId]) {
+fn submit_heartbeat_and_move_forward_heartbeat_interval(
+	nodes: &[<Test as frame_system::Config>::AccountId],
+) {
 	let start_block_number = System::block_number();
 	for node in nodes {
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(*node)));
 	}
 	run_to_block(start_block_number + HEARTBEAT_BLOCK_INTERVAL);
-}
-
-// Move a heartbeat intervals forward with no heartbeat sent
-fn go_to_interval(interval: u64) {
-	run_to_block(interval * HEARTBEAT_BLOCK_INTERVAL);
 }
 
 #[test]
@@ -59,7 +56,7 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 		ReputationPallet::heartbeat(RawOrigin::Signed(ALICE).into()).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 		// submit again, then move forward
-		submit_heartbeat_for_current_interval(&[ALICE]);
+		submit_heartbeat_and_move_forward_heartbeat_interval(&[ALICE]);
 		// no change in reputation, because we were on the same block, therefore we were in the same
 		// heartbeat block interval
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
@@ -94,7 +91,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		assert_eq!(ReputationPallet::accrual_ratio(), ACCRUAL_RATE);
 
-		submit_heartbeat_for_current_interval(&[ALICE]);
+		submit_heartbeat_and_move_forward_heartbeat_interval(&[ALICE]);
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT);
 
 		// Double the accrual rate.
@@ -104,7 +101,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATE.1,
 		));
 
-		submit_heartbeat_for_current_interval(&[ALICE]);
+		submit_heartbeat_and_move_forward_heartbeat_interval(&[ALICE]);
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 3);
 
 		// Halve the divisor, equivalent to double the initial rate.
@@ -114,7 +111,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATE.1 / 2,
 		));
 
-		submit_heartbeat_for_current_interval(&[ALICE]);
+		submit_heartbeat_and_move_forward_heartbeat_interval(&[ALICE]);
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 5);
 	});
 }
@@ -299,7 +296,7 @@ fn submitting_heartbeat_more_than_once_in_an_interval() {
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
-		go_to_interval(1);
+		run_to_block(HEARTBEAT_BLOCK_INTERVAL);
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 	});
@@ -310,7 +307,7 @@ fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
-		go_to_interval(2);
+		run_to_block(2 * HEARTBEAT_BLOCK_INTERVAL);
 		assert_eq!(
 			ReputationPallet::current_network_state().offline,
 			vec![ALICE],
@@ -346,7 +343,7 @@ fn non_validators_should_not_appear_in_network_state() {
 
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 
-		go_to_interval(3);
+		run_to_block(3 * HEARTBEAT_BLOCK_INTERVAL);
 
 		assert!(!ReputationPallet::is_qualified(&BOB), "Bob should be offline");
 
