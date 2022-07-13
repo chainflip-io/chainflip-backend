@@ -338,10 +338,10 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                             ),
                                         ) => {
                                             handle_keygen_request(
-                                                multisig_client.clone(), 
-                                                state_chain_client.clone(), 
-                                                ceremony_id, 
-                                                validator_candidates, 
+                                                multisig_client.clone(),
+                                                state_chain_client.clone(),
+                                                ceremony_id,
+                                                validator_candidates,
                                                 logger.clone()
                                             ).await;
                                         }
