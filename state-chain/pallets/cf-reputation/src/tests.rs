@@ -61,10 +61,10 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 		// submit again, then move forward
 		submit_heartbeat_for_current_interval(&[ALICE]);
-		// no change in reputation, because we're on the same block, therefore in the same
+		// no change in reputation, because we were on the same block, therefore we were in the same
 		// heartbeat block interval
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
-		// we've move forward a block interval, so now we should have the extra rep
+		// we've moved forward a block interval, so now we should have the extra rep
 		ReputationPallet::heartbeat(RawOrigin::Signed(ALICE).into()).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 2,);
 	})
