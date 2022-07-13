@@ -7,6 +7,28 @@ fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> Reputat
 	ReputationPallet::reputation(who).reputation_points
 }
 
+pub fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		ReputationPallet::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		ReputationPallet::on_initialize(System::block_number());
+	}
+}
+
+// Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
+fn submit_heartbeat_for_current_interval(nodes: &[<Test as frame_system::Config>::AccountId]) {
+	let start_block_number = System::block_number();
+	for node in nodes {
+		assert_ok!(ReputationPallet::heartbeat(Origin::signed(*node)));
+	}
+	run_to_block(start_block_number + HEARTBEAT_BLOCK_INTERVAL - 1);
+}
+
+// Move a heartbeat intervals forward with no heartbeat sent
+fn go_to_interval(interval: u64) {
+	run_to_block((interval * HEARTBEAT_BLOCK_INTERVAL) + 1);
+}
+
 #[test]
 fn submitting_heartbeat_should_reward_reputation_points() {
 	new_test_ext().execute_with(|| {
@@ -269,28 +291,6 @@ mod reporting_adapter_test {
 			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 2);
 		});
 	}
-}
-
-pub fn run_to_block(n: u64) {
-	while System::block_number() < n {
-		ReputationPallet::on_finalize(System::block_number());
-		System::set_block_number(System::block_number() + 1);
-		ReputationPallet::on_initialize(System::block_number());
-	}
-}
-
-// Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
-fn submit_heartbeat_for_current_interval(nodes: &[<Test as frame_system::Config>::AccountId]) {
-	let start_block_number = System::block_number();
-	for node in nodes {
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(*node)));
-	}
-	run_to_block(start_block_number + HEARTBEAT_BLOCK_INTERVAL - 1);
-}
-
-// Move a heartbeat intervals forward with no heartbeat sent
-fn go_to_interval(interval: u64) {
-	run_to_block((interval * HEARTBEAT_BLOCK_INTERVAL) + 1);
 }
 
 #[test]
