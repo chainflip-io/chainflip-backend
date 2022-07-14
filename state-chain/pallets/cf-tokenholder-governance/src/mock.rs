@@ -254,7 +254,7 @@ impl pallet_cf_tokenholder_governance::Config for Test {
     type FeePayment = MockFeePayment;
 	type Chain = MockEthereum;
     type ReplayProtectionProvider = MockReplayProvider;
-    type Flip = MockStakingInfo;
+    type StakingInfo = MockStakingInfo;
 	type SetGovKeyApiCall = MockSetGovKey;
 	type GovKeyBroadcaster = MockBroadcastGov;
 	type SetCommunityKeyApiCall = MockSetCommKey;

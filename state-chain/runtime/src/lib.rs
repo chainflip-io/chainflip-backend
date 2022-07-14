@@ -396,7 +396,7 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type FeePayment = Flip;
 	type Chain = Ethereum;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
-	type Flip = Flip;
+	type StakingInfo = Flip;
 	type SetGovKeyApiCall = eth::api::EthereumApi;
 	type SetCommunityKeyApiCall = eth::api::EthereumApi;
 	type GovKeyBroadcaster = EthereumBroadcaster;

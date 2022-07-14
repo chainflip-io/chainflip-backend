@@ -75,7 +75,7 @@ pub mod pallet {
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		/// The Flip token implementation.
-		type Flip: StakingInfo<
+		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
 		>;
@@ -195,10 +195,10 @@ pub mod pallet {
 			let total_baked: u128 = Backers::<T>::take(proposal.clone())
 				.iter()
 				.map(|baker| {
-					T::Flip::total_balance_of(baker).into()
+					T::StakingInfo::total_balance_of(baker).into()
 				})
 				.sum::<u128>();
-			let total_stake: u128 = T::Flip::onchain_funds().into();
+			let total_stake: u128 = T::StakingInfo::onchain_funds().into();
 			if total_baked > (total_stake / 3) * 2 {
 				match proposal {
 					SetGovernanceKey(key) => {
