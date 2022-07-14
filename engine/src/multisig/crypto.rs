@@ -7,6 +7,7 @@ pub mod secp256k1;
 
 use generic_array::{typenum::Unsigned, ArrayLength};
 
+use num_derive::FromPrimitive;
 use zeroize::{DefaultIsZeroes, ZeroizeOnDrop};
 
 use std::fmt::Debug;
@@ -20,14 +21,14 @@ pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 /// Used as a unique identifier when serializing/deserializing chain specific data.
 /// The values are explicitly given and should never be changed.
 #[repr(u16)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, FromPrimitive)]
 pub enum ChainTag {
     Ethereum = 0x0000,
     Polkadot = 0x0001,
 }
 
 impl ChainTag {
-    pub fn to_bytes(self) -> [u8; CHAIN_TAG_SIZE] {
+    pub const fn to_bytes(self) -> [u8; CHAIN_TAG_SIZE] {
         (self as u16).to_be_bytes()
     }
 }

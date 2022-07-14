@@ -33,6 +33,7 @@ clap = { version = "3.1.18", features = ["derive"] }
 chrono = "0.4.19"
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand_legacy = { package = "rand", version = "0.6" }
+ipc-channel = "0.16.0"
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
@@ -60,6 +61,7 @@ tokio-stream = "0.1.5"
 url = "1.7.2"
 num-bigint = "0.4"
 num-traits = "0.2"
+num-derive = "0.3"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['signing']}
 zeroize = "1.5.4"
 libp2p = "0.40"
@@ -154,7 +156,6 @@ tag = 'chainflip-monthly-2022-05'
 
 [dev-dependencies]
 env_logger = "0.9.0"
-jsonrpc-pubsub = "18.0.0"
 log = "0.4.14"
 mockall = "0.11.0"
 rand = "0.8.4"

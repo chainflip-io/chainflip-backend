@@ -16,12 +16,11 @@ use crate::{
         eth::EthSigning,
         KeyId, MessageHash, PersistentKeyDB,
     },
-    testing::{
-        assert_err, assert_future_can_complete, assert_ok, new_temp_directory_with_nonexistent_file,
-    },
+    testing::{assert_future_can_complete, new_temp_directory_with_nonexistent_file},
 };
 
 use client::MultisigClient;
+use utilities::{assert_err, assert_ok};
 
 #[tokio::test]
 async fn should_ignore_rts_for_unknown_key() {

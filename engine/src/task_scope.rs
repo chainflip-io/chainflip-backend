@@ -309,8 +309,7 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use futures::FutureExt;
-
-    use crate::testing::assert_err;
+    use utilities::assert_err;
 
     use super::*;
 

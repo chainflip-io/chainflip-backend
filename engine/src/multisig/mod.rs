@@ -7,7 +7,7 @@ mod crypto;
 /// Storage for the keys
 pub mod db;
 
-pub use crypto::{eth, Rng};
+pub use crypto::{eth, ChainTag, Rng};
 
 #[cfg(test)]
 mod tests;
@@ -16,11 +16,12 @@ use pallet_cf_threshold_signature::CeremonyId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
+use utilities::make_periodic_tick;
 
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    common, logging::COMPONENT_KEY, multisig::client::CeremonyRequestDetails,
+    logging::COMPONENT_KEY, multisig::client::CeremonyRequestDetails,
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 use slog::o;
@@ -92,8 +93,7 @@ where
 
         async move {
             // Stream outputs () approximately every ten seconds
-            let mut check_timeouts_tick =
-                common::make_periodic_tick(Duration::from_secs(10), false);
+            let mut check_timeouts_tick = make_periodic_tick(Duration::from_secs(10), false);
 
             loop {
                 tokio::select! {

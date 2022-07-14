@@ -418,7 +418,9 @@ impl<P: ECPoint> DKGUnverifiedCommitment<P> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{logging::test_utils::new_test_logger, testing::assert_ok};
+    use utilities::assert_ok;
+
+    use crate::logging::test_utils::new_test_logger;
 
     use super::*;
 

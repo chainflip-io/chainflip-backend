@@ -18,9 +18,10 @@ use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
 use sp_runtime::traits::Keccak256;
 use state_chain_runtime::CfeSettings;
+use utilities::make_periodic_tick;
 
 use crate::{
-    common::{make_periodic_tick, read_clean_and_decode_hex_str_file},
+    common::read_clean_and_decode_hex_str_file,
     constants::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_FALLING_BEHIND_MARGIN_BLOCKS,
         ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL, ETH_STILL_BEHIND_LOG_INTERVAL,

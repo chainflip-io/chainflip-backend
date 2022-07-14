@@ -13,6 +13,7 @@ use chainflip_engine::{
     logging,
     multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
     multisig_p2p,
+    p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
     state_chain,
     task_scope::with_main_task_scope,
@@ -78,11 +79,6 @@ fn main() -> anyhow::Result<()> {
 
             // TODO: Merge this into the MultisigClientApi
             let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
-                tokio::sync::mpsc::unbounded_channel();
-
-            let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
-                tokio::sync::mpsc::unbounded_channel();
-            let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
                 tokio::sync::mpsc::unbounded_channel();
 
             let (
@@ -172,12 +168,31 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to open database")?,
             );
 
+            // p2p -> muxer
+            let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
+                tokio::sync::mpsc::unbounded_channel();
+
+            // muxer -> p2p
+            let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
+                tokio::sync::mpsc::unbounded_channel();
+
+            let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::start(
+                incoming_p2p_message_receiver,
+                outgoing_p2p_message_sender,
+                &root_logger,
+            );
+
+            scope.spawn(async move {
+                muxer_future.await;
+                Ok(())
+            });
+
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(
                     state_chain_client.our_account_id.clone(),
                     KeyStore::new(db),
-                    incoming_p2p_message_receiver,
-                    outgoing_p2p_message_sender,
+                    eth_incoming_receiver,
+                    eth_outgoing_sender,
                     latest_ceremony_id,
                     &root_logger,
                 );

@@ -93,8 +93,8 @@ fn signature_should_be_valid() {
     use super::curve25519_ristretto::Scalar;
     use super::{ECPoint, ECScalar};
     use crate::multisig::crypto::Rng;
-    use crate::testing::assert_ok;
     use rand_legacy::SeedableRng;
+    use utilities::assert_ok;
 
     let mut rng = Rng::from_seed([0; 32]);
 
