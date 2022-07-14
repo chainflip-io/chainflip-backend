@@ -1035,7 +1035,11 @@ mod tests {
 
 					// We should be able to claim stake out of an auction
 					for node in &nodes {
-						assert_ok!(Staking::claim(Origin::signed(node.clone()), 1, ETH_DUMMY_ADDR));
+						assert_ok!(Staking::claim(
+							Origin::signed(node.clone()),
+							1.into(),
+							ETH_DUMMY_ADDR
+						));
 					}
 
 					let end_of_claim_period =
@@ -1047,7 +1051,7 @@ mod tests {
 						assert_noop!(
 							Staking::claim(
 								Origin::signed(node.clone()),
-								stake_amount,
+								stake_amount.into(),
 								ETH_DUMMY_ADDR
 							),
 							Error::<Runtime>::AuctionPhase
@@ -1074,7 +1078,7 @@ mod tests {
 					// TODO implement Claims in Contract/Network
 					for node in &nodes {
 						assert_noop!(
-							Staking::claim(Origin::signed(node.clone()), 1, ETH_DUMMY_ADDR),
+							Staking::claim(Origin::signed(node.clone()), 1.into(), ETH_DUMMY_ADDR),
 							Error::<Runtime>::PendingClaim
 						);
 					}

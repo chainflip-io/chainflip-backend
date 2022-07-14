@@ -16,7 +16,7 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::{ApiCall, RegisterClaim};
+use cf_chains::RegisterClaim;
 use cf_traits::{
 	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
 	StakeTransfer, ThresholdSigner,
@@ -34,10 +34,7 @@ use cf_traits::SystemStateInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
-	DispatchError,
-};
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
 use frame_support::pallet_prelude::Weight;
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
@@ -284,6 +281,8 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my authority key.
 		///
+		/// If amount of None is provided it will claim all claimable funds.
+		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached
 		/// claim request needs to be signed by a threshold of authorities in order to produce valid
 		/// data that can be submitted to the StakeManager Smart Contract.
@@ -306,36 +305,83 @@ pub mod pallet {
 		///
 		/// - [ThresholdSigner]
 		/// - [StakeTransfer]
-		#[pallet::weight(T::WeightInfo::claim())]
+		#[pallet::weight({ if amount.is_some() { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
 		pub fn claim(
 			origin: OriginFor<T>,
-			amount: FlipBalance<T>,
+			amount: Option<FlipBalance<T>>,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			Self::do_claim(&who, amount, address)?;
-			Ok(().into())
-		}
+			let account_id = ensure_signed(origin)?;
 
-		/// Get *all* FLIP that is held for me by the system, signed by my authority key.
-		///
-		/// Same as [claim](Self::claim) except first calculates the maximum claimable amount.
-		///
-		/// ## Events
-		///
-		/// - See [claim](Self::claim)
-		///
-		/// ## Errors
-		///
-		/// - See [claim](Self::claim)
-		#[pallet::weight(T::WeightInfo::claim_all())]
-		pub fn claim_all(
-			origin: OriginFor<T>,
-			address: EthereumAddress,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let claimable = T::Flip::claimable_balance(&who);
-			Self::do_claim(&who, claimable, address)?;
+			// claim all if no amount provided
+			let amount = amount.unwrap_or_else(|| T::Flip::claimable_balance(&account_id));
+
+			// Ensure we are claiming something
+			ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
+
+			// Ensure that we're not claiming to the zero address
+			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
+
+			// No new claim requests can be processed if we're currently in an auction phase.
+			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+
+			// If a claim already exists, return an error. The staker must either redeem their claim
+			// voucher or wait until expiry before creating a new claim.
+			ensure!(!PendingClaims::<T>::contains_key(&account_id), Error::<T>::PendingClaim);
+
+			// Check if a return address exists - if not just go with the provided claim address
+			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
+				// Check if the address is different from the stored address - if yes error out
+				if withdrawal_address != address {
+					return Err(Error::<T>::WithdrawalAddressRestricted.into())
+				}
+			}
+
+			// Calculate the maximum that would remain after this claim and ensure it won't be less
+			// than the system's minimum stake.  N.B. This would be caught in
+			// `StakeTranser::try_claim()` but this will need to be handled in a refactor of that
+			// trait(?)
+			let remaining = T::Flip::staked_balance(&account_id)
+				.checked_sub(&amount)
+				.ok_or(Error::<T>::InvalidClaim)?;
+
+			ensure!(
+				remaining == Zero::zero() || remaining >= MinimumStake::<T>::get(),
+				Error::<T>::BelowMinimumStake
+			);
+
+			// Throw an error if the staker tries to claim too much. Otherwise decrement the stake
+			// by the amount claimed.
+			T::Flip::try_claim(&account_id, amount)?;
+
+			// Set expiry and build the claim parameters.
+			let expiry =
+				(T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
+
+			Self::register_claim_expiry(account_id.clone(), expiry);
+
+			let call = T::RegisterClaim::new_unsigned(
+				T::ReplayProtectionProvider::replay_protection(),
+				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
+				amount.into(),
+				&address,
+				expiry,
+			);
+
+			T::ThresholdSigner::request_signature_with_callback(
+				call.threshold_signature_payload(),
+				|id| {
+					Call::<T>::post_claim_signature {
+						account_id: account_id.clone(),
+						signature_request_id: id,
+					}
+					.into()
+				},
+			);
+
+			// Store the claim params for later.
+			PendingClaims::<T>::insert(account_id, call);
+
 			Ok(().into())
 		}
 
@@ -615,78 +661,6 @@ impl<T: Config> Pallet<T> {
 		let new_total = T::Flip::credit_stake(account_id, amount);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
-	}
-
-	fn do_claim(
-		account_id: &AccountId<T>,
-		amount: T::Balance,
-		address: EthereumAddress,
-	) -> Result<(), DispatchError> {
-		// Ensure we are claiming something
-		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
-
-		// Ensure that we're not claiming to the zero address
-		ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
-
-		// No new claim requests can be processed if we're currently in an auction phase.
-		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
-
-		// If a claim already exists, return an error. The staker must either redeem their claim
-		// voucher or wait until expiry before creating a new claim.
-		ensure!(!PendingClaims::<T>::contains_key(account_id), Error::<T>::PendingClaim);
-
-		// Check if a return address exists - if not just go with the provided claim address
-		if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(account_id) {
-			// Check if the address is different from the stored address - if yes error out
-			if withdrawal_address != address {
-				return Err(Error::<T>::WithdrawalAddressRestricted.into())
-			}
-		}
-
-		// Calculate the maximum that would remain after this claim and ensure it won't be less than
-		// the system's minimum stake.  N.B. This would be caught in `StakeTranser::try_claim()` but
-		// this will need to be handled in a refactor of that trait(?)
-		let remaining = T::Flip::staked_balance(account_id)
-			.checked_sub(&amount)
-			.ok_or(Error::<T>::InvalidClaim)?;
-
-		ensure!(
-			remaining == Zero::zero() || remaining >= MinimumStake::<T>::get(),
-			Error::<T>::BelowMinimumStake
-		);
-
-		// Throw an error if the staker tries to claim too much. Otherwise decrement the stake by
-		// the amount claimed.
-		T::Flip::try_claim(account_id, amount)?;
-
-		// Set expiry and build the claim parameters.
-		let expiry = (T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
-
-		Self::register_claim_expiry(account_id.clone(), expiry);
-
-		let call = T::RegisterClaim::new_unsigned(
-			T::ReplayProtectionProvider::replay_protection(),
-			<T as Config>::StakerId::from_ref(account_id).as_ref(),
-			amount.into(),
-			&address,
-			expiry,
-		);
-
-		T::ThresholdSigner::request_signature_with_callback(
-			call.threshold_signature_payload(),
-			|id| {
-				Call::<T>::post_claim_signature {
-					account_id: account_id.clone(),
-					signature_request_id: id,
-				}
-				.into()
-			},
-		);
-
-		// Store the claim params for later.
-		PendingClaims::<T>::insert(account_id, call);
-
-		Ok(())
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no

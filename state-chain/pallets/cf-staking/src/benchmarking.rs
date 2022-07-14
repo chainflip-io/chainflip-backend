@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::{ChainCrypto, Ethereum};
+use cf_chains::{ApiCall, ChainCrypto, Ethereum};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
@@ -58,11 +58,10 @@ benchmarks! {
 		};
 		stake_call.dispatch_bypass_filter(origin)?;
 
-	} :_(RawOrigin::Signed(caller.clone()), balance_to_claim, withdrawal_address)
+	} :_(RawOrigin::Signed(caller.clone()), Some(balance_to_claim), withdrawal_address)
 	verify {
 		assert!(PendingClaims::<T>::contains_key(&caller));
 	}
-
 	claim_all {
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
@@ -80,7 +79,11 @@ benchmarks! {
 			tx_hash
 		}.dispatch_bypass_filter(origin)?;
 
-	}:_(RawOrigin::Signed(caller.clone()), withdrawal_address)
+		let call = Call::<T>::claim {
+			amount: None,
+			address: withdrawal_address,
+		};
+	}: { call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into())? }
 	verify {
 		assert!(PendingClaims::<T>::contains_key(&caller));
 	}
@@ -102,7 +105,7 @@ benchmarks! {
 
 		// Push a claim
 		let claimable = T::Flip::claimable_balance(&caller);
-		Pallet::<T>::do_claim(&caller, claimable, withdrawal_address)?;
+		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), None, withdrawal_address)?;
 
 		let call = Call::<T>::claimed {
 			account_id: caller.clone(),
@@ -129,7 +132,7 @@ benchmarks! {
 		}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
 
 		// requests a signature. So it's in the AsyncResult::Pending state
-		Pallet::<T>::do_claim(&caller, T::Flip::claimable_balance(&caller), withdrawal_address)?;
+		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), None, withdrawal_address)?;
 
 		// inserts signature so it's in the AsyncResult::Ready state
 		let signature_request_id = <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId::benchmark_value();
@@ -188,7 +191,7 @@ benchmarks! {
 				withdrawal_address,
 				tx_hash: [0; 32]
 			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
-			Pallet::<T>::do_claim(staker, T::Flip::claimable_balance(staker), withdrawal_address)?;
+			Pallet::<T>::claim(RawOrigin::Signed(staker.clone()).into(), None, withdrawal_address)?;
 
 			// we're registering the claim to be expired at the unix epoch.
 			// T::TimeSource::now().as_secs() evaulates to 0 in the benchmarks. So this ensures
