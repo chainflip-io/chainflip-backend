@@ -382,7 +382,7 @@ pub mod pallet {
 			block_number % T::HeartbeatBlockInterval::get()
 		}
 
-		/// Partitions the validators based on whether they are considered online or offline.
+		/// Partitions the authorities based on whether they are considered online or offline.
 		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
 			let (online, offline) =
 				T::EpochInfo::current_authorities().into_iter().partition(Self::is_qualified);
