@@ -592,7 +592,7 @@ mod tests {
 					max_expansion: self.max_authorities,
 				},
 				reputation: ReputationConfig {
-					accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+					accrual_ratio: ACCRUAL_RATIO,
 					penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
 					genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 				},

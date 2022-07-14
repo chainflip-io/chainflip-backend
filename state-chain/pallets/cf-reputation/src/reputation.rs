@@ -45,7 +45,7 @@ pub trait ReputationParameters {
 
 impl<P: ReputationParameters> ReputationTracker<P> {
 	/// Validators are rewarded with [OnlineCreditsFor] for remaining online. The credits are
-	/// automatically converted to reputation points at regular intervals, according to a
+	/// automatically converted to reputation points according to
 	/// some conversion ratio (ie. the [AccrualRatio]).
 	pub fn boost_reputation(&mut self, online_credit_reward: P::OnlineCredits) {
 		self.online_credits.saturating_accrue(online_credit_reward);

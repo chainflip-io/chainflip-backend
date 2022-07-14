@@ -12,10 +12,12 @@ pub mod common {
 	};
 
 	pub const MAX_AUTHORITIES: AuthorityCount = 150;
-	// Number of blocks to be online to accrue a point
-	pub const ACCRUAL_BLOCKS: u32 = 2500;
-	// Number of accrual points
-	pub const ACCRUAL_POINTS: i32 = 1;
+
+	// Number of online credits required to get `ACCRUAL_REPUTATION_POINTS` of reputation
+	pub const ACCRUAL_ONLINE_CREDITS: u32 = 2500;
+	// Number of reputation points received for having `ACCRUAL_ONLINE_CREDITS`
+	pub const ACCRUAL_REPUTATION_POINTS: i32 = 1;
+	pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE_CREDITS);
 
 	/// This determines the average expected block time that we are targeting.
 	/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
