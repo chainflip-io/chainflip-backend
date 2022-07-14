@@ -15,10 +15,7 @@ use futures::future::select_ok;
 use anyhow::{Context, Result};
 
 use crate::{
-    constants::{
-        ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, ETH_NODE_CONNECTION_TIMEOUT,
-        SYNC_POLL_INTERVAL,
-    },
+    constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
     settings,
 };
 
@@ -234,10 +231,7 @@ impl EthWsRpcClient {
             logger,
         );
         let web3 = web3::Web3::new(context!(
-            tokio::time::timeout(ETH_NODE_CONNECTION_TIMEOUT, async {
-                context!(web3::transports::WebSocket::new(ws_node_endpoint).await)
-            })
-            .await?
+            web3::transports::WebSocket::new(ws_node_endpoint).await
         )?);
 
         while let SyncState::Syncing(info) = web3
