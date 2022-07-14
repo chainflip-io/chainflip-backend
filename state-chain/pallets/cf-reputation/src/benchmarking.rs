@@ -11,16 +11,13 @@ const MAX_VALIDATOR_COUNT: u32 = 150;
 
 benchmarks! {
 	update_accrual_ratio {
-		let call = Call::<T>::update_accrual_ratio{ points: 2, online_credits: 151u32.into() };
+		let call = Call::<T>::update_accrual_ratio{ reputation_points: 2, online_credits: 151u32.into() };
 	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
 	set_penalty {
 		let call = Call::<T>::set_penalty { offence: PalletOffence::MissedHeartbeat.into(), penalty: Default::default() };
 	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
 	update_missed_heartbeat_penalty {
-		let call = Call::<T>::update_missed_heartbeat_penalty { value: ReputationPenaltyRate {
-			points: 1,
-			per_blocks: (10 as u32).into()
-	}};
+		let call = Call::<T>::update_missed_heartbeat_penalty { reputation: 20 };
 	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
 	verify {
 		assert_eq!(

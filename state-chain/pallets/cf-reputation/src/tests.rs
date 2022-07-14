@@ -66,15 +66,17 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 #[test]
 fn updating_accrual_rate_should_affect_reputation_points() {
 	new_test_ext().execute_with(|| {
+		// Fails due to too high a reputation points
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
 				Origin::root(),
 				MAX_REPUTATION_POINT_ACCRUED + 1,
-				0
+				20
 			),
 			Error::<Test>::InvalidAccrualRatio,
 		);
 
+		// Fails due to online points not being > 0
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(Origin::root(), MAX_REPUTATION_POINT_ACCRUED, 0),
 			Error::<Test>::InvalidAccrualRatio,
@@ -82,11 +84,11 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		assert_ok!(ReputationPallet::update_accrual_ratio(
 			Origin::root(),
-			ACCRUAL_RATE.0,
-			ACCRUAL_RATE.1,
+			ACCRUAL_RATIO.0,
+			ACCRUAL_RATIO.1,
 		));
 
-		assert_eq!(ReputationPallet::accrual_ratio(), ACCRUAL_RATE);
+		assert_eq!(ReputationPallet::accrual_ratio(), ACCRUAL_RATIO);
 
 		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT);
@@ -94,8 +96,8 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 		// Double the accrual rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
 			Origin::root(),
-			ACCRUAL_RATE.0 * 2,
-			ACCRUAL_RATE.1,
+			ACCRUAL_RATIO.0 * 2,
+			ACCRUAL_RATIO.1,
 		));
 
 		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
@@ -104,8 +106,8 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 		// Halve the divisor, equivalent to double the initial rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
 			Origin::root(),
-			ACCRUAL_RATE.0,
-			ACCRUAL_RATE.1 / 2,
+			ACCRUAL_RATIO.0,
+			ACCRUAL_RATIO.1 / 2,
 		));
 
 		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
