@@ -2,24 +2,20 @@
 Running: cargo fmt -- --check
 EOF
 
-diff=$(cargo fmt -- --check)
+cargo fmt -- --check
 result=$?
 
-if [[ ${result} -ne 0 ]] ; then
+if [ ${result} -ne 0 ] ; then
     cat <<\EOF
 There are some code style issues, run `cargo fmt` first.
 EOF
     exit 1
 fi
 
-cat <<\EOF
-Running: cargo clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces
-EOF
-
-diff=$(cargo clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces)
+sh clippy.sh
 result=$?
 
-if [[ ${result} -ne 0 ]] ; then
+if [ ${result} -ne 0 ] ; then
     cat <<\EOF
 
 -----------------------------
