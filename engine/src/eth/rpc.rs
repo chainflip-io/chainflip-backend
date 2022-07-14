@@ -11,7 +11,7 @@ use web3::{
 };
 use web3_secp256k1::SecretKey;
 
-use futures::future::select_ok;
+use futures::{future::select_ok, FutureExt};
 
 use anyhow::{Context, Result};
 
@@ -20,7 +20,7 @@ use crate::{
     settings,
 };
 
-use super::{redact_and_log_node_endpoint, TransportProtocol};
+use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 
 use async_trait::async_trait;
 
@@ -33,6 +33,42 @@ pub type EthWsRpcClient = EthRpcClient<web3::transports::WebSocket>;
 #[derive(Clone)]
 pub struct EthRpcClient<T: EthTransport> {
     web3: Web3<T>,
+}
+
+impl<T: EthTransport> EthRpcClient<T> {
+    async fn inner_new<F: futures::Future<Output = Result<T>>>(
+        node_endpoint: &str,
+        f: F,
+        logger: &slog::Logger,
+    ) -> Result<Self> {
+        match redact_secret_eth_node_endpoint(node_endpoint) {
+            Ok(redacted) => {
+                slog::debug!(
+                    logger,
+                    "Connecting new {} web3 client to {}",
+                    T::transport_protocol(),
+                    redacted
+                );
+            }
+            Err(e) => {
+                slog::error!(
+                    logger,
+                    "Could not redact secret in {} ETH node endpoint: {}",
+                    T::transport_protocol(),
+                    e
+                );
+                slog::debug!(
+                    logger,
+                    "Connecting new {} web3 client",
+                    T::transport_protocol()
+                );
+            }
+        };
+
+        Ok(Self {
+            web3: Web3::new(f.await?),
+        })
+    }
 }
 
 pub trait EthTransport: web3::Transport {
@@ -225,19 +261,19 @@ where
 
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
-        let ws_node_endpoint = &eth_settings.ws_node_endpoint;
-        redact_and_log_node_endpoint(
-            ws_node_endpoint,
-            web3::transports::WebSocket::transport_protocol(),
+        let client = Self::inner_new(
+            &eth_settings.ws_node_endpoint,
+            async {
+                context!(web3::transports::WebSocket::new(&eth_settings.ws_node_endpoint).await)
+            },
             logger,
-        );
-        let web3 = web3::Web3::new(context!(
-            web3::transports::WebSocket::new(ws_node_endpoint).await
-        )?);
+        )
+        .await?;
 
         let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
-        while let SyncState::Syncing(info) = web3
+        while let SyncState::Syncing(info) = client
+            .web3
             .eth()
             .syncing()
             .await
@@ -253,7 +289,7 @@ impl EthWsRpcClient {
         }
         slog::info!(logger, "ETH node is synced.");
 
-        Ok(Self { web3 })
+        Ok(client)
     }
 }
 
@@ -279,18 +315,17 @@ impl EthWsRpcApi for EthWsRpcClient {
 
 impl EthHttpRpcClient {
     pub fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
-        let http_node_endpoint = &eth_settings.http_node_endpoint;
-        redact_and_log_node_endpoint(
-            http_node_endpoint,
-            web3::transports::Http::transport_protocol(),
+        Self::inner_new(
+            &eth_settings.http_node_endpoint,
+            std::future::ready({
+                context!(web3::transports::Http::new(
+                    &eth_settings.http_node_endpoint
+                ))
+            }),
             logger,
-        );
-        let web3 = web3::Web3::new(
-            web3::transports::Http::new(http_node_endpoint)
-                .context("Failed to create HTTP Transport for web3 client")?,
-        );
-
-        Ok(Self { web3 })
+        )
+        .now_or_never()
+        .unwrap()
     }
 }
 

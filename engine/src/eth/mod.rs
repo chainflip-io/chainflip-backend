@@ -1077,32 +1077,6 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
     }
 }
 
-fn redact_and_log_node_endpoint(
-    endpoint: &str,
-    protocol: TransportProtocol,
-    logger: &slog::Logger,
-) {
-    match redact_secret_eth_node_endpoint(endpoint) {
-        Ok(redacted) => {
-            slog::debug!(
-                logger,
-                "Connecting new {} web3 client to {}",
-                protocol,
-                redacted
-            );
-        }
-        Err(e) => {
-            slog::error!(
-                logger,
-                "Could not redact secret in {} ETH node endpoint: {}",
-                protocol,
-                e
-            );
-            slog::debug!(logger, "Connecting new {} web3 client", protocol);
-        }
-    }
-}
-
 #[cfg(test)]
 mod merged_stream_tests {
     use std::time::Duration;
