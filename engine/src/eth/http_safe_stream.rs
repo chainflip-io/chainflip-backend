@@ -371,8 +371,7 @@ pub mod tests {
             .in_sequence(&mut seq)
             .returning(move |n| dummy_block(n.as_u64()));
 
-        let num_blocks_backwards = 2;
-        let back_to_block_number = first_block_number - U64::from(num_blocks_backwards);
+        let back_to_block_number = first_block_number - U64::from(2);
 
         // We want to return the one after the first one we have already returned
         for n in back_to_block_number.as_u64()..=first_block_number.as_u64() + 1 {
@@ -401,11 +400,9 @@ pub mod tests {
             &logger,
         )
         .await;
-        let expected_first_returned_block_number =
-            first_block_number - U64::from(ETH_BLOCK_SAFETY_MARGIN);
         assert_eq!(
             stream.next().await.unwrap().block_number,
-            expected_first_returned_block_number
+            first_safe_block_number
         );
 
         // We do not want any repeat blocks, we will just wait until we can return the next safe
@@ -465,8 +462,10 @@ pub mod tests {
 
         let mut seq = Sequence::new();
 
-        let block_range = 10..=12;
+        let end_of_successful_block_range = 13;
+        let block_range = 10..end_of_successful_block_range;
 
+        // Get blocks 10-12 successfully
         for block_number in block_range.clone() {
             mock_eth_http_rpc_client
                 .expect_block_number()
@@ -481,18 +480,19 @@ pub mod tests {
                 .returning(move |number| dummy_block(number.as_u64()));
         }
 
+        // Failed to poll for block number 13
         mock_eth_http_rpc_client
             .expect_block_number()
             .times(1)
             .in_sequence(&mut seq)
             .returning(move || Err(anyhow::Error::msg("Failed to get block number, you fool")));
 
-        let block_number_after_error = 13;
+        // successfully poll the next block number
         mock_eth_http_rpc_client
             .expect_block_number()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(move || Ok(U64::from(block_number_after_error)));
+            .returning(move || Ok(U64::from(end_of_successful_block_range)));
 
         mock_eth_http_rpc_client
             .expect_block()
@@ -519,7 +519,7 @@ pub mod tests {
 
         assert_eq!(
             stream.next().await.unwrap().block_number,
-            U64::from(block_number_after_error - ETH_BLOCK_SAFETY_MARGIN)
+            U64::from(end_of_successful_block_range - ETH_BLOCK_SAFETY_MARGIN)
         );
     }
 
