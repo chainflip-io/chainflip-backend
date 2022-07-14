@@ -30,6 +30,7 @@ pub enum Proposal<T: Config> {
 	SetGovernanceKey(<<T as Config>::Chain as ChainCrypto>::GovKey),
 	SetCommunityKey(<<T as Config>::Chain as ChainCrypto>::GovKey),
 }
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -71,10 +72,8 @@ pub mod pallet {
 
 		type SetCommunityKeyApiCall: SetCommunityKeyApiCall<Self::Chain>;
 
-		/// Something that can provide a nonce for the threshold signature.
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
-		/// The Flip token implementation.
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
@@ -178,7 +177,7 @@ pub mod pallet {
 			proposal: Proposal<T>,
 		) -> DispatchResultWithPostInfo {
 			let baker = ensure_signed(origin)?;
-			// ensure!(Backers::<T>::contains_key(proposal.clone()), Error::<T>::ProposalDosentExists);
+			// TODO: Prevent voting for proposal which dosen't exist
 			Backers::<T>::mutate(proposal, |bakers| {
 				if bakers.contains(&baker) {
 					return Err(Error::<T>::AlreadyBacked)

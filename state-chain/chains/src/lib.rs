@@ -57,7 +57,7 @@ pub trait ChainCrypto: Chain {
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 	type TransactionHash: Member + Parameter + Default;
-	type GovKey: Member + Parameter + Copy;
+	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -210,6 +210,13 @@ pub mod mocks {
 	impl Age<MockEthereum> for MockTrackedData {
 		fn birth_block(&self) -> u64 {
 			self.0
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	impl BenchmarkValue for [u8; 32] {
+		fn benchmark_value() -> Self {
+			[1u8; 32]
 		}
 	}
 

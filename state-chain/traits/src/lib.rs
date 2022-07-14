@@ -740,7 +740,9 @@ pub trait SystemStateManager {
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
-
+	/// Helper function to mint FLIP to an account
+	#[cfg(feature = "runtime-benchmarks")]
+	fn mint_to_account(account_id: Self::AccountId, amount: Self::Amount);
 	fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 

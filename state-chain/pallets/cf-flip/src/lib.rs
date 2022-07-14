@@ -374,6 +374,11 @@ impl<T:Config> FeePayment for Pallet<T> {
     type Amount = T::Balance;
     type AccountId = T::AccountId;
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn mint_to_account(account_id: Self::AccountId, amount: Self::Amount) {
+		// TODO: Mint some FLIP to an given account
+	}
+
     fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> sp_runtime::DispatchResult {
 		Pallet::<T>::settle(&account_id, Pallet::<T>::burn(amount).into());
 		Ok(().into())
