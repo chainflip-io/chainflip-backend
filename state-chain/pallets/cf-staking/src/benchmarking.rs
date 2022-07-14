@@ -182,7 +182,7 @@ benchmarks! {
 			let withdrawal_address = eth_base_addr.map(|x| x + i as u8);
 			Call::<T>::staked {
 				account_id: staker.clone(),
-				amount: MinimumStake::<T>::get().into(),
+				amount: T::Balance::from(MinimumStake::<T>::get()),
 				withdrawal_address,
 				tx_hash: [0; 32]
 			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
@@ -198,13 +198,13 @@ benchmarks! {
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {
-			minimum_stake: MinimumStake::<T>::get().into(),
+			minimum_stake: T::Balance::from(MinimumStake::<T>::get()),
 		};
 
 		let origin = T::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(MinimumStake::<T>::get(), MinimumStake::<T>::get().into());
+		assert_eq!(T::Balance::from(MinimumStake::<T>::get()), T::Balance::from(MinimumStake::<T>::get()));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
