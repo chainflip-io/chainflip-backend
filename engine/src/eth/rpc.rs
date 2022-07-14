@@ -1,4 +1,5 @@
 use sp_core::{H256, U256};
+use utilities::make_periodic_tick;
 use web3::{
     api::SubscriptionStream,
     signing::SecretKeyRef,
@@ -234,6 +235,8 @@ impl EthWsRpcClient {
             web3::transports::WebSocket::new(ws_node_endpoint).await
         )?);
 
+        let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
+
         while let SyncState::Syncing(info) = web3
             .eth()
             .syncing()
@@ -244,9 +247,9 @@ impl EthWsRpcClient {
                 logger,
                 "Waiting for ETH node to sync. Sync state is: {:?}. Checking again in {:?} ...",
                 info,
-                SYNC_POLL_INTERVAL
+                poll_interval.period(),
             );
-            tokio::time::sleep(SYNC_POLL_INTERVAL).await;
+            poll_interval.tick().await;
         }
         slog::info!(logger, "ETH node is synced.");
 
