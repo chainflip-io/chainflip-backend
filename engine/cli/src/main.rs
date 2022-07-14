@@ -139,7 +139,7 @@ async fn request_claim(
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
             pallet_cf_staking::Call::claim {
-                amount: atomic_amount,
+                amount: atomic_amount.into(),
                 address: eth_address,
             },
             logger,

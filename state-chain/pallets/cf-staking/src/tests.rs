@@ -61,8 +61,8 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B);
 
 		// Now claim some FLIP.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), CLAIM_A, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::claim(Origin::signed(BOB), CLAIM_B, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), CLAIM_A.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(BOB), CLAIM_B.into(), ETH_DUMMY_ADDR));
 
 		// Make sure it was subtracted.
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1 + STAKE_A2 - CLAIM_A);
@@ -93,7 +93,7 @@ fn claiming_unclaimable_is_err() {
 
 		// Claim FLIP before it is staked.
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
 			Error::<Test>::InvalidClaim
 		);
 
@@ -106,13 +106,13 @@ fn claiming_unclaimable_is_err() {
 		// Try to, and fail, claim an amount that would leave the balance below the minimum stake
 		let excessive_claim = STAKE - MIN_STAKE + 1;
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), excessive_claim, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), excessive_claim.into(), ETH_DUMMY_ADDR),
 			Error::<Test>::BelowMinimumStake
 		);
 
 		// Claim FLIP from another account.
 		assert_noop!(
-			Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(BOB), STAKE.into(), ETH_DUMMY_ADDR),
 			Error::<Test>::InvalidClaim
 		);
 
@@ -142,11 +142,11 @@ fn cannot_double_claim() {
 		));
 
 		// Claim a portion.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a1, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a1.into(), ETH_DUMMY_ADDR));
 
 		// Claiming the rest should not be possible yet.
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), stake_a2, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), stake_a1.into(), ETH_DUMMY_ADDR),
 			<Error<Test>>::PendingClaim
 		);
 
@@ -164,7 +164,7 @@ fn cannot_double_claim() {
 		);
 
 		// Should now be able to claim the rest.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2.into(), ETH_DUMMY_ADDR));
 
 		// Redeem the rest.
 		assert_eq!(
@@ -199,7 +199,7 @@ fn staked_and_claimed_events_must_match() {
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		// Claim it.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 
 		// Invalid Claimed Event from Ethereum: wrong account.
 		assert_noop!(
@@ -270,7 +270,7 @@ fn signature_is_inserted() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Claim it.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 
 		// Threshold signature request should have been made.
 		assert_eq!(MockThresholdSigner::received_requests().len(), 1);
@@ -338,25 +338,25 @@ fn cannot_claim_bond() {
 		Bonder::<Test>::update_bond(&ALICE, BOND);
 
 		// Bob can withdraw all, but not Alice.
-		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE.into(), ETH_DUMMY_ADDR));
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
 		);
 
 		// Alice *can* withdraw 100
-		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE - BOND, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), (STAKE - BOND).into(), ETH_DUMMY_ADDR));
 
 		// Even if she claims, the remaining 100 are blocked
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE - BOND, TX_HASH));
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), 1, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), 1.into(), ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
 		);
 
 		// Once she is no longer bonded, Alice can claim her stake.
 		Bonder::<Test>::update_bond(&ALICE, 0u128);
-		assert_ok!(Staking::claim(Origin::signed(ALICE), BOND, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), BOND.into(), ETH_DUMMY_ADDR));
 	});
 }
 
@@ -414,11 +414,11 @@ fn claim_expiry() {
 		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice claims immediately.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 
 		// Bob claims a little later.
 		time_source::Mock::tick(Duration::from_secs(3));
-		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE.into(), ETH_DUMMY_ADDR));
 
 		// If we stay within the defined bounds, we can claim.
 		time_source::Mock::reset_to(START_TIME);
@@ -492,7 +492,7 @@ fn no_claims_allowed_out_of_claim_period() {
 
 		// Claiming is not allowed.
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), stake.into(), ETH_DUMMY_ADDR),
 			<Error<Test>>::AuctionPhase
 		);
 	});
@@ -511,7 +511,7 @@ fn test_claim_all() {
 		Bonder::<Test>::update_bond(&ALICE, BOND);
 
 		// Claim all available funds.
-		assert_ok!(Staking::claim_all(Origin::signed(ALICE), ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), None, ETH_DUMMY_ADDR));
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_sequence!(
@@ -569,11 +569,11 @@ fn claim_with_withdrawal_address() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Claim it - expect to fail because the address is different
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), STAKE, WRONG_ETH_ADDR),
+			Staking::claim(Origin::signed(ALICE), STAKE.into(), WRONG_ETH_ADDR),
 			<Error<Test>>::WithdrawalAddressRestricted
 		);
 		// Try it again with the right address - expect to succeed
-		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 	});
 }
 
@@ -587,11 +587,11 @@ fn cannot_claim_to_zero_address() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 		// Claim it - expect to fail because the address is the zero address
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), STAKE, ETH_ZERO_ADDRESS),
+			Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_ZERO_ADDRESS),
 			<Error<Test>>::InvalidClaim
 		);
 		// Try it again with a non-zero address - expect to succeed
-		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 	});
 }
 
