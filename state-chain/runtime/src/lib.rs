@@ -440,7 +440,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
+	type MaximumAccruableReputation = MaximumReputationPointAccrued;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {

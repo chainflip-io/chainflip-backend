@@ -142,7 +142,7 @@ pub mod pallet {
 
 		/// The maximum number of reputation points that can be accrued
 		#[pallet::constant]
-		type MaximumReputationPointAccrued: Get<ReputationPoints>;
+		type MaximumAccruableReputation: Get<ReputationPoints>;
 	}
 
 	#[pallet::hooks]
@@ -254,7 +254,7 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			ensure!(
-				reputation_points <= T::MaximumReputationPointAccrued::get() &&
+				reputation_points <= T::MaximumAccruableReputation::get() &&
 					online_credits > Zero::zero(),
 				Error::<T>::InvalidAccrualRatio
 			);

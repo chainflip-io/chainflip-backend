@@ -168,7 +168,7 @@ impl Config for Test {
 	type Slasher = MockSlasher;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
+	type MaximumAccruableReputation = MaximumReputationPointAccrued;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
