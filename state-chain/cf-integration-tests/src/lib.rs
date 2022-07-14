@@ -583,7 +583,7 @@ mod tests {
 				flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 				staking: StakingConfig {
 					genesis_stakers: self.accounts.clone(),
-					minimum_stake: MIN_STAKE,
+					minimum_stake: DEFAULT_MIN_STAKE,
 					claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 				},
 				auction: AuctionConfig {

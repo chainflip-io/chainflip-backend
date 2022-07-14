@@ -16,8 +16,6 @@ fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 	(0..=count).map(|i| account("doogle", i, 0)).collect()
 }
 
-const MIN_STAKE: u128 = 50_000 * 10u128.pow(18);
-
 benchmarks! {
 
 	staked {
@@ -42,7 +40,7 @@ benchmarks! {
 
 	claim {
 		let balance_to_claim: T::Balance = T::Balance::from(50u32);
-		let balance_to_stake: T::Balance = T::Balance::from(MIN_STAKE);
+		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get());
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
@@ -67,7 +65,7 @@ benchmarks! {
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
 
-		let balance_to_stake: T::Balance = T::Balance::from(MIN_STAKE);
+		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get());
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 
 		let caller: T::AccountId = whitelisted_caller();
@@ -95,7 +93,7 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MIN_STAKE),
+			amount: T::Balance::from(MinimumStake::<T>::get()),
 			withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
@@ -123,7 +121,7 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MIN_STAKE),
+			amount: T::Balance::from(MinimumStake::<T>::get()),
 			withdrawal_address,
 			tx_hash: [211u8; 32],
 		}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
@@ -184,7 +182,7 @@ benchmarks! {
 			let withdrawal_address = eth_base_addr.map(|x| x + i as u8);
 			Call::<T>::staked {
 				account_id: staker.clone(),
-				amount: MIN_STAKE.into(),
+				amount: MinimumStake::<T>::get().into(),
 				withdrawal_address,
 				tx_hash: [0; 32]
 			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
@@ -200,13 +198,13 @@ benchmarks! {
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {
-			minimum_stake: MIN_STAKE.into(),
+			minimum_stake: MinimumStake::<T>::get().into(),
 		};
 
 		let origin = T::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(MinimumStake::<T>::get(), MIN_STAKE.into());
+		assert_eq!(MinimumStake::<T>::get(), MinimumStake::<T>::get().into());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
