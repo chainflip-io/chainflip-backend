@@ -39,8 +39,10 @@ benchmarks! {
 	}
 
 	claim {
-		let balance_to_claim: T::Balance = T::Balance::from(50u32);
-		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get());
+		// If we claim an amount which takes us below the minimum stake, the claim
+		// will fail.
+		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get() * T::Balance::from(2u128));
+		let balance_to_claim: T::Balance = T::Balance::from(MinimumStake::<T>::get());
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
