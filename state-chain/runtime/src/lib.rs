@@ -140,7 +140,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type AuctionQualification = (
-		Online,
+		Reputation,
 		pallet_cf_validator::PeerMapping<Self>,
 		SessionKeysRegistered<
 			<Self as frame_system::Config>::AccountId,
@@ -434,18 +434,13 @@ parameter_types! {
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
+	type Heartbeat = ChainflipHeartbeat;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
-}
-
-impl pallet_cf_online::Config for Runtime {
-	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
-	type Heartbeat = ChainflipHeartbeat;
-	type WeightInfo = pallet_cf_online::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
@@ -513,7 +508,6 @@ construct_runtime!(
 		Grandpa: pallet_grandpa,
 		Governance: pallet_cf_governance,
 		EthereumVault: pallet_cf_vaults::<Instance1>,
-		Online: pallet_cf_online,
 		Reputation: pallet_cf_reputation,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
@@ -559,7 +553,6 @@ pub type Executive = frame_executive::Executive<
 			(
 				migrations::DeleteRewardsPallet,
 				migrations::UnifyCeremonyIds,
-				migrations::refactor_offences::Migration,
 				migrations::migrate_contract_addresses::Migration,
 				migrations::add_flip_contract_address::Migration,
 				migrations::migrate_claims::Migration,
@@ -590,7 +583,6 @@ mod benches {
 		[pallet_cf_validator, Validator]
 		[pallet_cf_governance, Governance]
 		[pallet_cf_vaults, EthereumVault]
-		[pallet_cf_online, Online]
 		[pallet_cf_reputation, Reputation]
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
@@ -659,7 +651,7 @@ impl_runtime_apis! {
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
-			let last_heartbeat = pallet_cf_online::LastHeartbeat::<Runtime>::get(&account_id);
+			let last_heartbeat = pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 			let account_data = ChainflipAccountStore::<Runtime>::get(&account_id);

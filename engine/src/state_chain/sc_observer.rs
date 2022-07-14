@@ -121,7 +121,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     );
 
     state_chain_client
-        .submit_signed_extrinsic(pallet_cf_online::Call::heartbeat {}, &logger)
+        .submit_signed_extrinsic(pallet_cf_reputation::Call::heartbeat {}, &logger)
         .await
         .expect("Should be able to submit first heartbeat");
 
@@ -431,7 +431,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                             );
                             let _result = state_chain_client
                                 .submit_signed_extrinsic(
-                                    pallet_cf_online::Call::heartbeat {},
+                                    pallet_cf_reputation::Call::heartbeat {},
                                     &logger,
                                 )
                                 .await;

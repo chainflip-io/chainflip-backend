@@ -8,12 +8,12 @@ mod tests {
 	use state_chain_runtime::{
 		chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
 		AuctionConfig, Emissions, EmissionsConfig, EthereumVault, EthereumVaultConfig, Flip,
-		FlipConfig, Governance, GovernanceConfig, Online, Origin, Reputation, ReputationConfig,
-		Runtime, Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator,
+		FlipConfig, Governance, GovernanceConfig, Origin, Reputation, ReputationConfig, Runtime,
+		Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator,
 		ValidatorConfig,
 	};
 
-	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance, IsOnline};
+	use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
 	use libsecp256k1::SecretKey;
 	use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 	use rand::{prelude::*, SeedableRng};
@@ -309,8 +309,7 @@ mod tests {
 				if self.live {
 					// Heartbeat -> Send transaction to state chain twice an interval
 					if block_number % (HEARTBEAT_BLOCK_INTERVAL / 2) == 0 {
-						// Online pallet
-						let _result = Online::heartbeat(state_chain_runtime::Origin::signed(
+						let _result = Reputation::heartbeat(state_chain_runtime::Origin::signed(
 							self.node_id.clone(),
 						));
 					}
@@ -451,7 +450,6 @@ mod tests {
 					System::initialize(&block_number, &System::block_hash(block_number), &digest);
 					System::on_initialize(block_number);
 					Session::on_initialize(block_number);
-					Online::on_initialize(block_number);
 					Flip::on_initialize(block_number);
 					Staking::on_initialize(block_number);
 					Auction::on_initialize(block_number);
@@ -596,6 +594,7 @@ mod tests {
 				reputation: ReputationConfig {
 					accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 					penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
+					genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 				},
 				governance: GovernanceConfig {
 					members: self.root.iter().cloned().collect(),
@@ -637,7 +636,7 @@ mod tests {
 
 		use super::*;
 		use cf_traits::{
-			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
+			ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, QualifyNode,
 			StakeTransfer,
 		};
 		pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
@@ -696,7 +695,7 @@ mod tests {
 				}
 
 				for account in accounts.iter() {
-					assert!(!Online::is_online(account), "node should have not sent a heartbeat");
+					assert!(Reputation::is_qualified(account), "Genesis nodes start online");
 				}
 
 				assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
@@ -802,6 +801,7 @@ mod tests {
 
 					for node in &offline_nodes {
 						testnet.set_active(node, false);
+						pallet_cf_reputation::LastHeartbeat::<Runtime>::remove(node);
 					}
 
 					// Run to the next epoch to start the auction

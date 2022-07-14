@@ -321,13 +321,6 @@ pub trait EthEnvironmentProvider {
 	fn chain_id() -> u64;
 }
 
-pub trait IsOnline {
-	/// The validator id used
-	type ValidatorId;
-	/// The online status of the node
-	fn is_online(validator_id: &Self::ValidatorId) -> bool;
-}
-
 /// A representation of the current network state for this heartbeat interval.
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
@@ -601,8 +594,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 pub trait Heartbeat {
 	type ValidatorId;
 	type BlockNumber;
-	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber);
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }

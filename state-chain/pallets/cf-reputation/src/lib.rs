@@ -100,6 +100,8 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::{EpochInfo, QualifyNode};
+	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -109,7 +111,8 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + Chainflip {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -130,6 +133,9 @@ pub mod pallet {
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
+		/// Handle to allow us to trigger across any pallet on a heartbeat interval
+		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
+
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
@@ -148,6 +154,16 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: T::BlockNumber) -> Weight {
+			if Self::blocks_since_new_interval(current_block) == Zero::zero() {
+				// Provide feedback via the `Heartbeat` trait on each interval
+				T::Heartbeat::on_heartbeat_interval(Self::current_network_state());
+
+				return T::WeightInfo::submit_network_state()
+			}
+			T::WeightInfo::on_initialize_no_action()
+		}
+
 		fn on_runtime_upgrade() -> Weight {
 			migrations::PalletMigration::<T>::on_runtime_upgrade();
 			T::WeightInfo::on_runtime_upgrade()
@@ -197,6 +213,12 @@ pub mod pallet {
 	/// The penalty to be applied for each offence.
 	pub type OffenceTimeSlotTracker<T: Config> = StorageMap<_, Identity, ReportId, OpaqueTimeSlot>;
 
+	/// The last block numbers at which validators submitted a heartbeat.
+	#[pallet::storage]
+	#[pallet::getter(fn last_heartbeat)]
+	pub type LastHeartbeat<T: Config> =
+		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -237,7 +259,7 @@ pub mod pallet {
 			points: ReputationPoints,
 			online_credits: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
 				points <= T::MaximumReputationPointAccrued::get() && online_credits > Zero::zero(),
 				Error::<T>::InvalidAccrualRatio
@@ -259,7 +281,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			value: ReputationPenaltyRate<BlockNumberFor<T>>,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let ReputationPenaltyRate { points, per_blocks } = value;
 			let interval: u16 = T::HeartbeatBlockInterval::get().unique_saturated_into();
@@ -285,7 +307,7 @@ pub mod pallet {
 			offence: T::Offence,
 			penalty: Penalty<T>,
 		) -> DispatchResultWithPostInfo {
-			let _success = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let old = Penalties::<T>::mutate(&offence, |maybe_penalty| {
 				let old = maybe_penalty.clone().unwrap_or_default();
@@ -297,6 +319,76 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// A heartbeat is used to measure the liveness of a node. It is measured in blocks.
+		/// For every interval we expect at least one heartbeat from all nodes of the network.
+		/// Failing this they would be considered offline. Suspended validators can continue to
+		/// submit heartbeats so that when their suspension has expired they would be considered
+		/// online again.
+		///
+		/// ## Events
+		///
+		/// - None
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::heartbeat())]
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+			let current_block_number = frame_system::Pallet::<T>::current_block_number();
+
+			let start_of_this_interval =
+				current_block_number - Self::blocks_since_new_interval(current_block_number);
+
+			// Interval range is [start, end), so if we have a heartbeat block interval of 150-300
+			// and 300-450 and we submit on 300, it counts as a heartbeat for the latter interval.
+			// Since it's effecively [150, 299] -> [300, 449]
+			match LastHeartbeat::<T>::get(&validator_id) {
+				Some(last_heartbeat) if last_heartbeat > start_of_this_interval => {
+					// we have already submitted a heartbeat for this interval
+				},
+				_ => {
+					LastHeartbeat::<T>::insert(&validator_id, current_block_number);
+					Reputations::<T>::mutate(&validator_id, |rep| {
+						rep.boost_reputation(Self::online_credit_reward());
+					});
+				},
+			};
+
+			Ok(().into())
+		}
+	}
+
+	impl<T: Config> QualifyNode for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+
+		/// A node is considered online, and therefore qualified if fewer than
+		/// [T::HeartbeatBlockInterval] blocks have elapsed since their last heartbeat submission.
+		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+			use sp_runtime::traits::Saturating;
+			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
+					T::HeartbeatBlockInterval::get()
+			} else {
+				false
+			}
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		/// Returns the number of blocks that have elapsed since the new HeartbeatBlockInterval
+		pub fn blocks_since_new_interval(block_number: T::BlockNumber) -> T::BlockNumber {
+			block_number % T::HeartbeatBlockInterval::get()
+		}
+
+		/// Partitions the validators based on whether they are considered online or offline.
+		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
+			let (online, offline) =
+				T::EpochInfo::current_authorities().into_iter().partition(Self::is_qualified);
+
+			NetworkState { online, offline }
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -304,12 +396,17 @@ pub mod pallet {
 		pub accrual_ratio: (ReputationPoints, T::BlockNumber),
 		#[allow(clippy::type_complexity)]
 		pub penalties: Vec<(T::Offence, (ReputationPoints, T::BlockNumber))>,
+		pub genesis_nodes: Vec<T::ValidatorId>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { accrual_ratio: (Zero::zero(), Zero::zero()), penalties: Default::default() }
+			Self {
+				accrual_ratio: (Zero::zero(), Zero::zero()),
+				penalties: Default::default(),
+				genesis_nodes: Default::default(),
+			}
 		}
 	}
 
@@ -322,6 +419,10 @@ pub mod pallet {
 					offence,
 					Penalty::<T> { reputation: *reputation, suspension: *suspension },
 				);
+			}
+			let current_block_number = frame_system::Pallet::<T>::current_block_number();
+			for node in &self.genesis_nodes {
+				LastHeartbeat::<T>::insert(node, current_block_number);
 			}
 		}
 	}
@@ -358,35 +459,6 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	}
 }
 
-impl<T: Config> Heartbeat for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type BlockNumber = T::BlockNumber;
-
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, _block_number: Self::BlockNumber) {
-		Reputations::<T>::mutate(&validator_id, |rep| {
-			rep.boost_reputation(Self::online_credit_reward());
-		});
-	}
-
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
-		<Self as OffenceReporter>::report_many(
-			PalletOffence::MissedHeartbeat,
-			network_state.offline.as_slice(),
-		);
-		for validator_id in network_state.offline {
-			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
-				rep.reset_online_credits();
-				rep.reputation_points
-			});
-
-			if reputation_points < 0 {
-				// At this point we slash the node by the amount of blocks offline
-				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
-			}
-		}
-	}
-}
-
 pub trait OffenceList<T: Config> {
 	const OFFENCES: &'static [T::Offence];
 }
@@ -404,6 +476,24 @@ impl<T: Config, L: OffenceList<T>> Get<BTreeSet<T::ValidatorId>>
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn penalise_offline_authorities(offline_authorities: Vec<T::ValidatorId>) {
+		<Self as OffenceReporter>::report_many(
+			PalletOffence::MissedHeartbeat,
+			offline_authorities.as_slice(),
+		);
+		for validator_id in offline_authorities {
+			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
+				rep.reset_online_credits();
+				rep.reputation_points
+			});
+
+			if reputation_points < 0 {
+				// At this point we slash the node by the amount of blocks offline
+				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
+			}
+		}
+	}
+
 	/// Return number of online credits for reward
 	fn online_credit_reward() -> T::BlockNumber {
 		// Equivalent to the number of blocks used for the heartbeat
