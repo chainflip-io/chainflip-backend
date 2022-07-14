@@ -13,4 +13,5 @@ pub const SOUNDCHECK: StateChainEnvironment = StateChainEnvironment {
 	ethereum_deployment_block: 9819300,
 	eth_block_safety_margin: 4,
 	max_ceremony_stage_duration: 300,
+	min_stake: 1_000_000_000_000_000_000_000,
 };
