@@ -341,9 +341,7 @@ pub mod pallet {
 			let start_of_this_interval =
 				current_block_number - Self::blocks_since_new_interval(current_block_number);
 
-			// Interval range is [start, end), so if we have a heartbeat block interval of 150-300
-			// and 300-450 and we submit on 300, it counts as a heartbeat for the latter interval.
-			// Since it's effecively [150, 299] -> [300, 449]
+			// Heartbeat intervals range is (start, end]
 			match LastHeartbeat::<T>::get(&validator_id) {
 				Some(last_heartbeat) if last_heartbeat > start_of_this_interval => {
 					// we have already submitted a heartbeat for this interval
