@@ -144,6 +144,52 @@ async fn handle_signing_request<MultisigClient, RpcClient>(
     }
 }
 
+#[cfg(test)]
+pub async fn test_handle_keygen_request<MultisigClient, RpcClient>(
+    multisig_client: Arc<MultisigClient>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    ceremony_id: CeremonyId,
+    validator_candidates: Vec<AccountId32>,
+    logger: slog::Logger,
+) where
+    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+{
+    handle_keygen_request(
+        multisig_client,
+        state_chain_client,
+        ceremony_id,
+        validator_candidates,
+        logger,
+    )
+    .await;
+}
+
+#[cfg(test)]
+pub async fn test_handle_signing_request<MultisigClient, RpcClient>(
+    multisig_client: Arc<MultisigClient>,
+    state_chain_client: Arc<StateChainClient<RpcClient>>,
+    ceremony_id: CeremonyId,
+    key_id: KeyId,
+    signers: Vec<AccountId>,
+    data: MessageHash,
+    logger: slog::Logger,
+) where
+    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+{
+    handle_signing_request(
+        multisig_client,
+        state_chain_client,
+        ceremony_id,
+        key_id,
+        signers,
+        data,
+        logger,
+    )
+    .await;
+}
+
 pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,

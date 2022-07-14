@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use cf_chains::{
     eth::{AggKey, UnsignedTransaction},
@@ -23,8 +23,8 @@ use crate::{
         rpc::{EthWsRpcClient, MockEthRpcApi},
         EthBroadcaster, ObserveInstruction,
     },
-    logging::{self, test_utils::new_test_logger},
-    multisig::client::mocks::MockMultisigClientApi,
+    logging::test_utils::new_test_logger,
+    multisig::client::{mocks::MockMultisigClientApi, CeremonyFailureReason},
     settings::Settings,
     state_chain::{
         client::{
@@ -770,7 +770,7 @@ async fn only_encodes_and_signs_when_specified() {
 #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
 async fn run_the_sc_observer() {
     let settings = Settings::new_test().unwrap();
-    let logger = logging::test_utils::new_test_logger();
+    let logger = new_test_logger();
 
     let (initial_block_hash, block_stream, state_chain_client) =
         crate::state_chain::client::connect_to_state_chain(&settings.state_chain, false, &logger)
@@ -800,6 +800,112 @@ async fn run_the_sc_observer() {
         cfe_settings_update_sender,
         initial_block_hash,
         &logger,
+    )
+    .await;
+}
+
+// Test that the ceremony requests are calling the correct MultisigClientApi functions
+// depending on whether we are participating in the ceremony or not.
+#[tokio::test]
+async fn should_handle_ceremony_request() {
+    let logger = new_test_logger();
+    let latest_ceremony_id = 1;
+    let key_id = crate::multisig::KeyId(vec![0u8; 32]);
+    let sign_data = crate::multisig::MessageHash([0u8; 32]);
+    let our_account_id = AccountId32::new(OUR_ACCOUNT_ID_BYTES);
+    let not_our_account_id = AccountId32::new([1u8; 32]);
+    assert_ne!(our_account_id, not_our_account_id);
+
+    // Mock interfaces
+    let mut multisig_client = MockMultisigClientApi::new();
+    let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
+        MockStateChainRpcApi::new(),
+    ));
+
+    // Set up the mock api to expect the 2 not_participating_ceremony calls
+    multisig_client
+        .expect_not_participating_ceremony()
+        .with(predicate::eq(latest_ceremony_id))
+        .returning(|_| ());
+
+    multisig_client
+        .expect_not_participating_ceremony()
+        .with(predicate::eq(latest_ceremony_id + 1))
+        .returning(|_| ());
+
+    // Set up the mock api to expect the keygen and sign calls for the ceremonies we are participating in.
+    // It doesn't matter what failure reasons they return.
+    multisig_client
+        .expect_keygen()
+        .with(
+            predicate::eq(latest_ceremony_id + 2),
+            predicate::eq(vec![our_account_id.clone()]),
+        )
+        .returning(|_, _| {
+            Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
+            ))
+        });
+
+    multisig_client
+        .expect_sign()
+        .with(
+            predicate::eq(latest_ceremony_id + 3),
+            predicate::eq(key_id.clone()),
+            predicate::eq(vec![our_account_id.clone()]),
+            predicate::eq(sign_data.clone()),
+        )
+        .returning(|_, _, _, _| {
+            Err((
+                BTreeSet::new(),
+                CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
+            ))
+        });
+
+    let multisig_client = Arc::new(multisig_client);
+
+    // Handle a keygen request that we are not participating in
+    sc_observer::test_handle_keygen_request(
+        multisig_client.clone(),
+        state_chain_client.clone(),
+        latest_ceremony_id,
+        vec![not_our_account_id.clone()],
+        logger.clone(),
+    )
+    .await;
+
+    // Handle a signing request that we are not participating in
+    sc_observer::test_handle_signing_request(
+        multisig_client.clone(),
+        state_chain_client.clone(),
+        latest_ceremony_id + 1,
+        key_id.clone(),
+        vec![not_our_account_id.clone()],
+        sign_data.clone(),
+        logger.clone(),
+    )
+    .await;
+
+    // Handle a keygen request that we are participating in
+    sc_observer::test_handle_keygen_request(
+        multisig_client.clone(),
+        state_chain_client.clone(),
+        latest_ceremony_id + 2,
+        vec![our_account_id.clone()],
+        logger.clone(),
+    )
+    .await;
+
+    // Handle a signing request that we are participating in
+    sc_observer::test_handle_signing_request(
+        multisig_client,
+        state_chain_client.clone(),
+        latest_ceremony_id + 3,
+        key_id,
+        vec![our_account_id],
+        sign_data,
+        logger,
     )
     .await;
 }
