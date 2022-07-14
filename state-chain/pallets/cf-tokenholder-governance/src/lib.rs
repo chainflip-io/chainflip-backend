@@ -24,9 +24,6 @@ mod tests;
 
 pub type ProposalId = u32;
 
-// type GovKey<T> = <<T as Config>::Keys as AuthorityKeys>::Gov;
-// type CommKey<T> = <<T as Config>::Keys as AuthorityKeys>::Comm;
-
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum Proposal<T: Config> {

@@ -37,6 +37,7 @@ pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
 pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
 pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
+pallet-cf-tokenholder-governance = { path = "../pallets/cf-tokenholder-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
 pallet-cf-online = { path = "../pallets/cf-online", default-features = false }

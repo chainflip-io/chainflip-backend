@@ -18,7 +18,7 @@ pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{Bonding, Slashing, StakeHandler};
+use cf_traits::{Bonding, Slashing, StakeHandler, StakingInfo, FeePayment};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -355,6 +355,29 @@ impl<T: Config> Pallet<T> {
 	pub fn deposit_reserves(reserve_id: ReserveId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}
+}
+
+impl<T:Config> StakingInfo for Pallet<T> {
+    type AccountId = T::AccountId;
+    type Balance = T::Balance;
+
+    fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance {
+        Self::total_balance_of(account_id)
+    }
+
+    fn onchain_funds() -> Self::Balance {
+        Self::onchain_funds()
+    }
+}
+
+impl<T:Config> FeePayment for Pallet<T> {
+    type Amount = T::Balance;
+    type AccountId = T::AccountId;
+
+    fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> sp_runtime::DispatchResult {
+		Pallet::<T>::settle(&account_id, Pallet::<T>::burn(amount).into());
+		Ok(().into())
+    }
 }
 
 pub struct Bonder<T>(PhantomData<T>);

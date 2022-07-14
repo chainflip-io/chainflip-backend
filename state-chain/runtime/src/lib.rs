@@ -390,6 +390,19 @@ impl pallet_cf_staking::Config for Runtime {
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
 
+impl pallet_cf_tokenholder_governance::Config for Runtime {
+	type Event = Event;
+	type Balance = FlipBalance;
+	type FeePayment = Flip;
+	type Chain = Ethereum;
+	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
+	type Flip = Flip;
+	type SetGovKeyApiCall = eth::api::EthereumApi;
+	type SetCommunityKeyApiCall = eth::api::EthereumApi;
+	type GovKeyBroadcaster = EthereumBroadcaster;
+	type CommKeyBroadcaster = EthereumBroadcaster;
+}
+
 impl pallet_cf_governance::Config for Runtime {
 	type Origin = Origin;
 	type Call = Call;
@@ -512,6 +525,7 @@ construct_runtime!(
 		Authorship: pallet_authorship,
 		Grandpa: pallet_grandpa,
 		Governance: pallet_cf_governance,
+		TokenholderGovernance: pallet_cf_tokenholder_governance,
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		Online: pallet_cf_online,
 		Reputation: pallet_cf_reputation,
