@@ -42,10 +42,7 @@ impl SetCommunityKey {
 						ParamType::Address,
 					]),
 				),
-				ethabi_param(
-					"newKey",
-					ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)]),
-				),
+				ethabi_param("newKey", ParamType::Address),
 			],
 		)
 	}

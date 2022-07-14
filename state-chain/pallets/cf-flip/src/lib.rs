@@ -376,11 +376,13 @@ impl<T:Config> FeePayment for Pallet<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: Self::AccountId, amount: Self::Amount) {
-		// TODO: Mint some FLIP to an given account
+		Pallet::<T>::settle(&account_id, Pallet::<T>::mint(amount).into());
 	}
 
     fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> sp_runtime::DispatchResult {
-		Pallet::<T>::settle(&account_id, Pallet::<T>::burn(amount).into());
+		if let Err(_) = Pallet::<T>::try_settle(&account_id, Pallet::<T>::burn(amount).into()) {
+			return Err(Error::<T>::InsufficientLiquidity.into())
+		}
 		Ok(().into())
     }
 }
