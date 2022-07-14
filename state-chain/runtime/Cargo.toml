@@ -209,6 +209,7 @@ runtime-benchmarks = [
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
+  'pallet-cf-tokenholder-governance/runtime-benchmarks',
   'pallet-cf-online/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',

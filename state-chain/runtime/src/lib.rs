@@ -603,6 +603,7 @@ mod benches {
 		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
 		[pallet_cf_governance, Governance]
+		[pallet_cf_tokenholder_governance, TokenholderGovernance]
 		[pallet_cf_vaults, EthereumVault]
 		[pallet_cf_online, Online]
 		[pallet_cf_reputation, Reputation]
