@@ -465,7 +465,6 @@ pub mod tests {
         let end_of_successful_block_range = 13;
         let block_range = 10..end_of_successful_block_range;
 
-        // Get blocks 10-12 successfully
         for block_number in block_range.clone() {
             mock_eth_http_rpc_client
                 .expect_block_number()
@@ -480,14 +479,12 @@ pub mod tests {
                 .returning(move |number| dummy_block(number.as_u64()));
         }
 
-        // Failed to poll for block number 13
         mock_eth_http_rpc_client
             .expect_block_number()
             .times(1)
             .in_sequence(&mut seq)
             .returning(move || Err(anyhow::Error::msg("Failed to get block number, you fool")));
 
-        // successfully poll the next block number
         mock_eth_http_rpc_client
             .expect_block_number()
             .times(1)
