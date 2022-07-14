@@ -29,70 +29,70 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-    if !validator_candidates.contains(&state_chain_client.our_account_id) {
-        multisig_client.not_participating_ceremony(ceremony_id);
-        return;
-    }
+    if validator_candidates.contains(&state_chain_client.our_account_id) {
+        // Send a keygen request and wait to submit the result to the SC
+        tokio::spawn(async move {
+            let keygen_outcome = multisig_client
+                .keygen(ceremony_id, validator_candidates.clone())
+                .await;
 
-    tokio::spawn(async move {
-        let keygen_outcome = multisig_client
-            .keygen(ceremony_id, validator_candidates.clone())
-            .await;
+            let keygen_outcome = match keygen_outcome {
+                Ok(public_key) => {
+                    // Keygen verification: before the new key is returned to the SC,
+                    // we first ensure that all parties can use it for signing
 
-        let keygen_outcome = match keygen_outcome {
-            Ok(public_key) => {
-                // Keygen verification: before the new key is returned to the SC,
-                // we first ensure that all parties can use it for signing
+                    let public_key_bytes = public_key.get_element().serialize();
 
-                let public_key_bytes = public_key.get_element().serialize();
-
-                // We arbitrarily choose the data to sign over to be the hash of the generated pubkey
-                let data_to_sign = sp_core::hashing::blake2_256(&public_key_bytes);
-                match multisig_client
-                    .sign(
-                        ceremony_id,
-                        KeyId(public_key_bytes.to_vec()),
-                        validator_candidates,
-                        MessageHash(data_to_sign),
-                    )
-                    .await
-                {
-                    // Report keygen success if we are able to sign
-                    Ok(signature) => Ok((
-                        cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
-                        data_to_sign.into(),
-                        signature.into(),
-                    )),
-                    // Report keygen failure if we failed to sign
-                    Err((bad_account_ids, _reason)) => {
-                        slog::debug!(logger, "Keygen ceremony verification failed"; CEREMONY_ID_KEY => ceremony_id);
-                        Err(KeygenError::Failure(BTreeSet::from_iter(bad_account_ids)))
+                    // We arbitrarily choose the data to sign over to be the hash of the generated pubkey
+                    let data_to_sign = sp_core::hashing::blake2_256(&public_key_bytes);
+                    match multisig_client
+                        .sign(
+                            ceremony_id,
+                            KeyId(public_key_bytes.to_vec()),
+                            validator_candidates,
+                            MessageHash(data_to_sign),
+                        )
+                        .await
+                    {
+                        // Report keygen success if we are able to sign
+                        Ok(signature) => Ok((
+                            cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
+                            data_to_sign.into(),
+                            signature.into(),
+                        )),
+                        // Report keygen failure if we failed to sign
+                        Err((bad_account_ids, _reason)) => {
+                            slog::debug!(logger, "Keygen ceremony verification failed"; CEREMONY_ID_KEY => ceremony_id);
+                            Err(KeygenError::Failure(BTreeSet::from_iter(bad_account_ids)))
+                        }
                     }
                 }
-            }
-            Err((bad_account_ids, reason)) => Err({
-                if let CeremonyFailureReason::<KeygenFailureReason>::Other(
-                    KeygenFailureReason::KeyNotCompatible,
-                ) = reason
-                {
-                    KeygenError::Incompatible
-                } else {
-                    KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
-                }
-            }),
-        };
+                Err((bad_account_ids, reason)) => Err({
+                    if let CeremonyFailureReason::<KeygenFailureReason>::Other(
+                        KeygenFailureReason::KeyNotCompatible,
+                    ) = reason
+                    {
+                        KeygenError::Incompatible
+                    } else {
+                        KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
+                    }
+                }),
+            };
 
-        let _result = state_chain_client
-            .submit_signed_extrinsic(
-                pallet_cf_vaults::Call::report_keygen_outcome {
-                    ceremony_id,
-                    reported_outcome: keygen_outcome,
-                },
-                &logger,
-            )
-            .await;
-    });
+            let _result = state_chain_client
+                .submit_signed_extrinsic(
+                    pallet_cf_vaults::Call::report_keygen_outcome {
+                        ceremony_id,
+                        reported_outcome: keygen_outcome,
+                    },
+                    &logger,
+                )
+                .await;
+        });
+    } else {
+        // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
+        multisig_client.not_participating_ceremony(ceremony_id);
+    }
 }
 
 async fn handle_signing_request<MultisigClient, RpcClient>(
@@ -107,41 +107,41 @@ async fn handle_signing_request<MultisigClient, RpcClient>(
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-    if !signers.contains(&state_chain_client.our_account_id) {
+    if signers.contains(&state_chain_client.our_account_id) {
+        // Send a signing request and wait to submit the result to the SC
+        tokio::spawn(async move {
+            match multisig_client
+                .sign(ceremony_id, key_id, signers, data)
+                .await
+            {
+                Ok(signature) => {
+                    let _result = state_chain_client
+                        .submit_unsigned_extrinsic(
+                            pallet_cf_threshold_signature::Call::signature_success {
+                                ceremony_id,
+                                signature: signature.into(),
+                            },
+                            &logger,
+                        )
+                        .await;
+                }
+                Err((bad_account_ids, _reason)) => {
+                    let _result = state_chain_client
+                        .submit_signed_extrinsic(
+                            pallet_cf_threshold_signature::Call::report_signature_failed {
+                                id: ceremony_id,
+                                offenders: BTreeSet::from_iter(bad_account_ids),
+                            },
+                            &logger,
+                        )
+                        .await;
+                }
+            }
+        });
+    } else {
+        // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
         multisig_client.not_participating_ceremony(ceremony_id);
-        return;
     }
-
-    tokio::spawn(async move {
-        match multisig_client
-            .sign(ceremony_id, key_id, signers, data)
-            .await
-        {
-            Ok(signature) => {
-                let _result = state_chain_client
-                    .submit_unsigned_extrinsic(
-                        pallet_cf_threshold_signature::Call::signature_success {
-                            ceremony_id,
-                            signature: signature.into(),
-                        },
-                        &logger,
-                    )
-                    .await;
-            }
-            Err((bad_account_ids, _reason)) => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_threshold_signature::Call::report_signature_failed {
-                            id: ceremony_id,
-                            offenders: BTreeSet::from_iter(bad_account_ids),
-                        },
-                        &logger,
-                    )
-                    .await;
-            }
-        }
-    });
 }
 
 pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
