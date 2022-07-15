@@ -140,22 +140,25 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			let mut weight = 0;
 			if let Some(proposal) = Proposals::<T>::get(n) {
-				Self::resolve_vote(proposal);
+				weight = T::WeightInfo::on_initialize_resolve_votes(Self::resolve_vote(proposal).try_into().unwrap());
 			}
 			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
 				if gov_key.0 == n {
 					T::GovKeyBroadcaster::threshold_sign_and_broadcast(T::SetGovKeyApiCall::new_unsigned(T::ReplayProtectionProvider::replay_protection(), gov_key.1));
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
+					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
 			}
 			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if comm_key.0 == n {
 					T::CommKeyBroadcaster::threshold_sign_and_broadcast(T::SetCommunityKeyApiCall::new_unsigned(T::ReplayProtectionProvider::replay_protection(), comm_key.1));
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
+					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
 			}
-			0
+			weight
 		}
 	}
 
@@ -195,9 +198,10 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn resolve_vote(proposal: Proposal<T>) {
-			let total_baked: u128 = Backers::<T>::take(proposal.clone())
-				.iter()
+		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
+			let backers = Backers::<T>::get(proposal.clone());
+			let votes = backers.len();
+			let total_baked: u128 = backers.iter()
 				.map(|baker| {
 					T::StakingInfo::total_balance_of(baker).into()
 				})
@@ -212,10 +216,12 @@ pub mod pallet {
 						CommKeyUpdateAwaitingEnactment::<T>::put((<frame_system::Pallet<T>>::block_number() + EnactmentDelay::<T>::get(), key));
 					}
 				}
-				Self::deposit_event(Event::<T>::ProposalPassed(proposal));
+				Self::deposit_event(Event::<T>::ProposalPassed(proposal.clone()));
 			} else {
-				Self::deposit_event(Event::<T>::ProposalRejected(proposal));
+				Self::deposit_event(Event::<T>::ProposalRejected(proposal.clone()));
 			}
+			Backers::<T>::remove(proposal);
+			votes
 		}
 	}
 }
