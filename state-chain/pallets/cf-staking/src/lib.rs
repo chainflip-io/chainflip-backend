@@ -37,7 +37,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
 use frame_support::pallet_prelude::Weight;
-const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {

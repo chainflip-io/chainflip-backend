@@ -59,13 +59,15 @@ pub enum SystemState {
 // do not know how to solve this mock
 pub struct MockSystemStateManager;
 
-impl SystemStateManager for MockSystemStateManager {
-	type SystemState = SystemState;
-	fn set_system_state(state: Self::SystemState) {
+impl MockSystemStateManager {
+	pub fn set_system_state(state: SystemState) {
 		CURRENT_SYSTEM_STATE.with(|cell| {
 			*cell.borrow_mut() = state;
 		});
 	}
+}
+
+impl SystemStateManager for MockSystemStateManager {
 	fn activate_maintenance_mode() {
 		Self::set_system_state(SystemState::Maintenance);
 	}
