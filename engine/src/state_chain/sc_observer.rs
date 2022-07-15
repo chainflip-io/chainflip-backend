@@ -248,8 +248,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
-                                                let current_block_hash = current_block_header.hash();
-
                                                 if active_in_current_epoch {
                                                     assert!(try_end_previous_epoch_observation!(state_chain_client, current_block_hash, new_epoch));
                                                 }
