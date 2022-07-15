@@ -41,29 +41,23 @@ impl<T: EthTransport> EthRpcClient<T> {
         f: F,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        match redact_secret_eth_node_endpoint(node_endpoint) {
-            Ok(redacted) => {
-                slog::debug!(
-                    logger,
-                    "Connecting new {} web3 client to {}",
-                    T::transport_protocol(),
-                    redacted
-                );
+        slog::debug!(
+            logger,
+            "Connecting new {} web3 client{}",
+            T::transport_protocol(),
+            match redact_secret_eth_node_endpoint(node_endpoint) {
+                Ok(redacted_node_endpoint) => format!(" to {}", redacted_node_endpoint),
+                Err(e) => {
+                    slog::error!(
+                        logger,
+                        "Could not redact secret in {} ETH node endpoint: {}",
+                        T::transport_protocol(),
+                        e
+                    );
+                    "".to_string()
+                }
             }
-            Err(e) => {
-                slog::error!(
-                    logger,
-                    "Could not redact secret in {} ETH node endpoint: {}",
-                    T::transport_protocol(),
-                    e
-                );
-                slog::debug!(
-                    logger,
-                    "Connecting new {} web3 client",
-                    T::transport_protocol()
-                );
-            }
-        };
+        );
 
         Ok(Self {
             web3: Web3::new(f.await?),
