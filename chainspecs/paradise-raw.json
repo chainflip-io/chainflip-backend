@@ -3,7 +3,7 @@
   "id": "paradise",
   "chainType": "Live",
   "bootNodes": [
-    "/ip4/127.0.0.1/tcp/30333/p2p/12D3KooWPYCDdfpVRwDKmxB6F81kY34PK1k2UASD8ZFZqv3nGbnZ"
+    "/ip4/165.227.157.78/tcp/30333/p2p/12D3KooWFD3YMDyQocSQBAx6VCcUruYihi6xYufduzf321FnvvoY"
   ],
   "telemetryEndpoints": null,
   "protocolId": null,
