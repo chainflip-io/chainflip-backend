@@ -13,7 +13,7 @@ use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 pub struct SetCommunityKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
-	/// The new public key.
+	/// The new community key.
 	pub new_key: eth::Address,
 }
 

@@ -380,7 +380,7 @@ impl<T:Config> FeePayment for Pallet<T> {
 	}
 
     fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> sp_runtime::DispatchResult {
-		if let Err(_) = Pallet::<T>::try_settle(&account_id, Pallet::<T>::burn(amount).into()) {
+		if let None = Pallet::<T>::try_debit(&account_id, amount) {
 			return Err(Error::<T>::InsufficientLiquidity.into())
 		}
 		Ok(().into())

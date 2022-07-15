@@ -96,11 +96,11 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 	fn amount(&self) -> u128 {
 		match self {
-			EthereumApi::SetAggKeyWithAggKey(_) => 0,
+			EthereumApi::SetAggKeyWithAggKey(_) => unreachable!(),
 			EthereumApi::RegisterClaim(call) => call.amount.unique_saturated_into(),
-			EthereumApi::UpdateFlipSupply(_) => 0,
-			EthereumApi::SetGovKey(_) => 0,
-			EthereumApi::SetCommunityKey(_) => 0,
+			EthereumApi::UpdateFlipSupply(_) => unreachable!(),
+			EthereumApi::SetGovKey(_) => unreachable!(),
+			EthereumApi::SetCommunityKey(_) => unreachable!(),
 		}
 	}
 }

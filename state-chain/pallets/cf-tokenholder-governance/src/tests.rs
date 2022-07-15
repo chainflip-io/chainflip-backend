@@ -5,11 +5,6 @@ use crate::{mock::*, *};
 const GOV_KEY_PROPOSAL: [u8; 32] = [1u8; 32];
 const COMM_KEY_PROPOSAL: [u8; 32] = [1u8; 32];
 
-/// This is a more complex test scenraio in which we prove the following things:
-/// - Submit a proposal
-/// - Back a proposal
-/// - Proof an proposal can not be backed several times
-/// - ...
 #[test]
 fn update_gov_key_via_onchain_proposal() {
     new_test_ext().execute_with(|| {
@@ -17,8 +12,6 @@ fn update_gov_key_via_onchain_proposal() {
         EnactmentDelay::<Test>::set(20);
         assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
         assert!(Proposals::<Test>::contains_key(<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get()));
-        // Try to back the same proposal with the inital proposer
-        assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::AlreadyBacked);
         // Back the proposal to ensure threshold
         assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
         assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(CHARLES), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
@@ -28,5 +21,33 @@ fn update_gov_key_via_onchain_proposal() {
         assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
         TokenholderGovernance::on_initialize(<frame_system::Pallet<Test>>::block_number() + EnactmentDelay::<Test>::get());
         assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
+    });
+}
+
+#[test]
+fn cannot_back_proposal_twice() {
+    new_test_ext().execute_with(|| {
+        todo!()
+    });
+}
+
+#[test]
+fn cannot_create_proposal_with_unsuficient_liquidity() {
+    new_test_ext().execute_with(|| {
+        todo!()
+    });
+}
+
+#[test]
+fn not_enough_backed_liquidty() {
+    new_test_ext().execute_with(|| {
+        todo!()
+    });
+}
+
+#[test]
+fn replace_proposal_during_enactment_period() {
+    new_test_ext().execute_with(|| {
+        todo!()
     });
 }
