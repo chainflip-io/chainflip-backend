@@ -150,7 +150,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Supply Update has been Broadcasted [block_number]
-		SupplyUpdateBroadcasted(BlockNumberFor<T>),
+		SupplyUpdateBroadcastRequested(BlockNumberFor<T>),
 		/// Current authority inflation emission has been updated \[new\]
 		CurrentAuthorityInflationEmissionsUpdated(BasisPoints),
 		/// Backup node inflation emission has been updated \[new\]
@@ -191,7 +191,7 @@ pub mod pallet {
 						T::Issuance::total_issuance(),
 						current_block,
 					);
-					Self::deposit_event(Event::SupplyUpdateBroadcasted(current_block));
+					Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
 					// Update this pallet's state.
 					LastSupplyUpdateBlock::<T>::set(current_block);
 				} else {
