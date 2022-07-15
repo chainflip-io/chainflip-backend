@@ -17,9 +17,7 @@ fn update_gov_key_via_onchain_proposal() {
         EnactmentDelay::<Test>::set(20);
         assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
         assert!(Proposals::<Test>::contains_key(<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get()));
-        // Back a proposal
-        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        // Try to back the same proposal again
+        // Try to back the same proposal with the inital proposer
         assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::AlreadyBacked);
         // Back the proposal to ensure threshold
         assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));

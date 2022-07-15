@@ -9,6 +9,7 @@ use frame_support::{
 };
 
 use cf_chains::{ChainCrypto};
+use sp_std::vec;
 
 use codec::Encode;
 use frame_support::RuntimeDebugNoBound;
@@ -170,28 +171,32 @@ pub mod pallet {
 			proposal: Proposal<T>,
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
-			T::FeePayment::try_burn_fee(proposer, ProposalFee::<T>::get())?;
+			T::FeePayment::try_burn_fee(proposer.clone(), ProposalFee::<T>::get())?;
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get(),
 				proposal.clone(),
 			);
+			Backers::<T>::insert(proposal.clone(), vec![proposer]);
 			Self::deposit_event(Event::<T>::ProposalSubmitted(proposal));
 			Ok(().into())
 		}
-
 		#[pallet::weight(T::WeightInfo::back_proposal())]
 		pub fn back_proposal(
 			origin: OriginFor<T>,
 			proposal: Proposal<T>,
 		) -> DispatchResultWithPostInfo {
-			let baker = ensure_signed(origin)?;
-			// TODO: Prevent voting for proposal which dosen't exist
-			Backers::<T>::mutate(proposal, |bakers| {
-				if bakers.contains(&baker) {
-					return Err(Error::<T>::AlreadyBacked)
-				}
-				bakers.push(baker);
-				Ok(())
+			let backer = ensure_signed(origin)?;
+			Backers::<T>::try_mutate_exists(proposal, |maybe_backers| {
+				match maybe_backers {
+				    Some(bakers) => {
+					    if bakers.contains(&backer) {
+						    return Err(Error::<T>::AlreadyBacked)
+					    }
+					    bakers.push(backer);
+					    Ok(())
+				    },
+				    None => Err(Error::<T>::ProposalDosentExists)
+			    }
 			})?;
 			Ok(().into())
 		}
