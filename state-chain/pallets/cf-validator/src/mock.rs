@@ -6,7 +6,8 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	BackupNodes, Bid, Chainflip, ChainflipAccountData, QualifyNode, RuntimeAuctionOutcome,
+	BackupNodes, Bid, Chainflip, ChainflipAccountData, ChainflipAccountStore, QualifyNode,
+	RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
