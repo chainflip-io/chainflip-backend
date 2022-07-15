@@ -21,7 +21,7 @@ Then run a variation of the following command.
 ```sh
 ./target/release/chainflip-node try-runtime \
     --execution Native \
-    --chain soundcheck \
+    --chain paradise \
     --url wss://bashful-release.chainflip.xyz \
     --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> \
         on-runtime-upgrade live \
