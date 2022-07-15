@@ -401,6 +401,7 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type SetCommunityKeyApiCall = eth::api::EthereumApi;
 	type GovKeyBroadcaster = EthereumBroadcaster;
 	type CommKeyBroadcaster = EthereumBroadcaster;
+	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_governance::Config for Runtime {

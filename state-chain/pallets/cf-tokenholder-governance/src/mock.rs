@@ -259,6 +259,7 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type GovKeyBroadcaster = MockBroadcastGov;
 	type SetCommunityKeyApiCall = MockSetCommKey;
 	type CommKeyBroadcaster = MockBroadcastComm;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
