@@ -394,14 +394,8 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                         ) => {
                                             cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                         }
-                                        ignored_event => {
+                                        _ignored_event => {
                                             // ignore events we don't care about
-                                            slog::trace!(
-                                                logger,
-                                                "Ignoring event at block {}: {:?}",
-                                                current_block_header.number,
-                                                ignored_event
-                                            );
                                         }
                                     }
                                 }
