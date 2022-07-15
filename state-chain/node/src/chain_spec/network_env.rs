@@ -2,9 +2,9 @@ use super::*;
 
 /// Environment variables for PARADISE public testnet.
 pub const PARADISE: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("Aa07486C20F73fF4309495411927E6AE7C884DBa"),
-	stake_manager_address: hex_literal::hex!("D4185915BD9533575207DCfdEb6FDeF798B095d3"),
-	key_manager_address: hex_literal::hex!("6699A372477f62caA0B0e3465CDA30E789a8F815"),
+	flip_token_address: hex_literal::hex!("5FdD5c0A6c7f6a9d012F2A28c14cb620C86FCf0F"),
+	stake_manager_address: hex_literal::hex!("6a484d80422c40d752296f0AfAF2301F814Aba37"),
+	key_manager_address: hex_literal::hex!("F8a0c6627510cF1f2abbF9f6EC2f338158A53a61"),
 	ethereum_chain_id: 5, // GOERLI
 	eth_init_agg_key: hex_literal::hex!(
 		"02071915b34b466951fa08709724a40cc4ad69fbdf3503b372d218654eb0cff592"
