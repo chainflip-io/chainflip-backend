@@ -54,43 +54,28 @@ impl RewardsDistribution for BackupNodeEmissions {
 	type Balance = FlipBalance;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
-	// This is called on each heartbeat interval
 	fn distribute() {
 		let backup_nodes = Validator::backup_nodes();
 		if backup_nodes.is_empty() {
 			return
 		}
 
-		let backup_nodes: Vec<_> = backup_nodes
-			.iter()
-			.map(|backup_node| (backup_node.clone(), Flip::staked_balance(backup_node)))
-			.collect();
-
-		// The current minimum active bid
-		let minimum_active_bid = Validator::bond();
-		let heartbeat_block_interval: FlipBalance =
+		// Distribute rewards one by one
+		// N.B. This could be more optimal
+		for (validator_id, reward) in calculate_backup_rewards(
+			backup_nodes
+				.iter()
+				.map(|backup_node| (backup_node.clone(), Flip::staked_balance(backup_node)))
+				.collect(),
+			Validator::bond(),
 			<<Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval as Get<
 				BlockNumber,
 			>>::get()
-			.unique_saturated_into();
-		let backup_node_emission_per_block = Emissions::backup_node_emission_per_block();
-		let current_authority_emission_per_block =
-			Emissions::current_authority_emission_per_block();
-		let current_authority_count =
-			Self::Balance::unique_saturated_from(Validator::current_authority_count());
-
-		let rewards = calculate_backup_rewards(
-			backup_nodes,
-			minimum_active_bid,
-			heartbeat_block_interval,
-			backup_node_emission_per_block,
-			current_authority_emission_per_block,
-			current_authority_count,
-		);
-
-		// Distribute rewards one by one
-		// N.B. This could be more optimal
-		for (validator_id, reward) in rewards {
+			.unique_saturated_into(),
+			Emissions::backup_node_emission_per_block(),
+			Emissions::current_authority_emission_per_block(),
+			Self::Balance::unique_saturated_from(Validator::current_authority_count()),
+		) {
 			Flip::settle(&validator_id, Self::Issuance::mint(reward).into());
 		}
 	}

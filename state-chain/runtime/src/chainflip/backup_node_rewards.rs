@@ -9,7 +9,7 @@ use sp_std::{cmp::min, prelude::*};
 
 pub fn calculate_backup_rewards<Id, Amount>(
 	backup_nodes: Vec<(Id, u128)>,
-	minimum_active_bid: u128,
+	bond: u128,
 	reward_interwal: u128,
 	backup_node_emission_per_block: u128,
 	current_authority_emission_per_block: u128,
@@ -20,8 +20,8 @@ where
 {
 	const QUANTISATION_FACTOR: u128 = 100_000_000;
 
-	let (minimum_active_bid, backup_node_emission_per_block, current_authority_emission_per_block) = (
-		minimum_active_bid / QUANTISATION_FACTOR,
+	let (bond, backup_node_emission_per_block, current_authority_emission_per_block) = (
+		bond / QUANTISATION_FACTOR,
 		backup_node_emission_per_block / QUANTISATION_FACTOR,
 		current_authority_emission_per_block / QUANTISATION_FACTOR,
 	);
@@ -45,14 +45,10 @@ where
 		.map(|(node_id, backup_stake)| {
 			let reward = min(
 				average_authority_reward,
-				multiply_by_rational(
-					average_authority_reward * backup_stake,
-					backup_stake,
-					minimum_active_bid,
-				)
-				.unwrap()
-				.checked_div(minimum_active_bid)
-				.unwrap(),
+				multiply_by_rational(average_authority_reward * backup_stake, backup_stake, bond)
+					.unwrap()
+					.checked_div(bond)
+					.unwrap(),
 			)
 			.saturating_mul(8_u128)
 			.checked_div(10_u128)
@@ -150,7 +146,7 @@ fn test_example_calculations() {
 		.map(|(node, reward)| (node, reward * FLIPPERINOS_PER_CENTIFLIP))
 		.to_vec();
 
-	const MAB: u128 = 110_000 * FLIPPERINOS;
+	const BOND: u128 = 110_000 * FLIPPERINOS;
 	const BLOCKSPERYEAR: u128 = 14_400 * 356;
 	const BACKUP_EMISSIONS_CAP_PER_BLOCK: u128 = 900_000 * FLIPPERINOS / BLOCKSPERYEAR;
 	const AUTHORITY_EMISSIONS_PER_BLOCK: u128 = 9_000_000 * FLIPPERINOS / BLOCKSPERYEAR;
@@ -158,7 +154,7 @@ fn test_example_calculations() {
 
 	let calculated_rewards: Vec<(_, u128)> = calculate_backup_rewards(
 		test_backup_nodes,
-		MAB,
+		BOND,
 		BLOCKSPERYEAR,
 		BACKUP_EMISSIONS_CAP_PER_BLOCK,
 		AUTHORITY_EMISSIONS_PER_BLOCK,
