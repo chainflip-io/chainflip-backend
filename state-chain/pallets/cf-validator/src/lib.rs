@@ -463,8 +463,11 @@ pub mod pallet {
 
 			let account_id = ensure_signed(origin)?;
 
-			// Note this signature verify doesn't need replay protection as you need the
+			// Note: This signature verify doesn't need replay protection as you need the
 			// account_id's private key to pass the above ensure_signed which has replay protection.
+			// Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys, so we rely on
+			// the RuntimePublic::verify call below to do that (which internally uses
+			// ed25519_dalek::PublicKey::from_bytes to do it).
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature

@@ -197,12 +197,12 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     }
 }
 
-fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<PeerId> {
-    Ok(PeerId::from_public_key(
+fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> PeerId {
+    PeerId::from_public_key(
         &libp2p::identity::PublicKey::Ed25519(libp2p::identity::ed25519::PublicKey::decode(
             &peer_public_key.0[..],
-        )?),
-    ))
+        ).expect("peer_id's are checked before being registered using ed25519_dalek::PublicKey::from_bytes, the same function used to decode and check peer_id's inside libp2p::identity::ed25519::PublicKey::decode")),
+    )
 }
 
 pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
@@ -240,16 +240,16 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         .await?
         .into_iter()
         .map(|(account_id, public_key, port, ip_address)| {
-            Ok((
+            (
                 account_id,
                 (
-                    public_key_to_peer_id(&public_key)?,
+                    public_key_to_peer_id(&public_key),
                     port,
                     ip_address.into(),
                 )
-            ))
+            )
         })
-        .collect::<Result<BTreeMap<_, _>>>()?;
+        .collect::<BTreeMap<_, _>>();
 
     let mut peer_to_account_mapping_on_chain = account_to_peer_mapping_on_chain
         .iter()
@@ -382,45 +382,41 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                 }
             }
             Some((account_id, peer_public_key, account_peer_mapping_change)) = account_mapping_change_receiver.recv() => {
-                match public_key_to_peer_id(&peer_public_key) {
-                    Ok(peer_id) => {
-                        match account_peer_mapping_change {
-                            AccountPeerMappingChange::Registered(port, ip_address) => {
-                                if let Some((existing_peer_id, _, _)) = account_to_peer_mapping_on_chain.get(&account_id) {
-                                    peer_to_account_mapping_on_chain.remove(existing_peer_id);
-                                }
-                                if let Entry::Vacant(entry) = peer_to_account_mapping_on_chain.entry(peer_id) {
-                                    entry.insert(account_id.clone());
-                                    account_to_peer_mapping_on_chain.insert(account_id, (peer_id, port, ip_address));
-                                    if peer_id_from_cfe_config != peer_id {
-                                        if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
-                                            slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
-                                        } else {
-                                            slog::info!(logger, "Added peer {} to reserved set", peer_id);
-                                        }
-                                    }
-                                } else {
-                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
-                                }
-                            }
-                            AccountPeerMappingChange::Unregistered => {
-                                if Some(&account_id) == peer_to_account_mapping_on_chain.get(&peer_id) {
-                                    account_to_peer_mapping_on_chain.remove(&account_id);
-                                    peer_to_account_mapping_on_chain.remove(&peer_id);
-                                    if peer_id_from_cfe_config != peer_id {
-                                        if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
-                                            slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
-                                        } else {
-                                            slog::info!(logger, "Removed peer {} to reserved set", peer_id);
-                                        }
-                                    }
-                                } else {
-                                    slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
-                                }
-                            }
+                let peer_id = public_key_to_peer_id(&peer_public_key);
+                match account_peer_mapping_change {
+                    AccountPeerMappingChange::Registered(port, ip_address) => {
+                        if let Some((existing_peer_id, _, _)) = account_to_peer_mapping_on_chain.get(&account_id) {
+                            peer_to_account_mapping_on_chain.remove(existing_peer_id);
                         }
-                    },
-                    Err(error) => slog::error!(logger, "Unable to convert public key {} to peer id. {}", peer_public_key, error)
+                        if let Entry::Vacant(entry) = peer_to_account_mapping_on_chain.entry(peer_id) {
+                            entry.insert(account_id.clone());
+                            account_to_peer_mapping_on_chain.insert(account_id, (peer_id, port, ip_address));
+                            if peer_id_from_cfe_config != peer_id {
+                                if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
+                                    slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
+                                } else {
+                                    slog::info!(logger, "Added peer {} to reserved set", peer_id);
+                                }
+                            }
+                        } else {
+                            slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
+                        }
+                    }
+                    AccountPeerMappingChange::Unregistered => {
+                        if Some(&account_id) == peer_to_account_mapping_on_chain.get(&peer_id) {
+                            account_to_peer_mapping_on_chain.remove(&account_id);
+                            peer_to_account_mapping_on_chain.remove(&peer_id);
+                            if peer_id_from_cfe_config != peer_id {
+                                if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
+                                    slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
+                                } else {
+                                    slog::info!(logger, "Removed peer {} to reserved set", peer_id);
+                                }
+                            }
+                        } else {
+                            slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
+                        }
+                    }
                 }
             },
             _ = check_listener_address_tick.tick() => {
