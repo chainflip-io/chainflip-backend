@@ -749,7 +749,7 @@ mod tests {
 	mod epoch {
 		use std::collections::BTreeSet;
 
-		use super::{genesis::GENESIS_BALANCE, *};
+		use super::*;
 		use crate::tests::network::setup_account_and_peer_mapping;
 		use cf_traits::{
 			BackupOrPassive, BidderProvider, ChainflipAccount, ChainflipAccountState,
