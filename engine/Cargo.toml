@@ -2,7 +2,7 @@
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = '2021'
 name = "chainflip-engine"
-version = "0.3.0"
+version = "0.4.0"
 
 [package.metadata.deb]
 depends = "$auto"
@@ -79,7 +79,7 @@ typenum = "1.15"
 # (There is little public information on this, but some mentions can be found
 # in https://github.com/dalek-cryptography/curve25519-dalek/pull/338#issuecomment-772059572)
 # We might eventually update, but for now let's just
-# use the same version as polkadot. 
+# use the same version as polkadot.
 schnorrkel = "0.9.1"
 rayon = "1.5"
 

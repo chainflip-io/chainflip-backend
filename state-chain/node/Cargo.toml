@@ -1,14 +1,14 @@
 [package]
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 build = 'build.rs'
-description = 'The Chainflip State Chain node, based on substrate-node-template'
+description = 'The Chainflip State Chain node'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
+version = '0.4.0'
 
 [[bin]]
 name = 'chainflip-node'
