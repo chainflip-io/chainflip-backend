@@ -133,15 +133,6 @@ benchmarks! {
 	verify {
 		assert_eq!(Pallet::<T>::authority_set_min_size(), 1u8)
 	}
-	// force_rotation {
-	// 	let call = Call::<T>::force_rotation {};
-	// 	let o = <T as Config>::EnsureGovernance::successful_origin();
-	// }: {
-	// 	call.dispatch_bypass_filter(o)?
-	// }
-	// verify {
-	// 	assert!(matches!(Pallet::<T>::current_rotation_phase(), RotationPhase::VaultsRotating(..)));
-	// }
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
 		let version = SemVer {
