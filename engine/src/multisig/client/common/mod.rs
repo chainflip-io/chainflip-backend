@@ -115,6 +115,8 @@ pub enum BroadcastStageName {
     Complaints,
     #[error("Blame Responses")]
     BlameResponses,
+    #[error("Secret Shares")]
+    SecretShares,
 }
 
 const SIGNING_CEREMONY_FAILED_PREFIX: &str = "Signing ceremony failed";
