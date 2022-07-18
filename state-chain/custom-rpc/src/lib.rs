@@ -1,8 +1,9 @@
-use cf_chains::eth::SigData;
+use cf_chains::eth::{SigData, H256};
 use cf_utilities::JsonResultExt;
 use jsonrpc_core::serde::{Deserialize, Serialize};
 use jsonrpc_derive::rpc;
 use sc_client_api::HeaderBackend;
+use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
@@ -45,53 +46,71 @@ type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 pub trait CustomApi {
 	/// Returns true if the current phase is the auction phase.
 	#[rpc(name = "cf_is_auction_phase")]
-	fn cf_is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error>;
+	fn cf_is_auction_phase(&self, at: Option<H256>) -> Result<bool, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_key_manager_address")]
-	fn cf_eth_key_manager_address(&self) -> Result<String, jsonrpc_core::Error>;
+	fn cf_eth_key_manager_address(&self, at: Option<H256>) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_stake_manager_address")]
-	fn cf_eth_stake_manager_address(&self) -> Result<String, jsonrpc_core::Error>;
+	fn cf_eth_stake_manager_address(&self, at: Option<H256>)
+		-> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_flip_token_address")]
-	fn cf_eth_flip_token_address(&self) -> Result<String, jsonrpc_core::Error>;
+	fn cf_eth_flip_token_address(&self, at: Option<H256>) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_chain_id")]
-	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error>;
+	fn cf_eth_chain_id(&self, at: Option<H256>) -> Result<u64, jsonrpc_core::Error>;
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 	#[rpc(name = "cf_eth_vault")]
-	fn cf_eth_vault(&self) -> Result<(String, u32), jsonrpc_core::Error>;
+	fn cf_eth_vault(&self, at: Option<H256>) -> Result<(String, u32), jsonrpc_core::Error>;
 	#[rpc(name = "cf_tx_fee_multiplier")]
-	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error>;
+	fn cf_tx_fee_multiplier(&self, at: Option<H256>) -> Result<u64, jsonrpc_core::Error>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
 	#[rpc(name = "cf_auction_parameters")]
-	fn cf_auction_parameters(&self) -> Result<(u32, u32), jsonrpc_core::Error>;
+	fn cf_auction_parameters(&self, at: Option<H256>) -> Result<(u32, u32), jsonrpc_core::Error>;
 	#[rpc(name = "cf_min_stake")]
-	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error>;
+	fn cf_min_stake(&self, at: Option<H256>) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch")]
-	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error>;
+	fn cf_current_epoch(&self, at: Option<H256>) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_epoch_duration")]
-	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error>;
+	fn cf_epoch_duration(&self, at: Option<H256>) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch_started_at")]
-	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error>;
+	fn cf_current_epoch_started_at(&self, at: Option<H256>) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_authority_emission_per_block")]
-	fn cf_authority_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error>;
+	fn cf_authority_emission_per_block(
+		&self,
+		at: Option<H256>,
+	) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_backup_emission_per_block")]
-	fn cf_backup_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error>;
+	fn cf_backup_emission_per_block(
+		&self,
+		at: Option<H256>,
+	) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_flip_supply")]
-	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
+	fn cf_flip_supply(
+		&self,
+		at: Option<H256>,
+	) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
 	#[rpc(name = "cf_accounts")]
-	fn cf_accounts(&self) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error>;
+	fn cf_accounts(
+		&self,
+		at: Option<H256>,
+	) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error>;
 	#[rpc(name = "cf_account_info")]
 	fn cf_account_info(
 		&self,
 		account_id: AccountId32,
+		at: Option<H256>,
 	) -> Result<RpcAccountInfo, jsonrpc_core::Error>;
 	#[rpc(name = "cf_pending_claim")]
 	fn cf_pending_claim(
 		&self,
 		account_id: AccountId32,
+		at: Option<H256>,
 	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error>;
 	#[rpc(name = "cf_penalties")]
-	fn cf_penalties(&self) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error>;
+	fn cf_penalties(
+		&self,
+		at: Option<H256>,
+	) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error>;
 	#[rpc(name = "cf_suspensions")]
-	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error>;
+	fn cf_suspensions(&self, at: Option<H256>) -> Result<RpcSuspensions, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -103,107 +122,185 @@ pub struct CustomRpc<C, B> {
 impl<C, B> CustomApi for CustomRpc<C, B>
 where
 	B: sp_runtime::traits::Block,
+	<B as BlockT>::Hash: From<cf_chains::eth::H256>,
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	fn cf_is_auction_phase(&self) -> Result<bool, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client.runtime_api().cf_is_auction_phase(&at).map_to_json_error()
+	fn cf_is_auction_phase(&self, at: Option<H256>) -> Result<bool, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		self.client
+			.runtime_api()
+			.cf_is_auction_phase(&query_at_block)
+			.map_to_json_error()
 	}
-	fn cf_eth_flip_token_address(&self) -> Result<String, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let eth_flip_token_address =
-			self.client.runtime_api().cf_eth_flip_token_address(&at).map_to_json_error()?;
+	fn cf_eth_flip_token_address(&self, at: Option<H256>) -> Result<String, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		let eth_flip_token_address = self
+			.client
+			.runtime_api()
+			.cf_eth_flip_token_address(&query_at_block)
+			.map_to_json_error()?;
 		Ok(hex::encode(eth_flip_token_address))
 	}
-	fn cf_eth_stake_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_eth_stake_manager_address(
+		&self,
+		at: Option<H256>,
+	) -> Result<String, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		let eth_stake_manager_address = self
 			.client
 			.runtime_api()
-			.cf_eth_stake_manager_address(&at)
+			.cf_eth_stake_manager_address(&query_at_block)
 			.map_to_json_error()?;
 		Ok(hex::encode(eth_stake_manager_address))
 	}
-	fn cf_eth_key_manager_address(&self) -> Result<String, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let eth_key_manager_address =
-			self.client.runtime_api().cf_eth_key_manager_address(&at).map_to_json_error()?;
+	fn cf_eth_key_manager_address(&self, at: Option<H256>) -> Result<String, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		let eth_key_manager_address = self
+			.client
+			.runtime_api()
+			.cf_eth_key_manager_address(&query_at_block)
+			.map_to_json_error()?;
 		Ok(hex::encode(eth_key_manager_address))
 	}
-	fn cf_eth_chain_id(&self) -> Result<u64, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client.runtime_api().cf_eth_chain_id(&at).map_to_json_error()
+	fn cf_eth_chain_id(&self, at: Option<H256>) -> Result<u64, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		self.client.runtime_api().cf_eth_chain_id(&query_at_block).map_to_json_error()
 	}
-	fn cf_eth_vault(&self) -> Result<(String, u32), jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_eth_vault(&self, at: Option<H256>) -> Result<(String, u32), jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		let eth_vault = self
 			.client
 			.runtime_api()
-			.cf_eth_vault(&at)
+			.cf_eth_vault(&query_at_block)
 			.expect("The runtime API should not return error.");
 
 		Ok((hex::encode(eth_vault.0), eth_vault.1))
 	}
-	fn cf_tx_fee_multiplier(&self) -> Result<u64, jsonrpc_core::Error> {
+	// FIXME: Respect the block hash argument here
+	fn cf_tx_fee_multiplier(&self, _at: Option<H256>) -> Result<u64, jsonrpc_core::Error> {
 		Ok(TX_FEE_MULTIPLIER
 			.try_into()
 			.expect("We never set a fee multiplier greater than u64::MAX"))
 	}
-	fn cf_auction_parameters(&self) -> Result<(u32, u32), jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client.runtime_api().cf_auction_parameters(&at).map_to_json_error()
-	}
-	fn cf_min_stake(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let min_stake = self.client.runtime_api().cf_min_stake(&at).map_to_json_error()?;
-		Ok(min_stake.into())
-	}
-	fn cf_current_epoch(&self) -> Result<u32, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client.runtime_api().cf_current_epoch(&at).map_to_json_error()
-	}
-	fn cf_epoch_duration(&self) -> Result<u32, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_auction_parameters(&self, at: Option<H256>) -> Result<(u32, u32), jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		self.client
 			.runtime_api()
-			.cf_epoch_duration(&at)
+			.cf_auction_parameters(&query_at_block)
+			.map_to_json_error()
+	}
+	fn cf_min_stake(&self, at: Option<H256>) -> Result<NumberOrHex, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		let min_stake =
+			self.client.runtime_api().cf_min_stake(&query_at_block).map_to_json_error()?;
+		Ok(min_stake.into())
+	}
+	fn cf_current_epoch(&self, at: Option<H256>) -> Result<u32, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		self.client.runtime_api().cf_current_epoch(&query_at_block).map_to_json_error()
+	}
+	fn cf_epoch_duration(&self, at: Option<H256>) -> Result<u32, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		self.client
+			.runtime_api()
+			.cf_epoch_duration(&query_at_block)
 			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
 	}
-	fn cf_current_epoch_started_at(&self) -> Result<u32, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client.runtime_api().cf_current_epoch_started_at(&at).map_to_json_error()
+	fn cf_current_epoch_started_at(&self, at: Option<H256>) -> Result<u32, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		self.client
+			.runtime_api()
+			.cf_current_epoch_started_at(&query_at_block)
+			.map_to_json_error()
 	}
-	fn cf_authority_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_authority_emission_per_block(
+		&self,
+		at: Option<H256>,
+	) -> Result<NumberOrHex, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		let authority_emission_per_block = self
 			.client
 			.runtime_api()
-			.cf_authority_emission_per_block(&at)
+			.cf_authority_emission_per_block(&query_at_block)
 			.map_to_json_error()?;
 		Ok(authority_emission_per_block.into())
 	}
-	fn cf_backup_emission_per_block(&self) -> Result<NumberOrHex, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_backup_emission_per_block(
+		&self,
+		at: Option<H256>,
+	) -> Result<NumberOrHex, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		let backup_emission_per_block = self
 			.client
 			.runtime_api()
-			.cf_backup_emission_per_block(&at)
+			.cf_backup_emission_per_block(&query_at_block)
 			.map_to_json_error()?;
 		Ok(backup_emission_per_block.into())
 	}
-	fn cf_flip_supply(&self) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_flip_supply(
+		&self,
+		at: Option<H256>,
+	) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		let (issuance, offchain) =
-			self.client.runtime_api().cf_flip_supply(&at).map_to_json_error()?;
+			self.client.runtime_api().cf_flip_supply(&query_at_block).map_to_json_error()?;
 		Ok((issuance.into(), offchain.into()))
 	}
-	fn cf_accounts(&self) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_accounts(
+		&self,
+		at: Option<H256>,
+	) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		Ok(self
 			.client
 			.runtime_api()
-			.cf_accounts(&at)
+			.cf_accounts(&query_at_block)
 			.map_to_json_error()?
 			.into_iter()
 			.map(|(account_id, vanity_name_bytes)| {
@@ -216,10 +313,17 @@ where
 	fn cf_account_info(
 		&self,
 		account_id: AccountId32,
+		at: Option<H256>,
 	) -> Result<RpcAccountInfo, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		let account_info =
-			self.client.runtime_api().cf_account_info(&at, account_id).map_to_json_error()?;
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		let account_info = self
+			.client
+			.runtime_api()
+			.cf_account_info(&query_at_block, account_id)
+			.map_to_json_error()?;
 
 		Ok(RpcAccountInfo {
 			stake: account_info.stake.into(),
@@ -234,12 +338,16 @@ where
 	fn cf_pending_claim(
 		&self,
 		account_id: AccountId32,
+		at: Option<H256>,
 	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		let pending_claim = match self
 			.client
 			.runtime_api()
-			.cf_pending_claim(&at, account_id)
+			.cf_pending_claim(&query_at_block, account_id)
 			.map_to_json_error()?
 		{
 			Some(pending_claim) => pending_claim,
@@ -253,12 +361,18 @@ where
 			sig_data: pending_claim.sig_data,
 		}))
 	}
-	fn cf_penalties(&self) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
+	fn cf_penalties(
+		&self,
+		at: Option<H256>,
+	) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
 		Ok(self
 			.client
 			.runtime_api()
-			.cf_penalties(&at)
+			.cf_penalties(&query_at_block)
 			.map_to_json_error()?
 			.iter()
 			.map(|(offence, runtime_api_penalty)| {
@@ -272,8 +386,11 @@ where
 			})
 			.collect())
 	}
-	fn cf_suspensions(&self) -> Result<RpcSuspensions, jsonrpc_core::Error> {
-		let at = sp_api::BlockId::hash(self.client.info().best_hash);
-		self.client.runtime_api().cf_suspensions(&at).map_to_json_error()
+	fn cf_suspensions(&self, at: Option<H256>) -> Result<RpcSuspensions, jsonrpc_core::Error> {
+		let query_at_block = sp_api::BlockId::hash(match at {
+			Some(hash) => hash.into(),
+			None => self.client.info().best_hash,
+		});
+		self.client.runtime_api().cf_suspensions(&query_at_block).map_to_json_error()
 	}
 }
