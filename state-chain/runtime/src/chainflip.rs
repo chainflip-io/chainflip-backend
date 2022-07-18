@@ -102,13 +102,9 @@ impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
 	type BlockNumber = BlockNumber;
 
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber) {
-		<Reputation as Heartbeat>::heartbeat_submitted(validator_id, block_number);
-	}
-
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
 		// Reputation depends on heartbeats
-		<Reputation as Heartbeat>::on_heartbeat_interval(network_state.clone());
+		Reputation::penalise_offline_authorities(network_state.offline.clone());
 
 		BackupNodeEmissions::distribute();
 

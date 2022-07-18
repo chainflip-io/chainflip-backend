@@ -40,3 +40,27 @@ When your changes are ready, or you just want some feedback:
 
 - open a PR.
 - once the PR is open, avoid force-push, use `git merge` instead of `git rebase` to merge any upstream changes.
+
+### Useful commands
+
+The following commands should be executed from the repo root directory.
+- Check formatting:<br>
+  `cargo fmt --check`
+- Format code:<br>
+  - `cargo fmt -- <filename>`
+  - `cargo fmt --all` (format all packages)
+- Run clippy with the same settings as the CI:<br>
+  `sh clippy.sh`
+- Check the state-chain and cfe compile:
+  - `cargo check --all-targets`
+  - `cargo check --all-targets --all-features` (This is used by the CI, but you don't typically need it)
+- Run all unit tests:<br>
+  `cargo test --lib`
+- Expand macros for a given part of the code. You'll need to pipe output to a file.<br>
+  Requires _cargo-expand_ (`cargo install cargo-expand`):<br>
+  `cargo expand <options>`
+- Clean up old build objects (sometimes this will fix compile problems):
+  - `cargo clean`
+  - `cargo clean -p <package>`
+- Audit external dependencies (The CI runs this https://github.com/chainflip-io/chainflip-backend/issues/1175):<br>
+  `cargo audit`

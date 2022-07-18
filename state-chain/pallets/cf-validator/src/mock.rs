@@ -6,8 +6,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	BackupNodes, Bid, Chainflip, ChainflipAccountData, IsOnline, QualifyNode,
-	RuntimeAuctionOutcome,
+	BackupNodes, Bid, Chainflip, ChainflipAccountData, QualifyNode, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -135,15 +134,6 @@ impl Auctioneer<Test> for MockAuctioneer {
 	}
 }
 
-pub struct MockOnline;
-impl IsOnline for MockOnline {
-	type ValidatorId = ValidatorId;
-
-	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
-		true
-	}
-}
-
 impl ValidatorRegistration<ValidatorId> for Test {
 	fn is_registered(_id: &ValidatorId) -> bool {
 		true
@@ -165,8 +155,8 @@ pub struct MockQualifyValidator;
 impl QualifyNode for MockQualifyValidator {
 	type ValidatorId = ValidatorId;
 
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-		MockOnline::is_online(validator_id)
+	fn is_qualified(_validator_id: &Self::ValidatorId) -> bool {
+		true
 	}
 }
 

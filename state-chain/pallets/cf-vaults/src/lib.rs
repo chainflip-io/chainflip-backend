@@ -815,6 +815,31 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			None => AsyncResult::Void,
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+		match outcome {
+			AsyncResult::Pending => {
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
+					keygen_ceremony_id: Default::default(),
+					response_status: KeygenResponseStatus::new(Default::default()),
+				});
+			},
+			AsyncResult::Ready(Ok(())) => {
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
+					tx_hash: Default::default(),
+				});
+			},
+			AsyncResult::Ready(Err(offenders)) => {
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
+					offenders,
+				});
+			},
+			AsyncResult::Void => {
+				PendingVaultRotation::<T, I>::kill();
+			},
+		}
+	}
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {

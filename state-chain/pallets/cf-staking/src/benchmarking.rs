@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::{ChainCrypto, Ethereum};
+use cf_chains::{ApiCall, ChainCrypto, Ethereum};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
@@ -15,8 +15,6 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 	(0..=count).map(|i| account("doogle", i, 0)).collect()
 }
-
-const MIN_STAKE: u128 = 50_000 * 10u128.pow(18);
 
 benchmarks! {
 
@@ -41,8 +39,10 @@ benchmarks! {
 	}
 
 	claim {
-		let balance_to_claim: T::Balance = T::Balance::from(50u32);
-		let balance_to_stake: T::Balance = T::Balance::from(MIN_STAKE);
+		// If we claim an amount which takes us below the minimum stake, the claim
+		// will fail.
+		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get() * T::Balance::from(2u128));
+		let balance_to_claim: T::Balance = T::Balance::from(MinimumStake::<T>::get());
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
@@ -58,16 +58,15 @@ benchmarks! {
 		};
 		stake_call.dispatch_bypass_filter(origin)?;
 
-	} :_(RawOrigin::Signed(caller.clone()), balance_to_claim, withdrawal_address)
+	} :_(RawOrigin::Signed(caller.clone()), Some(balance_to_claim), withdrawal_address)
 	verify {
 		assert!(PendingClaims::<T>::contains_key(&caller));
 	}
-
 	claim_all {
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
 
-		let balance_to_stake: T::Balance = T::Balance::from(MIN_STAKE);
+		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get());
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 
 		let caller: T::AccountId = whitelisted_caller();
@@ -80,7 +79,11 @@ benchmarks! {
 			tx_hash
 		}.dispatch_bypass_filter(origin)?;
 
-	}:_(RawOrigin::Signed(caller.clone()), withdrawal_address)
+		let call = Call::<T>::claim {
+			amount: None,
+			address: withdrawal_address,
+		};
+	}: { call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into())? }
 	verify {
 		assert!(PendingClaims::<T>::contains_key(&caller));
 	}
@@ -95,14 +98,14 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MIN_STAKE),
+			amount: T::Balance::from(MinimumStake::<T>::get()),
 			withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 
 		// Push a claim
 		let claimable = T::Flip::claimable_balance(&caller);
-		Pallet::<T>::do_claim(&caller, claimable, withdrawal_address)?;
+		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), None, withdrawal_address)?;
 
 		let call = Call::<T>::claimed {
 			account_id: caller.clone(),
@@ -123,13 +126,13 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MIN_STAKE),
+			amount: T::Balance::from(MinimumStake::<T>::get()),
 			withdrawal_address,
 			tx_hash: [211u8; 32],
 		}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
 
 		// requests a signature. So it's in the AsyncResult::Pending state
-		Pallet::<T>::do_claim(&caller, T::Flip::claimable_balance(&caller), withdrawal_address)?;
+		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), None, withdrawal_address)?;
 
 		// inserts signature so it's in the AsyncResult::Ready state
 		let signature_request_id = <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId::benchmark_value();
@@ -184,11 +187,11 @@ benchmarks! {
 			let withdrawal_address = eth_base_addr.map(|x| x + i as u8);
 			Call::<T>::staked {
 				account_id: staker.clone(),
-				amount: MIN_STAKE.into(),
+				amount: T::Balance::from(MinimumStake::<T>::get()),
 				withdrawal_address,
 				tx_hash: [0; 32]
 			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
-			Pallet::<T>::do_claim(staker, T::Flip::claimable_balance(staker), withdrawal_address)?;
+			Pallet::<T>::claim(RawOrigin::Signed(staker.clone()).into(), None, withdrawal_address)?;
 
 			// we're registering the claim to be expired at the unix epoch.
 			// T::TimeSource::now().as_secs() evaulates to 0 in the benchmarks. So this ensures
@@ -200,13 +203,13 @@ benchmarks! {
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {
-			minimum_stake: MIN_STAKE.into(),
+			minimum_stake: T::Balance::from(MinimumStake::<T>::get()),
 		};
 
 		let origin = T::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(MinimumStake::<T>::get(), MIN_STAKE.into());
+		assert_eq!(T::Balance::from(MinimumStake::<T>::get()), T::Balance::from(MinimumStake::<T>::get()));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
