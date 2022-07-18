@@ -750,7 +750,7 @@ mod tests {
 		use std::collections::BTreeSet;
 
 		use super::*;
-		use crate::tests::network::setup_account_and_peer_mapping;
+		use crate::tests::{genesis::GENESIS_BALANCE, network::setup_account_and_peer_mapping};
 		use cf_traits::{
 			BackupOrPassive, BidderProvider, ChainflipAccount, ChainflipAccountState,
 			ChainflipAccountStore, EpochInfo,
@@ -759,12 +759,6 @@ mod tests {
 		use state_chain_runtime::Validator;
 
 		#[test]
-		// We have a test network which goes into the first epoch
-		// The auction fails as the stakers are offline and we fail at `WaitingForBids`
-		// We require that a network has a minimum of 5 nodes.  We have a network of 8(3 from
-		// genesis and 5 new bidders).  We knock 4 of these nodes offline.
-		// A new auction is started
-		// This continues until we have a new set
 		fn auction_repeats_after_failure_because_of_liveness() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			super::genesis::default()
@@ -828,16 +822,17 @@ mod tests {
 
 					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
-					// Move forward heartbeat to get those missing nodes online
 					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
-					// The rotation can now continue to the next phase.
+					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
+
+					// We are still rotating, we have not completed a rotation
 					assert!(
 						matches!(
 							Validator::current_rotation_phase(),
 							RotationPhase::VaultsRotating(..)
 						),
-						"Expected RotationPhase::VaultsRotated, got: {:?}.",
+						"Expected RotationPhase::VaultsRotating, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
 				});
