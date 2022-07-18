@@ -1,5 +1,5 @@
 [package]
-authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
 edition = '2021'
 name = "chainflip-engine"
 version = "0.4.0"
