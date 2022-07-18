@@ -197,12 +197,12 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     }
 }
 
-fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<PeerId> {
-    Ok(PeerId::from_public_key(
+fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> PeerId {
+    PeerId::from_public_key(
         &libp2p::identity::PublicKey::Ed25519(libp2p::identity::ed25519::PublicKey::decode(
             &peer_public_key.0[..],
-        )?),
-    ))
+        ).expect("peer_id's are checked before being registered using ed25519_dalek::PublicKey::from_bytes, the same function used to decode and check peer_id's inside libp2p::identity::ed25519::PublicKey::decode")),
+    )
 }
 
 pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
@@ -240,16 +240,16 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         .await?
         .into_iter()
         .map(|(account_id, public_key, port, ip_address)| {
-            Ok((
+            (
                 account_id,
                 (
-                    public_key_to_peer_id(&public_key)?,
+                    public_key_to_peer_id(&public_key),
                     port,
                     ip_address.into(),
                 )
-            ))
+            )
         })
-        .collect::<Result<BTreeMap<_, _>>>()?;
+        .collect::<BTreeMap<_, _>>();
 
     let mut peer_to_account_mapping_on_chain = account_to_peer_mapping_on_chain
         .iter()
@@ -382,45 +382,41 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                 }
             }
             Some((account_id, peer_public_key, account_peer_mapping_change)) = account_mapping_change_receiver.recv() => {
-                match public_key_to_peer_id(&peer_public_key) {
-                    Ok(peer_id) => {
-                        match account_peer_mapping_change {
-                            AccountPeerMappingChange::Registered(port, ip_address) => {
-                                if let Some((existing_peer_id, _, _)) = account_to_peer_mapping_on_chain.get(&account_id) {
-                                    peer_to_account_mapping_on_chain.remove(existing_peer_id);
-                                }
-                                if let Entry::Vacant(entry) = peer_to_account_mapping_on_chain.entry(peer_id) {
-                                    entry.insert(account_id.clone());
-                                    account_to_peer_mapping_on_chain.insert(account_id, (peer_id, port, ip_address));
-                                    if peer_id_from_cfe_config != peer_id {
-                                        if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
-                                            slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
-                                        } else {
-                                            slog::info!(logger, "Added peer {} to reserved set", peer_id);
-                                        }
-                                    }
-                                } else {
-                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
-                                }
-                            }
-                            AccountPeerMappingChange::Unregistered => {
-                                if Some(&account_id) == peer_to_account_mapping_on_chain.get(&peer_id) {
-                                    account_to_peer_mapping_on_chain.remove(&account_id);
-                                    peer_to_account_mapping_on_chain.remove(&peer_id);
-                                    if peer_id_from_cfe_config != peer_id {
-                                        if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
-                                            slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
-                                        } else {
-                                            slog::info!(logger, "Removed peer {} to reserved set", peer_id);
-                                        }
-                                    }
-                                } else {
-                                    slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
-                                }
-                            }
+                let peer_id = public_key_to_peer_id(&peer_public_key);
+                match account_peer_mapping_change {
+                    AccountPeerMappingChange::Registered(port, ip_address) => {
+                        if let Some((existing_peer_id, _, _)) = account_to_peer_mapping_on_chain.get(&account_id) {
+                            peer_to_account_mapping_on_chain.remove(existing_peer_id);
                         }
-                    },
-                    Err(error) => slog::error!(logger, "Unable to convert public key {} to peer id. {}", peer_public_key, error)
+                        if let Entry::Vacant(entry) = peer_to_account_mapping_on_chain.entry(peer_id) {
+                            entry.insert(account_id.clone());
+                            account_to_peer_mapping_on_chain.insert(account_id, (peer_id, port, ip_address));
+                            if peer_id_from_cfe_config != peer_id {
+                                if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
+                                    slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
+                                } else {
+                                    slog::info!(logger, "Added peer {} to reserved set", peer_id);
+                                }
+                            }
+                        } else {
+                            slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
+                        }
+                    }
+                    AccountPeerMappingChange::Unregistered => {
+                        if Some(&account_id) == peer_to_account_mapping_on_chain.get(&peer_id) {
+                            account_to_peer_mapping_on_chain.remove(&account_id);
+                            peer_to_account_mapping_on_chain.remove(&peer_id);
+                            if peer_id_from_cfe_config != peer_id {
+                                if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
+                                    slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
+                                } else {
+                                    slog::info!(logger, "Removed peer {} to reserved set", peer_id);
+                                }
+                            }
+                        } else {
+                            slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
+                        }
+                    }
                 }
             },
             _ = check_listener_address_tick.tick() => {
@@ -429,226 +425,3 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         }
     }
 }
-
-/*
-OLD TESTS TO CHANGE
-
-#[cfg(test)]
-mod tests {
-    use futures::StreamExt;
-    use itertools::Itertools;
-
-    use super::mock::*;
-    use super::*;
-
-    async fn receive_with_timeout<T>(mut stream: BoxStream<'_, T>) -> Option<T> {
-        let fut = stream.next();
-        tokio::time::timeout(std::time::Duration::from_millis(5), fut)
-            .await
-            .unwrap_or(None)
-    }
-
-    #[tokio::test]
-    async fn test_p2p_mock_send() {
-        let network = NetworkMock::new();
-
-        let data = vec![1, 2, 3];
-        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
-
-        let clients = validator_ids
-            .iter()
-            .map(|id| network.new_client(id.clone()))
-            .collect_vec();
-
-        // (0) sends to (1); (1) should receive one, (2) receives none
-        clients[0].send(&validator_ids[1], &data).await.unwrap();
-
-        drop(network);
-
-        let stream_1 = clients[1].take_stream().await.unwrap();
-
-        assert_eq!(
-            receive_with_timeout(stream_1).await,
-            Some(P2PMessage {
-                account_id: validator_ids[0].clone(),
-                data: data.clone()
-            })
-        );
-
-        let stream_2 = clients[2].take_stream().await.unwrap();
-
-        assert_eq!(receive_with_timeout(stream_2).await, None);
-    }
-
-    #[tokio::test]
-    async fn test_p2p_mock_broadcast() {
-        let network = NetworkMock::new();
-
-        let data = vec![3, 2, 1];
-        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
-        let clients = validator_ids
-            .iter()
-            .map(|id| network.new_client(id.clone()))
-            .collect_vec();
-
-        // (1) broadcasts; (0) and (2) should receive one message
-        clients[1].broadcast(&data).await.unwrap();
-
-        let stream_0 = clients[0].take_stream().await.unwrap();
-
-        assert_eq!(
-            receive_with_timeout(stream_0).await,
-            Some(P2PMessage {
-                account_id: validator_ids[1].clone(),
-                data: data.clone()
-            })
-        );
-
-        let stream_2 = clients[2].take_stream().await.unwrap();
-
-        assert_eq!(
-            receive_with_timeout(stream_2).await,
-            Some(P2PMessage {
-                account_id: validator_ids[1].clone(),
-                data: data.clone()
-            })
-        );
-    }
-}
-
-pub struct P2PClientMock {
-    id: AccountId,
-    pub receiver: Arc<Mutex<Option<UnboundedReceiverStream<P2PMessage>>>>,
-    network_inner: Arc<Mutex<NetworkMockInner>>,
-}
-
-impl P2PClientMock {
-    pub fn new(id: AccountId, network_inner: Arc<Mutex<NetworkMockInner>>) -> Self {
-        let (sender, receiver) = unbounded_channel();
-
-        network_inner.lock().unwrap().register(&id, sender);
-
-        P2PClientMock {
-            id,
-            receiver: Arc::new(Mutex::new(Some(UnboundedReceiverStream::new(receiver)))),
-            network_inner,
-        }
-    }
-}
-
-#[async_trait]
-impl P2PNetworkClient for P2PClientMock {
-    type NetworkEvent = P2PMessage;
-
-    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode> {
-        self.network_inner.lock().unwrap().broadcast(&self.id, data);
-        Ok(200)
-    }
-
-    async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode> {
-        self.network_inner.lock().unwrap().send(&self.id, to, data);
-        Ok(200)
-    }
-
-    async fn take_stream(&self) -> Result<BoxStream<Self::NetworkEvent>> {
-        let stream = self
-            .receiver
-            .lock()
-            .unwrap()
-            .take()
-            .ok_or(anyhow!("Subscription Error"))?;
-
-        Ok(Box::pin(stream))
-    }
-}
-
-pub struct MockChannelEventHandler(UnboundedSender<P2PMessage>);
-
-impl MockChannelEventHandler {
-    pub fn new() -> (Self, UnboundedReceiver<P2PMessage>) {
-        let (s, r) = unbounded_channel();
-        (Self(s), r)
-    }
-}
-
-#[async_trait]
-impl NetworkEventHandler<P2PClientMock> for MockChannelEventHandler {
-    async fn handle_event(&self, event: P2PMessage) {
-        self.0.send(event).unwrap()
-    }
-}
-
-pub struct NetworkMock(Arc<Mutex<NetworkMockInner>>);
-
-impl NetworkMock {
-    pub fn new() -> Self {
-        let inner = NetworkMockInner::new();
-        let inner = Arc::new(Mutex::new(inner));
-
-        NetworkMock(inner)
-    }
-
-    pub fn new_client(&self, id: AccountId) -> P2PClientMock {
-        P2PClientMock::new(id, Arc::clone(&self.0))
-    }
-}
-
-pub struct NetworkMockInner {
-    clients: HashMap<AccountId, UnboundedSender<P2PMessage>>,
-}
-
-impl NetworkMockInner {
-    fn new() -> Self {
-        NetworkMockInner {
-            clients: HashMap::new(),
-        }
-    }
-
-    /// Register validator, so we know how to contact them
-    fn register(&mut self, id: &AccountId, sender: UnboundedSender<P2PMessage>) {
-        let added = self.clients.insert(id.to_owned(), sender).is_none();
-        assert!(added, "Cannot insert the same validator more than once");
-    }
-
-    fn broadcast(&self, from: &AccountId, data: &[u8]) {
-        let m = P2PMessage {
-            account_id: from.to_owned(),
-            data: data.to_owned(),
-        };
-
-        for (id, sender) in &self.clients {
-            // Do not send to ourselves
-            if id != from {
-                match sender.send(m.clone()) {
-                    Ok(()) => (),
-                    Err(_) => {
-                        panic!("channel is disconnected");
-                    }
-                }
-            }
-        }
-    }
-
-    /// Send to a specific `validator` only
-    fn send(&self, from: &AccountId, to: &AccountId, data: &[u8]) {
-        let m = P2PMessage {
-            account_id: from.to_owned(),
-            data: data.to_owned(),
-        };
-
-        match self.clients.get(to) {
-            Some(client) => match client.send(m) {
-                Ok(()) => {}
-                Err(_) => {
-                    panic!("channel is disconnected");
-                }
-            },
-            None => {
-                eprintln!("Client not connected: {}", to);
-            }
-        }
-    }
-}
-
-
-*/

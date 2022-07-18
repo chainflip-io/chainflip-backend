@@ -8,8 +8,6 @@ pub use state_chain_runtime::constants::common::eth::BLOCK_SAFETY_MARGIN as ETH_
 pub const MAX_EXTRINSIC_RETRY_ATTEMPTS: usize = 10;
 
 // ======= Eth Rpc Client =======
-/// Duration before the attempt to connect to the ethereum node times out
-pub const ETH_NODE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Duration before we give up waiting on a response for a web3 request
 pub const ETH_LOG_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
