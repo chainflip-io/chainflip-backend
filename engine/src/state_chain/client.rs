@@ -687,7 +687,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     "Failed to get storage {} with key: {:?} at block hash {:#x}",
                     log_str, storage_key, block_hash
                 ))?
-                .map(|data| Value::decode(&mut &data.0[..]).unwrap()),
+                .map(|data| context!(Value::decode(&mut &data.0[..])).unwrap()),
         ))
     }
 
@@ -744,7 +744,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 changes
                     .into_iter()
                     .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| StorageType::decode(&mut &data.0[..]).unwrap())
+                        option_data
+                            .map(|data| context!(StorageType::decode(&mut &data.0[..])).unwrap())
                     })
             })
             .flatten()
@@ -761,7 +762,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .storage_pairs(block_hash, storage_key)
             .await?
             .into_iter()
-            .map(|(_, storage_data)| StorageType::decode(&mut &storage_data.0[..]).unwrap())
+            .map(|(_, storage_data)| {
+                context!(StorageType::decode(&mut &storage_data.0[..])).unwrap()
+            })
             .collect())
     }
 
@@ -1009,7 +1012,7 @@ async fn inner_connect_to_state_chain(
                     let account_info: frame_system::AccountInfo<
                         state_chain_runtime::Index,
                         <state_chain_runtime::Runtime as frame_system::Config>::AccountData,
-                    > = Decode::decode(&mut &encoded_account_info.0[..]).unwrap();
+                    > = context!(Decode::decode(&mut &encoded_account_info.0[..])).unwrap();
                     Some(account_info.nonce)
                 } else {
                     None
@@ -1066,13 +1069,14 @@ async fn inner_connect_to_state_chain(
         latest_block_hash
     );
 
-    let RuntimeMetadataPrefixed(metadata_prefix, metadata) = RuntimeMetadataPrefixed::decode(
-        &mut &state_chain_rpc_client
-            .state_rpc_client
-            .metadata(Some(latest_block_hash))
-            .await
-            .map_err(rpc_error_into_anyhow_error)?[..],
-    )?;
+    let RuntimeMetadataPrefixed(metadata_prefix, metadata) =
+        context!(RuntimeMetadataPrefixed::decode(
+            &mut &state_chain_rpc_client
+                .state_rpc_client
+                .metadata(Some(latest_block_hash))
+                .await
+                .map_err(rpc_error_into_anyhow_error)?[..],
+        ))?;
     if metadata_prefix != frame_metadata::META_RESERVED {
         bail!(
             "Invalid Metadata Prefix {}, expected {}.",
@@ -1108,7 +1112,7 @@ async fn inner_connect_to_state_chain(
             our_account_id,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: StorageKey(storage_prefix(b"System", b"Events").to_vec()),
-            heartbeat_block_interval: u32::decode(
+            heartbeat_block_interval: context!(u32::decode(
                 &mut &metadata
                     .pallets
                     .iter()
@@ -1119,7 +1123,7 @@ async fn inner_connect_to_state_chain(
                     .find(|constant| constant.name == "HeartbeatBlockInterval")
                     .unwrap()
                     .value[..],
-            )
+            ))
             .unwrap(),
         }),
     ))
