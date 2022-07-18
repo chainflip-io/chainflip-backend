@@ -27,14 +27,24 @@ fn update_gov_key_via_onchain_proposal() {
 #[test]
 fn cannot_back_proposal_twice() {
     new_test_ext().execute_with(|| {
-        todo!()
+        assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
+        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
+        assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::AlreadyBacked);
+    });
+}
+
+#[test]
+fn cannot_back_not_exisintg_proposal() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::ProposalDosentExists);
     });
 }
 
 #[test]
 fn cannot_create_proposal_with_unsuficient_liquidity() {
     new_test_ext().execute_with(|| {
-        todo!()
+        ProposalFee::<Test>::set(10000);
+        assert_noop!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), DispatchError::Other("Account is not sufficiently funded!"));
     });
 }
 

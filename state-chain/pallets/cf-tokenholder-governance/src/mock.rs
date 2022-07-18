@@ -16,12 +16,14 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+use sp_runtime::DispatchError;
 
 use cf_chains::SetCommKeyWithAggKey;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
+type Balance = u128;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -43,7 +45,6 @@ parameter_types! {
 pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
 pub const CHAIN_ID: u64 = 31337;
 pub const COUNTER: u64 = 42;
-
 pub struct MockReplayProvider;
 
 impl ReplayProtectionProvider<MockEthereum> for MockReplayProvider {
@@ -84,7 +85,6 @@ impl system::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-
 pub struct MockFeePayment;
 pub struct MockStakingInfo;
 
@@ -95,10 +95,10 @@ impl StakingInfo for MockStakingInfo {
 
     fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
 		match account_id {
-			&ALICE => 3000,
-			&BOB => 2000,
-			&CHARLES => 3000,
-			&EVE => 2000,
+			&ALICE => ALICE_BALANCE,
+			&BOB => BOB_BALANCE,
+			&CHARLES => CHARLES_BALANCE,
+			&EVE => EVE_BALANCE,
 			_ => 0
 		}
     }
@@ -230,10 +230,16 @@ impl Broadcaster<MockEthereum> for MockBroadcastComm {
 
 impl FeePayment for MockFeePayment {
     type AccountId = AccountId;
-    type Amount = u128;
+    type Amount = Balance;
     fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> Result<(), sp_runtime::DispatchError> {
-		// TODO: Provide a mock case in which the account dosen't has enough funds
-        Ok(().into())
+		let not_enough_funds = DispatchError::Other("Account is not sufficiently funded!");
+		match account_id {
+			ALICE if amount > ALICE_BALANCE => Err(not_enough_funds),
+			BOB if amount > BOB_BALANCE => Err(not_enough_funds),
+			CHARLES if amount > CHARLES_BALANCE => Err(not_enough_funds),
+			EVE if amount > EVE_BALANCE => Err(not_enough_funds),
+			_ => Ok(().into())
+		}
     }
 }
 
@@ -262,10 +268,17 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type WeightInfo = ();
 }
 
+// Accounts
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
 pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
+
+// Balances
+pub const ALICE_BALANCE: Balance = 3000;
+pub const BOB_BALANCE: Balance = 2000;
+pub const CHARLES_BALANCE: Balance = 3000;
+pub const EVE_BALANCE: Balance = 2000;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
