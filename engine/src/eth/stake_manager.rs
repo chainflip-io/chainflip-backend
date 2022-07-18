@@ -83,6 +83,30 @@ pub enum StakeManagerEvent {
         /// Withdrawal amount
         amount: u128,
     },
+
+    /// `CommunityGuardDisabled(communityGuardDisabled)`
+    CommunityGuardDisabled {
+        /// Is the community guard now disabled
+        community_guard_disabled: bool,
+    },
+
+    /// `FLIPSet(flip)`
+    FLIPSet {
+        /// Address of the new FLIP contract
+        flip: ethabi::Address,
+    },
+
+    /// `Suspended(suspended)`
+    Suspended {
+        /// Is the StakeManager now suspended
+        suspended: bool,
+    },
+
+    /// `UpdatedKeyManager(keyManager)`
+    UpdatedKeyManager {
+        /// Address of the new KeyManager contract
+        key_manager: ethabi::Address,
+    },
 }
 
 #[async_trait]
@@ -164,6 +188,11 @@ impl EthObserver for StakeManager {
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
         let gov_withdrawal = SignatureAndEvent::new(&self.contract, "GovernanceWithdrawal")?;
+        let community_guard_disabled =
+            SignatureAndEvent::new(&self.contract, "CommunityGuardDisabled")?;
+        let flip_set = SignatureAndEvent::new(&self.contract, "FLIPSet")?;
+        let suspended = SignatureAndEvent::new(&self.contract, "Suspended")?;
+        let updated_key_manager = SignatureAndEvent::new(&self.contract, "UpdatedKeyManager")?;
 
         Ok(Box::new(
             move |event_signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
@@ -215,6 +244,29 @@ impl EthObserver for StakeManager {
                     StakeManagerEvent::GovernanceWithdrawal {
                         to: utils::decode_log_param(&log, "to")?,
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    }
+                } else if event_signature == community_guard_disabled.signature {
+                    let log = community_guard_disabled.event.parse_log(raw_log)?;
+                    StakeManagerEvent::CommunityGuardDisabled {
+                        community_guard_disabled: utils::decode_log_param(
+                            &log,
+                            "communityGuardDisabled",
+                        )?,
+                    }
+                } else if event_signature == flip_set.signature {
+                    let log = flip_set.event.parse_log(raw_log)?;
+                    StakeManagerEvent::FLIPSet {
+                        flip: utils::decode_log_param(&log, "flip")?,
+                    }
+                } else if event_signature == suspended.signature {
+                    let log = suspended.event.parse_log(raw_log)?;
+                    StakeManagerEvent::Suspended {
+                        suspended: utils::decode_log_param(&log, "suspended")?,
+                    }
+                } else if event_signature == updated_key_manager.signature {
+                    let log = updated_key_manager.event.parse_log(raw_log)?;
+                    StakeManagerEvent::UpdatedKeyManager {
+                        key_manager: utils::decode_log_param(&log, "keyManager")?,
                     }
                 } else {
                     return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
@@ -458,5 +510,127 @@ mod tests {
             }
             _ => panic!("Expected Staking::GovernanceWithdrawal, got a different variant"),
         }
+    }
+
+    #[test]
+    fn community_guard_disabled_log_parsing() {
+        let stake_manager = StakeManager::new(H160::default());
+        let decode_log = stake_manager.decode_log_closure().unwrap();
+
+        let event_signature =
+            H256::from_str("0x057c4cb09f128960151f04372028154acda40272f16360154961672989b59bad")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "0000000000000000000000000000000000000000000000000000000000000001",
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap()
+        {
+            StakeManagerEvent::CommunityGuardDisabled {
+                community_guard_disabled,
+            } => {
+                // it is now disabled, so this should be true
+                assert!(community_guard_disabled)
+            }
+            _ => panic!("Expected Staking::CommunityGuardDisabled, got a different variant"),
+        };
+    }
+
+    #[test]
+    fn flip_set_log_parsing() {
+        let stake_manager = StakeManager::new(H160::default());
+        let decode_log = stake_manager.decode_log_closure().unwrap();
+
+        let event_signature =
+            H256::from_str("0x28a7be5ead6163acf2999fbd7effa68e097435d695eae192ae3121c9b4e50255")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "000000000000000000000000cf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap()
+        {
+            StakeManagerEvent::FLIPSet { flip } => {
+                assert_eq!(
+                    flip,
+                    H160::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").unwrap()
+                );
+            }
+            _ => panic!("Expected Staking::FLIPSet, got a different variant"),
+        };
+    }
+
+    #[test]
+    fn suspended_log_parsing() {
+        let stake_manager = StakeManager::new(H160::default());
+        let decode_log = stake_manager.decode_log_closure().unwrap();
+
+        let event_signature =
+            H256::from_str("0x58e6c20b68c19f4d8dbc6206267af40b288342464b433205bb41e5b65c4016da")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "0000000000000000000000000000000000000000000000000000000000000001",
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap()
+        {
+            StakeManagerEvent::Suspended { suspended } => {
+                // we are now suspended, so this should be true
+                assert!(suspended)
+            }
+            _ => panic!("Expected Staking::Suspended, got a different variant"),
+        };
+    }
+
+    #[test]
+    fn updated_key_manager_log_parsing() {
+        let stake_manager = StakeManager::new(H160::default());
+        let decode_log = stake_manager.decode_log_closure().unwrap();
+
+        let event_signature =
+            H256::from_str("0xd18040e514983d65f088430e69091aea9bf07feaed3696a3faac1ccc34b5e3bc")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "0000000000000000000000000000000000000000000000000000000000000001",
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap()
+        {
+            StakeManagerEvent::UpdatedKeyManager { key_manager } => {
+                assert_eq!(
+                    key_manager,
+                    H160::from_str("0x0000000000000000000000000000000000000001").unwrap()
+                )
+            }
+            _ => panic!("Expected Staking::UpdatedKeyManager, got a different variant"),
+        };
     }
 }
