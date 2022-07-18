@@ -5,7 +5,9 @@ use frame_support::{assert_noop, assert_ok};
 #[test]
 fn should_provide_winning_set() {
 	new_test_ext().execute_with(|| {
-		MockBidderProvider::set_bids(&(1..=10).map(|id| (id, 100)).collect::<Vec<_>>());
+		MockBidderProvider::set_bids(
+			&(1..=10).map(|bidder_id| Bid { bidder_id, amount: 100 }).collect::<Vec<_>>(),
+		);
 
 		let AuctionOutcome { winners, bond, .. } =
 			<AuctionPallet as Auctioneer<Test>>::resolve_auction().expect("the auction should run");
@@ -18,7 +20,9 @@ fn should_provide_winning_set() {
 			mock::Event::AuctionPallet(crate::Event::AuctionCompleted(winners, bond)),
 		);
 
-		MockBidderProvider::set_bids(&(11..=20).map(|id| (id, 80)).collect::<Vec<_>>());
+		MockBidderProvider::set_bids(
+			&(11..=20).map(|bidder_id| Bid { bidder_id, amount: 80 }).collect::<Vec<_>>(),
+		);
 		let AuctionOutcome { winners, bond, .. } =
 			AuctionPallet::resolve_auction().expect("the auction should run");
 

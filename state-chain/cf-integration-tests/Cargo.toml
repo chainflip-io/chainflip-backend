@@ -28,7 +28,6 @@ pallet-cf-emissions = { path = "../pallets/cf-emissions"}
 pallet-cf-governance = { path = "../pallets/cf-governance"}
 pallet-cf-reputation = { path = "../pallets/cf-reputation"}
 pallet-cf-vaults = { path = "../pallets/cf-vaults"}
-pallet-cf-online = { path = "../pallets/cf-online"}
 pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature"}
 pallet-cf-broadcast = { path = "../pallets/cf-broadcast"}
 pallet-cf-environment = { path = "../pallets/cf-environment"}

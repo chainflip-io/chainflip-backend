@@ -21,10 +21,11 @@ pub use frame_support::{
 	instances::Instance1,
 	parameter_types,
 	traits::{
-		ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo,
+		ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness,
+		StorageInfo,
 	},
 	weights::{
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, WEIGHT_PER_SECOND},
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	StorageValue,
@@ -139,7 +140,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
 	type AuctionQualification = (
-		Online,
+		Reputation,
 		pallet_cf_validator::PeerMapping<Self>,
 		SessionKeysRegistered<
 			<Self as frame_system::Config>::AccountId,
@@ -233,7 +234,6 @@ parameter_types! {
 		::with_sensible_defaults(2 * WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
-	pub const SS58Prefix: u8 = 42;
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -268,7 +268,7 @@ impl frame_system::Config for Runtime {
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
 	/// The weight of database operations that the runtime can invoke.
-	type DbWeight = RocksDbWeight;
+	type DbWeight = weights::rocksdb_weights::constants::RocksDbWeight;
 	/// Version of the runtime.
 	type Version = Version;
 	/// Converts a module to the index of the module in `construct_runtime!`.
@@ -287,8 +287,8 @@ impl frame_system::Config for Runtime {
 	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
 	type SystemWeightInfo = weights::frame_system::SubstrateWeight<Runtime>;
-	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
-	type SS58Prefix = SS58Prefix;
+	/// This is used as an identifier of the chain.
+	type SS58Prefix = ConstU16<CHAINFLIP_SS58_PREFIX>;
 	/// The set code logic, just the default since we're not a parachain.
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
@@ -448,18 +448,13 @@ parameter_types! {
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
+	type Heartbeat = ChainflipHeartbeat;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
-}
-
-impl pallet_cf_online::Config for Runtime {
-	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
-	type Heartbeat = ChainflipHeartbeat;
-	type WeightInfo = pallet_cf_online::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
@@ -528,7 +523,6 @@ construct_runtime!(
 		Governance: pallet_cf_governance,
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
 		EthereumVault: pallet_cf_vaults::<Instance1>,
-		Online: pallet_cf_online,
 		Reputation: pallet_cf_reputation,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
@@ -574,7 +568,6 @@ pub type Executive = frame_executive::Executive<
 			(
 				migrations::DeleteRewardsPallet,
 				migrations::UnifyCeremonyIds,
-				migrations::refactor_offences::Migration,
 				migrations::migrate_contract_addresses::Migration,
 				migrations::add_flip_contract_address::Migration,
 				migrations::migrate_claims::Migration,
@@ -606,7 +599,6 @@ mod benches {
 		[pallet_cf_governance, Governance]
 		[pallet_cf_tokenholder_governance, TokenholderGovernance]
 		[pallet_cf_vaults, EthereumVault]
-		[pallet_cf_online, Online]
 		[pallet_cf_reputation, Reputation]
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
@@ -643,20 +635,23 @@ impl_runtime_apis! {
 			let auction_params = Auction::auction_parameters();
 			(auction_params.min_size, auction_params.max_size)
 		}
-		fn cf_min_stake() -> u64 {
+		fn cf_min_stake() -> u128 {
 			MinimumStake::<Runtime>::get().unique_saturated_into()
 		}
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
 		}
+		fn cf_epoch_duration() -> u32 {
+			Validator::epoch_number_of_blocks()
+		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
 		}
-		fn cf_authority_emission_per_block() -> u64 {
-			Emissions::current_authority_emission_per_block().unique_saturated_into()
+		fn cf_authority_emission_per_block() -> u128 {
+			Emissions::current_authority_emission_per_block()
 		}
-		fn cf_backup_emission_per_block() -> u64 {
-			Emissions::backup_node_emission_per_block().unique_saturated_into()
+		fn cf_backup_emission_per_block() -> u128 {
+			Emissions::backup_node_emission_per_block()
 		}
 		fn cf_flip_supply() -> (u128, u128) {
 			(Flip::total_issuance(), Flip::offchain_funds())
@@ -672,7 +667,7 @@ impl_runtime_apis! {
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
-			let last_heartbeat = pallet_cf_online::LastHeartbeat::<Runtime>::get(&account_id);
+			let last_heartbeat = pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 			let account_data = ChainflipAccountStore::<Runtime>::get(&account_id);

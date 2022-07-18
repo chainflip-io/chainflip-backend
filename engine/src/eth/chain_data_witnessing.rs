@@ -11,6 +11,7 @@ use futures::{future, Stream, StreamExt};
 use slog::o;
 
 use sp_core::U256;
+use utilities::periodic_tick_stream;
 use web3::types::{BlockNumber, U64};
 
 /// Returns a stream of latest eth block numbers by polling at regular intervals.
@@ -23,7 +24,7 @@ pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync + 'a>(
 ) -> impl Stream<Item = u64> + 'a {
     let logger = logger.new(o!(COMPONENT_KEY => "ETH_Poll_LatestBlockStream"));
 
-    util::periodic_tick_stream(polling_interval)
+    periodic_tick_stream(polling_interval)
         .then(move |_| eth_rpc.block_number())
         .filter_map(move |rpc_result| {
             future::ready(match rpc_result {
@@ -69,20 +70,9 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 
     Ok(TrackedData::<Ethereum> {
         block_height: block_number,
-        base_fee: fee_history
-            .base_fee_per_gas
-            .first()
-            .expect("Requested, so should be present.")
-            .as_u128(),
+        base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
         priority_fee: round_wei_to_gwei(
-            fee_history
-                .reward
-                .expect("Requested, so should be present.")
-                .first()
-                .expect("Requested, so should be present.")
-                .first()
-                .expect("Requested, so should be present.")
-                .as_u128(),
+            context!(context!(context!(fee_history.reward)?.first())?.first())?.as_u128(),
         ),
     })
 }

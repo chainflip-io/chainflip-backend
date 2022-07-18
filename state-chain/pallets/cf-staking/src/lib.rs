@@ -16,10 +16,10 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::{ApiCall, RegisterClaim};
+use cf_chains::RegisterClaim;
 use cf_traits::{
-	BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider, StakeTransfer,
-	ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
+	StakeTransfer, ThresholdSigner,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -34,13 +34,10 @@ use cf_traits::SystemStateInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
-	DispatchError,
-};
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
 use frame_support::pallet_prelude::Weight;
-const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -118,26 +115,36 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Store the list of staked accounts and whether or not they are retired
+	/// Store the list of staked accounts and whether or not they are retired.
 	#[pallet::storage]
 	pub type AccountRetired<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
+	/// PendingClaims can be in one of two states:
+	/// - Pending threshold signature to allow registration of the claim.
+	/// - Pending execution of the claim on ETH.
 	#[pallet::storage]
 	pub type PendingClaims<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
 
+	/// Locks a particular account's ability to claim to a particular ETH address.
 	#[pallet::storage]
 	pub type WithdrawalAddresses<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
 
+	/// Currently just used to record failed staking attempts so that if necessary in the future we
+	/// can use it to recover user funds.
 	#[pallet::storage]
 	pub type FailedStakeAttempts<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<StakeAttempt<T::Balance>>, ValueQuery>;
 
+	/// List of pairs, mapping the time (in secs since Unix Epoch) at which the PendingClaim of a
+	/// particular AccountId expires.
 	#[pallet::storage]
 	pub type ClaimExpiries<T: Config> = StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
 
+	/// The minimum amount a user can stake, and therefore the minimum amount they can have
+	/// remaining after they claim.
 	#[pallet::storage]
 	pub type MinimumStake<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
@@ -216,9 +223,6 @@ pub mod pallet {
 		/// The claimant tried to claim despite having a claim already pending.
 		PendingClaim,
 
-		/// An account tried to post a signature to an already-signed claim.
-		SignatureAlreadyIssued,
-
 		/// Can't retire an account if it's already retired.
 		AlreadyRetired,
 
@@ -227,9 +231,6 @@ pub mod pallet {
 
 		/// We are in the auction phase
 		AuctionPhase,
-
-		/// Failed to encode the signed claim payload.
-		ClaimEncodingFailed,
 
 		/// A withdrawal address is provided, but the account has a different withdrawal address
 		/// already associated.
@@ -280,6 +281,8 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my authority key.
 		///
+		/// If amount of None is provided it will claim all claimable funds.
+		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached
 		/// claim request needs to be signed by a threshold of authorities in order to produce valid
 		/// data that can be submitted to the StakeManager Smart Contract.
@@ -302,36 +305,83 @@ pub mod pallet {
 		///
 		/// - [ThresholdSigner]
 		/// - [StakeTransfer]
-		#[pallet::weight(T::WeightInfo::claim())]
+		#[pallet::weight({ if amount.is_some() { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
 		pub fn claim(
 			origin: OriginFor<T>,
-			amount: FlipBalance<T>,
+			amount: Option<FlipBalance<T>>,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			Self::do_claim(&who, amount, address)?;
-			Ok(().into())
-		}
+			let account_id = ensure_signed(origin)?;
 
-		/// Get *all* FLIP that is held for me by the system, signed by my authority key.
-		///
-		/// Same as [claim](Self::claim) except first calculates the maximum claimable amount.
-		///
-		/// ## Events
-		///
-		/// - See [claim](Self::claim)
-		///
-		/// ## Errors
-		///
-		/// - See [claim](Self::claim)
-		#[pallet::weight(T::WeightInfo::claim_all())]
-		pub fn claim_all(
-			origin: OriginFor<T>,
-			address: EthereumAddress,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let claimable = T::Flip::claimable_balance(&who);
-			Self::do_claim(&who, claimable, address)?;
+			// claim all if no amount provided
+			let amount = amount.unwrap_or_else(|| T::Flip::claimable_balance(&account_id));
+
+			// Ensure we are claiming something
+			ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
+
+			// Ensure that we're not claiming to the zero address
+			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
+
+			// No new claim requests can be processed if we're currently in an auction phase.
+			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+
+			// If a claim already exists, return an error. The staker must either redeem their claim
+			// voucher or wait until expiry before creating a new claim.
+			ensure!(!PendingClaims::<T>::contains_key(&account_id), Error::<T>::PendingClaim);
+
+			// Check if a return address exists - if not just go with the provided claim address
+			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
+				// Check if the address is different from the stored address - if yes error out
+				if withdrawal_address != address {
+					return Err(Error::<T>::WithdrawalAddressRestricted.into())
+				}
+			}
+
+			// Calculate the maximum that would remain after this claim and ensure it won't be less
+			// than the system's minimum stake.  N.B. This would be caught in
+			// `StakeTranser::try_claim()` but this will need to be handled in a refactor of that
+			// trait(?)
+			let remaining = T::Flip::staked_balance(&account_id)
+				.checked_sub(&amount)
+				.ok_or(Error::<T>::InvalidClaim)?;
+
+			ensure!(
+				remaining == Zero::zero() || remaining >= MinimumStake::<T>::get(),
+				Error::<T>::BelowMinimumStake
+			);
+
+			// Throw an error if the staker tries to claim too much. Otherwise decrement the stake
+			// by the amount claimed.
+			T::Flip::try_claim(&account_id, amount)?;
+
+			// Set expiry and build the claim parameters.
+			let expiry =
+				(T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
+
+			Self::register_claim_expiry(account_id.clone(), expiry);
+
+			let call = T::RegisterClaim::new_unsigned(
+				T::ReplayProtectionProvider::replay_protection(),
+				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
+				amount.into(),
+				&address,
+				expiry,
+			);
+
+			T::ThresholdSigner::request_signature_with_callback(
+				call.threshold_signature_payload(),
+				|id| {
+					Call::<T>::post_claim_signature {
+						account_id: account_id.clone(),
+						signature_request_id: id,
+					}
+					.into()
+				},
+			);
+
+			// Store the claim params for later.
+			PendingClaims::<T>::insert(account_id, call);
+
 			Ok(().into())
 		}
 
@@ -364,11 +414,12 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 
-			let claim_details =
-				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
-
 			ensure!(
-				claimed_amount == claim_details.amount().into(),
+				claimed_amount ==
+					PendingClaims::<T>::get(&account_id)
+						.ok_or(Error::<T>::NoPendingClaim)?
+						.amount()
+						.into(),
 				Error::<T>::InvalidClaimDetails
 			);
 
@@ -398,13 +449,13 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// **This call can only be dispatched from the configured witness origin.**
+		/// **This call can only be dispatched from the threshold signature origin.**
 		///
-		/// The claim signature generated by the CFE should be posted here so it can be stored
-		/// on-chain. The Validators are no longer responsible for the execution of this claim,
-		/// since the claiming user is expected to read the signature from claim storage, and use it
-		/// to compose a transaction to the StakeManager Smart Contract, which they will then
-		/// broadcast themselves.
+		/// The claim signature generated by the CFE is registered via the threshold signature
+		/// pallet. This Call is a callback for a valid threshold signature which
+		/// corresponds to a claim. After `post_claim_signature` it is the responsibility of the
+		/// user to finish the claiming process by registering the claim and executing the claim on
+		/// Ethereum.
 		///
 		/// ## Events
 		///
@@ -413,9 +464,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [NoPendingClaim](Error::NoPendingClaim)
-		/// - [SignatureAlreadyIssued](Error::SignatureAlreadyIssued)
-		/// - [InvalidClaimDetails](Error::InvalidClaimDetails)
-		/// - [SignatureTooLate](Error::SignatureTooLate) the claim.
+		/// - [SignatureNotReady](Error::SignatureNotReady)
 		#[pallet::weight(T::WeightInfo::post_claim_signature())]
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
@@ -614,79 +663,6 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
 
-	fn do_claim(
-		account_id: &AccountId<T>,
-		amount: T::Balance,
-		address: EthereumAddress,
-	) -> Result<(), DispatchError> {
-		// Ensure we are claiming something
-		ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
-
-		// Ensure that we're not claiming to the zero address
-		ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
-
-		// No new claim requests can be processed if we're currently in an auction phase.
-		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
-
-		// If a claim already exists, return an error. The staker must either redeem their claim
-		// voucher or wait until expiry before creating a new claim.
-		ensure!(!PendingClaims::<T>::contains_key(account_id), Error::<T>::PendingClaim);
-
-		// Check if a return address exists - if not just go with the provided claim address
-		if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(account_id) {
-			// Check if the address is different from the stored address - if yes error out
-			if withdrawal_address != address {
-				return Err(Error::<T>::WithdrawalAddressRestricted.into())
-			}
-		}
-
-		// Calculate the maximum that would remain after this claim and ensure it won't be less than
-		// the system's minimum stake.  N.B. This would be caught in `StakeTranser::try_claim()` but
-		// this will need to be handled in a refactor of that trait(?)
-		let remaining = T::Flip::staked_balance(account_id)
-			.checked_sub(&amount)
-			.ok_or(Error::<T>::InvalidClaim)?;
-
-		ensure!(
-			remaining == Zero::zero() || remaining >= MinimumStake::<T>::get(),
-			DispatchError::from(Error::<T>::BelowMinimumStake)
-		);
-
-		// Throw an error if the staker tries to claim too much. Otherwise decrement the stake by
-		// the amount claimed.
-		T::Flip::try_claim(account_id, amount)?;
-
-		// Set expiry and build the claim parameters.
-		let expiry = (T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
-
-		Self::register_claim_expiry(account_id.clone(), expiry);
-
-		let call = T::RegisterClaim::new_unsigned(
-			T::ReplayProtectionProvider::replay_protection(),
-			<T as Config>::StakerId::from_ref(account_id).as_ref(),
-			amount.into(),
-			&address,
-			expiry,
-		);
-
-		// Emit a threshold signature request.
-		T::ThresholdSigner::request_signature_with_callback(
-			call.threshold_signature_payload(),
-			|id| {
-				Call::<T>::post_claim_signature {
-					account_id: account_id.clone(),
-					signature_request_id: id,
-				}
-				.into()
-			},
-		);
-
-		// Store the claim params for later.
-		PendingClaims::<T>::insert(account_id, call);
-
-		Ok(())
-	}
-
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no
 	/// longer wishes to participate in auctions.
 	///
@@ -758,14 +734,14 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = <T as frame_system::Config>::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		AccountRetired::<T>::iter()
-			.filter_map(|(acct, retired)| {
+			.filter_map(|(bidder_id, retired)| {
 				if retired {
 					None
 				} else {
-					let stake = T::Flip::staked_balance(&acct);
-					Some((acct, stake))
+					let amount = T::Flip::staked_balance(&bidder_id);
+					Some(Bid { bidder_id, amount })
 				}
 			})
 			.collect()

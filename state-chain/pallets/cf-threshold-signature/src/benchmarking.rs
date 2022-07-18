@@ -7,7 +7,7 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use frame_system::RawOrigin;
-use pallet_cf_online::Call as OnlineCall;
+use pallet_cf_reputation::Call as ReputationCall;
 use pallet_cf_validator::CurrentAuthorities;
 
 const SEED: u32 = 0;
@@ -16,14 +16,14 @@ type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Thresh
 
 fn add_authorities<T, I>(authorities: I)
 where
-	T: frame_system::Config + pallet_cf_validator::Config + pallet_cf_online::Config,
+	T: frame_system::Config + pallet_cf_validator::Config + pallet_cf_reputation::Config,
 	I: Clone + Iterator<Item = <T as Chainflip>::ValidatorId>,
 {
 	CurrentAuthorities::<T>::put(authorities.clone().collect::<Vec<_>>());
 	for validator_id in authorities {
 		let account_id = validator_id.into_ref();
 		whitelist_account!(account_id);
-		OnlineCall::<T>::heartbeat {}
+		ReputationCall::<T>::heartbeat {}
 			.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into())
 			.unwrap();
 	}
@@ -34,7 +34,7 @@ benchmarks_instance_pallet! {
 		where
 			T: frame_system::Config
 			+ pallet_cf_validator::Config
-			+ pallet_cf_online::Config
+			+ pallet_cf_reputation::Config
 	}
 
 	signature_success {

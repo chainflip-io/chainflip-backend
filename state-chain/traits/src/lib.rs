@@ -4,6 +4,8 @@ mod async_result;
 pub mod mocks;
 pub mod offence_reporting;
 
+use core::fmt::Debug;
+
 pub use async_result::AsyncResult;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
@@ -209,6 +211,11 @@ pub trait VaultRotator {
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+		unimplemented!()
+	}
 }
 
 /// Handler for Epoch life cycle events.
@@ -234,7 +241,7 @@ pub trait BidderProvider {
 	type Amount;
 	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
 	/// greater than zero
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
 pub trait StakeHandler {
@@ -319,13 +326,6 @@ pub trait EthEnvironmentProvider {
 	fn key_manager_address() -> [u8; 20];
 	fn stake_manager_address() -> [u8; 20];
 	fn chain_id() -> u64;
-}
-
-pub trait IsOnline {
-	/// The validator id used
-	type ValidatorId;
-	/// The online status of the node
-	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
 
 /// A representation of the current network state for this heartbeat interval.
@@ -601,8 +601,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 pub trait Heartbeat {
 	type ValidatorId;
 	type BlockNumber;
-	/// A heartbeat has been submitted
-	fn heartbeat_submitted(validator_id: &Self::ValidatorId, block_number: Self::BlockNumber);
 	/// Called on every heartbeat interval with the current network state
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
 }
@@ -649,6 +647,7 @@ where
 	A: QualifyNode<ValidatorId = B::ValidatorId>,
 	B: QualifyNode,
 	C: QualifyNode<ValidatorId = B::ValidatorId>,
+	B::ValidatorId: Debug,
 {
 	type ValidatorId = A::ValidatorId;
 
@@ -726,13 +725,15 @@ pub trait SystemStateInfo {
 	fn is_maintenance_mode() -> bool {
 		Self::ensure_no_maintenance().is_err()
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_maintenance_mode() {
+		unimplemented!()
+	}
 }
 
 /// Something that can manipulate the system state.
 pub trait SystemStateManager {
-	type SystemState;
-	/// Set the system state.
-	fn set_system_state(state: Self::SystemState);
 	/// Turn system maintenance on.
 	fn activate_maintenance_mode();
 }

@@ -1,8 +1,8 @@
 [package]
-authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
 edition = '2021'
 name = "chainflip-engine"
-version = "0.3.0"
+version = "0.4.0"
 
 [package.metadata.deb]
 depends = "$auto"
@@ -33,6 +33,7 @@ clap = { version = "3.1.18", features = ["derive"] }
 chrono = "0.4.19"
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand_legacy = { package = "rand", version = "0.6" }
+ipc-channel = "0.16.0"
 
 # Same version of jsonrpc as substrate
 jsonrpc-core = {version = "18.0.0"}
@@ -60,6 +61,7 @@ tokio-stream = "0.1.5"
 url = "1.7.2"
 num-bigint = "0.4"
 num-traits = "0.2"
+num-derive = "0.3"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['signing']}
 zeroize = "1.5.4"
 libp2p = "0.40"
@@ -77,9 +79,9 @@ typenum = "1.15"
 # (There is little public information on this, but some mentions can be found
 # in https://github.com/dalek-cryptography/curve25519-dalek/pull/338#issuecomment-772059572)
 # We might eventually update, but for now let's just
-# use the same version as polkadot. 
+# use the same version as polkadot.
 schnorrkel = "0.9.1"
-
+rayon = "1.5"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
@@ -90,7 +92,6 @@ pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
-pallet-cf-online = {path = "../state-chain/pallets/cf-online"}
 pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
@@ -154,9 +155,10 @@ tag = 'chainflip-monthly-2022-05'
 
 [dev-dependencies]
 env_logger = "0.9.0"
-jsonrpc-pubsub = "18.0.0"
 log = "0.4.14"
 mockall = "0.11.0"
 rand = "0.8.4"
 csv = "1.1.6"
 tempfile = "3.3.0"
+ethereum = "0.12"
+rlp = "0.5"

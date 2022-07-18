@@ -13,7 +13,6 @@ pub mod eth_environment_provider;
 pub mod eth_replay_protection_provider;
 pub mod key_provider;
 pub mod offence_reporting;
-pub mod online;
 pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod signer_nomination;

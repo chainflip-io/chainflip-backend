@@ -10,7 +10,10 @@ use sc_keystore::LocalKeystore;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-use state_chain_runtime::{self, opaque::Block, RuntimeApi};
+use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat};
+use state_chain_runtime::{
+	self, constants::common::CHAINFLIP_SS58_PREFIX, opaque::Block, RuntimeApi,
+};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 // Our native executor instance.
@@ -64,6 +67,8 @@ pub fn new_partial(
 	if config.keystore_remote.is_some() {
 		return Err(ServiceError::Other("Remote Keystores are not supported.".to_string()))
 	}
+
+	set_default_ss58_version(Ss58AddressFormat::custom(CHAINFLIP_SS58_PREFIX));
 
 	let telemetry = config
 		.telemetry_endpoints
@@ -259,7 +264,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		multisig_p2p_transport::new_p2p_network_node(
 			network.clone(),
 			task_manager.spawn_handle(),
-			sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
 			multisig_p2p_transport::RETRY_SEND_INTERVAL,
 		);
 

@@ -35,11 +35,13 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use utilities::Port;
 
-use crate::common::{read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error};
+use crate::common::read_clean_and_decode_hex_str_file;
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
+use utilities::rpc_error_into_anyhow_error;
 
 mod signer;
 
@@ -154,7 +156,7 @@ impl StateChainRpcApi for StateChainRpcClient {
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("latest_block_hash RPC API failed")?
-            .ok_or_else(|| anyhow::Error::msg("Latest block hash could not be fetched"))?
+            .expect("Latest block hash could not be fetched")
             .hash())
     }
 
@@ -242,6 +244,12 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     pub signer: signer::PairSigner<sp_core::sr25519::Pair>,
 
     state_chain_rpc_client: RpcClient,
+}
+
+impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
+    pub fn get_genesis_hash(&self) -> state_chain_runtime::Hash {
+        self.genesis_hash
+    }
 }
 
 // use this events key, to save creating chain metadata in the tests
@@ -671,16 +679,16 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: H256,
         log_str: &str,
     ) -> Result<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
-        self.state_chain_rpc_client
-            .storage(block_hash, storage_key.clone())
-            .await
-            .context(format!(
-                "Failed to get storage {} with key: {:?} at block hash {:#x}",
-                log_str, storage_key, block_hash
-            ))?
-            .map(|data| Value::decode(&mut &data.0[..]).map_err(anyhow::Error::msg))
-            .map_or(Ok(None), |v| v.map(Some))
-            .map(QueryKind::from_optional_value_to_query)
+        Ok(QueryKind::from_optional_value_to_query(
+            self.state_chain_rpc_client
+                .storage(block_hash, storage_key.clone())
+                .await
+                .context(format!(
+                    "Failed to get storage {} with key: {:?} at block hash {:#x}",
+                    log_str, storage_key, block_hash
+                ))?
+                .map(|data| context!(Value::decode(&mut &data.0[..])).unwrap()),
+        ))
     }
 
     pub async fn get_storage_value<StorageValue: storage_traits::StorageValueAssociatedTypes>(
@@ -736,13 +744,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 changes
                     .into_iter()
                     .filter_map(|(_storage_key, option_data)| {
-                        option_data.map(|data| {
-                            StorageType::decode(&mut &data.0[..]).map_err(anyhow::Error::msg)
-                        })
+                        option_data
+                            .map(|data| context!(StorageType::decode(&mut &data.0[..])).unwrap())
                     })
             })
             .flatten()
-            .collect::<Result<_>>()?)
+            .collect())
     }
 
     pub async fn get_storage_pairs<StorageType: Decode + Debug>(
@@ -750,17 +757,18 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<Vec<StorageType>> {
-        self.state_chain_rpc_client
+        Ok(self
+            .state_chain_rpc_client
             .storage_pairs(block_hash, storage_key)
             .await?
             .into_iter()
             .map(|(_, storage_data)| {
-                StorageType::decode(&mut &storage_data.0[..]).map_err(anyhow::Error::msg)
+                context!(StorageType::decode(&mut &storage_data.0[..])).unwrap()
             })
-            .collect()
+            .collect())
     }
 
-    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, u16, Ipv6Addr)>> {
+    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, Port, Ipv6Addr)>> {
         self.state_chain_rpc_client
             .local_listen_addresses()
             .await?
@@ -1004,7 +1012,7 @@ async fn inner_connect_to_state_chain(
                     let account_info: frame_system::AccountInfo<
                         state_chain_runtime::Index,
                         <state_chain_runtime::Runtime as frame_system::Config>::AccountData,
-                    > = Decode::decode(&mut &encoded_account_info.0[..])?;
+                    > = context!(Decode::decode(&mut &encoded_account_info.0[..])).unwrap();
                     Some(account_info.nonce)
                 } else {
                     None
@@ -1061,13 +1069,14 @@ async fn inner_connect_to_state_chain(
         latest_block_hash
     );
 
-    let RuntimeMetadataPrefixed(metadata_prefix, metadata) = RuntimeMetadataPrefixed::decode(
-        &mut &state_chain_rpc_client
-            .state_rpc_client
-            .metadata(Some(latest_block_hash))
-            .await
-            .map_err(rpc_error_into_anyhow_error)?[..],
-    )?;
+    let RuntimeMetadataPrefixed(metadata_prefix, metadata) =
+        context!(RuntimeMetadataPrefixed::decode(
+            &mut &state_chain_rpc_client
+                .state_rpc_client
+                .metadata(Some(latest_block_hash))
+                .await
+                .map_err(rpc_error_into_anyhow_error)?[..],
+        ))?;
     if metadata_prefix != frame_metadata::META_RESERVED {
         bail!(
             "Invalid Metadata Prefix {}, expected {}.",
@@ -1103,13 +1112,19 @@ async fn inner_connect_to_state_chain(
             our_account_id,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: StorageKey(storage_prefix(b"System", b"Events").to_vec()),
-            heartbeat_block_interval: metadata
-                .pallets.iter()
-                .find(|pallet| pallet.name == "Reputation").expect("No module 'Reputation' in chain metadata")
-                .constants.iter()
-                .find_map(|constant| if constant.name == "HeartbeatBlockInterval" { Some(&constant.value[..])} else { None })
-                .ok_or_else(|| anyhow::anyhow!("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'"))
-                .and_then(|value_bytes| Ok(u32::decode(&mut &*value_bytes)?))?,
+            heartbeat_block_interval: context!(u32::decode(
+                &mut &metadata
+                    .pallets
+                    .iter()
+                    .find(|pallet| pallet.name == "Reputation")
+                    .unwrap()
+                    .constants
+                    .iter()
+                    .find(|constant| constant.name == "HeartbeatBlockInterval")
+                    .unwrap()
+                    .value[..],
+            ))
+            .unwrap(),
         }),
     ))
 }
@@ -1194,8 +1209,9 @@ mod tests {
     use crate::{
         logging::{self, test_utils::new_test_logger},
         settings::{CommandLineOptions, Settings},
-        testing::assert_ok,
     };
+
+    use utilities::assert_ok;
 
     use super::*;
 

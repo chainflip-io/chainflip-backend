@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use futures::TryStreamExt;
+use futures::stream::StreamExt;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use multisig_p2p_transport::{PeerId, PeerIdTransferable};
@@ -19,28 +19,27 @@ use state_chain_runtime::AccountId;
 
 use codec::Encode;
 
-use futures::{StreamExt, TryFutureExt};
 use zeroize::Zeroizing;
 
 use frame_support::StoragePrefixedMap;
 
 use crate::{
-    common::{
-        self, format_iterator, read_clean_and_decode_hex_str_file, rpc_error_into_anyhow_error,
-    },
+    common::{self, format_iterator, read_clean_and_decode_hex_str_file},
     logging::COMPONENT_KEY,
     settings,
     state_chain::client::{StateChainClient, StateChainRpcApi},
 };
 
+use utilities::{make_periodic_tick, rpc_error_into_anyhow_error, Port};
+
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
-    Registered(u16, Ipv6Addr),
+    Registered(Port, Ipv6Addr),
     Unregistered,
 }
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for peering
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum OutgoingMultisigStageMessages {
     Broadcast(Vec<AccountId>, Vec<u8>),
     Private(Vec<(AccountId, Vec<u8>)>),
@@ -57,7 +56,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     peer_id_from_cfe_config: &PeerId,
     peer_keypair_from_cfe_config: &libp2p::identity::ed25519::Keypair,
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
-    account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
+    account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, Port, Ipv6Addr)>,
     logger: &slog::Logger,
 ) -> Result<()> {
     // TODO Don't Register Private Ips on Live chains
@@ -198,12 +197,12 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     }
 }
 
-fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> Result<PeerId> {
-    Ok(PeerId::from_public_key(
+fn public_key_to_peer_id(peer_public_key: &sp_core::ed25519::Public) -> PeerId {
+    PeerId::from_public_key(
         &libp2p::identity::PublicKey::Ed25519(libp2p::identity::ed25519::PublicKey::decode(
             &peer_public_key.0[..],
-        )?),
-    ))
+        ).expect("peer_id's are checked before being registered using ed25519_dalek::PublicKey::from_bytes, the same function used to decode and check peer_id's inside libp2p::identity::ed25519::PublicKey::decode")),
+    )
 }
 
 pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
@@ -224,17 +223,14 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     // Use StateChainClient's RpcChannel
     let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(
         &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| {
-            format!(
-                "Should be valid ws endpoint: {}",
-                settings.state_chain.ws_endpoint
-            )
+            format!("Invalid ws endpoint: {}", settings.state_chain.ws_endpoint)
         })?,
     )
     .await
     .map_err(rpc_error_into_anyhow_error)?;
 
     let mut account_to_peer_mapping_on_chain = state_chain_client
-        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, u16, pallet_cf_validator::Ipv6Addr)>(
+        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, Port, pallet_cf_validator::Ipv6Addr)>(
             latest_block_hash,
             StorageKey(
                 pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
@@ -244,16 +240,16 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         .await?
         .into_iter()
         .map(|(account_id, public_key, port, ip_address)| {
-            Ok((
+            (
                 account_id,
                 (
-                    public_key_to_peer_id(&public_key)?,
+                    public_key_to_peer_id(&public_key),
                     port,
                     ip_address.into(),
                 )
-            ))
+            )
         })
-        .collect::<Result<BTreeMap<_, _>>>()?;
+        .collect::<BTreeMap<_, _>>();
 
     let mut peer_to_account_mapping_on_chain = account_to_peer_mapping_on_chain
         .iter()
@@ -312,109 +308,115 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         account_to_peer_mapping_on_chain
     );
 
-    let mut incoming_p2p_message_stream = client
-        .subscribe_messages()
-        .map_err(rpc_error_into_anyhow_error)?
-        .map_err(rpc_error_into_anyhow_error);
+    let (ipc_outgoing_sender, mut ipc_incoming_stream) =
+        multisig_p2p_transport::setup_ipc_connections(&client).await?;
 
-    let mut check_listener_address_tick = common::make_periodic_tick(Duration::from_secs(60));
+    let mut check_listener_address_tick = make_periodic_tick(Duration::from_secs(60), false);
+
+    let (internal_incoming_sender, mut internal_incoming_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<(PeerId, Vec<u8>)>();
+    tokio::task::spawn(async move {
+        while let Some((peer_id, serialised_message)) = ipc_incoming_stream.next().await {
+            let peer_id: PeerId = peer_id.try_into()?;
+            let _result = internal_incoming_sender.send((peer_id, serialised_message));
+        }
+        anyhow::Result::<()>::Ok(())
+    });
+
+    let (internal_outgoing_sender, internal_outgoing_receiver) =
+        std::sync::mpsc::channel::<(Vec<PeerIdTransferable>, Vec<u8>)>();
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+        while let Ok((peer_ids, message)) = internal_outgoing_receiver.recv() {
+            ipc_outgoing_sender.send((peer_ids, message)).unwrap();
+        }
+        Ok(())
+    });
 
     loop {
         tokio::select! {
-            Some(result_p2p_message) = incoming_p2p_message_stream.next() => {
-                match result_p2p_message.and_then(|(peer_id, serialised_message)| {
-                    let peer_id: PeerId = peer_id.try_into()?;
-                    if let Some(account_id) = peer_to_account_mapping_on_chain.get(&peer_id) {
-                        incoming_p2p_message_sender.send((
-                            account_id.clone(),
-                            serialised_message
-                        )).map_err(anyhow::Error::new).with_context(|| "Failed to send message via channel".to_string())?;
-                        Ok(account_id)
-                    } else {
-                        Err(anyhow::Error::msg(format!("Missing Account Id mapping for Peer Id: {}", peer_id)))
-                    }
+            Some((peer_id, serialised_message)) = internal_incoming_receiver.recv() => {
+                match peer_to_account_mapping_on_chain.get(&peer_id).ok_or_else(|| anyhow::anyhow!("Missing Account Id mapping for Peer Id: {peer_id}")).and_then(|account_id| {
+                    incoming_p2p_message_sender.send((
+                        account_id.clone(),
+                        serialised_message
+                    )).map_err(|error| anyhow::anyhow!("Failed to send message via channel: {error}"))?;
+                    Ok(account_id)
                 }) {
                     Ok(account_id) => slog::info!(logger, "Received P2P message from: {}", account_id),
                     Err(error) => slog::error!(logger, "Failed to receive P2P message: {}", error)
                 }
             }
             Some(messages) = outgoing_p2p_message_receiver.recv() => {
-                async fn send_messages<'a, AccountIds: 'a + IntoIterator<Item = &'a AccountId> + Clone>(
-                    client: &P2PRpcClient,
-                    account_to_peer_mapping_on_chain: &BTreeMap<AccountId, (PeerId, u16, Ipv6Addr)>,
-                    account_ids: AccountIds,
+                let send_messages = |
+                    account_ids: &[AccountId],
                     message: Vec<u8>,
                     logger: &slog::Logger
-                ) {
-
-                    // If we can't get peer id for some accounts, should we still try to send messages to the rest?
-                    match async {
-                        account_ids.clone().into_iter().map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
-                            Some((peer_id, _, _)) => Ok(peer_id.into()),
-                            None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
-                        }).collect::<Result<Vec<_>, _>>()
-                    }.and_then(|peer_ids| {
-                        client.send_message(
-                            peer_ids,
-                            message
-                        ).map_err(rpc_error_into_anyhow_error)
-                    }).await {
+                | {
+                    // TODO: If we can't get peer id for some accounts, should we still try to send messages to the rest?
+                    match
+                        account_ids
+                            .iter()
+                            .map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
+                                Some((peer_id, _, _)) => Ok(peer_id.into()),
+                                None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
+                            })
+                            .collect::<Result<Vec<_>, _>>()
+                            .and_then(|peer_ids| {
+                                internal_outgoing_sender.send((peer_ids, message)).map_err(anyhow::Error::new)
+                            })
+                    {
                         Ok(_) => slog::info!(logger, "Sent P2P message to: {}", format_iterator(account_ids)),
                         Err(error) => slog::error!(logger, "Failed to send P2P message to: {}. {}", format_iterator(account_ids), error)
                     }
-                }
+                };
 
                 match messages {
                     OutgoingMultisigStageMessages::Broadcast(account_ids, message) => {
-                        send_messages(&client, &account_to_peer_mapping_on_chain, account_ids.iter(), message, &logger).await;
+                        send_messages(&account_ids, message, &logger);
                     },
                     OutgoingMultisigStageMessages::Private(messages) => {
                         for (account_id, message) in messages {
-                            send_messages(&client, &account_to_peer_mapping_on_chain, std::iter::once(&account_id), message, &logger).await;
+                            send_messages(&[account_id], message, &logger);
                         }
                     }
                 }
             }
             Some((account_id, peer_public_key, account_peer_mapping_change)) = account_mapping_change_receiver.recv() => {
-                match public_key_to_peer_id(&peer_public_key) {
-                    Ok(peer_id) => {
-                        match account_peer_mapping_change {
-                            AccountPeerMappingChange::Registered(port, ip_address) => {
-                                if let Some((existing_peer_id, _, _)) = account_to_peer_mapping_on_chain.get(&account_id) {
-                                    peer_to_account_mapping_on_chain.remove(existing_peer_id);
-                                }
-                                if let Entry::Vacant(entry) = peer_to_account_mapping_on_chain.entry(peer_id) {
-                                    entry.insert(account_id.clone());
-                                    account_to_peer_mapping_on_chain.insert(account_id, (peer_id, port, ip_address));
-                                    if peer_id_from_cfe_config != peer_id {
-                                        if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
-                                            slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
-                                        } else {
-                                            slog::info!(logger, "Added peer {} to reserved set", peer_id);
-                                        }
-                                    }
-                                } else {
-                                    slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
-                                }
-                            }
-                            AccountPeerMappingChange::Unregistered => {
-                                if Some(&account_id) == peer_to_account_mapping_on_chain.get(&peer_id) {
-                                    account_to_peer_mapping_on_chain.remove(&account_id);
-                                    peer_to_account_mapping_on_chain.remove(&peer_id);
-                                    if peer_id_from_cfe_config != peer_id {
-                                        if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
-                                            slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
-                                        } else {
-                                            slog::info!(logger, "Removed peer {} to reserved set", peer_id);
-                                        }
-                                    }
-                                } else {
-                                    slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
-                                }
-                            }
+                let peer_id = public_key_to_peer_id(&peer_public_key);
+                match account_peer_mapping_change {
+                    AccountPeerMappingChange::Registered(port, ip_address) => {
+                        if let Some((existing_peer_id, _, _)) = account_to_peer_mapping_on_chain.get(&account_id) {
+                            peer_to_account_mapping_on_chain.remove(existing_peer_id);
                         }
-                    },
-                    Err(error) => slog::error!(logger, "Unable to convert public key {} to peer id. {}", peer_public_key, error)
+                        if let Entry::Vacant(entry) = peer_to_account_mapping_on_chain.entry(peer_id) {
+                            entry.insert(account_id.clone());
+                            account_to_peer_mapping_on_chain.insert(account_id, (peer_id, port, ip_address));
+                            if peer_id_from_cfe_config != peer_id {
+                                if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
+                                    slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
+                                } else {
+                                    slog::info!(logger, "Added peer {} to reserved set", peer_id);
+                                }
+                            }
+                        } else {
+                            slog::error!(logger, "Unexpected Peer Registered event received for {} (Peer id: {}).", account_id, peer_id);
+                        }
+                    }
+                    AccountPeerMappingChange::Unregistered => {
+                        if Some(&account_id) == peer_to_account_mapping_on_chain.get(&peer_id) {
+                            account_to_peer_mapping_on_chain.remove(&account_id);
+                            peer_to_account_mapping_on_chain.remove(&peer_id);
+                            if peer_id_from_cfe_config != peer_id {
+                                if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
+                                    slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
+                                } else {
+                                    slog::info!(logger, "Removed peer {} to reserved set", peer_id);
+                                }
+                            }
+                        } else {
+                            slog::error!(logger, "Unexpected Peer Unregistered event received for {} (Peer id: {}).", account_id, peer_id);
+                        }
+                    }
                 }
             },
             _ = check_listener_address_tick.tick() => {
@@ -423,226 +425,3 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         }
     }
 }
-
-/*
-OLD TESTS TO CHANGE
-
-#[cfg(test)]
-mod tests {
-    use futures::StreamExt;
-    use itertools::Itertools;
-
-    use super::mock::*;
-    use super::*;
-
-    async fn receive_with_timeout<T>(mut stream: BoxStream<'_, T>) -> Option<T> {
-        let fut = stream.next();
-        tokio::time::timeout(std::time::Duration::from_millis(5), fut)
-            .await
-            .unwrap_or(None)
-    }
-
-    #[tokio::test]
-    async fn test_p2p_mock_send() {
-        let network = NetworkMock::new();
-
-        let data = vec![1, 2, 3];
-        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
-
-        let clients = validator_ids
-            .iter()
-            .map(|id| network.new_client(id.clone()))
-            .collect_vec();
-
-        // (0) sends to (1); (1) should receive one, (2) receives none
-        clients[0].send(&validator_ids[1], &data).await.unwrap();
-
-        drop(network);
-
-        let stream_1 = clients[1].take_stream().await.unwrap();
-
-        assert_eq!(
-            receive_with_timeout(stream_1).await,
-            Some(P2PMessage {
-                account_id: validator_ids[0].clone(),
-                data: data.clone()
-            })
-        );
-
-        let stream_2 = clients[2].take_stream().await.unwrap();
-
-        assert_eq!(receive_with_timeout(stream_2).await, None);
-    }
-
-    #[tokio::test]
-    async fn test_p2p_mock_broadcast() {
-        let network = NetworkMock::new();
-
-        let data = vec![3, 2, 1];
-        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
-        let clients = validator_ids
-            .iter()
-            .map(|id| network.new_client(id.clone()))
-            .collect_vec();
-
-        // (1) broadcasts; (0) and (2) should receive one message
-        clients[1].broadcast(&data).await.unwrap();
-
-        let stream_0 = clients[0].take_stream().await.unwrap();
-
-        assert_eq!(
-            receive_with_timeout(stream_0).await,
-            Some(P2PMessage {
-                account_id: validator_ids[1].clone(),
-                data: data.clone()
-            })
-        );
-
-        let stream_2 = clients[2].take_stream().await.unwrap();
-
-        assert_eq!(
-            receive_with_timeout(stream_2).await,
-            Some(P2PMessage {
-                account_id: validator_ids[1].clone(),
-                data: data.clone()
-            })
-        );
-    }
-}
-
-pub struct P2PClientMock {
-    id: AccountId,
-    pub receiver: Arc<Mutex<Option<UnboundedReceiverStream<P2PMessage>>>>,
-    network_inner: Arc<Mutex<NetworkMockInner>>,
-}
-
-impl P2PClientMock {
-    pub fn new(id: AccountId, network_inner: Arc<Mutex<NetworkMockInner>>) -> Self {
-        let (sender, receiver) = unbounded_channel();
-
-        network_inner.lock().unwrap().register(&id, sender);
-
-        P2PClientMock {
-            id,
-            receiver: Arc::new(Mutex::new(Some(UnboundedReceiverStream::new(receiver)))),
-            network_inner,
-        }
-    }
-}
-
-#[async_trait]
-impl P2PNetworkClient for P2PClientMock {
-    type NetworkEvent = P2PMessage;
-
-    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode> {
-        self.network_inner.lock().unwrap().broadcast(&self.id, data);
-        Ok(200)
-    }
-
-    async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode> {
-        self.network_inner.lock().unwrap().send(&self.id, to, data);
-        Ok(200)
-    }
-
-    async fn take_stream(&self) -> Result<BoxStream<Self::NetworkEvent>> {
-        let stream = self
-            .receiver
-            .lock()
-            .unwrap()
-            .take()
-            .ok_or(anyhow!("Subscription Error"))?;
-
-        Ok(Box::pin(stream))
-    }
-}
-
-pub struct MockChannelEventHandler(UnboundedSender<P2PMessage>);
-
-impl MockChannelEventHandler {
-    pub fn new() -> (Self, UnboundedReceiver<P2PMessage>) {
-        let (s, r) = unbounded_channel();
-        (Self(s), r)
-    }
-}
-
-#[async_trait]
-impl NetworkEventHandler<P2PClientMock> for MockChannelEventHandler {
-    async fn handle_event(&self, event: P2PMessage) {
-        self.0.send(event).unwrap()
-    }
-}
-
-pub struct NetworkMock(Arc<Mutex<NetworkMockInner>>);
-
-impl NetworkMock {
-    pub fn new() -> Self {
-        let inner = NetworkMockInner::new();
-        let inner = Arc::new(Mutex::new(inner));
-
-        NetworkMock(inner)
-    }
-
-    pub fn new_client(&self, id: AccountId) -> P2PClientMock {
-        P2PClientMock::new(id, Arc::clone(&self.0))
-    }
-}
-
-pub struct NetworkMockInner {
-    clients: HashMap<AccountId, UnboundedSender<P2PMessage>>,
-}
-
-impl NetworkMockInner {
-    fn new() -> Self {
-        NetworkMockInner {
-            clients: HashMap::new(),
-        }
-    }
-
-    /// Register validator, so we know how to contact them
-    fn register(&mut self, id: &AccountId, sender: UnboundedSender<P2PMessage>) {
-        let added = self.clients.insert(id.to_owned(), sender).is_none();
-        assert!(added, "Cannot insert the same validator more than once");
-    }
-
-    fn broadcast(&self, from: &AccountId, data: &[u8]) {
-        let m = P2PMessage {
-            account_id: from.to_owned(),
-            data: data.to_owned(),
-        };
-
-        for (id, sender) in &self.clients {
-            // Do not send to ourselves
-            if id != from {
-                match sender.send(m.clone()) {
-                    Ok(()) => (),
-                    Err(_) => {
-                        panic!("channel is disconnected");
-                    }
-                }
-            }
-        }
-    }
-
-    /// Send to a specific `validator` only
-    fn send(&self, from: &AccountId, to: &AccountId, data: &[u8]) {
-        let m = P2PMessage {
-            account_id: from.to_owned(),
-            data: data.to_owned(),
-        };
-
-        match self.clients.get(to) {
-            Some(client) => match client.send(m) {
-                Ok(()) => {}
-                Err(_) => {
-                    panic!("channel is disconnected");
-                }
-            },
-            None => {
-                eprintln!("Client not connected: {}", to);
-            }
-        }
-    }
-}
-
-
-*/

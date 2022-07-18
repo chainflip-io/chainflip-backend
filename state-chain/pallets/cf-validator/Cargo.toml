@@ -15,6 +15,12 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
+
+# Used for benchmarking
+pallet-cf-staking = { path = '../cf-staking', optional = true, default-features = false }
+pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
+pallet-cf-vaults = { path = '../cf-vaults', optional = true, default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 
@@ -47,6 +53,12 @@ tag = 'chainflip-monthly-2022-05'
 
 [dependencies.sp-runtime]
 default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sp-application-crypto]
+default-features = false
+optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
@@ -86,6 +98,7 @@ default = ['std']
 std = [
     'cf-traits/std',
     'cf-runtime-upgrade-utilities/std',
+    'cf-utilities/std',
     'codec/std',
     'scale-info/std',
     'frame-support/std',
@@ -101,6 +114,10 @@ runtime-benchmarks = [
     'frame-benchmarking',
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
+    'pallet-cf-staking',
+    'pallet-cf-reputation',
+    'pallet-cf-vaults',
+    'sp-application-crypto',
 ]
 try-runtime = [
     'frame-support/try-runtime',

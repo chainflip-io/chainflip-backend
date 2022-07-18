@@ -47,11 +47,12 @@ decl_runtime_apis!(
 		fn cf_eth_vault() -> ([u8; 33], u32);
 		/// Returns the Auction params in the form [min_set_size, max_set_size]
 		fn cf_auction_parameters() -> (u32, u32);
-		fn cf_min_stake() -> u64;
+		fn cf_min_stake() -> u128;
 		fn cf_current_epoch() -> u32;
+		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
-		fn cf_authority_emission_per_block() -> u64;
-		fn cf_backup_emission_per_block() -> u64;
+		fn cf_authority_emission_per_block() -> u128;
+		fn cf_backup_emission_per_block() -> u128;
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;

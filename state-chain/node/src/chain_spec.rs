@@ -59,6 +59,8 @@ pub struct StateChainEnvironment {
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	genesis_stake_amount: u128,
+	/// Note: Minimum stake should be expressed in Flipperinos.
+	min_stake: u128,
 	// CFE config values starts here
 	eth_block_safety_margin: u32,
 	max_ceremony_stage_duration: u32,
@@ -110,6 +112,10 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<u32>()
 		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
 
+	let min_stake: u128 = env::var("MIN_STAKE")
+		.map(|s| s.parse::<u128>().expect("MIN_STAKE env var could not be parsed to u128"))
+		.unwrap_or(DEFAULT_MIN_STAKE);
+
 	StateChainEnvironment {
 		flip_token_address,
 		stake_manager_address,
@@ -120,6 +126,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
+		min_stake,
 	}
 }
 
@@ -159,6 +166,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
+		min_stake,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -193,6 +201,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				genesis_stake_amount,
+				min_stake,
 			)
 		},
 		// Bootnodes
@@ -229,6 +238,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
+		min_stake,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -269,6 +279,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				genesis_stake_amount,
+				min_stake,
 			)
 		},
 		// Bootnodes
@@ -296,13 +307,13 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 	)
 }
 
-/// Build the chainspec for Soundcheck public testnet.
-pub fn chainflip_soundcheck_config() -> Result<ChainSpec, String> {
+/// Build the chainspec for Paradise public testnet.
+pub fn chainflip_paradise_config() -> Result<ChainSpec, String> {
 	chainflip_three_node_testnet_config_from_env(
-		"Chainflip Soundcheck",
-		"soundcheck",
+		"Chainflip Paradise",
+		"paradise",
 		ChainType::Live,
-		network_env::SOUNDCHECK,
+		network_env::PARADISE,
 	)
 }
 
@@ -331,6 +342,7 @@ fn chainflip_three_node_testnet_config_from_env(
 		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
+		min_stake,
 	} = environment;
 	Ok(ChainSpec::from_genesis(
 		name,
@@ -395,6 +407,7 @@ fn chainflip_three_node_testnet_config_from_env(
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				genesis_stake_amount,
+				min_stake,
 			)
 		},
 		// Bootnodes
@@ -438,6 +451,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
+		min_stake,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -524,6 +538,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				genesis_stake_amount,
+				min_stake,
 			)
 		},
 		// Bootnodes
@@ -554,6 +569,7 @@ fn testnet_genesis(
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	genesis_stake_amount: u128,
+	minimum_stake: u128,
 ) -> GenesisConfig {
 	GenesisConfig {
 		system: SystemConfig {
@@ -580,7 +596,7 @@ fn testnet_genesis(
 				.iter()
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
-			minimum_stake: MIN_STAKE,
+			minimum_stake,
 			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
 		},
 		auction: AuctionConfig {
@@ -594,6 +610,7 @@ fn testnet_genesis(
 		reputation: ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 			penalties: PENALTIES.to_vec(),
+			genesis_nodes: genesis_stakers,
 		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
@@ -616,7 +633,10 @@ fn testnet_genesis(
 pub fn chainflip_properties() -> Properties {
 	let mut properties = Properties::new();
 	// TODO - https://github.com/chainflip-io/chainflip-backend/issues/911
-	properties.insert("ss58Format".into(), 42.into());
+	properties.insert(
+		"ss58Format".into(),
+		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
+	);
 	properties.insert("tokenDecimals".into(), 18.into());
 	properties.insert("tokenSymbol".into(), "FLIP".into());
 	properties.insert("color".into(), "#61CFAA".into());

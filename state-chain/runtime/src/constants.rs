@@ -2,6 +2,8 @@ pub mod common {
 	use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
 	use pallet_cf_broadcast::AttemptCount;
 
+	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
+
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
 		const TOKEN_DECIMALS: u32 = 18;
@@ -71,8 +73,8 @@ pub mod common {
 	/// The maximum number of broadcast attempts
 	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
 
-	/// The minimum stake, 40_000 x 10^18
-	pub const MIN_STAKE: FlipBalance = 40_000 * 10u128.pow(18);
+	/// The default minimum stake, 1_000 x 10^18
+	pub const DEFAULT_MIN_STAKE: FlipBalance = 1_000 * 10u128.pow(18);
 
 	/// Percent of the epoch we are allowed to claim
 	pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
