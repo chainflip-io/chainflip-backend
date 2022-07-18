@@ -2,15 +2,15 @@ use super::*;
 
 /// Environment variables for PARADISE public testnet.
 pub const PARADISE: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("5FdD5c0A6c7f6a9d012F2A28c14cb620C86FCf0F"),
-	stake_manager_address: hex_literal::hex!("6a484d80422c40d752296f0AfAF2301F814Aba37"),
-	key_manager_address: hex_literal::hex!("F8a0c6627510cF1f2abbF9f6EC2f338158A53a61"),
+	flip_token_address: hex_literal::hex!("eAe3d8CbEFfe236aA8E43697aFc6659522AFf111"),
+	stake_manager_address: hex_literal::hex!("7Ee96ee5b3FB01De698CDB572B7f39fFFaDA5Ed8"),
+	key_manager_address: hex_literal::hex!("72124fd24dA3CC08fB65BC744D4D3a36C0eE3e51"),
 	ethereum_chain_id: 5, // GOERLI
 	eth_init_agg_key: hex_literal::hex!(
-		"02071915b34b466951fa08709724a40cc4ad69fbdf3503b372d218654eb0cff592"
+		"026a87139bd1a893de937b46cda43984499422428ba3edd6d7dc48eed785cb6247"
 	),
 	genesis_stake_amount: 50_000 * 10u128.pow(18),
-	ethereum_deployment_block: 7230032,
+	ethereum_deployment_block: 7248403,
 	eth_block_safety_margin: 6,
 	max_ceremony_stage_duration: 300,
 	min_stake: 1_000_000_000_000_000_000_000,
