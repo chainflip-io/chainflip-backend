@@ -1,13 +1,11 @@
-use std::cell::RefCell;
-
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{mocks::MockEthereum, ApiCall, eth::api::EthereumReplayProtection, ChainAbi, SetGovKeyWithAggKey, ChainCrypto};
 use cf_traits::{
-	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo, time_source},
-	Chainflip, ExecutionCondition, RuntimeUpgrade, FeePayment, StakingInfo, Broadcaster, ReplayProtectionProvider,
+	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo},
+	Chainflip, FeePayment, StakingInfo, Broadcaster, ReplayProtectionProvider,
 };
 use codec::{MaxEncodedLen, Encode, Decode};
-use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, parameter_types, storage, Twox64Concat, StorageHasher};
+use frame_support::{parameter_types, storage, Twox64Concat, StorageHasher};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
