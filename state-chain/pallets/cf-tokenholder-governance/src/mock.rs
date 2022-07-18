@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{mocks::MockEthereum, ApiCall, eth::api::EthereumReplayProtection, ChainAbi, SetGovKey, ChainCrypto};
+use cf_chains::{mocks::MockEthereum, ApiCall, eth::api::EthereumReplayProtection, ChainAbi, SetGovKeyWithAggKey, ChainCrypto};
 use cf_traits::{
 	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo, time_source},
 	Chainflip, ExecutionCondition, RuntimeUpgrade, FeePayment, StakingInfo, Broadcaster, ReplayProtectionProvider,
@@ -110,17 +110,17 @@ impl StakingInfo for MockStakingInfo {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetGovKey {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-	pub new_key: <MockEthereum as ChainCrypto>::GovKey,
+	pub new_gov_key: <MockEthereum as ChainCrypto>::GovKey,
 }
 
-impl SetGovKey<MockEthereum> for MockSetGovKey {
+impl SetGovKeyWithAggKey<MockEthereum> for MockSetGovKey {
 	fn new_unsigned(
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: <MockEthereum as ChainCrypto>::GovKey,
+		new_gov_key: <MockEthereum as ChainCrypto>::GovKey,
 	) -> Self {
 		Self {
 			nonce,
-			new_key
+			new_gov_key
 		}
 	}
 }

@@ -122,7 +122,7 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	) -> Self;
 }
 
-pub trait SetGovKey<Abi: ChainAbi>: ApiCall<Abi> {
+pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
 		new_key: <Abi as ChainCrypto>::GovKey,
