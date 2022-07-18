@@ -66,11 +66,11 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32) {
 	}
 }
 
-/// Builds a RotationStatus with the desired numbers of candidates.
-pub fn new_rotation_status<T: Config>(
+/// Builds a RotationState with the desired numbers of candidates.
+pub fn new_rotation_state<T: Config>(
 	num_primary_candidates: u32,
 	num_secondary_candidates: u32,
-) -> RuntimeRotationStatus<T> {
+) -> RuntimeRotationState<T> {
 	let winners = (0..num_primary_candidates).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
 	let losers = (num_primary_candidates..num_primary_candidates + num_secondary_candidates)
 		.map(|i| Bid::from((bidder_validator_id::<T, _>(i), 90u32.into())))
@@ -82,7 +82,7 @@ pub fn new_rotation_status<T: Config>(
 		losers.iter().map(|bid| bid.bidder_id.clone()).collect::<Vec<_>>(),
 	);
 
-	RotationStatus::from_auction_outcome::<T>(AuctionOutcome {
+	RotationState::from_auction_outcome::<T>(AuctionOutcome {
 		winners,
 		losers,
 		bond: 100u32.into(),
@@ -93,7 +93,7 @@ pub fn setup_and_start_vault_rotation<T: Config>(
 	num_primary_candidates: u32,
 	num_secondary_candidates: u32,
 ) {
-	Pallet::<T>::start_vault_rotation(new_rotation_status::<T>(
+	Pallet::<T>::start_vault_rotation(new_rotation_state::<T>(
 		num_primary_candidates,
 		num_secondary_candidates,
 	));
@@ -225,7 +225,7 @@ benchmarks! {
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.num_primary_candidates()),
+				RotationPhase::VaultsRotating(rotation_state) => Some(rotation_state.num_primary_candidates()),
 				_ => None,
 			}.expect("phase should be VaultsRotating"),
 			a
@@ -255,7 +255,7 @@ benchmarks! {
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotating(rotation_status) => Some(rotation_status.num_primary_candidates()),
+				RotationPhase::VaultsRotating(rotation_state) => Some(rotation_state.num_primary_candidates()),
 				_ => None,
 			}.expect("phase should be VaultsRotating"),
 			a,
@@ -291,8 +291,8 @@ benchmarks! {
 		assert!(
 			matches!(
 				CurrentRotationPhase::<T>::get(),
-				RotationPhase::VaultsRotating(rotation_status)
-					if rotation_status.authority_candidates::<BTreeSet<_>>().is_disjoint(
+				RotationPhase::VaultsRotating(rotation_state)
+					if rotation_state.authority_candidates::<BTreeSet<_>>().is_disjoint(
 						&offenders.clone().into_iter().collect::<BTreeSet<_>>()
 					)
 			),
@@ -309,13 +309,12 @@ benchmarks! {
 		let a in 3 .. 150;
 
 		// Set up a vault rotation.
-		let rotation_status = new_rotation_status::<T>(a, 50);
-		CurrentRotationPhase::<T>::put(RotationPhase::VaultsRotated(rotation_status));
+		CurrentRotationPhase::<T>::put(RotationPhase::VaultsRotated(new_rotation_state::<T>(a, 50)));
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotated(rotation_status) => Some(rotation_status.num_primary_candidates()),
+				RotationPhase::VaultsRotated(rotation_state) => Some(rotation_state.num_primary_candidates()),
 				_ => None,
 			}.expect("phase should be VaultsRotated"),
 			a,
