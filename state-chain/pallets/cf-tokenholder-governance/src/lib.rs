@@ -43,7 +43,7 @@ pub mod pallet {
     use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 
 	use cf_chains::SetGovKey as SetGovKeyApiCall;
-	use cf_chains::SetCommunityKey as SetCommunityKeyApiCall;
+	use cf_chains::SetCommKeyWithAggKey as SetCommunityKeyApiCall;
 
 	use crate::pallet::Proposal::SetGovernanceKey;
 	use crate::pallet::Proposal::SetCommunityKey;

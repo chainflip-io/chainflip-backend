@@ -17,7 +17,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_chains::SetCommunityKey;
+use cf_chains::SetCommKeyWithAggKey;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -174,7 +174,7 @@ pub struct MockSetCommKey {
 	pub new_key: <MockEthereum as ChainCrypto>::GovKey,
 }
 
-impl SetCommunityKey<MockEthereum> for MockSetCommKey {
+impl SetCommKeyWithAggKey<MockEthereum> for MockSetCommKey {
 	fn new_unsigned(
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_key: <MockEthereum as ChainCrypto>::GovKey,

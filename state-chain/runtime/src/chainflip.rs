@@ -164,7 +164,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				data,
 				..Default::default()
 			},
-			EthereumApi::SetCommunityKey(_) => eth::UnsignedTransaction {
+			EthereumApi::SetCommKeyWithAggKey(_) => eth::UnsignedTransaction {
 				chain_id: Environment::ethereum_chain_id(),
 				contract: Environment::key_manager_address().into(),
 				data,

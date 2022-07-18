@@ -29,7 +29,7 @@ impl SetCommKeyWithAggKey {
 	}
     fn get_function(&self) -> ethabi::Function {
 		ethabi_function(
-			"SetCommunityKey",
+			"SetCommKeyWithAggKey",
 			vec![
 				ethabi_param(
 					"sigData",
