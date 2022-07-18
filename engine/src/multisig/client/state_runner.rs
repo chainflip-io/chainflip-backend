@@ -70,36 +70,6 @@ where
         }
     }
 
-    #[cfg(test)]
-    pub fn new_authorised(
-        ceremony_id: CeremonyId,
-        stage: Box<
-            dyn CeremonyStage<
-                    Message = CeremonyData,
-                    Result = CeremonyResult,
-                    FailureReason = FailureReason,
-                > + Send,
-        >,
-        idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
-        num_of_participants: AuthorityCount,
-        logger: slog::Logger,
-    ) -> Self {
-        let inner = Some(StateAuthorised {
-            stage: Some(stage),
-            idx_mapping,
-            result_sender,
-            num_of_participants,
-        });
-
-        StateRunner {
-            inner,
-            delayed_messages: Default::default(),
-            should_expire_at: Instant::now() + MAX_STAGE_DURATION,
-            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
-        }
-    }
-
     /// Process ceremony request from the State Chain, which allows
     /// the state machine to make progress
     pub fn on_ceremony_request(
@@ -372,5 +342,42 @@ where
     #[cfg(test)]
     pub fn get_delayed_messages_len(&self) -> usize {
         self.delayed_messages.len()
+    }
+}
+
+#[cfg(test)]
+impl<CeremonyData, CeremonyResult, FailureReason>
+    StateRunner<CeremonyData, CeremonyResult, FailureReason>
+where
+    CeremonyData: Display,
+    FailureReason: Display,
+{
+    pub fn new_authorised(
+        ceremony_id: CeremonyId,
+        stage: Box<
+            dyn CeremonyStage<
+                    Message = CeremonyData,
+                    Result = CeremonyResult,
+                    FailureReason = FailureReason,
+                > + Send,
+        >,
+        idx_mapping: Arc<PartyIdxMapping>,
+        result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
+        num_of_participants: AuthorityCount,
+        logger: slog::Logger,
+    ) -> Self {
+        let inner = Some(StateAuthorised {
+            stage: Some(stage),
+            idx_mapping,
+            result_sender,
+            num_of_participants,
+        });
+
+        StateRunner {
+            inner,
+            delayed_messages: Default::default(),
+            should_expire_at: Instant::now() + MAX_STAGE_DURATION,
+            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+        }
     }
 }

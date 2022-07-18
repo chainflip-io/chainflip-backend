@@ -532,7 +532,7 @@ pub mod genesis {
 
         loop {
             attempt_counter += 1;
-            match generate_key_data::<P>(account_ids, &mut rng) {
+            match generate_key_data::<P>(account_ids, &mut rng, false) {
                 Ok(result) => break result,
                 Err(_) => {
                     // limit iteration so we don't loop forever
@@ -550,7 +550,8 @@ pub mod genesis {
         use crate::multisig::client::tests::DEFAULT_KEYGEN_SEED;
         use rand_legacy::SeedableRng;
 
-        generate_key_data_until_compatible(signers, 20, Rng::from_seed(DEFAULT_KEYGEN_SEED))
+        generate_key_data(signers, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
+            .expect("Should not be able to fail generating key data")
             .1
             .get(&signers[0])
             .expect("should get keygen for an account")
@@ -560,6 +561,7 @@ pub mod genesis {
     fn generate_key_data<P: ECPoint>(
         signers: &[AccountId],
         rng: &mut Rng,
+        allow_high_pubkey: bool,
     ) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<P>>)> {
         let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
         let n = params.share_count;
@@ -572,7 +574,7 @@ pub mod genesis {
             })
             .unzip();
 
-        let agg_pubkey = derive_aggregate_pubkey(&commitments, false /* allow high pubkey */)?;
+        let agg_pubkey = derive_aggregate_pubkey(&commitments, allow_high_pubkey)?;
 
         let validator_map = PartyIdxMapping::from_unsorted_signers(signers);
 

@@ -323,7 +323,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         &self,
         ceremony_id: &CeremonyId,
     ) -> Option<AuthorityCount> {
-        self.keygen_states.get_awaited_messages_for(ceremony_id)
+        self.keygen_states.get_awaited_parties_for(ceremony_id)
     }
 
     /// This should not be used in production as it could
@@ -343,7 +343,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     }
 
     /// Check is the ceremony is at the specified keygen BroadcastStage (0-9)
-    pub fn ensure_ceremony_at_keygen_stage(
+    pub fn check_ceremony_at_keygen_stage(
         &self,
         stage_number: usize,
         ceremony_id: CeremonyId,
@@ -373,7 +373,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     }
 
     /// Check is the ceremony is at the specified signing BroadcastStage (0-4)
-    pub fn ensure_ceremony_at_signing_stage(
+    pub fn check_ceremony_at_signing_stage(
         &self,
         stage_number: usize,
         ceremony_id: CeremonyId,
@@ -554,7 +554,7 @@ where
     }
 
     #[cfg(test)]
-    pub fn get_awaited_messages_for(&self, ceremony_id: &CeremonyId) -> Option<AuthorityCount> {
+    pub fn get_awaited_parties_for(&self, ceremony_id: &CeremonyId) -> Option<AuthorityCount> {
         self.inner
             .get(ceremony_id)
             .and_then(|s| s.get_awaited_messages())

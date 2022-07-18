@@ -1169,7 +1169,7 @@ impl Node {
         ceremony_id: CeremonyId,
     ) -> Result<()> {
         self.ceremony_manager
-            .ensure_ceremony_at_signing_stage(stage_number, ceremony_id)
+            .check_ceremony_at_signing_stage(stage_number, ceremony_id)
     }
 
     /// Check is the ceremony is at the specified keygen BroadcastStage (0-9).
@@ -1179,7 +1179,7 @@ impl Node {
         ceremony_id: CeremonyId,
     ) -> Result<()> {
         self.ceremony_manager
-            .ensure_ceremony_at_keygen_stage(stage_number, ceremony_id)
+            .check_ceremony_at_keygen_stage(stage_number, ceremony_id)
     }
 }
 

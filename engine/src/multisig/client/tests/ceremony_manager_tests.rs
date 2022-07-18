@@ -25,7 +25,7 @@ use utilities::{assert_ok, threshold_from_share_count};
 // This test is for MultisigData::Keygen but also covers the test for signing
 // because the code is common.
 #[test]
-fn should_ignore_non_first_stage_data_before_request() {
+fn should_not_create_unauthorised_ceremony_from_non_first_stage_message() {
     // Create a new ceremony manager
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
@@ -48,13 +48,41 @@ fn should_ignore_non_first_stage_data_before_request() {
     assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
 
     // Process a stage 1 message
+    let stage_1_data = MultisigData::Keygen(KeygenData::HashComm1(client::keygen::HashComm1(
+        sp_core::H256::default(),
+    )));
     ceremony_manager.process_p2p_message(
         ACCOUNT_IDS[0].clone(),
         MultisigMessage {
             ceremony_id: DEFAULT_KEYGEN_CEREMONY_ID,
-            data: MultisigData::Keygen(KeygenData::HashComm1(client::keygen::HashComm1(
-                sp_core::H256::default(),
-            ))),
+            data: stage_1_data,
+        },
+    );
+
+    // Check that the message was not ignored and an unauthorised ceremony was created
+    assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
+}
+
+// This test is for MultisigData::Keygen but also covers the test for signing
+// because the code is common.
+#[test]
+fn should_ignore_non_first_stage_data_before_authorised() {
+    // Create a new ceremony manager
+    let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+        ACCOUNT_IDS[0].clone(),
+        tokio::sync::mpsc::unbounded_channel().0,
+        &new_test_logger(),
+    );
+
+    // Process a stage 1 message to create an unauthorised ceremony
+    let stage_1_data = MultisigData::Keygen(KeygenData::HashComm1(client::keygen::HashComm1(
+        sp_core::H256::default(),
+    )));
+    ceremony_manager.process_p2p_message(
+        ACCOUNT_IDS[0].clone(),
+        MultisigMessage {
+            ceremony_id: DEFAULT_KEYGEN_CEREMONY_ID,
+            data: stage_1_data,
         },
     );
 
@@ -62,6 +90,8 @@ fn should_ignore_non_first_stage_data_before_request() {
     assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
 
     // Process a stage 2 message
+    let stage_2_data =
+        MultisigData::Keygen(gen_keygen_data_verify_hash_comm2(ACCOUNT_IDS.len() as u32));
     ceremony_manager.process_p2p_message(
         ACCOUNT_IDS[0].clone(),
         MultisigMessage {
@@ -145,7 +175,7 @@ async fn should_ignore_duplicate_keygen_request() {
     );
 
     // Check that the ceremony started
-    assert_ok!(ceremony_manager.ensure_ceremony_at_keygen_stage(1, DEFAULT_KEYGEN_CEREMONY_ID));
+    assert_ok!(ceremony_manager.check_ceremony_at_keygen_stage(1, DEFAULT_KEYGEN_CEREMONY_ID));
 
     // Send another keygen request with the same ceremony id (DEFAULT_KEYGEN_CEREMONY_ID)
     let (result_sender, mut result_receiver) = oneshot::channel();
@@ -189,7 +219,7 @@ async fn should_ignore_duplicate_rts() {
     );
 
     // Check that the ceremony started
-    assert_ok!(ceremony_manager.ensure_ceremony_at_signing_stage(1, DEFAULT_SIGNING_CEREMONY_ID));
+    assert_ok!(ceremony_manager.check_ceremony_at_signing_stage(1, DEFAULT_SIGNING_CEREMONY_ID));
 
     // Send another signing request with the same ceremony id (DEFAULT_SIGNING_CEREMONY_ID)
     let (result_sender, mut result_receiver) = oneshot::channel();
@@ -321,13 +351,16 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
 
 #[tokio::test]
 async fn should_ignore_rts_with_unknown_signer_id() {
-    // The id that we replace must not be our own id or the test will be invalid
-    let our_account_id_index = 0;
-    let account_id_index_to_replace = 1;
+    let our_account_id_idx = 0;
+    let unknown_signer_idx = 1;
+    assert_ne!(
+        our_account_id_idx, unknown_signer_idx,
+        "The unknown id must not be our own id or the test is invalid"
+    );
 
     // Create a new ceremony manager with an account id that is in ACCOUNT_IDS
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
-        ACCOUNT_IDS[our_account_id_index].clone(),
+        ACCOUNT_IDS[our_account_id_idx].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
         &new_test_logger(),
     );
@@ -336,7 +369,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let unknown_signer_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&unknown_signer_id));
     let mut participants = ACCOUNT_IDS.clone();
-    participants[account_id_index_to_replace] = unknown_signer_id;
+    participants[unknown_signer_idx] = unknown_signer_id;
 
     // Send a signing request with the modified participants
     let (result_sender, mut result_receiver) = oneshot::channel();
