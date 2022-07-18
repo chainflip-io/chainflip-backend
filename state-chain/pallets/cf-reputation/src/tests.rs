@@ -70,7 +70,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
 				Origin::root(),
-				MAX_REPUTATION_POINT_ACCRUED + 1,
+				MAX_ACCRUABLE_REPUTATION + 1,
 				20
 			),
 			Error::<Test>::InvalidAccrualRatio,
@@ -78,7 +78,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		// Fails due to online points not being > 0
 		assert_noop!(
-			ReputationPallet::update_accrual_ratio(Origin::root(), MAX_REPUTATION_POINT_ACCRUED, 0),
+			ReputationPallet::update_accrual_ratio(Origin::root(), MAX_ACCRUABLE_REPUTATION, 0),
 			Error::<Test>::InvalidAccrualRatio,
 		);
 

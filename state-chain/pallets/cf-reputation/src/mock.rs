@@ -75,7 +75,7 @@ pub const REPUTATION_PER_HEARTBEAT: ReputationPoints = 10;
 
 pub const ACCRUAL_RATIO: (i32, u64) = (REPUTATION_PER_HEARTBEAT, HEARTBEAT_BLOCK_INTERVAL);
 
-pub const MAX_REPUTATION_POINT_ACCRUED: ReputationPoints = 25;
+pub const MAX_ACCRUABLE_REPUTATION: ReputationPoints = 25;
 
 pub const MISSED_HEARTBEAT_PENALTY_POINTS: ReputationPoints = 2;
 pub const GRANDPA_EQUIVOCATION_PENALTY_POINTS: ReputationPoints = 50;
@@ -84,7 +84,7 @@ pub const GRANDPA_SUSPENSION_DURATION: u64 = HEARTBEAT_BLOCK_INTERVAL * 10;
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
-	pub const MaximumReputationPointAccrued: ReputationPoints = MAX_REPUTATION_POINT_ACCRUED;
+	pub const MaximumAccruableReputation: ReputationPoints = MAX_ACCRUABLE_REPUTATION;
 }
 
 // Mocking the `Slasher` trait
@@ -168,7 +168,7 @@ impl Config for Test {
 	type Slasher = MockSlasher;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type MaximumAccruableReputation = MaximumReputationPointAccrued;
+	type MaximumAccruableReputation = MaximumAccruableReputation;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
