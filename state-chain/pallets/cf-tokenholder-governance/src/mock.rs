@@ -93,7 +93,7 @@ impl StakingInfo for MockStakingInfo {
 
     type Balance = u128;
 
-    fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance {
+    fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
 		match account_id {
 			&ALICE => 3000,
 			&BOB => 2000,
@@ -103,7 +103,7 @@ impl StakingInfo for MockStakingInfo {
 		}
     }
 
-    fn onchain_funds() -> Self::Balance {
+    fn total_onchain_stake() -> Self::Balance {
         10000
     }
 }

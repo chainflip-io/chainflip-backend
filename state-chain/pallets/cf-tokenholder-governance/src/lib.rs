@@ -208,10 +208,10 @@ pub mod pallet {
 			let votes = backers.len();
 			let total_baked: u128 = backers.iter()
 				.map(|baker| {
-					T::StakingInfo::total_balance_of(baker).into()
+					T::StakingInfo::total_stake_of(baker).into()
 				})
 				.sum::<u128>();
-			let total_stake: u128 = T::StakingInfo::onchain_funds().into();
+			let total_stake: u128 = T::StakingInfo::total_onchain_stake().into();
 			if total_baked > (total_stake / 3) * 2 {
 				match proposal {
 					SetGovernanceKey(key) => {

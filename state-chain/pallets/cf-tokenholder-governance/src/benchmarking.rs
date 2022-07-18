@@ -18,7 +18,7 @@ benchmarks! {
         // Number of bakers
         let a in 10..1000;
         let stake = <T as pallet::Config>::Balance::from(50_000_000_000_000_000_000_000u128);
-        let total_onchain_funds = T::StakingInfo::onchain_funds();
+        let total_onchain_funds = T::StakingInfo::total_onchain_stake();
         VotingPeriod::<T>::set(1u32.into());
         EnactmentDelay::<T>::set(10u32.into());
         let proposal = generate_proposal::<T>();
