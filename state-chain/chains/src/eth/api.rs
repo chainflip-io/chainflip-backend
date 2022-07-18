@@ -6,7 +6,7 @@ pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
 pub mod update_flip_supply;
 pub mod set_gov_key;
-pub mod set_community_key;
+pub mod set_comm_key_with_agg_key;
 
 /// Chainflip api calls available on Ethereum.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -15,7 +15,7 @@ pub enum EthereumApi {
 	RegisterClaim(register_claim::RegisterClaim),
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 	SetGovKey(set_gov_key::SetGovKey),
-	SetCommunityKey(set_community_key::SetCommunityKey),
+	SetCommunityKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
@@ -70,7 +70,7 @@ impl SetCommunityKey<Ethereum> for EthereumApi {
 		replay_protection: EthereumReplayProtection,
 		new_key: eth::Address,
 	) -> Self {
-		Self::SetCommunityKey(set_community_key::SetCommunityKey::new_unsigned(
+		Self::SetCommunityKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
 			replay_protection,
 			new_key,
 		))
@@ -145,8 +145,8 @@ impl From<set_gov_key::SetGovKey> for EthereumApi {
 	}
 }
 
-impl From<set_community_key::SetCommunityKey> for EthereumApi {
-	fn from(tx: set_community_key::SetCommunityKey) -> Self {
+impl From<set_comm_key_with_agg_key::SetCommKeyWithAggKey> for EthereumApi {
+	fn from(tx: set_comm_key_with_agg_key::SetCommKeyWithAggKey) -> Self {
 		Self::SetCommunityKey(tx)
 	}
 }

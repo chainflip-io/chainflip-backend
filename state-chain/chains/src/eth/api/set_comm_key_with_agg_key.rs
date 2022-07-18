@@ -10,20 +10,20 @@ use crate::eth::SigData;
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct SetCommunityKey {
+pub struct SetCommKeyWithAggKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The new community key.
-	pub new_key: eth::Address,
+	pub new_comm_key: eth::Address,
 }
 
-impl SetCommunityKey {
+impl SetCommKeyWithAggKey {
     pub fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		new_key: eth::Address,
+		new_comm_key: eth::Address,
 	) -> Self {
 		let mut calldata =
-			Self { sig_data: SigData::new_empty(replay_protection), new_key: new_key.into() };
+			Self { sig_data: SigData::new_empty(replay_protection), new_comm_key: new_comm_key.into() };
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 		calldata
 	}
@@ -42,13 +42,13 @@ impl SetCommunityKey {
 						ParamType::Address,
 					]),
 				),
-				ethabi_param("newKey", ParamType::Address),
+				ethabi_param("newCommKey", ParamType::Address),
 			],
 		)
 	}
 }
 
-impl ApiCall<Ethereum> for SetCommunityKey {
+impl ApiCall<Ethereum> for SetCommKeyWithAggKey {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		self.sig_data.msg_hash
 	}
@@ -60,7 +60,7 @@ impl ApiCall<Ethereum> for SetCommunityKey {
 
 	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		self.get_function()
-			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_key)])
+			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_comm_key)])
 			.expect(
 				r#"
 						This can only fail if the parameter types don't match the function signature encoded below.
