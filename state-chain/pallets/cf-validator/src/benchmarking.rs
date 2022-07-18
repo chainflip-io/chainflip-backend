@@ -8,16 +8,22 @@ use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
 use sp_application_crypto::RuntimeAppPublic;
+use sp_runtime::{Digest, DigestItem};
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
-use frame_system::{pallet_prelude::OriginFor, RawOrigin};
+use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 
 mod p2p_crypto {
 	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
 	pub const PEER_ID_KEY: KeyTypeId = KeyTypeId(*b"peer");
 	app_crypto!(ed25519, PEER_ID_KEY);
 }
+
+// For accessing missed aura slot tracking.
+frame_support::generate_storage_alias!(
+	AuraSlotExtraction, LastSeenSlot => Value<u64>
+);
 
 pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + ReputationConfig {}
 
@@ -181,6 +187,28 @@ benchmarks! {
 	// verify {
 
 	// }
+
+	missed_authorship_slots {
+		let m in 1 .. 10;
+
+		let last_slot = 1_000u64;
+
+		SystemPallet::<T>::initialize(&1u32.into(), &SystemPallet::<T>::parent_hash(), &Digest {
+			logs: vec![DigestItem::PreRuntime(*b"aura", last_slot.encode())]
+		});
+		Pallet::<T>::on_initialize(1u32.into());
+		assert_eq!(LastSeenSlot::get(), Some(last_slot));
+
+		let expected_slot = last_slot + 1;
+		SystemPallet::<T>::initialize(&1u32.into(), &SystemPallet::<T>::parent_hash(), &Digest {
+			logs: vec![DigestItem::PreRuntime(*b"aura", (expected_slot + m as u64).encode())]
+		});
+	}: {
+		Pallet::<T>::punish_missed_authorship_slots();
+	}
+	verify {
+		assert_eq!(LastSeenSlot::get(), Some(expected_slot + m as u64));
+	}
 
 	/**** Rotation Benchmarks ****/
 
