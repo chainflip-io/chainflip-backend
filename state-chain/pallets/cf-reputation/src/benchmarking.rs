@@ -17,12 +17,15 @@ benchmarks! {
 		let call = Call::<T>::set_penalty { offence: PalletOffence::MissedHeartbeat.into(), penalty: Default::default() };
 	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
 	update_missed_heartbeat_penalty {
-		let call = Call::<T>::update_missed_heartbeat_penalty { reputation: 20 };
+		let new_reputation_penalty = 20;
+		let call = Call::<T>::update_missed_heartbeat_penalty { reputation: new_reputation_penalty };
+		let heartbeat_block_interval = T::HeartbeatBlockInterval::get();
+
 	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin()); }
 	verify {
 		assert_eq!(
 			Pallet::<T>::resolve_penalty_for(PalletOffence::MissedHeartbeat),
-			Penalty { reputation: 15, suspension: 0_u32.into() }
+			Penalty { reputation: new_reputation_penalty, suspension: heartbeat_block_interval }
 		);
 	}
 	on_runtime_upgrade {
