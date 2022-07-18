@@ -1,4 +1,7 @@
-use crate::{eth::{Tokenizable, self}, ApiCall, ChainAbi, ChainCrypto, Ethereum};
+use crate::{
+	eth::{self, Tokenizable},
+	ApiCall, ChainAbi, ChainCrypto, Ethereum,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{ParamType, Token};
 use frame_support::RuntimeDebug;
@@ -18,16 +21,18 @@ pub struct SetCommKeyWithAggKey {
 }
 
 impl SetCommKeyWithAggKey {
-    pub fn new_unsigned(
+	pub fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		new_comm_key: eth::Address,
 	) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(replay_protection), new_comm_key: new_comm_key.into() };
+		let mut calldata = Self {
+			sig_data: SigData::new_empty(replay_protection),
+			new_comm_key: new_comm_key.into(),
+		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 		calldata
 	}
-    fn get_function(&self) -> ethabi::Function {
+	fn get_function(&self) -> ethabi::Function {
 		ethabi_function(
 			"SetCommKeyWithAggKey",
 			vec![

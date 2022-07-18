@@ -18,7 +18,7 @@ pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{Bonding, Slashing, StakeHandler, StakingInfo, FeePayment};
+use cf_traits::{Bonding, FeePayment, Slashing, StakeHandler, StakingInfo};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -357,34 +357,37 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T:Config> StakingInfo for Pallet<T> {
-    type AccountId = T::AccountId;
-    type Balance = T::Balance;
+impl<T: Config> StakingInfo for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = T::Balance;
 
-    fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
-        Self::total_balance_of(account_id)
-    }
+	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
+		Self::total_balance_of(account_id)
+	}
 
-    fn total_onchain_stake() -> Self::Balance {
-        Self::onchain_funds()
-    }
+	fn total_onchain_stake() -> Self::Balance {
+		Self::onchain_funds()
+	}
 }
 
-impl<T:Config> FeePayment for Pallet<T> {
-    type Amount = T::Balance;
-    type AccountId = T::AccountId;
+impl<T: Config> FeePayment for Pallet<T> {
+	type Amount = T::Balance;
+	type AccountId = T::AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(account_id: Self::AccountId, amount: Self::Amount) {
 		Pallet::<T>::settle(&account_id, Pallet::<T>::mint(amount).into());
 	}
 
-    fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> sp_runtime::DispatchResult {
+	fn try_burn_fee(
+		account_id: Self::AccountId,
+		amount: Self::Amount,
+	) -> sp_runtime::DispatchResult {
 		if let None = Pallet::<T>::try_debit(&account_id, amount) {
 			return Err(Error::<T>::InsufficientLiquidity.into())
 		}
 		Ok(().into())
-    }
+	}
 }
 
 pub struct Bonder<T>(PhantomData<T>);

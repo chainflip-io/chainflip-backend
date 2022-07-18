@@ -4,9 +4,9 @@ use crate::*;
 
 pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
-pub mod update_flip_supply;
-pub mod set_gov_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
+pub mod set_gov_key_with_agg_key;
+pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -54,10 +54,7 @@ impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
 }
 
 impl SetGovKeyWithAggKey<Ethereum> for EthereumApi {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_key: eth::Address,
-	) -> Self {
+	fn new_unsigned(replay_protection: EthereumReplayProtection, new_key: eth::Address) -> Self {
 		Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
 			replay_protection,
 			new_key,
@@ -66,10 +63,7 @@ impl SetGovKeyWithAggKey<Ethereum> for EthereumApi {
 }
 
 impl SetCommKeyWithAggKey<Ethereum> for EthereumApi {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_key: eth::Address,
-	) -> Self {
+	fn new_unsigned(replay_protection: EthereumReplayProtection, new_key: eth::Address) -> Self {
 		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
 			replay_protection,
 			new_key,

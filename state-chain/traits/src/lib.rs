@@ -749,6 +749,6 @@ pub trait FeePayment {
 pub trait StakingInfo {
 	type AccountId;
 	type Balance;
-    fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
+	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
 	fn total_onchain_stake() -> Self::Balance;
 }

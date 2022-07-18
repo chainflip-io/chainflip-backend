@@ -1,20 +1,22 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{mocks::MockEthereum, ApiCall, eth::api::EthereumReplayProtection, ChainAbi, SetGovKeyWithAggKey, ChainCrypto};
+use cf_chains::{
+	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
+	SetGovKeyWithAggKey,
+};
 use cf_traits::{
 	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo},
-	Chainflip, FeePayment, StakingInfo, Broadcaster, ReplayProtectionProvider,
+	Broadcaster, Chainflip, FeePayment, ReplayProtectionProvider, StakingInfo,
 };
-use codec::{MaxEncodedLen, Encode, Decode};
-use frame_support::{parameter_types, storage, Twox64Concat, StorageHasher};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{parameter_types, storage, StorageHasher, Twox64Concat};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, DispatchError,
 };
-use sp_runtime::DispatchError;
 
 use cf_chains::SetCommKeyWithAggKey;
 
@@ -87,23 +89,23 @@ pub struct MockFeePayment;
 pub struct MockStakingInfo;
 
 impl StakingInfo for MockStakingInfo {
-    type AccountId = AccountId;
+	type AccountId = AccountId;
 
-    type Balance = u128;
+	type Balance = u128;
 
-    fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
+	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
 		match account_id {
 			&ALICE => ALICE_BALANCE,
 			&BOB => BOB_BALANCE,
 			&CHARLES => CHARLES_BALANCE,
 			&EVE => EVE_BALANCE,
-			_ => 0
+			_ => 0,
 		}
-    }
+	}
 
-    fn total_onchain_stake() -> Self::Balance {
-        10000
-    }
+	fn total_onchain_stake() -> Self::Balance {
+		10000
+	}
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetGovKey {
@@ -116,10 +118,7 @@ impl SetGovKeyWithAggKey<MockEthereum> for MockSetGovKey {
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_gov_key: <MockEthereum as ChainCrypto>::GovKey,
 	) -> Self {
-		Self {
-			nonce,
-			new_gov_key
-		}
+		Self { nonce, new_gov_key }
 	}
 }
 
@@ -143,7 +142,6 @@ impl ApiCall<MockEthereum> for MockSetGovKey {
 		unimplemented!()
 	}
 }
-
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockBroadcastGov;
@@ -177,10 +175,7 @@ impl SetCommKeyWithAggKey<MockEthereum> for MockSetCommKey {
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_key: <MockEthereum as ChainCrypto>::GovKey,
 	) -> Self {
-		Self {
-			nonce,
-			new_key
-		}
+		Self { nonce, new_key }
 	}
 }
 
@@ -227,18 +222,21 @@ impl Broadcaster<MockEthereum> for MockBroadcastComm {
 }
 
 impl FeePayment for MockFeePayment {
-    type AccountId = AccountId;
-    type Amount = Balance;
-    fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> Result<(), sp_runtime::DispatchError> {
+	type AccountId = AccountId;
+	type Amount = Balance;
+	fn try_burn_fee(
+		account_id: Self::AccountId,
+		amount: Self::Amount,
+	) -> Result<(), sp_runtime::DispatchError> {
 		let not_enough_funds = DispatchError::Other("Account is not sufficiently funded!");
 		match account_id {
 			ALICE if amount > ALICE_BALANCE => Err(not_enough_funds),
 			BOB if amount > BOB_BALANCE => Err(not_enough_funds),
 			CHARLES if amount > CHARLES_BALANCE => Err(not_enough_funds),
 			EVE if amount > EVE_BALANCE => Err(not_enough_funds),
-			_ => Ok(().into())
+			_ => Ok(().into()),
 		}
-    }
+	}
 }
 
 impl Chainflip for Test {
@@ -253,12 +251,12 @@ impl Chainflip for Test {
 }
 
 impl pallet_cf_tokenholder_governance::Config for Test {
-    type Event = Event;
-    type Balance = u128;
-    type FeePayment = MockFeePayment;
+	type Event = Event;
+	type Balance = u128;
+	type FeePayment = MockFeePayment;
 	type Chain = MockEthereum;
-    type ReplayProtectionProvider = MockReplayProvider;
-    type StakingInfo = MockStakingInfo;
+	type ReplayProtectionProvider = MockReplayProvider;
+	type StakingInfo = MockStakingInfo;
 	type SetGovKeyApiCall = MockSetGovKey;
 	type GovKeyBroadcaster = MockBroadcastGov;
 	type SetCommunityKeyApiCall = MockSetCommKey;
@@ -280,9 +278,7 @@ pub const EVE_BALANCE: Balance = 2000;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-	};
+	let config = GenesisConfig { system: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

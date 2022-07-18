@@ -1,4 +1,7 @@
-use crate::{eth::{Tokenizable, self}, ApiCall, ChainAbi, ChainCrypto, Ethereum};
+use crate::{
+	eth::{self, Tokenizable},
+	ApiCall, ChainAbi, ChainCrypto, Ethereum,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{ParamType, Token};
 use frame_support::RuntimeDebug;
@@ -18,7 +21,7 @@ pub struct SetGovKeyWithAggKey {
 }
 
 impl SetGovKeyWithAggKey {
-    pub fn new_unsigned(
+	pub fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		new_key: eth::Address,
 	) -> Self {
@@ -27,7 +30,7 @@ impl SetGovKeyWithAggKey {
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 		calldata
 	}
-    fn get_function(&self) -> ethabi::Function {
+	fn get_function(&self) -> ethabi::Function {
 		ethabi_function(
 			"setGovKeyWithAggKey",
 			vec![

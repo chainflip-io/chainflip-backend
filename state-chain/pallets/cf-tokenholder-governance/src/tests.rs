@@ -1,11 +1,11 @@
-use frame_support::{assert_noop, assert_ok};
 use crate::tests::TokenholderGovernance;
+use frame_support::{assert_noop, assert_ok};
 
 use crate::{mock::*, *};
 
 fn go_to_block(n: u64) {
-    System::set_block_number(n);
-    TokenholderGovernance::on_initialize(n);
+	System::set_block_number(n);
+	TokenholderGovernance::on_initialize(n);
 }
 
 const GOV_KEY_PROPOSAL: [u8; 32] = [1u8; 32];
@@ -13,77 +13,124 @@ const ANOTHER_GOV_KEY_PROPOSAL: [u8; 32] = [2u8; 32];
 
 #[test]
 fn update_gov_key_via_onchain_proposal() {
-    new_test_ext().execute_with(|| {
-        VotingPeriod::<Test>::set(10);
-        EnactmentDelay::<Test>::set(20);
-        assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        assert!(Proposals::<Test>::contains_key(<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get()));
-        // Back the proposal to ensure threshold
-        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(CHARLES), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        // Jump to the block in which we expect the proposal
-        TokenholderGovernance::on_initialize(<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get());
-        // Expect the proposal to be moved to the enactment stage
-        assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
-        TokenholderGovernance::on_initialize(<frame_system::Pallet<Test>>::block_number() + EnactmentDelay::<Test>::get());
-        assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
-        // TODO: verify the right event has been submitted
-    });
+	new_test_ext().execute_with(|| {
+		VotingPeriod::<Test>::set(10);
+		EnactmentDelay::<Test>::set(20);
+		assert_ok!(TokenholderGovernance::submit_proposal(
+			Origin::signed(ALICE),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+		));
+		assert!(Proposals::<Test>::contains_key(
+			<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get()
+		));
+		// Back the proposal to ensure threshold
+		assert_ok!(TokenholderGovernance::back_proposal(
+			Origin::signed(BOB),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+		));
+		assert_ok!(TokenholderGovernance::back_proposal(
+			Origin::signed(CHARLES),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+		));
+		// Jump to the block in which we expect the proposal
+		TokenholderGovernance::on_initialize(
+			<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get(),
+		);
+		// Expect the proposal to be moved to the enactment stage
+		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
+		TokenholderGovernance::on_initialize(
+			<frame_system::Pallet<Test>>::block_number() + EnactmentDelay::<Test>::get(),
+		);
+		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
+		// TODO: verify the right event has been submitted
+	});
 }
 
 #[test]
 fn cannot_back_proposal_twice() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::AlreadyBacked);
-    });
+	new_test_ext().execute_with(|| {
+		assert_ok!(TokenholderGovernance::submit_proposal(
+			Origin::signed(ALICE),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+		));
+		assert_ok!(TokenholderGovernance::back_proposal(
+			Origin::signed(BOB),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+		));
+		assert_noop!(
+			TokenholderGovernance::back_proposal(
+				Origin::signed(BOB),
+				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+			),
+			Error::<Test>::AlreadyBacked
+		);
+	});
 }
 
 #[test]
 fn cannot_back_not_exisintg_proposal() {
-    new_test_ext().execute_with(|| {
-        assert_noop!(TokenholderGovernance::back_proposal(Origin::signed(BOB), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), Error::<Test>::ProposalDosentExists);
-    });
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			TokenholderGovernance::back_proposal(
+				Origin::signed(BOB),
+				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+			),
+			Error::<Test>::ProposalDosentExists
+		);
+	});
 }
 
 #[test]
 fn cannot_create_proposal_with_unsuficient_liquidity() {
-    new_test_ext().execute_with(|| {
-        ProposalFee::<Test>::set(10000);
-        assert_noop!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)), DispatchError::Other("Account is not sufficiently funded!"));
-    });
+	new_test_ext().execute_with(|| {
+		ProposalFee::<Test>::set(10000);
+		assert_noop!(
+			TokenholderGovernance::submit_proposal(
+				Origin::signed(ALICE),
+				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+			),
+			DispatchError::Other("Account is not sufficiently funded!")
+		);
+	});
 }
 
 #[test]
 fn not_enough_backed_liquidty() {
-    new_test_ext().execute_with(|| {
-        VotingPeriod::<Test>::set(10);
-        EnactmentDelay::<Test>::set(20);
-        assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        TokenholderGovernance::on_initialize(<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get());
-        assert!(!Backers::<Test>::contains_key(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
-        assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
-        // TODO: verify the right event has been submitted
-    });
+	new_test_ext().execute_with(|| {
+		VotingPeriod::<Test>::set(10);
+		EnactmentDelay::<Test>::set(20);
+		assert_ok!(TokenholderGovernance::submit_proposal(
+			Origin::signed(ALICE),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+		));
+		TokenholderGovernance::on_initialize(
+			<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get(),
+		);
+		assert!(!Backers::<Test>::contains_key(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
+		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
+		// TODO: verify the right event has been submitted
+	});
 }
 
 #[test]
 fn replace_proposal_during_enactment_period() {
-    new_test_ext().execute_with(|| {
-        VotingPeriod::<Test>::set(10);
-        EnactmentDelay::<Test>::set(30);
-        fn create_and_back_proposal(proposal: Proposal<Test>) {
-            assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), proposal));
-            assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), proposal));
-            assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(CHARLES), proposal));
-        }
-        go_to_block(5);
-        create_and_back_proposal(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL));
-        go_to_block(15);
-        assert_eq!(GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap().1, GOV_KEY_PROPOSAL);
-        create_and_back_proposal(Proposal::SetGovernanceKey(ANOTHER_GOV_KEY_PROPOSAL));
-        go_to_block(25);
-        assert_eq!(GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap().1, ANOTHER_GOV_KEY_PROPOSAL);
-    });
+	new_test_ext().execute_with(|| {
+		VotingPeriod::<Test>::set(10);
+		EnactmentDelay::<Test>::set(30);
+		fn create_and_back_proposal(proposal: Proposal<Test>) {
+			assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), proposal));
+			assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), proposal));
+			assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(CHARLES), proposal));
+		}
+		go_to_block(5);
+		create_and_back_proposal(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL));
+		go_to_block(15);
+		assert_eq!(GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap().1, GOV_KEY_PROPOSAL);
+		create_and_back_proposal(Proposal::SetGovernanceKey(ANOTHER_GOV_KEY_PROPOSAL));
+		go_to_block(25);
+		assert_eq!(
+			GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap().1,
+			ANOTHER_GOV_KEY_PROPOSAL
+		);
+	});
 }
