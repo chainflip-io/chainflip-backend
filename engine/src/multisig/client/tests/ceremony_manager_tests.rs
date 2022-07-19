@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    constants::CEREMONY_ID_WINDOW,
     logging::test_utils::new_test_logger,
     multisig::{
         client::{
@@ -25,6 +26,7 @@ fn should_ignore_non_first_stage_keygen_data_before_request() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
+        0, /* latest_ceremony_id */
         &new_test_logger(),
     );
 
@@ -79,6 +81,7 @@ fn should_ignore_non_first_stage_signing_data_before_request() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
+        0, /* latest_ceremony_id */
         &new_test_logger(),
     );
 
@@ -133,4 +136,46 @@ fn should_ignore_non_first_stage_signing_data_before_request() {
         ceremony_manager.get_delayed_signing_messages_len(&DEFAULT_KEYGEN_CEREMONY_ID),
         1
     )
+}
+
+#[test]
+fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
+    let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
+    let past_ceremony_id = latest_ceremony_id - 1; // Invalid, because it was used in the past
+    let future_ceremony_id = latest_ceremony_id + CEREMONY_ID_WINDOW; // Valid, because its within the window
+    let future_ceremony_id_too_large = latest_ceremony_id + CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
+
+    // Junk stage 1 data to use for the test
+    let stage_1_data = KeygenData::HashComm1(client::keygen::HashComm1(sp_core::H256::default()));
+
+    // Create a new ceremony manager and set the latest_ceremony_id
+    let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+        ACCOUNT_IDS[0].clone(),
+        tokio::sync::mpsc::unbounded_channel().0,
+        latest_ceremony_id,
+        &new_test_logger(),
+    );
+
+    // Process a stage 1 message with a ceremony id that is in the past
+    ceremony_manager.process_keygen_data(
+        ACCOUNT_IDS[0].clone(),
+        past_ceremony_id,
+        stage_1_data.clone(),
+    );
+
+    // Process a stage 1 message with a ceremony id that is too far in the future
+    ceremony_manager.process_keygen_data(
+        ACCOUNT_IDS[0].clone(),
+        future_ceremony_id_too_large,
+        stage_1_data.clone(),
+    );
+
+    // Check that the messages were ignored and no unauthorised ceremonies were created
+    assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
+
+    // Process a stage 1 message with a ceremony id that in the future but still within the window
+    ceremony_manager.process_keygen_data(ACCOUNT_IDS[0].clone(), future_ceremony_id, stage_1_data);
+
+    // Check that the message was not ignored and unauthorised ceremony was created
+    assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
 }
