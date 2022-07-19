@@ -31,7 +31,7 @@ fn should_not_create_unauthorised_ceremony_from_non_first_stage_message() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
-        0, /* latest_ceremony_id */
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -42,7 +42,7 @@ fn should_not_create_unauthorised_ceremony_from_non_first_stage_message() {
         ACCOUNT_IDS[0].clone(),
         MultisigMessage {
             ceremony_id: DEFAULT_KEYGEN_CEREMONY_ID,
-            data: stage_2_data.clone(),
+            data: stage_2_data,
         },
     );
 
@@ -73,6 +73,7 @@ fn should_ignore_non_first_stage_data_before_authorised() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -120,6 +121,7 @@ async fn should_panic_keygen_request_if_not_participating() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         non_participating_id,
         tokio::sync::mpsc::unbounded_channel().0,
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -146,6 +148,7 @@ async fn should_panic_rts_if_not_participating() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         non_participating_id,
         tokio::sync::mpsc::unbounded_channel().0,
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -165,8 +168,12 @@ async fn should_panic_rts_if_not_participating() {
 async fn should_ignore_duplicate_keygen_request() {
     // Create a new ceremony manager
     let (p2p_sender, _p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut ceremony_manager =
-        CeremonyManager::<EthSigning>::new(ACCOUNT_IDS[0].clone(), p2p_sender, &new_test_logger());
+    let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+        ACCOUNT_IDS[0].clone(),
+        p2p_sender,
+        INITIAL_LATEST_CEREMONY_ID,
+        &new_test_logger(),
+    );
 
     // Send a keygen request with the DEFAULT_KEYGEN_CEREMONY_ID
     ceremony_manager.on_keygen_request(
@@ -207,8 +214,12 @@ async fn should_ignore_duplicate_rts() {
 
     // Create a new ceremony manager
     let (p2p_sender, _p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut ceremony_manager =
-        CeremonyManager::<EthSigning>::new(ACCOUNT_IDS[0].clone(), p2p_sender, &new_test_logger());
+    let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+        ACCOUNT_IDS[0].clone(),
+        p2p_sender,
+        INITIAL_LATEST_CEREMONY_ID,
+        &new_test_logger(),
+    );
 
     // Send a signing request with the DEFAULT_SIGNING_CEREMONY_ID
     ceremony_manager.on_request_to_sign(
@@ -255,7 +266,7 @@ async fn should_ignore_keygen_request_with_duplicate_signer() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
-        0, /* latest_ceremony_id */
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -290,6 +301,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -326,6 +338,7 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -365,6 +378,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[our_account_id_idx].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
+        INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     );
 
@@ -410,6 +424,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         ACCOUNT_IDS[0].clone(),
         tokio::sync::mpsc::unbounded_channel().0,
+        INITIAL_LATEST_CEREMONY_ID,
         &logger,
     );
 
@@ -422,14 +437,15 @@ async fn should_ignore_stage_data_with_incorrect_size() {
     );
 
     // Built a stage 2 message that has the incorrect number of elements
-    let stage_2_data = gen_keygen_data_verify_hash_comm2(num_of_participants + 1);
+    let stage_2_data =
+        MultisigData::Keygen(gen_keygen_data_verify_hash_comm2(num_of_participants + 1));
 
     // Process the bad message and it should get rejected
     ceremony_manager.process_p2p_message(
         ACCOUNT_IDS[0].clone(),
         MultisigMessage {
             ceremony_id,
-            data: MultisigData::Keygen(stage_2_data),
+            data: stage_2_data,
         },
     );
 
@@ -448,7 +464,9 @@ fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     let future_ceremony_id_too_large = latest_ceremony_id + CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
 
     // Junk stage 1 data to use for the test
-    let stage_1_data = KeygenData::HashComm1(client::keygen::HashComm1(sp_core::H256::default()));
+    let stage_1_data = MultisigData::Keygen(KeygenData::HashComm1(client::keygen::HashComm1(
+        sp_core::H256::default(),
+    )));
 
     // Create a new ceremony manager and set the latest_ceremony_id
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
@@ -459,24 +477,34 @@ fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     );
 
     // Process a stage 1 message with a ceremony id that is in the past
-    ceremony_manager.process_keygen_data(
+    ceremony_manager.process_p2p_message(
         ACCOUNT_IDS[0].clone(),
-        past_ceremony_id,
-        stage_1_data.clone(),
+        MultisigMessage {
+            ceremony_id: past_ceremony_id,
+            data: stage_1_data.clone(),
+        },
     );
 
     // Process a stage 1 message with a ceremony id that is too far in the future
-    ceremony_manager.process_keygen_data(
+    ceremony_manager.process_p2p_message(
         ACCOUNT_IDS[0].clone(),
-        future_ceremony_id_too_large,
-        stage_1_data.clone(),
+        MultisigMessage {
+            ceremony_id: future_ceremony_id_too_large,
+            data: stage_1_data.clone(),
+        },
     );
 
     // Check that the messages were ignored and no unauthorised ceremonies were created
     assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
 
     // Process a stage 1 message with a ceremony id that in the future but still within the window
-    ceremony_manager.process_keygen_data(ACCOUNT_IDS[0].clone(), future_ceremony_id, stage_1_data);
+    ceremony_manager.process_p2p_message(
+        ACCOUNT_IDS[0].clone(),
+        MultisigMessage {
+            ceremony_id: future_ceremony_id,
+            data: stage_1_data,
+        },
+    );
 
     // Check that the message was not ignored and unauthorised ceremony was created
     assert_eq!(ceremony_manager.get_keygen_states_len(), 1);

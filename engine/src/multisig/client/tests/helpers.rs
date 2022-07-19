@@ -60,7 +60,7 @@ use state_chain_runtime::AccountId;
 
 use super::{
     ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
-    DEFAULT_SIGNING_SEED,
+    DEFAULT_SIGNING_SEED, INITIAL_LATEST_CEREMONY_ID,
 };
 
 use crate::multisig::tests::fixtures::MESSAGE_HASH;
@@ -84,7 +84,7 @@ pub fn new_node(account_id: AccountId, allow_high_pubkey: bool) -> Node {
     let mut ceremony_manager = CeremonyManager::new(
         account_id,
         outgoing_p2p_message_sender,
-        0, // Start latest_ceremony_id at 0 for tests
+        INITIAL_LATEST_CEREMONY_ID,
         &logger,
     );
     if allow_high_pubkey {
