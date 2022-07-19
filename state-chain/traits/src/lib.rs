@@ -144,9 +144,7 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-#[derive(
-	PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
-)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub struct Bid<Id, Amount> {
 	pub bidder_id: Id,
 	pub amount: Amount,
