@@ -1070,7 +1070,7 @@ impl<T: Config> Pallet<T> {
 				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
 				// Use an approximation again - see comment above.
 				T::ValidatorWeightInfo::start_authority_rotation({
-					Self::current_authority_count() + Self::n_backup_nodes() as u32
+					Self::current_authority_count() + Self::num_high_reward_backups() as u32
 				})
 			},
 		}
@@ -1101,11 +1101,14 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn n_backup_nodes() -> usize {
+	/// Returns the number of backups eligible for the higher tier of backup rewards
+	pub fn num_high_reward_backups() -> usize {
 		Percent::from_percent(BackupNodePercentage::<T>::get()) *
 			Self::current_authority_count() as usize
 	}
 
+	// Returns the ids of the highest staked backup nodes, who are eligible for the higher tier of
+	// backup rewards
 	pub fn highest_staked_backup_nodes() -> Vec<ValidatorIdOf<T>> {
 		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
 			BackupValidatorTriage::<T>::get()
@@ -1117,7 +1120,7 @@ impl<T: Config> Pallet<T> {
 
 		backups_by_desc_amount
 			.into_iter()
-			.take(Self::n_backup_nodes())
+			.take(Self::num_high_reward_backups())
 			.map(|bid| bid.bidder_id)
 			.collect()
 	}

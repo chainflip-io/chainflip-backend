@@ -40,7 +40,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				})
 				// Limit the number of secondary candidates according to the size of the
 				// backup_percentage and the fracction of that, which can be secondary candidates
-				.take(Pallet::<T>::n_backup_nodes() / SECONDARY_CANDIDATE_FRACTION)
+				.take(Pallet::<T>::num_high_reward_backups() / SECONDARY_CANDIDATE_FRACTION)
 				.collect(),
 			banned: Default::default(),
 			bond,
