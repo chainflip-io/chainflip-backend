@@ -23,7 +23,7 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, StakeTransfer,
 };
 use frame_support::traits::Get;

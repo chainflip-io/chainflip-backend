@@ -188,16 +188,6 @@ pub trait Auctioneer<T: Chainflip> {
 	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
 }
 
-pub trait BackupNodes {
-	type ValidatorId;
-
-	// TODO: Change name
-	fn n_backup_nodes() -> usize;
-
-	// Get the highest n staked backup nodes
-	fn highest_staked_backup_nodes(n: usize) -> Vec<Self::ValidatorId>;
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RotationError {
 	/// No candidates provided.

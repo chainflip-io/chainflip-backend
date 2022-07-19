@@ -1,13 +1,12 @@
 use crate::*;
-use cf_traits::{BackupNodes, Bid};
+use cf_traits::Bid;
 use sp_runtime::traits::AtLeast32BitUnsigned;
-use sp_std::cmp::Reverse;
 
 /// Tracker for backup nodes
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct BackupTriage<Id, Amount> {
 	/// Sorted by id
-	backup: Vec<Bid<Id, Amount>>,
+	pub backup: Vec<Bid<Id, Amount>>,
 }
 
 impl<Id, Amount> Default for BackupTriage<Id, Amount> {
@@ -59,21 +58,6 @@ where
 				},
 			};
 		}
-	}
-}
-
-impl<T: Config> BackupNodes for Pallet<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-
-	fn n_backup_nodes() -> usize {
-		Percent::from_percent(BackupNodePercentage::<T>::get()) *
-			Self::current_authority_count() as usize
-	}
-
-	fn highest_staked_backup_nodes(n: usize) -> Vec<Self::ValidatorId> {
-		let mut backups = BackupValidatorTriage::<T>::get().backup;
-		backups.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
-		backups.into_iter().take(n).map(|bid| bid.bidder_id).collect()
 	}
 }
 

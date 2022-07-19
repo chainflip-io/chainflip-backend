@@ -20,10 +20,11 @@ mod rotation_state;
 
 pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BackupNodes,
-	BidderProvider, Bonding, Chainflip, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bid,
+	BidderProvider, Bonding, Chainflip, ChainflipAccount, ChainflipAccountData,
+	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
+	StakeHandler, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -1103,6 +1104,17 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 		}
+	}
+
+	pub fn n_backup_nodes() -> usize {
+		Percent::from_percent(BackupNodePercentage::<T>::get()) *
+			Self::current_authority_count() as usize
+	}
+
+	pub fn highest_staked_backup_nodes(n: usize) -> Vec<ValidatorIdOf<T>> {
+		let mut backups = BackupValidatorTriage::<T>::get().backup;
+		backups.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
+		backups.into_iter().take(n).map(|bid| bid.bidder_id).collect()
 	}
 
 	fn punish_missed_authorship_slots() -> Weight {

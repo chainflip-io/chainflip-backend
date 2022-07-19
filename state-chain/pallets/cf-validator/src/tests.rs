@@ -5,7 +5,7 @@ use cf_traits::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
 		vault_rotation::MockVaultRotator,
 	},
-	AuctionOutcome, BackupNodes, SystemStateInfo, VaultRotator,
+	AuctionOutcome, SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;

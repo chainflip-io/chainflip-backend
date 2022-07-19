@@ -1,5 +1,5 @@
 use crate::*;
-use cf_traits::{AuctionOutcome, BackupNodes, Bid};
+use cf_traits::{AuctionOutcome, Bid};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
 
