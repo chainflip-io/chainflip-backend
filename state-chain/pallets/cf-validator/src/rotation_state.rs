@@ -67,16 +67,14 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		}
 	}
 
-	pub fn authority_candidates_iter(&self) -> impl Iterator<Item = &Id> {
+	pub fn authority_candidates<I: FromIterator<Id>>(&self) -> I {
 		self.primary_candidates
 			.iter()
 			.chain(&self.secondary_candidates)
 			.filter(|id| !self.banned.contains(id))
 			.take(self.target_set_size as usize)
-	}
-
-	pub fn authority_candidates<I: FromIterator<Id>>(&self) -> I {
-		self.authority_candidates_iter().cloned().collect::<I>()
+			.cloned()
+			.collect::<I>()
 	}
 
 	pub fn num_primary_candidates(&self) -> u32 {
