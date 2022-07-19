@@ -1004,10 +1004,13 @@ impl<T: Config> Pallet<T> {
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
 		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
+
 		Bond::<T>::set(new_bond);
 
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as AuthorityCount);
+			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
+			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
 		EpochAuthorityCount::<T>::insert(new_epoch, new_authorities.len() as AuthorityCount);
@@ -1016,11 +1019,6 @@ impl<T: Config> Pallet<T> {
 
 		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
-
-		for authority in new_authorities {
-			EpochHistory::<T>::activate_epoch(authority, new_epoch);
-			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
-		}
 
 		// We've got new validators, which means the backups may have changed.
 		BackupValidatorTriage::<T>::put(backup_map);
