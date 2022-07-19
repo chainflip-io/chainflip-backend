@@ -11,23 +11,13 @@ pub struct RotationState<Id, Amount> {
 	secondary_candidates: Vec<Id>,
 	banned: BTreeSet<Id>,
 	pub bond: Amount,
-	target_set_size: u8,
 }
 
 impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amount> {
-	pub fn new(primary_candidates: Vec<Id>, secondary_candidates: Vec<Id>, bond: Amount) -> Self {
-		let target_set_size = primary_candidates.len() as u8;
-		Self {
-			primary_candidates,
-			secondary_candidates,
-			banned: Default::default(),
-			bond,
-			target_set_size,
-		}
-	}
-
 	// We need to work out how many to take for the secondary candidate fraction
-	pub fn from_auction_outcome<T>(auction_outcome: AuctionOutcome<Id, Amount>) -> Self
+	pub fn from_auction_outcome<T>(
+		AuctionOutcome { winners, losers, bond }: AuctionOutcome<Id, Amount>,
+	) -> Self
 	where
 		T: Config<Amount = Amount> + Chainflip<ValidatorId = Id>,
 	{
@@ -36,10 +26,9 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		let num_backup_nodes =
 			(authorities.len() * BackupNodePercentage::<T>::get() as usize) / 100;
 
-		Self::new(
-			auction_outcome.winners,
-			auction_outcome
-				.losers
+		RotationState {
+			primary_candidates: winners,
+			secondary_candidates: losers
 				.into_iter()
 				// We only allow current authorities or backup validators to be secondary
 				// candidates.
@@ -57,8 +46,9 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				// backup_percentage and the fracction of that, which can be secondary candidates
 				.take(num_backup_nodes / SECONDARY_CANDIDATE_FRACTION)
 				.collect(),
-			auction_outcome.bond,
-		)
+			banned: Default::default(),
+			bond,
+		}
 	}
 
 	pub fn ban(&mut self, new_banned: impl IntoIterator<Item = Id>) {
@@ -72,7 +62,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 			.iter()
 			.chain(&self.secondary_candidates)
 			.filter(|id| !self.banned.contains(id))
-			.take(self.target_set_size as usize)
+			.take(self.primary_candidates.len())
 			.cloned()
 			.collect::<I>()
 	}
