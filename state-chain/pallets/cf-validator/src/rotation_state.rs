@@ -14,7 +14,6 @@ pub struct RotationState<Id, Amount> {
 }
 
 impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amount> {
-	// We need to work out how many to take for the secondary candidate fraction
 	pub fn from_auction_outcome<T>(
 		AuctionOutcome { winners, losers, bond }: AuctionOutcome<Id, Amount>,
 	) -> Self
