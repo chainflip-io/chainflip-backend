@@ -189,6 +189,7 @@ benchmarks! {
 	// }
 
 	missed_authorship_slots {
+		// Unlikely we will ever miss 10 successive blocks.
 		let m in 1 .. 10;
 
 		let last_slot = 1_000u64;
