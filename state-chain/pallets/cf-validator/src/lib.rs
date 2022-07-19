@@ -1074,8 +1074,7 @@ impl<T: Config> Pallet<T> {
 				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
 				// Use an approximation again - see comment above.
 				T::ValidatorWeightInfo::start_authority_rotation({
-					let authority_count = Self::current_authority_count();
-					authority_count + Self::n_backup_nodes(authority_count as usize) as u32
+					Self::current_authority_count() + Self::n_backup_nodes() as u32
 				})
 			},
 		}

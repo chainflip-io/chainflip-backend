@@ -65,8 +65,9 @@ where
 impl<T: Config> BackupNodes for Pallet<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 
-	fn n_backup_nodes(num_authorities: usize) -> usize {
-		Percent::from_percent(BackupNodePercentage::<T>::get()) * num_authorities
+	fn n_backup_nodes() -> usize {
+		Percent::from_percent(BackupNodePercentage::<T>::get()) *
+			Self::current_authority_count() as usize
 	}
 
 	fn highest_staked_backup_nodes(n: usize) -> Vec<Self::ValidatorId> {

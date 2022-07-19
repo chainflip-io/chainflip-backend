@@ -192,7 +192,7 @@ pub trait BackupNodes {
 	type ValidatorId;
 
 	// TODO: Change name
-	fn n_backup_nodes(num_authorities: usize) -> usize;
+	fn n_backup_nodes() -> usize;
 
 	// Get the highest n staked backup nodes
 	fn highest_staked_backup_nodes(n: usize) -> Vec<Self::ValidatorId>;
