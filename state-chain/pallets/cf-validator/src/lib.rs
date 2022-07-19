@@ -822,7 +822,7 @@ pub mod pallet {
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
 				self.bond,
-				|| RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(vec![], 0),
+				RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(vec![]),
 			);
 		}
 	}
@@ -966,9 +966,6 @@ impl<T: Config> Pallet<T> {
 							T::ValidatorQualification::is_qualified(&bid.bidder_id)
 					})
 					.collect(),
-				// We set the group size when we initialise a new epoch...
-				// but we don't have a triage at genesis.
-				Self::n_backup_nodes(new_authorities.len()),
 			),
 		);
 

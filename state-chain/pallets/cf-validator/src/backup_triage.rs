@@ -8,14 +8,11 @@ use sp_std::cmp::Reverse;
 pub struct BackupTriage<Id, Amount> {
 	/// Sorted by id
 	backup: Vec<Bid<Id, Amount>>,
-
-	// TODO: Change this to max extra rewarded or something
-	backup_group_size_target: u32,
 }
 
 impl<Id, Amount> Default for BackupTriage<Id, Amount> {
 	fn default() -> Self {
-		BackupTriage { backup: Vec::new(), backup_group_size_target: 0 }
+		BackupTriage { backup: Vec::new() }
 	}
 }
 
@@ -27,19 +24,13 @@ where
 	Id: Ord,
 	Amount: AtLeast32BitUnsigned + Copy,
 {
-	pub fn new<AccountState: ChainflipAccount>(
-		mut backup_candidates: Vec<Bid<Id, Amount>>,
-		backup_group_size_target: usize,
-	) -> Self
+	pub fn new<AccountState: ChainflipAccount>(mut backup_candidates: Vec<Bid<Id, Amount>>) -> Self
 	where
 		Id: IsType<AccountState::AccountId>,
 	{
 		// Sort by validator id
 		backup_candidates.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id));
-		Self {
-			backup: backup_candidates,
-			backup_group_size_target: backup_group_size_target as u32,
-		}
+		Self { backup: backup_candidates }
 	}
 
 	// TODO: Inline this?? Or is it worth keeping to test it?
@@ -104,10 +95,6 @@ mod test_backup_triage {
 			let backup_set = triage_cloned.backup.into_iter().collect::<BTreeSet<_>>();
 			let passive_set = triage_cloned.passive.into_iter().collect::<BTreeSet<_>>();
 
-			assert!(
-				backup_set.len() <= triage_cloned.backup_group_size_target as usize,
-				"backup set should be within the target size"
-			);
 			assert!(
 				backup_set.is_disjoint(&passive_set),
 				"backup should not overlap with passive set"

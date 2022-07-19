@@ -559,7 +559,6 @@ pub type Executive = frame_executive::Executive<
 			),
 			112,
 		>,
-		migrations::VersionedMigration<(migrations::migrate_backup_triage::Migration,), 113>,
 	),
 >;
 
