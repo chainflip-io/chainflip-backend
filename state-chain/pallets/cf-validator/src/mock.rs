@@ -296,16 +296,6 @@ macro_rules! assert_invariants {
 				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
 				.collect::<Vec<_>>(),
 		);
-		assert!(
-			BackupValidatorTriage::<Test>::get()
-				.passive_nodes()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_passive()),
-			"All passive nodes should have their account state set accordingly. Got: {:?}",
-			BackupValidatorTriage::<Test>::get()
-				.passive_nodes()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
-				.collect::<Vec<_>>(),
-		);
 	};
 }
 

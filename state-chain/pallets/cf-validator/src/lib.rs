@@ -165,8 +165,7 @@ pub mod pallet {
 			Amount = Self::Amount,
 		>;
 
-		/// Criteria that need to be fulfilled to qualify as a validator node (authority, backup or
-		/// passive).
+		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
 		type ValidatorQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
@@ -914,7 +913,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Makes the transition to the next epoch.
 	///
-	/// Among other things, updates the authority, backup and passive sets.
+	/// Among other things, updates the authority, historical and backup sets.
 	///
 	/// Also triggers [T::EpochTransitionHandler::on_new_epoch] which may call into other pallets.
 	///
@@ -1019,7 +1018,7 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
 
-		// We've got new validators, which means the backups and passives may have changed.
+		// We've got new validators, which means the backups may have changed.
 		BackupValidatorTriage::<T>::put(backup_map);
 	}
 

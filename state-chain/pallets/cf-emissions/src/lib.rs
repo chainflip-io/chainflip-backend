@@ -275,7 +275,7 @@ pub mod pallet {
 		pub backup_node_emission_inflation: BasisPoints,
 	}
 
-	/// At genesis we need to set the inflation rates for active and passive validators.
+	/// At genesis we need to set the inflation rates for active and backup validators.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
