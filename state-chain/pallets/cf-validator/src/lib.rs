@@ -765,6 +765,7 @@ pub mod pallet {
 	#[pallet::getter(fn backup_validator_triage)]
 	pub type BackupValidatorTriage<T> = StorageValue<_, RuntimeBackupTriage<T>, ValueQuery>;
 
+	// TODO: Rename this
 	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
 	/// authority set size.
 	#[pallet::storage]
@@ -815,6 +816,8 @@ pub mod pallet {
 			for id in &self.genesis_authorities {
 				T::ChainflipAccount::set_current_authority(id.into_ref());
 			}
+
+			// TODO: We should have the stakers come in here as backup candidates...
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
@@ -955,6 +958,7 @@ impl<T: Config> Pallet<T> {
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
 		Self::initialise_new_epoch(new_epoch, &new_authorities, rotation_state.bond, || {
 			RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
+				// Can we do this a better way, with the losers or something???
 				T::BidderProvider::get_bidders()
 					.into_iter()
 					.filter(|bid| {
@@ -962,12 +966,11 @@ impl<T: Config> Pallet<T> {
 							T::ValidatorQualification::is_qualified(&bid.bidder_id)
 					})
 					.collect(),
-				Self::backup_set_target_size(
-					new_authorities_lookup.len(),
-					BackupNodePercentage::<T>::get(),
-				),
-			)
-		});
+				// We set the group size when we initialise a new epoch...
+				// but we don't have a triage at genesis.
+				Self::n_backup_nodes(new_authorities.len()),
+			),
+		);
 
 		// Trigger the new epoch handlers on other pallets.
 		T::EpochTransitionHandler::on_new_epoch(&new_authorities);
@@ -982,7 +985,7 @@ impl<T: Config> Pallet<T> {
 			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
-				T::ChainflipAccount::from_historical_to_backup_or_passive(authority.into_ref());
+				T::ChainflipAccount::from_historical_to_backup(authority.into_ref());
 				T::ReputationResetter::reset_reputation(authority);
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
@@ -1030,10 +1033,6 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::RotationPhaseUpdated { new_phase });
 	}
 
-	fn backup_set_target_size(num_authorities: usize, backup_node_percentage: Percentage) -> usize {
-		Percent::from_percent(backup_node_percentage) * num_authorities
-	}
-
 	fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
 			log::info!(
@@ -1077,10 +1076,10 @@ impl<T: Config> Pallet<T> {
 			Err(e) => {
 				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
 				// Use an approximation again - see comment above.
-				T::ValidatorWeightInfo::start_authority_rotation(
-					Self::current_authority_count() +
-						<Self as BackupNodes>::backup_nodes().len() as u32,
-				)
+				T::ValidatorWeightInfo::start_authority_rotation({
+					let authority_count = Self::current_authority_count();
+					authority_count + Self::n_backup_nodes(authority_count as usize) as u32
+				})
 			},
 		}
 	}

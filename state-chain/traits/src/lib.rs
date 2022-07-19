@@ -191,8 +191,11 @@ pub trait Auctioneer<T: Chainflip> {
 pub trait BackupNodes {
 	type ValidatorId;
 
-	/// The current set of backup nodes. The set may change on any stake or claim event.
-	fn backup_nodes() -> Vec<Self::ValidatorId>;
+	// TODO: Change name
+	fn n_backup_nodes(num_authorities: usize) -> usize;
+
+	// Get the highest n staked backup nodes
+	fn highest_staked_backup_nodes(n: usize) -> Vec<Self::ValidatorId>;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -364,17 +367,11 @@ pub trait EmergencyRotation {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum BackupOrPassive {
-	Backup,
-	Passive,
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
-	HistoricalAuthority(BackupOrPassive),
-	BackupOrPassive(BackupOrPassive),
+	/// Historical implies backup too
+	HistoricalAuthority,
+	Backup,
 }
 
 impl ChainflipAccountState {
@@ -383,19 +380,7 @@ impl ChainflipAccountState {
 	}
 
 	pub fn is_backup(&self) -> bool {
-		matches!(
-			self,
-			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup) |
-				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup)
-		)
-	}
-
-	pub fn is_passive(&self) -> bool {
-		matches!(
-			self,
-			ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive) |
-				ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive)
-		)
+		matches!(self, ChainflipAccountState::HistoricalAuthority | ChainflipAccountState::Backup)
 	}
 }
 
@@ -408,9 +393,7 @@ pub struct ChainflipAccountData {
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData {
-			state: ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
-		}
+		ChainflipAccountData { state: ChainflipAccountState::Backup }
 	}
 }
 
@@ -419,15 +402,13 @@ pub trait ChainflipAccount {
 
 	/// Get the account data for the given account id.
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	/// Updates the state of a
-	fn set_backup_or_passive(account_id: &Self::AccountId, backup_or_passive: BackupOrPassive);
 	/// Set the node to be a current authority
 	fn set_current_authority(account_id: &Self::AccountId);
 	/// Sets the authority state to historical
 	fn set_historical_authority(account_id: &Self::AccountId);
 	/// Sets the current authority to the historical authority, should be called
 	/// once the authority has no more active epochs
-	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId);
+	fn from_historical_to_backup(account_id: &Self::AccountId);
 }
 
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
@@ -441,24 +422,6 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::get(account_id)
 	}
 
-	fn set_backup_or_passive(account_id: &Self::AccountId, state: BackupOrPassive) {
-		log::debug!("Setting {:?} to {:?}", account_id, state);
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
-			ChainflipAccountState::CurrentAuthority => {
-				log::warn!(
-					"Attempted to set {state:?} on a current authority account {account_id:?}"
-				);
-			},
-			ChainflipAccountState::HistoricalAuthority(_) => {
-				(*account_data).state = ChainflipAccountState::HistoricalAuthority(state);
-			},
-			ChainflipAccountState::BackupOrPassive(_) => {
-				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
-			},
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
-	}
-
 	/// Set the last epoch number and set the account state to Validator
 	fn set_current_authority(account_id: &Self::AccountId) {
 		log::debug!("Setting current authority {:?}", account_id);
@@ -468,25 +431,20 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
-	// TODO: How to check if we set to backup or passive
-	// we might want to combine this with an update_backup_or_passive
 	fn set_historical_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state =
-				ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Passive);
+			(*account_data).state = ChainflipAccountState::HistoricalAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
-	fn from_historical_to_backup_or_passive(account_id: &Self::AccountId) {
+	fn from_historical_to_backup(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
-			ChainflipAccountState::HistoricalAuthority(state) => {
-				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
+			ChainflipAccountState::HistoricalAuthority => {
+				(*account_data).state = ChainflipAccountState::Backup;
 			},
-			state => {
-				log::error!(
-					"Attempted to set backup or passive on {state:?} account {account_id:?}"
-				);
+			_ => {
+				log::error!("Attempted to set Backup on a CurrentAuthority or existing Backup");
 			},
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));

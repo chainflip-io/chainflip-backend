@@ -26,15 +26,23 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		}
 	}
 
+	// We need to work out how many to take for the secondary candidate fraction
 	pub fn from_auction_outcome<T>(auction_outcome: AuctionOutcome<Id, Amount>) -> Self
 	where
 		T: Config<Amount = Amount> + Chainflip<ValidatorId = Id>,
 	{
-		let backups = Pallet::<T>::backup_nodes().into_iter().collect::<BTreeSet<_>>();
 		let authorities = Pallet::<T>::current_authorities().into_iter().collect::<BTreeSet<_>>();
 
-		// Limit the number of secondary candidates according to the size of the backup set.
-		let max_secondary_candidates = backups.len() / SECONDARY_CANDIDATE_FRACTION;
+		let backup_node_percentage = BackupNodePercentage::<T>::get();
+
+		let num_backup_nodes = (authorities.len() * backup_node_percentage as usize) / 100;
+
+		// Limit the number of secondary candidates according to the size of the backup_percentage
+		// and the fracction of that, which can be secondary candidates
+		let max_secondary_candidates = num_backup_nodes / (SECONDARY_CANDIDATE_FRACTION);
+
+		// only the highest staked nodes are eligible
+		let eligible_backups = Pallet::<T>::highest_staked_backup_nodes(num_backup_nodes);
 
 		Self::new(
 			auction_outcome.winners,
@@ -44,7 +52,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				// We only allow current authorities or backup validators to be secondary
 				// candidates.
 				.filter_map(|Bid { bidder_id, .. }| {
-					if backups.contains(&bidder_id) || authorities.contains(&bidder_id) {
+					if eligible_backups.contains(&bidder_id) || authorities.contains(&bidder_id) {
 						Some(bidder_id)
 					} else {
 						None

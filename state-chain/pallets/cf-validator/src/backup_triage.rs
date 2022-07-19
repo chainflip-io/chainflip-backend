@@ -1,19 +1,21 @@
 use crate::*;
-use cf_traits::{BackupNodes, BackupOrPassive, Bid};
+use cf_traits::{BackupNodes, Bid};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::cmp::Reverse;
 
-/// Tracker for backup and passive validators.
+/// Tracker for backup nodes
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct BackupTriage<Id, Amount> {
+	/// Sorted by id
 	backup: Vec<Bid<Id, Amount>>,
-	passive: Vec<Bid<Id, Amount>>,
+
+	// TODO: Change this to max extra rewarded or something
 	backup_group_size_target: u32,
 }
 
 impl<Id, Amount> Default for BackupTriage<Id, Amount> {
 	fn default() -> Self {
-		BackupTriage { backup: Vec::new(), passive: Vec::new(), backup_group_size_target: 0 }
+		BackupTriage { backup: Vec::new(), backup_group_size_target: 0 }
 	}
 }
 
@@ -32,58 +34,15 @@ where
 	where
 		Id: IsType<AccountState::AccountId>,
 	{
-		let mut triage_result = if backup_group_size_target >= backup_candidates.len() {
-			Self {
-				backup: backup_candidates,
-				passive: Vec::new(),
-				backup_group_size_target: backup_group_size_target as u32,
-			}
-		} else {
-			// Sort the candidates by decreasing bid.
-			backup_candidates.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
-			let passive = backup_candidates.split_off(backup_group_size_target);
-			Self {
-				backup: backup_candidates,
-				passive,
-				backup_group_size_target: backup_group_size_target as u32,
-			}
-		};
-
-		triage_result.sort_all_by_validator_id();
-
-		// TODO:
-		// It's not this simple. For example, there might be old backup validators who are no longer
-		// in either of these sets because they were banned from the auction.
-
-		for validator_id in triage_result.backup_nodes() {
-			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Backup);
+		// Sort by validator id
+		backup_candidates.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id));
+		Self {
+			backup: backup_candidates,
+			backup_group_size_target: backup_group_size_target as u32,
 		}
-		for validator_id in triage_result.passive_nodes() {
-			AccountState::set_backup_or_passive(validator_id.into_ref(), BackupOrPassive::Passive);
-		}
-
-		triage_result
 	}
 
-	pub fn backup_nodes(&self) -> impl Iterator<Item = &Id> {
-		self.backup.iter().map(|bid| &bid.bidder_id)
-	}
-
-	pub fn passive_nodes(&self) -> impl Iterator<Item = &Id> {
-		self.passive.iter().map(|bid| &bid.bidder_id)
-	}
-
-	fn lowest_backup_bid(&self) -> Amount {
-		if self.backup_group_size_target == 0 {
-			return Amount::max_value()
-		}
-		self.backup.iter().map(|bid| bid.amount).min().unwrap_or_else(Zero::zero)
-	}
-
-	fn highest_passive_bid(&self) -> Amount {
-		self.passive.iter().map(|bid| bid.amount).max().unwrap_or_else(Zero::zero)
-	}
-
+	// TODO: Inline this?? Or is it worth keeping to test it?
 	pub fn adjust_bid<AccountState: ChainflipAccount>(
 		&mut self,
 		bidder_id: Id,
@@ -92,121 +51,37 @@ where
 		Id: IsType<AccountState::AccountId>,
 	{
 		if new_bid_amount.is_zero() {
-			let find_and_remove_bidder_from = |bids: &mut Vec<Bid<Id, Amount>>| {
-				bids.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)).map(|i| {
-					bids.remove(i);
+			// Delete them from the backup set
+			self.backup
+				.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id))
+				.map(|i| {
+					self.backup.remove(i);
 				})
-			};
-
-			let _ = find_and_remove_bidder_from(&mut self.passive)
-				.or_else(|_| find_and_remove_bidder_from(&mut self.backup));
-
-			AccountState::set_backup_or_passive(bidder_id.into_ref(), BackupOrPassive::Passive);
+				.expect("They should be in the backup list if we are adjusting their bid");
 		} else {
-			// Cache these here before we start mutating the sets.
-			let (lowest_backup_bid, highest_passive_bid) =
-				(self.lowest_backup_bid(), self.highest_passive_bid());
-
-			match (
-				self.passive.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)),
-				self.backup.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)),
-			) {
-				// The validator is in the passive set.
-				(Ok(p), Err(b)) =>
-					if new_bid_amount > lowest_backup_bid {
-						// Promote the bidder to the backup set.
-						let mut promoted = self.passive.remove(p);
-						AccountState::set_backup_or_passive(
-							promoted.bidder_id.into_ref(),
-							BackupOrPassive::Backup,
-						);
-						promoted.amount = new_bid_amount;
-						self.backup.insert(b, promoted);
-					} else {
-						// No change, just update the bid.
-						self.passive[p].amount = new_bid_amount;
-					},
-				// The validator is in the backup set.
-				(Err(p), Ok(b)) =>
-					if new_bid_amount < highest_passive_bid {
-						// Demote the bidder to the passive set.
-						let mut demoted = self.backup.remove(b);
-						AccountState::set_backup_or_passive(
-							demoted.bidder_id.into_ref(),
-							BackupOrPassive::Passive,
-						);
-						demoted.amount = new_bid_amount;
-						self.passive.insert(p, demoted);
-					} else {
-						self.backup[b].amount = new_bid_amount;
-					},
-				// The validator is in neither the passive nor backup set.
-				(Err(p), Err(b)) =>
-					if new_bid_amount > lowest_backup_bid {
-						AccountState::set_backup_or_passive(
-							bidder_id.into_ref(),
-							BackupOrPassive::Backup,
-						);
-						self.backup.insert(b, Bid::from((bidder_id, new_bid_amount)));
-					} else {
-						AccountState::set_backup_or_passive(
-							bidder_id.into_ref(),
-							BackupOrPassive::Passive,
-						);
-						self.passive.insert(p, Bid::from((bidder_id, new_bid_amount)));
-					},
-				(Ok(_), Ok(_)) => unreachable!("Validator cannot be in both backup and passive"),
-			}
+			match self.backup.binary_search_by(|bid| bid.bidder_id.cmp(&bidder_id)) {
+				Ok(index) => {
+					self.backup[index].amount = new_bid_amount;
+				},
+				Err(index) => {
+					self.backup.insert(index, Bid { bidder_id, amount: new_bid_amount });
+				},
+			};
 		}
-
-		// We might have to resize the backup set to fit within the target size.
-		if self.backup.len() != self.backup_group_size_target as usize {
-			// First, sort by bid such that we can pop the lowest backup and highest passive
-			// respectively.
-			self.backup.sort_unstable_by_key(|bid| Reverse(bid.amount));
-			self.passive.sort_unstable_by_key(|bid| bid.amount);
-
-			// Demote any excess backups.
-			while self.backup.len() > self.backup_group_size_target as usize {
-				let demoted = self.backup.pop().expect("backup set is not empty");
-				AccountState::set_backup_or_passive(
-					demoted.bidder_id.into_ref(),
-					BackupOrPassive::Passive,
-				);
-				self.passive.push(demoted);
-			}
-
-			// Promote any passives that fit in the backup target size.
-			while self.backup.len() < self.backup_group_size_target as usize &&
-				!self.passive.is_empty()
-			{
-				let promoted = self.passive.pop().expect("passive set is not empty");
-				AccountState::set_backup_or_passive(
-					promoted.bidder_id.into_ref(),
-					BackupOrPassive::Backup,
-				);
-				self.backup.push(promoted);
-			}
-
-			// Restore the original sort order.
-			self.sort_all_by_validator_id();
-		}
-	}
-
-	fn sort_all_by_validator_id(&mut self) {
-		let sort = |bids: &mut [Bid<Id, Amount>]| {
-			bids.sort_unstable_by(|left, right| left.bidder_id.cmp(&right.bidder_id))
-		};
-		sort(&mut self.backup);
-		sort(&mut self.passive);
 	}
 }
 
 impl<T: Config> BackupNodes for Pallet<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 
-	fn backup_nodes() -> Vec<Self::ValidatorId> {
-		BackupValidatorTriage::<T>::get().backup_nodes().cloned().collect()
+	fn n_backup_nodes(num_authorities: usize) -> usize {
+		Percent::from_percent(BackupNodePercentage::<T>::get()) * num_authorities
+	}
+
+	fn highest_staked_backup_nodes(n: usize) -> Vec<Self::ValidatorId> {
+		let mut backups = BackupValidatorTriage::<T>::get().backup;
+		backups.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
+		backups.into_iter().take(n).map(|bid| bid.bidder_id).collect()
 	}
 }
 
