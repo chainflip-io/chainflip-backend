@@ -118,6 +118,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         rng: Rng,
         result_sender: CeremonyResultSender<KeygenResultInfo<C::Point>, KeygenFailureReason>,
     ) {
+        assert!(
+            !participants.is_empty(),
+            "Keygen request has no participants"
+        );
+
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         slog::debug!(logger_with_ceremony_id, "Processing a keygen request");
@@ -194,6 +199,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         rng: Rng,
         result_sender: CeremonyResultSender<C::Signature, SigningFailureReason>,
     ) {
+        assert!(!signers.is_empty(), "Request to sign has no signers");
+
         let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
 
         slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
