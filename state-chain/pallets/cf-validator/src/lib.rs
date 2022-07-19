@@ -254,20 +254,7 @@ pub mod pallet {
 				Self::expire_epoch(epoch_index);
 			}
 
-			// Punish any validators that missed their authorship slot.
-			for slot in T::MissedAuthorshipSlots::missed_slots() {
-				let validator_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
-				if let Some(id) =
-					<Self as EpochInfo>::current_authorities().get(validator_index as usize)
-				{
-					T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
-				} else {
-					log::error!(
-						"Invalid slot index {:?} when processing missed authorship slots.",
-						slot
-					);
-				}
-			}
+			weight += Self::punish_missed_authorship_slots();
 
 			// Progress the authority rotation if necessary.
 			weight += match CurrentRotationPhase::<T>::get() {
@@ -1124,6 +1111,26 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 		}
+	}
+
+	fn punish_missed_authorship_slots() -> Weight {
+		let mut num_missed_slots = 0;
+		for slot in T::MissedAuthorshipSlots::missed_slots() {
+			num_missed_slots += 1;
+			let validator_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
+			if let Some(id) =
+				<Self as EpochInfo>::current_authorities().get(validator_index as usize)
+			{
+				T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
+			} else {
+				log::error!(
+					"Invalid slot index {:?} when processing missed authorship slots.",
+					slot
+				);
+			}
+		}
+
+		T::ValidatorWeightInfo::missed_authorship_slots(num_missed_slots)
 	}
 }
 
