@@ -54,6 +54,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
 		type Balance: Parameter
 			+ Member
 			+ AtLeast32BitUnsigned
@@ -67,9 +68,11 @@ pub mod pallet {
 
 		type Chain: ChainAbi;
 
-		type SetGovKeyApiCall: SetGovKeyApiCall<Self::Chain>;
+		type ApiCalls: SetGovKeyApiCall<Self::Chain> + SetCommunityKeyApiCall<Self::Chain>;
 
-		type SetCommunityKeyApiCall: SetCommunityKeyApiCall<Self::Chain>;
+		// type SetGovKeyApiCall: SetGovKeyApiCall<Self::Chain>;
+
+		// type SetCommunityKeyApiCall: SetCommunityKeyApiCall<Self::Chain>;
 
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
@@ -78,37 +81,39 @@ pub mod pallet {
 			Balance = Self::Balance,
 		>;
 
-		type GovKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetGovKeyApiCall>;
+		// type GovKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetGovKeyApiCall>;
 
-		type CommKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetCommunityKeyApiCall>;
+		// type CommKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetCommunityKeyApiCall>;
+
+		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCalls>;
 
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn voting_period)]
-	pub(super) type VotingPeriod<T> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub type VotingPeriod<T> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_count)]
-	pub(super) type ProposalCount<T> = StorageValue<_, ProposalId, ValueQuery>;
+	pub type ProposalCount<T> = StorageValue<_, ProposalId, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn enactment_delay)]
-	pub(super) type EnactmentDelay<T> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub type EnactmentDelay<T> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposal_fee)]
-	pub(super) type ProposalFee<T> = StorageValue<_, <T as Config>::Balance, ValueQuery>;
+	pub type ProposalFee<T> = StorageValue<_, <T as Config>::Balance, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub(super) type Proposals<T: Config> =
+	pub type Proposals<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal<T>>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
-	pub(super) type Backers<T: Config> =
+	pub type Backers<T: Config> =
 		StorageMap<_, Twox64Concat, Proposal<T>, Vec<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
@@ -153,24 +158,20 @@ pub mod pallet {
 			}
 			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
 				if gov_key.0 == n {
-					T::GovKeyBroadcaster::threshold_sign_and_broadcast(
-						T::SetGovKeyApiCall::new_unsigned(
-							T::ReplayProtectionProvider::replay_protection(),
-							gov_key.1,
-						),
-					);
+					T::Broadcaster::threshold_sign_and_broadcast(<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
+						T::ReplayProtectionProvider::replay_protection(),
+						gov_key.1,
+					));
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
 			}
 			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if comm_key.0 == n {
-					T::CommKeyBroadcaster::threshold_sign_and_broadcast(
-						T::SetCommunityKeyApiCall::new_unsigned(
-							T::ReplayProtectionProvider::replay_protection(),
-							comm_key.1,
-						),
-					);
+					T::Broadcaster::threshold_sign_and_broadcast(<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
+						T::ReplayProtectionProvider::replay_protection(),
+						comm_key.1,
+					));
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}

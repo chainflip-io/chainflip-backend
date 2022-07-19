@@ -1,7 +1,6 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{
-	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
-	SetGovKeyWithAggKey,
+	eth::api::{EthereumReplayProtection}, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
 };
 use cf_traits::{
 	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo},
@@ -18,6 +17,7 @@ use sp_runtime::{
 	BuildStorage, DispatchError,
 };
 
+use cf_chains::SetGovKeyWithAggKey;
 use cf_chains::SetCommKeyWithAggKey;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -108,69 +108,12 @@ impl StakingInfo for MockStakingInfo {
 	}
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct MockSetGovKey {
-	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-	pub new_gov_key: <MockEthereum as ChainCrypto>::GovKey,
-}
-
-impl SetGovKeyWithAggKey<MockEthereum> for MockSetGovKey {
-	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_gov_key: <MockEthereum as ChainCrypto>::GovKey,
-	) -> Self {
-		Self { nonce, new_gov_key }
-	}
-}
-
-impl ApiCall<MockEthereum> for MockSetGovKey {
-	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
-		[0xcf; 4]
-	}
-
-	fn signed(
-		self,
-		_threshold_signature: &<MockEthereum as ChainCrypto>::ThresholdSignature,
-	) -> Self {
-		unimplemented!()
-	}
-
-	fn abi_encoded(&self) -> Vec<u8> {
-		unimplemented!()
-	}
-
-	fn is_signed(&self) -> bool {
-		unimplemented!()
-	}
-}
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockBroadcastGov;
-
-impl MockBroadcastGov {
-	pub fn call(outgoing: MockSetGovKey) {
-		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcastGov", &outgoing)
-	}
-
-	pub fn get_called() -> Option<MockSetGovKey> {
-		storage::hashed::get(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcastGov")
-	}
-}
-
-impl Broadcaster<MockEthereum> for MockBroadcastGov {
-	type ApiCall = MockSetGovKey;
-
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
-		Self::call(api_call)
-	}
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct MockSetCommKey {
+pub struct MockApiCalls {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_key: <MockEthereum as ChainCrypto>::GovKey,
 }
 
-impl SetCommKeyWithAggKey<MockEthereum> for MockSetCommKey {
+impl SetGovKeyWithAggKey<MockEthereum> for MockApiCalls {
 	fn new_unsigned(
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_key: <MockEthereum as ChainCrypto>::GovKey,
@@ -179,7 +122,7 @@ impl SetCommKeyWithAggKey<MockEthereum> for MockSetCommKey {
 	}
 }
 
-impl ApiCall<MockEthereum> for MockSetCommKey {
+impl ApiCall<MockEthereum> for MockApiCalls {
 	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
 		[0xcf; 4]
 	}
@@ -201,23 +144,28 @@ impl ApiCall<MockEthereum> for MockSetCommKey {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockBroadcastComm;
+pub struct MockBroadcaster;
 
-impl MockBroadcastComm {
-	pub fn call(outgoing: MockSetCommKey) {
-		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcastGov", &outgoing)
-	}
-
-	pub fn get_called() -> Option<MockSetCommKey> {
-		storage::hashed::get(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcastGov")
+impl SetCommKeyWithAggKey<MockEthereum> for MockApiCalls {
+	fn new_unsigned(
+		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
+		new_key: <MockEthereum as ChainCrypto>::GovKey,
+	) -> Self {
+		Self { nonce, new_key }
 	}
 }
 
-impl Broadcaster<MockEthereum> for MockBroadcastComm {
-	type ApiCall = MockSetCommKey;
+impl Broadcaster<MockEthereum> for MockBroadcaster {
+	type ApiCall = MockApiCalls;
 
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
-		Self::call(api_call)
+		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"GOV", &api_call);
+	}
+}
+
+impl MockBroadcaster {
+	pub fn get_called() -> Option<<MockBroadcaster as Broadcaster<MockEthereum>>::ApiCall> {
+		storage::hashed::get(&<Twox64Concat as StorageHasher>::hash, b"GOV")
 	}
 }
 
@@ -257,10 +205,8 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type Chain = MockEthereum;
 	type ReplayProtectionProvider = MockReplayProvider;
 	type StakingInfo = MockStakingInfo;
-	type SetGovKeyApiCall = MockSetGovKey;
-	type GovKeyBroadcaster = MockBroadcastGov;
-	type SetCommunityKeyApiCall = MockSetCommKey;
-	type CommKeyBroadcaster = MockBroadcastComm;
+	type ApiCalls = MockApiCalls;
+	type Broadcaster = MockBroadcaster;
 	type WeightInfo = ();
 }
 
