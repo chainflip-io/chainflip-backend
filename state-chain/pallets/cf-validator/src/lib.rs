@@ -865,15 +865,12 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		}
 
 		// start + ((epoch * percentage) / 100)
-		let last_block_for_claims = CurrentEpochStartedAt::<T>::get().saturating_add(
+		CurrentEpochStartedAt::<T>::get().saturating_add(
 			BlocksPerEpoch::<T>::get()
 				.saturating_mul(ClaimPeriodAsPercentage::<T>::get().into())
 				.checked_div(&100u32.into())
 				.unwrap_or_default(),
-		);
-
-		let current_block_number = frame_system::Pallet::<T>::current_block_number();
-		last_block_for_claims <= current_block_number
+		) <= frame_system::Pallet::<T>::current_block_number()
 	}
 
 	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount> {
