@@ -12,13 +12,11 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-mod backup_triage;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 mod rotation_state;
 
-pub use backup_triage::*;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bid,
 	BidderProvider, Bonding, Chainflip, ChainflipAccount, ChainflipAccountData,
@@ -105,6 +103,8 @@ impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 type VanityName = Vec<u8>;
+
+type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
@@ -764,7 +764,8 @@ pub mod pallet {
 	/// Backup validator triage state.
 	#[pallet::storage]
 	#[pallet::getter(fn backup_validator_triage)]
-	pub type BackupValidatorTriage<T> = StorageValue<_, RuntimeBackupTriage<T>, ValueQuery>;
+	pub type BackupValidatorTriage<T: Config> =
+		StorageValue<_, BackupMap<T>, ValueQuery>;
 
 	// TODO: Rename this
 	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
@@ -823,7 +824,7 @@ pub mod pallet {
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
 				self.bond,
-				RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(vec![]),
+				BackupMap::<T>::default(),
 			);
 		}
 	}
@@ -957,18 +958,16 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
-		Self::initialise_new_epoch(new_epoch, &new_authorities, rotation_state.bond, || {
-			RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
-				// Can we do this a better way, with the losers or something???
-				T::BidderProvider::get_bidders()
-					.into_iter()
-					.filter(|bid| {
-						!new_authorities_lookup.contains(&bid.bidder_id) &&
-							T::ValidatorQualification::is_qualified(&bid.bidder_id)
-					})
-					.collect(),
-			),
-		);
+
+		let backup_map: BackupMap<T> = T::BidderProvider::get_bidders()
+			.into_iter()
+			.filter(|bid| {
+				!new_authorities_lookup.contains(&bid.bidder_id) &&
+					T::ValidatorQualification::is_qualified(&bid.bidder_id)
+			})
+			.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+			.collect();
+		Self::initialise_new_epoch(new_epoch, &new_authorities, rotation_state.bond, backup_map);
 
 		// Trigger the new epoch handlers on other pallets.
 		T::EpochTransitionHandler::on_new_epoch(&new_authorities);
@@ -999,7 +998,7 @@ impl<T: Config> Pallet<T> {
 		new_epoch: EpochIndex,
 		new_authorities: &[ValidatorIdOf<T>],
 		new_bond: T::Amount,
-		backup_triage: impl Fn() -> RuntimeBackupTriage<T>,
+		backup_map: BackupMap<T>,
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
 		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
@@ -1022,7 +1021,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// We've got new validators, which means the backups and passives may have changed.
-		BackupValidatorTriage::<T>::put(backup_triage());
+		BackupValidatorTriage::<T>::put(backup_map);
 	}
 
 	fn set_rotation_phase(new_phase: RotationPhase<T>) {
@@ -1112,9 +1111,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn highest_staked_backup_nodes(n: usize) -> Vec<ValidatorIdOf<T>> {
-		let mut backups = BackupValidatorTriage::<T>::get().backup;
-		backups.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
-		backups.into_iter().take(n).map(|bid| bid.bidder_id).collect()
+		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
+			BackupValidatorTriage::<T>::get()
+				.into_iter()
+				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.collect();
+
+		backups_by_desc_amount.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
+
+		backups_by_desc_amount.into_iter().take(n).map(|bid| bid.bidder_id).collect()
 	}
 
 	fn punish_missed_authorship_slots() -> Weight {
@@ -1289,6 +1294,7 @@ impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	}
 }
 
+// TODO: Look at where this struct is used
 pub struct UpdateBackupAndPassiveAccounts<T>(PhantomData<T>);
 
 impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
@@ -1299,9 +1305,15 @@ impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
 		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
 			return
 		}
+
+		// TODO: You shouldn't have to be qualified to be removed from the backup list #1849
 		if T::ValidatorQualification::is_qualified(validator_id) {
-			BackupValidatorTriage::<T>::mutate(|backup_triage| {
-				backup_triage.adjust_bid::<T::ChainflipAccount>(validator_id.clone(), amount);
+			BackupValidatorTriage::<T>::mutate(|backups| {
+				if amount.is_zero() {
+					backups.remove(&validator_id).expect("This id should exist in the map");
+				} else {
+					backups.insert(validator_id.clone(), amount);
+				}
 			});
 		}
 	}
