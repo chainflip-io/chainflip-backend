@@ -764,8 +764,7 @@ pub mod pallet {
 	/// Backup validator triage state.
 	#[pallet::storage]
 	#[pallet::getter(fn backup_validator_triage)]
-	pub type BackupValidatorTriage<T: Config> =
-		StorageValue<_, BackupMap<T>, ValueQuery>;
+	pub type BackupValidatorTriage<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
 
 	// TODO: Rename this
 	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
@@ -1294,10 +1293,9 @@ impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	}
 }
 
-// TODO: Look at where this struct is used
-pub struct UpdateBackupAndPassiveAccounts<T>(PhantomData<T>);
+pub struct UpdateBackupMapping<T>(PhantomData<T>);
 
-impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
+impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type Amount = T::Amount;
 

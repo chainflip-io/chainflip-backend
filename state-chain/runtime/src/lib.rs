@@ -358,7 +358,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ConstU128<500>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = ConstU32<DAYS>;
-	type StakeHandler = pallet_cf_validator::UpdateBackupAndPassiveAccounts<Self>;
+	type StakeHandler = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 }
