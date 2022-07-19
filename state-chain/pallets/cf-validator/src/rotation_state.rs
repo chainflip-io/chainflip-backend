@@ -6,7 +6,7 @@ use sp_std::collections::btree_set::BTreeSet;
 pub(crate) const SECONDARY_CANDIDATE_FRACTION: usize = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-pub struct RotationStatus<Id, Amount> {
+pub struct RotationState<Id, Amount> {
 	primary_candidates: Vec<Id>,
 	secondary_candidates: Vec<Id>,
 	banned: BTreeSet<Id>,
@@ -14,7 +14,7 @@ pub struct RotationStatus<Id, Amount> {
 	target_set_size: u8,
 }
 
-impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationStatus<Id, Amount> {
+impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amount> {
 	pub fn new(primary_candidates: Vec<Id>, secondary_candidates: Vec<Id>, bond: Amount) -> Self {
 		let target_set_size = primary_candidates.len() as u8;
 		Self {

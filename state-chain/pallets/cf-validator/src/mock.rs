@@ -265,7 +265,7 @@ macro_rules! assert_invariants {
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::current_authorities(),
 			Session::validators(),
-			"Authorities out of sync at block {:?}. RotationStatus: {:?}",
+			"Authorities out of sync at block {:?}. RotationPhase: {:?}",
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
 		);

@@ -42,11 +42,11 @@ macro_rules! assert_default_auction_outcome {
 	};
 }
 
-fn simple_rotation_status(
+fn simple_rotation_state(
 	auction_winners: Vec<u64>,
 	bond: Option<u128>,
-) -> RuntimeRotationStatus<Test> {
-	RuntimeRotationStatus::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+) -> RuntimeRotationState<Test> {
+	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 		winners: auction_winners,
 		bond: bond.unwrap_or(100),
 		losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
@@ -563,7 +563,7 @@ fn test_reputation_reset() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
 		// Simulate an epoch rotation and give the validators some reputation.
 		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
-			simple_rotation_status(vec![1, 2, 3], None),
+			simple_rotation_state(vec![1, 2, 3], None),
 		));
 		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
 
@@ -575,7 +575,7 @@ fn test_reputation_reset() {
 
 		// Simulate another epoch rotation and give the validators some reputation.
 		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
-			simple_rotation_status(vec![4, 5, 6], None),
+			simple_rotation_state(vec![4, 5, 6], None),
 		));
 		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
 
@@ -616,16 +616,10 @@ mod bond_expiry {
 	fn increasing_bond() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_status(
-				vec![1, 2],
-				Some(100),
-			));
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![1, 2], Some(100)));
 			assert_eq!(ValidatorPallet::bond(), 100);
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_status(
-				vec![2, 3],
-				Some(101),
-			));
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![2, 3], Some(101)));
 			assert_eq!(ValidatorPallet::bond(), 101);
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
@@ -644,13 +638,10 @@ mod bond_expiry {
 	fn decreasing_bond() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_status(
-				vec![1, 2],
-				Some(100),
-			));
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![1, 2], Some(100)));
 			assert_eq!(ValidatorPallet::bond(), 100);
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_status(vec![2, 3], Some(99)));
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![2, 3], Some(99)));
 			assert_eq!(ValidatorPallet::bond(), 99);
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
