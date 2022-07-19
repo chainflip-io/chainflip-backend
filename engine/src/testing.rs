@@ -33,8 +33,3 @@ pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
     assert!(!tempfile.exists());
     (tempdir, tempfile)
 }
-
-#[test]
-fn test_stuff() {
-    println!("Here's the file and line number: {} : {}", file!(), line!())
-}

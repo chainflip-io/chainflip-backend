@@ -23,19 +23,24 @@ pub struct MissedAuraSlots;
 
 impl MissedAuthorshipSlots for MissedAuraSlots {
 	fn missed_slots() -> sp_std::ops::Range<u64> {
-		let authored = System::digest()
-			.logs()
-			.iter()
-			.find_map(extract_slot_from_digest_item)
-			.expect("Aura is not enabled;");
-
-		let maybe_expected = LastSeenSlot::get().map(|last_seen| last_seen.saturating_add(1u64));
-		LastSeenSlot::put(authored);
-		if let Some(expected) = maybe_expected {
-			(*expected)..(*authored)
-		} else {
-			log::info!("Not expecting any current slot.");
-			Default::default()
+		match (
+			System::digest().logs().iter().find_map(extract_slot_from_digest_item),
+			LastSeenSlot::get().map(|last_seen| last_seen.saturating_add(1u64)),
+		) {
+			(None, _) => {
+				log::warn!("No Aura block author slot can be determined");
+				Default::default()
+			},
+			(Some(authored), maybe_expected) => {
+				LastSeenSlot::put(authored);
+				if let Some(expected) = maybe_expected {
+					log::debug!("Expected Aura slot {:?}, got {:?}.", expected, authored);
+					(*expected)..(*authored)
+				} else {
+					log::info!("Not expecting any current Aura author slot, got {:?}.", authored);
+					Default::default()
+				}
+			},
 		}
 	}
 }
@@ -176,9 +181,11 @@ mod test_missed_authorship_slots {
 				assert!(missed_slots.is_empty());
 			});
 
+			let to_slot = |x| GENESIS_SLOT + x;
+
 			// Author block 3 - we missed slot 2.
 			simulate_block_authorship(3, |missed_slots| {
-				assert_eq!(missed_slots, [2].map(|x| GENESIS_SLOT + x));
+				assert_eq!(missed_slots, [2].map(to_slot));
 			});
 			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 3);
 
@@ -190,7 +197,7 @@ mod test_missed_authorship_slots {
 
 			// Author for slot 7, assert we missed slots 5 and 6.
 			simulate_block_authorship(7, |missed_slots| {
-				assert_eq!(missed_slots, [5, 6].map(|x| GENESIS_SLOT + x));
+				assert_eq!(missed_slots, [5, 6].map(to_slot));
 			});
 			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 7);
 		});

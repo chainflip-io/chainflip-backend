@@ -78,6 +78,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for HashCommitments1<P>
 {
     type Message = HashComm1;
+    const NAME: BroadcastStageName = BroadcastStageName::HashCommitments;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // We don't want to reveal the public coefficients yet, so sending the hash commitment only
@@ -144,6 +145,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyHashCommitmentsBroadcast2<P>
 {
     type Message = VerifyHashComm2;
+    const NAME: BroadcastStageName = BroadcastStageName::HashCommitments;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(VerifyHashComm2 {
@@ -164,10 +166,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        BroadcastStageName::HashCommitments,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
@@ -175,7 +174,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         slog::debug!(
             self.common.logger,
             "{} have been correctly broadcast",
-            BroadcastStageName::HashCommitments
+            Self::NAME
         );
 
         // Just saving hash commitments for now. We will use them
@@ -215,6 +214,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for CoefficientCommitments3<P>
 {
     type Message = CoeffComm3<P>;
+    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(self.own_commitment.clone())
@@ -262,6 +262,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyCommitmentsBroadcast4<P>
 {
     type Message = VerifyCoeffComm4<P>;
+    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.commitments.clone();
@@ -282,10 +283,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        BroadcastStageName::CoefficientCommitments,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
@@ -305,7 +303,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         slog::debug!(
             self.common.logger,
             "{} have been correctly broadcast",
-            BroadcastStageName::CoefficientCommitments
+            Self::NAME
         );
 
         // At this point we know everyone's commitments, which can already be
@@ -355,6 +353,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for SecretSharesStage5<P>
 {
     type Message = SecretShare5<P>;
+    const NAME: BroadcastStageName = BroadcastStageName::SecretShares;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // With everyone committed to their secrets and sharing polynomial coefficients
@@ -440,6 +439,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for ComplaintsStage6<P>
 {
     type Message = Complaints6;
+    const NAME: BroadcastStageName = BroadcastStageName::Complaints;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Complaints6(self.complaints.clone()))
@@ -483,6 +483,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyComplaintsBroadcastStage7<P>
 {
     type Message = VerifyComplaints7;
+    const NAME: BroadcastStageName = BroadcastStageName::Complaints;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.received_complaints.clone();
@@ -503,10 +504,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        BroadcastStageName::Complaints,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
@@ -602,6 +600,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for BlameResponsesStage8<P>
 {
     type Message = BlameResponse8<P>;
+    const NAME: BroadcastStageName = BroadcastStageName::BlameResponses;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // Indexes at which to reveal/broadcast secret shares
@@ -754,6 +753,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyBlameResponsesBroadcastStage9<P>
 {
     type Message = VerifyBlameResponses9<P>;
+    const NAME: BroadcastStageName = BroadcastStageName::BlameResponses;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.blame_responses.clone();
@@ -772,7 +772,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         slog::debug!(
             self.common.logger,
             "Processing verifications for {}",
-            BroadcastStageName::BlameResponses
+            Self::NAME
         );
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
@@ -780,10 +780,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        BroadcastStageName::BlameResponses,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };

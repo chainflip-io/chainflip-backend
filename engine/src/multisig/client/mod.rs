@@ -40,9 +40,7 @@ pub use utils::PartyIdxMapping;
 pub use utils::ensure_unsorted;
 
 use self::{
-    ceremony_manager::{CeremonyResultReceiver, CeremonyResultSender},
-    key_store::KeyStore,
-    signing::frost::SigningData,
+    ceremony_manager::CeremonyResultSender, key_store::KeyStore, signing::frost::SigningData,
 };
 
 pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
@@ -113,6 +111,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
             CeremonyFailureReason<KeygenFailureReason>,
         ),
     >;
+
     async fn sign(
         &self,
         ceremony_id: CeremonyId,
@@ -126,6 +125,8 @@ pub trait MultisigClientApi<C: CryptoScheme> {
             CeremonyFailureReason<SigningFailureReason>,
         ),
     >;
+
+    fn not_participating_ceremony(&self, ceremony_id: CeremonyId);
 }
 
 // This is constructed by hand since mockall
@@ -160,40 +161,50 @@ pub mod mocks {
                 _signers: Vec<AccountId>,
                 _data: MessageHash,
             ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, CeremonyFailureReason<SigningFailureReason>)>;
+            fn not_participating_ceremony(&self, ceremony_id: CeremonyId);
         }
     }
 }
 
-type KeygenRequestSender<P> = UnboundedSender<(
-    CeremonyId,
-    Vec<AccountId>,
-    Rng,
-    CeremonyResultSender<KeygenResultInfo<P>, KeygenFailureReason>,
-)>;
+/// The ceremony details are optional to alow the updating of the ceremony id tracking
+/// when we are not participating in the ceremony.
+pub struct CeremonyRequest<C: CryptoScheme> {
+    pub ceremony_id: CeremonyId,
+    pub details: Option<CeremonyRequestDetails<C>>,
+}
+pub enum CeremonyRequestDetails<C>
+where
+    C: CryptoScheme,
+{
+    Keygen(KeygenRequestDetails<<C as CryptoScheme>::Point>),
+    Sign(SigningRequestDetails<C>),
+}
 
-type SigningRequestSender<C> = UnboundedSender<(
-    CeremonyId,
-    Vec<AccountId>,
-    MessageHash,
-    KeygenResultInfo<<C as CryptoScheme>::Point>,
-    Rng,
-    CeremonyResultSender<<C as CryptoScheme>::Signature, SigningFailureReason>,
-)>;
+pub struct KeygenRequestDetails<P: ECPoint> {
+    pub participants: Vec<AccountId>,
+    pub rng: Rng,
+    pub result_sender: CeremonyResultSender<KeygenResultInfo<P>, KeygenFailureReason>,
+}
+
+pub struct SigningRequestDetails<C>
+where
+    C: CryptoScheme,
+{
+    pub participants: Vec<AccountId>,
+    pub data: MessageHash,
+    pub keygen_result_info: KeygenResultInfo<<C as CryptoScheme>::Point>,
+    pub rng: Rng,
+    pub result_sender: CeremonyResultSender<<C as CryptoScheme>::Signature, SigningFailureReason>,
+}
 
 /// Multisig client acts as the frontend for the multisig functionality, delegating
 /// the actual signing to "Ceremony Manager". It is additionally responsible for
 /// persistently storing generated keys and providing them to the signing ceremonies.
 pub struct MultisigClient<C: CryptoScheme> {
     my_account_id: AccountId,
-    keygen_request_sender: KeygenRequestSender<C::Point>,
-    signing_request_sender: SigningRequestSender<C>,
+    ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
     key_store: std::sync::Mutex<KeyStore<C>>,
     logger: slog::Logger,
-}
-
-enum RequestStatus<Output, FailureReason> {
-    Ready(Output),
-    WaitForOneshot(CeremonyResultReceiver<Output, FailureReason>),
 }
 
 impl<C> MultisigClient<C>
@@ -203,15 +214,13 @@ where
     pub fn new(
         my_account_id: AccountId,
         key_store: KeyStore<C>,
-        keygen_request_sender: KeygenRequestSender<C::Point>,
-        signing_request_sender: SigningRequestSender<C>,
+        ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClient {
             my_account_id,
             key_store: std::sync::Mutex::new(key_store),
-            keygen_request_sender,
-            signing_request_sender,
+            ceremony_request_sender,
             logger: logger.clone(),
         }
     }
@@ -246,24 +255,24 @@ where
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
 
-        let request_status = if participants.len() == 1 {
-            RequestStatus::Ready(self.single_party_keygen(rng))
-        } else {
-            let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
-            self.keygen_request_sender
-                .send((ceremony_id, participants, rng, result_sender))
-                .ok()
-                .unwrap();
-            RequestStatus::WaitForOneshot(result_receiver)
-        };
+        let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+        self.ceremony_request_sender
+            .send(CeremonyRequest {
+                ceremony_id,
+                details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
+                    participants,
+                    rng,
+                    result_sender,
+                })),
+            })
+            .ok()
+            .expect("Should send keygen request");
 
         async move {
-            let result = match request_status {
-                RequestStatus::Ready(keygen_result_info) => Ok(keygen_result_info),
-                RequestStatus::WaitForOneshot(result_receiver) => result_receiver
-                    .await
-                    .expect("Keygen result channel dropped before receiving a result"),
-            };
+            // Wait for the request to return a result, then log and return the result
+            let result = result_receiver
+                .await
+                .expect("Keygen result channel dropped before receiving a result");
 
             match result {
                 Ok(keygen_result_info) => {
@@ -321,6 +330,7 @@ where
         use rand_legacy::FromEntropy;
         let rng = Rng::from_entropy();
 
+        // Find the correct key and send the request to sign with that key
         let request = self
             .key_store
             .lock()
@@ -328,78 +338,49 @@ where
             .get_key(&key_id)
             .cloned()
             .map(|keygen_result_info| {
-                if signers.len() == 1 {
-                    RequestStatus::Ready(self.single_party_signing(data, keygen_result_info, rng))
-                } else {
-                    let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
-                    self.signing_request_sender
-                        .send((
-                            ceremony_id,
-                            signers,
+                let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+                self.ceremony_request_sender
+                    .send(CeremonyRequest {
+                        ceremony_id,
+                        details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
+                            participants: signers,
                             data,
                             keygen_result_info,
                             rng,
                             result_sender,
-                        ))
-                        .unwrap();
-                    RequestStatus::WaitForOneshot(result_receiver)
-                }
+                        })),
+                    })
+                    .ok()
+                    .expect("Should send signing request");
+                result_receiver
             });
 
         Box::pin(async move {
-            let result = match request {
-                Some(RequestStatus::Ready(signature)) => Ok(signature),
-                Some(RequestStatus::WaitForOneshot(result_receiver)) => result_receiver
+            // Wait for the request to return a result, then log and return the result
+            if let Some(result_receiver) = request {
+                let result = result_receiver
                     .await
-                    .expect("Signing result oneshot channel dropped before receiving a result"),
-                None => {
-                    // No key was found for the given key_id
-                    Err((
-                        BTreeSet::new(),
-                        CeremonyFailureReason::Other(SigningFailureReason::UnknownKey),
-                    ))
-                }
-            };
+                    .expect("Signing result oneshot channel dropped before receiving a result");
 
-            result.map_err(|(reported_parties, failure_reason)| {
+                result.map_err(|(reported_parties, failure_reason)| {
+                    failure_reason.log(
+                        &reported_parties,
+                        &self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+                    );
+
+                    (reported_parties, failure_reason)
+                })
+            } else {
+                // No key was found for the given key_id
+                let reported_parties = BTreeSet::new();
+                let failure_reason = CeremonyFailureReason::Other(SigningFailureReason::UnknownKey);
                 failure_reason.log(
                     &reported_parties,
                     &self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
                 );
-
-                (reported_parties, failure_reason)
-            })
+                Err((reported_parties, failure_reason))
+            }
         })
-    }
-
-    fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
-        slog::info!(self.logger, "Performing solo keygen");
-
-        let (_key_id, key_data) =
-            keygen::generate_key_data_until_compatible(&[self.my_account_id.clone()], 30, rng);
-        key_data[&self.my_account_id].clone()
-    }
-
-    fn single_party_signing(
-        &self,
-        data: MessageHash,
-        keygen_result_info: KeygenResultInfo<C::Point>,
-        mut rng: Rng,
-    ) -> C::Signature {
-        use crate::multisig::crypto::ECScalar;
-
-        slog::info!(self.logger, "Performing solo signing");
-
-        let key = &keygen_result_info.key.key_share;
-
-        let nonce = <C::Point as ECPoint>::Scalar::random(&mut rng);
-
-        let r = C::Point::from_scalar(&nonce);
-
-        let sigma =
-            signing::frost::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
-
-        C::build_signature(sigma, r)
     }
 }
 
@@ -434,5 +415,16 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
     > {
         self.initiate_signing(ceremony_id, key_id, signers, data)
             .await
+    }
+
+    /// If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
+    fn not_participating_ceremony(&self, ceremony_id: CeremonyId) {
+        self.ceremony_request_sender
+            .send(CeremonyRequest {
+                ceremony_id,
+                details: None,
+            })
+            .ok()
+            .expect("Should send ceremony request");
     }
 }

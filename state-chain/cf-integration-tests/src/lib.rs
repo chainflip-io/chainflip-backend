@@ -809,7 +809,7 @@ mod tests {
 
 					assert!(
 						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
-						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						"Expected RotationPhase::Idle, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
 
@@ -818,7 +818,7 @@ mod tests {
 
 					assert!(
 						matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
-						"Expected RotationPhase::VaultsRotating, got: {:?}.",
+						"Expected RotationPhase::Idle, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
 

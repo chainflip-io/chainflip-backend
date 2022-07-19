@@ -2,14 +2,16 @@ use std::time::Duration;
 
 pub use state_chain_runtime::constants::common::eth::BLOCK_SAFETY_MARGIN as ETH_BLOCK_SAFETY_MARGIN;
 
+/// The number of ceremonies ahead of the latest authorized ceremony that
+/// are allowed to create unauthorized ceremonies (delayed messages)
+pub const CEREMONY_ID_WINDOW: u64 = 6000;
+
 // ======= State chain client =======
 
 /// Number of times to retry after incrementing the nonce on a nonce error
 pub const MAX_EXTRINSIC_RETRY_ATTEMPTS: usize = 10;
 
 // ======= Eth Rpc Client =======
-/// Duration before the attempt to connect to the ethereum node times out
-pub const ETH_NODE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Duration before we give up waiting on a response for a web3 request
 pub const ETH_LOG_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);

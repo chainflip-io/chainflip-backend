@@ -10,7 +10,6 @@ mod mock;
 mod tests;
 
 pub mod weights;
-
 pub use weights::WeightInfo;
 
 mod backup_triage;
@@ -21,11 +20,11 @@ mod rotation_status;
 
 pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BidderProvider,
-	Bonding, Chainflip, ChainflipAccount, ChainflipAccountData, ChainflipAccountStore,
-	EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
-	SystemStateInfo, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BackupNodes,
+	BidderProvider, Bonding, Chainflip, ChainflipAccount, ChainflipAccountData,
+	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
+	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
+	StakeHandler, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -147,9 +146,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// Benchmark stuff
-		type ValidatorWeightInfo: WeightInfo;
-
 		/// Resolves auctions.
 		type Auctioneer: Auctioneer<Self>;
 
@@ -190,6 +186,9 @@ pub mod pallet {
 
 		/// This is used to reset the validator's reputation
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
+
+		/// Benchmark weights.
+		type ValidatorWeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -247,6 +246,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
+			let mut weight = 0;
 
 			// Check expiry of epoch and store last expired
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
@@ -269,40 +269,63 @@ pub mod pallet {
 				}
 			}
 
-			match CurrentRotationPhase::<T>::get() {
+			// Progress the authority rotation if necessary.
+			weight += match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
 						BlocksPerEpoch::<T>::get()
 					{
-						Self::start_authority_rotation();
+						Self::start_authority_rotation()
+					} else {
+						T::ValidatorWeightInfo::rotation_phase_idle()
 					}
 				},
-				RotationPhase::VaultsRotating(mut rotation_status) =>
+				RotationPhase::VaultsRotating(mut rotation_status) => {
 					match T::VaultRotator::get_vault_rotation_outcome() {
 						AsyncResult::Ready(Ok(_)) => {
+							let weight =
+								T::ValidatorWeightInfo::rotation_phase_vaults_rotating_success(
+									rotation_status.num_primary_candidates(),
+								);
 							Self::set_rotation_phase(RotationPhase::VaultsRotated(rotation_status));
+							weight
 						},
 						AsyncResult::Ready(Err(offenders)) => {
+							let weight =
+								T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
+									offenders.len() as u32,
+								);
 							rotation_status.ban(offenders);
 							Self::start_vault_rotation(rotation_status);
+							weight
 						},
 						AsyncResult::Void => {
 							debug_assert!(false, "Void state should be unreachable.");
 							log::error!(target: "cf-validator", "no vault rotation pending");
 							Self::set_rotation_phase(RotationPhase::Idle);
+							// Use the weight of the pending phase.
+							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
+								rotation_status.num_primary_candidates(),
+							)
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
+							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
+								rotation_status.num_primary_candidates(),
+							)
 						},
-					},
-				RotationPhase::VaultsRotated(rotation_status) => {
-					Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
+					}
 				},
-				RotationPhase::SessionRotating(_) => {
-					Self::set_rotation_phase(RotationPhase::Idle);
-				},
-			}
-			0
+				RotationPhase::VaultsRotated(rotation_status) =>
+					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
+						rotation_status.num_primary_candidates(),
+					),
+				RotationPhase::SessionRotating(rotation_status) =>
+					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
+						rotation_status.num_primary_candidates(),
+					),
+			};
+			weight
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -397,7 +420,14 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [RotationInProgress](Error::RotationInProgress)
-		#[pallet::weight(T::ValidatorWeightInfo::force_rotation())]
+		///
+		/// ## Weight
+		///
+		/// The weight is related to the number of bidders. Getting that number is quite expensive
+		/// so we use 2 * authority_count as an approximation.
+		#[pallet::weight(T::ValidatorWeightInfo::start_authority_rotation(
+			<Pallet<T> as EpochInfo>::current_authority_count() * 2
+		))]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
@@ -463,8 +493,11 @@ pub mod pallet {
 
 			let account_id = ensure_signed(origin)?;
 
-			// Note this signature verify doesn't need replay protection as you need the
+			// Note: This signature verify doesn't need replay protection as you need the
 			// account_id's private key to pass the above ensure_signed which has replay protection.
+			// Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys, so we rely on
+			// the RuntimePublic::verify call below to do that (which internally uses
+			// ed25519_dalek::PublicKey::from_bytes to do it).
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
@@ -892,8 +925,15 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Starting a new epoch we update the storage, emit the event and call
-	/// `EpochTransitionHandler::on_new_epoch`
+	/// Makes the transition to the next epoch.
+	///
+	/// Among other things, updates the authority, backup and passive sets.
+	///
+	/// Also triggers [T::EpochTransitionHandler::on_new_epoch] which may call into other pallets.
+	///
+	/// Note this function is not benchmarked - it is only ever triggered via the session pallet,
+	/// which at the time of writing uses `T::BlockWeights::get().max_block` ie. it implicitly fills
+	/// the block.
 	fn transition_to_next_epoch(rotation_status: RuntimeRotationStatus<T>) {
 		log::debug!(target: "cf-validator", "Starting new epoch");
 
@@ -1010,13 +1050,13 @@ impl<T: Config> Pallet<T> {
 		Percent::from_percent(backup_node_percentage) * num_authorities
 	}
 
-	fn start_authority_rotation() {
+	fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
 			log::info!(
 				target: "cf-validator",
 				"Can't start rotation. System is in maintenance mode."
 			);
-			return
+			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 		match T::Auctioneer::resolve_auction() {
@@ -1037,12 +1077,27 @@ impl<T: Config> Pallet<T> {
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
 						10u128.pow(18),
 				);
+
+				// Without reading the full list of bidders we can't know the real number.
+				// Use the winners and losers as an approximation.
+				let weight = T::ValidatorWeightInfo::start_authority_rotation(
+					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
+				);
+
 				Self::start_vault_rotation(RotationStatus::from_auction_outcome::<T>(
 					auction_outcome,
 				));
+
+				weight
 			},
-			Err(e) =>
-				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into()),
+			Err(e) => {
+				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
+				// Use an approximation again - see comment above.
+				T::ValidatorWeightInfo::start_authority_rotation(
+					Self::current_authority_count() +
+						<Self as BackupNodes>::backup_nodes().len() as u32,
+				)
+			},
 		}
 	}
 
@@ -1124,8 +1179,15 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	/// activates the queued validators.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
-			RotationPhase::VaultsRotated(rotation_status) =>
-				Some(rotation_status.authority_candidates()),
+			RotationPhase::VaultsRotated(rotation_status) => {
+				let next_authorities = rotation_status.authority_candidates();
+				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_status));
+				Some(next_authorities)
+			},
+			RotationPhase::SessionRotating(_) => {
+				Self::set_rotation_phase(RotationPhase::Idle);
+				None
+			},
 			_ => None,
 		}
 	}

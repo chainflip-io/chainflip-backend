@@ -23,6 +23,8 @@ use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 
+use crate::multisig::eth::EthSigning;
+
 #[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
     let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
@@ -150,7 +152,12 @@ fn main() -> anyhow::Result<()> {
             let key_manager_contract =
                 KeyManager::new(key_manager_address.into());
 
-            use crate::multisig::eth::EthSigning;
+            let latest_ceremony_id = state_chain_client
+            .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
+                latest_block_hash,
+            )
+            .await
+            .context("Failed to get CeremonyIdCounter from SC")?;
 
             let db = Arc::new(
                 PersistentKeyDB::new_and_migrate_to_latest(
@@ -186,6 +193,7 @@ fn main() -> anyhow::Result<()> {
                     KeyStore::new(db),
                     eth_incoming_receiver,
                     eth_outgoing_sender,
+                    latest_ceremony_id,
                     &root_logger,
                 );
             scope.spawn(

@@ -10,7 +10,10 @@ use crate::{
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
-use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+use super::{
+    ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult},
+    BroadcastStageName,
+};
 
 pub use super::broadcast_verification::verify_broadcasts;
 
@@ -29,6 +32,10 @@ pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     /// The specific variant of D shared between parties
     /// during this stage
     type Message: Clone + Into<Data> + TryFrom<Data>;
+
+    /// Broadcast Stage Name used for logging.
+    /// A broadcast and its verification will share the same name.
+    const NAME: BroadcastStageName;
 
     /// Init the stage, returning the data to broadcast
     fn init(&mut self) -> DataToSend<Self::Message>;

@@ -307,13 +307,13 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 	)
 }
 
-/// Build the chainspec for Soundcheck public testnet.
-pub fn chainflip_soundcheck_config() -> Result<ChainSpec, String> {
+/// Build the chainspec for Paradise public testnet.
+pub fn chainflip_paradise_config() -> Result<ChainSpec, String> {
 	chainflip_three_node_testnet_config_from_env(
-		"Chainflip Soundcheck",
-		"soundcheck",
+		"Chainflip Paradise",
+		"paradise",
 		ChainType::Live,
-		network_env::SOUNDCHECK,
+		network_env::PARADISE,
 	)
 }
 

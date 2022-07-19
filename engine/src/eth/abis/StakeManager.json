@@ -76,6 +76,32 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "bool",
+        "name": "communityGuardDisabled",
+        "type": "bool"
+      }
+    ],
+    "name": "CommunityGuardDisabled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "flip",
+        "type": "address"
+      }
+    ],
+    "name": "FLIPSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "address",
         "name": "to",
         "type": "address"
@@ -141,6 +167,32 @@
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "suspended",
+        "type": "bool"
+      }
+    ],
+    "name": "Suspended",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "keyManager",
+        "type": "address"
+      }
+    ],
+    "name": "UpdatedKeyManager",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "CLAIM_DELAY",
     "outputs": [
@@ -151,6 +203,20 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "disableCommunityGuard",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "enableCommunityGuard",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -168,10 +234,49 @@
   },
   {
     "inputs": [],
+    "name": "getCommunityGuardDisabled",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCommunityKey",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getFLIP",
     "outputs": [
       {
         "internalType": "contract IFLIP",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getGovernor",
+    "outputs": [
+      {
+        "internalType": "address",
         "name": "",
         "type": "address"
       }
@@ -248,7 +353,27 @@
   },
   {
     "inputs": [],
+    "name": "getSuspendedState",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "govWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "govWithdrawEth",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -284,7 +409,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
@@ -328,7 +453,7 @@
   {
     "inputs": [
       {
-        "internalType": "contract FLIP",
+        "internalType": "contract IFLIP",
         "name": "flip",
         "type": "address"
       }
@@ -382,19 +507,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "suspended",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "components": [
@@ -425,7 +537,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],

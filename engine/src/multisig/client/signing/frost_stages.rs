@@ -67,6 +67,7 @@ impl<C: CryptoScheme>
     for AwaitCommitments1<C>
 {
     type Message = Comm1<C::Point>;
+    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
@@ -115,6 +116,7 @@ impl<C: CryptoScheme>
     for VerifyCommitmentsBroadcast2<C>
 {
     type Message = VerifyComm2<C::Point>;
+    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
 
     /// Simply report all data that we have received from
     /// other parties in the last stage
@@ -136,10 +138,7 @@ impl<C: CryptoScheme>
             Err((reported_parties, abort_reason)) => {
                 return SigningStageResult::<C>::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        BroadcastStageName::CoefficientCommitments,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
@@ -147,7 +146,7 @@ impl<C: CryptoScheme>
         slog::debug!(
             self.common.logger,
             "{} have been correctly broadcast",
-            BroadcastStageName::CoefficientCommitments
+            Self::NAME
         );
 
         let processor = LocalSigStage3::<C> {
@@ -180,6 +179,7 @@ impl<C: CryptoScheme>
     for LocalSigStage3<C>
 {
     type Message = LocalSig3<C::Point>;
+    const NAME: BroadcastStageName = BroadcastStageName::LocalSignatures;
 
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
@@ -240,6 +240,7 @@ impl<C: CryptoScheme>
     for VerifyLocalSigsBroadcastStage4<C>
 {
     type Message = VerifyLocalSig4<C::Point>;
+    const NAME: BroadcastStageName = BroadcastStageName::LocalSignatures;
 
     /// Broadcast all signature shares sent to us
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -264,10 +265,7 @@ impl<C: CryptoScheme>
             Err((reported_parties, abort_reason)) => {
                 return SigningStageResult::<C>::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        BroadcastStageName::LocalSignatures,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
@@ -275,7 +273,7 @@ impl<C: CryptoScheme>
         slog::debug!(
             self.common.logger,
             "{} have been correctly broadcast",
-            BroadcastStageName::LocalSignatures
+            Self::NAME
         );
 
         let all_idxs = &self.common.all_idxs;
