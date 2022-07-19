@@ -70,20 +70,12 @@ pub mod pallet {
 
 		type ApiCalls: SetGovKeyApiCall<Self::Chain> + SetCommunityKeyApiCall<Self::Chain>;
 
-		// type SetGovKeyApiCall: SetGovKeyApiCall<Self::Chain>;
-
-		// type SetCommunityKeyApiCall: SetCommunityKeyApiCall<Self::Chain>;
-
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
 		>;
-
-		// type GovKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetGovKeyApiCall>;
-
-		// type CommKeyBroadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetCommunityKeyApiCall>;
 
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCalls>;
 

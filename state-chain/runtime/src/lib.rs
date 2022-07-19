@@ -397,12 +397,8 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type Chain = Ethereum;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type StakingInfo = Flip;
-	// type SetGovKeyApiCall = eth::api::EthereumApi;
-	// type SetCommunityKeyApiCall = eth::api::EthereumApi;
 	type ApiCalls = eth::api::EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
-	// type GovKeyBroadcaster = EthereumBroadcaster;
-	// type CommKeyBroadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 }
 
