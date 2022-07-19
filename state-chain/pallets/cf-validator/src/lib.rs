@@ -957,15 +957,19 @@ impl<T: Config> Pallet<T> {
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
 
-		let backup_map: BackupMap<T> = T::BidderProvider::get_bidders()
-			.into_iter()
-			.filter(|bid| {
-				!new_authorities_lookup.contains(&bid.bidder_id) &&
-					T::ValidatorQualification::is_qualified(&bid.bidder_id)
-			})
-			.map(|Bid { bidder_id, amount }| (bidder_id, amount))
-			.collect();
-		Self::initialise_new_epoch(new_epoch, &new_authorities, rotation_state.bond, backup_map);
+		Self::initialise_new_epoch(
+			new_epoch,
+			&new_authorities,
+			rotation_state.bond,
+			T::BidderProvider::get_bidders()
+				.into_iter()
+				.filter(|bid| {
+					!new_authorities_lookup.contains(&bid.bidder_id) &&
+						T::ValidatorQualification::is_qualified(&bid.bidder_id)
+				})
+				.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+				.collect(),
+		);
 
 		// Trigger the new epoch handlers on other pallets.
 		T::EpochTransitionHandler::on_new_epoch(&new_authorities);

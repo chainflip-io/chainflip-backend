@@ -33,16 +33,8 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 	{
 		let authorities = Pallet::<T>::current_authorities().into_iter().collect::<BTreeSet<_>>();
 
-		let backup_node_percentage = BackupNodePercentage::<T>::get();
-
-		let num_backup_nodes = (authorities.len() * backup_node_percentage as usize) / 100;
-
-		// Limit the number of secondary candidates according to the size of the backup_percentage
-		// and the fracction of that, which can be secondary candidates
-		let max_secondary_candidates = num_backup_nodes / (SECONDARY_CANDIDATE_FRACTION);
-
-		// only the highest staked nodes are eligible
-		let eligible_backups = Pallet::<T>::highest_staked_backup_nodes(num_backup_nodes);
+		let num_backup_nodes =
+			(authorities.len() * BackupNodePercentage::<T>::get() as usize) / 100;
 
 		Self::new(
 			auction_outcome.winners,
@@ -52,13 +44,18 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				// We only allow current authorities or backup validators to be secondary
 				// candidates.
 				.filter_map(|Bid { bidder_id, .. }| {
-					if eligible_backups.contains(&bidder_id) || authorities.contains(&bidder_id) {
+					// only the highest staked backups are eligible
+					if Pallet::<T>::highest_staked_backup_nodes(num_backup_nodes)
+						.contains(&bidder_id) || authorities.contains(&bidder_id)
+					{
 						Some(bidder_id)
 					} else {
 						None
 					}
 				})
-				.take(max_secondary_candidates)
+				// Limit the number of secondary candidates according to the size of the
+				// backup_percentage and the fracction of that, which can be secondary candidates
+				.take(num_backup_nodes / SECONDARY_CANDIDATE_FRACTION)
 				.collect(),
 			auction_outcome.bond,
 		)
