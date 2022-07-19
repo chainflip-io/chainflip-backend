@@ -22,9 +22,6 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 	{
 		let authorities = Pallet::<T>::current_authorities().into_iter().collect::<BTreeSet<_>>();
 
-		let num_backup_nodes =
-			(authorities.len() * BackupNodePercentage::<T>::get() as usize) / 100;
-
 		RotationState {
 			primary_candidates: winners,
 			secondary_candidates: losers
@@ -33,8 +30,8 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				// candidates.
 				.filter_map(|Bid { bidder_id, .. }| {
 					// only the highest staked backups are eligible
-					if Pallet::<T>::highest_staked_backup_nodes(num_backup_nodes)
-						.contains(&bidder_id) || authorities.contains(&bidder_id)
+					if Pallet::<T>::highest_staked_backup_nodes().contains(&bidder_id) ||
+						authorities.contains(&bidder_id)
 					{
 						Some(bidder_id)
 					} else {
@@ -43,7 +40,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				})
 				// Limit the number of secondary candidates according to the size of the
 				// backup_percentage and the fracction of that, which can be secondary candidates
-				.take(num_backup_nodes / SECONDARY_CANDIDATE_FRACTION)
+				.take(Pallet::<T>::n_backup_nodes() / SECONDARY_CANDIDATE_FRACTION)
 				.collect(),
 			banned: Default::default(),
 			bond,

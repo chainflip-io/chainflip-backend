@@ -1014,7 +1014,6 @@ impl<T: Config> Pallet<T> {
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
-		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		// We've got new validators, which means the backups may have changed.
@@ -1107,7 +1106,7 @@ impl<T: Config> Pallet<T> {
 			Self::current_authority_count() as usize
 	}
 
-	pub fn highest_staked_backup_nodes(n: usize) -> Vec<ValidatorIdOf<T>> {
+	pub fn highest_staked_backup_nodes() -> Vec<ValidatorIdOf<T>> {
 		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
 			BackupValidatorTriage::<T>::get()
 				.into_iter()
@@ -1116,7 +1115,11 @@ impl<T: Config> Pallet<T> {
 
 		backups_by_desc_amount.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
 
-		backups_by_desc_amount.into_iter().take(n).map(|bid| bid.bidder_id).collect()
+		backups_by_desc_amount
+			.into_iter()
+			.take(Self::n_backup_nodes())
+			.map(|bid| bid.bidder_id)
+			.collect()
 	}
 
 	fn punish_missed_authorship_slots() -> Weight {
