@@ -598,16 +598,6 @@ fn test_reputation_reset() {
 	});
 }
 
-#[test]
-fn backup_set_size_calculation() {
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 20u8), 30);
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 33u8), 49);
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 34u8), 51);
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 0u8), 0);
-	// Saturates at 100%.
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 200u8), 150);
-}
-
 #[cfg(test)]
 mod bond_expiry {
 	use super::*;
