@@ -100,8 +100,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub type Proposals<T: Config> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal<T>>;
+	pub type Proposals<T: Config> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal<T>>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
@@ -150,20 +149,24 @@ pub mod pallet {
 			}
 			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
 				if gov_key.0 == n {
-					T::Broadcaster::threshold_sign_and_broadcast(<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
-						T::ReplayProtectionProvider::replay_protection(),
-						gov_key.1,
-					));
+					T::Broadcaster::threshold_sign_and_broadcast(
+						<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
+							T::ReplayProtectionProvider::replay_protection(),
+							gov_key.1,
+						),
+					);
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
 			}
 			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if comm_key.0 == n {
-					T::Broadcaster::threshold_sign_and_broadcast(<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
-						T::ReplayProtectionProvider::replay_protection(),
-						comm_key.1,
-					));
+					T::Broadcaster::threshold_sign_and_broadcast(
+						<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
+							T::ReplayProtectionProvider::replay_protection(),
+							comm_key.1,
+						),
+					);
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}

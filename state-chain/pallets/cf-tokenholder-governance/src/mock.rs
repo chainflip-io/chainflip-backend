@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{
-	eth::api::{EthereumReplayProtection}, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
+	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
 };
 use cf_traits::{
 	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo},
@@ -17,8 +17,7 @@ use sp_runtime::{
 	BuildStorage, DispatchError,
 };
 
-use cf_chains::SetGovKeyWithAggKey;
-use cf_chains::SetCommKeyWithAggKey;
+use cf_chains::{SetCommKeyWithAggKey, SetGovKeyWithAggKey};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
