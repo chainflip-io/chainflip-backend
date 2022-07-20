@@ -62,7 +62,7 @@ tag = 'chainflip-monthly-2022-05'
 
 # Dev dependencies
 [dev-dependencies]
-hex-literal = { version = "0.3" }
+hex-literal = { version = '0.3' }
 
 [dev-dependencies.sp-core]
 default-features = false

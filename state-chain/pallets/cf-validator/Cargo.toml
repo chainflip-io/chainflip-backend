@@ -81,7 +81,7 @@ tag = 'chainflip-monthly-2022-05'
 # Dev dependencies
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities' }
-simple_logger = "2.1.0"
+simple_logger = '2.1.0'
 
 [dev-dependencies.sp-io]
 default-features = false
