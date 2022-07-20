@@ -1,5 +1,5 @@
 [package]
-name = "cf-session-benchmarking"
+name = 'cf-session-benchmarking'
 version = '0.1.0'
 description = 'Chainflip session pallet benchmark'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
@@ -10,10 +10,10 @@ publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 
 [package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
+targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
-rand = { version = "0.7.2", default-features = false }
+rand = { version = '0.7.2', default-features = false }
 
 [dependencies.pallet-session]
 default-features = false
@@ -47,12 +47,12 @@ git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
 [features]
-default = ["std"]
+default = ['std']
 std = [
-  "sp-std/std",
-  "frame-benchmarking/std",
-  "frame-support/std",
-  "frame-system/std",
-  "pallet-session/std",
-  "sp-runtime/std",
+  'sp-std/std',
+  'frame-benchmarking/std',
+  'frame-support/std',
+  'frame-system/std',
+  'pallet-session/std',
+  'sp-runtime/std',
 ]

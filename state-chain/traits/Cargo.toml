@@ -1,13 +1,13 @@
 [package]
-name = "cf-traits"
-version = "0.1.0"
+name = 'cf-traits'
+version = '0.1.0'
 edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
-description = "Common traits used in the Chainflip runtime"
+description = 'Common traits used in the Chainflip runtime'
 
 [dependencies]
 log = { version = '0.4.14', default-features = false }
-serde = { optional = true, version = "1.0.126", features = ['derive'] }
+serde = { optional = true, version = '1.0.126', features = ['derive'] }
 
 # Internal
 cf-chains = { path ='../chains', default-features = false }

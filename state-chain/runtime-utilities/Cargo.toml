@@ -1,13 +1,13 @@
 [package]
-name = "cf-runtime-utilities"
-version = "0.1.0"
+name = 'cf-runtime-utilities'
+version = '0.1.0'
 edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
-description = "Utilities for interacting with substrate runtimes."
+description = 'Utilities for interacting with substrate runtimes.'
 
 [dependencies]
 log = { version = '0.4.14', default-features = false }
-cf-runtime-macros = { path = "./macros", optional = true, default-features = false }
+cf-runtime-macros = { path = './macros', optional = true, default-features = false }
 
 [dependencies.codec]
 default-features = false
