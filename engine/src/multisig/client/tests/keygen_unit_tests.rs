@@ -766,42 +766,6 @@ async fn should_handle_not_compatible_keygen() {
     }
 }
 
-#[tokio::test]
-async fn should_not_consume_ceremony_id_if_unauthorised() {
-    let mut ceremony = KeygenCeremonyRunner::new_with_default();
-
-    {
-        let [test_id, sender_id] = ceremony.select_account_ids();
-
-        assert_eq!(
-            ceremony.nodes[&test_id]
-                .ceremony_manager
-                .get_keygen_states_len(),
-            0
-        );
-
-        // Receive initial stage message with the default keygen ceremony id
-        ceremony.distribute_message(
-            &sender_id,
-            &test_id,
-            get_invalid_hash_comm(&mut Rng::from_entropy()),
-        );
-
-        // Check that the unauthorised ceremony was created
-        assert_eq!(
-            ceremony.nodes[&test_id]
-                .ceremony_manager
-                .get_keygen_states_len(),
-            1
-        );
-
-        // Timeout the unauthorised ceremony
-        ceremony.get_mut_node(&test_id).force_stage_timeout();
-    }
-
-    standard_keygen(ceremony).await;
-}
-
 mod timeout {
 
     use super::*;

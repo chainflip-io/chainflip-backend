@@ -290,47 +290,6 @@ async fn should_ignore_unexpected_message_for_stage() {
 }
 
 #[tokio::test]
-async fn should_not_consume_ceremony_id_if_unauthorised() {
-    let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
-
-    let [node_0_id, node_1_id] = signing_ceremony.select_account_ids();
-
-    // Receive initial stage messages for an unauthorised signing_ceremony
-    let message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
-    signing_ceremony.distribute_message(&node_1_id, &node_0_id, message);
-
-    // Check the unauthorised ceremony was created
-    assert_eq!(
-        signing_ceremony
-            .nodes
-            .get(&node_0_id)
-            .unwrap()
-            .ceremony_manager
-            .get_signing_states_len(),
-        1
-    );
-
-    // Timeout the unauthorised ceremony
-    signing_ceremony
-        .get_mut_node(&node_0_id)
-        .force_stage_timeout();
-
-    // Do a signing ceremony as normal, using the default signing_ceremony
-    let (messages, result_receivers) = signing_ceremony.request().await;
-    let messages = run_stages!(
-        signing_ceremony,
-        messages,
-        VerifyComm2,
-        LocalSig3,
-        VerifyLocalSig4
-    );
-    signing_ceremony.distribute_messages(messages);
-
-    // completes successfully, because the ceremony_id was not consumed prior
-    signing_ceremony.complete(result_receivers).await;
-}
-
-#[tokio::test]
 async fn should_sign_with_all_parties() {
     let (key_id, key_data, _messages, nodes) =
         run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
