@@ -43,88 +43,112 @@ type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 
 #[rpc]
 /// The custom RPC endoints for the state chain node.
-pub trait CustomApi<BlockHash> {
+pub trait CustomApi {
 	/// Returns true if the current phase is the auction phase.
 	#[rpc(name = "cf_is_auction_phase")]
-	fn cf_is_auction_phase(&self, at: Option<BlockHash>) -> Result<bool, jsonrpc_core::Error>;
+	fn cf_is_auction_phase(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<bool, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_key_manager_address")]
 	fn cf_eth_key_manager_address(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_stake_manager_address")]
 	fn cf_eth_stake_manager_address(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_flip_token_address")]
 	fn cf_eth_flip_token_address(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<String, jsonrpc_core::Error>;
 	#[rpc(name = "cf_eth_chain_id")]
-	fn cf_eth_chain_id(&self, at: Option<BlockHash>) -> Result<u64, jsonrpc_core::Error>;
+	fn cf_eth_chain_id(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<u64, jsonrpc_core::Error>;
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 	#[rpc(name = "cf_eth_vault")]
-	fn cf_eth_vault(&self, at: Option<BlockHash>) -> Result<(String, u32), jsonrpc_core::Error>;
+	fn cf_eth_vault(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<(String, u32), jsonrpc_core::Error>;
 	#[rpc(name = "cf_tx_fee_multiplier")]
-	fn cf_tx_fee_multiplier(&self, at: Option<BlockHash>) -> Result<u64, jsonrpc_core::Error>;
+	fn cf_tx_fee_multiplier(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<u64, jsonrpc_core::Error>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
 	#[rpc(name = "cf_auction_parameters")]
 	fn cf_auction_parameters(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<(u32, u32), jsonrpc_core::Error>;
 	#[rpc(name = "cf_min_stake")]
-	fn cf_min_stake(&self, at: Option<BlockHash>) -> Result<NumberOrHex, jsonrpc_core::Error>;
+	fn cf_min_stake(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch")]
-	fn cf_current_epoch(&self, at: Option<BlockHash>) -> Result<u32, jsonrpc_core::Error>;
+	fn cf_current_epoch(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_epoch_duration")]
-	fn cf_epoch_duration(&self, at: Option<BlockHash>) -> Result<u32, jsonrpc_core::Error>;
+	fn cf_epoch_duration(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_current_epoch_started_at")]
 	fn cf_current_epoch_started_at(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<u32, jsonrpc_core::Error>;
 	#[rpc(name = "cf_authority_emission_per_block")]
 	fn cf_authority_emission_per_block(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_backup_emission_per_block")]
 	fn cf_backup_emission_per_block(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<NumberOrHex, jsonrpc_core::Error>;
 	#[rpc(name = "cf_flip_supply")]
 	fn cf_flip_supply(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
 	#[rpc(name = "cf_accounts")]
 	fn cf_accounts(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error>;
 	#[rpc(name = "cf_account_info")]
 	fn cf_account_info(
 		&self,
 		account_id: AccountId32,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<RpcAccountInfo, jsonrpc_core::Error>;
 	#[rpc(name = "cf_pending_claim")]
 	fn cf_pending_claim(
 		&self,
 		account_id: AccountId32,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error>;
 	#[rpc(name = "cf_penalties")]
 	fn cf_penalties(
 		&self,
-		at: Option<BlockHash>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error>;
 	#[rpc(name = "cf_suspensions")]
-	fn cf_suspensions(&self, at: Option<BlockHash>) -> Result<RpcSuspensions, jsonrpc_core::Error>;
+	fn cf_suspensions(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<RpcSuspensions, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -135,7 +159,7 @@ pub struct CustomRpc<C, B> {
 
 impl<C, B> CustomRpc<C, B>
 where
-	B: sp_runtime::traits::Block,
+	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
@@ -144,9 +168,9 @@ where
 	}
 }
 
-impl<C, B> CustomApi<<B as BlockT>::Hash> for CustomRpc<C, B>
+impl<C, B> CustomApi for CustomRpc<C, B>
 where
-	B: sp_runtime::traits::Block,
+	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: CustomRuntimeApi<B>,
 {

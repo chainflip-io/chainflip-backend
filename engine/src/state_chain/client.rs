@@ -78,7 +78,7 @@ pub struct StateChainRpcClient {
     state_rpc_client: StateRpcClient,
     chain_rpc_client: ChainRpcClient,
     system_rpc_client: SystemRpcClient,
-    custom_rpc_client: CustomClient<state_chain_runtime::Hash>,
+    custom_rpc_client: CustomClient,
 }
 
 /// Wraps the substrate client library methods
@@ -1144,7 +1144,7 @@ pub async fn connect_to_state_chain_without_signer(
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
     let state_rpc_client: StateRpcClient = rpc_client.clone().into();
     let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
-    let custom_rpc_client: CustomClient<state_chain_runtime::Hash> = rpc_client.into();
+    let custom_rpc_client: CustomClient = rpc_client.into();
 
     Ok(StateChainRpcClient {
         system_rpc_client,
