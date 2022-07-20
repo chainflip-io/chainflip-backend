@@ -247,10 +247,7 @@ pub mod pallet {
 
 			// Check expiry of epoch and store last expired.
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				Self::expire_epoch(epoch_index);
-				weight += T::ValidatorWeightInfo::expire_epoch(
-					<Self as EpochInfo>::current_authority_count(),
-				);
+				weight += Self::expire_epoch(epoch_index);
 			}
 
 			weight += Self::punish_missed_authorship_slots();
@@ -978,9 +975,11 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
 
-	fn expire_epoch(epoch: EpochIndex) {
+	fn expire_epoch(epoch: EpochIndex) -> Weight {
 		LastExpiredEpoch::<T>::set(epoch);
+		let mut num_expired_authorities = 0;
 		for authority in EpochHistory::<T>::epoch_authorities(epoch).iter() {
+			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
 				T::ChainflipAccount::from_historical_to_backup_or_passive(authority.into_ref());
@@ -988,6 +987,7 @@ impl<T: Config> Pallet<T> {
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
+		T::ValidatorWeightInfo::expire_epoch(num_expired_authorities)
 	}
 
 	/// Does all state updates related to the *new* epoch. Is also called at genesis to initialise

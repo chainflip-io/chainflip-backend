@@ -208,6 +208,11 @@ benchmarks! {
 			Pallet::<T>::epoch_index(),
 			EPOCH_TO_EXPIRE + 1,
 		);
+		// Ensure that we are expiring the expected number of authorities.
+		assert_eq!(
+			EpochHistory::<T>::epoch_authorities(EPOCH_TO_EXPIRE).len(),
+			a as usize,
+		);
 	}: {
 		Pallet::<T>::expire_epoch(EPOCH_TO_EXPIRE);
 	}
