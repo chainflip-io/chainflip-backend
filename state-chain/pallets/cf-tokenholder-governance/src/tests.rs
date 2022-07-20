@@ -19,7 +19,8 @@ fn update_gov_key_via_onchain_proposal() {
 			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 		));
 		assert!(Proposals::<Test>::contains_key(
-			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get()
+			<frame_system::Pallet<Test>>::block_number() +
+				<mock::Test as Config>::VotingPeriod::get()
 		));
 		// Back the proposal to ensure threshold
 		assert_ok!(TokenholderGovernance::back_proposal(
@@ -32,12 +33,14 @@ fn update_gov_key_via_onchain_proposal() {
 		));
 		// Jump to the block in which we expect the proposal
 		TokenholderGovernance::on_initialize(
-			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get(),
+			<frame_system::Pallet<Test>>::block_number() +
+				<mock::Test as Config>::VotingPeriod::get(),
 		);
 		// Expect the proposal to be moved to the enactment stage
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
 		TokenholderGovernance::on_initialize(
-			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::EnactmentDelay::get(),
+			<frame_system::Pallet<Test>>::block_number() +
+				<mock::Test as Config>::EnactmentDelay::get(),
 		);
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		// TODO: verify the right event has been submitted
@@ -99,7 +102,8 @@ fn not_enough_backed_liquidity() {
 			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 		));
 		TokenholderGovernance::on_initialize(
-			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get(),
+			<frame_system::Pallet<Test>>::block_number() +
+				<mock::Test as Config>::VotingPeriod::get(),
 		);
 		assert!(!Backers::<Test>::contains_key(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());

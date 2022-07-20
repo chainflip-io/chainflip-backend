@@ -403,10 +403,10 @@ impl<T: Config> FeePayment for Pallet<T> {
 		account_id: Self::AccountId,
 		amount: Self::Amount,
 	) -> sp_runtime::DispatchResult {
-		if let None = Pallet::<T>::try_debit(&account_id, amount) {
+		if Pallet::<T>::try_debit(&account_id, amount).is_none() {
 			return Err(Error::<T>::InsufficientLiquidity.into())
 		}
-		Ok(().into())
+		Ok(())
 	}
 }
 
