@@ -760,10 +760,10 @@ pub mod pallet {
 	#[pallet::getter(fn ceremony_id_counter)]
 	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// Backup validator triage state.
+	/// Backups, nodes who are not in the authority set, but are staked
 	#[pallet::storage]
-	#[pallet::getter(fn backup_validator_triage)]
-	pub type BackupValidatorTriage<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
+	#[pallet::getter(fn backups)]
+	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
 
 	// TODO: Rename this
 	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
@@ -1017,7 +1017,7 @@ impl<T: Config> Pallet<T> {
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		// We've got new validators, which means the backups may have changed.
-		BackupValidatorTriage::<T>::put(backup_map);
+		Backups::<T>::put(backup_map);
 	}
 
 	fn set_rotation_phase(new_phase: RotationPhase<T>) {
@@ -1110,7 +1110,7 @@ impl<T: Config> Pallet<T> {
 	// Returns the ids of the highest staked backup nodes, who are eligible for the backup rewards
 	pub fn highest_staked_backup_nodes() -> Vec<ValidatorIdOf<T>> {
 		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
-			BackupValidatorTriage::<T>::get()
+			Backups::<T>::get()
 				.into_iter()
 				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 				.collect();
@@ -1309,7 +1309,7 @@ impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 
 		// TODO: You shouldn't have to be qualified to be removed from the backup list #1849
 		if T::ValidatorQualification::is_qualified(validator_id) {
-			BackupValidatorTriage::<T>::mutate(|backups| {
+			Backups::<T>::mutate(|backups| {
 				if amount.is_zero() {
 					backups.remove(validator_id).expect("This id should exist in the map");
 				} else {
