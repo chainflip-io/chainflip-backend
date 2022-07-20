@@ -64,23 +64,23 @@ rand = {version='0.8.4'}
 [features]
 default = ['std']
 std = [
-    'codec/std',
-    'ethabi/full-serde',
-    'ethereum/std',
-    'frame-support/std',
-    'frame-system/std',
-    'hex/std',
-    'libsecp256k1/std',
-    'log/std',
-    'rlp/std',
-    'serde',
-    'sp-runtime/std',
-    'sp-std/std',
-    'secp256k1'
+  'codec/std',
+  'ethabi/full-serde',
+  'ethereum/std',
+  'frame-support/std',
+  'frame-system/std',
+  'hex/std',
+  'libsecp256k1/std',
+  'log/std',
+  'rlp/std',
+  'serde',
+  'sp-runtime/std',
+  'sp-std/std',
+  'secp256k1'
 ]
 runtime-benchmarks = [
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
-    'hex-literal',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+  'hex-literal',
 ]
 runtime-integration-tests = []

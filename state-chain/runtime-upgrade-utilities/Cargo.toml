@@ -26,8 +26,8 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
-    'frame-support/std',
-    'log/std',
-    'sp-std/std',
+  'frame-support/std',
+  'log/std',
+  'sp-std/std',
 ]
 try-runtime = ['frame-support/try-runtime']

@@ -219,7 +219,7 @@ runtime-benchmarks = [
   'cf-session-benchmarking',
 ]
 std = [
-	"pallet-transaction-payment-rpc-runtime-api/std",
+  "pallet-transaction-payment-rpc-runtime-api/std",
   'cf-chains/std',
   'cf-traits/std',
   'cf-utilities/std',
@@ -249,7 +249,7 @@ std = [
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment/std',
-	'pallet-transaction-payment-rpc-runtime-api/std',
+  'pallet-transaction-payment-rpc-runtime-api/std',
   'scale-info/std',
   'serde',
   'sp-api/std',

@@ -49,10 +49,10 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ["std"]
 std = [
-    "sp-std/std",
-	"frame-benchmarking/std",
-	"frame-support/std",
-	"frame-system/std",
-	"pallet-session/std",
-	"sp-runtime/std",
+  "sp-std/std",
+  "frame-benchmarking/std",
+  "frame-support/std",
+  "frame-system/std",
+  "pallet-session/std",
+  "sp-runtime/std",
 ]

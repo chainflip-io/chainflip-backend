@@ -77,23 +77,24 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
-	'cf-chains/std',
-	'cf-traits/std',
-	'codec/std',
-	'scale-info/std',
-	'frame-support/std',
-	'frame-system/std',
-	'log/std',
-	'sp-std/std',
-	'sp-runtime/std',
+  'cf-chains/std',
+  'cf-traits/std',
+  'codec/std',
+  'scale-info/std',
+  'frame-support/std',
+  'frame-system/std',
+  'frame-benchmarking',
+  'log/std',
+  'sp-std/std',
+  'sp-runtime/std',
 ]
 runtime-benchmarks = [
-	'frame-benchmarking',
-	'frame-support/runtime-benchmarks',
-	'frame-system/runtime-benchmarks',
-	'cf-traits/runtime-benchmarks',
-	'cf-chains/runtime-benchmarks',
-	'pallet-cf-validator',
-	'pallet-cf-reputation',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+  'cf-traits/runtime-benchmarks',
+  'cf-chains/runtime-benchmarks',
+  'pallet-cf-validator',
+  'pallet-cf-reputation',
 ]
 try-runtime = ['frame-support/try-runtime']
