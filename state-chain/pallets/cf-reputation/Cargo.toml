@@ -84,6 +84,7 @@ std = [
   'cf-runtime-upgrade-utilities/std',
   'codec/std',
   'scale-info/std',
+  'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'sp-std/std',
@@ -92,7 +93,7 @@ std = [
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
-  'frame-benchmarking',
+  'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
