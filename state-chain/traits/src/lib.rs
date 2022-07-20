@@ -741,7 +741,7 @@ pub trait FeePayment {
 	type AccountId;
 	/// Helper function to mint FLIP to an account
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(account_id: Self::AccountId, amount: Self::Amount) {
+	fn mint_to_account(_account_id: Self::AccountId, _amount: Self::Amount) {
 		unreachable!()
 	}
 	/// Burns token
