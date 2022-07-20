@@ -187,7 +187,7 @@ impl FeePayment for MockFeePayment {
 			CHARLES if amount > CHARLES_BALANCE => Err(not_enough_funds),
 			EVE if amount > EVE_BALANCE => Err(not_enough_funds),
 			BROKE_PAUL if amount > BROKE_BALANCE => Err(not_enough_funds),
-			_ => Ok(().into()),
+			_ => Ok(()),
 		}
 	}
 }

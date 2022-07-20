@@ -735,6 +735,7 @@ pub trait SystemStateManager {
 	fn activate_maintenance_mode();
 }
 
+/// Handles the burn of fees
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
@@ -743,12 +744,16 @@ pub trait FeePayment {
 	fn mint_to_account(account_id: Self::AccountId, amount: Self::Amount) {
 		unreachable!()
 	}
+	/// Burns token
 	fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
+/// Provides information about the on-chain staked funds
 pub trait StakingInfo {
 	type AccountId;
 	type Balance;
+	/// Returns the stake for an account
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
+	/// Returns the total staked locked inside the system
 	fn total_onchain_stake() -> Self::Balance;
 }
