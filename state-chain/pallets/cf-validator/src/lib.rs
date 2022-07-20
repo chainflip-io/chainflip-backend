@@ -19,10 +19,9 @@ mod rotation_state;
 
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bid,
-	BidderProvider, Bonding, Chainflip, ChainflipAccount, ChainflipAccountData,
-	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
-	StakeHandler, SystemStateInfo, VaultRotator,
+	BidderProvider, Bonding, Chainflip, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
