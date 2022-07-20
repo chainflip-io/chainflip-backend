@@ -337,29 +337,31 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 		.env()
 		.init();
 
-	log::debug!("Initializing test GenesisConfig.");
-	let config = GenesisConfig {
-		system: SystemConfig::default(),
-		session: SessionConfig {
-			keys: [&GENESIS_VALIDATORS[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-				.concat()
-				.iter()
-				.map(|&i| (i, i, UintAuthorityId(i).into()))
-				.collect(),
-		},
-		validator_pallet: ValidatorPalletConfig {
-			genesis_authorities: GENESIS_VALIDATORS.to_vec(),
-			blocks_per_epoch: EPOCH_DURATION,
-			bond: GENESIS_BOND,
-			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
-			backup_node_percentage: 34,
-			authority_set_min_size: 3,
-		},
-	};
+	log::debug!("Initializing TestExternalitiesWithCheck with GenesisConfig.");
 
-	let ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	TestExternalitiesWithCheck { ext }
+	TestExternalitiesWithCheck {
+		ext: GenesisConfig {
+			system: SystemConfig::default(),
+			session: SessionConfig {
+				keys: [&GENESIS_VALIDATORS[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+					.concat()
+					.iter()
+					.map(|&i| (i, i, UintAuthorityId(i).into()))
+					.collect(),
+			},
+			validator_pallet: ValidatorPalletConfig {
+				genesis_authorities: GENESIS_VALIDATORS.to_vec(),
+				blocks_per_epoch: EPOCH_DURATION,
+				bond: GENESIS_BOND,
+				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
+				backup_node_percentage: 34,
+				authority_set_min_size: 3,
+			},
+		}
+		.build_storage()
+		.unwrap()
+		.into(),
+	}
 }
 
 pub fn run_to_block(n: u64) {
