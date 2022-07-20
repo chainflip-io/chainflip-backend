@@ -82,6 +82,7 @@ typenum = "1.15"
 # use the same version as polkadot.
 schnorrkel = "0.9.1"
 rayon = "1.5"
+pin-project = "1.0.11"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
