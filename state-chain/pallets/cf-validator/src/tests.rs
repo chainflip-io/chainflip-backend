@@ -194,14 +194,14 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(
 			CurrentAuthorities::<Test>::get(),
-			GENESIS_VALIDATORS,
+			GENESIS_AUTHORITIES,
 			"the current authorities should be the genesis authorities"
 		);
 		// Run to the epoch boundary.
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::current_authorities(),
-			GENESIS_VALIDATORS,
+			GENESIS_AUTHORITIES,
 			"we should still be validating with the genesis authorities"
 		);
 		assert!(matches!(
@@ -220,7 +220,7 @@ fn genesis() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(
 			CurrentAuthorities::<Test>::get(),
-			GENESIS_VALIDATORS,
+			GENESIS_AUTHORITIES,
 			"We should have a set of validators at genesis"
 		);
 		assert_eq!(Bond::<Test>::get(), GENESIS_BOND, "We should have a minimum bid at genesis");
@@ -233,7 +233,7 @@ fn genesis() {
 fn send_cfe_version() {
 	new_test_ext().execute_with(|| {
 		// We initially submit version
-		let authority = GENESIS_VALIDATORS[0];
+		let authority = GENESIS_AUTHORITIES[0];
 
 		let version = SemVer { major: 4, ..Default::default() };
 		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), version.clone(),));
@@ -505,7 +505,7 @@ fn test_setting_vanity_names_() {
 fn test_missing_author_punishment() {
 	new_test_ext().execute_with(|| {
 		// Use a large offset to ensure the modulo math selects the correct validators.
-		let offset: u64 = GENESIS_VALIDATORS.len() as u64 * 123456;
+		let offset: u64 = GENESIS_AUTHORITIES.len() as u64 * 123456;
 		let (expected_authority_index, authored_authority_index) = (1usize, 3usize);
 		MockMissedAuthorshipSlots::set(
 			expected_authority_index as u64 + offset,

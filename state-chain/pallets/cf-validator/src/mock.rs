@@ -251,7 +251,7 @@ impl Config for Test {
 }
 
 /// Session pallet requires a set of validators at genesis.
-pub const GENESIS_VALIDATORS: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2];
+pub const GENESIS_AUTHORITIES: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2];
 pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 pub const GENESIS_BOND: Amount = 1;
 pub const EPOCH_DURATION: u64 = 10;
@@ -343,14 +343,14 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 		ext: GenesisConfig {
 			system: SystemConfig::default(),
 			session: SessionConfig {
-				keys: [&GENESIS_VALIDATORS[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+				keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
 					.concat()
 					.iter()
 					.map(|&i| (i, i, UintAuthorityId(i).into()))
 					.collect(),
 			},
 			validator_pallet: ValidatorPalletConfig {
-				genesis_authorities: GENESIS_VALIDATORS.to_vec(),
+				genesis_authorities: GENESIS_AUTHORITIES.to_vec(),
 				blocks_per_epoch: EPOCH_DURATION,
 				bond: GENESIS_BOND,
 				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
