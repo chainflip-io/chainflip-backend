@@ -104,6 +104,8 @@ benchmarks_instance_pallet! {
 		let a in 10..150;
 		// r: number of retries
 		let r in 0..50;
+		// o: number of offenders
+		let o in 1 .. 100;
 
 		T::KeyProvider::set_key(<T::TargetChain as ChainCrypto>::AggKey::benchmark_value());
 		CurrentAuthorities::<T>::put(Vec::<<T as Chainflip>::ValidatorId>::new());
@@ -127,6 +129,20 @@ benchmarks_instance_pallet! {
 		assert_eq!(
 			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
 			0 as usize,
+		);
+	}
+
+	// The above benchmark results in retries without any blamed parties. This benchmark allows us to account for
+	// blame reports.
+	report_offenders {
+		let o in 1 .. 100;
+		let offenders = (0..o)
+			.map(|i| account::<<T as Chainflip>::ValidatorId>("offender", i, SEED))
+			.collect::<Vec<_>>();
+	}: {
+		<T as Config<I>>::OffenceReporter::report_many(
+			PalletOffence::ParticipateSigningFailed,
+			offenders.as_slice(),
 		);
 	}
 }
