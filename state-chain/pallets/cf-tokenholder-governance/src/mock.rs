@@ -97,12 +97,12 @@ impl StakingInfo for MockStakingInfo {
 	type Balance = u128;
 
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
-		match account_id {
-			&ALICE => ALICE_BALANCE,
-			&BOB => BOB_BALANCE,
-			&CHARLES => CHARLES_BALANCE,
-			&EVE => EVE_BALANCE,
-			&BROKE_PAUL => BROKE_BALANCE,
+		match *account_id {
+			ALICE => ALICE_BALANCE,
+			BOB => BOB_BALANCE,
+			CHARLES => CHARLES_BALANCE,
+			EVE => EVE_BALANCE,
+			BROKE_PAUL => BROKE_BALANCE,
 			_ => 0,
 		}
 	}
