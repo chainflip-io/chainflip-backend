@@ -751,7 +751,7 @@ mod tests {
 		use std::collections::BTreeSet;
 
 		use super::*;
-		use crate::tests::{genesis::GENESIS_BALANCE, network::setup_account_and_peer_mapping};
+		use crate::tests::{genesis::GENESIS_BALANCE};
 		use cf_traits::{
 			BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
 			EpochInfo,
@@ -962,19 +962,6 @@ mod tests {
 					);
 
 					// Register the stake.
-					testnet.move_forward_blocks(1);
-
-					setup_account_and_peer_mapping(&late_staker);
-					network::Cli::activate_account(&late_staker);
-					// TODO [issue #1849]: We currently need to stake again in order to trigger
-					// an update of the backup node status.
-					testnet.stake_manager_contract.stake(
-						late_staker.clone(),
-						1u128,
-						GENESIS_EPOCH + 1,
-					);
-
-					// Trigger backup triage.
 					testnet.move_forward_blocks(1);
 
 					assert_eq!(
