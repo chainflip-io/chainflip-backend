@@ -208,6 +208,12 @@ pub enum KeyManagerEvent {
         /// Call hash of substrate call to be executed, hash over (call, nonce, runtime_version)
         message: GovCallHash,
     },
+
+    /// `AggKeyNonceConsumerSet(addrs)`
+    AggKeyNonceConsumersSet { addrs: Vec<ethabi::Address> },
+
+    /// `AggKeyNonceConsumerUpdated(newAddrs)`
+    AggKeyNonceConsumersUpdated { new_addrs: Vec<ethabi::Address> },
 }
 
 #[async_trait]
@@ -339,6 +345,12 @@ impl EthObserver for KeyManager {
         let gov_action = SignatureAndEvent::new(&self.contract, "GovernanceAction")?;
         let sig_accepted = SignatureAndEvent::new(&self.contract, "SignatureAccepted")?;
 
+        let agg_key_nonce_consumers_set =
+            SignatureAndEvent::new(&self.contract, "AggKeyNonceConsumersSet")?;
+
+        let agg_key_nonce_consumers_updated =
+            SignatureAndEvent::new(&self.contract, "AggKeyNonceConsumersUpdated")?;
+
         Ok(Box::new(
             move |event_signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
                 Ok(if event_signature == ak_set_by_ak.signature {
@@ -400,6 +412,16 @@ impl EthObserver for KeyManager {
                     KeyManagerEvent::GovernanceAction {
                         message: utils::decode_log_param(&log, "message")?,
                     }
+                } else if event_signature == agg_key_nonce_consumers_set.signature {
+                    let log = agg_key_nonce_consumers_set.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeyNonceConsumersSet {
+                        addrs: utils::decode_log_param(&log, "addrs")?,
+                    }
+                } else if event_signature == agg_key_nonce_consumers_updated.signature {
+                    let log = agg_key_nonce_consumers_updated.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeyNonceConsumersUpdated {
+                        new_addrs: utils::decode_log_param(&log, "newAddrs")?,
+                    }
                 } else {
                     return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
                         event_signature
@@ -434,8 +456,10 @@ impl KeyManager {
 // ck_set_by_ck: 0xb8529adc43e07de6ef9ce6a65ca2e5ad5f52b155e85bbbc28f7d3c165170deab
 // gk_set_by_ak: 0x6049e088bb150ffb9041c7bfd3f7d4017d79a930d2d23e2f331eeffb0cb74297
 // gk_set_by_gk: 0xb79780665df55038fba66988b1b3f2eda919a59b75cd2581f31f8f04f58bec7c
-// gov_action:   0x06e69d4af70b00b0c269b2707345abc134d9767085930456d9d03285f1eaf5c7
+// gov_action: 0x06e69d4af70b00b0c269b2707345abc134d9767085930456d9d03285f1eaf5c7
 // sig_accepted: 0x38045dba3d9ee1fee641ad521bd1cf34c28562f6658772ee04678edf17b9a3bc
+// agg_key_nonce_consumers_set: 0x4d44910489c7d151e8e9e918a73a0081a95b08fd2d8f2011a6e99548d2f585eb
+// agg_key_nonce_consumers_updated: 0x4f2c4ca40026b3ddbe8c1f23b9dc777d3ebaa9f1a30baa8de230d6b556b1a04f
 #[test]
 fn generate_signatures() {
     let contract = KeyManager::new(H160::default()).contract;
@@ -456,6 +480,18 @@ fn generate_signatures() {
     println!("gov_action: {:?}", gov_action.signature);
     let sig_accepted = SignatureAndEvent::new(&contract, "SignatureAccepted").unwrap();
     println!("sig_accepted: {:?}", sig_accepted.signature);
+    let agg_key_nonce_consumers_set =
+        SignatureAndEvent::new(&contract, "AggKeyNonceConsumersSet").unwrap();
+    println!(
+        "agg_key_nonce_consumers_set: {:?}",
+        agg_key_nonce_consumers_set.signature
+    );
+    let agg_key_nonce_consumers_updated =
+        SignatureAndEvent::new(&contract, "AggKeyNonceConsumersUpdated").unwrap();
+    println!(
+        "agg_key_nonce_consumers_updated: {:?}",
+        agg_key_nonce_consumers_updated.signature
+    );
 }
 
 #[cfg(test)]
@@ -708,6 +744,60 @@ mod tests {
                 assert_eq!(signer, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
             }
             _ => panic!("Expected KeyManagerEvent::SignatureAccepted, got different variant"),
+        }
+    }
+
+    #[test]
+    fn test_agg_key_nonce_consumers_set() {
+        let key_manager = new_test_key_manager();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("4d44910489c7d151e8e9e918a73a0081a95b08fd2d8f2011a6e99548d2f585eb")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000e7f1725e7734ce288f8367e1bb143e90bb3f05120000000000000000000000009fe46736679d2d9a65f0992f2272de9f3c7fa6e0000000000000000000000000cf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+                )
+                .unwrap(),
+            },
+        )
+        .expect("Failed parsing KeyManagerEvent::AggKeyNonceConsumerSet event")
+        {
+            KeyManagerEvent::AggKeyNonceConsumersSet { addrs } => {
+                assert_eq!(addrs, vec![H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(), H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(), H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()]);
+            }
+            _ => panic!("Expected KeyManagerEvent::AggKeyNonceConsumerSet, got different variant"),
+        }
+    }
+
+    #[test]
+    fn test_agg_key_nonce_consumers_updated() {
+        let key_manager = new_test_key_manager();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+        let event_signature =
+            H256::from_str("4f2c4ca40026b3ddbe8c1f23b9dc777d3ebaa9f1a30baa8de230d6b556b1a04f")
+                .unwrap();
+
+        match decode_log(
+            event_signature,
+            RawLog {
+                topics: vec![event_signature],
+                data: hex::decode(
+                    "000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000003000000000000000000000000e7f1725e7734ce288f8367e1bb143e90bb3f05120000000000000000000000009fe46736679d2d9a65f0992f2272de9f3c7fa6e0000000000000000000000000cf7ed3acca5a467e9e704c703e8d87f634fb0fc90000000000000000000000000000000000000000000000000000000000000003000000000000000000000000e7f1725e7734ce288f8367e1bb143e90bb3f05120000000000000000000000009fe46736679d2d9a65f0992f2272de9f3c7fa6e0000000000000000000000000cf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+                )
+                .unwrap(),
+            },
+        )
+        .expect("Failed parsing KeyManagerEvent::AggKeyNonceConsumersUpdated event")
+        {
+            KeyManagerEvent::AggKeyNonceConsumersUpdated { new_addrs } => {
+                assert_eq!(new_addrs, vec![H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(), H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(), H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()]);
+            }
+            _ => panic!("Expected KeyManagerEvent::AggKeyNonceConsumersUpdated, got different variant"),
         }
     }
 
