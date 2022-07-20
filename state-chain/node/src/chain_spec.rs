@@ -580,7 +580,7 @@ fn testnet_genesis(
 			genesis_authorities: initial_authorities.iter().map(|(id, ..)| id.clone()).collect(),
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
-			backup_node_percentage: 20,
+			backup_reward_node_percentage: 20,
 			bond: genesis_stake_amount,
 			authority_set_min_size: min_authorities as u8,
 		},

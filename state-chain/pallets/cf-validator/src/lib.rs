@@ -605,8 +605,8 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [EnsureGovernance]
-		#[pallet::weight(T::ValidatorWeightInfo::set_backup_node_percentage())]
-		pub fn set_backup_node_percentage(
+		#[pallet::weight(T::ValidatorWeightInfo::set_backup_reward_node_percentage())]
+		pub fn set_backup_reward_node_percentage(
 			origin: OriginFor<T>,
 			percentage: Percentage,
 		) -> DispatchResultWithPostInfo {
@@ -769,7 +769,7 @@ pub mod pallet {
 	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
 	/// authority set size.
 	#[pallet::storage]
-	#[pallet::getter(fn backup_node_percentage)]
+	#[pallet::getter(fn backup_reward_node_percentage)]
 	pub type BackupNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// The absolute minimum number of authority nodes for the next epoch.
@@ -783,7 +783,7 @@ pub mod pallet {
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
-		pub backup_node_percentage: Percentage,
+		pub backup_reward_node_percentage: Percentage,
 		pub authority_set_min_size: u8,
 	}
 
@@ -795,7 +795,7 @@ pub mod pallet {
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
-				backup_node_percentage: Zero::zero(),
+				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
 			}
 		}
@@ -809,7 +809,7 @@ pub mod pallet {
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-			BackupNodePercentage::<T>::set(self.backup_node_percentage);
+			BackupNodePercentage::<T>::set(self.backup_reward_node_percentage);
 
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);

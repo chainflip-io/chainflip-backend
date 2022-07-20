@@ -354,7 +354,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 				blocks_per_epoch: EPOCH_DURATION,
 				bond: GENESIS_BOND,
 				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
-				backup_node_percentage: 34,
+				backup_reward_node_percentage: 34,
 				authority_set_min_size: 3,
 			},
 		}

@@ -605,7 +605,7 @@ mod tests {
 					blocks_per_epoch: self.blocks_per_epoch,
 					bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
 					claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
-					backup_node_percentage: 34,
+					backup_reward_node_percentage: 34,
 					authority_set_min_size: self.min_authorities as u8,
 				},
 				ethereum_vault: EthereumVaultConfig {
