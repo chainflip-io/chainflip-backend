@@ -333,10 +333,10 @@ impl EthObserver for KeyManager {
     }
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
-        let agg_key_nonce_consumers_set =
+        let ak_nonce_consumers_set =
             SignatureAndEvent::new(&self.contract, "AggKeyNonceConsumersSet")?;
 
-        let agg_key_nonce_consumers_updated =
+        let ak_nonce_consumers_updated =
             SignatureAndEvent::new(&self.contract, "AggKeyNonceConsumersUpdated")?;
 
         let ak_set_by_ak = SignatureAndEvent::new(&self.contract, "AggKeySetByAggKey")?;
@@ -353,94 +353,80 @@ impl EthObserver for KeyManager {
 
         Ok(Box::new(
             move |event_signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
-                Ok(
-                    if event_signature == agg_key_nonce_consumers_set.signature {
-                        let log = agg_key_nonce_consumers_set.event.parse_log(raw_log)?;
-                        KeyManagerEvent::AggKeyNonceConsumersSet {
-                            addrs: utils::decode_log_param(&log, "addrs")?,
-                        }
-                    } else if event_signature == agg_key_nonce_consumers_updated.signature {
-                        let log = agg_key_nonce_consumers_updated.event.parse_log(raw_log)?;
-                        KeyManagerEvent::AggKeyNonceConsumersUpdated {
-                            new_addrs: utils::decode_log_param(&log, "newAddrs")?,
-                        }
-                    } else if event_signature == ak_set_by_ak.signature {
-                        let log = ak_set_by_ak.event.parse_log(raw_log)?;
-                        KeyManagerEvent::AggKeySetByAggKey {
-                            old_agg_key: utils::decode_log_param::<ChainflipKey>(
-                                &log,
-                                "oldAggKey",
-                            )?,
-                            new_agg_key: utils::decode_log_param::<ChainflipKey>(
-                                &log,
-                                "newAggKey",
-                            )?,
-                        }
-                    } else if event_signature == ak_set_by_gk.signature {
-                        let log = ak_set_by_gk.event.parse_log(raw_log)?;
-                        KeyManagerEvent::AggKeySetByGovKey {
-                            old_agg_key: utils::decode_log_param::<ChainflipKey>(
-                                &log,
-                                "oldAggKey",
-                            )?,
-                            new_agg_key: utils::decode_log_param::<ChainflipKey>(
-                                &log,
-                                "newAggKey",
-                            )?,
-                        }
-                    } else if event_signature == ck_set_by_ak.signature {
-                        let log = ck_set_by_ak.event.parse_log(raw_log)?;
-                        KeyManagerEvent::CommKeySetByAggKey {
-                            old_comm_key: utils::decode_log_param::<ethabi::Address>(
-                                &log,
-                                "oldCommKey",
-                            )?,
-                            new_comm_key: utils::decode_log_param::<ethabi::Address>(
-                                &log,
-                                "newCommKey",
-                            )?,
-                        }
-                    } else if event_signature == ck_set_by_ck.signature {
-                        let log = ck_set_by_ck.event.parse_log(raw_log)?;
-                        KeyManagerEvent::CommKeySetByCommKey {
-                            old_comm_key: utils::decode_log_param::<ethabi::Address>(
-                                &log,
-                                "oldCommKey",
-                            )?,
-                            new_comm_key: utils::decode_log_param::<ethabi::Address>(
-                                &log,
-                                "newCommKey",
-                            )?,
-                        }
-                    } else if event_signature == gk_set_by_ak.signature {
-                        let log = gk_set_by_ak.event.parse_log(raw_log)?;
-                        KeyManagerEvent::GovKeySetByAggKey {
-                            old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
-                            new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
-                        }
-                    } else if event_signature == gk_set_by_gk.signature {
-                        let log = gk_set_by_gk.event.parse_log(raw_log)?;
-                        KeyManagerEvent::GovKeySetByGovKey {
-                            old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
-                            new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
-                        }
-                    } else if event_signature == sig_accepted.signature {
-                        let log = sig_accepted.event.parse_log(raw_log)?;
-                        KeyManagerEvent::SignatureAccepted {
-                            sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
-                            signer: utils::decode_log_param(&log, "signer")?,
-                        }
-                    } else if event_signature == gov_action.signature {
-                        let log = gov_action.event.parse_log(raw_log)?;
-                        KeyManagerEvent::GovernanceAction {
-                            message: utils::decode_log_param(&log, "message")?,
-                        }
-                    } else {
-                        return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
-                            event_signature
-                        )));
-                    },
-                )
+                Ok(if event_signature == ak_nonce_consumers_set.signature {
+                    let log = ak_nonce_consumers_set.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeyNonceConsumersSet {
+                        addrs: utils::decode_log_param(&log, "addrs")?,
+                    }
+                } else if event_signature == ak_nonce_consumers_updated.signature {
+                    let log = ak_nonce_consumers_updated.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeyNonceConsumersUpdated {
+                        new_addrs: utils::decode_log_param(&log, "newAddrs")?,
+                    }
+                } else if event_signature == ak_set_by_ak.signature {
+                    let log = ak_set_by_ak.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeySetByAggKey {
+                        old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
+                        new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
+                    }
+                } else if event_signature == ak_set_by_gk.signature {
+                    let log = ak_set_by_gk.event.parse_log(raw_log)?;
+                    KeyManagerEvent::AggKeySetByGovKey {
+                        old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
+                        new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
+                    }
+                } else if event_signature == ck_set_by_ak.signature {
+                    let log = ck_set_by_ak.event.parse_log(raw_log)?;
+                    KeyManagerEvent::CommKeySetByAggKey {
+                        old_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "oldCommKey",
+                        )?,
+                        new_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "newCommKey",
+                        )?,
+                    }
+                } else if event_signature == ck_set_by_ck.signature {
+                    let log = ck_set_by_ck.event.parse_log(raw_log)?;
+                    KeyManagerEvent::CommKeySetByCommKey {
+                        old_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "oldCommKey",
+                        )?,
+                        new_comm_key: utils::decode_log_param::<ethabi::Address>(
+                            &log,
+                            "newCommKey",
+                        )?,
+                    }
+                } else if event_signature == gk_set_by_ak.signature {
+                    let log = gk_set_by_ak.event.parse_log(raw_log)?;
+                    KeyManagerEvent::GovKeySetByAggKey {
+                        old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
+                        new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
+                    }
+                } else if event_signature == gk_set_by_gk.signature {
+                    let log = gk_set_by_gk.event.parse_log(raw_log)?;
+                    KeyManagerEvent::GovKeySetByGovKey {
+                        old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
+                        new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
+                    }
+                } else if event_signature == sig_accepted.signature {
+                    let log = sig_accepted.event.parse_log(raw_log)?;
+                    KeyManagerEvent::SignatureAccepted {
+                        sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
+                        signer: utils::decode_log_param(&log, "signer")?,
+                    }
+                } else if event_signature == gov_action.signature {
+                    let log = gov_action.event.parse_log(raw_log)?;
+                    KeyManagerEvent::GovernanceAction {
+                        message: utils::decode_log_param(&log, "message")?,
+                    }
+                } else {
+                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
+                        event_signature
+                    )));
+                })
             },
         ))
     }
@@ -464,8 +450,8 @@ impl KeyManager {
 // Convenience test to allow us to generate the signatures of the events, allowing us
 // to manually query the contract for the events
 // current signatures below:
-// agg_key_nonce_consumers_set: 0x4d44910489c7d151e8e9e918a73a0081a95b08fd2d8f2011a6e99548d2f585eb
-// agg_key_nonce_consumers_updated: 0x4f2c4ca40026b3ddbe8c1f23b9dc777d3ebaa9f1a30baa8de230d6b556b1a04f
+// ak_nonce_consumers_set: 0x4d44910489c7d151e8e9e918a73a0081a95b08fd2d8f2011a6e99548d2f585eb
+// ak_nonce_consumers_updated: 0x4f2c4ca40026b3ddbe8c1f23b9dc777d3ebaa9f1a30baa8de230d6b556b1a04f
 // ak_set_by_ak: 0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521
 // ak_set_by_gk: 0xe441a6cf7a12870075eb2f6399c0de122bfe6cd8a75bfa83b05d5b611552532e
 // ck_set_by_ak: 0x999bc9c97358a1254b8ba2c1e65893b34385bf27c448cb21af3f19eee6b809ce
@@ -478,17 +464,17 @@ impl KeyManager {
 fn generate_signatures() {
     let contract = KeyManager::new(H160::default()).contract;
 
-    let agg_key_nonce_consumers_set =
+    let ak_nonce_consumers_set =
         SignatureAndEvent::new(&contract, "AggKeyNonceConsumersSet").unwrap();
     println!(
-        "agg_key_nonce_consumers_set: {:?}",
-        agg_key_nonce_consumers_set.signature
+        "ak_nonce_consumers_set: {:?}",
+        ak_nonce_consumers_set.signature
     );
-    let agg_key_nonce_consumers_updated =
+    let ak_nonce_consumers_updated =
         SignatureAndEvent::new(&contract, "AggKeyNonceConsumersUpdated").unwrap();
     println!(
-        "agg_key_nonce_consumers_updated: {:?}",
-        agg_key_nonce_consumers_updated.signature
+        "ak_nonce_consumers_updated: {:?}",
+        ak_nonce_consumers_updated.signature
     );
     let ak_set_by_ak = SignatureAndEvent::new(&contract, "AggKeySetByAggKey").unwrap();
     println!("ak_set_by_ak: {:?}", ak_set_by_ak.signature);
@@ -529,7 +515,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agg_key_nonce_consumers_set() {
+    fn test_ak_nonce_consumers_set() {
         let key_manager = new_test_key_manager();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
@@ -556,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agg_key_nonce_consumers_updated() {
+    fn test_ak_nonce_consumers_updated() {
         let key_manager = new_test_key_manager();
         let decode_log = key_manager.decode_log_closure().unwrap();
         let event_signature =
