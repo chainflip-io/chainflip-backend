@@ -14,14 +14,12 @@ const ANOTHER_GOV_KEY_PROPOSAL: [u8; 32] = [2u8; 32];
 #[test]
 fn update_gov_key_via_onchain_proposal() {
 	new_test_ext().execute_with(|| {
-		VotingPeriod::<Test>::set(10);
-		EnactmentDelay::<Test>::set(20);
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			Origin::signed(ALICE),
 			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 		));
 		assert!(Proposals::<Test>::contains_key(
-			<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get()
+			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get()
 		));
 		// Back the proposal to ensure threshold
 		assert_ok!(TokenholderGovernance::back_proposal(
@@ -34,12 +32,12 @@ fn update_gov_key_via_onchain_proposal() {
 		));
 		// Jump to the block in which we expect the proposal
 		TokenholderGovernance::on_initialize(
-			<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get(),
+			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get(),
 		);
 		// Expect the proposal to be moved to the enactment stage
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
 		TokenholderGovernance::on_initialize(
-			<frame_system::Pallet<Test>>::block_number() + EnactmentDelay::<Test>::get(),
+			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::EnactmentDelay::get(),
 		);
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		// TODO: verify the right event has been submitted
@@ -83,10 +81,9 @@ fn cannot_back_not_existing_proposal() {
 #[test]
 fn cannot_create_proposal_with_insufficient_liquidity() {
 	new_test_ext().execute_with(|| {
-		ProposalFee::<Test>::set(10000);
 		assert_noop!(
 			TokenholderGovernance::submit_proposal(
-				Origin::signed(ALICE),
+				Origin::signed(BROKE_PAUL),
 				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 			),
 			DispatchError::Other("Account is not sufficiently funded!")
@@ -97,14 +94,12 @@ fn cannot_create_proposal_with_insufficient_liquidity() {
 #[test]
 fn not_enough_backed_liquidity() {
 	new_test_ext().execute_with(|| {
-		VotingPeriod::<Test>::set(10);
-		EnactmentDelay::<Test>::set(20);
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			Origin::signed(ALICE),
 			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 		));
 		TokenholderGovernance::on_initialize(
-			<frame_system::Pallet<Test>>::block_number() + VotingPeriod::<Test>::get(),
+			<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get(),
 		);
 		assert!(!Backers::<Test>::contains_key(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
@@ -115,8 +110,6 @@ fn not_enough_backed_liquidity() {
 #[test]
 fn replace_proposal_during_enactment_period() {
 	new_test_ext().execute_with(|| {
-		VotingPeriod::<Test>::set(10);
-		EnactmentDelay::<Test>::set(30);
 		fn create_and_back_proposal(proposal: Proposal<Test>) {
 			assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), proposal));
 			assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), proposal));

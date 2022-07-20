@@ -19,11 +19,9 @@ benchmarks! {
 		let a in 10..1000;
 		let stake = <T as pallet::Config>::Balance::from(50_000_000_000_000_000_000_000u128);
 		let total_onchain_funds = T::StakingInfo::total_onchain_stake();
-		VotingPeriod::<T>::set(1u32.into());
-		EnactmentDelay::<T>::set(10u32.into());
 		let proposal = generate_proposal::<T>();
 		Proposals::<T>::insert(
-			VotingPeriod::<T>::get(),
+			T::VotingPeriod::get(),
 			proposal.clone(),
 		);
 		let mut bakers: Vec<T::AccountId> = vec![];
@@ -47,16 +45,16 @@ benchmarks! {
 	}
 	submit_proposal {
 		let caller: T::AccountId = whitelisted_caller();
-		T::FeePayment::mint_to_account(caller.clone(), ProposalFee::<T>::get());
+		T::FeePayment::mint_to_account(caller.clone(), T::ProposalFee::get());
 	}: _(RawOrigin::Signed(whitelisted_caller()), generate_proposal::<T>())
 	verify {
-		assert!(Proposals::<T>::contains_key(<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get()));
+		assert!(Proposals::<T>::contains_key(<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get()));
 	}
 	back_proposal {
 		let caller: T::AccountId = whitelisted_caller();
 		let proposal = generate_proposal::<T>();
 		Proposals::<T>::insert(
-			<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get(),
+			<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
 			proposal.clone(),
 		);
 	}: _(RawOrigin::Signed(caller.clone()), proposal.clone())

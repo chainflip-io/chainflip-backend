@@ -18,6 +18,7 @@ use sp_runtime::{
 };
 
 use cf_chains::{SetCommKeyWithAggKey, SetGovKeyWithAggKey};
+use system::pallet_prelude::BlockNumberFor;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -39,6 +40,9 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
+	pub const VotingPeriod: BlockNumberFor<Test> = 10;
+	pub const ProposalFee: Balance = 1000;
+	pub const EnactmentDelay: BlockNumberFor<Test> = 20;
 }
 
 pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
@@ -98,6 +102,7 @@ impl StakingInfo for MockStakingInfo {
 			&BOB => BOB_BALANCE,
 			&CHARLES => CHARLES_BALANCE,
 			&EVE => EVE_BALANCE,
+			&BROKE_PAUL => BROKE_BALANCE,
 			_ => 0,
 		}
 	}
@@ -181,6 +186,7 @@ impl FeePayment for MockFeePayment {
 			BOB if amount > BOB_BALANCE => Err(not_enough_funds),
 			CHARLES if amount > CHARLES_BALANCE => Err(not_enough_funds),
 			EVE if amount > EVE_BALANCE => Err(not_enough_funds),
+			BROKE_PAUL if amount > BROKE_BALANCE => Err(not_enough_funds),
 			_ => Ok(().into()),
 		}
 	}
@@ -207,6 +213,9 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type ApiCalls = MockApiCalls;
 	type Broadcaster = MockBroadcaster;
 	type WeightInfo = ();
+	type VotingPeriod = VotingPeriod;
+	type EnactmentDelay = EnactmentDelay;
+	type ProposalFee = ProposalFee;
 }
 
 // Accounts
@@ -214,12 +223,14 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
 pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
+pub const BROKE_PAUL: <Test as frame_system::Config>::AccountId = 1987u64;
 
 // Balances
 pub const ALICE_BALANCE: Balance = 3000;
 pub const BOB_BALANCE: Balance = 2000;
 pub const CHARLES_BALANCE: Balance = 3000;
 pub const EVE_BALANCE: Balance = 2000;
+pub const BROKE_BALANCE: Balance = 10;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {

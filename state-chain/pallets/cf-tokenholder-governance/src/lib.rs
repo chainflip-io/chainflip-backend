@@ -81,22 +81,16 @@ pub mod pallet {
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCalls>;
 		/// Benchmarking weights
 		type WeightInfo: WeightInfo;
+		/// Voting period of a proposal in blocks
+		#[pallet::constant]
+		type VotingPeriod: Get<BlockNumberFor<Self>>;
+		/// The cost of a proposal in FLIPERINO
+		#[pallet::constant]
+		type ProposalFee: Get<Self::Balance>;
+		/// Delay in blocks after a successfully backed proposal gets executed
+		#[pallet::constant]
+		type EnactmentDelay: Get<BlockNumberFor<Self>>;
 	}
-
-	/// Voting period of a proposal in blocks
-	#[pallet::storage]
-	#[pallet::getter(fn voting_period)]
-	pub type VotingPeriod<T> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
-	/// Delay in blocks after a successfully backed proposal gets executed
-	#[pallet::storage]
-	#[pallet::getter(fn enactment_delay)]
-	pub type EnactmentDelay<T> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
-	/// The cost of a proposal in FLIPERINO
-	#[pallet::storage]
-	#[pallet::getter(fn proposal_fee)]
-	pub type ProposalFee<T> = StorageValue<_, <T as Config>::Balance, ValueQuery>;
 
 	/// A map of all proposals open for voting
 	#[pallet::storage]
@@ -198,9 +192,9 @@ pub mod pallet {
 			proposal: Proposal<T>,
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
-			T::FeePayment::try_burn_fee(proposer.clone(), ProposalFee::<T>::get())?;
+			T::FeePayment::try_burn_fee(proposer.clone(), T::ProposalFee::get())?;
 			Proposals::<T>::insert(
-				<frame_system::Pallet<T>>::block_number() + VotingPeriod::<T>::get(),
+				<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
 				proposal.clone(),
 			);
 			Backers::<T>::insert(proposal.clone(), vec![proposer]);
@@ -240,13 +234,13 @@ pub mod pallet {
 				match proposal {
 					SetGovernanceKey(key) => {
 						GovKeyUpdateAwaitingEnactment::<T>::put((
-							<frame_system::Pallet<T>>::block_number() + EnactmentDelay::<T>::get(),
+							<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get(),
 							key,
 						));
 					},
 					SetCommunityKey(key) => {
 						CommKeyUpdateAwaitingEnactment::<T>::put((
-							<frame_system::Pallet<T>>::block_number() + EnactmentDelay::<T>::get(),
+							<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get(),
 							key,
 						));
 					},

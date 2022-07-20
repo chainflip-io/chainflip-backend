@@ -390,6 +390,12 @@ impl pallet_cf_staking::Config for Runtime {
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const VotingPeriod: BlockNumber = 10;
+	pub const ProposalFee: Balance = 100800;
+	pub const EnactmentDelay: BlockNumber = 201600;
+}
+
 impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
@@ -400,6 +406,9 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type ApiCalls = eth::api::EthereumApi;
 	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
+	type VotingPeriod = VotingPeriod;
+	type ProposalFee = ProposalFee;
+	type EnactmentDelay = EnactmentDelay;
 }
 
 impl pallet_cf_governance::Config for Runtime {

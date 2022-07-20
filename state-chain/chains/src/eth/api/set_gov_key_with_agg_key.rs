@@ -79,11 +79,7 @@ impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
 
 #[cfg(test)]
 mod test_set_agg_key_with_agg_key {
-	use crate::eth::SchnorrVerificationComponents;
-
-	use super::*;
 	use frame_support::assert_ok;
-	use sp_runtime::traits::{Hash, Keccak256};
 
 	#[test]
 	fn just_load_the_contract() {
