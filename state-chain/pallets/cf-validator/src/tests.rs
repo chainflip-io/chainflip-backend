@@ -9,6 +9,7 @@ use cf_traits::{
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
+use pallet_session::SessionManager;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -16,7 +17,7 @@ const GENESIS_EPOCH: u32 = 1;
 
 fn assert_epoch_number(n: EpochIndex) {
 	assert_eq!(
-		<ValidatorPallet as EpochInfo>::epoch_index(),
+		ValidatorPallet::epoch_index(),
 		n,
 		"we should be in epoch {n:?}. Rotation status is {:?}, VaultRotator says {:?} / {:?}",
 		CurrentRotationPhase::<Test>::get(),
@@ -29,7 +30,7 @@ macro_rules! assert_default_auction_outcome {
 	() => {
 		assert_epoch_number(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
-		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), AUCTION_WINNERS.to_vec());
+		assert_eq!(ValidatorPallet::current_authorities(), AUCTION_WINNERS.to_vec());
 	};
 }
 
@@ -200,7 +201,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		// Run to the epoch boundary.
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_authorities(),
+			ValidatorPallet::current_authorities(),
 			GENESIS_AUTHORITIES,
 			"we should still be validating with the genesis authorities"
 		);
@@ -208,7 +209,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::VaultsRotating(..)
 		));
-		while <ValidatorPallet as EpochInfo>::epoch_index() == GENESIS_EPOCH {
+		while ValidatorPallet::epoch_index() == GENESIS_EPOCH {
 			move_forward_blocks(1);
 		}
 		assert_default_auction_outcome!();
@@ -532,7 +533,7 @@ fn no_auction_during_maintenance() {
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
-		<ValidatorPallet as EmergencyRotation>::request_emergency_rotation();
+		ValidatorPallet::request_emergency_rotation();
 
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
@@ -556,7 +557,7 @@ fn test_reputation_reset() {
 		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
 			simple_rotation_state(vec![1, 2, 3], None),
 		));
-		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+		ValidatorPallet::start_session(0);
 
 		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
@@ -568,7 +569,7 @@ fn test_reputation_reset() {
 		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
 			simple_rotation_state(vec![4, 5, 6], None),
 		));
-		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+		ValidatorPallet::start_session(0);
 
 		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
