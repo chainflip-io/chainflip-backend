@@ -12,6 +12,7 @@ pub use crypto::{eth, ChainTag, Rng};
 #[cfg(test)]
 mod tests;
 
+use pallet_cf_threshold_signature::CeremonyId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,10 @@ use utilities::make_periodic_tick;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::{logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
+use crate::{
+    logging::COMPONENT_KEY, multisig::client::CeremonyRequestDetails,
+    multisig_p2p::OutgoingMultisigStageMessages,
+};
 use slog::o;
 use state_chain_runtime::AccountId;
 
@@ -54,6 +58,7 @@ pub fn start_client<C>(
     key_store: KeyStore<C>,
     mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+    latest_ceremony_id: CeremonyId,
     logger: &slog::Logger,
 ) -> (
     Arc<MultisigClient<C>>,
@@ -66,24 +71,25 @@ where
 
     slog::info!(logger, "Starting");
 
-    let (keygen_request_sender, mut keygen_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (signing_request_sender, mut signing_request_receiver) =
+    let (ceremony_request_sender, mut ceremony_request_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     let multisig_client = Arc::new(MultisigClient::new(
         my_account_id.clone(),
         key_store,
-        keygen_request_sender,
-        signing_request_sender,
+        ceremony_request_sender,
         &logger,
     ));
 
     let multisig_client_backend_future = {
         use crate::multisig::client::ceremony_manager::CeremonyManager;
 
-        let mut ceremony_manager =
-            CeremonyManager::<C>::new(my_account_id, outgoing_p2p_message_sender, &logger);
+        let mut ceremony_manager = CeremonyManager::<C>::new(
+            my_account_id,
+            outgoing_p2p_message_sender,
+            latest_ceremony_id,
+            &logger,
+        );
 
         async move {
             // Stream outputs () approximately every ten seconds
@@ -91,12 +97,33 @@ where
 
             loop {
                 tokio::select! {
-                    Some((ceremony_id, participants, rng, result_sender)) = keygen_request_receiver.recv() => {
-                        ceremony_manager.on_keygen_request(ceremony_id, participants, rng, result_sender);
+                        Some(request) = ceremony_request_receiver.recv() => {
+                            // Always update the latest ceremony id, even if we are not participating
+                            ceremony_manager.update_latest_ceremony_id(request.ceremony_id);
+
+                            match request.details {
+                                Some(CeremonyRequestDetails::Keygen(details)) => {
+                                    ceremony_manager.on_keygen_request(
+                                        request.ceremony_id,
+                                        details.participants,
+                                        details.rng,
+                                        details.result_sender,
+                                    )
+                                }
+                                Some(CeremonyRequestDetails::Sign(details)) =>{
+                                    ceremony_manager.on_request_to_sign(
+                                        request.ceremony_id,
+                                        details.participants,
+                                        details.data,
+                                        details.keygen_result_info,
+                                        details.rng,
+                                        details.result_sender,
+                                );
+                                }
+                                None => { /* Not participating in the ceremony, so do nothing */ }
+                            }
                     }
-                    Some((ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender)) = signing_request_receiver.recv() => {
-                        ceremony_manager.on_request_to_sign(ceremony_id, signers, message_hash, keygen_result_info, rng, result_sender);
-                    }
+
                     Some((sender_id, data)) = incoming_p2p_message_receiver.recv() => {
 
                         // For now we assume that every message we receive via p2p is a

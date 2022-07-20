@@ -6,7 +6,8 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	BackupNodes, Bid, Chainflip, ChainflipAccountData, QualifyNode, RuntimeAuctionOutcome,
+	BackupNodes, Bid, Chainflip, ChainflipAccountData, ChainflipAccountStore, QualifyNode,
+	RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -265,7 +266,7 @@ macro_rules! assert_invariants {
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::current_authorities(),
 			Session::validators(),
-			"Authorities out of sync at block {:?}. RotationStatus: {:?}",
+			"Authorities out of sync at block {:?}. RotationPhase: {:?}",
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
 		);

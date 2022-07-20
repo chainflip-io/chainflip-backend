@@ -21,7 +21,7 @@ use frame_support::{
 	traits::{Get, OnRuntimeUpgrade, StorageVersion},
 };
 pub use pallet::*;
-use sp_runtime::traits::{UniqueSaturatedInto, Zero};
+use sp_runtime::traits::Zero;
 use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
 	iter::Iterator,
@@ -59,13 +59,6 @@ impl<T: Config> ReputationParameters for T {
 }
 
 type RuntimeReputationTracker<T> = reputation::ReputationTracker<T>;
-
-/// A reputation penalty as a ratio of points penalised over number of blocks
-#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct ReputationPenaltyRate<BlockNumber> {
-	pub points: ReputationPoints,
-	pub per_blocks: BlockNumber,
-}
 
 /// A penalty comprises the reputation that will be deducted and the number of blocks suspension
 /// that are imposed.
@@ -149,7 +142,7 @@ pub mod pallet {
 
 		/// The maximum number of reputation points that can be accrued
 		#[pallet::constant]
-		type MaximumReputationPointAccrued: Get<ReputationPoints>;
+		type MaximumAccruableReputation: Get<ReputationPoints>;
 	}
 
 	#[pallet::hooks]
@@ -252,21 +245,22 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints)
-		/// - [InvalidAcctualOnlineCredits](Error::InvalidAccrualOnlineCredits)
 		#[pallet::weight(T::WeightInfo::update_accrual_ratio())]
 		pub fn update_accrual_ratio(
 			origin: OriginFor<T>,
-			points: ReputationPoints,
+			reputation_points: ReputationPoints,
 			online_credits: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
+
 			ensure!(
-				points <= T::MaximumReputationPointAccrued::get() && online_credits > Zero::zero(),
+				reputation_points <= T::MaximumAccruableReputation::get() &&
+					online_credits > Zero::zero(),
 				Error::<T>::InvalidAccrualRatio
 			);
 
-			AccrualRatio::<T>::set((points, online_credits));
-			Self::deposit_event(Event::AccrualRateUpdated(points, online_credits));
+			AccrualRatio::<T>::set((reputation_points, online_credits));
+			Self::deposit_event(Event::AccrualRateUpdated(reputation_points, online_credits));
 
 			Ok(().into())
 		}
@@ -279,21 +273,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_missed_heartbeat_penalty())]
 		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
-			value: ReputationPenaltyRate<BlockNumberFor<T>>,
+			reputation: ReputationPoints,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let ReputationPenaltyRate { points, per_blocks } = value;
-			let interval: u16 = T::HeartbeatBlockInterval::get().unique_saturated_into();
-			let per_blocks: u16 = per_blocks.unique_saturated_into();
-
-			let reputation =
-				(points.saturating_mul(interval as i32).checked_div(per_blocks as i32))
-					.ok_or(Error::<T>::InvalidReputationPenaltyRate)?;
-
 			Penalties::<T>::insert(
 				T::Offence::from(PalletOffence::MissedHeartbeat),
-				Penalty::<T> { reputation, suspension: Zero::zero() },
+				Penalty::<T> { reputation, suspension: T::HeartbeatBlockInterval::get() },
 			);
 
 			Self::deposit_event(Event::MissedHeartbeatPenaltyUpdated(reputation));
@@ -341,9 +327,7 @@ pub mod pallet {
 			let start_of_this_interval =
 				current_block_number - Self::blocks_since_new_interval(current_block_number);
 
-			// Interval range is [start, end), so if we have a heartbeat block interval of 150-300
-			// and 300-450 and we submit on 300, it counts as a heartbeat for the latter interval.
-			// Since it's effecively [150, 299] -> [300, 449]
+			// Heartbeat intervals range is (start, end]
 			match LastHeartbeat::<T>::get(&validator_id) {
 				Some(last_heartbeat) if last_heartbeat > start_of_this_interval => {
 					// we have already submitted a heartbeat for this interval
@@ -382,7 +366,7 @@ pub mod pallet {
 			block_number % T::HeartbeatBlockInterval::get()
 		}
 
-		/// Partitions the validators based on whether they are considered online or offline.
+		/// Partitions the authorities based on whether they are considered online or offline.
 		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
 			let (online, offline) =
 				T::EpochInfo::current_authorities().into_iter().partition(Self::is_qualified);

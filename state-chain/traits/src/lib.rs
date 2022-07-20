@@ -445,7 +445,9 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		log::debug!("Setting {:?} to {:?}", account_id, state);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
 			ChainflipAccountState::CurrentAuthority => {
-				log::warn!("Attempted to set backup or passive on a current authority account");
+				log::warn!(
+					"Attempted to set {state:?} on a current authority account {account_id:?}"
+				);
 			},
 			ChainflipAccountState::HistoricalAuthority(_) => {
 				(*account_data).state = ChainflipAccountState::HistoricalAuthority(state);
@@ -481,9 +483,9 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 			ChainflipAccountState::HistoricalAuthority(state) => {
 				(*account_data).state = ChainflipAccountState::BackupOrPassive(state);
 			},
-			_ => {
+			state => {
 				log::error!(
-					"Attempted to set backup or passive on a CurrentAuthority or BackupOrPassive"
+					"Attempted to set backup or passive on {state:?} account {account_id:?}"
 				);
 			},
 		})
@@ -689,11 +691,6 @@ pub trait HistoricalEpoch {
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
 	/// Returns the number of active epochs a authority is still active in
 	fn number_of_active_epochs_for_authority(id: &Self::ValidatorId) -> u32;
-}
-
-/// Handles the expiry of an epoch
-pub trait EpochExpiry {
-	fn expire_epoch(epoch: EpochIndex);
 }
 
 /// Handles the bonding logic

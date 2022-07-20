@@ -608,7 +608,7 @@ fn testnet_genesis(
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span: 80000 },
 		reputation: ReputationConfig {
-			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+			accrual_ratio: ACCRUAL_RATIO,
 			penalties: PENALTIES.to_vec(),
 			genesis_nodes: genesis_stakers,
 		},

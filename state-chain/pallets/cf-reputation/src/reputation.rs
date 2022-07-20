@@ -39,13 +39,14 @@ pub trait ReputationParameters {
 		+ Debug
 		+ Default;
 
+	// This is an on-chain constant
 	fn bounds() -> (ReputationPoints, ReputationPoints);
 	fn accrual_rate() -> (ReputationPoints, Self::OnlineCredits);
 }
 
 impl<P: ReputationParameters> ReputationTracker<P> {
 	/// Validators are rewarded with [OnlineCreditsFor] for remaining online. The credits are
-	/// automatically converted to reputation points at regular intervals, according to a
+	/// automatically converted to reputation points according to
 	/// some conversion ratio (ie. the [AccrualRatio]).
 	pub fn boost_reputation(&mut self, online_credit_reward: P::OnlineCredits) {
 		self.online_credits.saturating_accrue(online_credit_reward);
@@ -53,18 +54,19 @@ impl<P: ReputationParameters> ReputationTracker<P> {
 		while self.online_credits >= per_credits {
 			self.online_credits.saturating_reduce(per_credits);
 			self.reputation_points.saturating_accrue(reward);
-			self.clamp(P::bounds());
+			self.clamp();
 		}
 	}
 
 	/// Deducts reputation. Reputation is deducted for committing an offence.
 	pub fn deduct_reputation(&mut self, points: ReputationPoints) {
 		self.reputation_points.saturating_reduce(points);
-		self.clamp(P::bounds());
+		self.clamp();
 	}
 
 	/// Clamp the reputation points to the given bounds.
-	fn clamp(&mut self, (floor, ceiling): (ReputationPoints, ReputationPoints)) {
+	fn clamp(&mut self) {
+		let (floor, ceiling) = P::bounds();
 		self.reputation_points = self.reputation_points.clamp(floor, ceiling);
 	}
 

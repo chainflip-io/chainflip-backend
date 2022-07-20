@@ -449,7 +449,7 @@ impl pallet_transaction_payment::Config for Runtime {
 
 parameter_types! {
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
-	pub const MaximumReputationPointAccrued: pallet_cf_reputation::ReputationPoints = 15;
+	pub const MaximumAccruableReputation: pallet_cf_reputation::ReputationPoints = 15;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
@@ -461,7 +461,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type MaximumReputationPointAccrued = MaximumReputationPointAccrued;
+	type MaximumAccruableReputation = MaximumAccruableReputation;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
