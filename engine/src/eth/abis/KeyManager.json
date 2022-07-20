@@ -36,6 +36,38 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "addrs",
+        "type": "address[]"
+      }
+    ],
+    "name": "AggKeyNonceConsumersSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "currentAddrs",
+        "type": "address[]"
+      },
+      {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "newAddrs",
+        "type": "address[]"
+      }
+    ],
+    "name": "AggKeyNonceConsumersUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "components": [
           {
             "internalType": "uint256",
@@ -735,19 +767,6 @@
     "name": "updateCanConsumeKeyNonce",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "signingPubKeyX",
-        "type": "uint256"
-      }
-    ],
-    "name": "verifySigningKeyX",
-    "outputs": [],
-    "stateMutability": "pure",
     "type": "function"
   },
   {

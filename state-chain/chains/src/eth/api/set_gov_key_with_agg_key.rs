@@ -76,3 +76,19 @@ impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
 		self.sig_data.is_signed()
 	}
 }
+
+#[cfg(test)]
+mod test_set_agg_key_with_agg_key {
+	use crate::eth::SchnorrVerificationComponents;
+
+	use super::*;
+	use frame_support::assert_ok;
+	use sp_runtime::traits::{Hash, Keccak256};
+
+	#[test]
+	fn just_load_the_contract() {
+		assert_ok!(ethabi::Contract::load(
+			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
+		));
+	}
+}

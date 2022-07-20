@@ -68,20 +68,20 @@ fn cannot_back_proposal_twice() {
 }
 
 #[test]
-fn cannot_back_not_exisintg_proposal() {
+fn cannot_back_not_existing_proposal() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			TokenholderGovernance::back_proposal(
 				Origin::signed(BOB),
 				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 			),
-			Error::<Test>::ProposalDosentExists
+			Error::<Test>::ProposalDoesntExists
 		);
 	});
 }
 
 #[test]
-fn cannot_create_proposal_with_unsuficient_liquidity() {
+fn cannot_create_proposal_with_insufficient_liquidity() {
 	new_test_ext().execute_with(|| {
 		ProposalFee::<Test>::set(10000);
 		assert_noop!(
@@ -95,7 +95,7 @@ fn cannot_create_proposal_with_unsuficient_liquidity() {
 }
 
 #[test]
-fn not_enough_backed_liquidty() {
+fn not_enough_backed_liquidity() {
 	new_test_ext().execute_with(|| {
 		VotingPeriod::<Test>::set(10);
 		EnactmentDelay::<Test>::set(20);
