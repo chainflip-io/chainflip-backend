@@ -1218,32 +1218,33 @@ mod tests {
 					});
 
 					// assert list of backup validators as being the genesis authorities
-					let mut current_backup_nodes: Vec<NodeId> =
-						<Validator as BackupNodes>::backup_nodes();
+					let mut highest_staked_backup_nodes: Vec<NodeId> =
+						Validator::highest_staked_backup_nodes();
 
-					current_backup_nodes.sort();
+					highest_staked_backup_nodes.sort();
 					genesis_authorities.sort();
 
 					assert_eq!(
-						genesis_authorities, current_backup_nodes,
+						genesis_authorities, highest_staked_backup_nodes,
 						"the genesis authorities should now be the backup nodes"
 					);
 
-					current_backup_nodes.iter().for_each(|account_id| {
+					highest_staked_backup_nodes.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 						// we were active in the first epoch
 						assert_eq!(account_data.state, ChainflipAccountState::HistoricalAuthority);
 						// TODO: Check historical epochs
 					});
 
-					let backup_node_balances: HashMap<NodeId, FlipBalance> = current_backup_nodes
-						.iter()
-						.map(|validator_id| {
-							(validator_id.clone(), Flip::staked_balance(validator_id))
-						})
-						.collect::<Vec<(NodeId, FlipBalance)>>()
-						.into_iter()
-						.collect();
+					let backup_node_balances: HashMap<NodeId, FlipBalance> =
+						highest_staked_backup_nodes
+							.iter()
+							.map(|validator_id| {
+								(validator_id.clone(), Flip::staked_balance(validator_id))
+							})
+							.collect::<Vec<(NodeId, FlipBalance)>>()
+							.into_iter()
+							.collect();
 
 					// Move forward a heartbeat, emissions should be shared to backup nodes
 					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);

@@ -30,15 +30,6 @@ macro_rules! assert_default_auction_outcome {
 		assert_epoch_number(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
 		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), AUCTION_WINNERS.to_vec());
-		assert_eq!(
-			ValidatorPallet::backup_nodes(),
-			AUCTION_LOSERS[..ValidatorPallet::backup_set_target_size(
-				AUCTION_WINNERS.len(),
-				BackupNodePercentage::<Test>::get()
-			)]
-				.to_vec(),
-			"backup nodes should be updated and should not include the unqualified node"
-		);
 	};
 }
 
