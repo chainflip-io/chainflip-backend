@@ -21,10 +21,9 @@ mod rotation_state;
 pub use backup_triage::*;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BackupNodes,
-	BidderProvider, Bonding, Chainflip, ChainflipAccount, ChainflipAccountData,
-	ChainflipAccountStore, EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
-	StakeHandler, SystemStateInfo, VaultRotator,
+	BidderProvider, Bonding, Chainflip, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -129,9 +128,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config:
-		frame_system::Config<AccountData = ChainflipAccountData>
-		+ Chainflip
-		+ pallet_session::Config<ValidatorId = ValidatorIdOf<Self>>
+		frame_system::Config + Chainflip + pallet_session::Config<ValidatorId = ValidatorIdOf<Self>>
 	{
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -248,10 +245,9 @@ pub mod pallet {
 			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
 			let mut weight = 0;
 
-			// Check expiry of epoch and store last expired
+			// Check expiry of epoch and store last expired.
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				LastExpiredEpoch::<T>::set(epoch_index);
-				Self::expire_epoch(epoch_index);
+				weight += Self::expire_epoch(epoch_index);
 			}
 
 			weight += Self::punish_missed_authorship_slots();
@@ -817,13 +813,13 @@ pub mod pallet {
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 			for id in &self.genesis_authorities {
-				ChainflipAccountStore::<T>::set_current_authority(id.into_ref());
+				T::ChainflipAccount::set_current_authority(id.into_ref());
 			}
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
 				self.bond,
-				RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(vec![], 0),
+				|| RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(vec![], 0),
 			);
 		}
 	}
@@ -944,21 +940,20 @@ impl<T: Config> Pallet<T> {
 			.iter()
 			.filter(|authority| !new_authorities_lookup.contains(authority))
 		{
-			ChainflipAccountStore::<T>::set_historical_authority(historical_authority.into_ref());
+			log::trace!(target: "cf-validator", "Setting old authority {:?} to historical.", historical_authority);
+			T::ChainflipAccount::set_historical_authority(historical_authority.into_ref());
 		}
 
 		for incoming_authority in new_authorities_lookup
 			.iter()
 			.filter(|authority| !old_authorities_lookup.contains(authority))
 		{
-			ChainflipAccountStore::<T>::set_current_authority(incoming_authority.into_ref());
+			log::trace!(target: "cf-validator", "Setting new authority {:?} to current authority.", incoming_authority);
+			T::ChainflipAccount::set_current_authority(incoming_authority.into_ref());
 		}
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
-		Self::initialise_new_epoch(
-			new_epoch,
-			&new_authorities,
-			rotation_state.bond,
+		Self::initialise_new_epoch(new_epoch, &new_authorities, rotation_state.bond, || {
 			RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
 				T::BidderProvider::get_bidders()
 					.into_iter()
@@ -971,8 +966,8 @@ impl<T: Config> Pallet<T> {
 					new_authorities_lookup.len(),
 					BackupNodePercentage::<T>::get(),
 				),
-			),
-		);
+			)
+		});
 
 		// Trigger the new epoch handlers on other pallets.
 		T::EpochTransitionHandler::on_new_epoch(&new_authorities);
@@ -980,17 +975,19 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
 
-	fn expire_epoch(epoch: EpochIndex) {
+	fn expire_epoch(epoch: EpochIndex) -> Weight {
+		LastExpiredEpoch::<T>::set(epoch);
+		let mut num_expired_authorities = 0;
 		for authority in EpochHistory::<T>::epoch_authorities(epoch).iter() {
+			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
-				ChainflipAccountStore::<T>::from_historical_to_backup_or_passive(
-					authority.into_ref(),
-				);
+				T::ChainflipAccount::from_historical_to_backup_or_passive(authority.into_ref());
 				T::ReputationResetter::reset_reputation(authority);
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
+		T::ValidatorWeightInfo::expire_epoch(num_expired_authorities)
 	}
 
 	/// Does all state updates related to the *new* epoch. Is also called at genesis to initialise
@@ -1001,7 +998,7 @@ impl<T: Config> Pallet<T> {
 		new_epoch: EpochIndex,
 		new_authorities: &[ValidatorIdOf<T>],
 		new_bond: T::Amount,
-		backup_triage: RuntimeBackupTriage<T>,
+		backup_triage: impl Fn() -> RuntimeBackupTriage<T>,
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
 		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
@@ -1024,7 +1021,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// We've got new validators, which means the backups and passives may have changed.
-		BackupValidatorTriage::<T>::put(backup_triage);
+		BackupValidatorTriage::<T>::put(backup_triage());
 	}
 
 	fn set_rotation_phase(new_phase: RotationPhase<T>) {

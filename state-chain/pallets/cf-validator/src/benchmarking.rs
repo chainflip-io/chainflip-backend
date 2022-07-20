@@ -2,13 +2,14 @@
 
 use super::*;
 
-use cf_traits::{AuctionOutcome, Bid};
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::{Digest, DigestItem};
+
+use cf_traits::AuctionOutcome;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
@@ -29,80 +30,103 @@ pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + ReputationConf
 
 impl<T: Config + StakingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
 
-pub fn bidder_account_id<T: frame_system::Config, I: Into<u32>>(i: I) -> T::AccountId {
-	account::<T::AccountId>("auction-bidder", i.into(), 0)
-}
-
-pub fn bidder_validator_id<T: Chainflip, I: Into<u32>>(i: I) -> T::ValidatorId {
-	bidder_account_id::<T, I>(i).into()
+pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>, I: Into<u32>>(
+	size: I,
+	set_id: I,
+) -> impl Iterator<Item = Id> {
+	let set_id = set_id.into();
+	(0..size.into())
+		.map(move |i| account::<<T as frame_system::Config>::AccountId>("bidder", i, set_id).into())
 }
 
 /// Initialises bidders for the auction by staking each one, registering session keys and peer ids
 /// and submitting heartbeats.
-pub fn init_bidders<T: RuntimeConfig>(n: u32) {
-	for (i, bidder) in (0..n).map(bidder_account_id::<T, _>).enumerate() {
+pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
+	for bidder in bidder_set::<T, <T as frame_system::Config>::AccountId, _>(n, set_id) {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
 		assert_ok!(pallet_cf_staking::Pallet::<T>::staked(
 			T::EnsureWitnessed::successful_origin(),
 			bidder.clone(),
-			(100_000u128 * 10u128.pow(18)).unique_saturated_into(),
+			(flip_staked * 10u128.pow(18)).unique_saturated_into(),
 			pallet_cf_staking::ETH_ZERO_ADDRESS,
 			Default::default()
 		));
 		assert_ok!(pallet_cf_staking::Pallet::<T>::activate_account(bidder_origin.clone(),));
 
-		assert_ok!(pallet_session::Pallet::<T>::set_keys(
-			bidder_origin.clone(),
-			// 128 / 4 because u32 is 4 bytes.
-			T::Keys::decode(&mut &i.to_be_bytes().repeat(128 / 4)[..]).unwrap(),
-			vec![],
-		));
-
 		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature = public_key.sign(&bidder.encode()).unwrap();
 		assert_ok!(Pallet::<T>::register_peer_id(
 			bidder_origin.clone(),
-			public_key.try_into().unwrap(),
+			public_key.clone().try_into().unwrap(),
 			1337,
 			1u128,
 			signature.try_into().unwrap(),
+		));
+
+		// Reuse the random peer id for the session keys, we don't need real ones.
+		let fake_key = public_key.to_raw_vec().repeat(4);
+		assert_ok!(pallet_session::Pallet::<T>::set_keys(
+			bidder_origin.clone(),
+			// Public key is 32 bytes, we need 128 bytes.
+			T::Keys::decode(&mut &fake_key[..]).unwrap(),
+			vec![],
 		));
 
 		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(bidder_origin.clone(),));
 	}
 }
 
-/// Builds a RotationState with the desired numbers of candidates.
-pub fn new_rotation_state<T: Config>(
-	num_primary_candidates: u32,
-	num_secondary_candidates: u32,
-) -> RuntimeRotationState<T> {
-	let winners = (0..num_primary_candidates).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
-	let losers = (num_primary_candidates..num_primary_candidates + num_secondary_candidates)
-		.map(|i| Bid::from((bidder_validator_id::<T, _>(i), 90u32.into())))
-		.collect::<Vec<_>>();
+pub fn start_vault_rotation<T: RuntimeConfig>(
+	primary_candidates: u32,
+	secondary_candidates: u32,
+	epoch: u32,
+) {
+	// Use an offset to ensure the candidate sets don't clash.
+	const LARGE_OFFSET: u32 = 100;
+	init_bidders::<T>(primary_candidates, epoch, 100_000u128);
+	init_bidders::<T>(secondary_candidates, epoch + LARGE_OFFSET, 90_000u128);
 
-	// In order to be considered as secondary candidates, a validator must either a curret backup
-	// or authority. Making them authorities is easier.
-	CurrentAuthorities::<T>::put(
-		losers.iter().map(|bid| bid.bidder_id.clone()).collect::<Vec<_>>(),
-	);
-
-	RotationState::from_auction_outcome::<T>(AuctionOutcome {
-		winners,
-		losers,
+	Pallet::<T>::start_vault_rotation(RotationState::from_auction_outcome::<T>(AuctionOutcome {
+		winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
+		losers: bidder_set::<T, ValidatorIdOf<T>, _>(secondary_candidates, epoch + LARGE_OFFSET)
+			.map(|id| (id, 90_000u32.into()).into())
+			.collect(),
 		bond: 100u32.into(),
-	})
+	}));
+
+	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::VaultsRotating(..)));
 }
 
-pub fn setup_and_start_vault_rotation<T: Config>(
-	num_primary_candidates: u32,
-	num_secondary_candidates: u32,
-) {
-	Pallet::<T>::start_vault_rotation(new_rotation_state::<T>(
-		num_primary_candidates,
-		num_secondary_candidates,
-	));
+pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
+	let old_epoch = Pallet::<T>::epoch_index();
+
+	// Use an offset to ensure the candidate sets don't clash.
+	init_bidders::<T>(candidates, epoch, 100_000u128);
+
+	// Resolves the auction and starts the vault rotation.
+	Pallet::<T>::start_authority_rotation();
+
+	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::VaultsRotating(..)));
+
+	// Simulate success.
+	T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Ok(())));
+
+	// The rest should take care of itself.
+	let mut iterations = 0;
+	while !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+		let block = frame_system::Pallet::<T>::current_block_number();
+		Pallet::<T>::on_initialize(block);
+		pallet_session::Pallet::<T>::on_initialize(block);
+		iterations += 1;
+		if iterations > 4 {
+			panic!(
+				"Rotation should not take more than 4 iterations. Stuck at {:?}",
+				CurrentRotationPhase::<T>::get()
+			);
+		}
+	}
+
+	assert_eq!(Pallet::<T>::epoch_index(), old_epoch + 1, "authority rotation failed");
 }
 
 benchmarks! {
@@ -170,14 +194,31 @@ benchmarks! {
 		assert_eq!(VanityNames::<T>::get().get(&caller.into()), Some(&name));
 	}
 
-	// expire_epoch {
+	expire_epoch {
+		// 3 is the minimum number bidders for a successful auction.
+		let a in 3 .. 150;
 
-	// }: {
+		// This is the initial authority set that will be expired.
+		rotate_authorities::<T>(a, 1);
+		// A new distinct authority set. The previous authorities will now be historical authorities.
+		rotate_authorities::<T>(a, 2);
 
-	// }
-	// verify {
-
-	// }
+		const EPOCH_TO_EXPIRE: EpochIndex = 2;
+		assert_eq!(
+			Pallet::<T>::epoch_index(),
+			EPOCH_TO_EXPIRE + 1,
+		);
+		// Ensure that we are expiring the expected number of authorities.
+		assert_eq!(
+			EpochHistory::<T>::epoch_authorities(EPOCH_TO_EXPIRE).len(),
+			a as usize,
+		);
+	}: {
+		Pallet::<T>::expire_epoch(EPOCH_TO_EXPIRE);
+	}
+	verify {
+		assert_eq!(LastExpiredEpoch::<T>::get(), EPOCH_TO_EXPIRE);
+	}
 
 	missed_authorship_slots {
 		// Unlikely we will ever miss 10 successive blocks.
@@ -218,7 +259,7 @@ benchmarks! {
 	start_authority_rotation {
 		// a = number of bidders.
 		let a in 3 .. 400;
-		init_bidders::<T>(a);
+		init_bidders::<T>(a, 1, 100_000u128);
 	}: {
 		Pallet::<T>::start_authority_rotation();
 	}
@@ -249,7 +290,7 @@ benchmarks! {
 
 		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just have to be
 		// enough to fill up available secondary slots).
-		setup_and_start_vault_rotation::<T>(a, 50);
+		start_vault_rotation::<T>(a, a / 3, 1);
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
@@ -276,7 +317,7 @@ benchmarks! {
 
 		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just have to be
 		// enough to fill up available secondary slots).
-		setup_and_start_vault_rotation::<T>(a, 50);
+		start_vault_rotation::<T>(a, 50, 1);
 
 		// Simulate success.
 		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Ok(())));
@@ -305,10 +346,10 @@ benchmarks! {
 		let o in 1 .. { 150 / 3 };
 
 		// Set up a vault rotation.
-		setup_and_start_vault_rotation::<T>(150, 50);
+		start_vault_rotation::<T>(150, 50, 1);
 
 		// Simulate failure.
-		let offenders = (0..o).map(bidder_validator_id::<T, _>).collect::<Vec<_>>();
+		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<Vec<_>>();
 		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Err(offenders.clone())));
 
 		// This assertion ensures we are using the correct weight parameters.
@@ -338,7 +379,12 @@ benchmarks! {
 		let a in 3 .. 150;
 
 		// Set up a vault rotation.
-		CurrentRotationPhase::<T>::put(RotationPhase::VaultsRotated(new_rotation_state::<T>(a, 50)));
+		start_vault_rotation::<T>(a, 50, 1);
+		match CurrentRotationPhase::<T>::get() {
+			RotationPhase::VaultsRotating(rotation_state) =>
+				CurrentRotationPhase::<T>::put(RotationPhase::VaultsRotated(rotation_state)),
+			_ => panic!("phase should be VaultsRotated"),
+		}
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
