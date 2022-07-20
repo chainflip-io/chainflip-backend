@@ -136,7 +136,7 @@
         "blocksPerEpoch": 4800,
         "bond": 50000000000000000000000,
         "claimPeriodAsPercentage": 50,
-        "backupNodePercentage": 20,
+        "BackupRewardNodePercentage": 20,
         "authoritySetMinSize": 2
       },
       "session": {

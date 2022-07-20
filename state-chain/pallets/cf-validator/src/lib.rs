@@ -212,7 +212,7 @@ pub mod pallet {
 		/// Vanity Name for a node has been set \[account_id, vanity_name\]
 		VanityNameSet(T::AccountId, VanityName),
 		/// The backup node percentage has been updated \[percentage\].
-		BackupNodePercentageUpdated(Percentage),
+		BackupRewardNodePercentageUpdated(Percentage),
 		/// The minimum authority set size has been updated.
 		AuthoritySetMinSizeUpdated { min_size: u8 },
 	}
@@ -595,7 +595,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BackupNodePercentageUpdated](Event::BackupNodePercentageUpdated)
+		/// - [BackupRewardNodePercentageUpdated](Event::BackupRewardNodePercentageUpdated)
 		///
 		/// ## Errors
 		///
@@ -611,9 +611,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			BackupNodePercentage::<T>::put(percentage);
+			BackupRewardNodePercentage::<T>::put(percentage);
 
-			Self::deposit_event(Event::BackupNodePercentageUpdated(percentage));
+			Self::deposit_event(Event::BackupRewardNodePercentageUpdated(percentage));
 			Ok(().into())
 		}
 
@@ -623,7 +623,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BackupNodePercentageUpdated](Event::BackupNodePercentageUpdated)
+		/// - [BackupRewardNodePercentageUpdated](Event::BackupRewardNodePercentageUpdated)
 		///
 		/// ## Errors
 		///
@@ -764,12 +764,11 @@ pub mod pallet {
 	#[pallet::getter(fn backups)]
 	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
 
-	// TODO: Rename this
-	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
-	/// authority set size.
+	/// Determines the number of backup nodes who receive rewards as a percentage
+	/// of the authority count
 	#[pallet::storage]
 	#[pallet::getter(fn backup_reward_node_percentage)]
-	pub type BackupNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
+	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// The absolute minimum number of authority nodes for the next epoch.
 	#[pallet::storage]
@@ -808,7 +807,7 @@ pub mod pallet {
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-			BackupNodePercentage::<T>::set(self.backup_reward_node_percentage);
+			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
@@ -1102,7 +1101,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Returns the number of backup nodes eligible for rewards
 	pub fn backup_reward_nodes_limit() -> usize {
-		Percent::from_percent(BackupNodePercentage::<T>::get()) *
+		Percent::from_percent(BackupRewardNodePercentage::<T>::get()) *
 			Self::current_authority_count() as usize
 	}
 

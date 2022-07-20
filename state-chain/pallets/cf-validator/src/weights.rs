@@ -58,7 +58,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Validator BackupNodePercentage (r:0 w:1)
+	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
 	fn set_backup_reward_node_percentage() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(9_000_000 as Weight)
@@ -227,7 +227,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Validator BackupNodePercentage (r:0 w:1)
+	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
 	fn set_backup_reward_node_percentage() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(9_000_000 as Weight)
