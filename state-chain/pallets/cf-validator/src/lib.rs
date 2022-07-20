@@ -651,22 +651,22 @@ pub mod pallet {
 		}
 	}
 
-	/// Percentage of epoch we allow claims
+	/// Percentage of epoch we allow claims.
 	#[pallet::storage]
 	#[pallet::getter(fn claim_period_as_percentage)]
 	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
-	/// The starting block number for the current epoch
+	/// The starting block number for the current epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
 	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
-	/// The number of blocks an epoch runs for
+	/// The duration of an epoch in blocks.
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_number_of_blocks)]
 	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
-	/// Current epoch index
+	/// Current epoch index.
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
 	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
@@ -683,33 +683,33 @@ pub mod pallet {
 		AuthorityCount,
 	>;
 
-	/// Track epochs and their associated authority count
+	/// Track epochs and their associated authority count.
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_authority_count)]
 	pub type EpochAuthorityCount<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
 
-	/// The rotation phase we are currently at
+	/// The rotation phase we are currently at.
 	#[pallet::storage]
 	#[pallet::getter(fn current_rotation_phase)]
 	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
-	/// A list of the current authorites
+	/// A list of the current authorites.
 	#[pallet::storage]
 	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
-	/// Vanity names of the validators stored as a Map with the current validator IDs as key
+	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
 	#[pallet::storage]
 	#[pallet::getter(fn vanity_names)]
 	pub type VanityNames<T: Config> =
 		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
-	/// The current bond
+	/// The bond of the current epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn bond)]
 	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
-	/// Account to Peer Mapping
+	/// Account to Peer Mapping.
 	#[pallet::storage]
 	#[pallet::getter(fn node_peer_id)]
 	pub type AccountPeerMapping<T: Config> = StorageMap<
@@ -719,27 +719,27 @@ pub mod pallet {
 		(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 	>;
 
-	/// Peers that are associated with account ids
+	/// Peers that are associated with account ids.
 	#[pallet::storage]
 	#[pallet::getter(fn mapped_peer)]
 	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
 
-	/// Node CFE version
+	/// Node CFE version.
 	#[pallet::storage]
 	#[pallet::getter(fn node_cfe_version)]
 	pub type NodeCFEVersion<T: Config> =
 		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
 
-	/// The last expired epoch index
+	/// The last expired epoch index.
 	#[pallet::storage]
 	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
-	/// A map storing the expiry block numbers for old epochs
+	/// A map storing the expiry block numbers for old epochs.
 	#[pallet::storage]
 	pub type EpochExpiries<T: Config> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
-	/// A map between an epoch and an vector of authorities (participating in this epoch)
+	/// A map between an epoch and an vector of authorities (participating in this epoch).
 	#[pallet::storage]
 	pub type HistoricalAuthorities<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
@@ -759,13 +759,13 @@ pub mod pallet {
 	#[pallet::getter(fn ceremony_id_counter)]
 	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// Backups, nodes who are not in the authority set, but are staked
+	/// Backups, nodes who are not in the authority set, but are staked.
 	#[pallet::storage]
 	#[pallet::getter(fn backups)]
 	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
 
 	/// Determines the number of backup nodes who receive rewards as a percentage
-	/// of the authority count
+	/// of the authority count.
 	#[pallet::storage]
 	#[pallet::getter(fn backup_reward_node_percentage)]
 	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
