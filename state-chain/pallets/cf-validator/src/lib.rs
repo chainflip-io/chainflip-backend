@@ -1311,7 +1311,7 @@ impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 		if T::ValidatorQualification::is_qualified(validator_id) {
 			BackupValidatorTriage::<T>::mutate(|backups| {
 				if amount.is_zero() {
-					backups.remove(&validator_id).expect("This id should exist in the map");
+					backups.remove(validator_id).expect("This id should exist in the map");
 				} else {
 					backups.insert(validator_id.clone(), amount);
 				}

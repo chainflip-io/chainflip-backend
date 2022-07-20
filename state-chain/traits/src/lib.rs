@@ -432,7 +432,10 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 				(*account_data).state = ChainflipAccountState::Backup;
 			},
 			_ => {
-				log::error!("Attempted to set Backup on a CurrentAuthority or existing Backup");
+				const ERROR_MESSAGE: &str = "Attempted to transition to backup from historical, on a non-historical authority";
+				log::error!("{}", ERROR_MESSAGE);
+				#[cfg(test)]
+				panic!("{}", ERROR_MESSAGE);
 			},
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
