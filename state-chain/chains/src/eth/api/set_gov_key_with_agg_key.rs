@@ -25,8 +25,7 @@ impl SetGovKeyWithAggKey {
 		replay_protection: EthereumReplayProtection,
 		new_key: eth::Address,
 	) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(replay_protection), new_key: new_key };
+		let mut calldata = Self { sig_data: SigData::new_empty(replay_protection), new_key };
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 		calldata
 	}
