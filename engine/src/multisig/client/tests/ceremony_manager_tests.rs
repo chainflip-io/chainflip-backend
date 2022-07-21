@@ -13,15 +13,41 @@ use crate::{
             tests::helpers::gen_invalid_keygen_stage_2_state,
             CeremonyFailureReason, MultisigData,
         },
-        crypto::Rng,
+        crypto::{CryptoScheme, Rng},
         eth::EthSigning,
         tests::fixtures::MESSAGE_HASH,
     },
 };
 use client::MultisigMessage;
 use rand_legacy::SeedableRng;
+use sp_runtime::AccountId32;
 use tokio::sync::oneshot;
 use utilities::{assert_ok, threshold_from_share_count};
+
+/// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
+pub fn run_on_request_to_sign<C: CryptoScheme>(
+    ceremony_manager: &mut CeremonyManager<C>,
+    participants: Vec<sp_runtime::AccountId32>,
+) -> oneshot::Receiver<
+    Result<
+        <C as CryptoScheme>::Signature,
+        (
+            BTreeSet<AccountId32>,
+            CeremonyFailureReason<SigningFailureReason>,
+        ),
+    >,
+> {
+    let (result_sender, result_receiver) = oneshot::channel();
+    ceremony_manager.on_request_to_sign(
+        DEFAULT_SIGNING_CEREMONY_ID,
+        participants,
+        MESSAGE_HASH.clone(),
+        get_key_data_for_test(&ACCOUNT_IDS),
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
+        result_sender,
+    );
+    result_receiver
+}
 
 // This test is for MultisigData::Keygen but also covers the test for signing
 // because the code is common.
@@ -141,9 +167,6 @@ async fn should_panic_rts_if_not_participating() {
     let non_participating_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&non_participating_id));
 
-    // Generate a key to use in this test
-    let keygen_result_info = get_key_data_for_test(&ACCOUNT_IDS);
-
     // Create a new ceremony manager with the non_participating_id
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
         non_participating_id,
@@ -153,15 +176,7 @@ async fn should_panic_rts_if_not_participating() {
     );
 
     // Send a signing request where participants doesn't include non_participating_id
-    let (result_sender, _result_receiver) = oneshot::channel();
-    ceremony_manager.on_request_to_sign(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        ACCOUNT_IDS.clone(),
-        MESSAGE_HASH.clone(),
-        keygen_result_info,
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-        result_sender,
-    );
+    let _result_receiver = run_on_request_to_sign(&mut ceremony_manager, ACCOUNT_IDS.clone());
 }
 
 #[tokio::test]
@@ -209,9 +224,6 @@ async fn should_ignore_duplicate_keygen_request() {
 
 #[tokio::test]
 async fn should_ignore_duplicate_rts() {
-    // Generate a key to use in this test
-    let keygen_result_info = get_key_data_for_test(&ACCOUNT_IDS);
-
     // Create a new ceremony manager
     let (p2p_sender, _p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
@@ -222,28 +234,14 @@ async fn should_ignore_duplicate_rts() {
     );
 
     // Send a signing request with the DEFAULT_SIGNING_CEREMONY_ID
-    ceremony_manager.on_request_to_sign(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        ACCOUNT_IDS.clone(),
-        MESSAGE_HASH.clone(),
-        keygen_result_info.clone(),
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-        oneshot::channel().0,
-    );
+    let _result_receiver = run_on_request_to_sign(&mut ceremony_manager, ACCOUNT_IDS.clone());
 
     // Check that the ceremony started
     assert_ok!(ceremony_manager.check_ceremony_at_signing_stage(1, DEFAULT_SIGNING_CEREMONY_ID));
 
     // Send another signing request with the same ceremony id (DEFAULT_SIGNING_CEREMONY_ID)
-    let (result_sender, mut result_receiver) = oneshot::channel();
-    ceremony_manager.on_request_to_sign(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        ACCOUNT_IDS.clone(),
-        MESSAGE_HASH.clone(),
-        keygen_result_info,
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-        result_sender,
-    );
+    let mut result_receiver = run_on_request_to_sign(&mut ceremony_manager, ACCOUNT_IDS.clone());
+
     // Receive the DuplicateCeremonyId error result
     assert_eq!(
         result_receiver
@@ -306,15 +304,7 @@ async fn should_ignore_rts_with_duplicate_signer() {
     );
 
     // Send a signing request with the duplicate id
-    let (result_sender, mut result_receiver) = oneshot::channel();
-    ceremony_manager.on_request_to_sign(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        participants,
-        MESSAGE_HASH.clone(),
-        get_key_data_for_test(&ACCOUNT_IDS),
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-        result_sender,
-    );
+    let mut result_receiver = run_on_request_to_sign(&mut ceremony_manager, participants);
 
     // Receive the InvalidParticipants error result
     assert_eq!(
@@ -343,15 +333,8 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
     );
 
     // Send a signing request with not enough participants
-    let (result_sender, mut result_receiver) = oneshot::channel();
-    ceremony_manager.on_request_to_sign(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        not_enough_participants,
-        MESSAGE_HASH.clone(),
-        get_key_data_for_test(&ACCOUNT_IDS),
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-        result_sender,
-    );
+    let mut result_receiver =
+        run_on_request_to_sign(&mut ceremony_manager, not_enough_participants);
 
     // Receive the NotEnoughSigners error result
     assert_eq!(
@@ -389,15 +372,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     participants[unknown_signer_idx] = unknown_signer_id;
 
     // Send a signing request with the modified participants
-    let (result_sender, mut result_receiver) = oneshot::channel();
-    ceremony_manager.on_request_to_sign(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        participants,
-        MESSAGE_HASH.clone(),
-        get_key_data_for_test(&ACCOUNT_IDS),
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-        result_sender,
-    );
+    let mut result_receiver = run_on_request_to_sign(&mut ceremony_manager, participants);
 
     // Receive the InvalidParticipants error result
     assert_eq!(
