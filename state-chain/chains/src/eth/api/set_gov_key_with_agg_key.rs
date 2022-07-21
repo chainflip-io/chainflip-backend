@@ -3,7 +3,7 @@ use crate::{
 	ApiCall, ChainAbi, ChainCrypto, Ethereum,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{ParamType, Token};
+use ethabi::{Address, ParamType, Token};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::vec;
@@ -17,15 +17,13 @@ pub struct SetGovKeyWithAggKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The new gov key.
-	pub new_key: eth::Address,
+	pub new_key: Address,
 }
 
 impl SetGovKeyWithAggKey {
-	pub fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_key: eth::Address,
-	) -> Self {
-		let mut calldata = Self { sig_data: SigData::new_empty(replay_protection), new_key };
+	pub fn new_unsigned(replay_protection: EthereumReplayProtection, new_key: Address) -> Self {
+		let mut calldata =
+			Self { sig_data: SigData::new_empty(replay_protection), new_key: new_key.into() };
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 		calldata
 	}
@@ -78,12 +76,80 @@ impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
 
 #[cfg(test)]
 mod test_set_agg_key_with_agg_key {
+
+	use super::*;
+	use crate::{
+		eth::{tests::asymmetrise, SchnorrVerificationComponents},
+		ApiCall,
+	};
+	use ethabi::{Token};
+	use ethereum_types::H160;
 	use frame_support::assert_ok;
+
+	use crate::eth::api::{
+		set_gov_key_with_agg_key::SetGovKeyWithAggKey, EthereumReplayProtection,
+	};
 
 	#[test]
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
 			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
 		));
+	}
+
+	#[test]
+	fn test_known_payload() {
+		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
+		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
+		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
+		const CHAIN_ID: u64 = 1;
+		const NONCE: u64 = 6;
+		const TEST_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
+
+		let key_manager = ethabi::Contract::load(
+			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
+		)
+		.unwrap();
+
+		let set_gov_reference = key_manager.function("setGovKeyWithAggKey").unwrap();
+
+		let set_gov_key_runtime = SetGovKeyWithAggKey::new_unsigned(
+			EthereumReplayProtection {
+				key_manager_address: FAKE_KEYMAN_ADDR,
+				chain_id: CHAIN_ID,
+				nonce: NONCE,
+			},
+			H160::from(TEST_ADDR),
+		);
+		let expected_msg_hash = set_gov_key_runtime.sig_data.msg_hash;
+		assert_eq!(set_gov_key_runtime.threshold_signature_payload(), expected_msg_hash);
+
+		let runtime_payload = set_gov_key_runtime
+			.clone()
+			.signed(&SchnorrVerificationComponents {
+				s: FAKE_SIG,
+				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+			})
+			.abi_encoded();
+
+		assert_eq!(
+			// Our encoding:
+			runtime_payload,
+			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
+			set_gov_reference
+				.encode_input(&[
+					// sigData: SigData(address, uint, uint, uint, uint, address)
+					Token::Tuple(vec![
+						Token::Address(FAKE_KEYMAN_ADDR.into()),
+						Token::Uint(CHAIN_ID.into()),
+						Token::Uint(expected_msg_hash.0.into()),
+						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(NONCE.into()),
+						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
+					]),
+					Token::Address(TEST_ADDR.into()),
+				])
+				.unwrap()
+		);
 	}
 }
