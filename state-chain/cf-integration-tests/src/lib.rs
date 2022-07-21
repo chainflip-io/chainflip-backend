@@ -326,14 +326,13 @@ mod tests {
 		// Create an account, generate and register the session keys
 		pub(crate) fn setup_account(node_id: &NodeId) {
 			let seed = &node_id.clone().to_string();
-			let key = SessionKeys {
-				aura: get_from_seed::<AuraId>(seed),
-				grandpa: get_from_seed::<GrandpaId>(seed),
-			};
 
 			assert_ok!(state_chain_runtime::Session::set_keys(
 				state_chain_runtime::Origin::signed(node_id.clone()),
-				key,
+				SessionKeys {
+					aura: get_from_seed::<AuraId>(seed),
+					grandpa: get_from_seed::<GrandpaId>(seed),
+				},
 				vec![]
 			));
 		}
