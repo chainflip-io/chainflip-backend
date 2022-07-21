@@ -402,12 +402,8 @@ mod tests {
 				// Create the backup nodes
 				let mut backup_nodes = Vec::new();
 				for _ in 0..number_of_backup_nodes {
-					let node_id = network.next_node_id();
-					backup_nodes.push(node_id.clone());
-					network.engines.insert(
-						node_id.clone(),
-						Engine::new(node_id, network.threshold_signer.clone()),
-					);
+					let node_id = network.create_engine();
+					backup_nodes.push(node_id);
 				}
 
 				(network, backup_nodes)
@@ -423,7 +419,6 @@ mod tests {
 				node_id
 			}
 
-			// TODO: This seems like a pointless abstraction
 			// Adds an engine to the test network
 			pub fn add_engine(&mut self, node_id: &NodeId) {
 				self.engines.insert(
