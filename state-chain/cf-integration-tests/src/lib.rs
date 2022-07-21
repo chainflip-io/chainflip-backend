@@ -751,7 +751,7 @@ mod tests {
 		use std::collections::BTreeSet;
 
 		use super::*;
-		use crate::tests::{genesis::GENESIS_BALANCE};
+		use crate::tests::genesis::GENESIS_BALANCE;
 		use cf_traits::{
 			BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
 			EpochInfo,
@@ -1207,7 +1207,9 @@ mod tests {
 
 					// assert list of backup validators as being the genesis authorities
 					let mut highest_staked_backup_nodes: Vec<NodeId> =
-						Validator::highest_staked_backup_nodes();
+						Validator::highest_staked_qualified_backup_nodes_lookup()
+							.into_iter()
+							.collect();
 
 					highest_staked_backup_nodes.sort();
 					genesis_authorities.sort();

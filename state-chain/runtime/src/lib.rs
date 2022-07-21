@@ -669,7 +669,7 @@ impl_runtime_apis! {
 					ChainflipAccountStateWithPassive::CurrentAuthority
 				} else {
 					// if the node is in this set, they were previously known as backups
-					let backup_or_passive = if Validator::highest_staked_backup_nodes().contains(&account_id) {
+					let backup_or_passive = if Validator::highest_staked_qualified_backup_nodes_lookup().contains(&account_id) {
 						BackupOrPassive::Backup
 					} else {
 						BackupOrPassive::Passive

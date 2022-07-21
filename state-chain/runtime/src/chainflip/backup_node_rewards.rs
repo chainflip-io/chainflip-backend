@@ -1,3 +1,4 @@
+use cf_traits::Bid;
 use sp_runtime::helpers_128bit::multiply_by_rational;
 use sp_std::{cmp::min, prelude::*};
 
@@ -8,7 +9,7 @@ use sp_std::{cmp::min, prelude::*};
 // Flip error in calculation.
 
 pub fn calculate_backup_rewards<Id, Amount>(
-	backup_nodes: Vec<(Id, u128)>,
+	backup_nodes: Vec<Bid<Id, u128>>,
 	current_epoch_bond: u128,
 	reward_interwal: u128,
 	backup_node_emission_per_block: u128,
@@ -25,8 +26,9 @@ where
 		backup_node_emission_per_block / QUANTISATION_FACTOR,
 		current_authority_emission_per_block / QUANTISATION_FACTOR,
 	);
-	let backup_nodes =
-		backup_nodes.into_iter().map(|(id, stake)| (id, stake / QUANTISATION_FACTOR));
+	let backup_nodes = backup_nodes
+		.into_iter()
+		.map(|Bid { bidder_id, amount }| (bidder_id, amount / QUANTISATION_FACTOR));
 
 	// Our emission cap for this heartbeat interval
 	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interwal);
@@ -77,6 +79,9 @@ where
 
 #[test]
 fn test_example_calculations() {
+	const FLIPPERINOS_PER_FLIP: u128 = 1_000_000_000_000_000_000;
+	const FLIPPERINOS_PER_CENTIFLIP: u128 = 10_000_000_000_000_000;
+
 	// The example calculation is taken from here: https://www.notion.so/chainflip/Calculating-Backup-Validator-Rewards-8c42dee6bbc842ab99b1c4f0065b19fe
 	let test_backup_nodes = [
 		(1, 15000000),
@@ -129,7 +134,10 @@ fn test_example_calculations() {
 		(48, 4737844),
 		(49, 4643087),
 		(50, 4550225),
-	];
+	]
+	.into_iter()
+	.map(|(bidder_id, amount)| Bid { bidder_id, amount: amount * FLIPPERINOS_PER_CENTIFLIP })
+	.collect::<Vec<_>>();
 
 	let backup_rewards = [
 		3408412, 3408412, 3408412, 3408412, 3408412, 3408412, 3314286, 3183040, 3056992, 2935935,
@@ -138,13 +146,6 @@ fn test_example_calculations() {
 		1256729, 1206962, 1159167, 1113264, 1069178, 1026839, 986176, 947124, 909618, 873597,
 		839002, 805778, 773869, 743224, 713792, 685526, 658379, 632307, 607268, 583220,
 	];
-
-	const FLIPPERINOS: u128 = 1_000_000_000_000_000_000;
-	const FLIPPERINOS_PER_CENTIFLIP: u128 = 10_000_000_000_000_000;
-
-	let test_backup_nodes = test_backup_nodes
-		.map(|(node, reward)| (node, reward * FLIPPERINOS_PER_CENTIFLIP))
-		.to_vec();
 
 	const BOND: u128 = 110_000 * FLIPPERINOS;
 	const BLOCKSPERYEAR: u128 = 14_400 * 356;

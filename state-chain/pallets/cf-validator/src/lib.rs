@@ -1106,7 +1106,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Returns the ids of the highest staked backup nodes, who are eligible for the backup rewards
-	pub fn highest_staked_backup_nodes() -> Vec<ValidatorIdOf<T>> {
+	pub fn highest_staked_qualified_backup_node_bids(
+	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
 		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
 			Backups::<T>::get()
 				.into_iter()
@@ -1117,15 +1118,14 @@ impl<T: Config> Pallet<T> {
 
 		backups_by_desc_amount
 			.into_iter()
+			.filter(|Bid { bidder_id, .. }| T::ValidatorQualification::is_qualified(bidder_id))
 			.take(Self::backup_reward_nodes_limit())
-			.map(|bid| bid.bidder_id)
-			.collect()
 	}
 
-	pub fn highest_staked_qualified_backup_nodes() -> Vec<ValidatorIdOf<T>> {
-		Self::highest_staked_backup_nodes()
-			.into_iter()
-			.filter(T::ValidatorQualification::is_qualified)
+	/// Returns ids as BTreeSet for fast lookups
+	pub fn highest_staked_qualified_backup_nodes_lookup() -> BTreeSet<ValidatorIdOf<T>> {
+		Self::highest_staked_qualified_backup_node_bids()
+			.map(|Bid { bidder_id, .. }| bidder_id)
 			.collect()
 	}
 
