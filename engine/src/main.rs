@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
+use crate::multisig::eth::EthSigning;
 use anyhow::Context;
 use chainflip_engine::{
     eth::{
         self, build_broadcast_channel,
         key_manager::KeyManager,
-        rpc::{EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
+        rpc::{
+            EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthRpcClient, EthTransport,
+            EthWsRpcClient,
+        },
         stake_manager::StakeManager,
         EthBroadcaster,
     },
@@ -16,14 +20,56 @@ use chainflip_engine::{
     p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
     state_chain,
+    state_chain::client::{StateChainClient, StateChainRpcClient},
     task_scope::with_main_task_scope,
 };
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-use sp_core::U256;
+use sp_core::{H256, U256};
+use web3::transports::{Http, WebSocket};
 
-use crate::multisig::eth::EthSigning;
+async fn validate_client_chain_id<T>(
+    client: &EthRpcClient<T>,
+    expected_chain_id: U256,
+) -> anyhow::Result<()>
+where
+    T: Send + Sync + EthTransport,
+    T::Out: Send,
+{
+    let chain_id = client
+        .chain_id()
+        .await
+        .context("Failed to fetch chain id")?;
+
+    if chain_id != expected_chain_id {
+        return Err(anyhow::Error::msg(format!(
+            "Expected eth chain id {}, received {} through {}.",
+            expected_chain_id,
+            chain_id,
+            T::transport_protocol()
+        )));
+    }
+
+    Ok(())
+}
+
+async fn validate_eth_chain_ids(
+    state_chain_client: &Arc<StateChainClient<StateChainRpcClient>>,
+    eth_ws_rpc_client: &EthRpcClient<WebSocket>,
+    eth_http_rpc_client: &EthRpcClient<Http>,
+    latest_block_hash: H256,
+) -> anyhow::Result<()> {
+    let expected_chain_id = U256::from(state_chain_client
+        .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
+            latest_block_hash,
+        )
+        .await
+        .context("Failed to get EthereumChainId from state chain")?);
+
+    validate_client_chain_id(eth_ws_rpc_client, expected_chain_id).await?;
+    validate_client_chain_id(eth_http_rpc_client, expected_chain_id).await
+}
 
 #[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
@@ -86,43 +132,7 @@ fn main() -> anyhow::Result<()> {
                 [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
             ) = build_broadcast_channel(10);
 
-            {
-                // ensure configured eth node is pointing to the correct chain id
-                let chain_id_from_sc = U256::from(state_chain_client
-                    .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
-                        latest_block_hash,
-                    )
-                    .await
-                    .context("Failed to get EthereumChainId from SC")?);
-
-                let chain_id_from_eth_ws = eth_ws_rpc_client
-                    .chain_id()
-                    .await
-                    .context("Failed to fetch chain id")?;
-
-                let chain_id_from_eth_http = eth_http_rpc_client
-                    .chain_id()
-                    .await
-                    .context("Failed to fetch chain id")?;
-
-                let ws_wrong_network = chain_id_from_sc != chain_id_from_eth_ws;
-                let http_wrong_network = chain_id_from_sc != chain_id_from_eth_http;
-
-                if ws_wrong_network || http_wrong_network {
-                    return Err(anyhow::Error::msg(format!(
-                        "the ETH nodes are NOT pointing to the ETH network with ChainId {}, Please ensure they are.{}{}",
-                        chain_id_from_sc,
-                        lazy_format::lazy_format!(
-                            if ws_wrong_network => (" The WS ETH node is currently pointing to an ETH network with ChainId: {}.", chain_id_from_eth_ws)
-                            else => ("")
-                        ),
-                        lazy_format::lazy_format!(
-                            if http_wrong_network => (" The HTTP ETH node is currently pointing to an ETH network with ChainId: {}.", chain_id_from_eth_http)
-                            else => ("")
-                        ),
-                    )));
-                }
-            }
+            validate_eth_chain_ids(&state_chain_client, &eth_ws_rpc_client, &eth_http_rpc_client, latest_block_hash).await?;
 
             let cfe_settings = state_chain_client
                 .get_storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
