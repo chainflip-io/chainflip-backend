@@ -6,8 +6,9 @@ use sc_client_api::HeaderBackend;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::TX_FEE_MULTIPLIER, runtime_apis::CustomRuntimeApi,
-	ChainflipAccountState,
+	chainflip::Offence,
+	constants::common::TX_FEE_MULTIPLIER,
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -21,7 +22,7 @@ pub struct RpcAccountInfo {
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: String,
-	pub state: ChainflipAccountState,
+	pub state: ChainflipAccountStateWithPassive,
 }
 
 #[derive(Serialize, Deserialize)]

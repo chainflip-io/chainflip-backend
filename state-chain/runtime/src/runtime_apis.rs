@@ -1,13 +1,30 @@
 use crate::chainflip::Offence;
 use cf_chains::eth::SigData;
-use cf_traits::ChainflipAccountState;
 use codec::{Decode, Encode};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_core::U256;
 use sp_runtime::AccountId32;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum BackupOrPassive {
+	Backup,
+	Passive,
+}
+
+// TEMP: so frontend doesn't break after removal of passive from backend
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ChainflipAccountStateWithPassive {
+	CurrentAuthority,
+	HistoricalAuthority(BackupOrPassive),
+	BackupOrPassive(BackupOrPassive),
+}
 
 #[derive(Encode, Decode, Eq, PartialEq)]
 pub struct RuntimeApiAccountInfo {
@@ -17,7 +34,7 @@ pub struct RuntimeApiAccountInfo {
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
-	pub state: ChainflipAccountState,
+	pub state: ChainflipAccountStateWithPassive,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]

@@ -145,14 +145,14 @@ benchmarks! {
 	verify {
 		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
 	}
-	set_backup_node_percentage {
-		let call = Call::<T>::set_backup_node_percentage { percentage: 20 };
+	set_backup_reward_node_percentage {
+		let call = Call::<T>::set_backup_reward_node_percentage { percentage: 20 };
 		let o = <T as Config>::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
 	verify {
-		assert_eq!(Pallet::<T>::backup_node_percentage(), 20u8)
+		assert_eq!(Pallet::<T>::backup_reward_node_percentage(), 20u8)
 	}
 	set_authority_set_min_size {
 		let call = Call::<T>::set_authority_set_min_size { min_size: 1 };
@@ -408,5 +408,3 @@ benchmarks! {
 	}
 
 }
-
-// impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

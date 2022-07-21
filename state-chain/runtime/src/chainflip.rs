@@ -23,7 +23,7 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BackupNodes, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, StakeTransfer,
 };
 use frame_support::traits::Get;
@@ -55,7 +55,7 @@ impl RewardsDistribution for BackupNodeEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	fn distribute() {
-		let backup_nodes = Validator::backup_nodes();
+		let backup_nodes = Validator::highest_staked_backup_nodes();
 		if backup_nodes.is_empty() {
 			return
 		}

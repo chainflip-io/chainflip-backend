@@ -7,8 +7,7 @@ Validator nodes fall into different categories:
 - **Authority** Nodes are responsible for block authorship, signing ceremonies and witnessing. A portion of their stake
   is bonded and may be slashed according to the reputation system. Authorities earn Flip rewards at a rate that is
   fixed for the duration of the epoch.
-- **Backup** Nodes are incentivised to remain available to participate in the next keygen ceremony.
-- **Passive** Nodes have lower stake than Backup nodes and therefore earn no rewards.
+- **Backup** Nodes are incentivised to remain available to participate in the next keygen ceremony. Note, only the highest staked Backup nodes receive rewards, accoding to a ratio against the number of authorities, set in the runtime.
 
 To qualify as a Validator Node, the following conditions must be met:
 
@@ -23,8 +22,7 @@ of `Config::ValidatorQualification`.
 
 In addition, Authority nodes are split into **Current** and **Historical** Authorities. *Historical* authorities remain
 bonded and may be required to participate in signing ceremonies using expiring keys. They may be slashed, but earn no
-rewards, unless they happen to also be backup nodes: depending on a historical authority's stake, they will additionally
-be classified as a Backup or Passive node. However note that being a historical authority is not a prerequisite for
+rewards, unless they happen to be among the highest staked backup nodes. However note that being a historical authority is not a prerequisite for
 becoming a backup node.
 
 Any node that fulfils the qualificaton conditions will be considered for inclusion in the set of backup nodes. The size

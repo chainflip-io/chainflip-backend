@@ -82,7 +82,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip SlashingRate (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
-	// Storage: Validator BackupValidatorTriage (r:1 w:0)
+	// Storage: Validator Backups (r:1 w:0)
 	fn submit_network_state() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(45_000_000 as Weight)
@@ -139,7 +139,7 @@ impl WeightInfo for () {
 	// Storage: Flip SlashingRate (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
-	// Storage: Validator BackupValidatorTriage (r:1 w:0)
+	// Storage: Validator Backups (r:1 w:0)
 	fn submit_network_state() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(45_000_000 as Weight)

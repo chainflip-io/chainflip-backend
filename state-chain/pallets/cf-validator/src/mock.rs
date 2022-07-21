@@ -6,7 +6,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	BackupNodes, Bid, Chainflip, ChainflipAccountData, ChainflipAccountStore, QualifyNode,
+	Bid, Chainflip, ChainflipAccountData, ChainflipAccountStore, QualifyNode,
 	RuntimeAuctionOutcome,
 };
 use frame_support::{
@@ -252,7 +252,7 @@ impl Config for Test {
 }
 
 /// Session pallet requires a set of validators at genesis.
-pub const GENESIS_VALIDATORS: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2];
+pub const GENESIS_AUTHORITIES: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2];
 pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
 pub const GENESIS_BOND: Amount = 1;
 pub const EPOCH_DURATION: u64 = 10;
@@ -270,11 +270,16 @@ macro_rules! assert_invariants {
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
 		);
-		let current_authorities =
-			ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<_>>();
-		let current_backups = ValidatorPallet::backup_nodes().into_iter().collect::<BTreeSet<_>>();
+
 		assert!(
-			current_authorities.is_disjoint(&current_backups),
+			ValidatorPallet::current_authorities()
+				.into_iter()
+				.collect::<BTreeSet<_>>()
+				.is_disjoint(
+					&ValidatorPallet::highest_staked_backup_nodes()
+						.into_iter()
+						.collect::<BTreeSet<_>>()
+				),
 			"Backup nodes and validators should not overlap",
 		);
 		assert!(
@@ -288,22 +293,12 @@ macro_rules! assert_invariants {
 				.collect::<Vec<_>>(),
 		);
 		assert!(
-			ValidatorPallet::backup_nodes()
+			ValidatorPallet::highest_staked_backup_nodes()
 				.iter()
 				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_backup()),
 			"All backup nodes should have their account state set accordingly. Got: {:?}",
-			ValidatorPallet::backup_nodes()
+			ValidatorPallet::highest_staked_backup_nodes()
 				.iter()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
-				.collect::<Vec<_>>(),
-		);
-		assert!(
-			BackupValidatorTriage::<Test>::get()
-				.passive_nodes()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_passive()),
-			"All passive nodes should have their account state set accordingly. Got: {:?}",
-			BackupValidatorTriage::<Test>::get()
-				.passive_nodes()
 				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
 				.collect::<Vec<_>>(),
 		);
@@ -343,29 +338,31 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 		.env()
 		.init();
 
-	log::debug!("Initializing test GenesisConfig.");
-	let config = GenesisConfig {
-		system: SystemConfig::default(),
-		session: SessionConfig {
-			keys: [&GENESIS_VALIDATORS[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-				.concat()
-				.iter()
-				.map(|&i| (i, i, UintAuthorityId(i).into()))
-				.collect(),
-		},
-		validator_pallet: ValidatorPalletConfig {
-			genesis_authorities: GENESIS_VALIDATORS.to_vec(),
-			blocks_per_epoch: EPOCH_DURATION,
-			bond: GENESIS_BOND,
-			claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
-			backup_node_percentage: 34,
-			authority_set_min_size: 3,
-		},
-	};
+	log::debug!("Initializing TestExternalitiesWithCheck with GenesisConfig.");
 
-	let ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	TestExternalitiesWithCheck { ext }
+	TestExternalitiesWithCheck {
+		ext: GenesisConfig {
+			system: SystemConfig::default(),
+			session: SessionConfig {
+				keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+					.concat()
+					.iter()
+					.map(|&i| (i, i, UintAuthorityId(i).into()))
+					.collect(),
+			},
+			validator_pallet: ValidatorPalletConfig {
+				genesis_authorities: GENESIS_AUTHORITIES.to_vec(),
+				blocks_per_epoch: EPOCH_DURATION,
+				bond: GENESIS_BOND,
+				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
+				backup_reward_node_percentage: 34,
+				authority_set_min_size: 3,
+			},
+		}
+		.build_storage()
+		.unwrap()
+		.into(),
+	}
 }
 
 pub fn run_to_block(n: u64) {

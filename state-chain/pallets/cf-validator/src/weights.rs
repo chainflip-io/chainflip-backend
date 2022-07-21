@@ -31,7 +31,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_validator.
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
-	fn set_backup_node_percentage() -> Weight;
+	fn set_backup_reward_node_percentage() -> Weight;
 	fn set_authority_set_min_size() -> Weight;
 	fn cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
@@ -58,8 +58,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Validator BackupNodePercentage (r:0 w:1)
-	fn set_backup_node_percentage() -> Weight {
+	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
+	fn set_backup_reward_node_percentage() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(9_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -142,7 +142,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Session NextKeys (r:3 w:0)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Auction AuctionParameters (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:0)
+	// Storage: Validator Backups (r:1 w:0)
 	// Storage: Validator AuthoritySetMinSize (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
@@ -227,8 +227,8 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Validator BackupNodePercentage (r:0 w:1)
-	fn set_backup_node_percentage() -> Weight {
+	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
+	fn set_backup_reward_node_percentage() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(9_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -311,7 +311,7 @@ impl WeightInfo for () {
 	// Storage: Session NextKeys (r:3 w:0)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Auction AuctionParameters (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:0)
+	// Storage: Validator Backups (r:1 w:0)
 	// Storage: Validator AuthoritySetMinSize (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)

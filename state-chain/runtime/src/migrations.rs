@@ -8,7 +8,6 @@ pub use delete_rewards::DeleteRewardsPallet;
 mod unify_ceremony_ids;
 pub use unify_ceremony_ids::UnifyCeremonyIds;
 pub mod add_flip_contract_address;
-pub mod migrate_backup_triage;
 pub mod migrate_claims;
 pub mod migrate_contract_addresses;
 

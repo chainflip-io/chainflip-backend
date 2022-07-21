@@ -9,7 +9,7 @@ use sp_std::{cmp::min, prelude::*};
 
 pub fn calculate_backup_rewards<Id, Amount>(
 	backup_nodes: Vec<(Id, u128)>,
-	bond: u128,
+	current_epoch_bond: u128,
 	reward_interwal: u128,
 	backup_node_emission_per_block: u128,
 	current_authority_emission_per_block: u128,
@@ -21,7 +21,7 @@ where
 	const QUANTISATION_FACTOR: u128 = 100_000_000;
 
 	let (bond, backup_node_emission_per_block, current_authority_emission_per_block) = (
-		bond / QUANTISATION_FACTOR,
+		current_epoch_bond / QUANTISATION_FACTOR,
 		backup_node_emission_per_block / QUANTISATION_FACTOR,
 		current_authority_emission_per_block / QUANTISATION_FACTOR,
 	);
