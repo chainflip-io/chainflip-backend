@@ -55,7 +55,7 @@ impl RewardsDistribution for BackupNodeEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	fn distribute() {
-		let backup_nodes = Validator::highest_staked_backup_nodes();
+		let backup_nodes = Validator::highest_staked_qualified_backup_nodes();
 		if backup_nodes.is_empty() {
 			return
 		}

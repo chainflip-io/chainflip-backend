@@ -1122,6 +1122,13 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 
+	pub fn highest_staked_qualified_backup_nodes() -> Vec<ValidatorIdOf<T>> {
+		Self::highest_staked_backup_nodes()
+			.into_iter()
+			.filter(T::ValidatorQualification::is_qualified)
+			.collect()
+	}
+
 	fn punish_missed_authorship_slots() -> Weight {
 		let mut num_missed_slots = 0;
 		for slot in T::MissedAuthorshipSlots::missed_slots() {
