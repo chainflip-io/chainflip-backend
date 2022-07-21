@@ -4,10 +4,11 @@ pub mod common {
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
+	const TOKEN_DECIMALS: u32 = 18;
+	pub const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
+
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
-		const TOKEN_DECIMALS: u32 = 18;
-		const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
 		TOKEN_ISSUANCE * TOKEN_FRACTIONS
 	};
 

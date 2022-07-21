@@ -79,8 +79,8 @@ where
 
 #[test]
 fn test_example_calculations() {
-	const FLIPPERINOS_PER_FLIP: u128 = 1_000_000_000_000_000_000;
-	const FLIPPERINOS_PER_CENTIFLIP: u128 = 10_000_000_000_000_000;
+	use crate::constants::common::TOKEN_FRACTIONS;
+	const FLIPPERINOS_PER_CENTIFLIP: u128 = TOKEN_FRACTIONS / 100;
 
 	// The example calculation is taken from here: https://www.notion.so/chainflip/Calculating-Backup-Validator-Rewards-8c42dee6bbc842ab99b1c4f0065b19fe
 	let test_backup_nodes = [
@@ -147,10 +147,10 @@ fn test_example_calculations() {
 		839002, 805778, 773869, 743224, 713792, 685526, 658379, 632307, 607268, 583220,
 	];
 
-	const BOND: u128 = 110_000 * FLIPPERINOS;
+	const BOND: u128 = 110_000 * TOKEN_FRACTIONS;
 	const BLOCKSPERYEAR: u128 = 14_400 * 356;
-	const BACKUP_EMISSIONS_CAP_PER_BLOCK: u128 = 900_000 * FLIPPERINOS / BLOCKSPERYEAR;
-	const AUTHORITY_EMISSIONS_PER_BLOCK: u128 = 9_000_000 * FLIPPERINOS / BLOCKSPERYEAR;
+	const BACKUP_EMISSIONS_CAP_PER_BLOCK: u128 = 900_000 * TOKEN_FRACTIONS / BLOCKSPERYEAR;
+	const AUTHORITY_EMISSIONS_PER_BLOCK: u128 = 9_000_000 * TOKEN_FRACTIONS / BLOCKSPERYEAR;
 	const AUTHORITY_COUNT: u128 = 150;
 
 	let calculated_rewards: Vec<(_, u128)> = calculate_backup_rewards(
