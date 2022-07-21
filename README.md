@@ -52,8 +52,8 @@ The following commands should be executed from the repo root directory.
 - Run clippy with the same settings as the CI:<br>
   `cargo cf-clippy`
 - Check the state-chain and cfe compile:
-  - `cargo cf-check-all`
-  - `cargo cf-check-all-ci` (This is used by the CI, but you don't typically need it)
+  - `cargo cf-check`
+  - `cargo cf-check-all` (This is used by the CI, but you don't typically need it)
 - Run all unit tests:<br>
   `cargo cf-test`
 - Expand macros for a given part of the code. You'll need to pipe output to a file.<br>

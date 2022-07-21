@@ -275,7 +275,7 @@ jobs:
           environment:
             RUSTFLAGS: -D warnings
           command: |
-            cargo cf-check-all-ci
+            cargo cf-check-all
             sccache --show-stats
 
   cargo-test:

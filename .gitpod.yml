@@ -2,7 +2,7 @@
 image:
   file: .gitpod.Dockerfile
 tasks:
-  - init: cargo cf-check-all
+  - init: cargo cf-check
 
 github:
   prebuilds:
