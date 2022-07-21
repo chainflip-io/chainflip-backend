@@ -1305,15 +1305,12 @@ impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 			return
 		}
 
-		// TODO: You shouldn't have to be qualified to be removed from the backup list #1849
-		if T::ValidatorQualification::is_qualified(validator_id) {
-			Backups::<T>::mutate(|backups| {
-				if amount.is_zero() {
-					backups.remove(validator_id).expect("This id should exist in the map");
-				} else {
-					backups.insert(validator_id.clone(), amount);
-				}
-			});
-		}
+		Backups::<T>::mutate(|backups| {
+			if amount.is_zero() {
+				backups.remove(validator_id).expect("This id should exist in the map");
+			} else {
+				backups.insert(validator_id.clone(), amount);
+			}
+		});
 	}
 }
