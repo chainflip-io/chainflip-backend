@@ -1,7 +1,4 @@
-use crate::{
-	eth::{self, Tokenizable},
-	ApiCall, ChainAbi, ChainCrypto, Ethereum,
-};
+use crate::{eth::Tokenizable, ApiCall, ChainAbi, ChainCrypto, Ethereum};
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, ParamType, Token};
 use frame_support::RuntimeDebug;
@@ -75,27 +72,19 @@ impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
 }
 
 #[cfg(test)]
-mod test_set_agg_key_with_agg_key {
+mod test_set_gov_key_with_agg_key {
 
 	use super::*;
 	use crate::{
 		eth::{tests::asymmetrise, SchnorrVerificationComponents},
 		ApiCall,
 	};
-	use ethabi::{Token};
+	use ethabi::Token;
 	use ethereum_types::H160;
-	use frame_support::assert_ok;
 
 	use crate::eth::api::{
 		set_gov_key_with_agg_key::SetGovKeyWithAggKey, EthereumReplayProtection,
 	};
-
-	#[test]
-	fn just_load_the_contract() {
-		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
-		));
-	}
 
 	#[test]
 	fn test_known_payload() {
@@ -111,9 +100,7 @@ mod test_set_agg_key_with_agg_key {
 		)
 		.unwrap();
 
-		let set_gov_reference = key_manager.function("setGovKeyWithAggKey").unwrap();
-
-		let set_gov_key_runtime = SetGovKeyWithAggKey::new_unsigned(
+		let call = SetGovKeyWithAggKey::new_unsigned(
 			EthereumReplayProtection {
 				key_manager_address: FAKE_KEYMAN_ADDR,
 				chain_id: CHAIN_ID,
@@ -121,22 +108,21 @@ mod test_set_agg_key_with_agg_key {
 			},
 			H160::from(TEST_ADDR),
 		);
-		let expected_msg_hash = set_gov_key_runtime.sig_data.msg_hash;
-		assert_eq!(set_gov_key_runtime.threshold_signature_payload(), expected_msg_hash);
-
-		let runtime_payload = set_gov_key_runtime
-			.clone()
-			.signed(&SchnorrVerificationComponents {
-				s: FAKE_SIG,
-				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
-			})
-			.abi_encoded();
+		let expected_msg_hash = call.sig_data.msg_hash;
+		assert_eq!(call.threshold_signature_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:
-			runtime_payload,
+			call.clone()
+				.signed(&SchnorrVerificationComponents {
+					s: FAKE_SIG,
+					k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+				})
+				.abi_encoded(),
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
-			set_gov_reference
+			key_manager
+				.function("setGovKeyWithAggKey")
+				.unwrap()
 				.encode_input(&[
 					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
