@@ -732,7 +732,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
 		T::TransactionBuilder::refresh_unsigned_transaction(&mut broadcast_attempt.unsigned_tx);
 
-		// Seed based on the input data of the extrinsic
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
 		// Check if there is an nominated signer
@@ -755,14 +754,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			);
 
-			// Schedule expiry.
 			let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
 			Expiries::<T, I>::append(
 				expiry_block,
 				(BroadcastStage::TransactionSigning, broadcast_attempt.broadcast_attempt_id),
 			);
 
-			// Emit the transaction signing request.
 			Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
 				broadcast_attempt.broadcast_attempt_id,
 				nominated_signer,
