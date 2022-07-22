@@ -42,7 +42,7 @@ mod tests {
 		use codec::Encode;
 		use libsecp256k1::PublicKey;
 		use sp_core::H256;
-		use state_chain_runtime::{constants::common::HEARTBEAT_BLOCK_INTERVAL, Event, Origin};
+		use state_chain_runtime::{Event, Origin};
 		use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 		// TODO: Can we use the actual events here?
@@ -177,6 +177,9 @@ mod tests {
 		// Engine monitoring contract
 		pub struct Engine {
 			pub node_id: NodeId,
+
+			// TODO: Look at the usefulness of this, there ought to be a nicer way to do this.
+			// Like keep the offline nodes in a separate list
 			pub live: bool,
 			// conveniently creates a threshold "signature" (not really)
 			// all engines have the same one, so they create the same sig
@@ -301,18 +304,6 @@ mod tests {
 								}
 						},
 					);
-				}
-			}
-
-			// On block handler
-			fn on_block(&self, block_number: BlockNumber) {
-				if self.live {
-					// Heartbeat -> Send transaction to state chain twice an interval
-					if block_number % (HEARTBEAT_BLOCK_INTERVAL / 2) == 0 {
-						let _result = Reputation::heartbeat(state_chain_runtime::Origin::signed(
-							self.node_id.clone(),
-						));
-					}
 				}
 			}
 		}
@@ -470,17 +461,14 @@ mod tests {
 					Validator::on_initialize(block_number);
 					Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
 
-					// Notify contract events
 					for event in self.stake_manager_contract.events() {
 						for engine in self.engines.values() {
 							engine.on_contract_event(&event);
 						}
 					}
 
-					// Clear events on contract
 					self.stake_manager_contract.clear();
 
-					// Collect state chain events
 					let events = frame_system::Pallet::<Runtime>::events()
 						.into_iter()
 						.map(|e| e.event)
@@ -489,13 +477,8 @@ mod tests {
 
 					self.last_event += events.len();
 
-					// State chain events
 					for engine in self.engines.values_mut() {
 						engine.handle_state_chain_events(&events);
-					}
-
-					for engine in self.engines.values() {
-						engine.on_block(block_number);
 					}
 				}
 			}
@@ -848,30 +831,20 @@ mod tests {
 					);
 
 					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
-					// complete the rotation
-					testnet.move_forward_blocks(5);
+					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index());
 				});
 		}
 
 		#[test]
-		// An epoch has completed.  We have a genesis where the blocks per epoch are
-		// set to 100
-		// - When the epoch is reached an auction is started and completed
-		// - All nodes stake above the MAB
-		// - We have two nodes that haven't registered their session keys
-		// - New authorities have the state of Validator with the last active epoch stored
-		// - Nodes without keys state remain unqualified as a backup with `None` as their last
-		//   active epoch
 		fn epoch_rotates() {
-			const EPOCH_BLOCKS: BlockNumber = 100;
+			const EPOCH_BLOCKS: BlockNumber = 1000;
 			const MAX_SET_SIZE: AuthorityCount = 5;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				.min_authorities(MAX_SET_SIZE)
 				.build()
 				.execute_with(|| {
-					// Genesis nodes
 					let genesis_nodes = Validator::current_authorities();
 
 					let number_of_backup_nodes = MAX_SET_SIZE
@@ -921,13 +894,18 @@ mod tests {
 						network::Cli::activate_account(node);
 					}
 
-					// Run to the next epoch to start the auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					testnet.submit_heartbeat_all_engines();
+					testnet.move_forward_blocks(1);
 
-					assert!(matches!(
+					assert!(
+						matches!(
+							Validator::current_rotation_phase(),
+							RotationPhase::VaultsRotating(..),
+						),
+						"Expected RotationPhase::VaultsRotating, got: {:?}.",
 						Validator::current_rotation_phase(),
-						RotationPhase::VaultsRotating(..)
-					));
+					);
 
 					testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
@@ -1159,8 +1137,7 @@ mod tests {
 
 		#[test]
 		fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
-			// We want to have at least one heartbeat within our reduced epoch
-			const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
+			const EPOCH_BLOCKS: u32 = 1000;
 			// Reduce our validating set and hence the number of nodes we need to have a backup
 			// set
 			const MAX_AUTHORITIES: AuthorityCount = 10;
@@ -1198,7 +1175,9 @@ mod tests {
 					}
 
 					// Start an auction
-					testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
+					testnet.move_to_next_epoch(EPOCH_BLOCKS);
+					testnet.submit_heartbeat_all_engines();
+					testnet.move_forward_blocks(1);
 
 					assert_eq!(
 						GENESIS_EPOCH,
