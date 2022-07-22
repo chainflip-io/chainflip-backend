@@ -9,8 +9,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
-		threshold_signer::MockThresholdSigner, epoch_info::MockEpochInfo,
+		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
+		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
 	},
 	Chainflip, EpochIndex,
 };
