@@ -1,6 +1,3 @@
-//! Contains the information required to use the KeyManager contract as a source for
-//! the EthEventStreamer
-
 use crate::eth::{EthRpcApi, EventParseError};
 use crate::state_chain::client::StateChainClient;
 use crate::{
@@ -27,7 +24,6 @@ use super::event_common::EventWithCommon;
 use super::DecodeLogClosure;
 use super::EthObserver;
 
-/// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
     pub deployed_address: H160,
     pub contract: ethabi::Contract,
@@ -40,7 +36,6 @@ pub struct ChainflipKey {
 }
 
 impl ChainflipKey {
-    /// Create a ChainflipKey from a decimal string
     pub fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {
         let pub_key_x = web3::types::U256::from_dec_str(dec_str)?;
         Ok(ChainflipKey {
@@ -147,69 +142,51 @@ impl Tokenizable for SigData {
     }
 }
 
-/// Represents the events that are expected from the KeyManager contract.
 #[derive(Debug, PartialEq)]
 pub enum KeyManagerEvent {
-    /// `AggKeyNonceConsumerSet(addrs)`
-    AggKeyNonceConsumersSet { addrs: Vec<ethabi::Address> },
+    AggKeyNonceConsumersSet {
+        addrs: Vec<ethabi::Address>,
+    },
 
-    /// `AggKeyNonceConsumerUpdated(newAddrs)`
-    AggKeyNonceConsumersUpdated { new_addrs: Vec<ethabi::Address> },
+    AggKeyNonceConsumersUpdated {
+        new_addrs: Vec<ethabi::Address>,
+    },
 
-    /// `AggKeySetByAggKey(Key oldAggKey, Key newAggKey)`
     AggKeySetByAggKey {
-        /// The old aggregate key.
         old_agg_key: ChainflipKey,
-        /// The new aggregate key.
         new_agg_key: ChainflipKey,
     },
 
-    /// `AggKeySetByGovKey(Key oldKey, Key newKey)`
     AggKeySetByGovKey {
-        /// The old agg key.
         old_agg_key: ChainflipKey,
-        /// The new agg key.
         new_agg_key: ChainflipKey,
     },
 
     CommKeySetByAggKey {
-        /// The old comm key
         old_comm_key: ethabi::Address,
-        /// The new comm key,
         new_comm_key: ethabi::Address,
     },
 
     CommKeySetByCommKey {
-        /// The old comm key
         old_comm_key: ethabi::Address,
-        /// The new comm key,
         new_comm_key: ethabi::Address,
     },
 
     GovKeySetByAggKey {
-        /// The old gov key.
         old_gov_key: ethabi::Address,
-        /// The new gov key.
         new_gov_key: ethabi::Address,
     },
 
-    /// `GovKeySetByGovKey(Key oldKey, Key newKey)`
     GovKeySetByGovKey {
-        /// The old gov key.
         old_gov_key: ethabi::Address,
-        /// The new gov key.
         new_gov_key: ethabi::Address,
     },
 
-    /// `SignatureAccepted(sigData, signer);`
     SignatureAccepted {
-        /// Contains a signature and the msgHash that the signature is over. Kept as a single struct.
         sig_data: SigData,
-        /// Address of the signer of the broadcast.
         signer: ethabi::Address,
     },
 
-    // `GovernanceAction(message)`
     GovernanceAction {
         /// Call hash of substrate call to be executed, hash over (call, nonce, runtime_version)
         message: GovCallHash,

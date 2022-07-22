@@ -1,6 +1,3 @@
-//! Contains the information required to use the StakeManger contract as a source for
-//! the EthEventStreamer
-
 use crate::state_chain::client::StateChainClient;
 use std::sync::Arc;
 
@@ -25,86 +22,56 @@ use anyhow::Result;
 
 use super::{event_common::EventWithCommon, DecodeLogClosure, EthObserver, EventParseError};
 
-/// A wrapper for the StakeManager Ethereum contract.
 pub struct StakeManager {
     pub deployed_address: H160,
     contract: ethabi::Contract,
 }
 
-/// Represents the events that are expected from the StakeManager contract.
 #[derive(Debug)]
 pub enum StakeManagerEvent {
-    /// The `Staked(nodeId, amount)` event.
     Staked {
-        /// The node id of the validator that submitted the stake.
         account_id: AccountId32,
-        /// The amount of FLIP that was staked.
         amount: u128,
-        /// The address which made the `Stake` transaction
         staker: ethabi::Address,
-        /// The address which the staker requires to be used when claiming back FLIP for `nodeID`
         return_addr: ethabi::Address,
     },
 
-    /// `ClaimRegistered(nodeId, amount, staker, startTime, expiryTime)` event
     ClaimRegistered {
-        /// Node id of the validator registering the claim
         account_id: AccountId32,
-        /// Amount the validator is claiming
         amount: ethabi::Uint,
-        /// The ETH address of the validator, used to stake their FLIP
         staker: ethabi::Address,
-        /// The start time of the claim
         start_time: ethabi::Uint,
-        /// The expiry time of the claim
         expiry_time: ethabi::Uint,
     },
 
-    /// `ClaimExecuted(nodeId, amount)` event
     ClaimExecuted {
-        /// The node id of the validator that claimed their FLIP
         account_id: AccountId32,
-        /// The amount of FLIP that was claimed
         amount: u128,
     },
 
-    /// `MinStakeChanged(oldMinStake, newMinStake)`
     MinStakeChanged {
-        /// Old minimum stake
         old_min_stake: ethabi::Uint,
-        /// New minimum stake
         new_min_stake: ethabi::Uint,
     },
 
-    /// `GovernanceWithdrawal(to, amount)`
     GovernanceWithdrawal {
-        /// Withdrawal address
         to: ethabi::Address,
-        /// Withdrawal amount
         amount: u128,
     },
 
-    /// `CommunityGuardDisabled(communityGuardDisabled)`
     CommunityGuardDisabled {
-        /// Is the community guard now disabled
         community_guard_disabled: bool,
     },
 
-    /// `FLIPSet(flip)`
     FLIPSet {
-        /// Address of the new FLIP contract
         flip: ethabi::Address,
     },
 
-    /// `Suspended(suspended)`
     Suspended {
-        /// Is the StakeManager now suspended
         suspended: bool,
     },
 
-    /// `UpdatedKeyManager(keyManager)`
     UpdatedKeyManager {
-        /// Address of the new KeyManager contract
         key_manager: ethabi::Address,
     },
 }
