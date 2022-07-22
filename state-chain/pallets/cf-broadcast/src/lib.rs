@@ -629,7 +629,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 		FailedTransactionSigners::<T, I>::remove(broadcast_id);
 
-		ThresholdSignatureData::<T, I>::remove(broadcast_id);
+		if let Some((_, signature)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
+			SignatureToBroadcastIdLookup::<T, I>::remove(signature);
+		}
 	}
 
 	pub fn take_and_clean_up_awaiting_transaction_signature_attempt(
