@@ -809,7 +809,6 @@ mod tests {
 						Validator::current_rotation_phase(),
 					);
 
-					// now all nodes are online
 					for node in &offline_nodes {
 						testnet.set_active(node, true);
 					}
