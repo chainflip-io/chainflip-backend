@@ -793,6 +793,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					&failed_signers,
 				);
 			}
+
+			Self::clean_up_brodcast_attempt_storage(
+				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			);
+
 			Self::deposit_event(Event::<T, I>::BroadcastAborted(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			));

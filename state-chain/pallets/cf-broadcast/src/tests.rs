@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, AwaitingTransactionSignature, AwaitingTransmission, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, BroadcastStage, Error,
-	Event as BroadcastEvent, Expiries, FailedTransactionSigners, Instance1, PalletOffence,
-	RefundSignerId, SignatureToBroadcastIdLookup, ThresholdSignatureData, TransactionFeeDeficit,
+	Event as BroadcastEvent, Expiries, Instance1, PalletOffence, RefundSignerId,
+	SignatureToBroadcastIdLookup, ThresholdSignatureData, TransactionFeeDeficit,
 	TransactionHashWhitelist, WeightInfo,
 };
 use cf_chains::{
@@ -200,16 +200,9 @@ fn test_abort_after_max_attempt_reached() {
 		);
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
-		for i in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
+		for _ in 0..=MAXIMUM_BROADCAST_ATTEMPTS {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
-
-			let failed_signers =
-				FailedTransactionSigners::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
-					.unwrap();
-			assert_eq!(failed_signers.len() as u32, i + 1);
-
-			assert!(failed_signers.contains(&MockNominator::get_nominee().unwrap()));
 
 			// make the nomination unique, so we can test that all the authorities
 			// so we can test all the failed authorities reported
