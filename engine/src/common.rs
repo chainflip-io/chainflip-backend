@@ -473,22 +473,21 @@ mod try_map_and_end_after_error {
                     future
                 } else if *this.done_taking {
                     return Poll::Ready(None);
-                } else {
-                    if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx)) {
-                        match result {
-                            Ok(ok) => {
-                                this.future.set(Some((this.f)(ok)));
-                                this.future.as_mut().as_pin_mut().unwrap()
-                            }
-                            Err(error) => {
-                                *this.done_taking = true;
-                                return Poll::Ready(Some(Err(error)));
-                            }
+                } else if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx))
+                {
+                    match result {
+                        Ok(ok) => {
+                            this.future.set(Some((this.f)(ok)));
+                            this.future.as_mut().as_pin_mut().unwrap()
                         }
-                    } else {
-                        *this.done_taking = true;
-                        return Poll::Ready(None);
+                        Err(error) => {
+                            *this.done_taking = true;
+                            return Poll::Ready(Some(Err(error)));
+                        }
                     }
+                } else {
+                    *this.done_taking = true;
+                    return Poll::Ready(None);
                 };
 
                 assert!(!*this.done_taking);
