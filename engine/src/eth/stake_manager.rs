@@ -41,6 +41,7 @@ pub enum StakeManagerEvent {
     ClaimRegistered {
         account_id: AccountId32,
         amount: ethabi::Uint,
+        // Withdrawal address
         staker: ethabi::Address,
         start_time: ethabi::Uint,
         expiry_time: ethabi::Uint,
