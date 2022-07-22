@@ -1,7 +1,8 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 use cf_traits::{
-	ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochIndex, FlipBalance,
+	ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochIndex, EpochInfo,
+	FlipBalance,
 };
 use codec::Encode;
 use libsecp256k1::PublicKey;
@@ -22,6 +23,22 @@ macro_rules! on_events {
 			$(if let $p = event { $b })*
 		}
 	}
+}
+
+pub const NEW_STAKE_AMOUNT: FlipBalance = 4;
+
+pub fn create_testnet_with_new_staker() -> (Network, AccountId32) {
+	let (mut testnet, backup_nodes) = Network::create(1 as u8, &Validator::current_authorities());
+
+	let new_backup = backup_nodes.first().unwrap().clone();
+
+	testnet
+		.stake_manager_contract
+		.stake(new_backup.clone(), NEW_STAKE_AMOUNT, GENESIS_EPOCH);
+	// register the stake
+	testnet.move_forward_blocks(1);
+
+	(testnet, new_backup)
 }
 
 // A staking contract

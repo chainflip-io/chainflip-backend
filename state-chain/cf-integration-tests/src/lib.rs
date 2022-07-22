@@ -494,9 +494,15 @@ mod epoch {
 }
 
 mod staking {
+	use crate::{
+		genesis::GENESIS_BALANCE,
+		network::{create_testnet_with_new_staker, NEW_STAKE_AMOUNT},
+	};
+
 	use super::{genesis, network, *};
 	use cf_traits::EpochInfo;
 	use pallet_cf_staking::pallet::Error;
+	use pallet_cf_validator::Backups;
 	#[test]
 	// Stakers cannot claim when we are out of the claiming period (50% of the epoch)
 	// We have a set of nodes that are staked and can claim in the claiming period and
@@ -578,6 +584,28 @@ mod staking {
 						Error::<Runtime>::PendingClaim
 					);
 				}
+			});
+	}
+
+	#[test]
+	fn staked_node_is_added_to_backups() {
+		const EPOCH_BLOCKS: u32 = 10_000_000;
+		super::genesis::default()
+			.blocks_per_epoch(EPOCH_BLOCKS)
+			// As we run a rotation at genesis we will need accounts to support
+			// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
+			.accounts(vec![
+				(AccountId::from(ALICE), GENESIS_BALANCE),
+				(AccountId::from(BOB), GENESIS_BALANCE),
+				(AccountId::from(CHARLIE), GENESIS_BALANCE),
+			])
+			.min_authorities(3)
+			.build()
+			.execute_with(|| {
+				let (_, new_backup) = create_testnet_with_new_staker();
+				let backups_map = Backups::<Runtime>::get();
+				assert_eq!(backups_map.len(), 1);
+				assert_eq!(backups_map.get(&new_backup).unwrap(), &NEW_STAKE_AMOUNT);
 			});
 	}
 }
