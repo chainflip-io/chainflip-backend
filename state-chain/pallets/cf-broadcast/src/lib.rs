@@ -774,7 +774,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Schedule a failed attempt for retry when the next block is authored.
-	/// We will abort the broadcast once we have met the attempt threshold `MaximumAttempts`
+	/// We will abort the broadcast once all authorities have attempt to sign the transaction
 	fn schedule_retry(failed_broadcast_attempt: BroadcastAttempt<T, I>) {
 		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count <
 			T::EpochInfo::current_authority_count()
