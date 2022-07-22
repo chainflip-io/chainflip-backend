@@ -85,8 +85,6 @@ pub struct StateChainRpcClient {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait StateChainRpcApi {
-    /// Submit an extrinsic to the state chain. If `Some(nonce)` is provided, uses that nonce and
-    /// sends a signed transaction. If the nonce is `None`, send an unsigned transaction.
     async fn submit_extrinsic_rpc(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,

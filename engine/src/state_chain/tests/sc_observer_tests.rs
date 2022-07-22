@@ -216,17 +216,12 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
 #[tokio::test]
 async fn sends_initial_extrinsics_when_not_historic_on_startup() {
-    // Current epoch is set to 3. Our last_active_epoch is set to 1.
-    // So we should be backup, but not outgoing. Hence, we should not send any messages
-    // down the witness channels
-
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
 
-    // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
 
     let logger = new_test_logger();
