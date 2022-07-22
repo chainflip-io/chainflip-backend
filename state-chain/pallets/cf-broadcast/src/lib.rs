@@ -769,10 +769,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_attempt.unsigned_tx,
 			));
 		} else {
-			// In this case all validators are currently offline. We just do
-			// nothing in this case and wait until someone comes up again.
-			log::warn!("No online validators at the moment.");
-			Self::schedule_retry(broadcast_attempt);
+			const FAILED_SIGNER_SELECTION: &str = "Failed to select signer: We should either: a) have a signer eligible for nomination b) already have aborted this broadcast when scheduling the retry";
+			log::error!("{FAILED_SIGNER_SELECTION}");
+			#[cfg(test)]
+			panic!("{FAILED_SIGNER_SELECTION}");
 		}
 	}
 
