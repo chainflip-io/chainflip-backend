@@ -19,7 +19,6 @@ mod mock;
 mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
-pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u64 = 100;
 
 use cf_traits::{BlockEmissions, EpochTransitionHandler, Issuance, RewardsDistribution};
 use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
@@ -273,6 +272,7 @@ pub mod pallet {
 	pub struct GenesisConfig {
 		pub current_authority_emission_inflation: BasisPoints,
 		pub backup_node_emission_inflation: BasisPoints,
+		pub supply_update_interval: u32,
 	}
 
 	/// At genesis we need to set the inflation rates for active and backup validators.
@@ -281,9 +281,7 @@ pub mod pallet {
 		fn build(&self) {
 			CurrentAuthorityEmissionInflation::<T>::put(self.current_authority_emission_inflation);
 			BackupNodeEmissionInflation::<T>::put(self.backup_node_emission_inflation);
-			SupplyUpdateInterval::<T>::put(T::BlockNumber::from(
-				SUPPLY_UPDATE_INTERVAL_DEFAULT as u32,
-			));
+			SupplyUpdateInterval::<T>::put(T::BlockNumber::from(self.supply_update_interval));
 			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
 	}
