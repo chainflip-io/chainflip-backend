@@ -326,7 +326,7 @@ where
     }
 
     #[cfg(test)]
-    pub fn get_awaited_parties(&self) -> Option<AuthorityCount> {
+    pub fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
         self.inner.as_ref().and_then(|s| {
             s.stage
                 .as_ref()

@@ -380,11 +380,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.keygen_states.len()
     }
 
-    pub fn get_keygen_awaited_parties_for(
+    pub fn get_keygen_awaited_parties_count_for(
         &self,
         ceremony_id: &CeremonyId,
     ) -> Option<AuthorityCount> {
-        self.keygen_states.get_awaited_parties_for(ceremony_id)
+        self.keygen_states
+            .get_awaited_parties_count_for(ceremony_id)
     }
 
     /// This should not be used in production as it could
@@ -633,10 +634,13 @@ where
     }
 
     #[cfg(test)]
-    pub fn get_awaited_parties_for(&self, ceremony_id: &CeremonyId) -> Option<AuthorityCount> {
+    pub fn get_awaited_parties_count_for(
+        &self,
+        ceremony_id: &CeremonyId,
+    ) -> Option<AuthorityCount> {
         self.inner
             .get(ceremony_id)
-            .and_then(|s| s.get_awaited_parties())
+            .and_then(|s| s.get_awaited_parties_count())
     }
 
     #[cfg(test)]

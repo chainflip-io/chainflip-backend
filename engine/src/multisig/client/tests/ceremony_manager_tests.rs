@@ -386,7 +386,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 
     // Check that the bad message was ignored, so the stage is still awaiting all num_of_participants messages.
     assert_eq!(
-        ceremony_manager.get_keygen_awaited_parties_for(&ceremony_id),
+        ceremony_manager.get_keygen_awaited_parties_count_for(&ceremony_id),
         Some(num_of_participants)
     );
 }
