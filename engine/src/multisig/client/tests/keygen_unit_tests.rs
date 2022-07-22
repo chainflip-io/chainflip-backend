@@ -1,7 +1,6 @@
 use cf_traits::AuthorityCount;
-use rand_legacy::{FromEntropy, SeedableRng};
+use rand_legacy::FromEntropy;
 use std::collections::BTreeSet;
-use tokio::sync::oneshot;
 use utilities::assert_ok;
 
 use crate::multisig::{
@@ -15,9 +14,8 @@ use crate::multisig::{
         },
         tests::helpers::{
             all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
-            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_node, new_nodes, run_keygen,
-            run_stages, split_messages_for, standard_keygen, switch_out_participant,
-            KeygenCeremonyRunner,
+            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
+            split_messages_for, standard_keygen, KeygenCeremonyRunner,
         },
         utils::PartyIdxMapping,
     },
@@ -351,53 +349,6 @@ async fn should_abort_on_blames_at_invalid_indexes() {
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
         )
         .await;
-}
-
-#[tokio::test]
-#[should_panic]
-async fn should_panic_keygen_request_if_not_participating() {
-    let mut node = new_node(AccountId::new([0; 32]), true);
-
-    // Send a keygen request where participants doesn't include our account id
-    let (result_sender, _result_receiver) = oneshot::channel();
-    node.ceremony_manager.on_keygen_request(
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        ACCOUNT_IDS.clone(),
-        Rng::from_seed(DEFAULT_KEYGEN_SEED),
-        result_sender,
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_duplicate_keygen_request() {
-    // Create a keygen ceremony and run it a bit
-    let mut ceremony = KeygenCeremonyRunner::new_with_default();
-    let ceremony_id = ceremony.ceremony_id;
-
-    let (messages, _result_receivers) = ceremony.request().await;
-    let _messages = ceremony
-        .run_stage::<keygen::VerifyHashComm2, _, _>(messages)
-        .await;
-
-    let [node_id] = ceremony.select_account_ids();
-
-    // Send another keygen request with the same ceremony_id but different signers
-    let mut keygen_ceremony_details = ceremony.keygen_ceremony_details();
-    let unknown_id = AccountId::new([0; 32]);
-    assert!(!ceremony.nodes.contains_key(&unknown_id));
-    switch_out_participant(
-        &mut keygen_ceremony_details.signers,
-        node_id.clone(),
-        unknown_id,
-    );
-    let node = ceremony.get_mut_node(&node_id);
-    let result_receiver = node.request_keygen(keygen_ceremony_details);
-
-    // The request should have been rejected and the existing ceremony is unchanged
-    assert_ok!(node.ensure_ceremony_at_keygen_stage(2, ceremony_id));
-
-    // Check that the failure reason is correct
-    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::DuplicateCeremonyId);
 }
 
 // Ignore unexpected messages at all stages. This includes:
@@ -813,107 +764,6 @@ async fn should_handle_not_compatible_keygen() {
             )
         }
     }
-}
-
-// If the list of signers in the keygen request contains a duplicate id, the request should be ignored
-#[tokio::test]
-async fn should_ignore_keygen_request_with_duplicate_signer() {
-    // Create a list of signers with a duplicate id
-    let mut keygen_ids = ACCOUNT_IDS.clone();
-    keygen_ids[1] = keygen_ids[2].clone();
-
-    // Send a keygen request with the duplicate id to a node
-    let mut node = new_node(ACCOUNT_IDS[2].clone(), true);
-    let (result_sender, result_receiver) = oneshot::channel();
-    node.ceremony_manager.on_keygen_request(
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        keygen_ids,
-        Rng::from_seed(DEFAULT_KEYGEN_SEED),
-        result_sender,
-    );
-
-    // Check that the request did not start a ceremony
-    assert_ok!(node.ensure_ceremony_at_keygen_stage(
-        STAGE_FINISHED_OR_NOT_STARTED,
-        DEFAULT_KEYGEN_CEREMONY_ID
-    ));
-
-    // Check that the failure reason is correct
-    node.ensure_failure_reason(result_receiver, CeremonyFailureReason::InvalidParticipants);
-}
-
-#[tokio::test]
-async fn should_ignore_stage_data_with_incorrect_size() {
-    let mut ceremony = KeygenCeremonyRunner::new_with_default();
-
-    let (messages, _) = ceremony.request().await;
-
-    // This test will not work on stage 1 messages, so we must progress to stage 2
-    let mut messages = run_stages!(ceremony, messages, VerifyHashComm2,);
-
-    let [sending_node_id, receiving_node_id] = ceremony.select_account_ids();
-
-    // Add one extra commitment to a message so it is the incorrect size
-    assert!(
-        messages
-            .get_mut(&sending_node_id)
-            .unwrap()
-            .get_mut(&receiving_node_id)
-            .unwrap()
-            .data
-            .insert(
-                (ceremony.nodes.len() + 1) as cf_traits::AuthorityCount,
-                Some(get_invalid_hash_comm(&mut ceremony.rng)),
-            )
-            .is_none(),
-        "Failed to add an extra hash commitment to message"
-    );
-
-    ceremony.distribute_messages(messages);
-
-    // Check that the receiver of the oversized message did not progress to the next stage but the sender did
-    assert_ok!(ceremony
-        .get_mut_node(&receiving_node_id)
-        .ensure_ceremony_at_keygen_stage(2, DEFAULT_KEYGEN_CEREMONY_ID));
-    assert_ok!(ceremony
-        .get_mut_node(&sending_node_id)
-        .ensure_ceremony_at_keygen_stage(3, DEFAULT_KEYGEN_CEREMONY_ID));
-}
-
-#[tokio::test]
-async fn should_not_consume_ceremony_id_if_unauthorised() {
-    let mut ceremony = KeygenCeremonyRunner::new_with_default();
-
-    {
-        let [test_id, sender_id] = ceremony.select_account_ids();
-
-        assert_eq!(
-            ceremony.nodes[&test_id]
-                .ceremony_manager
-                .get_keygen_states_len(),
-            0
-        );
-
-        // Receive initial stage message with the default keygen ceremony id
-        ceremony.distribute_message(
-            &sender_id,
-            &test_id,
-            get_invalid_hash_comm(&mut Rng::from_entropy()),
-        );
-
-        // Check that the unauthorised ceremony was created
-        assert_eq!(
-            ceremony.nodes[&test_id]
-                .ceremony_manager
-                .get_keygen_states_len(),
-            1
-        );
-
-        // Timeout the unauthorised ceremony
-        ceremony.get_mut_node(&test_id).force_stage_timeout();
-    }
-
-    standard_keygen(ceremony).await;
 }
 
 mod timeout {

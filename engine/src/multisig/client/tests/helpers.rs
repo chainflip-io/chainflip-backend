@@ -1,8 +1,9 @@
 use std::{
     any::Any,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Display,
     pin::Pin,
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -14,6 +15,7 @@ use itertools::{Either, Itertools};
 use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
+use slog::Logger;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
 
@@ -22,9 +24,14 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
-            common::{CeremonyFailureReason, KeygenFailureReason, SigningFailureReason},
-            keygen::{HashComm1, HashContext, SecretShare5},
-            signing, KeygenResultInfo, MultisigData, ThresholdParameters,
+            common::{
+                broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
+                KeygenFailureReason, SigningFailureReason,
+            },
+            keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
+            signing,
+            state_runner::StateRunner,
+            KeygenResultInfo, MultisigData, PartyIdxMapping, ThresholdParameters,
         },
         crypto::{ECPoint, Rng},
         KeyId, MessageHash,
@@ -53,7 +60,7 @@ use state_chain_runtime::AccountId;
 
 use super::{
     ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
-    DEFAULT_SIGNING_SEED, STAGE_FINISHED_OR_NOT_STARTED,
+    DEFAULT_SIGNING_SEED, INITIAL_LATEST_CEREMONY_ID,
 };
 
 use crate::multisig::tests::fixtures::MESSAGE_HASH;
@@ -77,7 +84,7 @@ pub fn new_node(account_id: AccountId, allow_high_pubkey: bool) -> Node {
     let mut ceremony_manager = CeremonyManager::new(
         account_id,
         outgoing_p2p_message_sender,
-        0, // Start latest_ceremony_id at 0 for tests
+        INITIAL_LATEST_CEREMONY_ID,
         &logger,
     );
     if allow_high_pubkey {
@@ -1130,10 +1137,10 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1(
+pub fn gen_invalid_keygen_comm1<P: ECPoint>(
     rng: &mut Rng,
     share_count: AuthorityCount,
-) -> DKGUnverifiedCommitment<Point> {
+) -> DKGUnverifiedCommitment<P> {
     let (_, fake_comm1) = generate_shares_and_commitment(
         rng,
         // The commitment is only invalid because of the invalid context
@@ -1165,23 +1172,8 @@ impl Node {
         stage_number: usize,
         ceremony_id: CeremonyId,
     ) -> Result<()> {
-        let stage = self.ceremony_manager.get_signing_stage_for(ceremony_id);
-        let is_at_stage = match stage_number {
-            STAGE_FINISHED_OR_NOT_STARTED => stage == None,
-            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
-            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
-            3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
-            4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
-            _ => false,
-        };
-        if is_at_stage {
-            Ok(())
-        } else {
-            Err(anyhow::Error::msg(format!(
-                "Expected to be at stage {}, but actually at stage {:?}",
-                stage_number, stage
-            )))
-        }
+        self.ceremony_manager
+            .check_ceremony_at_signing_stage(stage_number, ceremony_id)
     }
 
     /// Check is the ceremony is at the specified keygen BroadcastStage (0-9).
@@ -1190,49 +1182,8 @@ impl Node {
         stage_number: usize,
         ceremony_id: CeremonyId,
     ) -> Result<()> {
-        let stage = self.ceremony_manager.get_keygen_stage_for(ceremony_id);
-        let is_at_stage = match stage_number {
-            STAGE_FINISHED_OR_NOT_STARTED => stage == None,
-            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
-            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
-            3 => stage.as_deref() == Some("BroadcastStage<CoefficientCommitments3>"),
-            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast4>"),
-            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage5>"),
-            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage6>"),
-            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage7>"),
-            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage8>"),
-            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage9>"),
-            _ => false,
-        };
-        if is_at_stage {
-            Ok(())
-        } else {
-            Err(anyhow::Error::msg(format!(
-                "Expected to be at stage {}, but actually at stage {:?}",
-                stage_number, stage
-            )))
-        }
-    }
-
-    /// Check the failure reason and tag are correct
-    pub fn ensure_failure_reason<CeremonyResult, FailureReason>(
-        &self,
-        mut result_receiver: CeremonyResultReceiver<CeremonyResult, FailureReason>,
-        expected_reason: CeremonyFailureReason<FailureReason>,
-    ) where
-        CeremonyResult: PartialEq + std::fmt::Debug,
-        FailureReason: PartialEq + std::fmt::Debug + std::fmt::Display,
-    {
-        assert_eq!(
-            result_receiver
-                .try_recv()
-                .expect("Failed to receive ceremony result")
-                .map_err(|(_, reason)| {
-                    println!("Ceremony failure reason: {}", reason);
-                    reason
-                }),
-            Err(expected_reason)
-        );
+        self.ceremony_manager
+            .check_ceremony_at_keygen_stage(stage_number, ceremony_id)
     }
 }
 
@@ -1253,12 +1204,41 @@ pub fn verify_sig_with_aggkey(sig: &EthSchnorrSignature, key_id: &KeyId) -> Resu
     Ok(())
 }
 
-pub fn switch_out_participant(participants: &mut Vec<AccountId>, keep: AccountId, add: AccountId) {
-    participants.retain(|account_id| keep != *account_id);
-    let account_id = participants
-        .iter_mut()
-        .find(|account_id| **account_id != add)
-        .unwrap();
-    *account_id = add;
-    participants.push(keep);
+pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
+    ceremony_id: CeremonyId,
+    account_ids: &[AccountId],
+    mut rng: Rng,
+    logger: Logger,
+) -> StateRunner<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
+    let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(account_ids));
+    let common = CeremonyCommon {
+        ceremony_id,
+        own_idx: 0,
+        all_idxs: BTreeSet::from_iter((0..account_ids.len()).into_iter().map(|id| id as u32)),
+        outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
+        validator_mapping: validator_mapping.clone(),
+        rng: rng.clone(),
+        logger: logger.clone(),
+    };
+
+    let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
+    let processor = VerifyHashCommitmentsBroadcast2::new(
+        common.clone(),
+        true,
+        commitment,
+        account_ids.iter().map(|_| (0, None)).collect(),
+        keygen::OutgoingShares(BTreeMap::new()),
+        HashContext([0; 32]),
+    );
+
+    let stage = Box::new(BroadcastStage::new(processor, common));
+
+    StateRunner::new_authorised(
+        ceremony_id,
+        stage,
+        validator_mapping,
+        oneshot::channel().0,
+        account_ids.len() as u32,
+        logger,
+    )
 }

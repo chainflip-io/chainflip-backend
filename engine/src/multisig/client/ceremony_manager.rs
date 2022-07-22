@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
-use std::collections::{BTreeSet, HashMap};
+use anyhow::Result;
+use std::collections::{hash_map::Entry, BTreeSet, HashMap};
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -360,52 +360,32 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.keygen_states.expire_all();
     }
 
-    pub fn get_signing_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
-        self.signing_states.get_stage_for(&ceremony_id)
+    pub fn add_keygen_state(
+        &mut self,
+        ceremony_id: CeremonyId,
+        state: StateRunner<
+            KeygenData<<C as CryptoScheme>::Point>,
+            KeygenResultInfo<<C as CryptoScheme>::Point>,
+            KeygenFailureReason,
+        >,
+    ) {
+        self.keygen_states.add_state(ceremony_id, state);
     }
 
     pub fn get_signing_states_len(&self) -> usize {
         self.signing_states.len()
     }
 
-    pub fn get_keygen_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
-        self.keygen_states.get_stage_for(&ceremony_id)
-    }
-
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
     }
 
-    // TODO: remove these process_xxx_data functions once the ceremony manager unit tests are refactored,
-    // Simplify ceremony manager unit tests #1731
-    pub fn process_keygen_data(
-        &mut self,
-        sender_id: AccountId,
-        ceremony_id: CeremonyId,
-        data: KeygenData<<C as CryptoScheme>::Point>,
-    ) {
-        self.process_p2p_message(
-            sender_id,
-            MultisigMessage {
-                ceremony_id,
-                data: MultisigData::Keygen(data),
-            },
-        );
-    }
-
-    pub fn process_signing_data(
-        &mut self,
-        sender_id: AccountId,
-        ceremony_id: CeremonyId,
-        data: SigningData<<C as CryptoScheme>::Point>,
-    ) {
-        self.process_p2p_message(
-            sender_id,
-            MultisigMessage {
-                ceremony_id,
-                data: MultisigData::Signing(data),
-            },
-        );
+    pub fn get_keygen_awaited_parties_count_for(
+        &self,
+        ceremony_id: &CeremonyId,
+    ) -> Option<AuthorityCount> {
+        self.keygen_states
+            .get_awaited_parties_count_for(ceremony_id)
     }
 
     /// This should not be used in production as it could
@@ -422,6 +402,61 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
     pub fn get_delayed_signing_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
         self.signing_states.get_delayed_messages_len(ceremony_id)
+    }
+
+    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9)
+    pub fn check_ceremony_at_keygen_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: CeremonyId,
+    ) -> Result<()> {
+        let stage = self.keygen_states.get_stage_for(&ceremony_id);
+        let is_at_stage = match stage_number {
+            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<CoefficientCommitments3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast4>"),
+            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage5>"),
+            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage6>"),
+            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage7>"),
+            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage8>"),
+            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage9>"),
+            _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
+        }
+    }
+
+    /// Check is the ceremony is at the specified signing BroadcastStage (0-4)
+    pub fn check_ceremony_at_signing_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: CeremonyId,
+    ) -> Result<()> {
+        let stage = self.signing_states.get_stage_for(&ceremony_id);
+        let is_at_stage = match stage_number {
+            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
+            _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
+        }
     }
 }
 
@@ -596,6 +631,25 @@ where
     #[cfg(test)]
     pub fn get_stage_for(&self, ceremony_id: &CeremonyId) -> Option<String> {
         self.inner.get(ceremony_id).and_then(|s| s.get_stage())
+    }
+
+    #[cfg(test)]
+    pub fn get_awaited_parties_count_for(
+        &self,
+        ceremony_id: &CeremonyId,
+    ) -> Option<AuthorityCount> {
+        self.inner
+            .get(ceremony_id)
+            .and_then(|s| s.get_awaited_parties_count())
+    }
+
+    #[cfg(test)]
+    pub fn add_state(
+        &mut self,
+        ceremony_id: CeremonyId,
+        state: StateRunner<CeremonyData, CeremonyResult, FailureReason>,
+    ) {
+        self.inner.insert(ceremony_id, state);
     }
 
     #[cfg(test)]

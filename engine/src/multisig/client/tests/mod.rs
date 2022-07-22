@@ -26,6 +26,7 @@ pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
 /// Default ceremony ids
 /// We start at id 1 because the latests ceremony id starts at 0 for tests (making 0 invalid),
 /// Also the SC will never send a ceremony request at id 0.
+pub const INITIAL_LATEST_CEREMONY_ID: u64 = 0;
 pub const DEFAULT_KEYGEN_CEREMONY_ID: u64 = 1;
 pub const DEFAULT_SIGNING_CEREMONY_ID: u64 = 2;
 
