@@ -432,9 +432,11 @@ mod tests {
 				);
 			}
 
-			pub fn move_to_next_epoch(&mut self, epoch: u32) {
+			pub fn move_to_next_epoch(&mut self, epoch_duration_blocks: u32) {
 				let current_block_number = System::block_number();
-				self.move_forward_blocks(epoch - (current_block_number % epoch));
+				self.move_forward_blocks(
+					epoch_duration_blocks - (current_block_number % epoch_duration_blocks),
+				);
 			}
 
 			pub fn submit_heartbeat_all_engines(&self) {
