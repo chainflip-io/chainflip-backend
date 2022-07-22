@@ -14,7 +14,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{epoch_info::MockEpochInfo, threshold_signer::MockThresholdSigner},
-	AsyncResult, ThresholdSigner,
+	AsyncResult, EpochInfo, ThresholdSigner,
 };
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
@@ -196,7 +196,7 @@ fn test_broadcast_happy_path() {
 }
 
 #[test]
-fn test_abort_after_max_attempt_reached() {
+fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
 
@@ -207,9 +207,8 @@ fn test_abort_after_max_attempt_reached() {
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
-		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
-		// retrying until the request to retry is aborted with an event emitted
-		for _ in 0..=MAXIMUM_BROADCAST_ATTEMPTS {
+
+		for _ in 0..=MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
 
