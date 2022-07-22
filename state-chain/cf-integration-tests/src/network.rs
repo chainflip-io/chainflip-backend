@@ -28,7 +28,7 @@ macro_rules! on_events {
 pub const NEW_STAKE_AMOUNT: FlipBalance = 4;
 
 pub fn create_testnet_with_new_staker() -> (Network, AccountId32) {
-	let (mut testnet, backup_nodes) = Network::create(1 as u8, &Validator::current_authorities());
+	let (mut testnet, backup_nodes) = Network::create(1, &Validator::current_authorities());
 
 	let new_backup = backup_nodes.first().unwrap().clone();
 
