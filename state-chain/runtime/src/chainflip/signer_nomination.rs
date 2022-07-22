@@ -45,7 +45,7 @@ fn eligible_authorities(
 	<Validator as EpochInfo>::current_authorities()
 		.into_iter()
 		.collect::<BTreeSet<_>>()
-		.difference(&exclude_ids.into_iter().cloned().collect())
+		.difference(&exclude_ids.iter().cloned().collect())
 		.cloned()
 		.collect()
 }
