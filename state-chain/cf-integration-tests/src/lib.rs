@@ -437,6 +437,14 @@ mod tests {
 				self.move_forward_blocks(epoch - (current_block_number % epoch));
 			}
 
+			pub fn submit_heartbeat_all_engines(&self) {
+				for engine in self.engines.values() {
+					let _result = Reputation::heartbeat(state_chain_runtime::Origin::signed(
+						engine.node_id.clone(),
+					));
+				}
+			}
+
 			pub fn move_forward_blocks(&mut self, n: u32) {
 				pub const INIT_TIMESTAMP: u64 = 30_000;
 				let current_block_number = System::block_number();
@@ -484,7 +492,6 @@ mod tests {
 						engine.handle_state_chain_events(&events);
 					}
 
-					// A completed block notification
 					for engine in self.engines.values() {
 						engine.on_block(block_number);
 					}
@@ -761,7 +768,7 @@ mod tests {
 
 		#[test]
 		fn auction_repeats_after_failure_because_of_liveness() {
-			const EPOCH_BLOCKS: BlockNumber = 100;
+			const EPOCH_BLOCKS: BlockNumber = 1000;
 			super::genesis::default()
 				.blocks_per_epoch(EPOCH_BLOCKS)
 				// As we run a rotation at genesis we will need accounts to support
@@ -817,25 +824,31 @@ mod tests {
 						Validator::current_rotation_phase(),
 					);
 
+					// now all nodes are online
 					for node in &offline_nodes {
 						testnet.set_active(node, true);
 					}
 
+					// Submit a heartbeat, for all the nodes. Given we were waiting for the nodes to
+					// come online to start the rotation, the rotation ought to start on the next
+					// block
+					testnet.submit_heartbeat_all_engines();
+					testnet.move_forward_blocks(1);
+
 					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
-
-					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
-
-					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
-
-					// We are still rotating, we have not completed a rotation
 					assert!(
 						matches!(
 							Validator::current_rotation_phase(),
-							RotationPhase::VaultsRotating(..)
+							RotationPhase::VaultsRotating { .. }
 						),
 						"Expected RotationPhase::VaultsRotating, got: {:?}.",
 						Validator::current_rotation_phase(),
 					);
+
+					assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
+					// complete the rotation
+					testnet.move_forward_blocks(5);
+					assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index());
 				});
 		}
 
