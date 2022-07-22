@@ -593,7 +593,7 @@ pub mod pallet {
 			let _ = T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
-			Self::clean_up_brodcast_storage(broadcast_id);
+			Self::clean_up_broadcast_storage(broadcast_id);
 			// Add fee deficits only when we know everything else is ok
 			// if this tx hash has been whitelisted, we can add the fee deficit to the authority's
 			// account
@@ -611,7 +611,7 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn clean_up_brodcast_storage(broadcast_id: BroadcastId) {
+	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
 		// Here we need to be able to get the accurate broadcast id from the payload
 		let attempt_numbers =
 			BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id).unwrap_or_default();
@@ -705,7 +705,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				&signature,
 			) {
 				SignatureToBroadcastIdLookup::<T, I>::remove(signature);
-				Self::clean_up_brodcast_storage(broadcast_id);
+				Self::clean_up_broadcast_storage(broadcast_id);
 				Self::threshold_sign_and_broadcast(api_call);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
@@ -796,7 +796,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 			}
 
-			Self::clean_up_brodcast_storage(
+			Self::clean_up_broadcast_storage(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			);
 
