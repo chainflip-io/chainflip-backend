@@ -4,7 +4,7 @@ cf-test = "test --lib"
 # run unit tests and benchmark tests
 cf-test-all = "test --lib --all-features"
 cf-build-with-benchmarks = "build --release --features runtime-benchmarks"
-cf-check = "check --all-features"
-# includes features: runtime-benchmarks, try-runtime, cli.
-cf-check-all = "check --all-targets --all-features --locked --release"
+# --all-features includes the features: runtime-benchmarks, try-runtime, cli
+cf-check-all = "check -all-targets --all-features"
+cf-check-all-release = "check --all-targets --all-features --locked --release"
 cf-clippy = "clippy --all-targets -- -D warnings -A clippy::boxed_local -A clippy::nonstandard_macro_braces"
