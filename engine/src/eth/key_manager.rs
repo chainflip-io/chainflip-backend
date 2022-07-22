@@ -142,6 +142,8 @@ impl Tokenizable for SigData {
     }
 }
 
+// The following events need to reflect the events emitted in the key contract:
+// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/KeyManager.sol
 #[derive(Debug, PartialEq)]
 pub enum KeyManagerEvent {
     AggKeyNonceConsumersSet {

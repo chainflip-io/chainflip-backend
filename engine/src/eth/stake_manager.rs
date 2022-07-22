@@ -27,6 +27,8 @@ pub struct StakeManager {
     contract: ethabi::Contract,
 }
 
+// The following events need to reflect the events emitted in the staking contract:
+// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
 #[derive(Debug)]
 pub enum StakeManagerEvent {
     Staked {
