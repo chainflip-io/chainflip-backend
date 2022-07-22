@@ -476,7 +476,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type SigningTimeout = ConstU32<5>;
 	type TransmissionTimeout = ConstU32<{ 10 * MINUTES }>;
-	type MaximumAttempts = ConstU32<MAXIMUM_BROADCAST_ATTEMPTS>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
 }

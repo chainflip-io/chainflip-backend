@@ -16,7 +16,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, Broadcaster, Chainflip, SignerNomination, ThresholdSigner,
+	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, SignerNomination,
+	ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -195,10 +196,6 @@ pub mod pallet {
 		/// Something that provides the current key for signing.
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 
-		/// Maximum number of attempts
-		#[pallet::constant]
-		type MaximumAttempts: Get<AttemptCount>;
-
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -300,7 +297,8 @@ pub mod pallet {
 		/// A broadcast attempt expired either at the transaction signing stage or the transmission
 		/// stage. \[broadcast_attempt_id, stage\]
 		BroadcastAttemptExpired(BroadcastAttemptId, BroadcastStage),
-		/// A broadcast has been aborted after failing `MaximumAttempts`. \[broadcast_id\]
+		/// A broadcast has been aborted after all authorities have attempted to broadcast the
+		/// transaction and failed. \[broadcast_id\]
 		BroadcastAborted(BroadcastId),
 		/// An account id has used a new signer id for a transaction
 		/// so we want to refund to that new signer id \[account_id, signer_id\]
@@ -781,7 +779,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Schedule a failed attempt for retry when the next block is authored.
 	/// We will abort the broadcast once we have met the attempt threshold `MaximumAttempts`
 	fn schedule_retry(failed_broadcast_attempt: BroadcastAttempt<T, I>) {
-		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count < T::MaximumAttempts::get() {
+		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count <
+			T::EpochInfo::current_authority_count()
+		{
 			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
 			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
 				failed_broadcast_attempt.broadcast_attempt_id,

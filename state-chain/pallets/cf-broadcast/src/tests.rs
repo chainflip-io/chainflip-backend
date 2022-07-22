@@ -12,7 +12,10 @@ use cf_chains::{
 	},
 	ChainAbi,
 };
-use cf_traits::{mocks::threshold_signer::MockThresholdSigner, AsyncResult, ThresholdSigner};
+use cf_traits::{
+	mocks::{epoch_info::MockEpochInfo, threshold_signer::MockThresholdSigner},
+	AsyncResult, ThresholdSigner,
+};
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
 
@@ -809,14 +812,13 @@ fn test_transmission_request_expiry() {
 #[test]
 fn no_authorities_available() {
 	new_test_ext().execute_with(|| {
-		// Simulate that no authority is currently online
+		MockEpochInfo::next_epoch(vec![1, 2, 3, 4]);
 		MockNominator::set_nominee(None);
 		MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
-		// Check the retry queue
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 	});
 }
