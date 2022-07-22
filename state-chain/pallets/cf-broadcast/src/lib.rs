@@ -610,7 +610,6 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
-		// Here we need to be able to get the accurate broadcast id from the payload
 		let attempt_numbers =
 			BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id).unwrap_or_default();
 
@@ -683,7 +682,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
 		BroadcastIdToAttemptNumbers::<T, I>::insert(broadcast_id, vec![0]);
 
-		// Save the payload and the coresponinding signature to the lookup table
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
@@ -734,7 +732,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
-		// Check if there is an nominated signer
 		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(
 			seed,
 			&FailedTransactionSigners::<T, I>::get(
