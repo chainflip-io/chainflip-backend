@@ -81,7 +81,7 @@ tag = 'chainflip-monthly-2022-05'
 # Dev dependencies
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities' }
-simple_logger = "2.1.0"
+simple_logger = '2.1.0'
 
 [dev-dependencies.sp-io]
 default-features = false
@@ -96,30 +96,31 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
-    'cf-traits/std',
-    'cf-runtime-upgrade-utilities/std',
-    'cf-utilities/std',
-    'codec/std',
-    'scale-info/std',
-    'frame-support/std',
-    'frame-system/std',
-    'sp-std/std',
-    'sp-core/std',
-    'sp-runtime/std',
-    'pallet-session/std',
-    'log/std',
+  'cf-traits/std',
+  'cf-runtime-upgrade-utilities/std',
+  'cf-utilities/std',
+  'codec/std',
+  'scale-info/std',
+  'frame-benchmarking/std',
+  'frame-support/std',
+  'frame-system/std',
+  'sp-std/std',
+  'sp-core/std',
+  'sp-runtime/std',
+  'pallet-session/std',
+  'log/std',
 ]
 runtime-benchmarks = [
-    'cf-traits/runtime-benchmarks',
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
-    'pallet-cf-staking',
-    'pallet-cf-reputation',
-    'pallet-cf-vaults',
-    'sp-application-crypto',
+  'cf-traits/runtime-benchmarks',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+  'pallet-cf-staking',
+  'pallet-cf-reputation',
+  'pallet-cf-vaults',
+  'sp-application-crypto',
 ]
 try-runtime = [
-    'frame-support/try-runtime',
-    'cf-runtime-upgrade-utilities/try-runtime',
+  'frame-support/try-runtime',
+  'cf-runtime-upgrade-utilities/try-runtime',
 ]

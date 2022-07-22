@@ -61,7 +61,7 @@ tag = 'chainflip-monthly-2022-05'
 
 # Dev dependencies
 [dev-dependencies]
-hex = {version = "0.4", default-features = false}
+hex = {version = '0.4', default-features = false}
 cf-test-utilities = { path = '../../test-utilities' }
 
 [dev-dependencies.sp-io]
@@ -83,6 +83,7 @@ std = [
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
+  'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'log/std',
@@ -91,10 +92,10 @@ std = [
   'utilities/std',
 ]
 runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
-    'cf-traits/runtime-benchmarks',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+  'cf-traits/runtime-benchmarks',
 ]
 try-runtime = [
   'frame-support/try-runtime',

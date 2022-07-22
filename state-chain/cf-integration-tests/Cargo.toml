@@ -16,21 +16,21 @@ libsecp256k1 = { version = '0.7', features = ['static-context'] }
 rand = {version='0.8.4'}
 
 # Chainflip local dependencies
-state-chain-runtime = { path = "../runtime"}
-cf-traits = { path = "../traits"}
-cf-chains = { path = "../chains", features = ['runtime-integration-tests']}
-pallet-cf-validator = { path = "../pallets/cf-validator"}
-pallet-cf-staking = { path = "../pallets/cf-staking"}
-pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
-pallet-cf-flip = { path = "../pallets/cf-flip"}
-pallet-cf-auction = { path = "../pallets/cf-auction"}
-pallet-cf-emissions = { path = "../pallets/cf-emissions"}
-pallet-cf-governance = { path = "../pallets/cf-governance"}
-pallet-cf-reputation = { path = "../pallets/cf-reputation"}
-pallet-cf-vaults = { path = "../pallets/cf-vaults"}
-pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature"}
-pallet-cf-broadcast = { path = "../pallets/cf-broadcast"}
-pallet-cf-environment = { path = "../pallets/cf-environment"}
+state-chain-runtime = { path = '../runtime'}
+cf-traits = { path = '../traits'}
+cf-chains = { path = '../chains', features = ['runtime-integration-tests']}
+pallet-cf-validator = { path = '../pallets/cf-validator'}
+pallet-cf-staking = { path = '../pallets/cf-staking'}
+pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
+pallet-cf-flip = { path = '../pallets/cf-flip'}
+pallet-cf-auction = { path = '../pallets/cf-auction'}
+pallet-cf-emissions = { path = '../pallets/cf-emissions'}
+pallet-cf-governance = { path = '../pallets/cf-governance'}
+pallet-cf-reputation = { path = '../pallets/cf-reputation'}
+pallet-cf-vaults = { path = '../pallets/cf-vaults'}
+pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature'}
+pallet-cf-broadcast = { path = '../pallets/cf-broadcast'}
+pallet-cf-environment = { path = '../pallets/cf-environment'}
 
 
 # Additional FRAME pallets

@@ -14,8 +14,8 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Chainflip
-cf-chains = { path = "../../chains", default-features = false }
-cf-traits = { path = "../../traits", default-features = false }
+cf-chains = { path = '../../chains', default-features = false }
+cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 log = { version = '0.4.14', default-features = false }
@@ -77,6 +77,7 @@ std = [
   'cf-runtime-upgrade-utilities/std',
   'codec/std',
   'scale-info/std',
+  'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'log/std',
@@ -85,10 +86,10 @@ std = [
   'sp-std/std',
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
-	"sp-runtime/runtime-benchmarks",
-	"frame-support/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
+  'frame-benchmarking/runtime-benchmarks',
+  'sp-runtime/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
 ]
 try-runtime = [
   'frame-support/try-runtime',

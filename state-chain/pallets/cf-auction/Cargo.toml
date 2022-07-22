@@ -57,7 +57,7 @@ optional = true
 tag = 'chainflip-monthly-2022-05'
 
 [dev-dependencies]
-assert_matches = { version = "1.5.0" }
+assert_matches = { version = '1.5.0' }
 cf-test-utilities = { path = '../../test-utilities' }
 
 [dev-dependencies.sp-core]
@@ -72,22 +72,23 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
-    'cf-traits/std',
-    'cf-runtime-upgrade-utilities/std',
-    'codec/std',
-    'scale-info/std',
-    'frame-support/std',
-    'frame-system/std',
-    'sp-std/std',
-    'sp-runtime/std',
-    'log/std',
+  'cf-traits/std',
+  'cf-runtime-upgrade-utilities/std',
+  'codec/std',
+  'scale-info/std',
+  'frame-benchmarking/std',
+  'frame-support/std',
+  'frame-system/std',
+  'sp-std/std',
+  'sp-runtime/std',
+  'log/std',
 ]
 runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
 ]
 try-runtime = [
-    'frame-support/try-runtime',
-    'cf-runtime-upgrade-utilities/try-runtime',
+  'frame-support/try-runtime',
+  'cf-runtime-upgrade-utilities/try-runtime',
 ]

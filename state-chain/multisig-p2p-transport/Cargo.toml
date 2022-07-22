@@ -16,9 +16,9 @@ serde_json = '1.0.68'
 bs58 = '0.4.0'
 futures = { version = '0.3.4', features = ['compat'] }
 tokio = {version = '1.13.1', features = ['full']}
-async-trait = "0.1.49"
-ipc-channel = "0.16.0"
-scopeguard = "1.1.0"
+async-trait = '0.1.49'
+ipc-channel = '0.16.0'
+scopeguard = '1.1.0'
 
 cf-utilities = { package = 'utilities', path = '../../utilities' }
 
@@ -45,6 +45,6 @@ git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
 [dev-dependencies]
-predicates = "2.1.1"
-mockall = "0.11.0"
+predicates = '2.1.1'
+mockall = '0.11.0'
 tokio-stream = '0.1.5'

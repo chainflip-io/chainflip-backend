@@ -1,9 +1,9 @@
 [package]
-name = "cf-runtime-upgrade-utilities"
-version = "0.1.0"
+name = 'cf-runtime-upgrade-utilities'
+version = '0.1.0'
 edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
-description = "Chainflip utilities for runtime upgrades."
+description = 'Chainflip utilities for runtime upgrades.'
 
 [dependencies]
 log = { version = '0.4.14', default-features = false }
@@ -26,8 +26,8 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
-    'frame-support/std',
-    'log/std',
-    'sp-std/std',
+  'frame-support/std',
+  'log/std',
+  'sp-std/std',
 ]
 try-runtime = ['frame-support/try-runtime']
