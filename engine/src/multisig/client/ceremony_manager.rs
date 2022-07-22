@@ -380,7 +380,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.keygen_states.len()
     }
 
-    pub fn get_keygen_awaited_messages_for(
+    pub fn get_keygen_awaited_parties_for(
         &self,
         ceremony_id: &CeremonyId,
     ) -> Option<AuthorityCount> {
@@ -636,7 +636,7 @@ where
     pub fn get_awaited_parties_for(&self, ceremony_id: &CeremonyId) -> Option<AuthorityCount> {
         self.inner
             .get(ceremony_id)
-            .and_then(|s| s.get_awaited_messages())
+            .and_then(|s| s.get_awaited_parties())
     }
 
     #[cfg(test)]
