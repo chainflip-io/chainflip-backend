@@ -810,20 +810,6 @@ fn test_transmission_request_expiry() {
 }
 
 #[test]
-fn no_authorities_available() {
-	new_test_ext().execute_with(|| {
-		MockEpochInfo::next_epoch(vec![1, 2, 3, 4]);
-		MockNominator::set_nominee(None);
-		MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
-	});
-}
-
-#[test]
 fn re_request_threshold_signature() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
