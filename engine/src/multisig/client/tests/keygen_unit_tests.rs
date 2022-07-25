@@ -318,39 +318,6 @@ async fn should_report_on_incomplete_blame_response() {
         .await;
 }
 
-#[tokio::test]
-async fn should_abort_on_blames_at_invalid_indexes() {
-    let mut keygen_ceremony = KeygenCeremonyRunner::new_with_default();
-    let (messages, result_receivers) = keygen_ceremony.request().await;
-
-    let mut messages = run_stages!(
-        keygen_ceremony,
-        messages,
-        keygen::VerifyHashComm2,
-        CoeffComm3,
-        VerifyCoeffComm4,
-        SecretShare5,
-        Complaints6
-    );
-
-    let bad_node_id = &ACCOUNT_IDS[1];
-    for message in messages.get_mut(bad_node_id).unwrap().values_mut() {
-        *message = keygen::Complaints6([1, u32::MAX].into_iter().collect());
-    }
-
-    let messages = keygen_ceremony
-        .run_stage::<keygen::VerifyComplaints7, _, _>(messages)
-        .await;
-    keygen_ceremony.distribute_messages(messages);
-    keygen_ceremony
-        .complete_with_error(
-            &[bad_node_id.clone()],
-            result_receivers,
-            CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
-        )
-        .await;
-}
-
 // Ignore unexpected messages at all stages. This includes:
 // - Messages with stage data that is not the current stage or the next stage
 // - Duplicate messages from the same sender AccountId
