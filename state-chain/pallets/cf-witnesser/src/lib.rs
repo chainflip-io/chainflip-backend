@@ -30,6 +30,13 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 use utilities::success_threshold_from_share_count;
 
+pub trait WitnessDataExtraction {
+	/// Extracts some data from a call and encodes it so it can be stored for later.
+	fn extract(&mut self) -> Option<Vec<u8>>;
+	/// Takes all of the previously extracted data, combines it, and injects it back into the call.
+	fn combine_and_inject(&mut self, data: &mut [Vec<u8>]);
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -51,7 +58,8 @@ pub mod pallet {
 			+ Parameter
 			+ From<frame_system::Call<Self>>
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
-			+ GetDispatchInfo;
+			+ GetDispatchInfo
+			+ WitnessDataExtraction;
 
 		type ValidatorId: Member
 			+ FullCodec
@@ -86,6 +94,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
+
+	/// Stores extra call data for later recomposition.
+	#[pallet::storage]
+	pub type ExtraCallData<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<Vec<u8>>>;
 
 	/// A flag indicating that the CallHash has been executed.
 	#[pallet::storage]
@@ -207,7 +220,7 @@ impl<T: Config> Pallet<T> {
 	/// reached.
 	fn do_witness_at_epoch(
 		who: <T as frame_system::Config>::AccountId,
-		call: <T as Config>::Call,
+		mut call: <T as Config>::Call,
 		epoch_index: EpochIndex,
 	) -> DispatchResultWithPostInfo {
 		// Ensure the epoch has not yet expired
@@ -223,7 +236,8 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
-		let call_hash = CallHash(Hashable::blake2_256(&call));
+		let extra_data = call.extract();
+		let call_hash = CallHash(call.blake2_256());
 		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
 			&epoch_index,
 			&call_hash,
@@ -256,6 +270,10 @@ impl<T: Config> Pallet<T> {
 				vote_count += 1;
 				*vote = true;
 
+				if let Some(extra_data) = extra_data {
+					ExtraCallData::<T>::append(epoch_index, &call_hash, extra_data);
+				}
+
 				Ok(vote_count)
 			},
 		)?;
@@ -264,6 +282,9 @@ impl<T: Config> Pallet<T> {
 		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
 			CallHashExecuted::<T>::get(&call_hash).is_none()
 		{
+			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
+				call.combine_and_inject(&mut extra_data)
+			}
 			let _result = call
 				.dispatch_bypass_filter(
 					(if epoch_index == T::EpochInfo::epoch_index() {
