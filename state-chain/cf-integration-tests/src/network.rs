@@ -409,16 +409,6 @@ impl Network {
 			System::initialize(&block_number, &System::block_hash(block_number), &digest);
 			Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
 			state_chain_runtime::AllPalletsWithSystem::on_initialize(block_number);
-			// System::on_initialize(block_number);
-			// Session::on_initialize(block_number);
-			// Flip::on_initialize(block_number);
-			// Staking::on_initialize(block_number);
-			// Auction::on_initialize(block_number);
-			// Emissions::on_initialize(block_number);
-			// Governance::on_initialize(block_number);
-			// Reputation::on_initialize(block_number);
-			// EthereumVault::on_initialize(block_number);
-			// Validator::on_initialize(block_number);
 
 			// Notify contract events
 			for event in self.stake_manager_contract.events() {
