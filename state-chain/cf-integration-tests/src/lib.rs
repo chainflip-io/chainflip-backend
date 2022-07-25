@@ -210,7 +210,7 @@ mod genesis {
 			);
 
 			assert_eq!(
-				Validator::epoch_number_of_blocks(),
+				Validator::blocks_per_epoch(),
 				0,
 				"epochs will not rotate automatically from genesis"
 			);

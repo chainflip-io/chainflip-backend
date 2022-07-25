@@ -663,7 +663,7 @@ pub mod pallet {
 
 	/// The duration of an epoch in blocks.
 	#[pallet::storage]
-	#[pallet::getter(fn epoch_number_of_blocks)]
+	#[pallet::getter(fn blocks_per_epoch)]
 	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Current epoch index.
@@ -1240,7 +1240,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	fn average_session_length() -> T::BlockNumber {
-		Self::epoch_number_of_blocks()
+		Self::blocks_per_epoch()
 	}
 
 	fn estimate_current_session_progress(

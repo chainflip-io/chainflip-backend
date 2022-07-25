@@ -312,7 +312,7 @@ impl pallet_aura::Config for Runtime {
 }
 
 parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::epoch_number_of_blocks().into();
+	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
 }
 
 type KeyOwnerIdentification<T, Id> =
@@ -629,7 +629,7 @@ impl_runtime_apis! {
 			Validator::current_epoch()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::epoch_number_of_blocks()
+			Validator::blocks_per_epoch()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()

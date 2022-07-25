@@ -143,7 +143,7 @@ benchmarks! {
 		call.dispatch_bypass_filter(o)?
 	}
 	verify {
-		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
+		assert_eq!(Pallet::<T>::blocks_per_epoch(), 2_u32.into())
 	}
 	set_backup_reward_node_percentage {
 		let call = Call::<T>::set_backup_reward_node_percentage { percentage: 20 };

@@ -391,7 +391,7 @@ impl Network {
 	}
 
 	pub fn move_to_next_epoch(&mut self) {
-		let epoch = Validator::epoch_number_of_blocks();
+		let epoch = Validator::blocks_per_epoch();
 		let current_block_number = System::block_number();
 		self.move_forward_blocks(epoch - (current_block_number % epoch));
 	}
