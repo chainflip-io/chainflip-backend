@@ -961,7 +961,7 @@ async fn inner_connect_to_state_chain(
             .subscribe_finalized_heads()
             .map_err(rpc_error_into_anyhow_error)?
             .map_err(rpc_error_into_anyhow_error)
-            .chain(futures::stream::iter(std::iter::once(Err(
+            .chain(futures::stream::once(std::future::ready(Err(
                 anyhow::anyhow!("sparse_finalized_block_header_stream unexpectedly ended"),
             ))));
 

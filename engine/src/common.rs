@@ -297,45 +297,43 @@ mod try_map_with_state_and_end_after_error {
             self: Pin<&mut Self>,
             cx: &mut std::task::Context<'_>,
         ) -> Poll<Option<Self::Item>> {
-            Poll::Ready({
-                let mut this = self.project();
+            let mut this = self.project();
 
-                let future = if let Some(future) = this.future.as_mut().as_pin_mut() {
-                    future
-                } else if this.state.is_some() {
-                    if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx)) {
-                        let state = this.state.take().unwrap();
-                        match result {
-                            Ok(ok) => {
-                                this.future.set(Some((this.f)(state, ok)));
-                                this.future.as_mut().as_pin_mut().unwrap()
-                            }
-                            Err(error) => {
-                                return Poll::Ready(Some(Err(error)));
-                            }
+            let future = if let Some(future) = this.future.as_mut().as_pin_mut() {
+                future
+            } else if this.state.is_some() {
+                if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx)) {
+                    let state = this.state.take().unwrap();
+                    match result {
+                        Ok(ok) => {
+                            this.future.set(Some((this.f)(state, ok)));
+                            this.future.as_mut().as_pin_mut().unwrap()
                         }
-                    } else {
-                        *this.state = None;
-                        return Poll::Ready(None);
+                        Err(error) => {
+                            return Poll::Ready(Some(Err(error)));
+                        }
                     }
                 } else {
                     *this.state = None;
                     return Poll::Ready(None);
-                };
+                }
+            } else {
+                *this.state = None;
+                return Poll::Ready(None);
+            };
 
-                assert!(this.state.is_none());
+            assert!(this.state.is_none());
 
-                let result = futures::ready!(future.poll(cx));
-                this.future.set(None);
+            let result = futures::ready!(future.poll(cx));
+            this.future.set(None);
 
-                Some(match result {
-                    Ok((state, ok)) => {
-                        *this.state = Some(state);
-                        Ok(ok)
-                    }
-                    Err(error) => Err(error),
-                })
-            })
+            Poll::Ready(Some(match result {
+                Ok((new_state, ok)) => {
+                    *this.state = Some(new_state);
+                    Ok(ok)
+                }
+                Err(error) => Err(error),
+            }))
         }
 
         fn size_hint(&self) -> (usize, Option<usize>) {
@@ -466,43 +464,40 @@ mod try_map_and_end_after_error {
             self: Pin<&mut Self>,
             cx: &mut std::task::Context<'_>,
         ) -> Poll<Option<Self::Item>> {
-            Poll::Ready({
-                let mut this = self.project();
+            let mut this = self.project();
 
-                let future = if let Some(future) = this.future.as_mut().as_pin_mut() {
-                    future
-                } else if *this.done_taking {
-                    return Poll::Ready(None);
-                } else if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx))
-                {
-                    match result {
-                        Ok(ok) => {
-                            this.future.set(Some((this.f)(ok)));
-                            this.future.as_mut().as_pin_mut().unwrap()
-                        }
-                        Err(error) => {
-                            *this.done_taking = true;
-                            return Poll::Ready(Some(Err(error)));
-                        }
+            let future = if let Some(future) = this.future.as_mut().as_pin_mut() {
+                future
+            } else if *this.done_taking {
+                return Poll::Ready(None);
+            } else if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx)) {
+                match result {
+                    Ok(ok) => {
+                        this.future.set(Some((this.f)(ok)));
+                        this.future.as_mut().as_pin_mut().unwrap()
                     }
-                } else {
-                    *this.done_taking = true;
-                    return Poll::Ready(None);
-                };
-
-                assert!(!*this.done_taking);
-
-                let result = futures::ready!(future.poll(cx));
-                this.future.set(None);
-
-                Some(match result {
-                    Ok(ok) => Ok(ok),
                     Err(error) => {
                         *this.done_taking = true;
-                        Err(error)
+                        return Poll::Ready(Some(Err(error)));
                     }
-                })
-            })
+                }
+            } else {
+                *this.done_taking = true;
+                return Poll::Ready(None);
+            };
+
+            assert!(!*this.done_taking);
+
+            let result = futures::ready!(future.poll(cx));
+            this.future.set(None);
+
+            Poll::Ready(Some(match result {
+                Ok(ok) => Ok(ok),
+                Err(error) => {
+                    *this.done_taking = true;
+                    Err(error)
+                }
+            }))
         }
 
         fn size_hint(&self) -> (usize, Option<usize>) {
@@ -522,7 +517,7 @@ mod try_map_and_end_after_error {
         Fut: Future<Output = Result<Ok, St::Error>>,
     {
         fn is_terminated(&self) -> bool {
-            self.done_taking || self.future.is_none() && self.stream.is_terminated()
+            self.done_taking || (self.future.is_none() && self.stream.is_terminated())
         }
     }
 
@@ -560,4 +555,8 @@ mod try_map_and_end_after_error {
             );
         }
     }
+}
+
+struct EndingOnErrorStream<St> {
+    stream : St
 }
