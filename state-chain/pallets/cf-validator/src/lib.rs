@@ -1105,21 +1105,23 @@ impl<T: Config> Pallet<T> {
 			Self::current_authority_count() as usize
 	}
 
-	// Returns the ids of the highest staked backup nodes, who are eligible for the backup rewards
+	// Returns the bids of the highest staked backup nodes, who are eligible for the backup rewards
 	pub fn highest_staked_qualified_backup_node_bids(
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
-		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
-			Backups::<T>::get()
-				.into_iter()
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
-				.collect();
-
-		backups_by_desc_amount.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
-
-		backups_by_desc_amount
+		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
-			.filter(|Bid { bidder_id, .. }| T::ValidatorQualification::is_qualified(bidder_id))
-			.take(Self::backup_reward_nodes_limit())
+			.filter(|(bidder_id, _)| T::ValidatorQualification::is_qualified(bidder_id))
+			.collect();
+
+		let limit = Self::backup_reward_nodes_limit();
+		if limit < backups.len() {
+			backups.select_nth_unstable_by_key(limit, |(_, amount)| Reverse(*amount));
+		}
+
+		backups
+			.into_iter()
+			.take(limit)
+			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 	}
 
 	/// Returns ids as BTreeSet for fast lookups
