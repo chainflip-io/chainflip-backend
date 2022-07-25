@@ -1314,7 +1314,12 @@ impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 
 		Backups::<T>::mutate(|backups| {
 			if amount.is_zero() {
-				backups.remove(validator_id).expect("This id should exist in the map");
+				if backups.remove(validator_id).is_none() {
+					#[cfg(not(test))]
+					log::warn!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
+					#[cfg(test)]
+					panic!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
+				}
 			} else {
 				backups.insert(validator_id.clone(), amount);
 			}
