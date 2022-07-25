@@ -8,10 +8,10 @@ use sp_core::crypto::{Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{traits::Zero, BuildStorage};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, Auction,
-	AuctionConfig, Emissions, EmissionsConfig, EthereumVault, EthereumVaultConfig, Flip,
-	FlipConfig, Governance, GovernanceConfig, Origin, Reputation, ReputationConfig, Runtime,
-	Session, SessionConfig, Staking, StakingConfig, System, Timestamp, Validator, ValidatorConfig,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
+	Emissions, EmissionsConfig, EthereumVaultConfig, Flip, FlipConfig, Governance,
+	GovernanceConfig, Origin, Reputation, ReputationConfig, Runtime, SessionConfig, Staking,
+	StakingConfig, System, Timestamp, Validator, ValidatorConfig,
 };
 
 use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
@@ -325,7 +325,7 @@ mod epoch {
 				}
 
 				// Run to the next epoch to start the auction
-				testnet.move_to_next_epoch(EPOCH_BLOCKS);
+				testnet.move_to_next_epoch();
 
 				assert!(
 					matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
@@ -568,7 +568,7 @@ mod staking {
 				assert_eq!(1, Validator::epoch_index(), "We should still be in the first epoch");
 
 				// Move to new epoch
-				testnet.move_to_next_epoch(EPOCH_BLOCKS);
+				testnet.move_to_next_epoch();
 				testnet.move_forward_blocks(1); // Start auction
 								// Run things to a successful vault rotation
 				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
