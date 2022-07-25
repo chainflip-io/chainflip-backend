@@ -21,12 +21,18 @@ use chainflip_engine::{
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-use sp_core::U256;
+use sp_core::{
+    crypto::{set_default_ss58_version, Ss58AddressFormat},
+    U256,
+};
+use state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX;
 
 use crate::multisig::eth::EthSigning;
 
 #[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
+    set_default_ss58_version(Ss58AddressFormat::custom(CHAINFLIP_SS58_PREFIX)); // Sets global that ensures SC AccountId's are printed correctly
+
     let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
     let root_logger = logging::utils::new_json_logger_with_tag_filter(
