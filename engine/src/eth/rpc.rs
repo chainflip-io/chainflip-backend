@@ -13,7 +13,7 @@ use web3_secp256k1::SecretKey;
 
 use futures::{future::select_ok, FutureExt};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use crate::{
     constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
@@ -601,4 +601,29 @@ mod tests {
             );
         }
     }
+}
+
+pub async fn validate_client_chain_id<T>(
+    client: &EthRpcClient<T>,
+    expected_chain_id: U256,
+) -> anyhow::Result<()>
+where
+    T: Send + Sync + EthTransport,
+    T::Out: Send,
+{
+    let chain_id = client
+        .chain_id()
+        .await
+        .context("Failed to fetch chain id")?;
+
+    if chain_id != expected_chain_id {
+        return Err(anyhow!(
+            "Expected ETH chain id {}, received {} through {}.",
+            expected_chain_id,
+            chain_id,
+            T::transport_protocol()
+        ));
+    }
+
+    Ok(())
 }

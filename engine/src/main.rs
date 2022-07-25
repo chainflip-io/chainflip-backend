@@ -7,10 +7,7 @@ use chainflip_engine::{
     eth::{
         self, build_broadcast_channel,
         key_manager::KeyManager,
-        rpc::{
-            EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthRpcClient, EthTransport,
-            EthWsRpcClient,
-        },
+        rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         stake_manager::StakeManager,
         EthBroadcaster,
     },
@@ -27,31 +24,6 @@ use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
-
-async fn validate_client_chain_id<T>(
-    client: &EthRpcClient<T>,
-    expected_chain_id: U256,
-) -> anyhow::Result<()>
-where
-    T: Send + Sync + EthTransport,
-    T::Out: Send,
-{
-    let chain_id = client
-        .chain_id()
-        .await
-        .context("Failed to fetch chain id")?;
-
-    if chain_id != expected_chain_id {
-        return Err(anyhow!(
-            "Expected ETH chain id {}, received {} through {}.",
-            expected_chain_id,
-            chain_id,
-            T::transport_protocol()
-        ));
-    }
-
-    Ok(())
-}
 
 #[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
