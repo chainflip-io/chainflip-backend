@@ -42,12 +42,12 @@ where
         .context("Failed to fetch chain id")?;
 
     if chain_id != expected_chain_id {
-        return Err(anyhow::Error::msg(format!(
+        return Err(anyhow!(
             "Expected eth chain id {}, received {} through {}.",
             expected_chain_id,
             chain_id,
             T::transport_protocol()
-        )));
+        ));
     }
 
     Ok(())
