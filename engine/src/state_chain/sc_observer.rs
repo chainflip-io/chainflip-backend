@@ -1,3 +1,4 @@
+use cf_traits::EpochIndex;
 use futures::{stream, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::KeygenError;
@@ -190,6 +191,83 @@ pub async fn test_handle_signing_request<MultisigClient, RpcClient>(
     .await;
 }
 
+async fn start_epoch_observation<Sender, RpcClient>(
+    send_instruction: Sender,
+    state_chain_client: &Arc<StateChainClient<RpcClient>>,
+    block_hash: H256,
+    epoch: EpochIndex,
+) where
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+    Sender: FnOnce(ObserveInstruction),
+{
+    send_instruction(ObserveInstruction::Start(
+        state_chain_client
+            .get_storage_map::<pallet_cf_vaults::Vaults<
+                state_chain_runtime::Runtime,
+                state_chain_runtime::EthereumInstance,
+            >>(block_hash, &epoch)
+            .await
+            .unwrap()
+            .unwrap()
+            .active_from_block,
+        epoch,
+    ));
+}
+
+async fn try_end_previous_epoch_observation<Sender, RpcClient>(
+    send_instruction: Sender,
+    state_chain_client: &Arc<StateChainClient<RpcClient>>,
+    block_hash: H256,
+    epoch: EpochIndex,
+) -> bool
+where
+    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+    Sender: FnOnce(ObserveInstruction),
+{
+    if let Some(vault) = state_chain_client
+        .get_storage_map::<pallet_cf_vaults::Vaults<
+            state_chain_runtime::Runtime,
+            state_chain_runtime::EthereumInstance,
+        >>(block_hash, &epoch)
+        .await
+        .unwrap()
+    {
+        send_instruction(ObserveInstruction::End(vault.active_from_block));
+        true
+    } else {
+        false
+    }
+}
+
+// Wrap the match so we add a log message before executing the processing of the event
+// if we are processing. Else, ignore it.
+macro_rules! match_event {
+    ($logger:ident, $event:ident { $($bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
+        let formatted_event = format!("{:?}", $event);
+        match $event {
+            $(
+                $bind => {
+                    $(if !$condition {
+                        slog::trace!(
+                            $logger,
+                            "Ignoring event {}",
+                            formatted_event
+                        );
+                    } else )? {
+                        slog::debug!(
+                            $logger,
+                            "Handling event {}",
+                            formatted_event
+                        );
+                        $block
+                    }
+                }
+            )+
+            _ => () // Don't log events the CFE does not ever process
+        }
+    }}
+}
+
 pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     sc_block_stream: BlockStream,
@@ -232,47 +310,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
             .unwrap();
     };
 
-    macro_rules! start_epoch_observation {
-        ($state_chain_client:ident, $block_hash:expr, $epoch:expr) => {
-            let block_hash = $block_hash;
-            let epoch = $epoch;
-
-            send_instruction(ObserveInstruction::Start(
-                $state_chain_client
-                    .get_storage_map::<pallet_cf_vaults::Vaults<
-                        state_chain_runtime::Runtime,
-                        state_chain_runtime::EthereumInstance,
-                    >>(block_hash, &epoch)
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .active_from_block,
-                epoch,
-            ));
-        };
-    }
-
-    macro_rules! try_end_previous_epoch_observation {
-        ($state_chain_client:ident, $block_hash:expr, $epoch:expr) => {{
-            let block_hash = $block_hash;
-            let epoch = $epoch;
-
-            if let Some(vault) = $state_chain_client
-                .get_storage_map::<pallet_cf_vaults::Vaults<
-                    state_chain_runtime::Runtime,
-                    state_chain_runtime::EthereumInstance,
-                >>(block_hash, &epoch)
-                .await
-                .unwrap()
-            {
-                send_instruction(ObserveInstruction::End(vault.active_from_block));
-                true
-            } else {
-                false
-            }
-        }};
-    }
-
     let historical_active_epochs = state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
         initial_block_hash,
         &state_chain_client.our_account_id
@@ -284,12 +321,21 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         .fold(false, |acc, epoch| {
             let state_chain_client = state_chain_client.clone();
             async move {
-                start_epoch_observation!(state_chain_client, initial_block_hash, epoch);
-                if try_end_previous_epoch_observation!(
-                    state_chain_client,
+                start_epoch_observation(
+                    send_instruction,
+                    &state_chain_client,
                     initial_block_hash,
-                    epoch + 1
-                ) {
+                    epoch,
+                )
+                .await;
+                if try_end_previous_epoch_observation(
+                    send_instruction,
+                    &state_chain_client,
+                    initial_block_hash,
+                    epoch + 1,
+                )
+                .await
+                {
                     acc
                 } else {
                     assert!(!acc);
@@ -316,41 +362,12 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                         match state_chain_client.get_events(current_block_hash).await {
                             Ok(events) => {
                                 for (_phase, event, _topics) in events {
-                                    // Wrap the match so we add a log message before executing the processing of the event
-                                    // if we are processing. Else, ignore it.
-                                    macro_rules! match_event {
-                                        ($logger:ident, $event:ident { $($bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
-                                            let formatted_event = format!("{:?}", $event);
-                                            match $event {
-                                                $(
-                                                    $bind => {
-                                                        $(if !$condition {
-                                                            slog::trace!(
-                                                                logger,
-                                                                "Ignoring event {}",
-                                                                formatted_event
-                                                            );
-                                                        } else )? {
-                                                            slog::debug!(
-                                                                logger,
-                                                                "Handling event {}",
-                                                                formatted_event
-                                                            );
-                                                            $block
-                                                        }
-                                                    }
-                                                )+
-                                                _ => () // Don't log events the CFE does not ever process
-                                            }
-                                        }}
-                                    }
-
                                     match_event! { logger, event {
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
                                                 if active_in_current_epoch {
-                                                    assert!(try_end_previous_epoch_observation!(state_chain_client, current_block_hash, new_epoch));
+                                                    assert!(try_end_previous_epoch_observation(&send_instruction, &state_chain_client, current_block_hash, new_epoch).await);
                                                 }
 
                                                 active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
@@ -360,7 +377,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                 ).await.unwrap().is_some();
 
                                                 if active_in_current_epoch {
-                                                    start_epoch_observation!(state_chain_client, current_block_hash, new_epoch);
+                                                    start_epoch_observation(&send_instruction, &state_chain_client, current_block_hash, new_epoch).await;
                                                 }
                                             }
                                             state_chain_runtime::Event::Validator(
