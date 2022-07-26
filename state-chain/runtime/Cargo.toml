@@ -1,6 +1,6 @@
 [package]
 name = 'state-chain-runtime'
-version = '0.4.0'
+version = '0.4.1'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2021'
 homepage = 'https://chainflip.io'
@@ -18,16 +18,16 @@ tag = 'chainflip-monthly-2022-05'
 [dependencies]
 # Required to get wasm to compile.
 # See https://docs.rs/getrandom/#webassembly-support
-getrandom = { version = "0.2", features = ["js"], default-features = false }
+getrandom = { version = '0.2', features = ['js'], default-features = false }
 
 log = { version = '0.4.14', default-features = false }
 nanorand = { version = '0.6', default-features = false, features = ['wyrand']}
-serde = { version = "1.0.126", optional = true, features = ['derive'] }
+serde = { version = '1.0.126', optional = true, features = ['derive'] }
 
 # Chainflip local dependencies
-cf-traits = { path = "../traits", default-features = false }
-cf-chains = { path = "../chains", default-features = false }
-cf-session-benchmarking = { path = "../cf-session-benchmarking", default-features = false, optional = true }
+cf-traits = { path = '../traits', default-features = false }
+cf-chains = { path = '../chains', default-features = false }
+cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
 
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
@@ -46,8 +46,8 @@ pallet-cf-environment = { path = "../pallets/cf-environment", default-features =
 pallet-cf-chain-tracking = { path = "../pallets/cf-chain-tracking", default-features = false }
 
 # SCALE
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
+scale-info = { version = '2.0.1', default-features = false, features = ['derive'] }
 
 # Additional FRAME pallets
 [dependencies.pallet-authorship]
@@ -221,7 +221,7 @@ runtime-benchmarks = [
   'cf-session-benchmarking',
 ]
 std = [
-	"pallet-transaction-payment-rpc-runtime-api/std",
+  'pallet-transaction-payment-rpc-runtime-api/std',
   'cf-chains/std',
   'cf-traits/std',
   'cf-utilities/std',
@@ -251,7 +251,7 @@ std = [
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment/std',
-	'pallet-transaction-payment-rpc-runtime-api/std',
+  'pallet-transaction-payment-rpc-runtime-api/std',
   'scale-info/std',
   'serde',
   'sp-api/std',
@@ -267,17 +267,17 @@ std = [
   'sp-version/std',
 ]
 try-runtime = [
-  "frame-executive/try-runtime",
-  "frame-try-runtime",
-  "frame-system/try-runtime",
-  "pallet-aura/try-runtime",
-  "pallet-grandpa/try-runtime",
-  "pallet-timestamp/try-runtime",
-  "pallet-transaction-payment/try-runtime",
-  "pallet-cf-auction/try-runtime",
-  "pallet-cf-validator/try-runtime",
-  "pallet-cf-vaults/try-runtime",
-  "pallet-cf-reputation/try-runtime",
-  "pallet-cf-emissions/try-runtime",
-  "pallet-cf-environment/try-runtime",
+  'frame-executive/try-runtime',
+  'frame-try-runtime',
+  'frame-system/try-runtime',
+  'pallet-aura/try-runtime',
+  'pallet-grandpa/try-runtime',
+  'pallet-timestamp/try-runtime',
+  'pallet-transaction-payment/try-runtime',
+  'pallet-cf-auction/try-runtime',
+  'pallet-cf-validator/try-runtime',
+  'pallet-cf-vaults/try-runtime',
+  'pallet-cf-reputation/try-runtime',
+  'pallet-cf-emissions/try-runtime',
+  'pallet-cf-environment/try-runtime',
 ]

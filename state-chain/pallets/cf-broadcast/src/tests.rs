@@ -144,6 +144,16 @@ impl MockCfe {
 	}
 }
 
+fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
+	assert!(
+		SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
+			.is_none()
+	);
+	assert!(FailedTransactionSigners::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
+}
+
 #[test]
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
@@ -178,11 +188,7 @@ fn test_broadcast_happy_path() {
 			broadcast_attempt_id.broadcast_id
 		);
 
-		// Check if the storage was cleaned up successfully
-		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
-			MockThresholdSignature::default()
-		)
-		.is_none());
+		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
 	})
 }
 
@@ -200,16 +206,9 @@ fn test_abort_after_max_attempt_reached() {
 		);
 		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
 		// retrying until the request to retry is aborted with an event emitted
-		for i in 0..MAXIMUM_BROADCAST_ATTEMPTS + 1 {
+		for _ in 0..=MAXIMUM_BROADCAST_ATTEMPTS {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
-
-			let failed_signers =
-				FailedTransactionSigners::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
-					.unwrap();
-			assert_eq!(failed_signers.len() as u32, i + 1);
-
-			assert!(failed_signers.contains(&MockNominator::get_nominee().unwrap()));
 
 			// make the nomination unique, so we can test that all the authorities
 			// so we can test all the failed authorities reported
@@ -227,12 +226,13 @@ fn test_abort_after_max_attempt_reached() {
 			Event::MockBroadcast(crate::Event::BroadcastAborted(1))
 		);
 
-		// The nominee was reported.
 		MockOffenceReporter::assert_reported(
 			PalletOffence::FailedToSignTransaction,
 			(starting_nomination..=(starting_nomination + (MAXIMUM_BROADCAST_ATTEMPTS as u64)))
 				.collect::<Vec<_>>(),
 		);
+
+		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
 	})
 }
 
@@ -536,7 +536,6 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 		);
 
 		const FEE_PAID: u128 = 200;
-		// We submit that the signature was accepted
 		assert_ok!(MockBroadcast::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),

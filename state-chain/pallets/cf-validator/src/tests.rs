@@ -5,10 +5,11 @@ use cf_traits::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
 		vault_rotation::MockVaultRotator,
 	},
-	AuctionOutcome, BackupNodes, SystemStateInfo, VaultRotator,
+	AuctionOutcome, SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
+use pallet_session::SessionManager;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -16,7 +17,7 @@ const GENESIS_EPOCH: u32 = 1;
 
 fn assert_epoch_number(n: EpochIndex) {
 	assert_eq!(
-		<ValidatorPallet as EpochInfo>::epoch_index(),
+		ValidatorPallet::epoch_index(),
 		n,
 		"we should be in epoch {n:?}. Rotation status is {:?}, VaultRotator says {:?} / {:?}",
 		CurrentRotationPhase::<Test>::get(),
@@ -29,16 +30,7 @@ macro_rules! assert_default_auction_outcome {
 	() => {
 		assert_epoch_number(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
-		assert_eq!(<ValidatorPallet as EpochInfo>::current_authorities(), AUCTION_WINNERS.to_vec());
-		assert_eq!(
-			ValidatorPallet::backup_nodes(),
-			AUCTION_LOSERS[..ValidatorPallet::backup_set_target_size(
-				AUCTION_WINNERS.len(),
-				BackupNodePercentage::<Test>::get()
-			)]
-				.to_vec(),
-			"backup nodes should be updated and should not include the unqualified node"
-		);
+		assert_eq!(ValidatorPallet::current_authorities(), AUCTION_WINNERS.to_vec());
 	};
 }
 
@@ -203,21 +195,21 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(
 			CurrentAuthorities::<Test>::get(),
-			GENESIS_VALIDATORS,
+			GENESIS_AUTHORITIES,
 			"the current authorities should be the genesis authorities"
 		);
 		// Run to the epoch boundary.
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_authorities(),
-			GENESIS_VALIDATORS,
+			ValidatorPallet::current_authorities(),
+			GENESIS_AUTHORITIES,
 			"we should still be validating with the genesis authorities"
 		);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::VaultsRotating(..)
 		));
-		while <ValidatorPallet as EpochInfo>::epoch_index() == GENESIS_EPOCH {
+		while ValidatorPallet::epoch_index() == GENESIS_EPOCH {
 			move_forward_blocks(1);
 		}
 		assert_default_auction_outcome!();
@@ -229,7 +221,7 @@ fn genesis() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(
 			CurrentAuthorities::<Test>::get(),
-			GENESIS_VALIDATORS,
+			GENESIS_AUTHORITIES,
 			"We should have a set of validators at genesis"
 		);
 		assert_eq!(Bond::<Test>::get(), GENESIS_BOND, "We should have a minimum bid at genesis");
@@ -242,7 +234,7 @@ fn genesis() {
 fn send_cfe_version() {
 	new_test_ext().execute_with(|| {
 		// We initially submit version
-		let authority = GENESIS_VALIDATORS[0];
+		let authority = GENESIS_AUTHORITIES[0];
 
 		let version = SemVer { major: 4, ..Default::default() };
 		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), version.clone(),));
@@ -514,7 +506,7 @@ fn test_setting_vanity_names_() {
 fn test_missing_author_punishment() {
 	new_test_ext().execute_with(|| {
 		// Use a large offset to ensure the modulo math selects the correct validators.
-		let offset: u64 = GENESIS_VALIDATORS.len() as u64 * 123456;
+		let offset: u64 = GENESIS_AUTHORITIES.len() as u64 * 123456;
 		let (expected_authority_index, authored_authority_index) = (1usize, 3usize);
 		MockMissedAuthorshipSlots::set(
 			expected_authority_index as u64 + offset,
@@ -541,7 +533,7 @@ fn no_auction_during_maintenance() {
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
-		<ValidatorPallet as EmergencyRotation>::request_emergency_rotation();
+		ValidatorPallet::request_emergency_rotation();
 
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
@@ -565,7 +557,7 @@ fn test_reputation_reset() {
 		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
 			simple_rotation_state(vec![1, 2, 3], None),
 		));
-		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+		ValidatorPallet::start_session(0);
 
 		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
@@ -577,7 +569,7 @@ fn test_reputation_reset() {
 		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
 			simple_rotation_state(vec![4, 5, 6], None),
 		));
-		<ValidatorPallet as pallet_session::SessionManager<_>>::start_session(0);
+		ValidatorPallet::start_session(0);
 
 		for id in &ValidatorPallet::current_authorities() {
 			MockReputationResetter::<Test>::set_reputation(id, 100);
@@ -596,16 +588,6 @@ fn test_reputation_reset() {
 			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
 		}
 	});
-}
-
-#[test]
-fn backup_set_size_calculation() {
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 20u8), 30);
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 33u8), 49);
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 34u8), 51);
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 0u8), 0);
-	// Saturates at 100%.
-	assert_eq!(Pallet::<Test>::backup_set_target_size(150, 200u8), 150);
 }
 
 #[cfg(test)]

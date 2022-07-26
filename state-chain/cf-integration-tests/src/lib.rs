@@ -386,7 +386,7 @@ mod tests {
 			// Create a network which includes the authorities in genesis of number of nodes
 			// and return a network and sorted list of nodes within
 			pub fn create(
-				number_of_passive_nodes: u8,
+				number_of_backup_nodes: u8,
 				existing_nodes: &[NodeId],
 			) -> (Self, Vec<NodeId>) {
 				let mut network: Network = Default::default();
@@ -399,18 +399,18 @@ mod tests {
 					setup_peer_mapping(node);
 				}
 
-				// Create the passive nodes
-				let mut passive_nodes = Vec::new();
-				for _ in 0..number_of_passive_nodes {
+				// Create the backup nodes
+				let mut backup_nodes = Vec::new();
+				for _ in 0..number_of_backup_nodes {
 					let node_id = network.next_node_id();
-					passive_nodes.push(node_id.clone());
+					backup_nodes.push(node_id.clone());
 					network.engines.insert(
 						node_id.clone(),
 						Engine::new(node_id, network.threshold_signer.clone()),
 					);
 				}
 
-				(network, passive_nodes)
+				(network, backup_nodes)
 			}
 
 			pub fn set_active(&mut self, node_id: &NodeId, active: bool) {
@@ -605,7 +605,7 @@ mod tests {
 					blocks_per_epoch: self.blocks_per_epoch,
 					bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
 					claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
-					backup_node_percentage: 34,
+					backup_reward_node_percentage: 34,
 					authority_set_min_size: self.min_authorities as u8,
 				},
 				ethereum_vault: EthereumVaultConfig {
@@ -616,6 +616,7 @@ mod tests {
 				emissions: EmissionsConfig {
 					current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 					backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
+					supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 				},
 				..state_chain_runtime::GenesisConfig::default()
 			}
@@ -752,8 +753,8 @@ mod tests {
 		use super::*;
 		use crate::tests::{genesis::GENESIS_BALANCE, network::setup_account_and_peer_mapping};
 		use cf_traits::{
-			BackupOrPassive, BidderProvider, ChainflipAccount, ChainflipAccountState,
-			ChainflipAccountStore, EpochInfo,
+			BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+			EpochInfo,
 		};
 		use pallet_cf_validator::RotationPhase;
 		use state_chain_runtime::Validator;
@@ -776,9 +777,9 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					let mut nodes = Validator::current_authorities();
-					let (mut testnet, mut passive_nodes) = network::Network::create(3, &nodes);
+					let (mut testnet, mut backup_nodes) = network::Network::create(3, &nodes);
 
-					nodes.append(&mut passive_nodes);
+					nodes.append(&mut backup_nodes);
 
 					// All nodes stake to be included in the next epoch which are witnessed on the
 					// state chain
@@ -845,7 +846,8 @@ mod tests {
 		// - All nodes stake above the MAB
 		// - We have two nodes that haven't registered their session keys
 		// - New authorities have the state of Validator with the last active epoch stored
-		// - Nodes without keys state remains passive with `None` as their last active epoch
+		// - Nodes without keys state remain unqualified as a backup with `None` as their last
+		//   active epoch
 		fn epoch_rotates() {
 			const EPOCH_BLOCKS: BlockNumber = 100;
 			const MAX_SET_SIZE: AuthorityCount = 5;
@@ -857,12 +859,12 @@ mod tests {
 					// Genesis nodes
 					let genesis_nodes = Validator::current_authorities();
 
-					let number_of_passive_nodes = MAX_SET_SIZE
+					let number_of_backup_nodes = MAX_SET_SIZE
 						.checked_sub(genesis_nodes.len() as AuthorityCount)
 						.expect("Max set size must be at least the number of genesis authorities");
 
-					let (mut testnet, passive_nodes) =
-						network::Network::create(number_of_passive_nodes as u8, &genesis_nodes);
+					let (mut testnet, backup_nodes) =
+						network::Network::create(number_of_backup_nodes as u8, &genesis_nodes);
 
 					assert_eq!(testnet.live_nodes().len() as AuthorityCount, MAX_SET_SIZE);
 					// All nodes stake to be included in the next epoch which are witnessed on the
@@ -895,7 +897,7 @@ mod tests {
 					// Move forward one block to register the stakes on-chain.
 					testnet.move_forward_blocks(1);
 
-					for node in &passive_nodes {
+					for node in &backup_nodes {
 						network::setup_account_and_peer_mapping(node);
 						network::Cli::activate_account(node);
 					}
@@ -929,16 +931,16 @@ mod tests {
 
 					assert_eq!(
 						Validator::current_authorities().iter().collect::<BTreeSet<_>>(),
-						[genesis_nodes, passive_nodes].concat().iter().collect::<BTreeSet<_>>(),
-						"the new winners should be those genesis authorities and the passive nodes that have keys"
+						[genesis_nodes, backup_nodes].concat().iter().collect::<BTreeSet<_>>(),
+						"the new winners should be those genesis authorities and the backup nodes that have keys set"
 					);
 
 					for account in keyless_nodes.iter() {
 						// TODO: Check historical epochs
 						assert_eq!(
-							ChainflipAccountState::BackupOrPassive(BackupOrPassive::Passive),
+							ChainflipAccountState::Backup,
 							ChainflipAccountStore::<Runtime>::get(account).state,
-							"should be a passive node"
+							"should be a backup node"
 						);
 					}
 
@@ -976,7 +978,7 @@ mod tests {
 					testnet.move_forward_blocks(1);
 
 					assert_eq!(
-						ChainflipAccountState::BackupOrPassive(BackupOrPassive::Backup),
+						ChainflipAccountState::Backup,
 						ChainflipAccountStore::<Runtime>::get(&late_staker).state,
 						"late staker should be a backup node"
 					);
@@ -1001,13 +1003,13 @@ mod tests {
 				.build()
 				.execute_with(|| {
 					let mut nodes = Validator::current_authorities();
-					let (mut testnet, mut passive_nodes) = network::Network::create(0, &nodes);
+					let (mut testnet, mut backup_nodes) = network::Network::create(0, &nodes);
 
-					for passive_node in passive_nodes.clone() {
-						network::Cli::activate_account(&passive_node);
+					for backup_node in backup_nodes.clone() {
+						network::Cli::activate_account(&backup_node);
 					}
 
-					nodes.append(&mut passive_nodes);
+					nodes.append(&mut backup_nodes);
 
 					// Stake these nodes so that they are included in the next epoch
 					let stake_amount = genesis::GENESIS_BALANCE;
@@ -1134,8 +1136,8 @@ mod tests {
 			VAULT_ROTATION_BLOCKS,
 		};
 		use cf_traits::{
-			AuthorityCount, BackupNodes, BackupOrPassive, ChainflipAccount, ChainflipAccountState,
-			ChainflipAccountStore, EpochInfo, FlipBalance, StakeTransfer,
+			AuthorityCount, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore,
+			EpochInfo, FlipBalance, StakeTransfer,
 		};
 		use state_chain_runtime::{Flip, Runtime, Validator};
 		use std::collections::HashMap;
@@ -1152,18 +1154,18 @@ mod tests {
 				.max_authorities(MAX_AUTHORITIES)
 				.build()
 				.execute_with(|| {
-					// Create MAX_AUTHORITIES passive nodes and stake them above our genesis
+					// Create MAX_AUTHORITIES backup nodes and stake them above our genesis
 					// authorities The result will be our newly created nodes will be authorities
 					// and the genesis authorities will become backup nodes
 					let mut genesis_authorities = Validator::current_authorities();
-					let (mut testnet, mut init_passive_nodes) =
+					let (mut testnet, mut init_backup_nodes) =
 						network::Network::create(MAX_AUTHORITIES as u8, &genesis_authorities);
 
 					// An initial stake which is greater than the genesis stakes
-					// We intend for these initially passive nodes to win the auction
+					// We intend for these initially backup nodes to win the auction
 					const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
-					// Stake these passive nodes so that they are included in the next epoch
-					for node in &init_passive_nodes {
+					// Stake these backup nodes so that they are included in the next epoch
+					for node in &init_backup_nodes {
 						testnet.stake_manager_contract.stake(
 							node.clone(),
 							INITIAL_STAKE,
@@ -1175,7 +1177,7 @@ mod tests {
 					// ids.
 					testnet.move_forward_blocks(1);
 
-					for node in &init_passive_nodes {
+					for node in &init_backup_nodes {
 						network::setup_account_and_peer_mapping(node);
 						network::Cli::activate_account(node);
 					}
@@ -1201,11 +1203,11 @@ mod tests {
 					let mut current_authorities: Vec<NodeId> = Validator::current_authorities();
 
 					current_authorities.sort();
-					init_passive_nodes.sort();
+					init_backup_nodes.sort();
 
 					assert_eq!(
-						init_passive_nodes, current_authorities,
-						"our new initial passive nodes should be the new authorities"
+						init_backup_nodes, current_authorities,
+						"our new initial backup nodes should be the new authorities"
 					);
 
 					current_authorities.iter().for_each(|account_id| {
@@ -1217,35 +1219,33 @@ mod tests {
 					});
 
 					// assert list of backup validators as being the genesis authorities
-					let mut current_backup_nodes: Vec<NodeId> =
-						<Validator as BackupNodes>::backup_nodes();
+					let mut highest_staked_backup_nodes: Vec<NodeId> =
+						Validator::highest_staked_backup_nodes();
 
-					current_backup_nodes.sort();
+					highest_staked_backup_nodes.sort();
 					genesis_authorities.sort();
 
 					assert_eq!(
-						genesis_authorities, current_backup_nodes,
+						genesis_authorities, highest_staked_backup_nodes,
 						"the genesis authorities should now be the backup nodes"
 					);
 
-					current_backup_nodes.iter().for_each(|account_id| {
+					highest_staked_backup_nodes.iter().for_each(|account_id| {
 						let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-						assert_eq!(
-							account_data.state,
-							ChainflipAccountState::HistoricalAuthority(BackupOrPassive::Backup)
-						);
-						// we were active in teh first epoch
+						// we were active in the first epoch
+						assert_eq!(account_data.state, ChainflipAccountState::HistoricalAuthority);
 						// TODO: Check historical epochs
 					});
 
-					let backup_node_balances: HashMap<NodeId, FlipBalance> = current_backup_nodes
-						.iter()
-						.map(|validator_id| {
-							(validator_id.clone(), Flip::staked_balance(validator_id))
-						})
-						.collect::<Vec<(NodeId, FlipBalance)>>()
-						.into_iter()
-						.collect();
+					let backup_node_balances: HashMap<NodeId, FlipBalance> =
+						highest_staked_backup_nodes
+							.iter()
+							.map(|validator_id| {
+								(validator_id.clone(), Flip::staked_balance(validator_id))
+							})
+							.collect::<Vec<(NodeId, FlipBalance)>>()
+							.into_iter()
+							.collect();
 
 					// Move forward a heartbeat, emissions should be shared to backup nodes
 					testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);

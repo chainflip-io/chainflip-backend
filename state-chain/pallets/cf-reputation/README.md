@@ -17,7 +17,7 @@ Once every heartbeat interval, this pallet divides nodes into nodes that are 'on
 ## Terminology
 
 - Authority: A node that is bonded, can perform tasks like witnessing and signing for active epochs it is an authority in. (Can be CurrentAuthority *or* HistoricalAuthority)
-- Node: A node on in our network - may be a CurrentAuthority, HistoricalAuthority(BackupOrPassive), BackupOrPassive(BackupOrPassive).
+- Node: A node on in our network - may be a CurrentAuthority, HistoricalAuthority, Backup.
 - Heartbeat: An extrinsic submitted by each node to signal their liveness.
 - Heartbeat interval: The duration, measured in blocks, after which we consider a node to be offline if no heartbeat is received.
 - Online: A node is considered online if its most recent hearbeat was at most `heartbeat_interval` blocks ago.

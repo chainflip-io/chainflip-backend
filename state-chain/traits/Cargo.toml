@@ -1,13 +1,13 @@
 [package]
-name = "cf-traits"
-version = "0.1.0"
+name = 'cf-traits'
+version = '0.1.0'
 edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
-description = "Common traits used in the Chainflip runtime"
+description = 'Common traits used in the Chainflip runtime'
 
 [dependencies]
 log = { version = '0.4.14', default-features = false }
-serde = { optional = true, version = "1.0.126", features = ['derive'] }
+serde = { optional = true, version = '1.0.126', features = ['derive'] }
 
 # Internal
 cf-chains = { path ='../chains', default-features = false }
@@ -61,18 +61,19 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
-    'cf-chains/std',
-    'codec/std',
-    'scale-info/std',
-    'sp-std/std',
-    'frame-support/std',
-    'frame-system/std',
-    'sp-runtime/std',
-    'serde'
+  'cf-chains/std',
+  'codec/std',
+  'scale-info/std',
+  'sp-std/std',
+  'frame-benchmarking/std',
+  'frame-support/std',
+  'frame-system/std',
+  'sp-runtime/std',
+  'serde'
 ]
 runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
-    'cf-chains/runtime-benchmarks',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+  'cf-chains/runtime-benchmarks',
 ]

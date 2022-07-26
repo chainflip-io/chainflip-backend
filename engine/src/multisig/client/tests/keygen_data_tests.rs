@@ -17,7 +17,7 @@ use super::helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm};
 /// ==========================
 // Generate invalid keygen data with the given number of elements in its inner and outer collection(s)
 
-fn gen_keygen_data_verify_hash_comm2(length: AuthorityCount) -> KeygenData<Point> {
+pub fn gen_keygen_data_verify_hash_comm2(length: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
     KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
         data: (0..length)

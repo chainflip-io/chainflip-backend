@@ -86,12 +86,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
 		system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
-	const GENESIS_VALIDATORS: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
+	const GENESIS_AUTHORITIES: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
 
 	ext.execute_with(|| {
 		// This is required to log events.
 		System::set_block_number(1);
-		MockEpochInfo::next_epoch(GENESIS_VALIDATORS.to_vec());
+		MockEpochInfo::next_epoch(GENESIS_AUTHORITIES.to_vec());
 	});
 
 	ext

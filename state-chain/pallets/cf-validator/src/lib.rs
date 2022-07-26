@@ -12,15 +12,13 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-mod backup_triage;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 mod rotation_state;
 
-pub use backup_triage::*;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, BackupNodes,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bid,
 	BidderProvider, Bonding, Chainflip, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
 	QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo, VaultRotator,
@@ -105,6 +103,8 @@ impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 type VanityName = Vec<u8>;
 
+type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
@@ -164,8 +164,7 @@ pub mod pallet {
 			Amount = Self::Amount,
 		>;
 
-		/// Criteria that need to be fulfilled to qualify as a validator node (authority, backup or
-		/// passive).
+		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
 		type ValidatorQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
@@ -213,7 +212,7 @@ pub mod pallet {
 		/// Vanity Name for a node has been set \[account_id, vanity_name\]
 		VanityNameSet(T::AccountId, VanityName),
 		/// The backup node percentage has been updated \[percentage\].
-		BackupNodePercentageUpdated(Percentage),
+		BackupRewardNodePercentageUpdated(Percentage),
 		/// The minimum authority set size has been updated.
 		AuthoritySetMinSizeUpdated { min_size: u8 },
 	}
@@ -596,7 +595,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BackupNodePercentageUpdated](Event::BackupNodePercentageUpdated)
+		/// - [BackupRewardNodePercentageUpdated](Event::BackupRewardNodePercentageUpdated)
 		///
 		/// ## Errors
 		///
@@ -605,16 +604,16 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [EnsureGovernance]
-		#[pallet::weight(T::ValidatorWeightInfo::set_backup_node_percentage())]
-		pub fn set_backup_node_percentage(
+		#[pallet::weight(T::ValidatorWeightInfo::set_backup_reward_node_percentage())]
+		pub fn set_backup_reward_node_percentage(
 			origin: OriginFor<T>,
 			percentage: Percentage,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			BackupNodePercentage::<T>::put(percentage);
+			BackupRewardNodePercentage::<T>::put(percentage);
 
-			Self::deposit_event(Event::BackupNodePercentageUpdated(percentage));
+			Self::deposit_event(Event::BackupRewardNodePercentageUpdated(percentage));
 			Ok(().into())
 		}
 
@@ -624,7 +623,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [BackupNodePercentageUpdated](Event::BackupNodePercentageUpdated)
+		/// - [BackupRewardNodePercentageUpdated](Event::BackupRewardNodePercentageUpdated)
 		///
 		/// ## Errors
 		///
@@ -652,22 +651,22 @@ pub mod pallet {
 		}
 	}
 
-	/// Percentage of epoch we allow claims
+	/// Percentage of epoch we allow claims.
 	#[pallet::storage]
 	#[pallet::getter(fn claim_period_as_percentage)]
 	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
-	/// The starting block number for the current epoch
+	/// The starting block number for the current epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
 	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
-	/// The number of blocks an epoch runs for
+	/// The duration of an epoch in blocks.
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_number_of_blocks)]
 	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
-	/// Current epoch index
+	/// Current epoch index.
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
 	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
@@ -684,33 +683,33 @@ pub mod pallet {
 		AuthorityCount,
 	>;
 
-	/// Track epochs and their associated authority count
+	/// Track epochs and their associated authority count.
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_authority_count)]
 	pub type EpochAuthorityCount<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
 
-	/// The rotation phase we are currently at
+	/// The rotation phase we are currently at.
 	#[pallet::storage]
 	#[pallet::getter(fn current_rotation_phase)]
 	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
-	/// A list of the current authorites
+	/// A list of the current authorites.
 	#[pallet::storage]
 	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
-	/// Vanity names of the validators stored as a Map with the current validator IDs as key
+	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
 	#[pallet::storage]
 	#[pallet::getter(fn vanity_names)]
 	pub type VanityNames<T: Config> =
 		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
-	/// The current bond
+	/// The bond of the current epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn bond)]
 	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
-	/// Account to Peer Mapping
+	/// Account to Peer Mapping.
 	#[pallet::storage]
 	#[pallet::getter(fn node_peer_id)]
 	pub type AccountPeerMapping<T: Config> = StorageMap<
@@ -720,27 +719,27 @@ pub mod pallet {
 		(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 	>;
 
-	/// Peers that are associated with account ids
+	/// Peers that are associated with account ids.
 	#[pallet::storage]
 	#[pallet::getter(fn mapped_peer)]
 	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
 
-	/// Node CFE version
+	/// Node CFE version.
 	#[pallet::storage]
 	#[pallet::getter(fn node_cfe_version)]
 	pub type NodeCFEVersion<T: Config> =
 		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
 
-	/// The last expired epoch index
+	/// The last expired epoch index.
 	#[pallet::storage]
 	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
 
-	/// A map storing the expiry block numbers for old epochs
+	/// A map storing the expiry block numbers for old epochs.
 	#[pallet::storage]
 	pub type EpochExpiries<T: Config> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
-	/// A map between an epoch and an vector of authorities (participating in this epoch)
+	/// A map between an epoch and an vector of authorities (participating in this epoch).
 	#[pallet::storage]
 	pub type HistoricalAuthorities<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
@@ -760,16 +759,16 @@ pub mod pallet {
 	#[pallet::getter(fn ceremony_id_counter)]
 	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// Backup validator triage state.
+	/// Backups, nodes who are not in the authority set, but are staked.
 	#[pallet::storage]
-	#[pallet::getter(fn backup_validator_triage)]
-	pub type BackupValidatorTriage<T> = StorageValue<_, RuntimeBackupTriage<T>, ValueQuery>;
+	#[pallet::getter(fn backups)]
+	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
 
-	/// Determines the target size for the set of backup nodes. Expressed as a percentage of the
-	/// authority set size.
+	/// Determines the number of backup nodes who receive rewards as a percentage
+	/// of the authority count.
 	#[pallet::storage]
-	#[pallet::getter(fn backup_node_percentage)]
-	pub type BackupNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
+	#[pallet::getter(fn backup_reward_node_percentage)]
+	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// The absolute minimum number of authority nodes for the next epoch.
 	#[pallet::storage]
@@ -782,7 +781,7 @@ pub mod pallet {
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
-		pub backup_node_percentage: Percentage,
+		pub backup_reward_node_percentage: Percentage,
 		pub authority_set_min_size: u8,
 	}
 
@@ -794,7 +793,7 @@ pub mod pallet {
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
-				backup_node_percentage: Zero::zero(),
+				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
 			}
 		}
@@ -808,18 +807,20 @@ pub mod pallet {
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
-			BackupNodePercentage::<T>::set(self.backup_node_percentage);
+			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 			for id in &self.genesis_authorities {
 				T::ChainflipAccount::set_current_authority(id.into_ref());
 			}
+
+			// TODO: We should have the stakers come in here as backup candidates...
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
 				self.bond,
-				|| RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(vec![], 0),
+				BackupMap::<T>::default(),
 			);
 		}
 	}
@@ -862,15 +863,12 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		}
 
 		// start + ((epoch * percentage) / 100)
-		let last_block_for_claims = CurrentEpochStartedAt::<T>::get().saturating_add(
+		CurrentEpochStartedAt::<T>::get().saturating_add(
 			BlocksPerEpoch::<T>::get()
 				.saturating_mul(ClaimPeriodAsPercentage::<T>::get().into())
 				.checked_div(&100u32.into())
 				.unwrap_or_default(),
-		);
-
-		let current_block_number = frame_system::Pallet::<T>::current_block_number();
-		last_block_for_claims <= current_block_number
+		) <= frame_system::Pallet::<T>::current_block_number()
 	}
 
 	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount> {
@@ -910,7 +908,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Makes the transition to the next epoch.
 	///
-	/// Among other things, updates the authority, backup and passive sets.
+	/// Among other things, updates the authority, historical and backup sets.
 	///
 	/// Also triggers [T::EpochTransitionHandler::on_new_epoch] which may call into other pallets.
 	///
@@ -953,21 +951,20 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
-		Self::initialise_new_epoch(new_epoch, &new_authorities, rotation_state.bond, || {
-			RuntimeBackupTriage::<T>::new::<T::ChainflipAccount>(
-				T::BidderProvider::get_bidders()
-					.into_iter()
-					.filter(|bid| {
-						!new_authorities_lookup.contains(&bid.bidder_id) &&
-							T::ValidatorQualification::is_qualified(&bid.bidder_id)
-					})
-					.collect(),
-				Self::backup_set_target_size(
-					new_authorities_lookup.len(),
-					BackupNodePercentage::<T>::get(),
-				),
-			)
-		});
+
+		Self::initialise_new_epoch(
+			new_epoch,
+			&new_authorities,
+			rotation_state.bond,
+			T::BidderProvider::get_bidders()
+				.into_iter()
+				.filter(|bid| {
+					!new_authorities_lookup.contains(&bid.bidder_id) &&
+						T::ValidatorQualification::is_qualified(&bid.bidder_id)
+				})
+				.map(|Bid { bidder_id, amount }| (bidder_id, amount))
+				.collect(),
+		);
 
 		// Trigger the new epoch handlers on other pallets.
 		T::EpochTransitionHandler::on_new_epoch(&new_authorities);
@@ -982,7 +979,7 @@ impl<T: Config> Pallet<T> {
 			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
-				T::ChainflipAccount::from_historical_to_backup_or_passive(authority.into_ref());
+				T::ChainflipAccount::from_historical_to_backup(authority.into_ref());
 				T::ReputationResetter::reset_reputation(authority);
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
@@ -998,40 +995,33 @@ impl<T: Config> Pallet<T> {
 		new_epoch: EpochIndex,
 		new_authorities: &[ValidatorIdOf<T>],
 		new_bond: T::Amount,
-		backup_triage: impl Fn() -> RuntimeBackupTriage<T>,
+		backup_map: BackupMap<T>,
 	) {
 		CurrentAuthorities::<T>::put(new_authorities);
 		HistoricalAuthorities::<T>::insert(new_epoch, new_authorities);
+
 		Bond::<T>::set(new_bond);
 
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as AuthorityCount);
+			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
+			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
 		EpochAuthorityCount::<T>::insert(new_epoch, new_authorities.len() as AuthorityCount);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
-		// Save the bond for each epoch
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		for authority in new_authorities {
-			EpochHistory::<T>::activate_epoch(authority, new_epoch);
-			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
-		}
-
-		// We've got new validators, which means the backups and passives may have changed.
-		BackupValidatorTriage::<T>::put(backup_triage());
+		// We've got new validators, which means the backups may have changed.
+		Backups::<T>::put(backup_map);
 	}
 
 	fn set_rotation_phase(new_phase: RotationPhase<T>) {
 		log::debug!(target: "cf-validator", "Advancing rotation phase to: {new_phase:?}");
 		CurrentRotationPhase::<T>::put(new_phase.clone());
 		Self::deposit_event(Event::RotationPhaseUpdated { new_phase });
-	}
-
-	fn backup_set_target_size(num_authorities: usize, backup_node_percentage: Percentage) -> usize {
-		Percent::from_percent(backup_node_percentage) * num_authorities
 	}
 
 	fn start_authority_rotation() -> Weight {
@@ -1077,10 +1067,9 @@ impl<T: Config> Pallet<T> {
 			Err(e) => {
 				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
 				// Use an approximation again - see comment above.
-				T::ValidatorWeightInfo::start_authority_rotation(
-					Self::current_authority_count() +
-						<Self as BackupNodes>::backup_nodes().len() as u32,
-				)
+				T::ValidatorWeightInfo::start_authority_rotation({
+					Self::current_authority_count() + Self::backup_reward_nodes_limit() as u32
+				})
 			},
 		}
 	}
@@ -1108,6 +1097,29 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 		}
+	}
+
+	/// Returns the number of backup nodes eligible for rewards
+	pub fn backup_reward_nodes_limit() -> usize {
+		Percent::from_percent(BackupRewardNodePercentage::<T>::get()) *
+			Self::current_authority_count() as usize
+	}
+
+	// Returns the ids of the highest staked backup nodes, who are eligible for the backup rewards
+	pub fn highest_staked_backup_nodes() -> Vec<ValidatorIdOf<T>> {
+		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
+			Backups::<T>::get()
+				.into_iter()
+				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.collect();
+
+		backups_by_desc_amount.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
+
+		backups_by_desc_amount
+			.into_iter()
+			.take(Self::backup_reward_nodes_limit())
+			.map(|bid| bid.bidder_id)
+			.collect()
 	}
 
 	fn punish_missed_authorship_slots() -> Weight {
@@ -1282,9 +1294,9 @@ impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 	}
 }
 
-pub struct UpdateBackupAndPassiveAccounts<T>(PhantomData<T>);
+pub struct UpdateBackupMapping<T>(PhantomData<T>);
 
-impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
+impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type Amount = T::Amount;
 
@@ -1292,9 +1304,15 @@ impl<T: Config> StakeHandler for UpdateBackupAndPassiveAccounts<T> {
 		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
 			return
 		}
+
+		// TODO: You shouldn't have to be qualified to be removed from the backup list #1849
 		if T::ValidatorQualification::is_qualified(validator_id) {
-			BackupValidatorTriage::<T>::mutate(|backup_triage| {
-				backup_triage.adjust_bid::<T::ChainflipAccount>(validator_id.clone(), amount);
+			Backups::<T>::mutate(|backups| {
+				if amount.is_zero() {
+					backups.remove(validator_id).expect("This id should exist in the map");
+				} else {
+					backups.insert(validator_id.clone(), amount);
+				}
 			});
 		}
 	}

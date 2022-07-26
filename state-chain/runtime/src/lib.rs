@@ -9,11 +9,15 @@ mod migrations;
 pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
+use runtime_apis::BackupOrPassive;
 #[cfg(test)]
 mod tests;
 use crate::{
 	chainflip::Offence,
-	runtime_apis::{RuntimeApiAccountInfo, RuntimeApiPenalty, RuntimeApiPendingClaim},
+	runtime_apis::{
+		ChainflipAccountStateWithPassive, RuntimeApiAccountInfo, RuntimeApiPenalty,
+		RuntimeApiPendingClaim,
+	},
 };
 use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
 pub use frame_support::{
@@ -358,7 +362,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ConstU128<500>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BlocksPerDay = ConstU32<DAYS>;
-	type StakeHandler = pallet_cf_validator::UpdateBackupAndPassiveAccounts<Self>;
+	type StakeHandler = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 }
@@ -581,7 +585,6 @@ pub type Executive = frame_executive::Executive<
 			),
 			112,
 		>,
-		migrations::VersionedMigration<(migrations::migrate_backup_triage::Migration,), 113>,
 	),
 >;
 
@@ -665,7 +668,7 @@ impl_runtime_apis! {
 		}
 		fn cf_accounts() -> Vec<(AccountId, Vec<u8>)> {
 			let mut vanity_names = Validator::vanity_names();
-			pallet_cf_flip::Account::<Runtime>::iter_keys()
+			frame_system::Account::<Runtime>::iter_keys()
 				.map(|account_id| {
 					let vanity_name = vanity_names.remove(&account_id).unwrap_or_default();
 					(account_id, vanity_name)
@@ -674,7 +677,6 @@ impl_runtime_apis! {
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
-			let last_heartbeat = pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 			let account_data = ChainflipAccountStore::<Runtime>::get(&account_id);
@@ -682,13 +684,29 @@ impl_runtime_apis! {
 			RuntimeApiAccountInfo {
 				stake: account_info.total(),
 				bond: account_info.bond(),
-				last_heartbeat: last_heartbeat.unwrap_or(0),
+				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
-				state: account_data.state
+				state: if account_data.state == ChainflipAccountState::CurrentAuthority {
+					ChainflipAccountStateWithPassive::CurrentAuthority
+				} else {
+					// if the node is in this set, they were previously known as backups
+					let backup_or_passive = if Validator::highest_staked_backup_nodes().contains(&account_id) {
+						BackupOrPassive::Backup
+					} else {
+						BackupOrPassive::Passive
+					};
+
+					match account_data.state {
+						ChainflipAccountState::Backup => ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
+						ChainflipAccountState::HistoricalAuthority => ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
+						_ => unreachable!("Already checked for current authority")
+					}
+				},
 			}
 		}
+
 		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimeApiPendingClaim> {
 			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
 			let pending_claim: RegisterClaim = match api_call {

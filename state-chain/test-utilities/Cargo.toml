@@ -1,9 +1,9 @@
 [package]
-name = "cf-test-utilities"
-version = "0.1.0"
-edition = "2018"
+name = 'cf-test-utilities'
+version = '0.1.0'
+edition = '2018'
 authors = ['Chainflip <https://chainflip.io>']
-description = "Chainflip test utilities used in multiple crates"
+description = 'Chainflip test utilities used in multiple crates'
 
 [dependencies.codec]
 package = 'parity-scale-codec'

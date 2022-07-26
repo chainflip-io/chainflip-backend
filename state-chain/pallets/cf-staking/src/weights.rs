@@ -47,7 +47,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Staking WithdrawalAddresses (r:0 w:1)
 	// Storage: Staking AccountRetired (r:0 w:1)
 	fn staked() -> Weight {
@@ -66,7 +66,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Staking MinimumStake (r:1 w:0)
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Staking ClaimTTL (r:1 w:0)
 	// Storage: Staking ClaimExpiries (r:1 w:1)
@@ -101,7 +101,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Staking WithdrawalAddresses (r:1 w:0)
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Staking ClaimTTL (r:1 w:0)
 	// Storage: Staking ClaimExpiries (r:1 w:1)
@@ -170,7 +170,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Flip Account (r:7 w:7)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: System Account (r:7 w:7)
 	fn expire_pending_claims_at(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
@@ -196,7 +196,7 @@ impl WeightInfo for () {
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Staking WithdrawalAddresses (r:0 w:1)
 	// Storage: Staking AccountRetired (r:0 w:1)
 	fn staked() -> Weight {
@@ -215,7 +215,7 @@ impl WeightInfo for () {
 	// Storage: Staking MinimumStake (r:1 w:0)
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Staking ClaimTTL (r:1 w:0)
 	// Storage: Staking ClaimExpiries (r:1 w:1)
@@ -250,7 +250,7 @@ impl WeightInfo for () {
 	// Storage: Staking WithdrawalAddresses (r:1 w:0)
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Staking ClaimTTL (r:1 w:0)
 	// Storage: Staking ClaimExpiries (r:1 w:1)
@@ -319,7 +319,7 @@ impl WeightInfo for () {
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Flip Account (r:7 w:7)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: Validator BackupValidatorTriage (r:1 w:1)
+	// Storage: Validator Backups (r:1 w:1)
 	// Storage: System Account (r:7 w:7)
 	fn expire_pending_claims_at(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]

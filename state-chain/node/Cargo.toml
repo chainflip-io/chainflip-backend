@@ -8,7 +8,7 @@ license = '<TODO>'
 name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.4.0'
+version = '0.4.1'
 
 [[bin]]
 name = 'chainflip-node'
@@ -85,11 +85,11 @@ substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrat
 default = []
 runtime-benchmarks = ['state-chain-runtime/runtime-benchmarks']
 cli = [
-    'try-runtime-cli',
+  'try-runtime-cli',
 ]
 try-runtime = [
-    "state-chain-runtime/try-runtime",
-    "try-runtime-cli",
+  "state-chain-runtime/try-runtime",
+  "try-runtime-cli",
 ]
 
 [package.metadata.deb]

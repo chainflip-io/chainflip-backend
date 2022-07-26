@@ -160,8 +160,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup() {
     // Current epoch is set to 4. Our last_active_epoch is set to 3.
-    // So we should be deemed outgoing, and submit the block height windows as expected to the nodes
-    // even though we are passive
+    // So we should be deemed historical, and submit the block height windows as expected to the nodes
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
@@ -217,17 +216,12 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
 #[tokio::test]
 async fn sends_initial_extrinsics_when_not_historic_on_startup() {
-    // Current epoch is set to 3. Our last_active_epoch is set to 1.
-    // So we should be backup, but not outgoing. Hence, we should not send any messages
-    // down the witness channels
-
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
 
-    // No blocks in the stream
     let sc_block_stream = tokio_stream::iter(vec![]);
 
     let logger = new_test_logger();
@@ -520,7 +514,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         Ok(empty_block_header.clone()),
         // in the mock for the events, we return a new epoch event for the block with this header
         Ok(new_epoch_block_header.clone()),
-        // after we go to passive, we should keep checking for our status as a node now
+        // after we become a historical authority, we should keep checking for our status as a node now
         Ok(test_header(22)),
         Ok(test_header(23)),
     ]);

@@ -568,7 +568,6 @@ pub struct CleanBlockEvents<EventParameters: Debug> {
     pub events: Vec<EventWithCommon<EventParameters>>,
 }
 
-// Specify a default type for the mock
 #[async_trait]
 pub trait EthObserver {
     type EventParameters: Debug + Send + Sync + 'static;

@@ -580,7 +580,7 @@ fn testnet_genesis(
 			genesis_authorities: initial_authorities.iter().map(|(id, ..)| id.clone()).collect(),
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
-			backup_node_percentage: 20,
+			backup_reward_node_percentage: 20,
 			bond: genesis_stake_amount,
 			authority_set_min_size: min_authorities as u8,
 		},
@@ -625,6 +625,7 @@ fn testnet_genesis(
 		emissions: EmissionsConfig {
 			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
+			supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 		},
 		transaction_payment: Default::default(),
 	}

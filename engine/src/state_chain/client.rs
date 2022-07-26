@@ -85,8 +85,6 @@ pub struct StateChainRpcClient {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait StateChainRpcApi {
-    /// Submit an extrinsic to the state chain. If `Some(nonce)` is provided, uses that nonce and
-    /// sends a signed transaction. If the nonce is `None`, send an unsigned transaction.
     async fn submit_extrinsic_rpc(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,
@@ -225,7 +223,7 @@ impl StateChainRpcApi for StateChainRpcClient {
 
     async fn is_auction_phase(&self) -> Result<bool> {
         self.custom_rpc_client
-            .cf_is_auction_phase()
+            .cf_is_auction_phase(None)
             .await
             .map_err(rpc_error_into_anyhow_error)
             .context("cf_is_auction_phase RPC API failed")
@@ -921,7 +919,7 @@ pub async fn connect_to_state_chain(
 )> {
     inner_connect_to_state_chain(state_chain_settings, wait_for_staking, logger)
         .await
-        .map_err(|e| anyhow::Error::msg(format!("Failed to connect to state chain node. Please ensure your state_chain_ws_endpoint is pointing to a working node. {}", e)))
+        .context("Failed to connect to state chain node")
 }
 
 #[allow(clippy::eval_order_dependence)]
@@ -1133,12 +1131,17 @@ async fn inner_connect_to_state_chain(
 pub async fn connect_to_state_chain_without_signer(
     state_chain_settings: &settings::StateChain,
 ) -> Result<StateChainRpcClient> {
-    let rpc_client = jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(
-        state_chain_settings.ws_endpoint.as_str(),
-    )?)
-    .await
-    .map_err(rpc_error_into_anyhow_error)
-    .context("Failed to establish rpc connection to substrate node")?;
+    let ws_endpoint = state_chain_settings.ws_endpoint.as_str();
+    let rpc_client =
+        jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(ws_endpoint)?)
+            .await
+            .map_err(rpc_error_into_anyhow_error)
+            .with_context(|| {
+                format!(
+                    "Failed to establish rpc connection to substrate node '{}'",
+                    ws_endpoint
+                )
+            })?;
 
     let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
     let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
