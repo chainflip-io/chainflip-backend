@@ -14,12 +14,12 @@ pub struct SetGovKeyWithAggKey {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The new gov key.
-	pub new_key: Address,
+	pub new_gov_key: Address,
 }
 
 impl SetGovKeyWithAggKey {
-	pub fn new_unsigned(replay_protection: EthereumReplayProtection, new_key: Address) -> Self {
-		let mut calldata = Self { sig_data: SigData::new_empty(replay_protection), new_key };
+	pub fn new_unsigned(replay_protection: EthereumReplayProtection, new_gov_key: Address) -> Self {
+		let mut calldata = Self { sig_data: SigData::new_empty(replay_protection), new_gov_key };
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 		calldata
 	}
@@ -56,7 +56,7 @@ impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
 
 	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		self.get_function()
-			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_key)])
+			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_gov_key)])
 			.expect(
 				r#"
 						This can only fail if the parameter types don't match the function signature encoded below.
