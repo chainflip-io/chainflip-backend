@@ -395,8 +395,11 @@ impl pallet_cf_staking::Config for Runtime {
 }
 
 parameter_types! {
-	pub const VotingPeriod: BlockNumber = 10;
-	pub const ProposalFee: Balance = 100800;
+	// 1000 FLIP in FLIPERINOS
+	pub const ProposalFee: Balance = 1_00000_00000_00000_00000;
+	// 7 Days in blocks
+	pub const VotingPeriod: BlockNumber = 100800;
+	// 14 Days in blocks
 	pub const EnactmentDelay: BlockNumber = 201600;
 }
 
