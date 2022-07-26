@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1043,7 +1043,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "cf-chains",
  "clap",
