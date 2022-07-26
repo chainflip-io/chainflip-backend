@@ -159,6 +159,7 @@ pub mod pallet {
 							gov_key.1,
 						),
 					);
+					Self::deposit_event(Event::<T>::ProposalEnacted(Proposal::<T>::SetGovernanceKey(gov_key.1)));
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
@@ -171,6 +172,7 @@ pub mod pallet {
 							comm_key.1,
 						),
 					);
+					Self::deposit_event(Event::<T>::ProposalEnacted(Proposal::<T>::SetCommunityKey(comm_key.1)));
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}

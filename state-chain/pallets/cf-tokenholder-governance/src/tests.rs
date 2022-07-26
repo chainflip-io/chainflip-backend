@@ -1,4 +1,5 @@
 use crate::tests::TokenholderGovernance;
+use cf_test_utilities::last_event;
 use frame_support::{assert_noop, assert_ok};
 
 use crate::{mock::*, *};
@@ -18,6 +19,7 @@ fn update_gov_key_via_onchain_proposal() {
 			Origin::signed(ALICE),
 			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 		));
+		assert_eq!(last_event::<Test>(), crate::mock::Event::TokenholderGovernance(crate::Event::ProposalSubmitted(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL))),);
 		assert!(Proposals::<Test>::contains_key(
 			<frame_system::Pallet<Test>>::block_number() +
 				<mock::Test as Config>::VotingPeriod::get()
@@ -36,6 +38,7 @@ fn update_gov_key_via_onchain_proposal() {
 			<frame_system::Pallet<Test>>::block_number() +
 				<mock::Test as Config>::VotingPeriod::get(),
 		);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::TokenholderGovernance(crate::Event::ProposalPassed(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL))),);
 		// Expect the proposal to be moved to the enactment stage
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
 		TokenholderGovernance::on_initialize(
@@ -43,7 +46,7 @@ fn update_gov_key_via_onchain_proposal() {
 				<mock::Test as Config>::EnactmentDelay::get(),
 		);
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
-		// TODO: verify the right event has been submitted
+		assert_eq!(last_event::<Test>(), crate::mock::Event::TokenholderGovernance(crate::Event::ProposalEnacted(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL))),);
 	});
 }
 
@@ -107,7 +110,7 @@ fn not_enough_backed_liquidity() {
 		);
 		assert!(!Backers::<Test>::contains_key(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
-		// TODO: verify the right event has been submitted
+		assert_eq!(last_event::<Test>(), crate::mock::Event::TokenholderGovernance(crate::Event::ProposalRejected(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL))),);
 	});
 }
 
