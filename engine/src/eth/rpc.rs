@@ -11,7 +11,10 @@ use web3::{
 };
 use web3_secp256k1::SecretKey;
 
-use futures::{future::select_ok, FutureExt};
+use futures::{
+    future::{select, Either},
+    FutureExt,
+};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -327,14 +330,40 @@ impl EthHttpRpcClient {
 pub struct EthDualRpcClient {
     ws_client: EthWsRpcClient,
     http_client: EthHttpRpcClient,
+    logger: slog::Logger,
 }
 
 impl EthDualRpcClient {
-    pub fn new(ws_client: EthWsRpcClient, http_client: EthHttpRpcClient) -> Self {
+    pub fn new(
+        ws_client: EthWsRpcClient,
+        http_client: EthHttpRpcClient,
+        logger: slog::Logger,
+    ) -> Self {
         Self {
             ws_client,
             http_client,
+            logger,
         }
+    }
+}
+
+async fn select_ok_or_both_errors<F, T, E>(
+    f1: F,
+    f2: F,
+) -> Result<(T, Option<Either<E, E>>), (E, E)>
+where
+    F: futures::Future<Output = Result<T, E>> + Unpin,
+{
+    match select(f1, f2).await {
+        Either::Left((Ok(ok), _)) | Either::Right((Ok(ok), _)) => Ok((ok, None)),
+        Either::Left((Err(e_left), other)) => match other.await {
+            Ok(ok) => Ok((ok, Some(Either::Left(e_left)))),
+            Err(e_right) => Err((e_left, e_right)),
+        },
+        Either::Right((Err(e_right), other)) => match other.await {
+            Ok(ok) => Ok((ok, Some(Either::Right(e_right)))),
+            Err(e_left) => Err((e_left, e_right)),
+        },
     }
 }
 
@@ -344,12 +373,29 @@ macro_rules! dual_call_rpc {
             let ws_request = $eth_dual.ws_client.$method($($arg.clone()),*);
             let http_request = $eth_dual.http_client.$method($($arg),*);
 
-            // TODO: Work out how to wait for both errors (select_ok returns only the last error)
-            tokio::time::timeout(ETH_DUAL_REQUEST_TIMEOUT, select_ok([ws_request, http_request]))
+            tokio::time::timeout(ETH_DUAL_REQUEST_TIMEOUT, select_ok_or_both_errors(ws_request, http_request))
                 .await
                 .context("ETH Dual RPC request timed out")?
-                .context("ETH Dual RPC request failed")
-                .map(|x| x.0)
+                .map_err(|(e_ws, e_http)| {
+                    anyhow::Error::msg(format!(
+                        "ETH Dual RPC request failed: {:?}, {:?}",
+                        e_ws, e_http
+                    ))
+                })
+                .map(|(res, maybe_err)| {
+                    if let Some(err) = maybe_err {
+                        let (side, message) = match err {
+                            Either::Left(e) => ("WS", e),
+                            Either::Right(e) => ("HTTP", e),
+                        };
+                        slog::warn!(
+                            $eth_dual.logger,
+                            "{:?} side of the ETH Dual RPC request failed (the other succeeded): {:?}",
+                            side, message,
+                        );
+                    }
+                    res
+                })
         }
     };
 }

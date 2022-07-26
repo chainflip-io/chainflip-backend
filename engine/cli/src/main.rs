@@ -242,6 +242,7 @@ async fn register_claim(
                 .expect("Unable to create EthWslRpcClient"),
             EthHttpRpcClient::new(&settings.eth, logger)
                 .expect("Unable to create EthHttpRpcClient"),
+            logger.clone(),
         ),
         logger,
     )?;
