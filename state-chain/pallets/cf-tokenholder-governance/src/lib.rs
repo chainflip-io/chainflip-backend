@@ -209,11 +209,11 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let backer = ensure_signed(origin)?;
 			Backers::<T>::try_mutate_exists(proposal, |maybe_backers| match maybe_backers {
-				Some(bakers) => {
-					if bakers.contains(&backer) {
+				Some(backers) => {
+					if backers.contains(&backer) {
 						return Err(Error::<T>::AlreadyBacked)
 					}
-					bakers.push(backer);
+					backers.push(backer);
 					Ok(())
 				},
 				None => Err(Error::<T>::ProposalDoesntExists),

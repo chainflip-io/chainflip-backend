@@ -15,7 +15,7 @@ fn generate_proposal<T: Config>() -> Proposal<T> {
 
 benchmarks! {
 	on_initialize_resolve_votes {
-		// Number of bakers
+		// Number of backers
 		let a in 10..1000;
 		let stake = <T as pallet::Config>::Balance::from(50_000_000_000_000_000_000_000u128);
 		let total_onchain_funds = T::StakingInfo::total_onchain_stake();
@@ -24,13 +24,13 @@ benchmarks! {
 			T::VotingPeriod::get(),
 			proposal.clone(),
 		);
-		let mut bakers: Vec<T::AccountId> = vec![];
+		let mut backers: Vec<T::AccountId> = vec![];
 		for i in 1..a {
 			let account: T::AccountId = account("doogle", i, i);
 			T::FeePayment::mint_to_account(account.clone(), stake);
-			bakers.push(account);
+			backers.push(account);
 		}
-		Backers::<T>::insert(proposal, bakers);
+		Backers::<T>::insert(proposal, backers);
 	} : {
 		Pallet::<T>::on_initialize(1u32.into());
 	} verify {
