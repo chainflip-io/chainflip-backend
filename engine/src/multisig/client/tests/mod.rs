@@ -17,7 +17,6 @@ use state_chain_runtime::AccountId;
 
 pub const KEYGEN_STAGES: usize = 9;
 pub const SIGNING_STAGES: usize = 4;
-pub const STAGE_FINISHED_OR_NOT_STARTED: usize = 0;
 
 /// Default seeds
 pub const DEFAULT_KEYGEN_SEED: [u8; 32] = [8; 32];

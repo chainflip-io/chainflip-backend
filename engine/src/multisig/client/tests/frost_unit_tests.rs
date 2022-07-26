@@ -1,13 +1,14 @@
 use crate::multisig::{
     client::{
         common::{
-            BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, SigningFailureReason,
+            BroadcastFailureReason, CeremonyFailureReason, CeremonyStageName, SigningFailureReason,
         },
         signing::frost,
         tests::helpers::{
-            for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes,
-            new_signing_ceremony_with_keygen, run_keygen, run_stages, split_messages_for,
-            standard_signing, standard_signing_coroutine, SigningCeremonyRunner,
+            for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1,
+            get_signing_stage_name_from_number, new_nodes, new_signing_ceremony_with_keygen,
+            run_keygen, run_stages, split_messages_for, standard_signing,
+            standard_signing_coroutine, SigningCeremonyRunner,
         },
     },
     crypto::Rng,
@@ -41,26 +42,29 @@ async fn should_delay_stage_data() {
             let (next_late_msg, next_msgs) = get_messages_for_stage(stage_number);
             ceremony.distribute_messages(next_msgs);
 
-            assert_ok!(ceremony.nodes[&test_account]
-                .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id));
+            assert_ok!(
+                ceremony.nodes[&test_account].ensure_ceremony_at_signing_stage(
+                    get_signing_stage_name_from_number(stage_number),
+                    ceremony.ceremony_id
+                )
+            );
 
             // Now receive the final client's data to advance the stage
             ceremony.distribute_messages(late_msg);
 
-            assert_ok!(ceremony.nodes[&test_account]
-                .ensure_ceremony_at_signing_stage(stage_number + 1, ceremony.ceremony_id));
+            assert_ok!(
+                ceremony.nodes[&test_account].ensure_ceremony_at_signing_stage(
+                    get_signing_stage_name_from_number(stage_number + 1),
+                    ceremony.ceremony_id
+                )
+            );
 
             ceremony.distribute_messages(next_late_msg);
 
             // Check that the stage correctly advanced or finished
             assert_ok!(
                 ceremony.nodes[&test_account].ensure_ceremony_at_signing_stage(
-                    if stage_number + 2 > SIGNING_STAGES {
-                        // The keygen finished
-                        STAGE_FINISHED_OR_NOT_STARTED
-                    } else {
-                        stage_number + 2
-                    },
+                    get_signing_stage_name_from_number(stage_number + 2),
                     ceremony.ceremony_id
                 )
             );
@@ -82,19 +86,19 @@ async fn should_delay_comm1_before_rts() {
     signing_ceremony.distribute_messages(signing_messages.stage_1_messages);
 
     let [test_id] = &signing_ceremony.select_account_ids();
-    assert_ok!(
-        signing_ceremony.nodes[test_id].ensure_ceremony_at_signing_stage(
-            STAGE_FINISHED_OR_NOT_STARTED,
-            signing_ceremony.ceremony_id
-        )
-    );
+    assert_ok!(signing_ceremony.nodes[test_id]
+        .ensure_ceremony_at_signing_stage(None, signing_ceremony.ceremony_id));
 
     // Now we get the request to sign (effectively receiving the request from our StateChain)
     signing_ceremony.request().await;
 
     // It should advance to stage 2 right away if the comm1's were delayed correctly
-    assert_ok!(signing_ceremony.nodes[test_id]
-        .ensure_ceremony_at_signing_stage(2, signing_ceremony.ceremony_id));
+    assert_ok!(
+        signing_ceremony.nodes[test_id].ensure_ceremony_at_signing_stage(
+            Some(CeremonyStageName::VerifyCommitmentsBroadcast2),
+            signing_ceremony.ceremony_id
+        )
+    );
 }
 
 // We choose (arbitrarily) to use eth crypto for unit tests.
@@ -152,7 +156,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
             result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                BroadcastStageName::CoefficientCommitments,
+                CeremonyStageName::VerifyCommitmentsBroadcast2,
             ),
         )
         .await;
@@ -182,7 +186,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
             result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                BroadcastStageName::LocalSignatures,
+                CeremonyStageName::VerifyLocalSigsBroadcastStage4,
             ),
         )
         .await;
@@ -220,7 +224,10 @@ async fn should_ignore_unexpected_message_for_stage() {
             // We should not have progressed further when receiving unexpected messages
             assert!(
                 ceremony.nodes[test_node_id]
-                    .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
+                    .ensure_ceremony_at_signing_stage(
+                        get_signing_stage_name_from_number(stage_number),
+                        ceremony.ceremony_id
+                    )
                     .is_ok(),
                 "Failed to ignore a message from an unexpected stage"
             );
@@ -229,7 +236,10 @@ async fn should_ignore_unexpected_message_for_stage() {
             ceremony.distribute_messages(other_msgs);
             assert!(
                 ceremony.nodes[test_node_id]
-                    .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
+                    .ensure_ceremony_at_signing_stage(
+                        get_signing_stage_name_from_number(stage_number),
+                        ceremony.ceremony_id
+                    )
                     .is_ok(),
                 "Failed to ignore a duplicate message"
             );
@@ -245,7 +255,10 @@ async fn should_ignore_unexpected_message_for_stage() {
             );
             assert!(
                 ceremony.nodes[test_node_id]
-                    .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
+                    .ensure_ceremony_at_signing_stage(
+                        get_signing_stage_name_from_number(stage_number),
+                        ceremony.ceremony_id
+                    )
                     .is_ok(),
                 "Failed to ignore a message from an unknown account id"
             );
@@ -263,7 +276,10 @@ async fn should_ignore_unexpected_message_for_stage() {
             );
             assert!(
                 ceremony.nodes[test_node_id]
-                    .ensure_ceremony_at_signing_stage(stage_number, ceremony.ceremony_id)
+                    .ensure_ceremony_at_signing_stage(
+                        get_signing_stage_name_from_number(stage_number),
+                        ceremony.ceremony_id
+                    )
                     .is_ok(),
                 "Failed to ignore a message from non-participant account id"
             );
@@ -273,12 +289,7 @@ async fn should_ignore_unexpected_message_for_stage() {
             assert!(
                 ceremony.nodes[test_node_id]
                     .ensure_ceremony_at_signing_stage(
-                        if stage_number + 1 > SIGNING_STAGES {
-                            // The keygen finished
-                            STAGE_FINISHED_OR_NOT_STARTED
-                        } else {
-                            stage_number + 1
-                        },
+                        get_signing_stage_name_from_number(stage_number + 1),
                         ceremony.ceremony_id
                     )
                     .is_ok(),
@@ -475,7 +486,7 @@ mod timeout {
                     result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        BroadcastStageName::CoefficientCommitments,
+                        CeremonyStageName::VerifyCommitmentsBroadcast2,
                     ),
                 )
                 .await
@@ -511,7 +522,7 @@ mod timeout {
                     result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        BroadcastStageName::LocalSignatures,
+                        CeremonyStageName::VerifyLocalSigsBroadcastStage4,
                     ),
                 )
                 .await
