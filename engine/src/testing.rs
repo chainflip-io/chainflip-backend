@@ -5,14 +5,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use core::time::Duration;
 use futures::{Future, FutureExt};
 use tempfile::{self, TempDir};
 use utilities::assert_ok;
 
-/// Checks that a given future yields without producing a result (yet) / is blocked by something
-pub fn assert_future_awaits(f: impl Future) {
-    assert!(f.now_or_never().is_none());
-}
+use tokio::sync::mpsc::UnboundedReceiver;
+
+const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 
 /// Checks if a given future either is ready, or will become ready on the next poll/without yielding
 pub fn assert_future_can_complete<I>(f: impl Future<Output = I>) -> I {
@@ -32,4 +32,22 @@ pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
     let tempfile = tempdir.path().to_owned().join("file");
     assert!(!tempfile.exists());
     (tempdir, tempfile)
+}
+
+async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option<I> {
+    tokio::time::timeout(CHANNEL_TIMEOUT, receiver.recv())
+        .await
+        .ok()?
+}
+
+pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
+    receiver: &mut UnboundedReceiver<Item>,
+) -> Item {
+    match recv_with_timeout(receiver).await {
+        Some(i) => i,
+        None => panic!(
+            "Timeout waiting for message, expected {}",
+            std::any::type_name::<Item>()
+        ),
+    }
 }
