@@ -191,14 +191,14 @@ pub async fn test_handle_signing_request<MultisigClient, RpcClient>(
     .await;
 }
 
-async fn start_epoch_observation<Sender, RpcClient>(
-    send_instruction: Sender,
+async fn start_epoch_observation<SendInstruction, RpcClient>(
+    send_instruction: SendInstruction,
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
     block_hash: H256,
     epoch: EpochIndex,
 ) where
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
-    Sender: FnOnce(ObserveInstruction),
+    SendInstruction: FnOnce(ObserveInstruction),
 {
     send_instruction(ObserveInstruction::Start(
         state_chain_client
@@ -214,15 +214,15 @@ async fn start_epoch_observation<Sender, RpcClient>(
     ));
 }
 
-async fn try_end_previous_epoch_observation<Sender, RpcClient>(
-    send_instruction: Sender,
+async fn try_end_previous_epoch_observation<SendInstruction, RpcClient>(
+    send_instruction: SendInstruction,
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
     block_hash: H256,
     epoch: EpochIndex,
 ) -> bool
 where
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
-    Sender: FnOnce(ObserveInstruction),
+    SendInstruction: FnOnce(ObserveInstruction),
 {
     if let Some(vault) = state_chain_client
         .get_storage_map::<pallet_cf_vaults::Vaults<
@@ -367,7 +367,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
                                                 if active_in_current_epoch {
-                                                    assert!(try_end_previous_epoch_observation(&send_instruction, &state_chain_client, current_block_hash, new_epoch).await);
+                                                    assert!(try_end_previous_epoch_observation(send_instruction, &state_chain_client, current_block_hash, new_epoch).await);
                                                 }
 
                                                 active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
@@ -377,7 +377,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                 ).await.unwrap().is_some();
 
                                                 if active_in_current_epoch {
-                                                    start_epoch_observation(&send_instruction, &state_chain_client, current_block_hash, new_epoch).await;
+                                                    start_epoch_observation(send_instruction, &state_chain_client, current_block_hash, new_epoch).await;
                                                 }
                                             }
                                             state_chain_runtime::Event::Validator(
