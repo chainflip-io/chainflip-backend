@@ -104,9 +104,6 @@ benchmarks_instance_pallet! {
 		let a in 10..150;
 		// r: number of retries
 		let r in 0..50;
-		// o: number of offenders
-		let o in 1 .. 100;
-
 		T::KeyProvider::set_key(<T::TargetChain as ChainCrypto>::AggKey::benchmark_value());
 		CurrentAuthorities::<T>::put(Vec::<<T as Chainflip>::ValidatorId>::new());
 
