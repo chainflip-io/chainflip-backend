@@ -580,6 +580,7 @@ mod benches {
 		[pallet_cf_flip, Flip]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_staking, Staking]
+		[pallet_grandpa, Grandpa]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
 		[pallet_cf_auction, Auction]

@@ -215,6 +215,7 @@ runtime-benchmarks = [
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
+  'pallet-grandpa/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
   'cf-session-benchmarking',
 ]
