@@ -191,14 +191,13 @@ pub async fn test_handle_signing_request<MultisigClient, RpcClient>(
     .await;
 }
 
-async fn start_epoch_observation<SendInstruction, RpcClient>(
-    send_instruction: SendInstruction,
+async fn start_epoch_observation<RpcClient>(
+    send_instruction: impl FnOnce(ObserveInstruction),
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
     block_hash: H256,
     epoch: EpochIndex,
 ) where
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
-    SendInstruction: FnOnce(ObserveInstruction),
 {
     send_instruction(ObserveInstruction::Start(
         state_chain_client
@@ -214,15 +213,14 @@ async fn start_epoch_observation<SendInstruction, RpcClient>(
     ));
 }
 
-async fn try_end_previous_epoch_observation<SendInstruction, RpcClient>(
-    send_instruction: SendInstruction,
+async fn try_end_previous_epoch_observation<RpcClient>(
+    send_instruction: impl FnOnce(ObserveInstruction),
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
     block_hash: H256,
     epoch: EpochIndex,
 ) -> bool
 where
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
-    SendInstruction: FnOnce(ObserveInstruction),
 {
     if let Some(vault) = state_chain_client
         .get_storage_map::<pallet_cf_vaults::Vaults<
