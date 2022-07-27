@@ -1166,25 +1166,6 @@ impl Node {
         self.ceremony_manager.expire_all();
         self.ceremony_manager.check_all_timeouts();
     }
-
-    pub fn ensure_ceremony_at_signing_stage(
-        &self,
-        stage: Option<CeremonyStageName>,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        self.ceremony_manager
-            .check_ceremony_at_signing_stage(stage, ceremony_id)
-    }
-
-    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9).
-    pub fn ensure_ceremony_at_keygen_stage(
-        &self,
-        stage: Option<CeremonyStageName>,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        self.ceremony_manager
-            .check_ceremony_at_keygen_stage(stage, ceremony_id)
-    }
 }
 
 /// Using the given key_id, verify the signature is correct

@@ -1,7 +1,6 @@
 use cf_traits::AuthorityCount;
 use rand_legacy::FromEntropy;
 use std::collections::BTreeSet;
-use utilities::assert_ok;
 
 use crate::multisig::{
     client::{
@@ -52,21 +51,30 @@ async fn should_delay_comm1_before_keygen_request() {
 
     ceremony.distribute_messages(early_msgs);
 
-    assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(None, ceremony.ceremony_id));
+    assert_eq!(
+        ceremony.nodes[&test_id]
+            .ceremony_manager
+            .get_keygen_stage_name(ceremony.ceremony_id),
+        None
+    );
 
     ceremony.request().await;
 
-    assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(
+    assert_eq!(
+        ceremony.nodes[&test_id]
+            .ceremony_manager
+            .get_keygen_stage_name(ceremony.ceremony_id),
         Some(CeremonyStageName::HashCommitments1),
-        ceremony.ceremony_id
-    ));
+    );
 
     ceremony.distribute_messages(late_msg);
 
-    assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(
+    assert_eq!(
+        ceremony.nodes[&test_id]
+            .ceremony_manager
+            .get_keygen_stage_name(ceremony.ceremony_id),
         Some(CeremonyStageName::VerifyHashCommitmentsBroadcast2),
-        ceremony.ceremony_id
-    ));
+    );
 }
 
 // Data for any stage that arrives one stage too early should be properly delayed
@@ -94,30 +102,30 @@ async fn should_delay_stage_data() {
             );
             ceremony.distribute_messages(early_messages);
 
-            assert_ok!(
-                ceremony.nodes[target_account_id].ensure_ceremony_at_keygen_stage(
-                    get_keygen_stage_name_from_number(stage_number),
-                    ceremony.ceremony_id
-                )
+            assert_eq!(
+                ceremony.nodes[target_account_id]
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number)
             );
 
             ceremony.distribute_messages(late_messages);
 
-            assert_ok!(
-                ceremony.nodes[target_account_id].ensure_ceremony_at_keygen_stage(
-                    get_keygen_stage_name_from_number(stage_number + 1),
-                    ceremony.ceremony_id
-                )
+            assert_eq!(
+                ceremony.nodes[target_account_id]
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number + 1)
             );
 
             ceremony.distribute_messages(late_messages_next);
 
             // Check that the stage correctly advanced or finished
-            assert_ok!(
-                ceremony.nodes[target_account_id].ensure_ceremony_at_keygen_stage(
-                    get_keygen_stage_name_from_number(stage_number + 2),
-                    ceremony.ceremony_id
-                )
+            assert_eq!(
+                ceremony.nodes[target_account_id]
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number + 2)
             );
         },
     )
@@ -358,24 +366,21 @@ async fn should_ignore_unexpected_message_for_stage() {
                 ceremony.distribute_messages(msg_from_1);
             }
 
-            assert!(
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(
-                        get_keygen_stage_name_from_number(stage_number),
-                        ceremony.ceremony_id
-                    )
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unexpected stage"
             );
 
             ceremony.distribute_messages(other_msgs);
-            assert!(
+
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(
-                        get_keygen_stage_name_from_number(stage_number),
-                        ceremony.ceremony_id
-                    )
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore duplicate messages"
             );
 
@@ -387,25 +392,21 @@ async fn should_ignore_unexpected_message_for_stage() {
                     .map(|(_, message)| (unknown_id.clone(), message.clone()))
                     .collect(),
             );
-            assert!(
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(
-                        get_keygen_stage_name_from_number(stage_number),
-                        ceremony.ceremony_id
-                    )
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unknown account id"
             );
 
             ceremony.distribute_messages(msg_from_1);
 
-            assert!(
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(
-                        get_keygen_stage_name_from_number(stage_number + 1),
-                        ceremony.ceremony_id
-                    )
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number + 1),
                 "Failed to proceed to next stage"
             );
         },

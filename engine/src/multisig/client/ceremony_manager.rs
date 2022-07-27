@@ -407,24 +407,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.signing_states.get_delayed_messages_len(ceremony_id)
     }
 
-    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9)
-    pub fn check_ceremony_at_keygen_stage(
-        &self,
-        stage: Option<CeremonyStageName>,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        self.keygen_states
-            .check_ceremony_at_stage(stage, ceremony_id)
+    pub fn get_keygen_stage_name(&self, ceremony_id: CeremonyId) -> Option<CeremonyStageName> {
+        self.keygen_states.get_stage_for(&ceremony_id)
     }
 
-    /// Check is the ceremony is at the specified signing BroadcastStage (0-4)
-    pub fn check_ceremony_at_signing_stage(
-        &self,
-        stage: Option<CeremonyStageName>,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        self.signing_states
-            .check_ceremony_at_stage(stage, ceremony_id)
+    pub fn get_signing_stage_name(&self, ceremony_id: CeremonyId) -> Option<CeremonyStageName> {
+        self.signing_states.get_stage_for(&ceremony_id)
     }
 }
 
@@ -591,38 +579,6 @@ where
     CeremonyData: Display + PreProcessStageDataCheck,
     FailureReason: Display,
 {
-    /// Check is the ceremony is at the specified CeremonyStageName,
-    /// Use None if the ceremony is finished or not started.
-    pub fn check_ceremony_at_stage(
-        &self,
-        expected_stage: Option<CeremonyStageName>,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        let stage = self.get_stage_for(&ceremony_id);
-
-        match (stage, expected_stage) {
-            (Some(stage_string), Some(expected_stage)) => {
-                if stage_string != expected_stage {
-                    Err(anyhow::Error::msg(format!(
-                        "Expected to be at stage {}, but actually at stage {}",
-                        expected_stage, stage_string
-                    )))
-                } else {
-                    Ok(()) // At the expected stage
-                }
-            }
-            (None, Some(expected_stage)) => Err(anyhow::Error::msg(format!(
-                "Expected to be at stage {:?}, but ceremony is not running.",
-                expected_stage
-            ))),
-            (Some(stage_string), None) => Err(anyhow::Error::msg(format!(
-                "Expected ceremony to not be running, but actually at stage {:?}",
-                stage_string
-            ))),
-            (None, None) => Ok(()), // Ceremony is finished or not started, as expected.
-        }
-    }
-
     fn expire_all(&mut self) {
         for state in self.inner.values_mut() {
             let one_second_ago = std::time::Instant::now() - std::time::Duration::from_secs(1);
