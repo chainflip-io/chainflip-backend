@@ -3,7 +3,6 @@ use std::collections::{hash_map::Entry, BTreeSet, HashMap};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::constants::CEREMONY_ID_WINDOW;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::client::keygen::generate_key_data_until_compatible;
@@ -507,7 +506,7 @@ where
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: CeremonyData,
-        latest_ceremony_id: CeremonyId,
+        _latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
@@ -516,19 +515,7 @@ where
         let state = if data.is_first_stage() {
             match self.inner.entry(ceremony_id) {
                 Entry::Vacant(entry) => {
-                    // Only a ceremony id that is within the ceremony id window can create unauthorised ceremonies
-                    if ceremony_id > latest_ceremony_id
-                        && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
-                    {
-                        entry.insert(StateRunner::new_unauthorised(ceremony_id, logger))
-                    } else {
-                        slog::debug!(
-                            logger,
-                            "Ignoring data: initial stage data with unexpected ceremony id {}",
-                            ceremony_id
-                        );
-                        return;
-                    }
+                    entry.insert(StateRunner::new_unauthorised(ceremony_id, logger))
                 }
                 Entry::Occupied(entry) => entry.into_mut(),
             }
