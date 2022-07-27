@@ -984,11 +984,11 @@ async fn inner_connect_to_state_chain(
 
                         let chain_rpc_client = chain_rpc_client.clone();
                         async move {
-                            let intervening_headers: Vec<_> = futures::stream::iter(
+                            let intervening_headers_stream = futures::stream::iter(
                                 prev_finalized_header.number + 1..next_finalized_header.number,
                             )
-                            .then(|block_number| {
-                                let chain_rpc_client = &chain_rpc_client;
+                            .then(move |block_number| {
+                                let chain_rpc_client = chain_rpc_client.clone();
                                 async move {
                                     let block_hash = try_unwrap_value(
                                         chain_rpc_client
@@ -1010,27 +1010,21 @@ async fn inner_connect_to_state_chain(
                                     Result::<_, anyhow::Error>::Ok((block_hash, block_header))
                                 }
                             })
-                            .try_collect()
-                            .await?;
+                            .scan(prev_finalized_header.hash(), |prev_hash, res| {
+                                futures::future::ready(match res {
+                                    Ok((next_hash, next_header)) => {
+                                        assert_eq!(*prev_hash, next_header.parent_hash);
+                                        *prev_hash = next_hash;
+                                        Some(Ok(next_header))
+                                    }
+                                    Err(e) => Some(Err(e)),
+                                })
+                            })
+                            .chain(futures::stream::once(futures::future::ok(
+                                next_finalized_header,
+                            )));
 
-                            for (block_hash, next_block_header) in Iterator::zip(
-                                std::iter::once(&prev_finalized_header.hash())
-                                    .chain(intervening_headers.iter().map(|(hash, _header)| hash)),
-                                intervening_headers
-                                    .iter()
-                                    .map(|(_hash, header)| header)
-                                    .chain(std::iter::once(&next_finalized_header)),
-                            ) {
-                                assert_eq!(*block_hash, next_block_header.parent_hash);
-                            }
-
-                            Result::<_, anyhow::Error>::Ok(futures::stream::iter(
-                                intervening_headers
-                                    .into_iter()
-                                    .map(|(_hash, header)| header)
-                                    .chain(std::iter::once(next_finalized_header))
-                                    .map(Result::<_, anyhow::Error>::Ok),
-                            ))
+                            Result::<_, anyhow::Error>::Ok(intervening_headers_stream)
                         }
                     })
                     .try_flatten(),
