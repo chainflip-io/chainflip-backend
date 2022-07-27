@@ -203,6 +203,35 @@ macro_rules! impl_spawn_ops {
 
                 ScopedJoinHandle { receiver }
             }
+
+            // The returned handle should only ever be awaited on inside of the task scope
+            // this spawn is associated with, or any sub-task scopes. Otherwise the await
+            // will never complete in the Error case.
+            fn spawn_blocking_with_custom_error_handling<
+                R,
+                V: 'static + Send,
+                F: 'static + FnOnce() -> R + Send,
+                ErrorHandler: 'static + FnOnce(R) -> (T, Option<V>) + Send,
+            >(
+                &self,
+                error_handler: ErrorHandler,
+                f: F,
+            ) -> ScopedJoinHandle<V> {
+                let (sender, receiver) = oneshot::channel();
+
+                self.spawn_blocking(|| {
+                    let result = f();
+                    let (t, option_v) = error_handler(result);
+
+                    if let Some(v) = option_v {
+                        let _result = sender.send(v);
+                    }
+
+                    t
+                });
+
+                ScopedJoinHandle { receiver }
+            }
         }
 
         impl<$env_lifetime> Scope<$env_lifetime, anyhow::Result<()>, $stat> {
@@ -216,6 +245,24 @@ macro_rules! impl_spawn_ops {
                 f: F,
             ) -> ScopedJoinHandle<V> {
                 self.spawn_with_custom_error_handling(
+                    |t| match t {
+                        Ok(v) => (Ok(()), Some(v)),
+                        Err(e) => (Err(e), None),
+                    },
+                    f,
+                )
+            }
+
+            /// Spawns a function in a separate thread and gives you a handle to receive the Result::Ok by awaiting
+            /// on the returned handle (If the task errors/panics the scope will exit with the error/panic)
+            pub fn spawn_blocking_with_handle<
+                V: 'static + Send,
+                F: 'static + FnOnce() -> anyhow::Result<V> + Send,
+            >(
+                &self,
+                f: F,
+            ) -> ScopedJoinHandle<V> {
+                self.spawn_blocking_with_custom_error_handling(
                     |t| match t {
                         Ok(v) => (Ok(()), Some(v)),
                         Err(e) => (Err(e), None),
@@ -269,6 +316,18 @@ impl<'env, T: Send + 'static> Scope<'env, T, false> {
                 unsafe { std::mem::transmute(future) };
             self.spawner.spawn(future)
         }));
+    }
+}
+
+impl<'a, T: Send + 'static, const TASKS_HAVE_STATIC_LIFETIMES: bool>
+    Scope<'a, T, TASKS_HAVE_STATIC_LIFETIMES>
+{
+    /// Spawn a task that is guaranteed to exit/cancel/abort before the associated scope exits
+    pub fn spawn_blocking<F: 'static + FnOnce() -> T + Send>(&self, f: F) {
+        // If this result is an error (I.e. the channel receiver was dropped) then the stream was closed, and so we want to drop the handle to cancel the task we just spawned.
+        let _result = self
+            .sender
+            .send(CancellingJoinHandle::new(self.spawner.spawn_blocking(f)));
     }
 }
 
@@ -385,11 +444,42 @@ mod tests {
     }
 
     #[test]
+    fn join_of_blocking_spawn_handles_return_value_correctly() {
+        const VALUE: u32 = 40;
+        with_main_task_scope(|scope| {
+            async {
+                let handle = scope.spawn_blocking_with_handle(|| Ok(VALUE));
+
+                assert_eq!(handle.await, VALUE);
+
+                Ok(())
+            }
+            .boxed()
+        })
+        .unwrap();
+    }
+
+    #[test]
     fn join_handles_handle_errors() {
         with_main_task_scope::<'_, _, ()>(|scope| {
             async {
                 let handle =
                     scope.spawn_with_handle::<(), _>(async { Err(anyhow::Error::msg("")) });
+
+                handle.await;
+                unreachable!()
+            }
+            .boxed()
+        })
+        .unwrap_err();
+    }
+
+    #[test]
+    fn join_of_blocking_spawn_handles_handle_errors() {
+        with_main_task_scope::<'_, _, ()>(|scope| {
+            async {
+                let handle =
+                    scope.spawn_blocking_with_handle::<(), _>(|| Err(anyhow::Error::msg("")));
 
                 handle.await;
                 unreachable!()
