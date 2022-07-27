@@ -309,15 +309,19 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let mut num_retries = 0;
+			let mut num_offenders = 0;
 
 			// Process pending retries.
 			for ceremony_id in RetryQueues::<T, I>::take(current_block) {
 				if let Some(failed_ceremony_context) = PendingCeremonies::<T, I>::take(ceremony_id)
 				{
 					num_retries += 1;
+
+					let offenders = failed_ceremony_context.offenders();
+					num_offenders += offenders.len();
 					T::OffenceReporter::report_many(
 						PalletOffence::ParticipateSigningFailed,
-						failed_ceremony_context.offenders().as_slice(),
+						&offenders[..],
 					);
 
 					// Clean up old ceremony and start a new one.
@@ -335,9 +339,8 @@ pub mod pallet {
 				}
 			}
 
-			// TODO: replace this with benchmark results.
-			num_retries as u64 *
-				frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
+			T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
+				T::Weights::report_offenders(num_offenders as u32)
 		}
 	}
 
@@ -545,6 +548,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(ceremony_id, attempt),
 			T::EpochInfo::epoch_index(),
 		) {
+			log::trace!(
+				target: "threshold-signing",
+				"Threshold set selected for request {}, requesting signature ceremony {}.",
+				request_id,
+				ceremony_id
+			);
+
 			// Store the context.
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
@@ -564,6 +574,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				payload,
 			));
 		} else {
+			log::trace!(
+				target: "threshold-signing",
+				"Not enough signers for request {} at attempt {}, scheduling retry.",
+				request_id,
+				attempt,
+			);
+
 			// Store the context, schedule a retry for the next block.
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
