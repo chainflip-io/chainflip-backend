@@ -139,6 +139,7 @@ fn should_ignore_non_first_stage_signing_data_before_request() {
 }
 
 #[test]
+#[ignore = "temporarily disabled - see issue #1972"]
 fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
     let past_ceremony_id = latest_ceremony_id - 1; // Invalid, because it was used in the past
