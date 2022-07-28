@@ -105,12 +105,14 @@ fn main() -> anyhow::Result<()> {
                         expected_chain_id,
                     ).await]
                     .into_iter()
-                    .filter(|res| res.is_err())
-                    .map(|res| res.err().unwrap())
+                    .filter_map(|res| match res {
+                        Ok(_) => None,
+                        Err(err) => Some(err),
+                    })
                     .peekable();
 
                 if errors.peek().is_some() {
-                    return Err(anyhow!(format!("Inconsistent chain configuration. Terminating.\n{}", format_iterator(errors))));
+                    return Err(anyhow!(format!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors))));
                 }
             }
 
