@@ -171,7 +171,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             }
         };
 
-        slog::debug!(self.common.logger, "{} complete", Self::NAME);
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         // Just saving hash commitments for now. We will use them
         // once the parties reveal their public coefficients (next two stages)
@@ -296,7 +296,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             }
         };
 
-        slog::debug!(self.common.logger, "{} complete", Self::NAME);
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         // At this point we know everyone's commitments, which can already be
         // used to derive the resulting aggregate public key. Before proceeding

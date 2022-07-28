@@ -143,7 +143,7 @@ impl<C: CryptoScheme>
             }
         };
 
-        slog::debug!(self.common.logger, "{} complete", Self::NAME);
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         let processor = LocalSigStage3::<C> {
             common: self.common.clone(),
@@ -266,7 +266,7 @@ impl<C: CryptoScheme>
             }
         };
 
-        slog::debug!(self.common.logger, "{} Complete", Self::NAME);
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         let all_idxs = &self.common.all_idxs;
 
