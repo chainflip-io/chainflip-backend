@@ -318,7 +318,6 @@ mod try_map_with_state_and_end_after_error {
                     return Poll::Ready(None);
                 }
             } else {
-                *this.state = None;
                 return Poll::Ready(None);
             };
 
@@ -466,10 +465,12 @@ mod try_map_and_end_after_error {
         ) -> Poll<Option<Self::Item>> {
             let mut this = self.project();
 
+            if *this.done_taking {
+                return Poll::Ready(None);
+            }
+
             let future = if let Some(future) = this.future.as_mut().as_pin_mut() {
                 future
-            } else if *this.done_taking {
-                return Poll::Ready(None);
             } else if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx)) {
                 match result {
                     Ok(ok) => {
