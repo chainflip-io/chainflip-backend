@@ -306,7 +306,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     logger: slog::Logger,
 ) -> Result<(), anyhow::Error>
 where
-    BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + Sync + 'static,
+    BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
     EthRpc: EthRpcApi + Send + Sync + 'static,
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
