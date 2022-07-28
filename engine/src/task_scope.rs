@@ -203,35 +203,6 @@ macro_rules! impl_spawn_ops {
 
                 ScopedJoinHandle { receiver }
             }
-
-            // The returned handle should only ever be awaited on inside of the task scope
-            // this spawn is associated with, or any sub-task scopes. Otherwise the await
-            // will never complete in the Error case.
-            fn spawn_blocking_with_custom_error_handling<
-                R,
-                V: 'static + Send,
-                F: 'static + FnOnce() -> R + Send,
-                ErrorHandler: 'static + FnOnce(R) -> (T, Option<V>) + Send,
-            >(
-                &self,
-                error_handler: ErrorHandler,
-                f: F,
-            ) -> ScopedJoinHandle<V> {
-                let (sender, receiver) = oneshot::channel();
-
-                self.spawn_blocking(|| {
-                    let result = f();
-                    let (t, option_v) = error_handler(result);
-
-                    if let Some(v) = option_v {
-                        let _result = sender.send(v);
-                    }
-
-                    t
-                });
-
-                ScopedJoinHandle { receiver }
-            }
         }
 
         impl<$env_lifetime> Scope<$env_lifetime, anyhow::Result<()>, $stat> {
@@ -245,24 +216,6 @@ macro_rules! impl_spawn_ops {
                 f: F,
             ) -> ScopedJoinHandle<V> {
                 self.spawn_with_custom_error_handling(
-                    |t| match t {
-                        Ok(v) => (Ok(()), Some(v)),
-                        Err(e) => (Err(e), None),
-                    },
-                    f,
-                )
-            }
-
-            /// Spawns a function in a separate thread and gives you a handle to receive the Result::Ok by awaiting
-            /// on the returned handle (If the task errors/panics the scope will exit with the error/panic)
-            pub fn spawn_blocking_with_handle<
-                V: 'static + Send,
-                F: 'static + FnOnce() -> anyhow::Result<V> + Send,
-            >(
-                &self,
-                f: F,
-            ) -> ScopedJoinHandle<V> {
-                self.spawn_blocking_with_custom_error_handling(
                     |t| match t {
                         Ok(v) => (Ok(()), Some(v)),
                         Err(e) => (Err(e), None),
@@ -328,6 +281,57 @@ impl<'a, T: Send + 'static, const TASKS_HAVE_STATIC_LIFETIMES: bool>
         let _result = self
             .sender
             .send(CancellingJoinHandle::new(self.spawner.spawn_blocking(f)));
+    }
+
+    // The returned handle should only ever be awaited on inside of the task scope
+    // this spawn is associated with, or any sub-task scopes. Otherwise the await
+    // will never complete in the Error case.
+    fn spawn_blocking_with_custom_error_handling<
+        R,
+        V: 'static + Send,
+        F: 'static + FnOnce() -> R + Send,
+        ErrorHandler: 'static + FnOnce(R) -> (T, Option<V>) + Send,
+    >(
+        &self,
+        error_handler: ErrorHandler,
+        f: F,
+    ) -> ScopedJoinHandle<V> {
+        let (sender, receiver) = oneshot::channel();
+
+        self.spawn_blocking(|| {
+            let result = f();
+            let (t, option_v) = error_handler(result);
+
+            if let Some(v) = option_v {
+                let _result = sender.send(v);
+            }
+
+            t
+        });
+
+        ScopedJoinHandle { receiver }
+    }
+}
+
+impl<'a, const TASKS_HAVE_STATIC_LIFETIMES: bool>
+    Scope<'a, anyhow::Result<()>, TASKS_HAVE_STATIC_LIFETIMES>
+{
+    /// Spawns a function in a separate thread and gives you a handle to receive the Result::Ok by awaiting
+    /// on the returned handle (If the task errors/panics the scope will exit with the error/panic)
+    pub fn spawn_blocking_with_handle<
+        V: 'static + Send,
+        F: 'static + FnOnce() -> anyhow::Result<V> + Send,
+    >(
+        &self,
+        f: F,
+    ) -> ScopedJoinHandle<V> {
+        self.spawn_blocking_with_custom_error_handling(
+            |t| match t {
+                Ok(v) => (Ok(()), Some(v)),
+                Err(e) => (Err(e), None),
+            },
+            f,
+        )
     }
 }
 
