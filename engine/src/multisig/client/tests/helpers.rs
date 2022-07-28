@@ -26,7 +26,7 @@ use crate::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
             common::{
                 broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
-                KeygenFailureReason, SigningFailureReason,
+                CeremonyStageName, KeygenFailureReason, SigningFailureReason,
             },
             keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
             signing,
@@ -1166,25 +1166,6 @@ impl Node {
         self.ceremony_manager.expire_all();
         self.ceremony_manager.check_all_timeouts();
     }
-
-    pub fn ensure_ceremony_at_signing_stage(
-        &self,
-        stage_number: usize,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        self.ceremony_manager
-            .check_ceremony_at_signing_stage(stage_number, ceremony_id)
-    }
-
-    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9).
-    pub fn ensure_ceremony_at_keygen_stage(
-        &self,
-        stage_number: usize,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        self.ceremony_manager
-            .check_ceremony_at_keygen_stage(stage_number, ceremony_id)
-    }
 }
 
 /// Using the given key_id, verify the signature is correct
@@ -1241,4 +1222,29 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
         account_ids.len() as u32,
         logger,
     )
+}
+
+pub fn get_keygen_stage_name_from_number(stage_number: usize) -> Option<CeremonyStageName> {
+    match stage_number {
+        1 => Some(CeremonyStageName::HashCommitments1),
+        2 => Some(CeremonyStageName::VerifyHashCommitmentsBroadcast2),
+        3 => Some(CeremonyStageName::CoefficientCommitments3),
+        4 => Some(CeremonyStageName::VerifyCommitmentsBroadcast4),
+        5 => Some(CeremonyStageName::SecretSharesStage5),
+        6 => Some(CeremonyStageName::ComplaintsStage6),
+        7 => Some(CeremonyStageName::VerifyComplaintsBroadcastStage7),
+        8 => Some(CeremonyStageName::BlameResponsesStage8),
+        9 => Some(CeremonyStageName::VerifyBlameResponsesBroadcastStage9),
+        _ => None,
+    }
+}
+
+pub fn get_signing_stage_name_from_number(stage_number: usize) -> Option<CeremonyStageName> {
+    match stage_number {
+        1 => Some(CeremonyStageName::AwaitCommitments1),
+        2 => Some(CeremonyStageName::VerifyCommitmentsBroadcast2),
+        3 => Some(CeremonyStageName::LocalSigStage3),
+        4 => Some(CeremonyStageName::VerifyLocalSigsBroadcastStage4),
+        _ => None,
+    }
 }

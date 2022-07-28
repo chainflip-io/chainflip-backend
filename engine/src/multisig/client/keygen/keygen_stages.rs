@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::common::format_iterator;
 use crate::multisig::client::common::{
-    BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
+    CeremonyFailureReason, CeremonyStageName, KeygenFailureReason,
 };
 use crate::multisig::client::{self, KeygenResult, KeygenResultInfo};
 
@@ -78,7 +78,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for HashCommitments1<P>
 {
     type Message = HashComm1;
-    const NAME: BroadcastStageName = BroadcastStageName::HashCommitments;
+    const NAME: CeremonyStageName = CeremonyStageName::HashCommitments1;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // We don't want to reveal the public coefficients yet, so sending the hash commitment only
@@ -145,7 +145,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyHashCommitmentsBroadcast2<P>
 {
     type Message = VerifyHashComm2;
-    const NAME: BroadcastStageName = BroadcastStageName::HashCommitments;
+    const NAME: CeremonyStageName = CeremonyStageName::VerifyHashCommitmentsBroadcast2;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(VerifyHashComm2 {
@@ -171,11 +171,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             }
         };
 
-        slog::debug!(
-            self.common.logger,
-            "{} have been correctly broadcast",
-            Self::NAME
-        );
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         // Just saving hash commitments for now. We will use them
         // once the parties reveal their public coefficients (next two stages)
@@ -214,7 +210,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for CoefficientCommitments3<P>
 {
     type Message = CoeffComm3<P>;
-    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
+    const NAME: CeremonyStageName = CeremonyStageName::CoefficientCommitments3;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(self.own_commitment.clone())
@@ -262,7 +258,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyCommitmentsBroadcast4<P>
 {
     type Message = VerifyCoeffComm4<P>;
-    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
+    const NAME: CeremonyStageName = CeremonyStageName::VerifyCommitmentsBroadcast4;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.commitments.clone();
@@ -300,11 +296,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             }
         };
 
-        slog::debug!(
-            self.common.logger,
-            "{} have been correctly broadcast",
-            Self::NAME
-        );
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         // At this point we know everyone's commitments, which can already be
         // used to derive the resulting aggregate public key. Before proceeding
@@ -353,7 +345,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for SecretSharesStage5<P>
 {
     type Message = SecretShare5<P>;
-    const NAME: BroadcastStageName = BroadcastStageName::SecretShares;
+    const NAME: CeremonyStageName = CeremonyStageName::SecretSharesStage5;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // With everyone committed to their secrets and sharing polynomial coefficients
@@ -439,7 +431,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for ComplaintsStage6<P>
 {
     type Message = Complaints6;
-    const NAME: BroadcastStageName = BroadcastStageName::Complaints;
+    const NAME: CeremonyStageName = CeremonyStageName::ComplaintsStage6;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Complaints6(self.complaints.clone()))
@@ -483,7 +475,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyComplaintsBroadcastStage7<P>
 {
     type Message = VerifyComplaints7;
-    const NAME: BroadcastStageName = BroadcastStageName::Complaints;
+    const NAME: CeremonyStageName = CeremonyStageName::VerifyComplaintsBroadcastStage7;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.received_complaints.clone();
@@ -600,7 +592,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for BlameResponsesStage8<P>
 {
     type Message = BlameResponse8<P>;
-    const NAME: BroadcastStageName = BroadcastStageName::BlameResponses;
+    const NAME: CeremonyStageName = CeremonyStageName::BlameResponsesStage8;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         // Indexes at which to reveal/broadcast secret shares
@@ -753,7 +745,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     for VerifyBlameResponsesBroadcastStage9<P>
 {
     type Message = VerifyBlameResponses9<P>;
-    const NAME: BroadcastStageName = BroadcastStageName::BlameResponses;
+    const NAME: CeremonyStageName = CeremonyStageName::VerifyBlameResponsesBroadcastStage9;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         let data = self.blame_responses.clone();
@@ -769,11 +761,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         mut self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
-        slog::debug!(
-            self.common.logger,
-            "Processing verifications for {}",
-            Self::NAME
-        );
+        slog::debug!(self.common.logger, "Processing {}", Self::NAME);
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,

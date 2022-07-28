@@ -63,7 +63,7 @@ pub enum CeremonyFailureReason<T> {
     #[error("Invalid Participants")]
     InvalidParticipants,
     #[error("Broadcast Failure ({0}) during {1} stage")]
-    BroadcastFailure(BroadcastFailureReason, BroadcastStageName),
+    BroadcastFailure(BroadcastFailureReason, CeremonyStageName),
     #[error("{0}")]
     Other(T),
 }
@@ -104,19 +104,36 @@ pub enum BroadcastFailureReason {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BroadcastStageName {
-    #[error("Coefficient Commitments")]
-    CoefficientCommitments,
-    #[error("Local Signatures")]
-    LocalSignatures,
+pub enum CeremonyStageName {
+    // Keygen
     #[error("Hash Commitments")]
-    HashCommitments,
-    #[error("Complaints")]
-    Complaints,
-    #[error("Blame Responses")]
-    BlameResponses,
+    HashCommitments1,
+    #[error("Verify Hash Commitments")]
+    VerifyHashCommitmentsBroadcast2,
+    #[error("Coefficient Commitments")]
+    CoefficientCommitments3,
+    #[error("Verify Coefficient Commitments")]
+    VerifyCommitmentsBroadcast4,
     #[error("Secret Shares")]
-    SecretShares,
+    SecretSharesStage5,
+    #[error("Complaints")]
+    ComplaintsStage6,
+    #[error("Verify Complaints")]
+    VerifyComplaintsBroadcastStage7,
+    #[error("Blame Responses")]
+    BlameResponsesStage8,
+    #[error("Verify Blame Responses")]
+    VerifyBlameResponsesBroadcastStage9,
+
+    // Signing
+    #[error("Commitments")]
+    AwaitCommitments1,
+    #[error("Verify Commitments")]
+    VerifyCommitmentsBroadcast2,
+    #[error("Local Signatures")]
+    LocalSigStage3,
+    #[error("Verify Local Signatures")]
+    VerifyLocalSigsBroadcastStage4,
 }
 
 const SIGNING_CEREMONY_FAILED_PREFIX: &str = "Signing ceremony failed";
