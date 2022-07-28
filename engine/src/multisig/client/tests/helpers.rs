@@ -30,7 +30,7 @@ use crate::{
             },
             keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
             signing,
-            state_runner::StateRunner,
+            state_runner::CeremonyRunner,
             KeygenResultInfo, MultisigData, PartyIdxMapping, ThresholdParameters,
         },
         crypto::{ECPoint, Rng},
@@ -1209,7 +1209,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
     account_ids: &[AccountId],
     mut rng: Rng,
     logger: Logger,
-) -> StateRunner<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
+) -> CeremonyRunner<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
     let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(account_ids));
     let common = CeremonyCommon {
         ceremony_id,
@@ -1233,7 +1233,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
     let stage = Box::new(BroadcastStage::new(processor, common));
 
-    StateRunner::new_authorised(
+    CeremonyRunner::new_authorised(
         ceremony_id,
         stage,
         validator_mapping,
