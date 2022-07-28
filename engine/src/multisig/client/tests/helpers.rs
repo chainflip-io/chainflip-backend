@@ -53,7 +53,9 @@ use crate::{
         // This determines which crypto scheme will be used in tests
         // (we make arbitrary choice to use eth)
         crypto::eth::{EthSchnorrSignature, EthSigning, Point},
+        tests::fixtures::MESSAGE_HASH,
     },
+    testing::expect_recv_with_timeout,
 };
 
 use state_chain_runtime::AccountId;
@@ -63,11 +65,7 @@ use super::{
     DEFAULT_SIGNING_SEED, INITIAL_LATEST_CEREMONY_ID,
 };
 
-use crate::multisig::tests::fixtures::MESSAGE_HASH;
-
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
-
-use crate::engine_utils::test_utils::expect_recv_with_timeout;
 
 pub struct Node {
     pub ceremony_manager: CeremonyManager<EthSigning>,

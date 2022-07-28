@@ -5,7 +5,6 @@ pub mod common;
 #[macro_use]
 pub mod errors;
 pub mod constants;
-mod engine_utils;
 pub mod health;
 pub mod multisig;
 pub mod multisig_p2p;
@@ -15,7 +14,7 @@ pub mod state_chain;
 pub mod task_scope;
 
 #[macro_use]
-pub mod testing;
+mod testing;
 // Blockchains
 pub mod eth;
 
