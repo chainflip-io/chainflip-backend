@@ -37,7 +37,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use utilities::Port;
 
-use crate::common::read_clean_and_decode_hex_str_file;
+use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
@@ -953,49 +953,123 @@ async fn inner_connect_to_state_chain(
     let state_chain_rpc_client =
         connect_to_state_chain_without_signer(state_chain_settings).await?;
 
-    let mut block_header_stream = state_chain_rpc_client
-        .chain_rpc_client
-        .subscribe_finalized_heads()
-        .map_err(rpc_error_into_anyhow_error)?
-        .map_err(rpc_error_into_anyhow_error);
+    let (first_finalized_block_header, mut finalized_block_header_stream) = {
+        // https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
+        // https://arxiv.org/abs/2007.01560
+        let mut sparse_finalized_block_header_stream = state_chain_rpc_client
+            .chain_rpc_client
+            .subscribe_finalized_heads()
+            .map_err(rpc_error_into_anyhow_error)?
+            .map_err(rpc_error_into_anyhow_error)
+            .chain(futures::stream::once(std::future::ready(Err(
+                anyhow::anyhow!("sparse_finalized_block_header_stream unexpectedly ended"),
+            ))));
 
-    let (latest_block_hash, latest_block_number, account_nonce) = {
-        let (stream_block_hash, stream_block_number) =
-            if let Some(Ok(stream_block_header)) = block_header_stream.next().await {
-                Ok((stream_block_header.hash(), stream_block_header.number))
-            } else {
-                Err(anyhow::Error::msg(
-                    "Couldn't get first block from block header stream",
-                ))
-            }?;
+        let mut latest_finalized_header =
+            sparse_finalized_block_header_stream.next().await.unwrap()?;
 
-        // often this call returns a more accurate hash than the stream returns
-        // so we check and compare this to what the end of the stream is
-        let finalised_head_hash = state_chain_rpc_client
+        let chain_rpc_client = state_chain_rpc_client.chain_rpc_client.clone();
+
+        (
+            latest_finalized_header.clone(),
+            Box::pin(
+                sparse_finalized_block_header_stream
+                    .try_map_and_end_after_error(move |next_finalized_header| {
+                        assert!(latest_finalized_header.number < next_finalized_header.number);
+
+                        let prev_finalized_header = std::mem::replace(
+                            &mut latest_finalized_header,
+                            next_finalized_header.clone(),
+                        );
+
+                        let chain_rpc_client = chain_rpc_client.clone();
+                        async move {
+                            let intervening_headers: Vec<_> = futures::stream::iter(
+                                prev_finalized_header.number + 1..next_finalized_header.number,
+                            )
+                            .then(|block_number| {
+                                let chain_rpc_client = &chain_rpc_client;
+                                async move {
+                                    let block_hash = try_unwrap_value(
+                                        chain_rpc_client
+                                            .block_hash(Some(sp_rpc::list::ListOrValue::Value(
+                                                block_number.into(),
+                                            )))
+                                            .await
+                                            .map_err(rpc_error_into_anyhow_error)?,
+                                        anyhow::Error::msg("Finalized block missing hash"),
+                                    )
+                                    .unwrap();
+                                    let block_header = chain_rpc_client
+                                        .header(Some(block_hash))
+                                        .await
+                                        .map_err(rpc_error_into_anyhow_error)?
+                                        .unwrap();
+                                    assert_eq!(block_header.hash(), block_hash);
+                                    assert_eq!(block_header.number, block_number);
+                                    Result::<_, anyhow::Error>::Ok((block_hash, block_header))
+                                }
+                            })
+                            .try_collect()
+                            .await?;
+
+                            for (block_hash, next_block_header) in Iterator::zip(
+                                std::iter::once(&prev_finalized_header.hash())
+                                    .chain(intervening_headers.iter().map(|(hash, _header)| hash)),
+                                intervening_headers
+                                    .iter()
+                                    .map(|(_hash, header)| header)
+                                    .chain(std::iter::once(&next_finalized_header)),
+                            ) {
+                                assert_eq!(*block_hash, next_block_header.parent_hash);
+                            }
+
+                            Result::<_, anyhow::Error>::Ok(futures::stream::iter(
+                                intervening_headers
+                                    .into_iter()
+                                    .map(|(_hash, header)| header)
+                                    .chain(std::iter::once(next_finalized_header))
+                                    .map(Result::<_, anyhow::Error>::Ok),
+                            ))
+                        }
+                    })
+                    .try_flatten(),
+            ),
+        )
+    };
+
+    // Often `finalized_header` returns a significantly newer latest block than the stream returns
+    // so we move the stream forward to this block
+    let (mut latest_block_hash, mut latest_block_number) = {
+        let finalised_header_hash = state_chain_rpc_client
             .chain_rpc_client
             .finalized_head()
             .await
             .map_err(rpc_error_into_anyhow_error)?;
-        let finalised_head_number = state_chain_rpc_client.chain_rpc_client
-            .header(Some(finalised_head_hash))
+        let finalised_header_number = state_chain_rpc_client.chain_rpc_client
+            .header(Some(finalised_header_hash))
             .await
             .map_err(rpc_error_into_anyhow_error)?
             .expect("We have the hash from the chain, so there should definitely be a header for this block")
             .number;
 
-        // if the finalised head number is > stream_block_number, loop the stream
-        let (mut latest_block_hash, mut latest_block_number) =
-            if stream_block_number < finalised_head_number {
-                for _i in stream_block_number..finalised_head_number {
-                    block_header_stream.next().await.ok_or_else(|| {
-                        anyhow::Error::msg("Chainflip block stream unexpectedly ended")
-                    })??; // TODO Factor out handling of assumed to be infinite streams
-                }
-                (finalised_head_hash, finalised_head_number)
-            } else {
-                (stream_block_hash, stream_block_number)
-            };
+        if first_finalized_block_header.number < finalised_header_number {
+            for block_number in first_finalized_block_header.number + 1..=finalised_header_number {
+                assert_eq!(
+                    finalized_block_header_stream.next().await.unwrap()?.number,
+                    block_number
+                );
+            }
+            (finalised_header_hash, finalised_header_number)
+        } else {
+            (
+                first_finalized_block_header.hash(),
+                first_finalized_block_header.number,
+            )
+        }
+    };
 
+    let (latest_block_hash, latest_block_number, account_nonce) = {
         async fn get_account_nonce(
             state_rpc_client: &StateRpcClient,
             account_storage_key: &StorageKey,
@@ -1040,9 +1114,7 @@ async fn inner_connect_to_state_chain(
                         } else {
                             slog::warn!(logger, "Your Chainflip account {} is not staked. WAITING for account to be staked at block: {}", our_account_id, latest_block_number);
                             let block_header =
-                                block_header_stream.next().await.ok_or_else(|| {
-                                    anyhow::Error::msg("Chainflip block stream unexpectedly ended")
-                                })??; // TODO Factor out handling of assumed to be infinite streams
+                                finalized_block_header_stream.next().await.unwrap()?;
                             latest_block_hash = block_header.hash();
                             latest_block_number += 1;
                             assert_eq!(latest_block_number, block_header.number);
@@ -1089,7 +1161,7 @@ async fn inner_connect_to_state_chain(
 
     Ok((
         latest_block_hash,
-        block_header_stream,
+        finalized_block_header_stream,
         Arc::new(StateChainClient {
             nonce: AtomicU32::new(account_nonce),
             runtime_version: RwLock::new(

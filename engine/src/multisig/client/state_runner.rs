@@ -128,7 +128,11 @@ where
 
         match stage.finalize() {
             StageResult::NextStage(mut next_stage) => {
-                slog::debug!(self.logger, "Ceremony transitions to {}", &next_stage);
+                slog::debug!(
+                    self.logger,
+                    "Ceremony transitions to {}",
+                    next_stage.get_stage_name()
+                );
 
                 next_stage.init();
 
@@ -233,7 +237,7 @@ where
                     "Delaying message {} from party [{}] during stage: {}",
                     m,
                     id,
-                    stage
+                    stage.get_stage_name()
                 );
             }
             None => {
@@ -319,10 +323,10 @@ where
     }
 
     #[cfg(test)]
-    pub fn get_stage(&self) -> Option<String> {
+    pub fn get_stage_name(&self) -> Option<super::common::CeremonyStageName> {
         self.inner
             .as_ref()
-            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
+            .and_then(|s| s.stage.as_ref().map(|s| s.get_stage_name()))
     }
 
     #[cfg(test)]

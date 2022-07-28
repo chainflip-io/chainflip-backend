@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult},
-    BroadcastStageName,
+    CeremonyStageName,
 };
 
 pub use super::broadcast_verification::verify_broadcasts;
@@ -33,9 +33,8 @@ pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     /// during this stage
     type Message: Clone + Into<Data> + TryFrom<Data>;
 
-    /// Broadcast Stage Name used for logging.
-    /// A broadcast and its verification will share the same name.
-    const NAME: BroadcastStageName;
+    /// Unique stage name used for logging and testing.
+    const NAME: CeremonyStageName;
 
     /// Init the stage, returning the data to broadcast
     fn init(&mut self) -> DataToSend<Self::Message>;
@@ -91,9 +90,10 @@ impl<Data, Result, Stage, Point, FailureReason> Display
 where
     Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
     Point: ECPoint,
+    BroadcastStage<Data, Result, Stage, Point, FailureReason>: CeremonyStage,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BroadcastStage<{}>", &self.processor)
+        write!(f, "BroadcastStage({})", &self.get_stage_name())
     }
 }
 
@@ -250,5 +250,9 @@ where
         }
 
         awaited
+    }
+
+    fn get_stage_name(&self) -> CeremonyStageName {
+        <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::NAME
     }
 }

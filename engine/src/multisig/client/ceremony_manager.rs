@@ -3,7 +3,6 @@ use std::collections::{hash_map::Entry, BTreeSet, HashMap};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::constants::CEREMONY_ID_WINDOW;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::client::keygen::generate_key_data_until_compatible;
@@ -29,6 +28,9 @@ use crate::multisig::MessageHash;
 use super::common::PreProcessStageDataCheck;
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
+
+#[cfg(test)]
+use client::common::CeremonyStageName;
 
 pub type CeremonyResultSender<T, R> =
     oneshot::Sender<Result<T, (BTreeSet<AccountId>, CeremonyFailureReason<R>)>>;
@@ -404,59 +406,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         self.signing_states.get_delayed_messages_len(ceremony_id)
     }
 
-    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9)
-    pub fn check_ceremony_at_keygen_stage(
-        &self,
-        stage_number: usize,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        let stage = self.keygen_states.get_stage_for(&ceremony_id);
-        let is_at_stage = match stage_number {
-            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
-            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
-            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
-            3 => stage.as_deref() == Some("BroadcastStage<CoefficientCommitments3>"),
-            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast4>"),
-            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage5>"),
-            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage6>"),
-            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage7>"),
-            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage8>"),
-            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage9>"),
-            _ => false,
-        };
-        if is_at_stage {
-            Ok(())
-        } else {
-            Err(anyhow::Error::msg(format!(
-                "Expected to be at stage {}, but actually at stage {:?}",
-                stage_number, stage
-            )))
-        }
+    pub fn get_keygen_stage_name(&self, ceremony_id: CeremonyId) -> Option<CeremonyStageName> {
+        self.keygen_states.get_stage_for(&ceremony_id)
     }
 
-    /// Check is the ceremony is at the specified signing BroadcastStage (0-4)
-    pub fn check_ceremony_at_signing_stage(
-        &self,
-        stage_number: usize,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        let stage = self.signing_states.get_stage_for(&ceremony_id);
-        let is_at_stage = match stage_number {
-            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
-            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
-            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
-            3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
-            4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
-            _ => false,
-        };
-        if is_at_stage {
-            Ok(())
-        } else {
-            Err(anyhow::Error::msg(format!(
-                "Expected to be at stage {}, but actually at stage {:?}",
-                stage_number, stage
-            )))
-        }
+    pub fn get_signing_stage_name(&self, ceremony_id: CeremonyId) -> Option<CeremonyStageName> {
+        self.signing_states.get_stage_for(&ceremony_id)
     }
 }
 
@@ -507,7 +462,7 @@ where
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: CeremonyData,
-        latest_ceremony_id: CeremonyId,
+        _latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
@@ -516,19 +471,8 @@ where
         let state = if data.is_first_stage() {
             match self.inner.entry(ceremony_id) {
                 Entry::Vacant(entry) => {
-                    // Only a ceremony id that is within the ceremony id window can create unauthorised ceremonies
-                    if ceremony_id > latest_ceremony_id
-                        && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
-                    {
-                        entry.insert(StateRunner::new_unauthorised(ceremony_id, logger))
-                    } else {
-                        slog::debug!(
-                            logger,
-                            "Ignoring data: initial stage data with unexpected ceremony id {}",
-                            ceremony_id
-                        );
-                        return;
-                    }
+                    // TODO: See issue #1972
+                    entry.insert(StateRunner::new_unauthorised(ceremony_id, logger))
                 }
                 Entry::Occupied(entry) => entry.into_mut(),
             }
@@ -614,8 +558,15 @@ where
             .entry(ceremony_id)
             .or_insert_with(|| StateRunner::new_unauthorised(ceremony_id, logger))
     }
+}
 
-    #[cfg(test)]
+#[cfg(test)]
+impl<CeremonyData, CeremonyResult, FailureReason>
+    CeremonyStates<CeremonyData, CeremonyResult, FailureReason>
+where
+    CeremonyData: Display + PreProcessStageDataCheck,
+    FailureReason: Display,
+{
     fn expire_all(&mut self) {
         for state in self.inner.values_mut() {
             let one_second_ago = std::time::Instant::now() - std::time::Duration::from_secs(1);
@@ -623,17 +574,14 @@ where
         }
     }
 
-    #[cfg(test)]
     fn len(&self) -> usize {
         self.inner.len()
     }
 
-    #[cfg(test)]
-    pub fn get_stage_for(&self, ceremony_id: &CeremonyId) -> Option<String> {
-        self.inner.get(ceremony_id).and_then(|s| s.get_stage())
+    pub fn get_stage_for(&self, ceremony_id: &CeremonyId) -> Option<CeremonyStageName> {
+        self.inner.get(ceremony_id).and_then(|s| s.get_stage_name())
     }
 
-    #[cfg(test)]
     pub fn get_awaited_parties_count_for(
         &self,
         ceremony_id: &CeremonyId,
@@ -643,7 +591,6 @@ where
             .and_then(|s| s.get_awaited_parties_count())
     }
 
-    #[cfg(test)]
     pub fn add_state(
         &mut self,
         ceremony_id: CeremonyId,
@@ -652,7 +599,6 @@ where
         self.inner.insert(ceremony_id, state);
     }
 
-    #[cfg(test)]
     pub fn get_delayed_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
         self.inner
             .get(ceremony_id)

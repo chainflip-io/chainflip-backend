@@ -8,7 +8,7 @@ use crate::{
         client::{
             self,
             ceremony_manager::CeremonyManager,
-            common::SigningFailureReason,
+            common::{CeremonyStageName, SigningFailureReason},
             keygen::{get_key_data_for_test, KeygenData},
             tests::helpers::gen_invalid_keygen_stage_2_state,
             CeremonyFailureReason, MultisigData,
@@ -22,7 +22,7 @@ use client::MultisigMessage;
 use rand_legacy::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::oneshot;
-use utilities::{assert_ok, threshold_from_share_count};
+use utilities::threshold_from_share_count;
 
 /// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
 fn run_on_request_to_sign<C: CryptoScheme>(
@@ -187,7 +187,10 @@ async fn should_ignore_duplicate_keygen_request() {
     );
 
     // Check that the ceremony started
-    assert_ok!(ceremony_manager.check_ceremony_at_keygen_stage(1, DEFAULT_KEYGEN_CEREMONY_ID));
+    assert_eq!(
+        ceremony_manager.get_keygen_stage_name(DEFAULT_KEYGEN_CEREMONY_ID),
+        Some(CeremonyStageName::HashCommitments1)
+    );
 
     // Send another keygen request with the same ceremony id (DEFAULT_KEYGEN_CEREMONY_ID)
     let (result_sender, mut result_receiver) = oneshot::channel();
@@ -225,7 +228,10 @@ async fn should_ignore_duplicate_rts() {
     let _result_receiver = run_on_request_to_sign(&mut ceremony_manager, ACCOUNT_IDS.clone());
 
     // Check that the ceremony started
-    assert_ok!(ceremony_manager.check_ceremony_at_signing_stage(1, DEFAULT_SIGNING_CEREMONY_ID));
+    assert_eq!(
+        ceremony_manager.get_signing_stage_name(DEFAULT_SIGNING_CEREMONY_ID),
+        Some(CeremonyStageName::AwaitCommitments1),
+    );
 
     // Send another signing request with the same ceremony id (DEFAULT_SIGNING_CEREMONY_ID)
     let mut result_receiver = run_on_request_to_sign(&mut ceremony_manager, ACCOUNT_IDS.clone());
@@ -392,6 +398,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 }
 
 #[test]
+#[ignore = "temporarily disabled - see issue #1972"]
 fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
     let past_ceremony_id = latest_ceremony_id - 1; // Invalid, because it was used in the past
