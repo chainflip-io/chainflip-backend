@@ -515,6 +515,7 @@ where
         let state = if data.is_first_stage() {
             match self.inner.entry(ceremony_id) {
                 Entry::Vacant(entry) => {
+                    // TODO: See issue #1972
                     entry.insert(StateRunner::new_unauthorised(ceremony_id, logger))
                 }
                 Entry::Occupied(entry) => entry.into_mut(),
