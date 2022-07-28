@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Context;
+use futures::{Future, TryStream};
 use itertools::Itertools;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -203,4 +204,355 @@ fn test_split_at() {
 
     assert_eq!(&left[..], &[4, 5, 6]);
     assert_eq!(&right[..], &[3, 4, 5]);
+}
+
+pub trait EngineTryStreamExt: TryStream + Sized {
+    fn try_map_and_end_after_error<Ok, F, Fut>(
+        self,
+        f: F,
+    ) -> try_map_and_end_after_error::TryMapAndEndAfterError<Self, F, Fut>
+    where
+        F: FnMut(Self::Ok) -> Fut,
+        Fut: Future<Output = Result<Ok, Self::Error>>,
+    {
+        try_map_and_end_after_error::TryMapAndEndAfterError::new(self, f)
+    }
+
+    fn try_map_with_state_and_end_after_error<S, F, Fut, Ok>(
+        self,
+        initial_state: S,
+        f: F,
+    ) -> try_map_with_state_and_end_after_error::TryMapWithStateAndEndAfterError<Self, S, F, Fut>
+    where
+        F: FnMut(S, Self::Ok) -> Fut,
+        Fut: Future<Output = Result<(S, Ok), Self::Error>>,
+    {
+        try_map_with_state_and_end_after_error::TryMapWithStateAndEndAfterError::new(
+            self,
+            initial_state,
+            f,
+        )
+    }
+}
+impl<S: TryStream + Sized> EngineTryStreamExt for S {}
+
+mod try_map_with_state_and_end_after_error {
+    use futures::{Future, Stream, TryStream};
+    use futures_core::FusedStream;
+    use pin_project::pin_project;
+    use std::{fmt, pin::Pin, task::Poll};
+
+    /// Stream for the [`try_map_with_state_and_end_after_error`](super::EngineTryStreamExt::try_map_with_state_and_end_after_error) method.
+    #[must_use = "streams do nothing unless polled"]
+    #[pin_project]
+    pub struct TryMapWithStateAndEndAfterError<St: TryStream, S, F, Fut> {
+        #[pin]
+        stream: St,
+        state: Option<S>,
+        f: F,
+        #[pin]
+        future: Option<Fut>,
+    }
+
+    impl<St, S, F, Fut> fmt::Debug for TryMapWithStateAndEndAfterError<St, S, F, Fut>
+    where
+        St: TryStream + fmt::Debug,
+        S: fmt::Debug,
+        Fut: fmt::Debug,
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("Scan")
+                .field("stream", &self.stream)
+                .field("state", &self.state)
+                .field("future", &self.future)
+                .finish()
+        }
+    }
+
+    impl<St, S, F, Fut, Ok> TryMapWithStateAndEndAfterError<St, S, F, Fut>
+    where
+        St: TryStream,
+        F: FnMut(S, St::Ok) -> Fut,
+        Fut: Future<Output = Result<(S, Ok), St::Error>>,
+    {
+        pub(super) fn new(stream: St, initial_state: S, f: F) -> Self {
+            Self {
+                stream,
+                state: Some(initial_state),
+                f,
+                future: None,
+            }
+        }
+    }
+
+    impl<St, S, F, Fut, Ok> Stream for TryMapWithStateAndEndAfterError<St, S, F, Fut>
+    where
+        St: TryStream,
+        F: FnMut(S, St::Ok) -> Fut,
+        Fut: Future<Output = Result<(S, Ok), St::Error>>,
+    {
+        type Item = Result<Ok, St::Error>;
+
+        fn poll_next(
+            self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> Poll<Option<Self::Item>> {
+            let mut this = self.project();
+
+            let future = if let Some(future) = this.future.as_mut().as_pin_mut() {
+                future
+            } else if this.state.is_some() {
+                if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx)) {
+                    let state = this.state.take().unwrap();
+                    match result {
+                        Ok(ok) => {
+                            this.future.set(Some((this.f)(state, ok)));
+                            this.future.as_mut().as_pin_mut().unwrap()
+                        }
+                        Err(error) => {
+                            return Poll::Ready(Some(Err(error)));
+                        }
+                    }
+                } else {
+                    *this.state = None;
+                    return Poll::Ready(None);
+                }
+            } else {
+                *this.state = None;
+                return Poll::Ready(None);
+            };
+
+            assert!(this.state.is_none());
+
+            let result = futures::ready!(future.poll(cx));
+            this.future.set(None);
+
+            Poll::Ready(Some(match result {
+                Ok((new_state, ok)) => {
+                    *this.state = Some(new_state);
+                    Ok(ok)
+                }
+                Err(error) => Err(error),
+            }))
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            if self.state.is_none() && self.future.is_none() {
+                (0, Some(0))
+            } else {
+                let (lower, upper) = self.stream.size_hint();
+                (std::cmp::min(1, lower), upper) // can't know a lower bound, due to the predicate
+            }
+        }
+    }
+
+    impl<St, S, F, Fut, Ok> FusedStream for TryMapWithStateAndEndAfterError<St, S, F, Fut>
+    where
+        St: TryStream + FusedStream,
+        F: FnMut(S, St::Ok) -> Fut,
+        Fut: Future<Output = Result<(S, Ok), St::Error>>,
+    {
+        fn is_terminated(&self) -> bool {
+            self.future.is_none() && (self.state.is_none() || self.stream.is_terminated())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use futures::StreamExt;
+
+        use crate::common::EngineTryStreamExt;
+
+        #[tokio::test]
+        async fn end_after_error_from_underlying_stream() {
+            assert_eq!(
+                vec![Ok(1), Err(2)],
+                futures::stream::iter([Ok(1), Err(2), Ok(3)])
+                    .try_map_with_state_and_end_after_error((), |(), n| async move { Ok(((), n)) })
+                    .collect::<Vec<_>>()
+                    .await
+            );
+        }
+
+        #[tokio::test]
+        async fn end_after_error_from_predicate() {
+            assert_eq!(
+                vec![Ok(1), Err(2)],
+                futures::stream::iter([Ok(1), Ok(2), Ok(3)])
+                    .try_map_with_state_and_end_after_error((), |(), n| async move {
+                        if n == 2 {
+                            Err(2)
+                        } else {
+                            Ok(((), n))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .await
+            );
+        }
+
+        #[tokio::test]
+        async fn state_is_updated() {
+            assert_eq!(
+                vec![Result::<u32, u32>::Ok(0), Ok(1), Ok(3)],
+                futures::stream::iter([Ok(1), Ok(2), Ok(3)])
+                    .try_map_with_state_and_end_after_error(0, |n, m| async move { Ok((n + m, n)) })
+                    .collect::<Vec<_>>()
+                    .await
+            );
+        }
+    }
+}
+
+mod try_map_and_end_after_error {
+    use futures::{Future, Stream, TryStream};
+    use futures_core::FusedStream;
+    use pin_project::pin_project;
+    use std::{fmt, pin::Pin, task::Poll};
+
+    /// Stream for the [`try_map_and_end_after_error`](super::EngineTryStreamExt::try_map_and_end_after_error) method.
+    #[must_use = "streams do nothing unless polled"]
+    #[pin_project]
+    pub struct TryMapAndEndAfterError<St: TryStream, F, Fut> {
+        #[pin]
+        stream: St,
+        done_taking: bool,
+        f: F,
+        #[pin]
+        future: Option<Fut>,
+    }
+
+    impl<St, Fut, F> fmt::Debug for TryMapAndEndAfterError<St, F, Fut>
+    where
+        St: TryStream + fmt::Debug,
+        Fut: fmt::Debug,
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("TryMapAndEndAfterError")
+                .field("stream", &self.stream)
+                .field("future", &self.future)
+                .field("done_taking", &self.done_taking)
+                .finish()
+        }
+    }
+
+    impl<St, F, Fut, Ok> TryMapAndEndAfterError<St, F, Fut>
+    where
+        St: TryStream,
+        F: FnMut(St::Ok) -> Fut,
+        Fut: Future<Output = Result<Ok, St::Error>>,
+    {
+        pub(super) fn new(stream: St, f: F) -> Self {
+            Self {
+                stream,
+                done_taking: false,
+                f,
+                future: None,
+            }
+        }
+    }
+
+    impl<St, F, Fut, Ok> Stream for TryMapAndEndAfterError<St, F, Fut>
+    where
+        St: TryStream,
+        F: FnMut(St::Ok) -> Fut,
+        Fut: Future<Output = Result<Ok, St::Error>>,
+    {
+        type Item = Result<Ok, St::Error>;
+
+        fn poll_next(
+            self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> Poll<Option<Self::Item>> {
+            let mut this = self.project();
+
+            let future = if let Some(future) = this.future.as_mut().as_pin_mut() {
+                future
+            } else if *this.done_taking {
+                return Poll::Ready(None);
+            } else if let Some(result) = futures::ready!(this.stream.as_mut().try_poll_next(cx)) {
+                match result {
+                    Ok(ok) => {
+                        this.future.set(Some((this.f)(ok)));
+                        this.future.as_mut().as_pin_mut().unwrap()
+                    }
+                    Err(error) => {
+                        *this.done_taking = true;
+                        return Poll::Ready(Some(Err(error)));
+                    }
+                }
+            } else {
+                *this.done_taking = true;
+                return Poll::Ready(None);
+            };
+
+            assert!(!*this.done_taking);
+
+            let result = futures::ready!(future.poll(cx));
+            this.future.set(None);
+
+            Poll::Ready(Some(match result {
+                Ok(ok) => Ok(ok),
+                Err(error) => {
+                    *this.done_taking = true;
+                    Err(error)
+                }
+            }))
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            if self.done_taking {
+                (0, Some(0))
+            } else {
+                let (lower, upper) = self.stream.size_hint();
+                (std::cmp::min(1, lower), upper) // can't know a lower bound, due to the predicate
+            }
+        }
+    }
+
+    impl<St, F, Fut, Ok> FusedStream for TryMapAndEndAfterError<St, F, Fut>
+    where
+        St: TryStream + FusedStream,
+        F: FnMut(St::Ok) -> Fut,
+        Fut: Future<Output = Result<Ok, St::Error>>,
+    {
+        fn is_terminated(&self) -> bool {
+            self.done_taking || (self.future.is_none() && self.stream.is_terminated())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use futures::StreamExt;
+
+        use crate::common::EngineTryStreamExt;
+
+        #[tokio::test]
+        async fn end_after_error_from_underlying_stream() {
+            assert_eq!(
+                vec![Ok(1), Err(2)],
+                futures::stream::iter([Ok(1), Err(2), Ok(3)])
+                    .try_map_and_end_after_error(|n| async move { Ok(n) })
+                    .collect::<Vec<_>>()
+                    .await
+            );
+        }
+
+        #[tokio::test]
+        async fn end_after_error_from_predicate() {
+            assert_eq!(
+                vec![Ok(1), Err(2)],
+                futures::stream::iter([Ok(1), Ok(2), Ok(3)])
+                    .try_map_and_end_after_error(|n| async move {
+                        if n == 2 {
+                            Err(2)
+                        } else {
+                            Ok(n)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .await
+            );
+        }
+    }
 }
