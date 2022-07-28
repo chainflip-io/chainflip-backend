@@ -12,7 +12,7 @@ use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
-use client::{signing::frost::SigningData, state_runner::StateRunner, utils::PartyIdxMapping};
+use client::{signing::frost::SigningData, state_runner::CeremonyRunner, utils::PartyIdxMapping};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
@@ -365,7 +365,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn add_keygen_state(
         &mut self,
         ceremony_id: CeremonyId,
-        state: StateRunner<
+        state: CeremonyRunner<
             KeygenData<<C as CryptoScheme>::Point>,
             KeygenResultInfo<<C as CryptoScheme>::Point>,
             KeygenFailureReason,
@@ -440,7 +440,7 @@ pub fn generate_keygen_context(
 }
 
 struct CeremonyStates<CeremonyData, CeremonyResult, FailureReason> {
-    inner: HashMap<u64, StateRunner<CeremonyData, CeremonyResult, FailureReason>>,
+    inner: HashMap<u64, CeremonyRunner<CeremonyData, CeremonyResult, FailureReason>>,
 }
 
 impl<CeremonyData, CeremonyResult, FailureReason>
@@ -472,7 +472,7 @@ where
             match self.inner.entry(ceremony_id) {
                 Entry::Vacant(entry) => {
                     // TODO: See issue #1972
-                    entry.insert(StateRunner::new_unauthorised(ceremony_id, logger))
+                    entry.insert(CeremonyRunner::new_unauthorised(ceremony_id, logger))
                 }
                 Entry::Occupied(entry) => entry.into_mut(),
             }
@@ -553,10 +553,10 @@ where
         &mut self,
         ceremony_id: CeremonyId,
         logger: &slog::Logger,
-    ) -> &mut StateRunner<CeremonyData, CeremonyResult, FailureReason> {
+    ) -> &mut CeremonyRunner<CeremonyData, CeremonyResult, FailureReason> {
         self.inner
             .entry(ceremony_id)
-            .or_insert_with(|| StateRunner::new_unauthorised(ceremony_id, logger))
+            .or_insert_with(|| CeremonyRunner::new_unauthorised(ceremony_id, logger))
     }
 }
 
@@ -594,7 +594,7 @@ where
     pub fn add_state(
         &mut self,
         ceremony_id: CeremonyId,
-        state: StateRunner<CeremonyData, CeremonyResult, FailureReason>,
+        state: CeremonyRunner<CeremonyData, CeremonyResult, FailureReason>,
     ) {
         self.inner.insert(ceremony_id, state);
     }

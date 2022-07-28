@@ -30,7 +30,7 @@ use crate::{
             },
             keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
             signing,
-            state_runner::StateRunner,
+            state_runner::CeremonyRunner,
             KeygenResultInfo, MultisigData, PartyIdxMapping, ThresholdParameters,
         },
         crypto::{ECPoint, Rng},
@@ -188,14 +188,14 @@ pub trait CeremonyRunnerStrategy {
     >;
 }
 
-pub struct CeremonyRunner<CeremonyRunnerData> {
+pub struct CeremonyTestRunner<CeremonyRunnerData> {
     pub nodes: HashMap<AccountId, Node>,
     pub ceremony_id: CeremonyId,
     pub ceremony_runner_data: CeremonyRunnerData,
     pub rng: Rng,
 }
 
-impl<CeremonyRunnerData> CeremonyRunner<CeremonyRunnerData>
+impl<CeremonyRunnerData> CeremonyTestRunner<CeremonyRunnerData>
 where
     Self: CeremonyRunnerStrategy,
 {
@@ -559,7 +559,7 @@ where
             AccountId,
             HashMap<
                 AccountId,
-                <CeremonyRunner<CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
+                <CeremonyTestRunner<CeremonyRunnerData> as CeremonyRunnerStrategy>::InitialStageData,
             >,
         >,
         HashMap<
@@ -569,7 +569,7 @@ where
                 <Self as CeremonyRunnerStrategy>::FailureReason,
             >,
         >,
-    ) {
+    ){
         let result_receivers = self.request_without_gather();
 
         (self.gather_outgoing_messages().await, result_receivers)
@@ -591,7 +591,7 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-pub type KeygenCeremonyRunner = CeremonyRunner<()>;
+pub type KeygenCeremonyRunner = CeremonyTestRunner<()>;
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     type CeremonyData = KeygenData<Point>;
     type Output = KeygenResultInfo<Point>;
@@ -659,7 +659,7 @@ pub struct SigningCeremonyRunnerData {
     pub key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
     pub message_hash: MessageHash,
 }
-pub type SigningCeremonyRunner = CeremonyRunner<SigningCeremonyRunnerData>;
+pub type SigningCeremonyRunner = CeremonyTestRunner<SigningCeremonyRunnerData>;
 impl CeremonyRunnerStrategy for SigningCeremonyRunner {
     type CeremonyData = SigningData<Point>;
     type Output = EthSchnorrSignature;
@@ -1188,7 +1188,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
     account_ids: &[AccountId],
     mut rng: Rng,
     logger: Logger,
-) -> StateRunner<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
+) -> CeremonyRunner<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
     let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(account_ids));
     let common = CeremonyCommon {
         ceremony_id,
@@ -1212,7 +1212,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
     let stage = Box::new(BroadcastStage::new(processor, common));
 
-    StateRunner::new_authorised(
+    CeremonyRunner::new_authorised(
         ceremony_id,
         stage,
         validator_mapping,

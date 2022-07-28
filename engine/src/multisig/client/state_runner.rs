@@ -42,7 +42,7 @@ pub struct StateAuthorised<CeremonyData, CeremonyResult, FailureReason> {
     pub num_of_participants: AuthorityCount,
 }
 
-pub struct StateRunner<CeremonyData, CeremonyResult, FailureReason> {
+pub struct CeremonyRunner<CeremonyData, CeremonyResult, FailureReason> {
     inner: Option<StateAuthorised<CeremonyData, CeremonyResult, FailureReason>>,
     // Note that we use a map here to limit the number of messages
     // that can be delayed from any one party to one per stage.
@@ -53,7 +53,7 @@ pub struct StateRunner<CeremonyData, CeremonyResult, FailureReason> {
 }
 
 impl<CeremonyData, CeremonyResult, FailureReason>
-    StateRunner<CeremonyData, CeremonyResult, FailureReason>
+    CeremonyRunner<CeremonyData, CeremonyResult, FailureReason>
 where
     CeremonyData: Display,
     FailureReason: Display,
@@ -62,7 +62,7 @@ where
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
     pub fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
-        StateRunner {
+        CeremonyRunner {
             inner: None,
             delayed_messages: Default::default(),
             should_expire_at: Instant::now() + MAX_STAGE_DURATION,
@@ -365,7 +365,7 @@ where
 
 #[cfg(test)]
 impl<CeremonyData, CeremonyResult, FailureReason>
-    StateRunner<CeremonyData, CeremonyResult, FailureReason>
+    CeremonyRunner<CeremonyData, CeremonyResult, FailureReason>
 where
     CeremonyData: Display,
     FailureReason: Display,
@@ -391,7 +391,7 @@ where
             num_of_participants,
         });
 
-        StateRunner {
+        CeremonyRunner {
             inner,
             delayed_messages: Default::default(),
             should_expire_at: Instant::now() + MAX_STAGE_DURATION,
