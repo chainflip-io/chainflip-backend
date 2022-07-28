@@ -556,7 +556,3 @@ mod try_map_and_end_after_error {
         }
     }
 }
-
-struct EndingOnErrorStream<St> {
-    stream : St
-}
