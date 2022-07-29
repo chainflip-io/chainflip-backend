@@ -403,10 +403,12 @@ impl<T: Config> FeePayment for Pallet<T> {
 		account_id: Self::AccountId,
 		amount: Self::Amount,
 	) -> sp_runtime::DispatchResult {
-		if Pallet::<T>::try_debit(&account_id, amount).is_none() {
-			return Err(Error::<T>::InsufficientLiquidity.into())
+		if let Some(surplus) = Pallet::<T>::try_debit(&account_id, amount) {
+			let _ = surplus.offset(Pallet::<T>::burn(amount));
+			Ok(())
+		} else {
+			Err(Error::<T>::InsufficientLiquidity.into())
 		}
-		Ok(())
 	}
 }
 

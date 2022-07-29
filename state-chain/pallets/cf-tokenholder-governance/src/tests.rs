@@ -94,7 +94,7 @@ fn cannot_back_not_existing_proposal() {
 				Origin::signed(BOB),
 				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
 			),
-			Error::<Test>::ProposalDoesntExists
+			Error::<Test>::ProposalDoesntExist
 		);
 	});
 }

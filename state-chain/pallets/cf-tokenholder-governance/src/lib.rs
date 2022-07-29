@@ -22,8 +22,6 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub type ProposalId = u32;
-
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum Proposal<T: Config> {
@@ -84,7 +82,7 @@ pub mod pallet {
 		/// Voting period of a proposal in blocks
 		#[pallet::constant]
 		type VotingPeriod: Get<BlockNumberFor<Self>>;
-		/// The cost of a proposal in FLIPERINO
+		/// The cost of a proposal in FLIPPERINOS
 		#[pallet::constant]
 		type ProposalFee: Get<Self::Balance>;
 		/// Delay in blocks after a successfully backed proposal gets executed
@@ -139,43 +137,43 @@ pub mod pallet {
 		/// Proposal is already backed by the same account
 		AlreadyBacked,
 		/// Proposal doesn't exist
-		ProposalDoesntExists,
+		ProposalDoesntExist,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut weight = 0;
-			if let Some(proposal) = Proposals::<T>::get(n) {
+			if let Some(proposal) = Proposals::<T>::take(n) {
 				weight = T::WeightInfo::on_initialize_resolve_votes(
 					Self::resolve_vote(proposal).try_into().unwrap(),
 				);
 			}
-			if let Some(gov_key) = GovKeyUpdateAwaitingEnactment::<T>::get() {
-				if gov_key.0 == n {
+			if let Some((enactment_block, gov_key)) = GovKeyUpdateAwaitingEnactment::<T>::get() {
+				if enactment_block == n {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
 							T::ReplayProtectionProvider::replay_protection(),
-							gov_key.1,
+							gov_key,
 						),
 					);
 					Self::deposit_event(Event::<T>::ProposalEnacted(
-						Proposal::<T>::SetGovernanceKey(gov_key.1),
+						Proposal::<T>::SetGovernanceKey(gov_key),
 					));
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
 			}
-			if let Some(comm_key) = CommKeyUpdateAwaitingEnactment::<T>::get() {
-				if comm_key.0 == n {
+			if let Some((enactment_block, comm_key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
+				if enactment_block == n {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
 							T::ReplayProtectionProvider::replay_protection(),
-							comm_key.1,
+							comm_key,
 						),
 					);
 					Self::deposit_event(Event::<T>::ProposalEnacted(
-						Proposal::<T>::SetCommunityKey(comm_key.1),
+						Proposal::<T>::SetCommunityKey(comm_key),
 					));
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
@@ -222,7 +220,7 @@ pub mod pallet {
 					backers.push(backer);
 					Ok(())
 				},
-				None => Err(Error::<T>::ProposalDoesntExists),
+				None => Err(Error::<T>::ProposalDoesntExist),
 			})?;
 			Ok(().into())
 		}
@@ -233,7 +231,7 @@ pub mod pallet {
 			let votes = backers.len();
 			let total_baked: u128 = backers
 				.iter()
-				.map(|baker| T::StakingInfo::total_stake_of(baker).into())
+				.map(|backer| T::StakingInfo::total_stake_of(backer).into())
 				.sum::<u128>();
 			let total_stake: u128 = T::StakingInfo::total_onchain_stake().into();
 			if total_baked > (total_stake / 3) * 2 {

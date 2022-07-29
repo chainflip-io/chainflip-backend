@@ -52,11 +52,14 @@ benchmarks! {
 	}
 	back_proposal {
 		let caller: T::AccountId = whitelisted_caller();
+		let a in 1..1000;
 		let proposal = generate_proposal::<T>();
+		let backers = (0..a).map(|i| account::<T::AccountId>("signers", i, 0)).collect::<Vec<T::AccountId>>();
 		Proposals::<T>::insert(
 			<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
 			proposal.clone(),
 		);
+		Backers::<T>::insert(proposal.clone(), backers);
 	}: _(RawOrigin::Signed(caller.clone()), proposal.clone())
 	verify {
 		assert!(Backers::<T>::get(proposal).contains(&caller));
