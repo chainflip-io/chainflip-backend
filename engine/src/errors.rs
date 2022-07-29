@@ -4,11 +4,10 @@
 macro_rules! here {
     () => {
         format_args!(
-            "{}{}",
-            concat!("at ", file!(), " line ", line!(), " column ", column!()),
+            "{}",
             lazy_format::lazy_format!(
-                if let Some(commit_hash) = core::option_env!("CIRCLE_SHA1") => (" [link](https://github.com/chainflip-io/chainflip-backend/tree/{}#L{})", commit_hash, line!())
-                else => ("")
+                if let (Some(github_repo), Some(commit_hash)) = (core::option_env!("GITHUB_REPOSITORY"), core::option_env!("CIRCLE_SHA1")) => ("https://github.com/{github_repo}/tree/{commit_hash}/{}#L{}#C{}", file!(), line!(), column!())
+                else => ("{}", concat!(file!(), " line ", line!(), " column ", column!()))
             )
         )
     };
@@ -24,7 +23,7 @@ macro_rules! context {
         ) -> anyhow::Result<V> {
             t.with_context(|| {
                 format!(
-                    "Error: '{}' with type '{}' failed {}",
+                    "Error: '{}' with type '{}' failed at {}",
                     stringify!($e),
                     std::any::type_name::<T>(),
                     here
