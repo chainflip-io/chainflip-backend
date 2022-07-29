@@ -66,8 +66,7 @@ fn main() -> anyhow::Result<()> {
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
                 state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
-                    .await
-                    .context("Failed to connect to state chain")?;
+                    .await?;
 
             state_chain_client
                 .submit_signed_extrinsic(
