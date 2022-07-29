@@ -48,9 +48,10 @@ pub mod common {
 			SECONDS_PER_BLOCK as u32;
 
 	/// The maximum number of blocks to wait for a keygen to complete.
-	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		((MAX_STAGE_DURATION_SECONDS * NUM_KEYGEN_STAGES) + TIMEOUT_BUFFER_SECONDS) /
-			SECONDS_PER_BLOCK as u32;
+	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = ((MAX_STAGE_DURATION_SECONDS *
+		(NUM_KEYGEN_STAGES + NUM_THRESHOLD_SIGNING_STAGES)) +
+		TIMEOUT_BUFFER_SECONDS) /
+		SECONDS_PER_BLOCK as u32;
 
 	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
 	pub const SECS_IN_AN_HOUR: u64 = 3600;
