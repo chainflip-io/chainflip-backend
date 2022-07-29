@@ -5,11 +5,9 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
-use codec::Encode;
 pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
-use pallet_cf_witnesser::WitnessDataExtraction;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 
