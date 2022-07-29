@@ -5,16 +5,11 @@ macro_rules! here {
     () => {
         format_args!(
             "{}{}",
-            concat!("at ", file!(), " line ", line!(), " column ({}) ", column!()),
-            lazy_format::lazy_format!("{}", {
-                let git_repo_url = core::option_env!("CIRCLE_REPOSITORY_URL");
-                let commit_hash = core::option_env!("CIRCLE_SHA1");
-
-                lazy_format::lazy_format!(
-                    if git_repo_url.is_some() && commit_hash.is_some() => ("{}/{}#L{}", git_repo_url.unwrap(), commit_hash.is_some(), line!())
-                    else => ("")
-                )
-            })
+            concat!("at ", file!(), " line ", line!(), " column ", column!()),
+            lazy_format::lazy_format!(
+                if let Some(commit_hash) = core::option_env!("CIRCLE_SHA1") => (" [link](https://github.com/chainflip-io/chainflip-backend/tree/{}#L{})", commit_hash, line!())
+                else => ("")
+            )
         )
     };
 }
