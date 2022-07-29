@@ -15,13 +15,34 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 rand = { version = '0.7.2', default-features = false }
 
+# Required for bechmarking
+pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
+pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
+cf-traits = { path = '../traits', default-features = false }
+
 [dependencies.pallet-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 features = ['historical']
 
+[dependencies.pallet-grandpa]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sp-finality-grandpa]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+# features = ["derive-codec"]
+
 [dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
@@ -55,4 +76,5 @@ std = [
   'frame-system/std',
   'pallet-session/std',
   'sp-runtime/std',
+  'sp-finality-grandpa/std',
 ]

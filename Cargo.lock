@@ -846,11 +846,17 @@ dependencies = [
 name = "cf-session-benchmarking"
 version = "0.1.0"
 dependencies = [
+ "cf-traits",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-cf-reputation",
+ "pallet-cf-validator",
+ "pallet-grandpa",
  "pallet-session",
  "rand 0.7.3",
+ "sp-core",
+ "sp-finality-grandpa",
  "sp-runtime",
  "sp-std",
 ]

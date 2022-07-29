@@ -337,7 +337,7 @@ impl pallet_grandpa::Config for Runtime {
 		GrandpaOffenceReporter<Self>,
 		BlocksPerEpoch,
 	>;
-	type WeightInfo = ();
+	type WeightInfo = (); //weights::pallet_grandpa::SubstrateWeight<Runtime>;
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
 
@@ -580,7 +580,7 @@ mod benches {
 		[pallet_cf_flip, Flip]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_staking, Staking]
-		[pallet_grandpa, Grandpa]
+		[pallet_grandpa, GrandpaBench::<Runtime>]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
 		[pallet_cf_auction, Auction]
@@ -880,7 +880,8 @@ impl_runtime_apis! {
 			use frame_benchmarking::{baseline, Benchmarking, BenchmarkList};
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
-			use cf_session_benchmarking::Pallet as SessionBench;
+			use cf_session_benchmarking::session::Pallet as SessionBench;
+			use cf_session_benchmarking::grandpa::Pallet as GrandpaBench;
 			use baseline::Pallet as BaselineBench;
 
 			let mut list = Vec::<BenchmarkList>::new();
@@ -899,9 +900,11 @@ impl_runtime_apis! {
 
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
-			use cf_session_benchmarking::Pallet as SessionBench;
+			use cf_session_benchmarking::session::Pallet as SessionBench;
+			use cf_session_benchmarking::grandpa::Pallet as GrandpaBench;
 
-			impl cf_session_benchmarking::Config for Runtime {}
+			impl cf_session_benchmarking::session::Config for Runtime {}
+			impl cf_session_benchmarking::grandpa::Config for Runtime {}
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 

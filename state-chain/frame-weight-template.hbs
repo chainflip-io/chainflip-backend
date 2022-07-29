@@ -16,7 +16,11 @@
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
+{{#if (eq pallet "pallet_grandpa")}}
+use {{pallet}}::WeightInfo;
+{{else}}
 use {{pallet}}::weights::WeightInfo;
+{{/if}}
 
 /// Weights for {{pallet}} using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
