@@ -72,9 +72,14 @@ mod tests {
 	}
 
 	#[test]
-	fn test_priority_fee_median() {
-		let [mut threshold_call, mut calls @ ..] =
-			[1, 100, 10, 10, 10, 10].map(eth_chain_tracking_call_with_fee);
+	fn test_medians() {
+		test_priority_fee_median([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5);
+		test_priority_fee_median([1, 2, 3, 4, 6, 6, 7, 8, 9, 10], 6);
+		test_priority_fee_median([0, 0, 1, 1, 2, 3, 3, 4, 6], 2);
+	}
+
+	fn test_priority_fee_median<const S: usize>(fees: [u128; S], expected_median: u128) {
+		let mut calls = fees.map(eth_chain_tracking_call_with_fee);
 
 		let call_hashes = calls.iter().map(|call| CallHash(call.blake2_256())).collect::<Vec<_>>();
 		assert!(
@@ -91,9 +96,10 @@ mod tests {
 			"Call hashes should all be equal after extraction."
 		);
 
+		let mut threshold_call = calls.last().unwrap().clone();
 		threshold_call.combine_and_inject(&mut extracted_data[..]);
 
-		assert_eq!(threshold_call, eth_chain_tracking_call_with_fee(10));
+		assert_eq!(threshold_call, eth_chain_tracking_call_with_fee(expected_median));
 	}
 
 	#[test]
