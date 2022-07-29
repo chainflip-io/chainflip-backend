@@ -282,7 +282,7 @@ mod end_after_error {
                 (0, Some(0))
             } else {
                 let (lower, upper) = self.stream.size_hint();
-                (std::cmp::min(1, lower), upper) // can't know a lower bound, due to the predicate
+                (std::cmp::min(1, lower), upper) // lower bound can always be 1 if the next result.is_err()
             }
         }
     }
