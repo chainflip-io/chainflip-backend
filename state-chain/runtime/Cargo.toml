@@ -265,6 +265,7 @@ std = [
   'sp-std/std',
   'sp-transaction-pool/std',
   'sp-version/std',
+  'pallet-cf-tokenholder-governance/std',
 ]
 try-runtime = [
   'frame-executive/try-runtime',

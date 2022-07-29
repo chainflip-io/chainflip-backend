@@ -43,6 +43,10 @@ fn update_gov_key_via_onchain_proposal() {
 			<frame_system::Pallet<Test>>::block_number() +
 				<mock::Test as Config>::VotingPeriod::get(),
 		);
+		assert!(!Proposals::<Test>::contains_key(
+			<frame_system::Pallet<Test>>::block_number() +
+				<mock::Test as Config>::VotingPeriod::get()
+		));
 		assert_eq!(
 			last_event::<Test>(),
 			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalPassed(
@@ -123,6 +127,10 @@ fn not_enough_backed_liquidity() {
 			<frame_system::Pallet<Test>>::block_number() +
 				<mock::Test as Config>::VotingPeriod::get(),
 		);
+		assert!(!Proposals::<Test>::contains_key(
+			<frame_system::Pallet<Test>>::block_number() +
+				<mock::Test as Config>::VotingPeriod::get()
+		));
 		assert!(!Backers::<Test>::contains_key(Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)));
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
