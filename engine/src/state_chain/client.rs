@@ -974,7 +974,7 @@ async fn inner_connect_to_state_chain(
             latest_finalized_header.clone(),
             Box::pin(
                 sparse_finalized_block_header_stream
-                    .try_map_and_end_after_error(move |next_finalized_header| {
+                    .and_then(move |next_finalized_header| {
                         assert!(latest_finalized_header.number < next_finalized_header.number);
 
                         let prev_finalized_header = std::mem::replace(
@@ -1033,6 +1033,7 @@ async fn inner_connect_to_state_chain(
                             ))
                         }
                     })
+                    .end_after_error()
                     .try_flatten(),
             ),
         )
