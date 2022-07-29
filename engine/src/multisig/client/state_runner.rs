@@ -126,7 +126,7 @@ where
             .take()
             .expect("Stage must be present to be finalized");
 
-        match stage.finalize() {
+        match stage.finalize(&self.logger) {
             StageResult::NextStage(mut next_stage) => {
                 slog::debug!(
                     self.logger,
