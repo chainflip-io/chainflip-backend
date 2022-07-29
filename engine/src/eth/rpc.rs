@@ -255,6 +255,8 @@ where
 
 impl EthWsRpcClient {
     pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        context!(Result::<u32, _>::Err(anyhow::anyhow!("dfdf"))).unwrap();
+
         let client = Self::inner_new(
             &eth_settings.ws_node_endpoint,
             async {

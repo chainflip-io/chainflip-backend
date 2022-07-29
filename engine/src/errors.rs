@@ -3,7 +3,19 @@
 
 macro_rules! here {
     () => {
-        concat!("at ", file!(), " line ", line!(), " column ", column!())
+        format_args!(
+            "{}{}",
+            concat!("at ", file!(), " line ", line!(), " column ({}) ", column!()),
+            lazy_format::lazy_format!("{}", {
+                let git_repo_url = core::option_env!("CIRCLE_REPOSITORY_URL");
+                let commit_hash = core::option_env!("CIRCLE_SHA1");
+
+                lazy_format::lazy_format!(
+                    if git_repo_url.is_some() && commit_hash.is_some() => ("{}/{}#L{}", git_repo_url.unwrap(), commit_hash.is_some(), line!())
+                    else => ("")
+                )
+            })
+        )
     };
 }
 
@@ -11,9 +23,9 @@ macro_rules! context {
     ($e:expr) => {{
         // Using function ensures the expression's temporary's lifetimes last until after context!() call
         #[inline(always)]
-        fn get_expr_type<V, E, T: anyhow::Context<V, E>>(
+        fn get_expr_type<V, E, T: anyhow::Context<V, E>, Here: core::fmt::Display>(
             t: T,
-            here: &'static str,
+            here: Here,
         ) -> anyhow::Result<V> {
             t.with_context(|| {
                 format!(
