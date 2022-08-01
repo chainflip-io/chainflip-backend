@@ -3,8 +3,9 @@
 use super::*;
 
 use cf_chains::benchmarking_value::BenchmarkValue;
-use cf_traits::{FeePayment, StakingInfo};
-use frame_benchmarking::{account, benchmarks, vec, whitelisted_caller, Vec};
+use cf_traits::{Chainflip, FeePayment};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller, Vec};
+use frame_support::sp_runtime::traits::UniqueSaturatedFrom;
 use frame_system::RawOrigin;
 
 fn generate_proposal<T: Config>() -> Proposal<T> {
@@ -17,18 +18,15 @@ benchmarks! {
 	on_initialize_resolve_votes {
 		// Number of backers
 		let a in 10..1000;
-		let stake = <T as pallet::Config>::Balance::from(50_000_000_000_000_000_000_000u128);
-		let total_onchain_funds = T::StakingInfo::total_onchain_stake();
+		let stake = <T as Chainflip>::Amount::unique_saturated_from(50_000_000_000_000_000_000_000u128);
 		let proposal = generate_proposal::<T>();
 		Proposals::<T>::insert(
-			T::VotingPeriod::get(),
+			T::BlockNumber::from(1u32),
 			proposal.clone(),
 		);
-		let mut backers: Vec<T::AccountId> = vec![];
-		for i in 1..a {
-			let account: T::AccountId = account("doogle", i, i);
-			T::FeePayment::mint_to_account(account.clone(), stake);
-			backers.push(account);
+		let backers = (0..a).map(|i| account("doogle", i, 0)).collect::<Vec<_>>();
+		for account in &backers {
+			T::FeePayment::mint_to_account(account, stake);
 		}
 		Backers::<T>::insert(proposal, backers);
 	} : {
@@ -45,14 +43,14 @@ benchmarks! {
 	}
 	submit_proposal {
 		let caller: T::AccountId = whitelisted_caller();
-		T::FeePayment::mint_to_account(caller.clone(), T::ProposalFee::get());
+		T::FeePayment::mint_to_account(&caller, T::ProposalFee::get());
 	}: _(RawOrigin::Signed(whitelisted_caller()), generate_proposal::<T>())
 	verify {
 		assert!(Proposals::<T>::contains_key(<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get()));
 	}
 	back_proposal {
-		let caller: T::AccountId = whitelisted_caller();
 		let a in 1..1000;
+		let caller: T::AccountId = whitelisted_caller();
 		let proposal = generate_proposal::<T>();
 		let backers = (0..a).map(|i| account::<T::AccountId>("signers", i, 0)).collect::<Vec<T::AccountId>>();
 		Proposals::<T>::insert(
