@@ -7,7 +7,7 @@ use cf_traits::{
 use codec::Encode;
 use libsecp256k1::PublicKey;
 use sp_core::H256;
-use state_chain_runtime::{constants::common::HEARTBEAT_BLOCK_INTERVAL, Event, Origin};
+use state_chain_runtime::{Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 // TODO: Can we use the actual events here?
@@ -280,18 +280,6 @@ impl Engine {
 			);
 		}
 	}
-
-	// On block handler
-	fn on_block(&self, block_number: BlockNumber) {
-		if self.live {
-			// Heartbeat -> Send transaction to state chain twice an interval
-			if block_number % (HEARTBEAT_BLOCK_INTERVAL / 2) == 0 {
-				let _result = Reputation::heartbeat(state_chain_runtime::Origin::signed(
-					self.node_id.clone(),
-				));
-			}
-		}
-	}
 }
 
 /// Do this after staking.
@@ -391,9 +379,16 @@ impl Network {
 	}
 
 	pub fn move_to_next_epoch(&mut self) {
-		let epoch = Validator::blocks_per_epoch();
+		let blocks_per_epoch = Validator::blocks_per_epoch();
 		let current_block_number = System::block_number();
-		self.move_forward_blocks(epoch - (current_block_number % epoch));
+		self.move_forward_blocks(blocks_per_epoch - (current_block_number % blocks_per_epoch));
+	}
+
+	pub fn submit_heartbeat_all_engines(&self) {
+		for engine in self.engines.values() {
+			let _result =
+				Reputation::heartbeat(state_chain_runtime::Origin::signed(engine.node_id.clone()));
+		}
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
@@ -410,17 +405,14 @@ impl Network {
 			Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
 			state_chain_runtime::AllPalletsWithSystem::on_initialize(block_number);
 
-			// Notify contract events
 			for event in self.stake_manager_contract.events() {
 				for engine in self.engines.values() {
 					engine.on_contract_event(&event);
 				}
 			}
 
-			// Clear events on contract
 			self.stake_manager_contract.clear();
 
-			// Collect state chain events
 			let events = frame_system::Pallet::<Runtime>::events()
 				.into_iter()
 				.map(|e| e.event)
@@ -429,14 +421,8 @@ impl Network {
 
 			self.last_event += events.len();
 
-			// State chain events
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
-			}
-
-			// A completed block notification
-			for engine in self.engines.values() {
-				engine.on_block(block_number);
 			}
 		}
 	}

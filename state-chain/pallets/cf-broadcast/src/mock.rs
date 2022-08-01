@@ -9,8 +9,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
-		threshold_signer::MockThresholdSigner,
+		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
+		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
 	},
 	Chainflip, EpochIndex,
 };
@@ -192,7 +192,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SigningTimeout = SigningTimeout;
 	type TransmissionTimeout = TransmissionTimeout;
 	type WeightInfo = ();
-	type MaximumAttempts = MaximumAttempts;
 	type KeyProvider = MockKeyProvider;
 }
 
@@ -203,6 +202,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		MockEpochInfo::next_epoch(vec![1, 2, 3]);
 	});
 
 	ext

@@ -286,7 +286,7 @@ mod epoch {
 
 	#[test]
 	fn auction_repeats_after_failure_because_of_liveness() {
-		const EPOCH_BLOCKS: BlockNumber = 100;
+		const EPOCH_BLOCKS: BlockNumber = 1000;
 		super::genesis::default()
 			.blocks_per_epoch(EPOCH_BLOCKS)
 			// As we run a rotation at genesis we will need accounts to support
@@ -346,9 +346,11 @@ mod epoch {
 					testnet.set_active(node, true);
 				}
 
-				assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
-
-				testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
+				// Submit a heartbeat, for all the nodes. Given we were waiting for the nodes to
+				// come online to start the rotation, the rotation ought to start on the next
+				// block
+				testnet.submit_heartbeat_all_engines();
+				testnet.move_forward_blocks(1);
 
 				assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
@@ -356,7 +358,7 @@ mod epoch {
 				assert!(
 					matches!(
 						Validator::current_rotation_phase(),
-						RotationPhase::VaultsRotating(..)
+						RotationPhase::VaultsRotating { .. }
 					),
 					"Expected RotationPhase::VaultsRotating, got: {:?}.",
 					Validator::current_rotation_phase(),
@@ -374,7 +376,7 @@ mod epoch {
 	// - Nodes without keys state remain unqualified as a backup with `None` as their last active
 	//   epoch
 	fn epoch_rotates() {
-		const EPOCH_BLOCKS: BlockNumber = 100;
+		const EPOCH_BLOCKS: BlockNumber = 1000;
 		const MAX_SET_SIZE: AuthorityCount = 5;
 		super::genesis::default()
 			.blocks_per_epoch(EPOCH_BLOCKS)
@@ -427,8 +429,9 @@ mod epoch {
 					network::Cli::activate_account(node);
 				}
 
-				// Run to the next epoch to start the auction
-				testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
+				testnet.move_to_next_epoch();
+				testnet.submit_heartbeat_all_engines();
+				testnet.move_forward_blocks(1);
 
 				assert!(matches!(
 					Validator::current_rotation_phase(),
@@ -569,8 +572,7 @@ mod staking {
 
 				// Move to new epoch
 				testnet.move_to_next_epoch();
-				testnet.move_forward_blocks(1); // Start auction
-								// Run things to a successful vault rotation
+				// Run things to a successful vault rotation
 				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 				assert_eq!(2, Validator::epoch_index(), "We are in a new epoch");
@@ -672,7 +674,7 @@ mod authorities {
 	#[test]
 	fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 		// We want to have at least one heartbeat within our reduced epoch
-		const EPOCH_BLOCKS: u32 = HEARTBEAT_BLOCK_INTERVAL * 2;
+		const EPOCH_BLOCKS: u32 = 1000;
 		// Reduce our validating set and hence the number of nodes we need to have a backup
 		// set
 		const MAX_AUTHORITIES: AuthorityCount = 10;
@@ -710,7 +712,9 @@ mod authorities {
 				}
 
 				// Start an auction
-				testnet.move_forward_blocks(EPOCH_BLOCKS - 1);
+				testnet.move_to_next_epoch();
+				testnet.submit_heartbeat_all_engines();
+				testnet.move_forward_blocks(1);
 
 				assert_eq!(
 					GENESIS_EPOCH,
@@ -718,7 +722,6 @@ mod authorities {
 					"We should still be in the genesis epoch"
 				);
 
-				// Run things to a successful vault rotation
 				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 				assert_eq!(
 					GENESIS_EPOCH + 1,

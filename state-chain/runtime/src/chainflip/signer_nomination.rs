@@ -1,10 +1,8 @@
 use crate::{Runtime, Validator};
 use cf_traits::{Chainflip, EpochIndex, EpochInfo};
-use frame_support::{traits::Get, Hashable};
+use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
-
-use super::{ExclusionSetFor, SigningOffences};
 
 /// Tries to select `n` items randomly from the provided Vec.
 ///
@@ -44,16 +42,10 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 fn eligible_authorities(
 	exclude_ids: &[<Runtime as Chainflip>::ValidatorId],
 ) -> Vec<<Runtime as Chainflip>::ValidatorId> {
-	let mut excluded_from_signing = ExclusionSetFor::<SigningOffences>::get();
-
-	exclude_ids.iter().for_each(|id| {
-		excluded_from_signing.insert(id.clone());
-	});
-
 	<Validator as EpochInfo>::current_authorities()
 		.into_iter()
 		.collect::<BTreeSet<_>>()
-		.difference(&excluded_from_signing)
+		.difference(&exclude_ids.iter().cloned().collect())
 		.cloned()
 		.collect()
 }
