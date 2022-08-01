@@ -1,5 +1,3 @@
-// TODO: make it unnecessary to expose macros here
-#[macro_use]
 pub mod frost;
 pub mod frost_stages;
 
