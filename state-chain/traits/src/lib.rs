@@ -685,25 +685,25 @@ pub trait SystemStateManager {
 	fn activate_maintenance_mode();
 }
 
-/// Handles the burn of fees
+/// Allows accounts to pay for things by burning fees.
 pub trait FeePayment {
 	type Amount;
 	type AccountId;
-	/// Helper function to mint FLIP to an account
+	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
 		unreachable!()
 	}
-	/// Burns token
+	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
 	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
-/// Provides information about the on-chain staked funds
+/// Provides information about the on-chain staked funds.
 pub trait StakingInfo {
 	type AccountId;
 	type Balance;
-	/// Returns the stake for an account
+	/// Returns the stake of an account.
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
-	/// Returns the total staked locked inside the system
+	/// Returns the total stake held on-chain.
 	fn total_onchain_stake() -> Self::Balance;
 }
