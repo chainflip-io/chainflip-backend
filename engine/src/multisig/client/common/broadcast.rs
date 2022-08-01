@@ -97,14 +97,16 @@ where
     }
 }
 
-impl<Point, Data, Result, Stage, FailureReason> CeremonyStage
+impl<Point, Data, Result, Stage, FailureReason, TryFromError> CeremonyStage
     for BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
     Point: ECPoint,
     Data: Clone + Display + Into<MultisigData<Point>>,
     Result: Clone,
     Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
-    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message: TryFrom<Data>,
+    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message:
+        TryFrom<Data, Error = TryFromError>,
+    TryFromError: Display,
 {
     type Message = Data;
     type Result = Result;
@@ -174,14 +176,13 @@ where
     }
 
     fn process_message(&mut self, signer_idx: AuthorityCount, m: Data) -> ProcessMessageResult {
-        let message_string = m.to_string();
         let m: Stage::Message = match m.try_into() {
             Ok(m) => m,
-            Err(_) => {
+            Err(incorrect_type) => {
                 slog::warn!(
                     self.common.logger,
                     "Ignoring unexpected message {} while in stage {}",
-                    message_string,
+                    incorrect_type,
                     self;
                     "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
                 );
