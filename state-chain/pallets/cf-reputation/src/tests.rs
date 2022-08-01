@@ -321,7 +321,7 @@ fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 		assert_eq!(
 			ReputationPallet::current_network_state().online,
 			vec![ALICE],
-			"Alice should be offline after missing one heartbeat"
+			"Alice should be online after submitting a heartbeat"
 		);
 	});
 }
