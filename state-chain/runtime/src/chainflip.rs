@@ -24,7 +24,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, StakeTransfer,
+	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -55,7 +55,8 @@ impl RewardsDistribution for BackupNodeEmissions {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 
 	fn distribute() {
-		let backup_nodes = Validator::highest_staked_backup_nodes();
+		let backup_nodes =
+			Validator::highest_staked_qualified_backup_node_bids().collect::<Vec<_>>();
 		if backup_nodes.is_empty() {
 			return
 		}
@@ -63,10 +64,7 @@ impl RewardsDistribution for BackupNodeEmissions {
 		// Distribute rewards one by one
 		// N.B. This could be more optimal
 		for (validator_id, reward) in calculate_backup_rewards(
-			backup_nodes
-				.iter()
-				.map(|backup_node| (backup_node.clone(), Flip::staked_balance(backup_node)))
-				.collect(),
+			backup_nodes,
 			Validator::bond(),
 			<<Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval as Get<
 				BlockNumber,

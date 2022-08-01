@@ -22,6 +22,9 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 	{
 		let authorities = Pallet::<T>::current_authorities().into_iter().collect::<BTreeSet<_>>();
 
+		let highest_staked_qualified_backup_nodes =
+			Pallet::<T>::highest_staked_qualified_backup_nodes_lookup();
+
 		RotationState {
 			primary_candidates: winners,
 			secondary_candidates: losers
@@ -29,8 +32,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				// We only allow current authorities or backup validators to be secondary
 				// candidates.
 				.filter_map(|Bid { bidder_id, .. }| {
-					// only the highest staked backups are eligible
-					if Pallet::<T>::highest_staked_backup_nodes().contains(&bidder_id) ||
+					if highest_staked_qualified_backup_nodes.contains(&bidder_id) ||
 						authorities.contains(&bidder_id)
 					{
 						Some(bidder_id)
