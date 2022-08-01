@@ -1,15 +1,15 @@
-// Add a special cool method for adding line numbers
-// Ripped from: https://github.com/dtolnay/anyhow/issues/22
-
 macro_rules! here {
     () => {
         lazy_format::lazy_format!(
+            // CIRCLE_SHA1 is CircleCI's environment variable exposing the git commit hash
             if let Some(commit_hash) = core::option_env!("CIRCLE_SHA1") => (
                 "https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}/{}#L{}#C{}",
                 file!(),
                 line!(),
                 column!()
             )
+            // Add a special cool method for adding line numbers
+            // Ripped from: https://github.com/dtolnay/anyhow/issues/22
             else => ("{}", concat!(file!(), " line ", line!(), " column ", column!()))
         )
     };
