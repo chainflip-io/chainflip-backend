@@ -24,7 +24,7 @@ use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
 };
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
@@ -44,7 +44,8 @@ pub trait Chainflip: frame_system::Config {
 		+ Copy
 		+ AtLeast32BitUnsigned
 		+ MaybeSerializeDeserialize
-		+ Bounded;
+		+ Bounded
+		+ Sum<Self::Amount>;
 
 	/// An identity for a node
 	type ValidatorId: Member

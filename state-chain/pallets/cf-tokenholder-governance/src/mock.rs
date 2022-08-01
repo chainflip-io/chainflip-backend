@@ -194,7 +194,6 @@ impl pallet_cf_flip::Config for Test {
 
 impl pallet_cf_tokenholder_governance::Config for Test {
 	type Event = Event;
-	type Balance = u128;
 	type FeePayment = Flip;
 	type Chain = MockEthereum;
 	type ReplayProtectionProvider = MockReplayProvider;

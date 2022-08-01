@@ -1,15 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use codec::Decode;
-use frame_support::dispatch::Weight;
-
-use frame_support::pallet_prelude::*;
-
 use cf_chains::ChainCrypto;
-use sp_std::vec;
-
-use codec::Encode;
-use frame_support::RuntimeDebugNoBound;
-use sp_std::cmp::PartialEq;
+use codec::{Decode, Encode};
+use frame_support::{dispatch::Weight, pallet_prelude::*, RuntimeDebugNoBound};
+use sp_std::{cmp::PartialEq, vec};
 
 pub use pallet::*;
 #[cfg(feature = "runtime-benchmarks")]
@@ -46,24 +39,14 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::AtLeast32BitUnsigned;
 	use sp_std::vec::Vec;
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// Flip balance
-		type Balance: Parameter
-			+ Member
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ Into<u128>
-			+ From<u128>;
 		/// Burns the proposal fee from the accounts
-		type FeePayment: FeePayment<Amount = Self::Balance, AccountId = Self::AccountId>;
+		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 		/// The chain instance
 		type Chain: ChainAbi;
 		/// Smart contract calls
@@ -73,7 +56,7 @@ pub mod pallet {
 		/// Provides information about the current distribution of on-chain stake
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
-			Balance = Self::Balance,
+			Balance = Self::Amount,
 		>;
 		/// Transaction broadcaster for configured destination chain
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCalls>;
@@ -84,7 +67,7 @@ pub mod pallet {
 		type VotingPeriod: Get<BlockNumberFor<Self>>;
 		/// The cost of a proposal in FLIPPERINOS
 		#[pallet::constant]
-		type ProposalFee: Get<Self::Balance>;
+		type ProposalFee: Get<Self::Amount>;
 		/// Delay in blocks after a successfully backed proposal gets executed
 		#[pallet::constant]
 		type EnactmentDelay: Get<BlockNumberFor<Self>>;
@@ -229,12 +212,12 @@ pub mod pallet {
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
 			let backers = Backers::<T>::get(proposal.clone());
 			let votes = backers.len();
-			let total_baked: u128 = backers
+			let total_backed = backers
 				.iter()
-				.map(|backer| T::StakingInfo::total_stake_of(backer).into())
-				.sum::<u128>();
-			let total_stake: u128 = T::StakingInfo::total_onchain_stake().into();
-			if total_baked > (total_stake / 3) * 2 {
+				.map(|backer| T::StakingInfo::total_stake_of(backer))
+				.sum::<T::Amount>();
+			let total_stake = T::StakingInfo::total_onchain_stake();
+			if total_backed > (total_stake / 3u32.into()) * 2u32.into() {
 				match proposal {
 					SetGovernanceKey(key) => {
 						GovKeyUpdateAwaitingEnactment::<T>::put((
