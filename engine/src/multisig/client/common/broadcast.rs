@@ -174,14 +174,16 @@ where
     }
 
     fn process_message(&mut self, signer_idx: AuthorityCount, m: Data) -> ProcessMessageResult {
+        let message_string = m.to_string();
         let m: Stage::Message = match m.try_into() {
             Ok(m) => m,
             Err(_) => {
                 slog::warn!(
                     self.common.logger,
-                    "Ignoring an unexpected message for stage {} from party [{}]",
-                    self,
-                    signer_idx
+                    "Ignoring unexpected message {} while in stage {}",
+                    message_string,
+                    self;
+                    "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
                 );
                 return ProcessMessageResult::NotReady;
             }
