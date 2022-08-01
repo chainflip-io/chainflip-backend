@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
-use anyhow::Context;
+use crate::multisig::eth::EthSigning;
+use anyhow::{anyhow, Context};
 use chainflip_engine::{
+    common::format_iterator,
     eth::{
         self, build_broadcast_channel,
         key_manager::KeyManager,
-        rpc::{EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
+        rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         stake_manager::StakeManager,
         EthBroadcaster,
     },
@@ -26,8 +28,6 @@ use sp_core::{
     U256,
 };
 use state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX;
-
-use crate::multisig::eth::EthSigning;
 
 #[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
@@ -91,41 +91,30 @@ fn main() -> anyhow::Result<()> {
                 [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
             ) = build_broadcast_channel(10);
 
+            // validate chain ids
             {
-                // ensure configured eth node is pointing to the correct chain id
-                let chain_id_from_sc = U256::from(state_chain_client
+                let expected_chain_id = U256::from(state_chain_client
                     .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
                         latest_block_hash,
                     )
                     .await
-                    .context("Failed to get EthereumChainId from SC")?);
+                    .context("Failed to get EthereumChainId from state chain")?);
 
-                let chain_id_from_eth_ws = eth_ws_rpc_client
-                    .chain_id()
-                    .await
-                    .context("Failed to fetch chain id")?;
+                let mut errors = [
+                    validate_client_chain_id(
+                        &eth_ws_rpc_client,
+                        expected_chain_id,
+                    ).await,
+                    validate_client_chain_id(
+                        &eth_http_rpc_client,
+                        expected_chain_id,
+                    ).await]
+                    .into_iter()
+                    .filter_map(|res| res.err())
+                    .peekable();
 
-                let chain_id_from_eth_http = eth_http_rpc_client
-                    .chain_id()
-                    .await
-                    .context("Failed to fetch chain id")?;
-
-                let ws_wrong_network = chain_id_from_sc != chain_id_from_eth_ws;
-                let http_wrong_network = chain_id_from_sc != chain_id_from_eth_http;
-
-                if ws_wrong_network || http_wrong_network {
-                    return Err(anyhow::Error::msg(format!(
-                        "the ETH nodes are NOT pointing to the ETH network with ChainId {}, Please ensure they are.{}{}",
-                        chain_id_from_sc,
-                        lazy_format::lazy_format!(
-                            if ws_wrong_network => (" The WS ETH node is currently pointing to an ETH network with ChainId: {}.", chain_id_from_eth_ws)
-                            else => ("")
-                        ),
-                        lazy_format::lazy_format!(
-                            if http_wrong_network => (" The HTTP ETH node is currently pointing to an ETH network with ChainId: {}.", chain_id_from_eth_http)
-                            else => ("")
-                        ),
-                    )));
+                if errors.peek().is_some() {
+                    return Err(anyhow!(format!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors))));
                 }
             }
 
