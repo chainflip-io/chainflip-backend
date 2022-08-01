@@ -61,6 +61,7 @@ tag = 'chainflip-monthly-2022-05'
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities'}
+pallet-cf-flip = { path = '../cf-flip' }
 
 # Dev dependencies
 [dev-dependencies.sp-io]

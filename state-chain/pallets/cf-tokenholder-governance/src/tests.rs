@@ -70,6 +70,21 @@ fn update_gov_key_via_onchain_proposal() {
 }
 
 #[test]
+fn fees_getting_burned() {
+	new_test_ext().execute_with(|| {
+		let balance_before = Flip::total_balance_of(&ALICE);
+		assert_ok!(TokenholderGovernance::submit_proposal(
+			Origin::signed(ALICE),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
+		));
+		assert_eq!(
+			Flip::total_balance_of(&ALICE),
+			balance_before - <mock::Test as Config>::ProposalFee::get()
+		);
+	});
+}
+
+#[test]
 fn cannot_back_proposal_twice() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TokenholderGovernance::submit_proposal(
@@ -106,13 +121,13 @@ fn cannot_back_not_existing_proposal() {
 #[test]
 fn cannot_create_proposal_with_insufficient_liquidity() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			TokenholderGovernance::submit_proposal(
-				Origin::signed(BROKE_PAUL),
-				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
-			),
-			DispatchError::Other("Account is not sufficiently funded!")
-		);
+		let balance_before = Flip::total_balance_of(&BROKE_PAUL);
+		assert!(TokenholderGovernance::submit_proposal(
+			Origin::signed(BROKE_PAUL),
+			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL),
+		)
+		.is_err());
+		assert_eq!(balance_before, Flip::total_balance_of(&BROKE_PAUL));
 	});
 }
 

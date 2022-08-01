@@ -3,18 +3,24 @@ use cf_chains::{
 	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
 };
 use cf_traits::{
-	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo},
-	Broadcaster, Chainflip, FeePayment, ReplayProtectionProvider, StakingInfo,
+	impl_mock_stake_transfer, impl_mock_waived_fees,
+	mocks::{
+		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
+		system_state_info::MockSystemStateInfo,
+	},
+	Broadcaster, Chainflip, ReplayProtectionProvider, StakeTransfer, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{parameter_types, storage, StorageHasher, Twox64Concat};
+use frame_support::{
+	parameter_types, storage, traits::HandleLifetime, StorageHasher, Twox64Concat,
+};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, DispatchError,
+	BuildStorage,
 };
 
 use cf_chains::{SetCommKeyWithAggKey, SetGovKeyWithAggKey};
@@ -34,6 +40,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
+		Flip: pallet_cf_flip,
 	}
 );
 
@@ -41,7 +48,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
 	pub const VotingPeriod: BlockNumberFor<Test> = 10;
-	pub const ProposalFee: Balance = 1000;
+	pub const ProposalFee: Balance = 100;
 	pub const EnactmentDelay: BlockNumberFor<Test> = 20;
 }
 
@@ -88,29 +95,7 @@ impl system::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-pub struct MockFeePayment;
-pub struct MockStakingInfo;
 
-impl StakingInfo for MockStakingInfo {
-	type AccountId = AccountId;
-
-	type Balance = u128;
-
-	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
-		match *account_id {
-			ALICE => ALICE_BALANCE,
-			BOB => BOB_BALANCE,
-			CHARLES => CHARLES_BALANCE,
-			EVE => EVE_BALANCE,
-			BROKE_PAUL => BROKE_BALANCE,
-			_ => 0,
-		}
-	}
-
-	fn total_onchain_stake() -> Self::Balance {
-		10000
-	}
-}
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockApiCalls {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
@@ -173,25 +158,6 @@ impl MockBroadcaster {
 	}
 }
 
-impl FeePayment for MockFeePayment {
-	type AccountId = AccountId;
-	type Amount = Balance;
-	fn try_burn_fee(
-		account_id: Self::AccountId,
-		amount: Self::Amount,
-	) -> Result<(), sp_runtime::DispatchError> {
-		let not_enough_funds = DispatchError::Other("Account is not sufficiently funded!");
-		match account_id {
-			ALICE if amount > ALICE_BALANCE => Err(not_enough_funds),
-			BOB if amount > BOB_BALANCE => Err(not_enough_funds),
-			CHARLES if amount > CHARLES_BALANCE => Err(not_enough_funds),
-			EVE if amount > EVE_BALANCE => Err(not_enough_funds),
-			BROKE_PAUL if amount > BROKE_BALANCE => Err(not_enough_funds),
-			_ => Ok(()),
-		}
-	}
-}
-
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
@@ -203,13 +169,36 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 10;
+}
+
+parameter_types! {
+	pub const BlocksPerDay: u64 = 14400;
+}
+
+// Implement mock for RestrictionHandler
+impl_mock_waived_fees!(AccountId, Call);
+impl_mock_stake_transfer!(AccountId, u128);
+
+impl pallet_cf_flip::Config for Test {
+	type Event = Event;
+	type Balance = u128;
+	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock;
+}
+
 impl pallet_cf_tokenholder_governance::Config for Test {
 	type Event = Event;
 	type Balance = u128;
-	type FeePayment = MockFeePayment;
+	type FeePayment = Flip;
 	type Chain = MockEthereum;
 	type ReplayProtectionProvider = MockReplayProvider;
-	type StakingInfo = MockStakingInfo;
+	type StakingInfo = Flip;
 	type ApiCalls = MockApiCalls;
 	type Broadcaster = MockBroadcaster;
 	type WeightInfo = ();
@@ -225,21 +214,30 @@ pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
 pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
 pub const BROKE_PAUL: <Test as frame_system::Config>::AccountId = 1987u64;
 
-// Balances
-pub const ALICE_BALANCE: Balance = 3000;
-pub const BOB_BALANCE: Balance = 2000;
-pub const CHARLES_BALANCE: Balance = 3000;
-pub const EVE_BALANCE: Balance = 2000;
-pub const BROKE_BALANCE: Balance = 10;
-
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default() };
+	let total_issuance = 1_000u128;
+	let config = GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance } };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		frame_system::Provider::<Test>::created(&ALICE).unwrap();
+		frame_system::Provider::<Test>::created(&BOB).unwrap();
+		frame_system::Provider::<Test>::created(&CHARLES).unwrap();
+		frame_system::Provider::<Test>::created(&EVE).unwrap();
+		frame_system::Provider::<Test>::created(&BROKE_PAUL).unwrap();
+		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
+		assert!(frame_system::Pallet::<Test>::account_exists(&CHARLES));
+		assert!(frame_system::Pallet::<Test>::account_exists(&EVE));
+		assert!(frame_system::Pallet::<Test>::account_exists(&BROKE_PAUL));
+		<Flip as StakeTransfer>::credit_stake(&ALICE, 500);
+		<Flip as StakeTransfer>::credit_stake(&BOB, 200);
+		<Flip as StakeTransfer>::credit_stake(&CHARLES, 100);
+		<Flip as StakeTransfer>::credit_stake(&EVE, 200);
+		<Flip as StakeTransfer>::credit_stake(&BROKE_PAUL, 100);
 	});
 
 	ext
