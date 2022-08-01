@@ -43,48 +43,49 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type
+		/// The event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// Burns the proposal fee from the accounts
+		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
-		/// The chain instance
+		/// The chain instance.
 		type Chain: ChainAbi;
-		/// Smart contract calls
+		/// Smart contract calls.
 		type ApiCalls: SetGovKeyApiCall<Self::Chain> + SetCommunityKeyApiCall<Self::Chain>;
-		/// Provided replay protection
+		/// Provided replay protection.
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
-		/// Provides information about the current distribution of on-chain stake
+		/// Provides information about the current distribution of on-chain stake.
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Amount,
 		>;
-		/// Transaction broadcaster for configured destination chain
+		/// Transaction broadcaster for configured destination chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCalls>;
-		/// Benchmarking weights
+		/// Benchmarking weights.
 		type WeightInfo: WeightInfo;
-		/// Voting period of a proposal in blocks
+		/// Voting period of a proposal in blocks.
 		#[pallet::constant]
 		type VotingPeriod: Get<BlockNumberFor<Self>>;
-		/// The cost of a proposal in FLIPPERINOS
+		/// The cost of a proposal in FLIPPERINOS.
 		#[pallet::constant]
 		type ProposalFee: Get<Self::Amount>;
-		/// Delay in blocks after a successfully backed proposal gets executed
+		/// Delay in blocks after a successfully backed proposal gets executed.
 		#[pallet::constant]
 		type EnactmentDelay: Get<BlockNumberFor<Self>>;
 	}
 
-	/// A map of all proposals open for voting
+	/// All unresolved proposals that are open for backing, indexed by the block at which the vote
+	/// will be resolved.
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub type Proposals<T: Config> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal<T>>;
 
-	/// Map of proposals backed by accounts
+	/// The accounts currently backing each proposal.
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
 	pub type Backers<T: Config> =
 		StorageMap<_, Twox64Concat, Proposal<T>, Vec<T::AccountId>, ValueQuery>;
 
-	/// Government key proposal currently in enactment
+	/// The Government key proposal currently awaiting enactment, if any.
 	#[pallet::storage]
 	#[pallet::getter(fn gov_enactment)]
 	pub type GovKeyUpdateAwaitingEnactment<T> = StorageValue<
@@ -93,7 +94,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Community key proposal currently in enactment
+	/// The Community key proposal currently awaiting enactment, if any.
 	#[pallet::storage]
 	#[pallet::getter(fn community_enactment)]
 	pub type CommKeyUpdateAwaitingEnactment<T> = StorageValue<
@@ -105,21 +106,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A proposal has been submitted \[proposal\]
-		ProposalSubmitted(Proposal<T>),
-		/// A proposal has passed \[proposal\]
-		ProposalPassed(Proposal<T>),
-		/// A proposal was rejected \[proposal\]
-		ProposalRejected(Proposal<T>),
-		/// A proposal was enacted \[proposal\]
-		ProposalEnacted(Proposal<T>),
+		/// A proposal has been submitted.
+		ProposalSubmitted { proposal: Proposal<T> },
+		/// A proposal has passed.
+		ProposalPassed { proposal: Proposal<T> },
+		/// A proposal was rejected.
+		ProposalRejected { proposal: Proposal<T> },
+		/// A proposal was enacted.
+		ProposalEnacted { proposal: Proposal<T> },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Proposal is already backed by the same account
+		/// Proposal is already backed by the same account.
 		AlreadyBacked,
-		/// Proposal doesn't exist
+		/// Proposal doesn't exist.
 		ProposalDoesntExist,
 	}
 
@@ -140,9 +141,9 @@ pub mod pallet {
 							gov_key,
 						),
 					);
-					Self::deposit_event(Event::<T>::ProposalEnacted(
-						Proposal::<T>::SetGovernanceKey(gov_key),
-					));
+					Self::deposit_event(Event::<T>::ProposalEnacted {
+						proposal: Proposal::<T>::SetGovernanceKey(gov_key),
+					});
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
@@ -155,9 +156,9 @@ pub mod pallet {
 							comm_key,
 						),
 					);
-					Self::deposit_event(Event::<T>::ProposalEnacted(
-						Proposal::<T>::SetCommunityKey(comm_key),
-					));
+					Self::deposit_event(Event::<T>::ProposalEnacted {
+						proposal: Proposal::<T>::SetCommunityKey(comm_key),
+					});
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
 				}
@@ -168,11 +169,17 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Submits a proposal
+		/// Submit a proposal. The caller will be charged a proposal fee equal to
+		/// [Config::ProposalFee].
 		///
 		/// ## Events
 		///
 		/// - [ProposalSubmitted](Event::ProposalSubmitted)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientLiquidity)
 		#[pallet::weight(T::WeightInfo::submit_proposal())]
 		pub fn submit_proposal(
 			origin: OriginFor<T>,
@@ -185,10 +192,17 @@ pub mod pallet {
 				proposal.clone(),
 			);
 			Backers::<T>::insert(proposal.clone(), vec![proposer]);
-			Self::deposit_event(Event::<T>::ProposalSubmitted(proposal));
+			Self::deposit_event(Event::<T>::ProposalSubmitted { proposal });
 			Ok(().into())
 		}
-		/// Backs a proposal
+
+		/// Backs a proposal. The caller signals their support for a proposal.
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [ProposalDoesntExist](Error::ProposalDoesntExist)
+		/// - [AlreadyBacked](Error::AlreadyBacked)
 		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_len(proposal).unwrap_or_default() as u32))]
 		pub fn back_proposal(
 			origin: OriginFor<T>,
@@ -236,7 +250,6 @@ pub mod pallet {
 			} else {
 				Self::deposit_event(Event::<T>::ProposalRejected(proposal.clone()));
 			}
-			Backers::<T>::remove(proposal);
 			votes
 		}
 	}
