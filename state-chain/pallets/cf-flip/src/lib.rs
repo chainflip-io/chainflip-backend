@@ -395,15 +395,15 @@ impl<T: Config> FeePayment for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(account_id: Self::AccountId, amount: Self::Amount) {
-		Pallet::<T>::settle(&account_id, Pallet::<T>::mint(amount).into());
+	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
+		Pallet::<T>::settle(account_id, Pallet::<T>::mint(amount).into());
 	}
 
 	fn try_burn_fee(
-		account_id: Self::AccountId,
+		account_id: &Self::AccountId,
 		amount: Self::Amount,
 	) -> sp_runtime::DispatchResult {
-		if let Some(surplus) = Pallet::<T>::try_debit(&account_id, amount) {
+		if let Some(surplus) = Pallet::<T>::try_debit(account_id, amount) {
 			let _ = surplus.offset(Pallet::<T>::burn(amount));
 			Ok(())
 		} else {

@@ -691,11 +691,11 @@ pub trait FeePayment {
 	type AccountId;
 	/// Helper function to mint FLIP to an account
 	#[cfg(feature = "runtime-benchmarks")]
-	fn mint_to_account(_account_id: Self::AccountId, _amount: Self::Amount) {
+	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
 		unreachable!()
 	}
 	/// Burns token
-	fn try_burn_fee(account_id: Self::AccountId, amount: Self::Amount) -> DispatchResult;
+	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
 /// Provides information about the on-chain staked funds

@@ -179,7 +179,7 @@ pub mod pallet {
 			proposal: Proposal<T>,
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
-			T::FeePayment::try_burn_fee(proposer.clone(), T::ProposalFee::get())?;
+			T::FeePayment::try_burn_fee(&proposer, T::ProposalFee::get())?;
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
 				proposal.clone(),
