@@ -105,10 +105,7 @@ fn main() -> anyhow::Result<()> {
                         expected_chain_id,
                     ).await]
                     .into_iter()
-                    .filter_map(|res| match res {
-                        Ok(_) => None,
-                        Err(err) => Some(err),
-                    })
+                    .filter_map(|res| res.err())
                     .peekable();
 
                 if errors.peek().is_some() {
