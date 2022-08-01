@@ -62,13 +62,9 @@ pub trait CeremonyStage {
 
     /// Verify data for this stage after it is received from all other parties,
     /// either abort or proceed to the next stage based on the result
-    fn finalize(
-        self: Box<Self>,
-        logger: &slog::Logger,
-    ) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
+    fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
-    #[cfg(test)]
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
 
     fn get_stage_name(&self) -> super::CeremonyStageName;

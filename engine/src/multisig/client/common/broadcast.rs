@@ -1,13 +1,8 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Display,
-    marker::PhantomData,
-};
+use std::{collections::BTreeMap, fmt::Display, marker::PhantomData};
 
 use cf_traits::AuthorityCount;
 
 use crate::{
-    common::format_iterator,
     multisig::{
         client::{MultisigData, MultisigMessage},
         crypto::ECPoint,
@@ -225,10 +220,7 @@ where
         self.processor.should_delay(m)
     }
 
-    fn finalize(
-        mut self: Box<Self>,
-        logger: &slog::Logger,
-    ) -> StageResult<Data, Result, FailureReason> {
+    fn finalize(mut self: Box<Self>) -> StageResult<Data, Result, FailureReason> {
         // Because we might want to finalize the stage before
         // all data has been received (e.g. due to a timeout),
         // we insert None for any missing data
@@ -244,34 +236,9 @@ where
             .map(|idx| (*idx, received_messages.remove(idx)))
             .collect();
 
-        // Log the idxs of the missing messages
-        let missing_messages_idxs: BTreeSet<AuthorityCount> = messages
-            .iter()
-            .filter_map(
-                |(idx, message)| {
-                    if message.is_none() {
-                        Some(*idx)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect();
-
-        if !missing_messages_idxs.is_empty() {
-            slog::debug!(
-                logger,
-                "Stage `{}` is missing messages from {} parties",
-                self.get_stage_name(),
-                missing_messages_idxs.len();
-                "missing_idxs" => format_iterator(missing_messages_idxs).to_string()
-            )
-        }
-
         self.processor.process(messages)
     }
 
-    #[cfg(test)]
     fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {
         let mut awaited = std::collections::BTreeSet::new();
 
