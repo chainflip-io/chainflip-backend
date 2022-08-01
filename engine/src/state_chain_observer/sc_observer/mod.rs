@@ -98,7 +98,7 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
         });
     } else {
         // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.track_ceremony_id(ceremony_id);
+        multisig_client.update_latest_ceremony_id(ceremony_id);
     }
 }
 
@@ -149,7 +149,7 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
         });
     } else {
         // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.track_ceremony_id(ceremony_id);
+        multisig_client.update_latest_ceremony_id(ceremony_id);
     }
 }
 

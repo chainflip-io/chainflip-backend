@@ -126,7 +126,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
         ),
     >;
 
-    fn track_ceremony_id(&self, ceremony_id: CeremonyId);
+    fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
 }
 
 // This is constructed by hand since mockall
@@ -161,7 +161,7 @@ pub mod mocks {
                 _signers: Vec<AccountId>,
                 _data: MessageHash,
             ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, CeremonyFailureReason<SigningFailureReason>)>;
-            fn track_ceremony_id(&self, ceremony_id: CeremonyId);
+            fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
         }
     }
 }
@@ -417,7 +417,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
             .await
     }
 
-    fn track_ceremony_id(&self, ceremony_id: CeremonyId) {
+    fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId) {
         self.ceremony_request_sender
             .send(CeremonyRequest {
                 ceremony_id,

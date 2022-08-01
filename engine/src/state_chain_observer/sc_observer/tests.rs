@@ -834,7 +834,7 @@ async fn should_handle_signing_request() {
     let mut multisig_client = MockMultisigClientApi::new();
 
     multisig_client
-        .expect_track_ceremony_id()
+        .expect_update_latest_ceremony_id()
         .with(predicate::eq(first_ceremony_id))
         .returning(|_| ());
 
@@ -909,7 +909,7 @@ async fn should_handle_keygen_request() {
     let mut multisig_client = MockMultisigClientApi::new();
 
     multisig_client
-        .expect_track_ceremony_id()
+        .expect_update_latest_ceremony_id()
         .with(predicate::eq(first_ceremony_id))
         .returning(|_| ());
 
