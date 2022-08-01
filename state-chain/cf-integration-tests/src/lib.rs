@@ -722,7 +722,6 @@ mod authorities {
 					"We should still be in the genesis epoch"
 				);
 
-				// Run things to a successful vault rotation
 				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 				assert_eq!(
 					GENESIS_EPOCH + 1,
