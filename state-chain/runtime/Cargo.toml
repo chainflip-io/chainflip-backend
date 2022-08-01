@@ -30,20 +30,20 @@ cf-chains = { path = '../chains', default-features = false }
 cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
 
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
-pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
-pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
-pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
-pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
-pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
-pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
-pallet-cf-tokenholder-governance = { path = "../pallets/cf-tokenholder-governance", default-features = false }
-pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
-pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
-pallet-cf-threshold-signature = { path = "../pallets/cf-threshold-signature", default-features = false }
-pallet-cf-broadcast = { path = "../pallets/cf-broadcast", default-features = false }
-pallet-cf-environment = { path = "../pallets/cf-environment", default-features = false }
-pallet-cf-chain-tracking = { path = "../pallets/cf-chain-tracking", default-features = false }
+pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
+pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
+pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
+pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
+pallet-cf-auction = { path = '../pallets/cf-auction', default-features = false }
+pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
+pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
+pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
+pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
+pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
+pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
+pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
+pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
+pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
