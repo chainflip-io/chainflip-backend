@@ -663,7 +663,7 @@ pub mod pallet {
 
 	/// The duration of an epoch in blocks.
 	#[pallet::storage]
-	#[pallet::getter(fn epoch_number_of_blocks)]
+	#[pallet::getter(fn blocks_per_epoch)]
 	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Current epoch index.
@@ -1105,20 +1105,27 @@ impl<T: Config> Pallet<T> {
 			Self::current_authority_count() as usize
 	}
 
-	// Returns the ids of the highest staked backup nodes, who are eligible for the backup rewards
-	pub fn highest_staked_backup_nodes() -> Vec<ValidatorIdOf<T>> {
-		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
-			Backups::<T>::get()
-				.into_iter()
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
-				.collect();
-
-		backups_by_desc_amount.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
-
-		backups_by_desc_amount
+	// Returns the bids of the highest staked backup nodes, who are eligible for the backup rewards
+	pub fn highest_staked_qualified_backup_node_bids(
+	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
+		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
-			.take(Self::backup_reward_nodes_limit())
-			.map(|bid| bid.bidder_id)
+			.filter(|(bidder_id, _)| T::ValidatorQualification::is_qualified(bidder_id))
+			.collect();
+
+		let limit = Self::backup_reward_nodes_limit();
+		if limit < backups.len() {
+			backups.select_nth_unstable_by_key(limit - 1, |(_, amount)| Reverse(*amount));
+			backups.truncate(limit);
+		}
+
+		backups.into_iter().map(|(bidder_id, amount)| Bid { bidder_id, amount })
+	}
+
+	/// Returns ids as BTreeSet for fast lookups
+	pub fn highest_staked_qualified_backup_nodes_lookup() -> BTreeSet<ValidatorIdOf<T>> {
+		Self::highest_staked_qualified_backup_node_bids()
+			.map(|Bid { bidder_id, .. }| bidder_id)
 			.collect()
 	}
 
@@ -1231,7 +1238,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	fn average_session_length() -> T::BlockNumber {
-		Self::epoch_number_of_blocks()
+		Self::blocks_per_epoch()
 	}
 
 	fn estimate_current_session_progress(
@@ -1305,15 +1312,17 @@ impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 			return
 		}
 
-		// TODO: You shouldn't have to be qualified to be removed from the backup list #1849
-		if T::ValidatorQualification::is_qualified(validator_id) {
-			Backups::<T>::mutate(|backups| {
-				if amount.is_zero() {
-					backups.remove(validator_id).expect("This id should exist in the map");
-				} else {
-					backups.insert(validator_id.clone(), amount);
+		Backups::<T>::mutate(|backups| {
+			if amount.is_zero() {
+				if backups.remove(validator_id).is_none() {
+					#[cfg(not(test))]
+					log::warn!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
+					#[cfg(test)]
+					panic!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
 				}
-			});
-		}
+			} else {
+				backups.insert(validator_id.clone(), amount);
+			}
+		});
 	}
 }

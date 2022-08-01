@@ -4,11 +4,12 @@ pub mod common {
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
+	const FLIP_DECIMALS: u32 = 18;
+	pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
+
 	pub const TOTAL_ISSUANCE: FlipBalance = {
-		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
-		const TOKEN_DECIMALS: u32 = 18;
-		const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
-		TOKEN_ISSUANCE * TOKEN_FRACTIONS
+		const TOTAL_ISSUANCE_IN_FLIP: FlipBalance = 90_000_000;
+		TOTAL_ISSUANCE_IN_FLIP * FLIPPERINOS_PER_FLIP
 	};
 
 	pub const MAX_AUTHORITIES: AuthorityCount = 150;

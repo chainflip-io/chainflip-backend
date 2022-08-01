@@ -275,11 +275,7 @@ macro_rules! assert_invariants {
 			ValidatorPallet::current_authorities()
 				.into_iter()
 				.collect::<BTreeSet<_>>()
-				.is_disjoint(
-					&ValidatorPallet::highest_staked_backup_nodes()
-						.into_iter()
-						.collect::<BTreeSet<_>>()
-				),
+				.is_disjoint(&ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()),
 			"Backup nodes and validators should not overlap",
 		);
 		assert!(
@@ -293,11 +289,11 @@ macro_rules! assert_invariants {
 				.collect::<Vec<_>>(),
 		);
 		assert!(
-			ValidatorPallet::highest_staked_backup_nodes()
+			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
 				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_backup()),
 			"All backup nodes should have their account state set accordingly. Got: {:?}",
-			ValidatorPallet::highest_staked_backup_nodes()
+			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
 				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
 				.collect::<Vec<_>>(),

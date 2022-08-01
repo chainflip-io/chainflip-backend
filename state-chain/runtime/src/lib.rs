@@ -312,7 +312,7 @@ impl pallet_aura::Config for Runtime {
 }
 
 parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::epoch_number_of_blocks().into();
+	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
 }
 
 type KeyOwnerIdentification<T, Id> =
@@ -628,7 +628,7 @@ impl_runtime_apis! {
 			Validator::current_epoch()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::epoch_number_of_blocks()
+			Validator::blocks_per_epoch()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
@@ -668,7 +668,7 @@ impl_runtime_apis! {
 					ChainflipAccountStateWithPassive::CurrentAuthority
 				} else {
 					// if the node is in this set, they were previously known as backups
-					let backup_or_passive = if Validator::highest_staked_backup_nodes().contains(&account_id) {
+					let backup_or_passive = if Validator::highest_staked_qualified_backup_nodes_lookup().contains(&account_id) {
 						BackupOrPassive::Backup
 					} else {
 						BackupOrPassive::Passive
