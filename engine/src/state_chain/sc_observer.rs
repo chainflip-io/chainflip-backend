@@ -26,17 +26,17 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
     multisig_client: Arc<MultisigClient>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ceremony_id: CeremonyId,
-    validator_candidates: Vec<AccountId32>,
+    keygen_participants: Vec<AccountId32>,
     logger: slog::Logger,
 ) where
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    if validator_candidates.contains(&state_chain_client.our_account_id) {
+    if keygen_participants.contains(&state_chain_client.our_account_id) {
         // Send a keygen request and wait to submit the result to the SC
         scope.spawn(async move {
             let keygen_outcome = multisig_client
-                .keygen(ceremony_id, validator_candidates.clone())
+                .keygen(ceremony_id, keygen_participants.clone())
                 .await;
 
             let keygen_outcome = match keygen_outcome {
@@ -52,7 +52,7 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
                         .sign(
                             ceremony_id,
                             KeyId(public_key_bytes.to_vec()),
-                            validator_candidates,
+                            keygen_participants,
                             MessageHash(data_to_sign),
                         )
                         .await
@@ -155,7 +155,7 @@ pub async fn test_handle_keygen_request<MultisigClient, RpcClient>(
     multisig_client: Arc<MultisigClient>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ceremony_id: CeremonyId,
-    validator_candidates: Vec<AccountId32>,
+    keygen_participants: Vec<AccountId32>,
     logger: slog::Logger,
 ) where
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
@@ -168,7 +168,7 @@ pub async fn test_handle_keygen_request<MultisigClient, RpcClient>(
                 multisig_client,
                 state_chain_client,
                 ceremony_id,
-                validator_candidates,
+                keygen_participants,
                 logger,
             )
             .await;
@@ -440,7 +440,7 @@ where
                                             state_chain_runtime::Event::EthereumVault(
                                                 pallet_cf_vaults::Event::KeygenRequest(
                                                     ceremony_id,
-                                                    validator_candidates,
+                                                    keygen_participants,
                                                 ),
                                             ) => {
                                                 handle_keygen_request(
@@ -448,7 +448,7 @@ where
                                                     multisig_client.clone(),
                                                     state_chain_client.clone(),
                                                     ceremony_id,
-                                                    validator_candidates,
+                                                    keygen_participants,
                                                     logger.clone()
                                                 ).await;
                                             }
