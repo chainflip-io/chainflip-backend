@@ -126,7 +126,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
         ),
     >;
 
-    fn not_participating_ceremony(&self, ceremony_id: CeremonyId);
+    fn track_ceremony_id(&self, ceremony_id: CeremonyId);
 }
 
 // This is constructed by hand since mockall
@@ -161,7 +161,7 @@ pub mod mocks {
                 _signers: Vec<AccountId>,
                 _data: MessageHash,
             ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, CeremonyFailureReason<SigningFailureReason>)>;
-            fn not_participating_ceremony(&self, ceremony_id: CeremonyId);
+            fn track_ceremony_id(&self, ceremony_id: CeremonyId);
         }
     }
 }
@@ -417,8 +417,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
             .await
     }
 
-    /// If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-    fn not_participating_ceremony(&self, ceremony_id: CeremonyId) {
+    fn track_ceremony_id(&self, ceremony_id: CeremonyId) {
         self.ceremony_request_sender
             .send(CeremonyRequest {
                 ceremony_id,

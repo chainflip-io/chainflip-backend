@@ -825,14 +825,13 @@ async fn should_handle_ceremony_request() {
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(rpc));
     let mut multisig_client = MockMultisigClientApi::new();
 
-    // Set up the mock api to expect the 2 not_participating_ceremony calls
     multisig_client
-        .expect_not_participating_ceremony()
+        .expect_track_ceremony_id()
         .with(predicate::eq(latest_ceremony_id))
         .returning(|_| ());
 
     multisig_client
-        .expect_not_participating_ceremony()
+        .expect_track_ceremony_id()
         .with(predicate::eq(latest_ceremony_id + 1))
         .returning(|_| ());
 
