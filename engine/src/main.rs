@@ -251,7 +251,7 @@ fn main() -> anyhow::Result<()> {
             );
 
             // Start state chain components
-            let sc_observer_future = state_chain_observer::sc_observer::start(
+            let sc_observer_future = state_chain_observer::start(
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,

@@ -6,6 +6,7 @@ use cf_chains::{
 };
 use codec::Encode;
 use frame_system::Phase;
+use futures::FutureExt;
 use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::{Vault, Vaults};
@@ -34,6 +35,7 @@ use crate::{
         },
         sc_observer,
     },
+    task_scope::with_task_scope,
 };
 
 fn test_header(number: u32) -> Header {
@@ -775,9 +777,13 @@ async fn run_the_sc_observer() {
     let logger = new_test_logger();
 
     let (initial_block_hash, block_stream, state_chain_client) =
-        crate::state_chain_observer::client::connect_to_state_chain(&settings.state_chain, false, &logger)
-            .await
-            .unwrap();
+        crate::state_chain_observer::client::connect_to_state_chain(
+            &settings.state_chain,
+            false,
+            &logger,
+        )
+        .await
+        .unwrap();
 
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -850,29 +856,40 @@ async fn should_handle_signing_request() {
 
     let multisig_client = Arc::new(multisig_client);
 
-    // Handle a signing request that we are not participating in
-    sc_observer::test_handle_signing_request(
-        multisig_client.clone(),
-        state_chain_client.clone(),
-        first_ceremony_id,
-        key_id.clone(),
-        vec![not_our_account_id.clone()],
-        sign_data.clone(),
-        logger.clone(),
-    )
-    .await;
+    with_task_scope(|scope| {
+        async {
+            // Handle a signing request that we are not participating in
+            sc_observer::handle_signing_request(
+                scope,
+                multisig_client.clone(),
+                state_chain_client.clone(),
+                first_ceremony_id,
+                key_id.clone(),
+                vec![not_our_account_id.clone()],
+                sign_data.clone(),
+                logger.clone(),
+            )
+            .await;
 
-    // Handle a signing request that we are participating in
-    sc_observer::test_handle_signing_request(
-        multisig_client,
-        state_chain_client.clone(),
-        next_ceremony_id,
-        key_id,
-        vec![our_account_id],
-        sign_data,
-        logger,
-    )
-    .await;
+            // Handle a signing request that we are participating in
+            sc_observer::handle_signing_request(
+                scope,
+                multisig_client,
+                state_chain_client.clone(),
+                next_ceremony_id,
+                key_id,
+                vec![our_account_id],
+                sign_data,
+                logger,
+            )
+            .await;
+
+            Ok(())
+        }
+        .boxed()
+    })
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -914,23 +931,33 @@ async fn should_handle_keygen_request() {
 
     let multisig_client = Arc::new(multisig_client);
 
-    // Handle a keygen request that we are not participating in
-    sc_observer::test_handle_keygen_request(
-        multisig_client.clone(),
-        state_chain_client.clone(),
-        first_ceremony_id,
-        vec![not_our_account_id.clone()],
-        logger.clone(),
-    )
-    .await;
+    with_task_scope(|scope| {
+        async {
+            // Handle a keygen request that we are not participating in
+            sc_observer::handle_keygen_request(
+                scope,
+                multisig_client.clone(),
+                state_chain_client.clone(),
+                first_ceremony_id,
+                vec![not_our_account_id.clone()],
+                logger.clone(),
+            )
+            .await;
 
-    // Handle a keygen request that we are participating in
-    sc_observer::test_handle_keygen_request(
-        multisig_client.clone(),
-        state_chain_client.clone(),
-        next_ceremony_id,
-        vec![our_account_id.clone()],
-        logger.clone(),
-    )
-    .await;
+            // Handle a keygen request that we are participating in
+            sc_observer::handle_keygen_request(
+                scope,
+                multisig_client.clone(),
+                state_chain_client.clone(),
+                next_ceremony_id,
+                vec![our_account_id.clone()],
+                logger.clone(),
+            )
+            .await;
+            Ok(())
+        }
+        .boxed()
+    })
+    .await
+    .unwrap();
 }

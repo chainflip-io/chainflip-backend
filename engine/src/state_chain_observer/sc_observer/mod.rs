@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use cf_traits::EpochIndex;
 use futures::{stream, FutureExt, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
@@ -148,70 +151,6 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
         // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
         multisig_client.track_ceremony_id(ceremony_id);
     }
-}
-
-#[cfg(test)]
-pub async fn test_handle_keygen_request<MultisigClient, RpcClient>(
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    keygen_participants: Vec<AccountId32>,
-    logger: slog::Logger,
-) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
-{
-    with_task_scope(|scope| {
-        async {
-            handle_keygen_request(
-                scope,
-                multisig_client,
-                state_chain_client,
-                ceremony_id,
-                keygen_participants,
-                logger,
-            )
-            .await;
-            Ok(())
-        }
-        .boxed()
-    })
-    .await
-    .unwrap();
-}
-
-#[cfg(test)]
-pub async fn test_handle_signing_request<MultisigClient, RpcClient>(
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    key_id: KeyId,
-    signers: Vec<AccountId>,
-    data: MessageHash,
-    logger: slog::Logger,
-) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
-{
-    with_task_scope(|scope| {
-        async {
-            handle_signing_request(
-                scope,
-                multisig_client,
-                state_chain_client,
-                ceremony_id,
-                key_id,
-                signers,
-                data,
-                logger,
-            )
-            .await;
-            Ok(())
-        }
-        .boxed()
-    })
-    .await
-    .unwrap();
 }
 
 async fn start_epoch_observation<RpcClient>(
