@@ -23,9 +23,7 @@ use sha2::{Digest, Sha256};
 /// A pair of secret single-use nonces (and their
 /// corresponding public commitments). Correspond to (d,e)
 /// generated during the preprocessing stage in Section 5.3 (page 13)
-// TODO: Not sure if it is a good idea to to make
-// the secret values clonable
-#[derive(Debug, Clone, Zeroize)]
+#[derive(Debug, Zeroize)]
 pub struct SecretNoncePair<P: ECPoint> {
     pub d: P::Scalar,
     pub d_pub: P,
