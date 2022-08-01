@@ -810,7 +810,7 @@ async fn run_the_sc_observer() {
 // Test that the ceremony requests are calling the correct MultisigClientApi functions
 // depending on whether we are participating in the ceremony or not.
 #[tokio::test]
-async fn should_handle_keygen_request() {
+async fn should_handle_signing_request() {
     let logger = new_test_logger();
     let first_ceremony_id = 1;
     let key_id = crate::multisig::KeyId(vec![0u8; 32]);
@@ -820,7 +820,7 @@ async fn should_handle_keygen_request() {
     assert_ne!(our_account_id, not_our_account_id);
 
     let mut rpc = MockStateChainRpcApi::new();
-    // Reporting keygen outcome
+    // Reporting signing outcome
     rpc.expect_submit_extrinsic_rpc()
         .times(1)
         .returning(move |_| Ok(H256::default()));
@@ -876,7 +876,7 @@ async fn should_handle_keygen_request() {
 }
 
 #[tokio::test]
-async fn should_handle_signing_request() {
+async fn should_handle_keygen_request() {
     let logger = new_test_logger();
     let first_ceremony_id = 1;
     let our_account_id = AccountId32::new(OUR_ACCOUNT_ID_BYTES);
@@ -884,7 +884,7 @@ async fn should_handle_signing_request() {
     assert_ne!(our_account_id, not_our_account_id);
 
     let mut rpc = MockStateChainRpcApi::new();
-    // Submitting signing outcome
+    // Submitting keygen outcome
     rpc.expect_submit_extrinsic_rpc()
         .times(1)
         .returning(move |_| Ok(H256::default()));
