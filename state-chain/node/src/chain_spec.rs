@@ -633,7 +633,6 @@ fn testnet_genesis(
 
 pub fn chainflip_properties() -> Properties {
 	let mut properties = Properties::new();
-	// TODO - https://github.com/chainflip-io/chainflip-backend/issues/911
 	properties.insert(
 		"ss58Format".into(),
 		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
