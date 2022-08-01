@@ -1,9 +1,9 @@
-use crate::state_chain::client::StateChainClient;
+use crate::state_chain_observer::client::StateChainClient;
 use std::sync::Arc;
 
 use crate::{
     eth::{utils, EthRpcApi, SignatureAndEvent},
-    state_chain::client::StateChainRpcApi,
+    state_chain_observer::client::StateChainRpcApi,
 };
 
 use cf_traits::EpochIndex;

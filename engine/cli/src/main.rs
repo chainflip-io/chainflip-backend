@@ -4,7 +4,7 @@ use chainflip_engine::{
         rpc::{EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         EthBroadcaster,
     },
-    state_chain::client::{
+    state_chain_observer::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
 };

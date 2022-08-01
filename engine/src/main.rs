@@ -15,7 +15,7 @@ use chainflip_engine::{
     multisig_p2p,
     p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
-    state_chain,
+    state_chain_observer,
     task_scope::with_main_task_scope,
 };
 use clap::Parser;
@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to create ETH broadcaster")?;
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
+                state_chain_observer::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
                     .await?;
 
             state_chain_client
@@ -251,7 +251,7 @@ fn main() -> anyhow::Result<()> {
             );
 
             // Start state chain components
-            let sc_observer_future = state_chain::sc_observer::start(
+            let sc_observer_future = state_chain_observer::sc_observer::start(
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,

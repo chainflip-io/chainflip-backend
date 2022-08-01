@@ -27,7 +27,7 @@ use crate::{
     logging::test_utils::new_test_logger,
     multisig::client::{mocks::MockMultisigClientApi, CeremonyFailureReason},
     settings::Settings,
-    state_chain::{
+    state_chain_observer::{
         client::{
             mock_events_key, test_utils::storage_change_set_from, MockStateChainRpcApi,
             StateChainClient, OUR_ACCOUNT_ID_BYTES,
@@ -775,7 +775,7 @@ async fn run_the_sc_observer() {
     let logger = new_test_logger();
 
     let (initial_block_hash, block_stream, state_chain_client) =
-        crate::state_chain::client::connect_to_state_chain(&settings.state_chain, false, &logger)
+        crate::state_chain_observer::client::connect_to_state_chain(&settings.state_chain, false, &logger)
             .await
             .unwrap();
 
