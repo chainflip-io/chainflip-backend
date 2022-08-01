@@ -207,36 +207,33 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 }
 
 // Accounts
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
-pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
-pub const BROKE_PAUL: <Test as frame_system::Config>::AccountId = 1987u64;
+pub const ALICE: AccountId = 123u64;
+pub const BOB: AccountId = 456u64;
+pub const CHARLES: AccountId = 789u64;
+pub const EVE: AccountId = 987u64;
+pub const BROKE_PAUL: AccountId = 1987u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let total_issuance = 1_000u128;
+	let stakes = [
+		(ALICE, 500),
+		(BOB, 200),
+		(CHARLES, 100),
+		(EVE, 200),
+		(BROKE_PAUL, ProposalFee::get() - 1),
+	];
+	let total_issuance = stakes.iter().map(|(_, stake)| stake).sum();
 	let config = GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance } };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		frame_system::Provider::<Test>::created(&ALICE).unwrap();
-		frame_system::Provider::<Test>::created(&BOB).unwrap();
-		frame_system::Provider::<Test>::created(&CHARLES).unwrap();
-		frame_system::Provider::<Test>::created(&EVE).unwrap();
-		frame_system::Provider::<Test>::created(&BROKE_PAUL).unwrap();
-		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
-		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
-		assert!(frame_system::Pallet::<Test>::account_exists(&CHARLES));
-		assert!(frame_system::Pallet::<Test>::account_exists(&EVE));
-		assert!(frame_system::Pallet::<Test>::account_exists(&BROKE_PAUL));
-		<Flip as StakeTransfer>::credit_stake(&ALICE, 500);
-		<Flip as StakeTransfer>::credit_stake(&BOB, 200);
-		<Flip as StakeTransfer>::credit_stake(&CHARLES, 100);
-		<Flip as StakeTransfer>::credit_stake(&EVE, 200);
-		<Flip as StakeTransfer>::credit_stake(&BROKE_PAUL, 100);
+		for (account, stake) in stakes {
+			frame_system::Provider::<Test>::created(&account).unwrap();
+			assert!(frame_system::Pallet::<Test>::account_exists(&account));
+			<Flip as StakeTransfer>::credit_stake(&account, stake);
+		}
 	});
 
 	ext

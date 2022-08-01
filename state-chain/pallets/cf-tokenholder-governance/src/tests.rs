@@ -122,11 +122,13 @@ fn cannot_back_not_existing_proposal() {
 fn cannot_create_proposal_with_insufficient_liquidity() {
 	new_test_ext().execute_with(|| {
 		let balance_before = Flip::total_balance_of(&BROKE_PAUL);
-		assert!(TokenholderGovernance::submit_proposal(
-			Origin::signed(BROKE_PAUL),
-			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL),
-		)
-		.is_err());
+		assert_noop!(
+			TokenholderGovernance::submit_proposal(
+				Origin::signed(BROKE_PAUL),
+				Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL),
+			),
+			pallet_cf_flip::Error::<Test>::InsufficientLiquidity
+		);
 		assert_eq!(balance_before, Flip::total_balance_of(&BROKE_PAUL));
 	});
 }
