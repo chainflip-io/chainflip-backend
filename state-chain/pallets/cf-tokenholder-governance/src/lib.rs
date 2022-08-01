@@ -224,7 +224,7 @@ pub mod pallet {
 	}
 	impl<T: Config> Pallet<T> {
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
-			let backers = Backers::<T>::get(proposal.clone());
+			let backers = Backers::<T>::take(&proposal);
 			let votes = backers.len();
 			let total_backed = backers
 				.iter()
@@ -246,9 +246,9 @@ pub mod pallet {
 						));
 					},
 				}
-				Self::deposit_event(Event::<T>::ProposalPassed(proposal.clone()));
+				Self::deposit_event(Event::<T>::ProposalPassed { proposal });
 			} else {
-				Self::deposit_event(Event::<T>::ProposalRejected(proposal.clone()));
+				Self::deposit_event(Event::<T>::ProposalRejected { proposal });
 			}
 			votes
 		}
