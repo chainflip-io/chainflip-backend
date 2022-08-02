@@ -186,13 +186,13 @@ where
                                         "Start observing from ETH block: {}",
                                         from_block
                                     );
-                                    let mut event_stream = contract_observer
-                                        .event_stream(eth_ws_rpc, eth_http_rpc, from_block, &logger)
+                                    let mut block_stream = contract_observer
+                                        .block_stream(eth_ws_rpc, eth_http_rpc, from_block, &logger)
                                         .await
                                         .expect("Failed to initialise event stream");
 
                                     // TOOD: Handle None on stream, and result event being an error
-                                    while let Some(block) = event_stream.next().await {
+                                    while let Some(block) = block_stream.next().await {
                                         if let Some(end_at_block) =
                                             *task_end_at_block.lock().unwrap()
                                         {
@@ -714,7 +714,7 @@ pub trait EthObserver {
 
     /// Get an event stream for the contract, returning the stream only if the head of the stream is
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
-    async fn event_stream(
+    async fn block_stream(
         &self,
         eth_ws_rpc: EthWsRpcClient,
         eth_http_rpc: EthHttpRpcClient,

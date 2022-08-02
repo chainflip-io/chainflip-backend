@@ -43,7 +43,7 @@ pub async fn test_all_stake_manager_events() {
     // in which it should have already done it's job.
     let sm_events = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        stake_manager.event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
+        stake_manager.block_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
     )
     .await
     .expect(common::EVENT_STREAM_TIMEOUT_MESSAGE)
