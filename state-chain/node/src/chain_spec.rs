@@ -13,7 +13,7 @@ use state_chain_runtime::{
 	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
 	SystemConfig, ValidatorConfig, WASM_BINARY,
 };
-use std::{env, marker::PhantomData};
+use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 mod network_env;
@@ -581,6 +581,18 @@ fn testnet_genesis(
 		},
 		validator: ValidatorConfig {
 			genesis_authorities: initial_authorities.iter().map(|(id, ..)| id.clone()).collect(),
+			genesis_backups: genesis_stakers
+				.iter()
+				.cloned()
+				.collect::<BTreeSet<_>>()
+				.difference(
+					&initial_authorities
+						.iter()
+						.map(|(account_id, _, _)| account_id.clone())
+						.collect::<BTreeSet<_>>(),
+				)
+				.map(|account_id| (account_id.clone(), genesis_stake_amount))
+				.collect(),
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_reward_node_percentage: 20,

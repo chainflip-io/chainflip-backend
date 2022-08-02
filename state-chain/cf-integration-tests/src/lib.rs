@@ -135,6 +135,7 @@ impl ExtBuilder {
 			},
 			validator: ValidatorConfig {
 				genesis_authorities: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
+				genesis_backups: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
 				bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
 				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,

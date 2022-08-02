@@ -778,6 +778,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: Vec<ValidatorIdOf<T>>,
+		pub genesis_backups: BackupMap<T>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
@@ -790,6 +791,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				genesis_authorities: Default::default(),
+				genesis_backups: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
@@ -815,12 +817,11 @@ pub mod pallet {
 				T::ChainflipAccount::set_current_authority(id.into_ref());
 			}
 
-			// TODO: We should have the stakers come in here as backup candidates...
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
 				self.bond,
-				BackupMap::<T>::default(),
+				self.genesis_backups.clone(),
 			);
 		}
 	}
