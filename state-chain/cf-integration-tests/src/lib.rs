@@ -34,7 +34,6 @@ pub const CHARLIE: [u8; 32] = [0xcc; 32];
 // Root and Gov member
 pub const ERIN: [u8; 32] = [0xee; 32];
 
-pub const BLOCK_TIME: u64 = 1000;
 const GENESIS_EPOCH: EpochIndex = 1;
 
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -668,8 +667,53 @@ mod authorities {
 		AuthorityCount, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
 		FlipBalance, StakeTransfer,
 	};
+	use sp_runtime::AccountId32;
 	use state_chain_runtime::{Flip, Runtime, Validator};
 	use std::collections::HashMap;
+
+	#[test]
+	fn authorities_earn_rewards_for_authoring_blocks() {
+		// We want to have at least one heartbeat within our reduced epoch
+		const EPOCH_BLOCKS: u32 = 1000;
+		// Reduce our validating set and hence the number of nodes we need to have a backup
+		// set
+		const MAX_AUTHORITIES: AuthorityCount = 3;
+		super::genesis::default()
+			.blocks_per_epoch(EPOCH_BLOCKS)
+			.max_authorities(MAX_AUTHORITIES)
+			.build()
+			.execute_with(|| {
+				let genesis_authorities = Validator::current_authorities();
+				let (mut testnet, _) = network::Network::create(0, &genesis_authorities);
+
+				let staked_amounts = || {
+					genesis_authorities
+						.iter()
+						.map(|id| (id.clone(), Flip::staked_balance(id)))
+						.collect()
+				};
+
+				let staked_amounts_before: Vec<(AccountId32, u128)> = staked_amounts();
+
+				// each authority should author a block and mint FLIP to themselves
+				testnet.move_forward_blocks(MAX_AUTHORITIES);
+
+				// Each node should have more rewards now than before, since they've each authored a
+				// block
+				let staked_amounts_after = staked_amounts();
+
+				// Ensure all nodes have increased the same amount
+				let first_node_stake = staked_amounts_after.first().unwrap().1;
+				staked_amounts_after.iter().all(|(_node, amount)| amount == &first_node_stake);
+
+				// Ensure all nodes have a higher stake than before
+				staked_amounts_before.into_iter().zip(staked_amounts_after).for_each(
+					|((_node, amount_before), (_node2, amount_after))| {
+						assert!(amount_before < amount_after)
+					},
+				);
+			});
+	}
 
 	#[test]
 	fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {

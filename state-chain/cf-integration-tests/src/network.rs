@@ -5,10 +5,14 @@ use cf_traits::{
 	FlipBalance,
 };
 use codec::Encode;
+use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
 use sp_core::H256;
-use state_chain_runtime::{Event, Origin};
+use state_chain_runtime::{Authorship, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
+// arbitrary units of block time
+pub const BLOCK_TIME: u64 = 1000;
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
@@ -392,18 +396,24 @@ impl Network {
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
-		pub const INIT_TIMESTAMP: u64 = 30_000;
+		const INIT_TIMESTAMP: u64 = 30_000;
 		let current_block_number = System::block_number();
 		while System::block_number() < current_block_number + n {
 			let block_number = System::block_number() + 1;
-			let mut digest = sp_runtime::Digest::default();
-			digest.push(sp_runtime::DigestItem::PreRuntime(
-				sp_consensus_aura::AURA_ENGINE_ID,
-				sp_consensus_aura::Slot::from(block_number as u64).encode(),
-			));
-			System::initialize(&block_number, &System::block_hash(block_number), &digest);
+
+			System::initialize(&block_number, &System::block_hash(block_number), &{
+				let mut digest = sp_runtime::Digest::default();
+				digest.push(sp_runtime::DigestItem::PreRuntime(
+					sp_consensus_aura::AURA_ENGINE_ID,
+					sp_consensus_aura::Slot::from(block_number as u64).encode(),
+				));
+				digest
+			});
+
 			Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
-			state_chain_runtime::AllPalletsWithSystem::on_initialize(block_number);
+			state_chain_runtime::AllPalletsWithoutSystem::on_initialize(block_number);
+			// We must finalise this to clear the previous author which is otherwise cached
+			Authorship::on_finalize(block_number);
 
 			for event in self.stake_manager_contract.events() {
 				for engine in self.engines.values() {
