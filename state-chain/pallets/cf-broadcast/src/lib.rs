@@ -435,14 +435,14 @@ pub mod pallet {
 				Error::<T, I>::InvalidSigner
 			);
 
-			// it's no longer being signed, it's being broadcast
-			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
-
 			if let Ok(tx_hash) = T::TargetChain::verify_signed_transaction(
 				&signing_attempt.broadcast_attempt.unsigned_tx,
 				&signed_tx,
 				&signer_id,
 			) {
+				// it's no longer being signed, it's being broadcast
+				AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
+
 				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
 				if !TransactionFeeDeficit::<T, I>::contains_key(&extrinsic_signer) {
 					TransactionFeeDeficit::<T, I>::insert(
@@ -488,6 +488,11 @@ pub mod pallet {
 					"Unable to verify tranaction signature for broadcast attempt id {}",
 					broadcast_attempt_id
 				);
+
+				Self::take_and_clean_up_awaiting_transaction_signature_attempt(
+					broadcast_attempt_id,
+				);
+
 				T::OffenceReporter::report(
 					PalletOffence::InvalidTransactionAuthored,
 					signing_attempt.nominee,
@@ -621,7 +626,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
 				AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
 			{
-				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
+				log::warn!("Attempt {broadcast_attempt_id} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.");
+				#[cfg(test)]
+				panic!("Attempt {broadcast_attempt_id} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.");
 			}
 		}
 		FailedTransactionSigners::<T, I>::remove(broadcast_id);
@@ -695,32 +702,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+			if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 				&T::KeyProvider::current_key(),
 				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
-				SignatureToBroadcastIdLookup::<T, I>::remove(signature);
-				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(api_call);
-				log::info!(
-					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
-					broadcast_attempt.broadcast_attempt_id.broadcast_id
-				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid(broadcast_id));
-			} else {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
 
 				BroadcastIdToAttemptNumbers::<T, I>::append(
-					broadcast_attempt.broadcast_attempt_id.broadcast_id,
+					broadcast_id,
 					next_broadcast_attempt_id.attempt_count,
 				);
 
 				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 					broadcast_attempt_id: next_broadcast_attempt_id,
 					..broadcast_attempt
-				})
+				});
+			} else {
+				Self::clean_up_broadcast_storage(broadcast_id);
+				Self::threshold_sign_and_broadcast(api_call);
+				log::info!(
+					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+					broadcast_id
+				);
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid(broadcast_id));
 			}
 		} else {
 			log::error!("No threshold signature data is available.");

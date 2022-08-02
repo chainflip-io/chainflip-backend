@@ -343,6 +343,13 @@ fn test_bad_signature() {
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
 		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
+		// if we have a bad sig then we want to remove the attempt number for that failed attempt
+		// before we retry too
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
+			broadcast_attempt_id.broadcast_id
+		)
+		.unwrap()
+		.is_empty());
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// The nominee was reported.
@@ -842,8 +849,12 @@ fn re_request_threshold_signature() {
 			MockThresholdSignature::default()
 		)
 		.is_none());
-		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(1).is_none());
-		assert!(ThresholdSignatureData::<Test, Instance1>::get(1).is_none());
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
+			broadcast_attempt_id.broadcast_id
+		)
+		.is_none());
+		assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+			.is_none());
 		// Verify that we have a new signature request in the pipeline
 		assert_eq!(
 			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
