@@ -1,5 +1,5 @@
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
-use cf_traits::mocks::system_state_info::MockSystemStateInfo;
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, RewardsDistribution};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
 
@@ -33,6 +33,8 @@ fn test_should_mint_at() {
 
 #[cfg(test)]
 mod test_block_rewards {
+	use cf_traits::RewardsDistribution;
+
 	use super::*;
 
 	fn test_with(emissions_per_block: u128) {
@@ -40,7 +42,7 @@ mod test_block_rewards {
 			Emissions::update_authority_block_emission(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
-			Emissions::mint_rewards_for_block();
+			MockRewardsDistribution::distribute();
 			let after = Flip::<Test>::total_issuance();
 
 			assert_eq!(before + emissions_per_block, after);
@@ -69,14 +71,14 @@ fn test_duplicate_emission_should_be_noop() {
 		Emissions::update_authority_block_emission(EMISSION_RATE);
 
 		let before = Flip::<Test>::total_issuance();
-		Emissions::mint_rewards_for_block();
+		MockRewardsDistribution::distribute();
 		let after = Flip::<Test>::total_issuance();
 
 		assert_eq!(before + EMISSION_RATE, after);
 
 		// Minting again at the same block should have no effect.
 		let before = after;
-		Emissions::mint_rewards_for_block();
+		MockRewardsDistribution::distribute();
 		let after = Flip::<Test>::total_issuance();
 
 		assert_eq!(before + EMISSION_RATE, after);
@@ -96,7 +98,7 @@ fn should_calculate_block_emissions() {
 fn should_mint_but_not_broadcast() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		let prev_supply_update_block = LastSupplyUpdateBlock::<Test>::get();
-		Emissions::mint_rewards_for_block();
+		MockRewardsDistribution::distribute();
 		assert_eq!(prev_supply_update_block, LastSupplyUpdateBlock::<Test>::get());
 	});
 }
