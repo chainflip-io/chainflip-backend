@@ -33,7 +33,7 @@ use crate::{
     },
     logging::{COMPONENT_KEY, ETH_HTTP_STREAM_YIELDED, ETH_STREAM_BEHIND, ETH_WS_STREAM_YIELDED},
     settings,
-    state_chain::client::{StateChainClient, StateChainRpcApi},
+    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
     task_scope::{with_task_scope, ScopedJoinHandle},
 };
 use chain_data_witnessing::*;
@@ -1532,7 +1532,7 @@ mod witnesser_tests {
     use super::rpc::mocks::MockEthHttpRpcClient;
     use super::*;
     use crate::logging::test_utils::new_test_logger;
-    use crate::state_chain::client::MockStateChainRpcApi;
+    use crate::state_chain_observer::client::MockStateChainRpcApi;
     use crate::task_scope::with_main_task_scope;
 
     #[test]

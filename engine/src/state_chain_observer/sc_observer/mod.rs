@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use cf_traits::EpochIndex;
 use futures::{stream, FutureExt, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
@@ -17,7 +20,7 @@ use crate::{
         KeyId, MessageHash,
     },
     multisig_p2p::AccountPeerMappingChange,
-    state_chain::client::{StateChainClient, StateChainRpcApi},
+    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
     task_scope::{with_task_scope, Scope},
 };
 
@@ -26,17 +29,17 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
     multisig_client: Arc<MultisigClient>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ceremony_id: CeremonyId,
-    validator_candidates: Vec<AccountId32>,
+    keygen_participants: Vec<AccountId32>,
     logger: slog::Logger,
 ) where
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    if validator_candidates.contains(&state_chain_client.our_account_id) {
+    if keygen_participants.contains(&state_chain_client.our_account_id) {
         // Send a keygen request and wait to submit the result to the SC
         scope.spawn(async move {
             let keygen_outcome = multisig_client
-                .keygen(ceremony_id, validator_candidates.clone())
+                .keygen(ceremony_id, keygen_participants.clone())
                 .await;
 
             let keygen_outcome = match keygen_outcome {
@@ -52,7 +55,7 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
                         .sign(
                             ceremony_id,
                             KeyId(public_key_bytes.to_vec()),
-                            validator_candidates,
+                            keygen_participants,
                             MessageHash(data_to_sign),
                         )
                         .await
@@ -95,7 +98,7 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
         });
     } else {
         // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.not_participating_ceremony(ceremony_id);
+        multisig_client.update_latest_ceremony_id(ceremony_id);
     }
 }
 
@@ -146,72 +149,8 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
         });
     } else {
         // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.not_participating_ceremony(ceremony_id);
+        multisig_client.update_latest_ceremony_id(ceremony_id);
     }
-}
-
-#[cfg(test)]
-pub async fn test_handle_keygen_request<MultisigClient, RpcClient>(
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    validator_candidates: Vec<AccountId32>,
-    logger: slog::Logger,
-) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
-{
-    with_task_scope(|scope| {
-        async {
-            handle_keygen_request(
-                scope,
-                multisig_client,
-                state_chain_client,
-                ceremony_id,
-                validator_candidates,
-                logger,
-            )
-            .await;
-            Ok(())
-        }
-        .boxed()
-    })
-    .await
-    .unwrap();
-}
-
-#[cfg(test)]
-pub async fn test_handle_signing_request<MultisigClient, RpcClient>(
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    key_id: KeyId,
-    signers: Vec<AccountId>,
-    data: MessageHash,
-    logger: slog::Logger,
-) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
-{
-    with_task_scope(|scope| {
-        async {
-            handle_signing_request(
-                scope,
-                multisig_client,
-                state_chain_client,
-                ceremony_id,
-                key_id,
-                signers,
-                data,
-                logger,
-            )
-            .await;
-            Ok(())
-        }
-        .boxed()
-    })
-    .await
-    .unwrap();
 }
 
 async fn start_epoch_observation<RpcClient>(
@@ -440,7 +379,7 @@ where
                                             state_chain_runtime::Event::EthereumVault(
                                                 pallet_cf_vaults::Event::KeygenRequest(
                                                     ceremony_id,
-                                                    validator_candidates,
+                                                    keygen_participants,
                                                 ),
                                             ) => {
                                                 handle_keygen_request(
@@ -448,7 +387,7 @@ where
                                                     multisig_client.clone(),
                                                     state_chain_client.clone(),
                                                     ceremony_id,
-                                                    validator_candidates,
+                                                    keygen_participants,
                                                     logger.clone()
                                                 ).await;
                                             }
