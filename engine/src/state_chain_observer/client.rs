@@ -35,13 +35,12 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use utilities::Port;
 
 use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
-use utilities::rpc_error_into_anyhow_error;
+use utilities::{context, rpc_error_into_anyhow_error, Port};
 
 mod signer;
 
