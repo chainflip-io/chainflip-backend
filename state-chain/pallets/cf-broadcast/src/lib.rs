@@ -695,19 +695,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			if !<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+			if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 				&T::KeyProvider::current_key(),
 				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
-				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(api_call);
-				log::info!(
-					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
-					broadcast_id
-				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid(broadcast_id));
-			} else {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
 
@@ -719,7 +711,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 					broadcast_attempt_id: next_broadcast_attempt_id,
 					..broadcast_attempt
-				})
+				});
+			} else {
+				Self::clean_up_broadcast_storage(broadcast_id);
+				Self::threshold_sign_and_broadcast(api_call);
+				log::info!(
+					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+					broadcast_id
+				);
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid(broadcast_id));
 			}
 		} else {
 			log::error!("No threshold signature data is available.");
