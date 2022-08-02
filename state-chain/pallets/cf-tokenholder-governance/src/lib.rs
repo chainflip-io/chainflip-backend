@@ -226,10 +226,8 @@ pub mod pallet {
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
 			let backers = Backers::<T>::take(&proposal);
 			let votes = backers.len();
-			let total_backed = backers
-				.iter()
-				.map(|backer| T::StakingInfo::total_stake_of(backer))
-				.sum::<T::Amount>();
+			let total_backed =
+				backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>();
 			let total_stake = T::StakingInfo::total_onchain_stake();
 			if total_backed > (total_stake / 3u32.into()) * 2u32.into() {
 				match proposal {
