@@ -11,7 +11,7 @@ use futures::{future, Stream, StreamExt};
 use slog::o;
 
 use sp_core::U256;
-use utilities::periodic_tick_stream;
+use utilities::{context, periodic_tick_stream};
 use web3::types::{BlockNumber, U64};
 
 /// Returns a stream of latest eth block numbers by polling at regular intervals.
