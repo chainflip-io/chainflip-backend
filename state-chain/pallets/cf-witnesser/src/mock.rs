@@ -78,11 +78,11 @@ impl dummy::Config for Test {
 
 impl WitnessDataExtraction for Call {
 	fn extract(&mut self) -> Option<Vec<u8>> {
-		todo!()
+		None
 	}
 
-	fn combine_and_inject(&mut self, data: &mut [Vec<u8>]) {
-		todo!()
+	fn combine_and_inject(&mut self, _data: &mut [Vec<u8>]) {
+		// Do nothing
 	}
 }
 
