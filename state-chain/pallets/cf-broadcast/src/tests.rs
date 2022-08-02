@@ -842,8 +842,12 @@ fn re_request_threshold_signature() {
 			MockThresholdSignature::default()
 		)
 		.is_none());
-		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(1).is_none());
-		assert!(ThresholdSignatureData::<Test, Instance1>::get(1).is_none());
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
+			broadcast_attempt_id.broadcast_id
+		)
+		.is_none());
+		assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+			.is_none());
 		// Verify that we have a new signature request in the pipeline
 		assert_eq!(
 			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
