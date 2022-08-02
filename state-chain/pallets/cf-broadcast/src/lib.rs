@@ -621,7 +621,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if AwaitingTransmission::<T, I>::take(broadcast_attempt_id).is_none() &&
 				AwaitingTransactionSignature::<T, I>::take(broadcast_attempt_id).is_none()
 			{
-				log::warn!("Attempt {} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.", broadcast_attempt_id);
+				log::warn!("Attempt {broadcast_attempt_id} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.");
+				#[cfg(test)]
+				panic!("Attempt {broadcast_attempt_id} exists that is neither awaiting sig, nor awaiting transmissions. This should be impossible.");
 			}
 		}
 		FailedTransactionSigners::<T, I>::remove(broadcast_id);
