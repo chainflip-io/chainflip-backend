@@ -21,6 +21,8 @@ pub fn make_periodic_tick(duration: Duration, yield_immediately: bool) -> tokio:
 
 #[cfg(test)]
 mod tests_make_periodic_tick {
+    use crate::{assert_ok, assert_err};
+
     use super::*;
 
     #[tokio::test]
