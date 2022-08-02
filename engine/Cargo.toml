@@ -102,6 +102,7 @@ pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser = {path = "../state-chain/pallets/cf-witnesser"}
 custom-rpc = {path = "../state-chain/custom-rpc"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+chainflip-node = {path = "../state-chain/node"}
 utilities = {path = "../utilities"}
 
 [dependencies.rocksdb]

@@ -1,6 +1,9 @@
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
+use sp_core::{
+	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
+	sr25519, Pair, Public,
+};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
@@ -633,7 +636,6 @@ fn testnet_genesis(
 
 pub fn chainflip_properties() -> Properties {
 	let mut properties = Properties::new();
-	// TODO - https://github.com/chainflip-io/chainflip-backend/issues/911
 	properties.insert(
 		"ss58Format".into(),
 		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
@@ -643,4 +645,9 @@ pub fn chainflip_properties() -> Properties {
 	properties.insert("color".into(), "#61CFAA".into());
 
 	properties
+}
+
+/// Sets global that ensures SC AccountId's are printed correctly
+pub fn setup_account_id_encoding() {
+	set_default_ss58_version(Ss58AddressFormat::custom(CHAINFLIP_SS58_PREFIX));
 }
