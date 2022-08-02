@@ -1,7 +1,12 @@
 // #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_benchmarking::{benchmarks, whitelist_account, whitelisted_caller};
-use frame_support::{assert_ok, codec::Decode, storage, traits::KeyOwnerProofSystem};
+use frame_support::{
+	assert_ok,
+	codec::Decode,
+	storage,
+	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize},
+};
 use frame_system::RawOrigin;
 use pallet_grandpa::*;
 use rand::{RngCore, SeedableRng};
@@ -16,13 +21,17 @@ use cf_traits::Chainflip;
 use frame_benchmarking::account;
 use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use pallet_cf_reputation::Call as ReputationCall;
-use pallet_cf_validator::CurrentAuthorities;
+use pallet_cf_validator::{CurrentAuthorities, CurrentRotationPhase, RotationPhase};
 
 const SEED: u32 = 0;
 
 pub struct Pallet<T: Config>(pallet_grandpa::Pallet<T>);
 pub trait Config:
-	pallet_grandpa::Config + pallet_cf_validator::Config + pallet_cf_reputation::Config
+	pallet_grandpa::Config
+	+ pallet_cf_validator::Config
+	+ pallet_cf_reputation::Config
+	+ pallet_session::Config
+	+ pallet_session::historical::Config
 {
 }
 
@@ -66,10 +75,17 @@ benchmarks! {
 			251, 129, 29, 45, 32, 29, 6
 		];
 
+		// Pallet::<T>::on_finalize(2_u64);
+
 		let all_accounts = (0..150).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED));
 		let authorities: AuthorityList = storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into();
 		let equivocation_key = authorities[0].0.clone();
 		add_authorities::<T, _>(all_accounts);
+
+		for i in 0..150u32 {
+			pallet_session::Pallet::<T>::on_initialize(i.into());
+			pallet_grandpa::Pallet::<T>::on_finalize(i.into());
+		}
 
 		let key_owner_proof = T::KeyOwnerProofSystem::prove((sp_finality_grandpa::KEY_TYPE, equivocation_key)).unwrap();
 
@@ -82,7 +98,7 @@ benchmarks! {
 		let equivocation_proof1: sp_finality_grandpa::EquivocationProof<<T as frame_system::Config>::Hash, <T as frame_system::Config>::BlockNumber> =
 			Decode::decode(&mut &EQUIVOCATION_PROOF_BLOB[..]).unwrap();
 		let equivocation_proof2 = equivocation_proof1.clone();
-	}: {} //_(RawOrigin::Signed(caller.clone()), Box::new(equivocation_proof1), key_owner_proof)
+	}: _(RawOrigin::Signed(caller.clone()), Box::new(equivocation_proof1), key_owner_proof)
 	note_stalled {
 		let delay = 1000u32.into();
 		let best_finalized_block_number = 1u32.into();
