@@ -177,7 +177,7 @@ where
                             let dual_rpc = EthDualRpcClient::new(
                                 eth_ws_rpc.clone(),
                                 eth_http_rpc.clone(),
-                                logger.clone(),
+                                &logger,
                             );
                             let logger = logger.clone();
                             let contract_observer = contract_observer.clone();

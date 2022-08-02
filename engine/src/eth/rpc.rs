@@ -20,6 +20,7 @@ use anyhow::{anyhow, Context, Result};
 
 use crate::{
     constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
+    logging::COMPONENT_KEY,
     settings,
 };
 
@@ -337,12 +338,12 @@ impl EthDualRpcClient {
     pub fn new(
         ws_client: EthWsRpcClient,
         http_client: EthHttpRpcClient,
-        logger: slog::Logger,
+        logger: &slog::Logger,
     ) -> Self {
         Self {
             ws_client,
             http_client,
-            logger,
+            logger: logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient")),
         }
     }
 }
