@@ -378,15 +378,15 @@ macro_rules! dual_call_rpc {
                 .context("ETH Dual RPC request timed out")?
                 .map_err(|(e_ws, e_http)| {
                     anyhow::Error::msg(format!(
-                        "ETH Dual RPC request failed: {:?}, {:?}",
-                        e_ws, e_http
+                        "ETH Dual RPC request failed: {:?} side: {:?}, {:?} HTTP side: {:?}",
+                        TransportProtocol::Ws, e_ws, TransportProtocol::Http, e_http
                     ))
                 })
                 .map(|(res, maybe_err)| {
                     if let Some(err) = maybe_err {
                         let (side, message) = match err {
-                            Either::Left(e) => ("WS", e),
-                            Either::Right(e) => ("HTTP", e),
+                            Either::Left(e) => (TransportProtocol::Ws, e),
+                            Either::Right(e) => (TransportProtocol::Http, e),
                         };
                         slog::warn!(
                             $eth_dual.logger,
