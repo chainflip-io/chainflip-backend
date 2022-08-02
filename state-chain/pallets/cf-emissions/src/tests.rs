@@ -108,7 +108,7 @@ fn should_mint_and_initiate_broadcast() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		let before = Flip::<Test>::total_issuance();
 		assert!(MockBroadcast::get_called().is_none());
-		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
+		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		let after = Flip::<Test>::total_issuance();
 		assert!(after > before, "Expected {:?} > {:?}", after, before);
 		assert_eq!(
@@ -124,13 +124,13 @@ fn no_update_of_update_total_supply_during_maintanance() {
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
 		// Try send a broadcast to update the total supply
-		<Emissions as OnInitialize<_>>::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
+		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		// Expect nothing to be sent
 		assert!(MockBroadcast::get_called().is_none());
 		// Deactivate maintenance mode
 		MockSystemStateInfo::set_maintenance(false);
 		// Try send a broadcast to update the total supply
-		<Emissions as OnInitialize<_>>::on_initialize((SUPPLY_UPDATE_INTERVAL * 2).into());
+		Emissions::on_initialize((SUPPLY_UPDATE_INTERVAL * 2).into());
 		// Expect the broadcast to be sendt
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,
