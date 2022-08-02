@@ -356,11 +356,11 @@ where
 {
     match select(f1, f2).await {
         Either::Left((Ok(ok), _)) | Either::Right((Ok(ok), _)) => Ok((ok, None)),
-        Either::Left((Err(e_left), other)) => match other.await {
+        Either::Left((Err(e_left), right)) => match right.await {
             Ok(ok) => Ok((ok, Some(Either::Left(e_left)))),
             Err(e_right) => Err((e_left, e_right)),
         },
-        Either::Right((Err(e_right), other)) => match other.await {
+        Either::Right((Err(e_right), left)) => match left.await {
             Ok(ok) => Ok((ok, Some(Either::Right(e_right)))),
             Err(e_left) => Err((e_left, e_right)),
         },
