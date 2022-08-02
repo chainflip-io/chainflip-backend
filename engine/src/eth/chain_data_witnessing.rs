@@ -37,18 +37,6 @@ pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync + 'a>(
         })
 }
 
-/// Rounds some amount in Wei to the nearest whole amount of Gwei.
-fn round_wei_to_gwei(number: u128) -> u128 {
-    const ONE_GWEI: u128 = 1_000_000_000;
-    const HALF_GWEI: u128 = ONE_GWEI / 2;
-    let rounded_down = (number / ONE_GWEI) * ONE_GWEI;
-    if number % ONE_GWEI < HALF_GWEI {
-        rounded_down
-    } else {
-        rounded_down + ONE_GWEI
-    }
-}
-
 /// Queries the rpc node and builds the `TrackedData` for Ethereum at the requested block number.
 ///
 /// Value in Wei is rounded to nearest Gwei in an effort to ensure agreement between nodes in the presence of floating
@@ -71,9 +59,7 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
     Ok(TrackedData::<Ethereum> {
         block_height: block_number,
         base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
-        priority_fee: round_wei_to_gwei(
-            context!(context!(context!(fee_history.reward)?.first())?.first())?.as_u128(),
-        ),
+        priority_fee: context!(context!(context!(fee_history.reward)?.first())?.first())?.as_u128(),
     })
 }
 
@@ -81,22 +67,6 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 mod tests {
     use super::*;
     use crate::logging::test_utils::new_test_logger;
-
-    #[test]
-    fn test_round_wei_to_gwei() {
-        assert_eq!(
-            round_wei_to_gwei(1_000_000_001_000_000_000),
-            1_000_000_001_000_000_000
-        );
-        assert_eq!(
-            round_wei_to_gwei(1_000_000_001_499_999_999),
-            1_000_000_001_000_000_000
-        );
-        assert_eq!(
-            round_wei_to_gwei(1_000_000_000_500_000_001),
-            1_000_000_001_000_000_000
-        );
-    }
 
     #[tokio::test]
     async fn test_get_tracked_data() {
