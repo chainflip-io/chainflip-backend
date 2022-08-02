@@ -189,7 +189,7 @@ where
                                     let mut block_stream = contract_observer
                                         .block_stream(eth_ws_rpc, eth_http_rpc, from_block, &logger)
                                         .await
-                                        .expect("Failed to initialise event stream");
+                                        .expect("Failed to initialise block stream");
 
                                     // TOOD: Handle None on stream, and result event being an error
                                     while let Some(block) = block_stream.next().await {
@@ -712,7 +712,7 @@ pub trait EthObserver {
         Err(anyhow::Error::msg("No events in ETH safe head stream"))
     }
 
-    /// Get an event stream for the contract, returning the stream only if the head of the stream is
+    /// Get an block stream for the contract, returning the stream only if the head of the stream is
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
     async fn block_stream(
         &self,
@@ -1015,7 +1015,7 @@ pub trait EthObserver {
                         Err(err) => {
                             slog::error!(
                                 stream_state.merged_stream_state.logger,
-                                "Terminating ETH merged event stream due to error: {}",
+                                "Terminating ETH merged block stream due to error: {}",
                                 err
                             );
                             break None;
