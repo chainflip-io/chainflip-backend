@@ -1,3 +1,5 @@
+#![feature(ip)]
+
 //! Chainflip P2P layer.
 //!
 //! This code allows this node's CFE to communicate with other node's CFEs using substrate's
@@ -120,7 +122,13 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 			CHAINFLIP_P2P_PROTOCOL_NAME,
 			std::iter::once(
 				[
-					multiaddr::Protocol::Ip6(address),
+					if let Some(ipv4) = address.to_ipv4_mapped() {
+						log::info!("p2p using ipv4 {} for {}", ipv4, peer_id);
+						multiaddr::Protocol::Ip4(ipv4)
+					} else {
+						log::info!("p2p using ipv6 {} for {}", address, peer_id);
+						multiaddr::Protocol::Ip6(address)
+					},
 					multiaddr::Protocol::Tcp(port),
 					multiaddr::Protocol::P2p(peer_id.into()),
 				]

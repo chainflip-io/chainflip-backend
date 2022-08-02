@@ -70,6 +70,16 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .dedup()
         .collect::<Vec<_>>();
 
+    slog::info!(
+        logger,
+        "Node's reported listening addresses: {}",
+        common::format_iterator(
+            listening_addresses
+                .iter()
+                .map(|(_, port, ip_address)| format!("[{}]:{}", ip_address, port))
+        )
+    );
+
     if listening_addresses.is_empty() {
         Err(anyhow::Error::msg(
             "No non-loopback listening addresses reported",
@@ -80,6 +90,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         if *peer_id_from_cfe_config == peer_id_from_node {
             let (port, ip_address, source) = if let Some((port, ip_address)) = listening_addresses
                 .iter()
+                .sorted_by_key(|(_, _, ipv6_address)| ipv6_address.to_ipv4_mapped().is_none())
                 .find(|(_, _, ipv6_address)|
                     // Ipv6Addr::is_global doesn't handle Ipv4 mapped addresses
                     match ipv6_address.to_ipv4_mapped() {
@@ -96,7 +107,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
             } else if let Some((port, ip_address)) = {
                 slog::warn!(logger, "The node is not reporting a public ip address");
 
-                if let Some(public_ip) = public_ip::addr().await {
+                if let Some(public_ip) = public_ip::addr_v4().await {
                     // We don't know which private ip address the public ip address maps to,
                     // so we must pick a port number that is listened to on all the private ip's to ensure it is correct
                     if let Some(port) = listening_addresses
@@ -113,13 +124,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                         .into_iter()
                         .next()
                     {
-                        Some((
-                            port,
-                            match public_ip {
-                                std::net::IpAddr::V4(ip) => ip.to_ipv6_mapped(),
-                                std::net::IpAddr::V6(ip) => ip,
-                            },
-                        ))
+                        Some((port, public_ip.to_ipv6_mapped()))
                     } else {
                         slog::warn!(logger, "We could not determine the correct port number for the resolved public ip address {}", public_ip);
                         None
@@ -143,15 +148,6 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                 account_to_peer_mapping_on_chain.get(&state_chain_client.our_account_id);
 
             if Some(&(peer_id_from_node, port, ip_address)) != option_previous_address_on_chain {
-                slog::info!(
-                    logger,
-                    "Node's reported listening addresses: {}",
-                    common::format_iterator(
-                        listening_addresses
-                            .iter()
-                            .map(|(_, port, ip_address)| format!("[{}]:{}", ip_address, port))
-                    )
-                );
                 slog::info!(
                     logger,
                     "Registering node's peer_id {}, ip address, and port number [{}]:{}. This ip address is {}. {}.",
