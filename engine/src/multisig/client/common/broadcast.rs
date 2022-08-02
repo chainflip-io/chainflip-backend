@@ -239,7 +239,6 @@ where
         self.processor.process(messages)
     }
 
-    #[cfg(test)]
     fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {
         let mut awaited = std::collections::BTreeSet::new();
 

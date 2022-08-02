@@ -283,7 +283,7 @@ where
                         CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
                     )))
                 }
-                Some(_authorised_state) => {
+                Some(authorised_state) => {
                     // We can't simply abort here as we don't know whether other
                     // participants are going to do the same (e.g. if a malicious
                     // node targeted us by communicating with everyone but us, it
@@ -295,6 +295,20 @@ where
                         self.logger,
                         "Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
                     );
+
+                    // Log the account ids of the missing messages
+                    if let Some(stage) = &authorised_state.stage {
+                        let missing_messages_from_accounts = authorised_state
+                            .idx_mapping
+                            .get_ids(stage.awaited_parties());
+                        slog::debug!(
+                            self.logger,
+                            "Stage `{}` is missing messages from {} parties",
+                            stage.get_stage_name(),
+                            missing_messages_from_accounts.len();
+                            "missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
+                        )
+                    }
 
                     self.finalize_current_stage()
                 }

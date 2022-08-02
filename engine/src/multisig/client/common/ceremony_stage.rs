@@ -65,7 +65,6 @@ pub trait CeremonyStage {
     fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
-    #[cfg(test)]
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
 
     fn get_stage_name(&self) -> super::CeremonyStageName;
