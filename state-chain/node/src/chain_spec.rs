@@ -648,6 +648,6 @@ pub fn chainflip_properties() -> Properties {
 }
 
 /// Sets global that ensures SC AccountId's are printed correctly
-pub fn setup_account_id_encoding() {
+pub fn use_chainflip_account_id_encoding() {
 	set_default_ss58_version(Ss58AddressFormat::custom(CHAINFLIP_SS58_PREFIX));
 }

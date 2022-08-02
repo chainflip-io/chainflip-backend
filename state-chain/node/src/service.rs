@@ -13,7 +13,7 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
-use crate::chain_spec::setup_account_id_encoding;
+use crate::chain_spec::use_chainflip_account_id_encoding;
 
 // Our native executor instance.
 pub struct ExecutorDispatch;
@@ -67,7 +67,7 @@ pub fn new_partial(
 		return Err(ServiceError::Other("Remote Keystores are not supported.".to_string()))
 	}
 
-	setup_account_id_encoding();
+	use_chainflip_account_id_encoding();
 
 	let telemetry = config
 		.telemetry_endpoints

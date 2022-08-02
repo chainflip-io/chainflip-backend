@@ -20,7 +20,7 @@ use chainflip_engine::{
     state_chain_observer,
     task_scope::with_main_task_scope,
 };
-use chainflip_node::chain_spec::setup_account_id_encoding;
+use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
@@ -28,7 +28,7 @@ use sp_core::U256;
 
 #[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
-    setup_account_id_encoding();
+    use_chainflip_account_id_encoding();
 
     let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
