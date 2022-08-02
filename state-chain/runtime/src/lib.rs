@@ -394,6 +394,21 @@ impl pallet_cf_staking::Config for Runtime {
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
 
+impl pallet_cf_tokenholder_governance::Config for Runtime {
+	type Event = Event;
+	type FeePayment = Flip;
+	type Chain = Ethereum;
+	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
+	type StakingInfo = Flip;
+	type ApiCalls = eth::api::EthereumApi;
+	type Broadcaster = EthereumBroadcaster;
+	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
+	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
+	/// 1000 FLIP in FLIPPERINOS
+	type ProposalFee = ConstU128<1_000_000_000_000_000_000_000>;
+	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
+}
+
 impl pallet_cf_governance::Config for Runtime {
 	type Origin = Origin;
 	type Call = Call;
@@ -510,6 +525,7 @@ construct_runtime!(
 		Authorship: pallet_authorship,
 		Grandpa: pallet_grandpa,
 		Governance: pallet_cf_governance,
+		TokenholderGovernance: pallet_cf_tokenholder_governance,
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		Reputation: pallet_cf_reputation,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
@@ -584,6 +600,7 @@ mod benches {
 		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
 		[pallet_cf_governance, Governance]
+		[pallet_cf_tokenholder_governance, TokenholderGovernance]
 		[pallet_cf_vaults, EthereumVault]
 		[pallet_cf_reputation, Reputation]
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]

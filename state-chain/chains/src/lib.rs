@@ -57,6 +57,7 @@ pub trait ChainCrypto: Chain {
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 	type TransactionHash: Member + Parameter + Default;
+	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -125,6 +126,20 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	) -> Self;
 }
 
+pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		new_gov_key: <Abi as ChainCrypto>::GovKey,
+	) -> Self;
+}
+
+pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		new_comm_key: <Abi as ChainCrypto>::GovKey,
+	) -> Self;
+}
+
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
@@ -162,6 +177,7 @@ impl ChainCrypto for Ethereum {
 	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionHash = eth::H256;
+	type GovKey = eth::Address;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -198,6 +214,13 @@ pub mod mocks {
 	impl Age<MockEthereum> for MockTrackedData {
 		fn birth_block(&self) -> u64 {
 			self.0
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	impl BenchmarkValue for [u8; 32] {
+		fn benchmark_value() -> Self {
+			[1u8; 32]
 		}
 	}
 
@@ -263,6 +286,7 @@ pub mod mocks {
 		type Payload = [u8; 4];
 		type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 		type TransactionHash = [u8; 4];
+		type GovKey = [u8; 32];
 
 		fn verify_threshold_signature(
 			agg_key: &Self::AggKey,

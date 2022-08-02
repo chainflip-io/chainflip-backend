@@ -18,7 +18,7 @@ pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{Bonding, Slashing, StakeHandler};
+use cf_traits::{Bonding, FeePayment, Slashing, StakeHandler, StakingInfo};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -374,6 +374,41 @@ impl<T: Config> Pallet<T> {
 	/// doesn't exist already.
 	pub fn deposit_reserves(reserve_id: ReserveId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_reserve(reserve_id, amount)
+	}
+}
+
+impl<T: Config> StakingInfo for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = T::Balance;
+
+	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
+		Self::total_balance_of(account_id)
+	}
+
+	fn total_onchain_stake() -> Self::Balance {
+		Self::onchain_funds()
+	}
+}
+
+impl<T: Config> FeePayment for Pallet<T> {
+	type Amount = T::Balance;
+	type AccountId = T::AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn mint_to_account(account_id: &Self::AccountId, amount: Self::Amount) {
+		Pallet::<T>::settle(account_id, Pallet::<T>::mint(amount).into());
+	}
+
+	fn try_burn_fee(
+		account_id: &Self::AccountId,
+		amount: Self::Amount,
+	) -> sp_runtime::DispatchResult {
+		if let Some(surplus) = Pallet::<T>::try_debit(account_id, amount) {
+			let _ = surplus.offset(Pallet::<T>::burn(amount));
+			Ok(())
+		} else {
+			Err(Error::<T>::InsufficientLiquidity.into())
+		}
 	}
 }
 

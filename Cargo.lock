@@ -5296,6 +5296,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-tokenholder-governance"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-flip",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
@@ -8941,6 +8960,7 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
+ "pallet-cf-tokenholder-governance",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",

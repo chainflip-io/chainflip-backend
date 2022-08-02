@@ -37,6 +37,7 @@ pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
 pallet-cf-auction = { path = '../pallets/cf-auction', default-features = false }
 pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
+pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
 pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
 pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
@@ -207,6 +208,7 @@ runtime-benchmarks = [
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
+  'pallet-cf-tokenholder-governance/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
@@ -263,6 +265,7 @@ std = [
   'sp-std/std',
   'sp-transaction-pool/std',
   'sp-version/std',
+  'pallet-cf-tokenholder-governance/std',
 ]
 try-runtime = [
   'frame-executive/try-runtime',

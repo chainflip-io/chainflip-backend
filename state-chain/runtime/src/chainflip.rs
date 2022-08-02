@@ -126,6 +126,8 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::RegisterClaim(_) => Environment::stake_manager_address().into(),
 				EthereumApi::UpdateFlipSupply(_) => Environment::flip_token_address().into(),
+				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
+				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 			},
 			data: signed_call.abi_encoded(),
 			..Default::default()
