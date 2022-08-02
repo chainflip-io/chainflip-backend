@@ -1014,7 +1014,7 @@ impl<T: Config> Pallet<T> {
 
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		// We've got new validators, which means the backups may have changed.
+		// We've got new authorities, which means the backups may have changed.
 		Backups::<T>::put(backup_map);
 	}
 
