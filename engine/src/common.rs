@@ -64,11 +64,12 @@ impl<T> Mutex<T> {
 
 #[cfg(test)]
 mod tests {
+    use utilities::assert_future_panics;
+
     use super::*;
     use std::sync::Arc;
 
     #[tokio::test]
-    #[should_panic]
     async fn mutex_panics_if_poisoned() {
         let mutex = Arc::new(Mutex::new(0));
         {
@@ -80,7 +81,7 @@ mod tests {
             .await
             .unwrap_err();
         }
-        mutex.lock().await;
+        assert_future_panics!(mutex.lock());
     }
 
     #[tokio::test]

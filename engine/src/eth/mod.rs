@@ -1088,6 +1088,8 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
 mod merged_stream_tests {
     use std::time::Duration;
 
+    use utilities::assert_future_panics;
+
     use crate::logging::test_utils::new_test_logger;
     use crate::logging::test_utils::new_test_logger_with_tag_cache;
     use crate::logging::ETH_WS_STREAM_YIELDED;
@@ -1407,7 +1409,6 @@ mod merged_stream_tests {
     }
 
     #[tokio::test]
-    #[should_panic]
     async fn merged_stream_panics_if_a_stream_moves_backwards() {
         let mut stream = test_km_contract()
             .merged_block_events_stream(
@@ -1437,7 +1438,7 @@ mod merged_stream_tests {
         stream.next().await.unwrap();
         stream.next().await.unwrap();
         stream.next().await.unwrap();
-        stream.next().await;
+        assert_future_panics!(stream.next());
     }
 
     #[tokio::test]

@@ -22,7 +22,7 @@ use client::MultisigMessage;
 use rand_legacy::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::oneshot;
-use utilities::threshold_from_share_count;
+use utilities::{assert_panics, threshold_from_share_count};
 
 /// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
 fn run_on_request_to_sign<C: CryptoScheme>(
@@ -136,7 +136,6 @@ fn should_ignore_non_first_stage_data_before_authorised() {
 }
 
 #[tokio::test]
-#[should_panic]
 async fn should_panic_keygen_request_if_not_participating() {
     let non_participating_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&non_participating_id));
@@ -146,16 +145,15 @@ async fn should_panic_keygen_request_if_not_participating() {
 
     // Send a keygen request where participants doesn't include non_participating_id
     let (result_sender, _result_receiver) = oneshot::channel();
-    ceremony_manager.on_keygen_request(
+    assert_panics!(ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
         ACCOUNT_IDS.clone(),
         Rng::from_seed(DEFAULT_KEYGEN_SEED),
         result_sender,
-    );
+    ));
 }
 
 #[tokio::test]
-#[should_panic]
 async fn should_panic_rts_if_not_participating() {
     let non_participating_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&non_participating_id));
@@ -164,7 +162,10 @@ async fn should_panic_rts_if_not_participating() {
     let mut ceremony_manager = new_ceremony_manager_for_test(non_participating_id);
 
     // Send a signing request where participants doesn't include non_participating_id
-    let _result_receiver = run_on_request_to_sign(&mut ceremony_manager, ACCOUNT_IDS.clone());
+    assert_panics!(run_on_request_to_sign(
+        &mut ceremony_manager,
+        ACCOUNT_IDS.clone()
+    ));
 }
 
 #[tokio::test]
