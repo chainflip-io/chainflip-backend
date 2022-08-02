@@ -48,6 +48,8 @@ pub async fn test_all_stake_manager_events() {
     .await
     .expect(common::EVENT_STREAM_TIMEOUT_MESSAGE)
     .unwrap()
+    .map(|block| futures::stream::iter(block.events))
+    .flatten()
     .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
     .collect::<Vec<_>>()
     .await
