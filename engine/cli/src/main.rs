@@ -8,7 +8,7 @@ use chainflip_engine::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
 };
-use chainflip_node::chain_spec::setup_account_id_encoding;
+use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -28,7 +28,7 @@ mod settings;
 
 #[tokio::main]
 async fn main() {
-    setup_account_id_encoding();
+    use_chainflip_account_id_encoding();
 
     std::process::exit(match run_cli().await {
         Ok(_) => 0,
