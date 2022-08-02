@@ -34,7 +34,6 @@ pub const CHARLIE: [u8; 32] = [0xcc; 32];
 // Root and Gov member
 pub const ERIN: [u8; 32] = [0xee; 32];
 
-pub const BLOCK_TIME: u64 = 1000;
 const GENESIS_EPOCH: EpochIndex = 1;
 
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -668,8 +667,40 @@ mod authorities {
 		AuthorityCount, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
 		FlipBalance, StakeTransfer,
 	};
+	use sp_runtime::AccountId32;
 	use state_chain_runtime::{Flip, Runtime, Validator};
 	use std::collections::HashMap;
+
+	#[test]
+	fn authorities_earn_rewards_for_authoring_blocks() {
+		// We want to have at least one heartbeat within our reduced epoch
+		const EPOCH_BLOCKS: u32 = 1000;
+		// Reduce our validating set and hence the number of nodes we need to have a backup
+		// set
+		const MAX_AUTHORITIES: AuthorityCount = 3;
+		super::genesis::default()
+			.blocks_per_epoch(EPOCH_BLOCKS)
+			.max_authorities(MAX_AUTHORITIES)
+			.build()
+			.execute_with(|| {
+				let genesis_authorities = Validator::current_authorities();
+				let (mut testnet, _) = network::Network::create(0, &genesis_authorities);
+
+				let staked_amounts_before: Vec<(AccountId32, u128)> = genesis_authorities
+					.iter()
+					.map(|id| (id.clone(), Flip::staked_balance(id)))
+					.collect();
+
+				// each authority should have author a block and mint to Flip to themselves
+				testnet.move_forward_blocks(MAX_AUTHORITIES);
+
+				// Each node should have more rewards now than before, since they've each authored a
+				// block
+				for (account_id, amount_before) in staked_amounts_before {
+					assert!(amount_before < Flip::staked_balance(&account_id));
+				}
+			});
+	}
 
 	#[test]
 	fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
