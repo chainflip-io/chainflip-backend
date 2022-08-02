@@ -686,19 +686,32 @@ mod authorities {
 				let genesis_authorities = Validator::current_authorities();
 				let (mut testnet, _) = network::Network::create(0, &genesis_authorities);
 
-				let staked_amounts_before: Vec<(AccountId32, u128)> = genesis_authorities
-					.iter()
-					.map(|id| (id.clone(), Flip::staked_balance(id)))
-					.collect();
+				let staked_amounts = || {
+					genesis_authorities
+						.iter()
+						.map(|id| (id.clone(), Flip::staked_balance(id)))
+						.collect()
+				};
+
+				let staked_amounts_before: Vec<(AccountId32, u128)> = staked_amounts();
 
 				// each authority should author a block and mint FLIP to themselves
 				testnet.move_forward_blocks(MAX_AUTHORITIES);
 
 				// Each node should have more rewards now than before, since they've each authored a
 				// block
-				for (account_id, amount_before) in staked_amounts_before {
-					assert!(amount_before < Flip::staked_balance(&account_id));
-				}
+				let staked_amounts_after = staked_amounts();
+
+				// Ensure all nodes have increased the same amount
+				let first_node_stake = staked_amounts_after.first().unwrap().1;
+				staked_amounts_after.iter().all(|(_node, amount)| amount == &first_node_stake);
+
+				// Ensure all nodes have a higher stake than before
+				staked_amounts_before.into_iter().zip(staked_amounts_after).for_each(
+					|((_node, amount_before), (_node2, amount_after))| {
+						assert!(amount_before < amount_after)
+					},
+				);
 			});
 	}
 
