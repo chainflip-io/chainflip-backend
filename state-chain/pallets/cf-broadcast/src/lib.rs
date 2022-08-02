@@ -435,14 +435,14 @@ pub mod pallet {
 				Error::<T, I>::InvalidSigner
 			);
 
-			// it's no longer being signed, it's being broadcast
-			AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
-
 			if let Ok(tx_hash) = T::TargetChain::verify_signed_transaction(
 				&signing_attempt.broadcast_attempt.unsigned_tx,
 				&signed_tx,
 				&signer_id,
 			) {
+				// it's no longer being signed, it's being broadcast
+				AwaitingTransactionSignature::<T, I>::remove(broadcast_attempt_id);
+
 				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
 				if !TransactionFeeDeficit::<T, I>::contains_key(&extrinsic_signer) {
 					TransactionFeeDeficit::<T, I>::insert(
@@ -488,6 +488,11 @@ pub mod pallet {
 					"Unable to verify tranaction signature for broadcast attempt id {}",
 					broadcast_attempt_id
 				);
+
+				Self::take_and_clean_up_awaiting_transaction_signature_attempt(
+					broadcast_attempt_id,
+				);
+
 				T::OffenceReporter::report(
 					PalletOffence::InvalidTransactionAuthored,
 					signing_attempt.nominee,
