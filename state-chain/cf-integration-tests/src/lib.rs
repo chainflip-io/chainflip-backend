@@ -691,7 +691,7 @@ mod authorities {
 					.map(|id| (id.clone(), Flip::staked_balance(id)))
 					.collect();
 
-				// each authority should have author a block and mint to Flip to themselves
+				// each authority should author a block and mint FLIP to themselves
 				testnet.move_forward_blocks(MAX_AUTHORITIES);
 
 				// Each node should have more rewards now than before, since they've each authored a
