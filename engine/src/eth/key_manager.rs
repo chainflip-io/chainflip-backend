@@ -1,8 +1,8 @@
 use crate::eth::{EthRpcApi, EventParseError};
-use crate::state_chain::client::StateChainClient;
+use crate::state_chain_observer::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
-    state_chain::client::StateChainRpcApi,
+    state_chain_observer::client::StateChainRpcApi,
 };
 use cf_chains::eth::SchnorrVerificationComponents;
 use cf_traits::EpochIndex;
