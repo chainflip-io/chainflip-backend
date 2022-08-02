@@ -348,6 +348,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 			},
 			validator_pallet: ValidatorPalletConfig {
 				genesis_authorities: GENESIS_AUTHORITIES.to_vec(),
+				genesis_backups: Default::default(),
 				blocks_per_epoch: EPOCH_DURATION,
 				bond: GENESIS_BOND,
 				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
