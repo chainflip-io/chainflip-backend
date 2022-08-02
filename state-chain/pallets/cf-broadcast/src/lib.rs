@@ -700,7 +700,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
-				SignatureToBroadcastIdLookup::<T, I>::remove(signature);
 				Self::clean_up_broadcast_storage(broadcast_id);
 				Self::threshold_sign_and_broadcast(api_call);
 				log::info!(
