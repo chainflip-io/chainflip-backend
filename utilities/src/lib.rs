@@ -23,6 +23,7 @@ macro_rules! assert_err {
     };
 }
 
+#[cfg(test)]
 mod test_asserts {
     use crate::assert_panics;
 
