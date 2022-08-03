@@ -82,12 +82,11 @@ impl SetSizeMaximisingAuctionResolver {
 				Reverse(amount)
 			});
 
-		let mut winners = winners.into_iter().map(|bid| bid.bidder_id.clone()).collect::<Vec<_>>();
+		let mut winners = winners.iter_mut().map(|bid| bid.bidder_id.clone()).collect::<Vec<_>>();
 		winners.push(marginal_winner.bidder_id.clone());
 		let bond = marginal_winner.amount;
-		let losers = losers.iter().cloned().collect::<Vec<_>>();
 
-		Ok(AuctionOutcome { winners, losers, bond })
+		Ok(AuctionOutcome { winners, losers: losers.to_vec(), bond })
 	}
 }
 
