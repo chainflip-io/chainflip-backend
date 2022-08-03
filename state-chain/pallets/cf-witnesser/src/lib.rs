@@ -170,8 +170,8 @@ pub mod pallet {
 		/// Called as a witness of some external event.
 		///
 		/// The provided `call` will be dispatched when the configured threshold number of
-		/// authorities have submitted an identical transaction. This can be thought of as a vote for
-		/// the encoded [Call](Config::Call) value.
+		/// authorities have submitted an identical transaction. This can be thought of as a vote
+		/// for the encoded [Call](Config::Call) value.
 		///
 		/// ## Events
 		///
@@ -245,6 +245,7 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
+		// `extract()` modifies the call, so we need to calculate the call hash *after* this.
 		let extra_data = call.extract();
 		let call_hash = CallHash(call.blake2_256());
 		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
