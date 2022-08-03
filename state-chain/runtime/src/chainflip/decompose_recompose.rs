@@ -77,18 +77,22 @@ mod tests {
 	#[test]
 	fn test_medians() {
 		test_priority_fee_median([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5);
+		test_priority_fee_median([6, 4, 5, 10, 1, 7, 8, 9, 2, 3], 5);
 		test_priority_fee_median([1, 2, 3, 4, 6, 6, 7, 8, 9, 10], 6);
 		test_priority_fee_median([0, 0, 1, 1, 2, 3, 3, 4, 6], 2);
+		test_priority_fee_median([1, 1, 1], 1);
 	}
 
 	fn test_priority_fee_median<const S: usize>(fees: [u128; S], expected_median: u128) {
 		let mut calls = fees.map(eth_chain_tracking_call_with_fee);
 
 		let call_hashes = calls.iter().map(|call| CallHash(call.blake2_256())).collect::<Vec<_>>();
-		assert!(
-			!iter::zip(call_hashes.iter(), call_hashes.iter().skip(1)).all(|(a, b)| a == b),
-			"Call hashes should be different before extraction."
-		);
+		if !fees.iter().zip(fees.iter().skip(1)).all(|(a, b)| a == b) {
+			assert!(
+				!iter::zip(call_hashes.iter(), call_hashes.iter().skip(1)).all(|(a, b)| a == b),
+				"Call hashes should be different before extraction if fees differ."
+			);
+		}
 
 		let mut extracted_data =
 			calls.iter_mut().map(|call| call.extract().unwrap()).collect::<Vec<_>>();
@@ -112,7 +116,7 @@ mod tests {
 				pallet_cf_chain_tracking::ChainState::<Runtime, EthereumInstance>::get().is_none()
 			);
 
-			let calls = [1, 100, 10, 10, 10, 10].map(eth_chain_tracking_call_with_fee);
+			let calls = [1, 100, 12, 10, 9, 11].map(eth_chain_tracking_call_with_fee);
 
 			let authorities = (0..calls.len()).map(|i| [i as u8; 32].into()).collect::<Vec<_>>();
 			pallet_cf_validator::CurrentEpoch::<Runtime>::put(1);
