@@ -1092,17 +1092,9 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
-			match T::VaultRotator::start_vault_rotation(candidates) {
-				Ok(()) => {
-					log::info!(target: "cf-validator", "Vault rotation initiated.");
-					Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
-				},
-				Err(e) => {
-					log::error!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
-					#[cfg(test)]
-					panic!("Attempted rotation when one in progress. This should never occur");
-				},
-			}
+			T::VaultRotator::start_vault_rotation(candidates);
+			log::info!(target: "cf-validator", "Vault rotation initiated.");
+			Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
 		}
 	}
 

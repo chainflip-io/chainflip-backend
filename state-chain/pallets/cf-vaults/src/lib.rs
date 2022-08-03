@@ -7,8 +7,8 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
 	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
-	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RotationError,
-	SystemStateManager, VaultRotator,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SystemStateManager,
+	VaultRotator,
 };
 use frame_support::{
 	dispatch::DispatchResult,
@@ -778,13 +778,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError> {
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
-		ensure!(
-			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
-			RotationError::RotationInProgress
-		);
+		assert_ne!(Self::get_vault_rotation_outcome(), AsyncResult::Pending);
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
@@ -798,7 +795,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
 
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest(ceremony_id, candidates));
-		Ok(())
 	}
 
 	/// Get the status of the current key generation

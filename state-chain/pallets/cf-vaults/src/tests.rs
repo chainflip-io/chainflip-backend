@@ -7,7 +7,7 @@ use cf_chains::mocks::MockThresholdSignature;
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
-	RotationError, VaultRotator,
+	VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::collections::btree_set::BTreeSet;
@@ -40,14 +40,14 @@ const MOCK_THRESHOLD_SIG: MockThresholdSignature<[u8; 4], [u8; 4]> =
 #[should_panic]
 fn start_vault_rotation_panics_with_no_candidates() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]).unwrap();
+		<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]);
 	});
 }
 
 #[test]
 fn keygen_request_emitted() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		// Confirm we have a new vault rotation process running
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
@@ -66,20 +66,18 @@ fn keygen_request_emitted() {
 }
 
 #[test]
-fn only_one_concurrent_request_per_chain() {
+#[should_panic]
+fn start_vault_rotation_panics_if_called_while_vault_rotation_in_progress() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
-		assert_noop!(
-			<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()),
-			RotationError::RotationInProgress
-		);
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 	});
 }
 
 #[test]
 fn keygen_success() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
@@ -96,7 +94,7 @@ fn keygen_failure() {
 	new_test_ext().execute_with(|| {
 		const BAD_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
 
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 
 		let ceremony_id = current_ceremony_id();
 
@@ -145,7 +143,7 @@ fn no_active_rotation() {
 #[test]
 fn cannot_report_keygen_success_twice() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -173,7 +171,7 @@ fn cannot_report_keygen_success_twice() {
 #[test]
 fn cannot_report_two_different_keygen_outcomes() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -201,7 +199,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 #[test]
 fn only_participants_can_report_keygen_outcome() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -231,7 +229,7 @@ fn only_participants_can_report_keygen_outcome() {
 #[test]
 fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -273,7 +271,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 #[test]
 fn keygen_report_success() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -360,7 +358,7 @@ fn keygen_report_success() {
 #[test]
 fn keygen_report_success_but_bad_sig_results_in_failure() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -425,7 +423,7 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 #[test]
 fn keygen_report_failure() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -500,7 +498,7 @@ fn keygen_report_failure() {
 #[test]
 fn test_keygen_timeout_period() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -541,7 +539,7 @@ fn vault_key_rotated() {
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
-		assert_ok!(<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec()));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
 

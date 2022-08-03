@@ -1,5 +1,5 @@
 use super::{MockPallet, MockPalletStorage};
-use crate::{AsyncResult, RotationError, VaultRotator};
+use crate::{AsyncResult, VaultRotator};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct MockVaultRotator;
@@ -40,9 +40,8 @@ impl MockVaultRotator {
 impl VaultRotator for MockVaultRotator {
 	type ValidatorId = u64;
 
-	fn start_vault_rotation(_candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError> {
+	fn start_vault_rotation(_candidates: Vec<Self::ValidatorId>) {
 		Self::put_storage(ROTATION_OUTCOME, b"", AsyncResult::<MockVaultOutcome>::Pending);
-		Ok(())
 	}
 
 	fn get_vault_rotation_outcome() -> AsyncResult<MockVaultOutcome> {
@@ -53,7 +52,7 @@ impl VaultRotator for MockVaultRotator {
 #[test]
 fn test_mock() {
 	sp_io::TestExternalities::new_empty().execute_with(|| {
-		<MockVaultRotator as VaultRotator>::start_vault_rotation(vec![]).unwrap();
+		<MockVaultRotator as VaultRotator>::start_vault_rotation(vec![]);
 		assert_eq!(
 			<MockVaultRotator as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::<MockVaultOutcome>::Pending
@@ -64,7 +63,7 @@ fn test_mock() {
 			<MockVaultRotator as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Ready(MockVaultOutcome::Ok(()))
 		);
-		<MockVaultRotator as VaultRotator>::start_vault_rotation(vec![]).unwrap();
+		<MockVaultRotator as VaultRotator>::start_vault_rotation(vec![]);
 		MockVaultRotator::failing(vec![42]);
 		MockVaultRotator::on_initialise();
 		assert_eq!(
