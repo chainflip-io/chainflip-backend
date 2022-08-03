@@ -193,9 +193,13 @@ where
         if self.messages.contains_key(&signer_idx) {
             slog::warn!(
                 self.common.logger,
-                "Ignoring a redundant message for stage {} from party [{}]",
+                "Ignoring a redundant message for stage {} from {}",
                 self,
-                signer_idx
+                self.common
+                    .validator_mapping
+                    .get_id(signer_idx)
+                    .expect("Should map idx")
+                    .to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
@@ -203,9 +207,13 @@ where
         if !self.common.all_idxs.contains(&signer_idx) {
             slog::warn!(
                 self.common.logger,
-                "Ignoring a message from non-participant for stage {} from party [{}]",
+                "Ignoring a message from non-participant for stage {} from {}",
                 self,
-                signer_idx
+                self.common
+                    .validator_mapping
+                    .get_id(signer_idx)
+                    .expect("Should map idx")
+                    .to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
