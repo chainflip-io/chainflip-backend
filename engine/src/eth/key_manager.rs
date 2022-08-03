@@ -20,7 +20,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::event_common::EventWithCommon;
+use super::event::Event;
 use super::DecodeLogClosure;
 use super::EthObserver;
 
@@ -207,7 +207,7 @@ impl EthObserver for KeyManager {
         &self,
         _epoch_index: EpochIndex,
         block_number: u64,
-        event: EventWithCommon<Self::EventParameters>,
+        event: Event<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,

@@ -3,7 +3,7 @@ mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;
 
-pub mod event_common;
+pub mod event;
 
 mod ws_safe_stream;
 
@@ -52,7 +52,7 @@ use std::{
 use thiserror::Error;
 use tokio::sync::{broadcast, oneshot, watch};
 use web3::{
-    ethabi::{self, Address, Contract, Event},
+    ethabi::{self, Address, Contract},
     signing::{Key, SecretKeyRef},
     types::{
         Block, BlockNumber, Bytes, CallRequest, FilterBuilder, TransactionParameters, H2048, H256,
@@ -63,7 +63,7 @@ use web3_secp256k1::SecretKey;
 
 use tokio_stream::Stream;
 
-use event_common::EventWithCommon;
+use event::Event;
 
 use async_trait::async_trait;
 
@@ -93,7 +93,7 @@ pub enum EventParseError {
 // The signature is recalculated on each Event::signature() call, so we use this structure to cache the signture
 pub struct SignatureAndEvent {
     pub signature: H256,
-    pub event: Event,
+    pub event: ethabi::Event,
 }
 impl SignatureAndEvent {
     pub fn new(contract: &Contract, name: &str) -> Result<Self> {
@@ -562,7 +562,7 @@ impl fmt::Display for TransportProtocol {
 #[derive(Debug)]
 pub struct BlockWithDecodedEvents<EventParameters: Debug> {
     pub block_number: u64,
-    pub decode_events_result: Result<Vec<EventWithCommon<EventParameters>>>,
+    pub decode_events_result: Result<Vec<Event<EventParameters>>>,
 }
 
 /// Just contains an empty vec if there are no events
@@ -570,7 +570,7 @@ pub struct BlockWithDecodedEvents<EventParameters: Debug> {
 #[cfg_attr(test, derive(PartialEq))]
 pub struct BlockWithEvents<EventParameters: Debug> {
     pub block_number: u64,
-    pub events: Vec<EventWithCommon<EventParameters>>,
+    pub events: Vec<Event<EventParameters>>,
 }
 
 #[async_trait]
@@ -684,26 +684,24 @@ pub trait EthObserver {
                             (block_number.as_u64(), result_logs)
                         }
                     })
-                    .map(
-                        move |(block_number, result_logs)| BlockWithDecodedEvents {
-                            block_number,
-                            decode_events_result: result_logs.and_then(|logs| {
-                                logs.into_iter()
+                    .map(move |(block_number, result_logs)| BlockWithDecodedEvents {
+                        block_number,
+                        decode_events_result: result_logs.and_then(|logs| {
+                            logs.into_iter()
                                     .map(
                                         |unparsed_log| -> Result<
-                                            EventWithCommon<Self::EventParameters>,
+                                            Event<Self::EventParameters>,
                                             anyhow::Error,
                                         > {
-                                            EventWithCommon::<Self::EventParameters>::new_from_unparsed_logs(
+                                            Event::<Self::EventParameters>::new_from_unparsed_logs(
                                                 &decode_log_fn,
                                                 unparsed_log,
                                             )
                                         },
                                     )
                                     .collect::<Result<Vec<_>>>()
-                            }),
-                        },
-                    );
+                        }),
+                    });
 
                 return Ok(Box::pin(events));
             }
@@ -1031,7 +1029,7 @@ pub trait EthObserver {
         &self,
         epoch: EpochIndex,
         block_number: u64,
-        event: EventWithCommon<Self::EventParameters>,
+        event: Event<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -1106,10 +1104,10 @@ mod merged_stream_tests {
         KeyManager::new(H160::default())
     }
 
-    fn make_dummy_events(log_indices: &[u8]) -> Vec<EventWithCommon<KeyManagerEvent>> {
+    fn make_dummy_events(log_indices: &[u8]) -> Vec<Event<KeyManagerEvent>> {
         log_indices
             .iter()
-            .map(|log_index| EventWithCommon::<KeyManagerEvent> {
+            .map(|log_index| Event::<KeyManagerEvent> {
                 tx_hash: Default::default(),
                 log_index: U256::from(*log_index),
                 event_parameters: KeyManagerEvent::AggKeySetByAggKey {

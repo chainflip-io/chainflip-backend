@@ -20,7 +20,7 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 
-use super::{event_common::EventWithCommon, DecodeLogClosure, EthObserver, EventParseError};
+use super::{event::Event, DecodeLogClosure, EthObserver, EventParseError};
 
 pub struct StakeManager {
     pub deployed_address: H160,
@@ -91,7 +91,7 @@ impl EthObserver for StakeManager {
         &self,
         epoch: EpochIndex,
         _block_number: u64,
-        event: EventWithCommon<Self::EventParameters>,
+        event: Event<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,

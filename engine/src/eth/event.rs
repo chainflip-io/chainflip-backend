@@ -9,7 +9,7 @@ use web3::{
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq)]
-pub struct EventWithCommon<EventParameters: Debug> {
+pub struct Event<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: H256,
     /// The index number of this particular log, in the list of logs emitted by the tx_hash
@@ -18,7 +18,7 @@ pub struct EventWithCommon<EventParameters: Debug> {
     pub event_parameters: EventParameters,
 }
 
-impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParameters> {
+impl<EventParameters: Debug> std::fmt::Display for Event<EventParameters> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -28,7 +28,7 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
     }
 }
 
-impl<EventParameters: Debug> EventWithCommon<EventParameters> {
+impl<EventParameters: Debug> Event<EventParameters> {
     pub fn new_from_unparsed_logs<LogDecoder>(decode_log: &LogDecoder, log: Log) -> Result<Self>
     where
         LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>,
@@ -72,7 +72,7 @@ mod tests {
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
                 .unwrap();
 
-        let event = EventWithCommon::new_from_unparsed_logs(
+        let event = Event::new_from_unparsed_logs(
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
