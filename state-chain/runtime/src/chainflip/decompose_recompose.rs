@@ -63,10 +63,13 @@ mod tests {
 	use pallet_cf_witnesser::CallHash;
 	use sp_std::iter;
 
+	const BLOCK_HEIGHT: u64 = 1_000;
+	const BASE_FEE: u128 = 40;
+
 	fn eth_chain_tracking_call_with_fee(priority_fee: <Ethereum as Chain>::ChainAmount) -> Call {
 		Call::EthereumChainTracking(
 			pallet_cf_chain_tracking::Call::<Runtime, EthereumInstance>::update_chain_state {
-				state: TrackedData { block_height: 1_000, base_fee: 40, priority_fee },
+				state: TrackedData { block_height: BLOCK_HEIGHT, base_fee: BASE_FEE, priority_fee },
 			},
 		)
 	}
@@ -133,7 +136,7 @@ mod tests {
 
 			assert_eq!(
 				pallet_cf_chain_tracking::ChainState::<Runtime, EthereumInstance>::get().unwrap(),
-				TrackedData { block_height: 1_000, base_fee: 40, priority_fee: 10 }
+				TrackedData { block_height: BLOCK_HEIGHT, base_fee: BASE_FEE, priority_fee: 10 }
 			);
 		})
 	}
