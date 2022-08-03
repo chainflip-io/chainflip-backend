@@ -34,6 +34,9 @@ pub trait WitnessDataExtraction {
 	/// Extracts some data from a call and encodes it so it can be stored for later.
 	fn extract(&mut self) -> Option<Vec<u8>>;
 	/// Takes all of the previously extracted data, combines it, and injects it back into the call.
+	///
+	/// The combination method should be resistant to minority attacks / outliers. For example,
+	/// medians are resistant to outliers, but means are not.
 	fn combine_and_inject(&mut self, data: &mut [Vec<u8>]);
 }
 
@@ -150,7 +153,10 @@ pub mod pallet {
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
-		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight(
+			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
+				T::EpochInfo::authority_count_at_epoch(T::EpochInfo::epoch_index()).unwrap_or(1u32) as u64)
+		)]
 		pub fn witness(
 			origin: OriginFor<T>,
 			// TODO: Not possible to fix the clippy warning here. At the moment we
@@ -163,9 +169,9 @@ pub mod pallet {
 
 		/// Called as a witness of some external event.
 		///
-		/// The provided `call` will be dispatched when the configured threshold number of validtors
-		/// have submitted an identical transaction. This can be thought of as a vote for the
-		/// encoded [Call](Config::Call) value.
+		/// The provided `call` will be dispatched when the configured threshold number of
+		/// validators have submitted an identical transaction. This can be thought of as a vote for
+		/// the encoded [Call](Config::Call) value.
 		///
 		/// ## Events
 		///
@@ -176,7 +182,10 @@ pub mod pallet {
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
-		#[pallet::weight(T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight(
+			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
+				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
+		)]
 		pub fn witness_at_epoch(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
