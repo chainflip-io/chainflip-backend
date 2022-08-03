@@ -549,6 +549,23 @@ fn test_reputation_reset() {
 	});
 }
 
+#[test]
+fn rotating_during_rotation_is_noop() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		assert_eq!(MockAuctioneer::number_of_auctions_attempted(), 0);
+		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
+		// We attempt an auction when we force a rotation
+		assert_eq!(MockAuctioneer::number_of_auctions_attempted(), 1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::VaultsRotating(..)
+		));
+		ValidatorPallet::start_authority_rotation();
+		// We don't attempt the auction again, because we're already in a rotation
+		assert_eq!(MockAuctioneer::number_of_auctions_attempted(), 1);
+	});
+}
+
 #[cfg(test)]
 mod bond_expiry {
 	use super::*;

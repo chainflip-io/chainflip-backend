@@ -1029,7 +1029,13 @@ impl<T: Config> Pallet<T> {
 		if T::SystemState::is_maintenance_mode() {
 			log::info!(
 				target: "cf-validator",
-				"Can't start rotation. System is in maintenance mode."
+				"Can't start authority rotation. System is in maintenance mode."
+			);
+			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
+		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+			log::warn!(
+				target: "cf-validator",
+				"Can't start authority rotation. Authority rotation already in progress."
 			);
 			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}

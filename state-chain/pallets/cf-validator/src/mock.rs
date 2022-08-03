@@ -117,6 +117,8 @@ thread_local! {
 			bond: BOND,
 		}
 	));
+
+	pub static NUMBER_OF_AUCTIONS_ATTEMPTED: RefCell<u8> = RefCell::new(0);
 }
 
 impl MockAuctioneer {
@@ -125,12 +127,19 @@ impl MockAuctioneer {
 			*cell.borrow_mut() = behaviour;
 		});
 	}
+
+	pub fn number_of_auctions_attempted() -> u8 {
+		NUMBER_OF_AUCTIONS_ATTEMPTED.with(|cell| *cell.borrow())
+	}
 }
 
 impl Auctioneer<Test> for MockAuctioneer {
 	type Error = &'static str;
 
 	fn resolve_auction() -> Result<RuntimeAuctionOutcome<Test>, Self::Error> {
+		NUMBER_OF_AUCTIONS_ATTEMPTED.with(|cell| {
+			*cell.borrow_mut() += 1;
+		});
 		NEXT_AUCTION_OUTCOME.with(|cell| cell.borrow().clone())
 	}
 }
