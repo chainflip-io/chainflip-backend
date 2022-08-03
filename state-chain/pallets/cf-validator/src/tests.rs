@@ -26,7 +26,7 @@ fn assert_epoch_number(n: EpochIndex) {
 	);
 }
 
-macro_rules! assert_default_auction_outcome {
+macro_rules! assert_default_rotation_outcome {
 	() => {
 		assert_epoch_number(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
@@ -160,7 +160,7 @@ fn should_retry_rotation_until_success_with_failing_vault_rotations() {
 		// vaults on_initialise runs *after* the validator pallet's on_initialise.
 		// TODO: Address this as part of issue [#1702](https://github.com/chainflip-io/chainflip-backend/issues/1702)
 		move_forward_blocks(5);
-		assert_default_auction_outcome!();
+		assert_default_rotation_outcome!();
 	});
 }
 
@@ -212,7 +212,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		while ValidatorPallet::epoch_index() == GENESIS_EPOCH {
 			move_forward_blocks(1);
 		}
-		assert_default_auction_outcome!();
+		assert_default_rotation_outcome!();
 	});
 }
 

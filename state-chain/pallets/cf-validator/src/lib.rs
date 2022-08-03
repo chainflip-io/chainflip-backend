@@ -1093,8 +1093,8 @@ impl<T: Config> Pallet<T> {
 				},
 				Err(e) => {
 					log::error!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
-					#[cfg(not(test))]
-					debug_assert!(false, "Unable to start vault rotation");
+					#[cfg(test)]
+					panic!("Attempted rotation when one in progress. This should never occur");
 				},
 			}
 		}
