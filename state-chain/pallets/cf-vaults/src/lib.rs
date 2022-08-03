@@ -779,7 +779,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError> {
-		ensure!(!candidates.is_empty(), RotationError::NoCandidates);
+		assert!(!candidates.is_empty());
+
 		ensure!(
 			Self::get_vault_rotation_outcome() != AsyncResult::Pending,
 			RotationError::RotationInProgress

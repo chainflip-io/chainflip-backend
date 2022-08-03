@@ -37,12 +37,10 @@ const MOCK_THRESHOLD_SIG: MockThresholdSignature<[u8; 4], [u8; 4]> =
 	};
 
 #[test]
-fn no_candidates_is_noop_and_error() {
+#[should_panic]
+fn start_vault_rotation_panics_with_no_candidates() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]),
-			RotationError::NoCandidates
-		);
+		<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]).unwrap();
 	});
 }
 

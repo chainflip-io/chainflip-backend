@@ -189,8 +189,6 @@ pub trait Auctioneer<T: Chainflip> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RotationError {
-	/// No candidates provided.
-	NoCandidates,
 	/// A rotation is already in progress.
 	RotationInProgress,
 }
