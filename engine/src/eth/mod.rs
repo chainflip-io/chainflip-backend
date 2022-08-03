@@ -680,11 +680,11 @@ pub trait EthObserver {
                                 Ok(vec![])
                             };
 
-                            (block_number.as_u64(), header.base_fee_per_gas, result_logs)
+                            (block_number.as_u64(), result_logs)
                         }
                     })
                     .map(
-                        move |(block_number, base_fee_per_gas, result_logs)| BlockWithDecodedEvents {
+                        move |(block_number, result_logs)| BlockWithDecodedEvents {
                             block_number,
                             decode_events_result: result_logs.and_then(|logs| {
                                 logs.into_iter()
@@ -697,7 +697,6 @@ pub trait EthObserver {
                                                 &decode_log_fn,
                                                 unparsed_log,
                                                 block_number,
-                                                base_fee_per_gas,
                                             )
                                         },
                                     )
@@ -1115,7 +1114,6 @@ mod merged_stream_tests {
             .map(|log_index| EventWithCommon::<KeyManagerEvent> {
                 tx_hash: Default::default(),
                 log_index: U256::from(*log_index),
-                base_fee_per_gas: U256::from(2),
                 block_number,
                 event_parameters: KeyManagerEvent::AggKeySetByAggKey {
                     old_agg_key: ChainflipKey::default(),

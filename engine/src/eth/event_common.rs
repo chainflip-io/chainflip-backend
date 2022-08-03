@@ -16,8 +16,6 @@ pub struct EventWithCommon<EventParameters: Debug> {
     pub log_index: U256,
     /// The block number at which the event occurred
     pub block_number: u64,
-    /// Base fee per unit of gas for the block this event was included in
-    pub base_fee_per_gas: U256,
     /// The event specific parameters
     pub event_parameters: EventParameters,
 }
@@ -37,7 +35,6 @@ impl<EventParameters: Debug> EventWithCommon<EventParameters> {
         decode_log: &LogDecoder,
         log: Log,
         block_number: u64,
-        base_fee_per_gas: U256,
     ) -> Result<Self>
     where
         LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>,
@@ -49,7 +46,6 @@ impl<EventParameters: Debug> EventWithCommon<EventParameters> {
             log_index: log
                 .log_index
                 .ok_or_else(|| anyhow::Error::msg("Could not get log index from ETH log"))?,
-            base_fee_per_gas,
             block_number,
             event_parameters: decode_log(
                 *log.topics.first().ok_or_else(|| {
@@ -100,7 +96,6 @@ mod tests {
                 removed: None,
             },
             0,
-            U256::default(),
         ).unwrap();
 
         assert_eq!(event.tx_hash, transaction_hash);
