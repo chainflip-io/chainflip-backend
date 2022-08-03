@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use cf_traits::AuthorityCount;
 use rand_legacy::SeedableRng;
+use utilities::assert_panics;
 
 use crate::multisig::{
     client::{
@@ -243,7 +244,7 @@ fn check_data_size_verify_blame_responses9() {
 }
 
 #[test]
-#[should_panic]
 fn check_data_size_should_panic_with_none_on_non_initial_stage() {
-    gen_keygen_data_verify_hash_comm2(1).data_size_is_valid(None);
+    let keygen_data = gen_keygen_data_verify_hash_comm2(1);
+    assert_panics!(keygen_data.data_size_is_valid(None));
 }

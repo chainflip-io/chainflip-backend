@@ -5,7 +5,7 @@ use futures::{stream, Stream};
 macro_rules! assert_panics {
     ($expression:expr) => {
         match ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| $expression)) {
-            Ok(result) => panic!("expression didn't panic '{}'", stringify!($expression),),
+            Ok(_result) => panic!("expression didn't panic '{}'", stringify!($expression),),
             Err(panic) => panic,
         }
     };
@@ -16,7 +16,7 @@ macro_rules! assert_future_panics {
     ($future:expr) => {
         use futures::future::FutureExt;
         match ::std::panic::AssertUnwindSafe($future).catch_unwind().await {
-            Ok(result) => panic!("future didn't panic '{}'", stringify!($future),),
+            Ok(_result) => panic!("future didn't panic '{}'", stringify!($future),),
             Err(panic) => panic,
         }
     };
