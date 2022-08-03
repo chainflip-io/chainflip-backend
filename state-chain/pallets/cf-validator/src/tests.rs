@@ -490,9 +490,10 @@ fn no_auction_during_maintenance() {
 		assert!(MockSystemStateInfo::is_maintenance_mode());
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
+		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
+		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 		ValidatorPallet::request_emergency_rotation();
-
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Deactivate maintenance mode
