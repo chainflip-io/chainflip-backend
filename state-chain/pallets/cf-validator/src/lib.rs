@@ -1027,7 +1027,7 @@ impl<T: Config> Pallet<T> {
 
 	fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
-			log::info!(
+			log::warn!(
 				target: "cf-validator",
 				"Can't start authority rotation. System is in maintenance mode."
 			);
