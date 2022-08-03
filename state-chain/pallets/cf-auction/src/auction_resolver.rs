@@ -68,22 +68,24 @@ impl SetSizeMaximisingAuctionResolver {
 		});
 
 		let target_size = min(
-			self.parameters.max_size,
-			self.current_size.saturating_add(self.parameters.max_expansion),
+			min(
+				self.parameters.max_size,
+				self.current_size.saturating_add(self.parameters.max_expansion),
+			),
+			auction_candidates.len() as u32,
 		);
 
-		auction_candidates.sort_unstable_by_key(|&Bid { amount, .. }| Reverse(amount));
+		// This is panic safe because we take a min over the ideal target and the number of auction
+		// candidates available
+		let (winners, marginal_winner, losers) = auction_candidates
+			.select_nth_unstable_by_key((target_size - 1) as usize, |&Bid { amount, .. }| {
+				Reverse(amount)
+			});
 
-		let losers = auction_candidates
-			.split_off(min(target_size as usize, auction_candidates.len()))
-			.into_iter()
-			.map(Into::into)
-			.collect();
-		let bond = auction_candidates
-			.last()
-			.map(|bid| bid.amount)
-			.expect("Can't run auction with no candidates, and candidates must be staked > 0.");
-		let winners = auction_candidates.into_iter().map(|bid| bid.bidder_id).collect();
+		let mut winners = winners.into_iter().map(|bid| bid.bidder_id.clone()).collect::<Vec<_>>();
+		winners.push(marginal_winner.bidder_id.clone());
+		let bond = marginal_winner.amount;
+		let losers = losers.iter().cloned().collect::<Vec<_>>();
 
 		Ok(AuctionOutcome { winners, losers, bond })
 	}
