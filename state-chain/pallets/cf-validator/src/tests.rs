@@ -123,48 +123,6 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 }
 
 #[test]
-fn should_retry_rotation_until_success_with_failing_vault_rotations() {
-	new_test_ext().execute_with(|| {
-		MockVaultRotator::set_error_on_start(true);
-		ValidatorPallet::start_authority_rotation();
-
-		// Move forward a few blocks, vault rotations fail because the vault rotator can't start.
-		// We keep trying to resolve the auction.
-		move_forward_blocks(10);
-		assert_epoch_number(GENESIS_EPOCH);
-		assert_eq!(ValidatorPallet::current_rotation_phase(), RotationPhase::Idle);
-
-		// Allow vault rotations to progress.
-		// The keygen ceremony will fail.
-		MockVaultRotator::set_error_on_start(false);
-		MockVaultRotator::failing(vec![]);
-
-		for i in 0..10 {
-			move_forward_blocks(1);
-			assert!(
-				matches!(
-					ValidatorPallet::current_rotation_phase(),
-					RotationPhase::VaultsRotating(..)
-				),
-				"at iteration {i:?}, got {:?}",
-				ValidatorPallet::current_rotation_phase()
-			);
-		}
-
-		assert_epoch_number(GENESIS_EPOCH);
-
-		// Allow keygen to succeed.
-		MockVaultRotator::succeeding();
-
-		// Four blocks - one for keygen, one for each session rotation, then one more because the
-		// vaults on_initialise runs *after* the validator pallet's on_initialise.
-		// TODO: Address this as part of issue [#1702](https://github.com/chainflip-io/chainflip-backend/issues/1702)
-		move_forward_blocks(5);
-		assert_default_rotation_outcome!();
-	});
-}
-
-#[test]
 fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().execute_with(|| {
 		ValidatorPallet::start_authority_rotation();
