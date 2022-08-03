@@ -14,8 +14,6 @@ pub struct EventWithCommon<EventParameters: Debug> {
     pub tx_hash: H256,
     /// The index number of this particular log, in the list of logs emitted by the tx_hash
     pub log_index: U256,
-    /// The block number at which the event occurred
-    pub block_number: u64,
     /// The event specific parameters
     pub event_parameters: EventParameters,
 }
@@ -24,18 +22,14 @@ impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParamete
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EventParameters: {:?}; block_number: {}; tx_hash: {:#x}",
-            self.event_parameters, self.block_number, self.tx_hash
+            "EventParameters: {:?}; tx_hash: {:#x}",
+            self.event_parameters, self.tx_hash
         )
     }
 }
 
 impl<EventParameters: Debug> EventWithCommon<EventParameters> {
-    pub fn new_from_unparsed_logs<LogDecoder>(
-        decode_log: &LogDecoder,
-        log: Log,
-        block_number: u64,
-    ) -> Result<Self>
+    pub fn new_from_unparsed_logs<LogDecoder>(decode_log: &LogDecoder, log: Log) -> Result<Self>
     where
         LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>,
     {
@@ -46,7 +40,6 @@ impl<EventParameters: Debug> EventWithCommon<EventParameters> {
             log_index: log
                 .log_index
                 .ok_or_else(|| anyhow::Error::msg("Could not get log index from ETH log"))?,
-            block_number,
             event_parameters: decode_log(
                 *log.topics.first().ok_or_else(|| {
                     anyhow::Error::msg("Could not get event signature from ETH log")
@@ -95,7 +88,6 @@ mod tests {
                 log_type: None,
                 removed: None,
             },
-            0,
         ).unwrap();
 
         assert_eq!(event.tx_hash, transaction_hash);

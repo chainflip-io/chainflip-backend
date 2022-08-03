@@ -90,6 +90,7 @@ impl EthObserver for StakeManager {
     async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
+        _block_number: u64,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,

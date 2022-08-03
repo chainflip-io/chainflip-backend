@@ -215,6 +215,7 @@ where
                                             contract_observer
                                                 .handle_event(
                                                     epoch,
+                                                    block.block_number,
                                                     event,
                                                     state_chain_client.clone(),
                                                     &dual_rpc,
@@ -696,7 +697,6 @@ pub trait EthObserver {
                                             EventWithCommon::<Self::EventParameters>::new_from_unparsed_logs(
                                                 &decode_log_fn,
                                                 unparsed_log,
-                                                block_number,
                                             )
                                         },
                                     )
@@ -1030,6 +1030,7 @@ pub trait EthObserver {
     async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
+        block_number: u64,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
@@ -1105,16 +1106,12 @@ mod merged_stream_tests {
         KeyManager::new(H160::default())
     }
 
-    fn make_dummy_events(
-        block_number: u64,
-        log_indices: &[u8],
-    ) -> Vec<EventWithCommon<KeyManagerEvent>> {
+    fn make_dummy_events(log_indices: &[u8]) -> Vec<EventWithCommon<KeyManagerEvent>> {
         log_indices
             .iter()
             .map(|log_index| EventWithCommon::<KeyManagerEvent> {
                 tx_hash: Default::default(),
                 log_index: U256::from(*log_index),
-                block_number,
                 event_parameters: KeyManagerEvent::AggKeySetByAggKey {
                     old_agg_key: ChainflipKey::default(),
                     new_agg_key: ChainflipKey::default(),
@@ -1129,7 +1126,7 @@ mod merged_stream_tests {
     ) -> BlockWithDecodedEvents<KeyManagerEvent> {
         BlockWithDecodedEvents {
             block_number,
-            decode_events_result: Ok(make_dummy_events(block_number, log_indices)),
+            decode_events_result: Ok(make_dummy_events(log_indices)),
         }
     }
 
@@ -1148,7 +1145,7 @@ mod merged_stream_tests {
     ) -> BlockWithEvents<KeyManagerEvent> {
         BlockWithEvents {
             block_number,
-            events: make_dummy_events(block_number, log_indices),
+            events: make_dummy_events(log_indices),
         }
     }
 

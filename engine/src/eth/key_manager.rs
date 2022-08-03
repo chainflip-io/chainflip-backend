@@ -206,6 +206,7 @@ impl EthObserver for KeyManager {
     async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         _epoch_index: EpochIndex,
+        block_number: u64,
         event: EventWithCommon<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
@@ -225,7 +226,7 @@ impl EthObserver for KeyManager {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
                                         new_agg_key.serialize(),
                                     ),
-                                    block_number: event.block_number,
+                                    block_number,
                                     tx_hash: event.tx_hash,
                                 }
                                 .into(),
@@ -244,7 +245,7 @@ impl EthObserver for KeyManager {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
                                         new_agg_key.serialize(),
                                     ),
-                                    block_number: event.block_number,
+                                    block_number,
                                     tx_hash: event.tx_hash,
                                 }
                                 .into(),
