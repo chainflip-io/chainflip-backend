@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_witness};
+use crate::{self as pallet_cf_witness, WitnessDataExtraction};
 use cf_traits::mocks::{self, epoch_info::MockEpochInfo};
 use frame_support::parameter_types;
 use frame_system as system;
@@ -74,6 +74,16 @@ impl dummy::Config for Test {
 	type Call = Call;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 	type Witnesser = pallet_cf_witness::Pallet<Test>;
+}
+
+impl WitnessDataExtraction for Call {
+	fn extract(&mut self) -> Option<Vec<u8>> {
+		None
+	}
+
+	fn combine_and_inject(&mut self, _data: &mut [Vec<u8>]) {
+		// Do nothing
+	}
 }
 
 pub const ALISSA: <Test as frame_system::Config>::AccountId = 1u64;

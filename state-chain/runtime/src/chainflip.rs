@@ -1,6 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 mod backup_node_rewards;
 pub mod chain_instances;
+pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
