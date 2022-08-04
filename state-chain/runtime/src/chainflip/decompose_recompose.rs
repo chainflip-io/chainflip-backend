@@ -86,14 +86,6 @@ mod tests {
 	fn test_priority_fee_median<const S: usize>(fees: [u128; S], expected_median: u128) {
 		let mut calls = fees.map(eth_chain_tracking_call_with_fee);
 
-		let call_hashes = calls.iter().map(|call| CallHash(call.blake2_256())).collect::<Vec<_>>();
-		if !fees.iter().zip(fees.iter().skip(1)).all(|(a, b)| a == b) {
-			assert!(
-				!iter::zip(call_hashes.iter(), call_hashes.iter().skip(1)).all(|(a, b)| a == b),
-				"Call hashes should be different before extraction if fees differ."
-			);
-		}
-
 		let mut extracted_data =
 			calls.iter_mut().map(|call| call.extract().unwrap()).collect::<Vec<_>>();
 
