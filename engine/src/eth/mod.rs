@@ -174,8 +174,11 @@ where
                             let task_end_at_block_c = task_end_at_block.clone();
                             let eth_ws_rpc = eth_ws_rpc.clone();
                             let eth_http_rpc = eth_http_rpc.clone();
-                            let dual_rpc =
-                                EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone());
+                            let dual_rpc = EthDualRpcClient::new(
+                                eth_ws_rpc.clone(),
+                                eth_http_rpc.clone(),
+                                &logger,
+                            );
                             let logger = logger.clone();
                             let contract_observer = contract_observer.clone();
                             let state_chain_client = state_chain_client.clone();

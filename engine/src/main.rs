@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
                 EthHttpRpcClient::new(&settings.eth, &root_logger).context("Failed to create EthHttpRpcClient")?;
 
             let eth_dual_rpc =
-                EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone());
+                EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone(), &root_logger);
 
             let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
                 .context("Failed to create ETH broadcaster")?;
