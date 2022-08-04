@@ -778,6 +778,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
+	/// # Panics
+	/// - If an empty Vec of candidates is provided
+	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
 	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
