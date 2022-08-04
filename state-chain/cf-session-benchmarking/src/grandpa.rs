@@ -1,38 +1,34 @@
 // #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_benchmarking::{benchmarks, whitelist_account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
 	codec::Decode,
 	storage,
-	traits::{EnsureOrigin, KeyOwnerProofSystem, OnFinalize, OnInitialize},
+	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::{pallet_prelude::OriginFor, RawOrigin};
 use pallet_grandpa::*;
-use rand::{RngCore, SeedableRng};
-use sp_core::H256;
 use sp_finality_grandpa;
-use sp_runtime::traits::{BlockNumberProvider, Convert};
+use sp_runtime::traits::BlockNumberProvider;
 use sp_std::{prelude::*, vec};
-
-use pallet_cf_validator::EpochHistory;
 
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_cf_staking::Config as StakingConfig;
 use pallet_cf_validator::Config as ValidatorConfig;
-use pallet_cf_vaults::Config as VaultsConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_traits::{AsyncResult, AuctionOutcome, EpochInfo, VaultRotator};
+use frame_support::traits::EnsureOrigin;
+
+use cf_traits::{AuctionOutcome, EpochInfo};
 
 use fg_primitives::{AuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use cf_traits::Chainflip;
 use frame_benchmarking::account;
-use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
-use pallet_cf_reputation::Call as ReputationCall;
-use pallet_cf_validator::{CurrentAuthorities, CurrentRotationPhase, RotationPhase};
+
+use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::traits::UniqueSaturatedInto;
