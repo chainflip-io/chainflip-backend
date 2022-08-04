@@ -196,9 +196,6 @@ where
                                         if let Some(end_at_block) =
                                             *task_end_at_block.lock().unwrap()
                                         {
-                                            // TODO: Have the stream end when the safe head gets to the block number,
-                                            // not just when we receive an event (which could be arbitrarily far in the future)
-                                            // past our window_to
                                             if block.block_number >= end_at_block {
                                                 slog::info!(
                                                     logger,
