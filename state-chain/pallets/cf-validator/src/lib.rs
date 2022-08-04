@@ -1033,7 +1033,7 @@ impl<T: Config> Pallet<T> {
 			);
 			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
-			log::warn!(
+			log::error!(
 				target: "cf-validator",
 				"Can't start authority rotation. Authority rotation already in progress."
 			);
@@ -1265,6 +1265,11 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if CurrentRotationPhase::<T>::get() == RotationPhase::<T>::Idle {
 			Pallet::<T>::deposit_event(Event::EmergencyRotationInitiated);
 			Self::start_authority_rotation();
+		} else {
+			log::warn!(
+				target: "cf-validator",
+				"Can't start emergency rotation. Authority rotation already in progress."
+			);
 		}
 	}
 }

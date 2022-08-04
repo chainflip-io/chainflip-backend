@@ -493,7 +493,7 @@ fn no_auction_during_maintenance() {
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
-		ValidatorPallet::request_emergency_rotation();
+
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Deactivate maintenance mode
@@ -560,9 +560,14 @@ fn rotating_during_rotation_is_noop() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::VaultsRotating(..)
 		));
-		ValidatorPallet::start_authority_rotation();
+
 		// We don't attempt the auction again, because we're already in a rotation
+		ValidatorPallet::request_emergency_rotation();
 		assert_eq!(MockAuctioneer::number_of_auctions_attempted(), 1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::VaultsRotating(..)
+		));
 	});
 }
 
