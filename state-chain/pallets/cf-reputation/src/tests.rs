@@ -8,10 +8,14 @@ fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> Reputat
 
 pub fn advance_by_hearbeat_intervals(n: u64) {
 	for _ in 0..n * HeartbeatBlockInterval::get() {
-		let next_block = System::block_number() + 1;
-		System::set_block_number(next_block);
-		AllPalletsWithoutSystem::on_initialize(next_block);
+		advance_by_block();
 	}
+}
+
+fn advance_by_block() {
+	let next_block = System::block_number() + 1;
+	System::set_block_number(next_block);
+	AllPalletsWithoutSystem::on_initialize(next_block);
 }
 
 // Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
@@ -53,6 +57,7 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 		// submit again, then move forward
+		advance_by_block();
 		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
 		// no change in reputation, because we were on the same block, therefore we were in the same
 		// heartbeat block interval
@@ -60,6 +65,17 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 		// we've moved forward a block interval, so now we should have the extra rep
 		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 2,);
+	})
+}
+
+#[test]
+fn update_last_heartbeat_each_submission() {
+	new_test_ext().execute_with(|| {
+		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
+		assert_eq!(ReputationPallet::last_heartbeat(ALICE).unwrap(), 1);
+		advance_by_block();
+		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
+		assert_eq!(ReputationPallet::last_heartbeat(ALICE).unwrap(), 2);
 	})
 }
 

@@ -333,12 +333,13 @@ pub mod pallet {
 					// we have already submitted a heartbeat for this interval
 				},
 				_ => {
-					LastHeartbeat::<T>::insert(&validator_id, current_block_number);
 					Reputations::<T>::mutate(&validator_id, |rep| {
 						rep.boost_reputation(Self::online_credit_reward());
 					});
 				},
 			};
+
+			LastHeartbeat::<T>::insert(&validator_id, current_block_number);
 
 			Ok(().into())
 		}
