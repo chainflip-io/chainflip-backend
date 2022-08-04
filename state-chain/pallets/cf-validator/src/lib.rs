@@ -1027,9 +1027,15 @@ impl<T: Config> Pallet<T> {
 
 	fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
-			log::info!(
+			log::warn!(
 				target: "cf-validator",
-				"Can't start rotation. System is in maintenance mode."
+				"Can't start authority rotation. System is in maintenance mode."
+			);
+			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
+		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+			log::error!(
+				target: "cf-validator",
+				"Can't start authority rotation. Authority rotation already in progress."
 			);
 			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}
@@ -1086,17 +1092,9 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
-			match T::VaultRotator::start_vault_rotation(candidates) {
-				Ok(()) => {
-					log::info!(target: "cf-validator", "Vault rotation initiated.");
-					Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
-				},
-				Err(e) => {
-					log::error!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
-					#[cfg(not(test))]
-					debug_assert!(false, "Unable to start vault rotation");
-				},
-			}
+			T::VaultRotator::start_vault_rotation(candidates);
+			log::info!(target: "cf-validator", "Vault rotation initiated.");
+			Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
 		}
 	}
 
@@ -1267,6 +1265,11 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if CurrentRotationPhase::<T>::get() == RotationPhase::<T>::Idle {
 			Pallet::<T>::deposit_event(Event::EmergencyRotationInitiated);
 			Self::start_authority_rotation();
+		} else {
+			log::warn!(
+				target: "cf-validator",
+				"Can't start emergency rotation. Authority rotation already in progress."
+			);
 		}
 	}
 }

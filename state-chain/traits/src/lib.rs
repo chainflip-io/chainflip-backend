@@ -187,19 +187,11 @@ pub trait Auctioneer<T: Chainflip> {
 	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RotationError {
-	/// No candidates provided.
-	NoCandidates,
-	/// A rotation is already in progress.
-	RotationInProgress,
-}
-
 pub trait VaultRotator {
 	type ValidatorId;
 
 	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError>;
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>);
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
