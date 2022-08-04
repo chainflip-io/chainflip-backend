@@ -26,7 +26,7 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 /// An index to a block.
-pub type BlockNumber = u32;
+pub type BlockNumber = u64;
 pub type FlipBalance = u128;
 pub type EpochIndex = u32;
 

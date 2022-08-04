@@ -39,7 +39,7 @@ use sp_std::{
 	prelude::*,
 };
 
-use crate::rotation_state::RotationState;
+pub use crate::rotation_state::RotationState;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
@@ -1024,7 +1024,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::RotationPhaseUpdated { new_phase });
 	}
 
-	fn start_authority_rotation() -> Weight {
+	pub fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
 			log::info!(
 				target: "cf-validator",
@@ -1074,7 +1074,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
+	pub fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
 		let candidates: Vec<_> = rotation_state.authority_candidates();
 		if candidates.len() < AuthoritySetMinSize::<T>::get().into() {
 			log::warn!(

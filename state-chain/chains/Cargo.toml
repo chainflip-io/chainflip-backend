@@ -34,6 +34,10 @@ default-features = false
 features = ['derive']
 version = '2.0.1'
 
+[dependencies.pallet-aura]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'

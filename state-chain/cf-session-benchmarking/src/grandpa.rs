@@ -1,19 +1,30 @@
 // #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::Encode;
 use frame_benchmarking::{benchmarks, whitelist_account, whitelisted_caller};
 use frame_support::{
 	assert_ok,
 	codec::Decode,
 	storage,
-	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize},
+	traits::{EnsureOrigin, KeyOwnerProofSystem, OnFinalize, OnInitialize},
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::OriginFor, RawOrigin};
 use pallet_grandpa::*;
 use rand::{RngCore, SeedableRng};
 use sp_core::H256;
 use sp_finality_grandpa;
-use sp_runtime::traits::Convert;
+use sp_runtime::traits::{BlockNumberProvider, Convert};
 use sp_std::{prelude::*, vec};
+
+use pallet_cf_validator::EpochHistory;
+
+use pallet_cf_reputation::Config as ReputationConfig;
+use pallet_cf_staking::Config as StakingConfig;
+use pallet_cf_validator::Config as ValidatorConfig;
+use pallet_cf_vaults::Config as VaultsConfig;
+use pallet_session::Config as SessionConfig;
+
+use cf_traits::{AsyncResult, AuctionOutcome, EpochInfo, VaultRotator};
 
 use fg_primitives::{AuthorityList, GRANDPA_AUTHORITIES_KEY};
 
@@ -23,37 +34,174 @@ use frame_support::{dispatch::UnfilteredDispatchable, traits::IsType};
 use pallet_cf_reputation::Call as ReputationCall;
 use pallet_cf_validator::{CurrentAuthorities, CurrentRotationPhase, RotationPhase};
 
-const SEED: u32 = 0;
+use sp_application_crypto::RuntimeAppPublic;
+use sp_runtime::traits::UniqueSaturatedInto;
 
+const SEED: u32 = 0;
 pub struct Pallet<T: Config>(pallet_grandpa::Pallet<T>);
 pub trait Config:
 	pallet_grandpa::Config
 	+ pallet_cf_validator::Config
+	// + pallet_cf_vaults::Config
 	+ pallet_cf_reputation::Config
+	+ pallet_cf_staking::Config
 	+ pallet_session::Config
 	+ pallet_session::historical::Config
 {
 }
 
-fn add_authorities<T, I>(authorities: I)
-where
-	T: frame_system::Config + pallet_cf_validator::Config + pallet_cf_reputation::Config,
-	I: Clone + Iterator<Item = <T as Chainflip>::ValidatorId>,
+mod p2p_crypto {
+	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
+	pub const PEER_ID_KEY: KeyTypeId = KeyTypeId(*b"peer");
+	app_crypto!(ed25519, PEER_ID_KEY);
+}
+
+pub trait RuntimeConfig:
+	Config + StakingConfig + SessionConfig + ReputationConfig + ValidatorConfig
 {
-	CurrentAuthorities::<T>::put(authorities.clone().collect::<Vec<_>>());
-	for validator_id in authorities {
-		let account_id = validator_id.into_ref();
-		whitelist_account!(account_id);
-		ReputationCall::<T>::heartbeat {}
-			.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into())
-			.unwrap();
+}
+
+impl<T: Config + StakingConfig + SessionConfig + ReputationConfig + ValidatorConfig> RuntimeConfig
+	for T
+{
+}
+
+pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>, I: Into<u32>>(
+	size: I,
+	set_id: I,
+) -> impl Iterator<Item = Id> {
+	let set_id = set_id.into();
+	(0..size.into())
+		.map(move |i| account::<<T as frame_system::Config>::AccountId>("bidder", i, set_id).into())
+}
+
+pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
+	for bidder in bidder_set::<T, <T as frame_system::Config>::AccountId, _>(n, set_id) {
+		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
+		assert_ok!(pallet_cf_staking::Pallet::<T>::staked(
+			<T as Chainflip>::EnsureWitnessed::successful_origin(),
+			bidder.clone(),
+			(flip_staked * 10u128.pow(18)).unique_saturated_into(),
+			pallet_cf_staking::ETH_ZERO_ADDRESS,
+			Default::default()
+		));
+		assert_ok!(pallet_cf_staking::Pallet::<T>::activate_account(bidder_origin.clone(),));
+
+		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
+		let signature = public_key.sign(&bidder.encode()).unwrap();
+		assert_ok!(pallet_cf_validator::Pallet::<T>::register_peer_id(
+			bidder_origin.clone(),
+			public_key.clone().try_into().unwrap(),
+			1337,
+			1u128,
+			signature.try_into().unwrap(),
+		));
+
+		// Reuse the random peer id for the session keys, we don't need real ones.
+		let fake_key = public_key.to_raw_vec().repeat(4);
+		assert_ok!(pallet_session::Pallet::<T>::set_keys(
+			bidder_origin.clone(),
+			// Public key is 32 bytes, we need 128 bytes.
+			T::Keys::decode(&mut &fake_key[..]).unwrap(),
+			vec![],
+		));
+
+		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(bidder_origin.clone(),));
 	}
+}
+
+pub fn start_vault_rotation<T: RuntimeConfig>(
+	primary_candidates: u32,
+	secondary_candidates: u32,
+	epoch: u32,
+) {
+	// Use an offset to ensure the candidate sets don't clash.
+	const LARGE_OFFSET: u32 = 100;
+	init_bidders::<T>(primary_candidates, epoch, 100_000u128);
+	init_bidders::<T>(secondary_candidates, epoch + LARGE_OFFSET, 90_000u128);
+
+	pallet_cf_validator::Pallet::<T>::start_vault_rotation(
+		pallet_cf_validator::RotationState::from_auction_outcome::<T>(AuctionOutcome {
+			winners: bidder_set::<T, <T as Chainflip>::ValidatorId, _>(primary_candidates, epoch)
+				.collect(),
+			losers: bidder_set::<T, <T as Chainflip>::ValidatorId, _>(
+				secondary_candidates,
+				epoch + LARGE_OFFSET,
+			)
+			.map(|id| (id, 90_000u32.into()).into())
+			.collect(),
+			bond: 100u32.into(),
+		}),
+	);
+
+	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::VaultsRotating(..)));
+}
+
+pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
+	let old_epoch = pallet_cf_validator::Pallet::<T>::epoch_index();
+
+	// Use an offset to ensure the candidate sets don't clash.
+	init_bidders::<T>(candidates, epoch, 100_000u128);
+
+	// Resolves the auction and starts the vault rotation.
+	pallet_cf_validator::Pallet::<T>::start_authority_rotation();
+
+	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::VaultsRotating(..)));
+
+	// Simulate success.
+	#[cfg(feature = "runtime-benchmarks")]
+	<pallet_cf_validator::Pallet<T> as VaultRotator>::set_vault_rotation_outcome::set_vault_rotation_outcome(AsyncResult::Ready(
+		Ok(()),
+	));
+
+	// The rest should take care of itself.
+	let mut iterations = 0;
+	while !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+		let block = frame_system::Pallet::<T>::current_block_number();
+		pallet_cf_validator::Pallet::<T>::on_initialize(block);
+		pallet_session::Pallet::<T>::on_initialize(block);
+		// frame_system::Pallet::<T>::initialize(
+		// 	&block,
+		// 	&frame_system::Pallet::<T>::block_hash(block),
+		// 	&{
+		// 		let mut digest = sp_runtime::Digest::default();
+		// 		digest.push(sp_runtime::DigestItem::PreRuntime(
+		// 			sp_consensus_aura::AURA_ENGINE_ID,
+		// 			sp_consensus_aura::Slot::from(block).encode(),
+		// 		));
+		// 		digest
+		// 	},
+		// );
+
+		iterations += 1;
+		if iterations > 4 {
+
+			// panic!(
+			// 	"Rotation should not take more than 4 iterations. Stuck at {:?}",
+			// 	CurrentRotationPhase::<T>::get()
+			// );
+		}
+	}
+
+	assert_eq!(
+		pallet_cf_validator::Pallet::<T>::epoch_index(),
+		old_epoch + 1,
+		"authority rotation failed"
+	);
 }
 
 benchmarks! {
 	report_equivocation {
 		let caller: T::AccountId = whitelisted_caller();
 		let x in 0 .. 1;
+
+		// 3 is the minimum number bidders for a successful auction.
+		let a in 3 .. 150;
+
+		// This is the initial authority set that will be expired.
+		rotate_authorities::<T>(a, 1);
+		// A new distinct authority set. The previous authorities will now be historical authorities.
+		rotate_authorities::<T>(a, 2);
 
 		const EQUIVOCATION_PROOF_BLOB: [u8; 257] = [
 			1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 136, 220, 52, 23,
@@ -80,12 +228,12 @@ benchmarks! {
 		let all_accounts = (0..150).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED));
 		let authorities: AuthorityList = storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into();
 		let equivocation_key = authorities[0].0.clone();
-		add_authorities::<T, _>(all_accounts);
+		// add_authorities::<T, _>(all_accounts);
 
-		for i in 0..150u32 {
-			pallet_session::Pallet::<T>::on_initialize(i.into());
-			pallet_grandpa::Pallet::<T>::on_finalize(i.into());
-		}
+		// for i in 0..150u32 {
+		// 	pallet_session::Pallet::<T>::on_initialize(i.into());
+		// 	pallet_grandpa::Pallet::<T>::on_finalize(i.into());
+		// }
 
 		let key_owner_proof = T::KeyOwnerProofSystem::prove((sp_finality_grandpa::KEY_TYPE, equivocation_key)).unwrap();
 

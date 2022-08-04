@@ -17,8 +17,26 @@ rand = { version = '0.7.2', default-features = false }
 
 # Required for bechmarking
 pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
+pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
+pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
 cf-traits = { path = '../traits', default-features = false }
+
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '3.0.0'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '2.0.1'
+
+# [dependencies.sp-consensus-aura]
+# git = 'https://github.com/chainflip-io/substrate.git'
+# tag = 'chainflip-monthly-2022-05'
+# version = '0.10.0-dev'
 
 [dependencies.pallet-session]
 default-features = false
@@ -38,6 +56,11 @@ tag = 'chainflip-monthly-2022-05'
 # features = ["derive-codec"]
 
 [dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sp-application-crypto]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
