@@ -65,7 +65,7 @@ use sp_version::RuntimeVersion;
 
 pub use cf_traits::{
 	BlockNumber, ChainflipAccount, ChainflipAccountData, ChainflipAccountState,
-	ChainflipAccountStore, EpochInfo, FlipBalance, SessionKeysRegistered,
+	ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
@@ -678,6 +678,8 @@ impl_runtime_apis! {
 				stake: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
+				is_live: Reputation::is_qualified(&account_id),
+				is_activated: !pallet_cf_staking::AccountRetired::<Runtime>::get(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
