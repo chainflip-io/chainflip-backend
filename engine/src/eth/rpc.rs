@@ -379,7 +379,7 @@ macro_rules! dual_call_rpc {
                 .context("ETH Dual RPC request timed out")?
                 .map_err(|(e_ws, e_http)| {
                     anyhow::Error::msg(format!(
-                        "ETH Dual RPC request failed: {:?} side: {:?}, {:?} HTTP side: {:?}",
+                        "ETH Dual RPC request failed: {:?} side: {:?}, {:?} side: {:?}",
                         TransportProtocol::Ws, e_ws, TransportProtocol::Http, e_http
                     ))
                 })
