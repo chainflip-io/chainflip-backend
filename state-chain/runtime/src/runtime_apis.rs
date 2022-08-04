@@ -30,6 +30,7 @@ pub enum ChainflipAccountStateWithPassive {
 pub struct RuntimeApiAccountInfo {
 	pub stake: u128,
 	pub bond: u128,
+	pub last_heartbeat: u32,
 	pub liveness: bool,
 	pub account_activated: bool,
 	pub online_credits: u32,

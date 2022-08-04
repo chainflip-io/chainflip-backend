@@ -19,6 +19,7 @@ pub use self::gen_client::Client as CustomClient;
 pub struct RpcAccountInfo {
 	pub stake: NumberOrHex,
 	pub bond: NumberOrHex,
+	pub last_heartbeat: u32,
 	pub liveness: bool,
 	pub account_activated: bool,
 	pub online_credits: u32,
@@ -356,6 +357,7 @@ where
 		Ok(RpcAccountInfo {
 			stake: account_info.stake.into(),
 			bond: account_info.bond.into(),
+			last_heartbeat: account_info.last_heartbeat,
 			liveness: account_info.liveness,
 			account_activated: account_info.account_activated,
 			online_credits: account_info.online_credits,

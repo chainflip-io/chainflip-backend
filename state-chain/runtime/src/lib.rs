@@ -678,6 +678,7 @@ impl_runtime_apis! {
 				stake: account_info.total(),
 				bond: account_info.bond(),
 				liveness: Reputation::is_qualified(&account_id),
+				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
 				account_activated: !pallet_cf_staking::AccountRetired::<Runtime>::get(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
