@@ -1,6 +1,27 @@
 use core::{fmt::Display, time::Duration};
 use futures::{stream, Stream};
 
+#[macro_export]
+macro_rules! assert_panics {
+    ($expression:expr) => {
+        match ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| $expression)) {
+            Ok(_result) => panic!("expression didn't panic '{}'", stringify!($expression),),
+            Err(panic) => panic,
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! assert_future_panics {
+    ($future:expr) => {
+        use futures::future::FutureExt;
+        match ::std::panic::AssertUnwindSafe($future).catch_unwind().await {
+            Ok(_result) => panic!("future didn't panic '{}'", stringify!($future),),
+            Err(panic) => panic,
+        }
+    };
+}
+
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for some time)
 /// it will immediately output a single tick on the next call to tick() and resume ticking every duration.
 ///

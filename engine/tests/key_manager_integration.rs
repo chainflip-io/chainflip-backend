@@ -38,11 +38,13 @@ pub async fn test_all_key_manager_events() {
     // in which it should have already done it's job.
     let km_events = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        key_manager.event_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
+        key_manager.block_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
     )
     .await
     .expect(common::EVENT_STREAM_TIMEOUT_MESSAGE)
     .unwrap()
+    .map(|block| futures::stream::iter(block.events))
+    .flatten()
     .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
     .collect::<Vec<_>>()
     .await

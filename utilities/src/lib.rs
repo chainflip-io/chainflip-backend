@@ -23,7 +23,9 @@ macro_rules! assert_err {
     };
 }
 
+#[cfg(test)]
 mod test_asserts {
+    use crate::assert_panics;
 
     #[test]
     fn test_assert_ok_unwrap_ok() {
@@ -35,12 +37,8 @@ mod test_asserts {
     }
 
     #[test]
-    #[should_panic]
     fn test_assert_ok_err() {
-        fn works() -> Result<i32, i32> {
-            Err(0)
-        }
-        assert_ok!(works());
+        assert_panics!(assert_ok!(Err::<u32, u32>(1)));
     }
 }
 

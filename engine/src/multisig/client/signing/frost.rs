@@ -341,6 +341,7 @@ mod tests {
     };
 
     use rand_legacy::SeedableRng;
+    use utilities::assert_panics;
 
     const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
     const NONCE_KEY: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
@@ -432,13 +433,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn check_data_size_should_panic_with_none_on_non_initial_stage() {
         let data_to_check =
             SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
                 data: BTreeMap::new(),
             });
 
-        data_to_check.data_size_is_valid(None);
+        assert_panics!(data_to_check.data_size_is_valid(None));
     }
 }
