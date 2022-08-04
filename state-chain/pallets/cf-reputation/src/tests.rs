@@ -57,6 +57,7 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 		// submit again, then move forward
+		advance_by_block();
 		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
 		// no change in reputation, because we were on the same block, therefore we were in the same
 		// heartbeat block interval
