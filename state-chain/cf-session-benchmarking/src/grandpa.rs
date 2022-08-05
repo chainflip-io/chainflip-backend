@@ -11,9 +11,10 @@ use frame_support::{
 use frame_system::{pallet_prelude::OriginFor, RawOrigin};
 use pallet_grandpa::*;
 use sp_finality_grandpa;
-use sp_runtime::traits::BlockNumberProvider;
+use sp_runtime::traits::{BlockNumberProvider, Saturating};
 use sp_std::{prelude::*, vec};
 
+use pallet_authorship::Config as AuthorshipConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_cf_staking::Config as StakingConfig;
 use pallet_cf_validator::Config as ValidatorConfig;
@@ -30,6 +31,7 @@ use frame_benchmarking::account;
 
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 
+use frame_support::traits::OnFinalize;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::traits::UniqueSaturatedInto;
 
@@ -38,7 +40,7 @@ pub struct Pallet<T: Config>(pallet_grandpa::Pallet<T>);
 pub trait Config:
 	pallet_grandpa::Config
 	+ pallet_cf_validator::Config
-	// + pallet_cf_vaults::Config
+	+ pallet_authorship::Config
 	+ pallet_cf_reputation::Config
 	+ pallet_cf_staking::Config
 	+ pallet_session::Config
@@ -53,12 +55,18 @@ mod p2p_crypto {
 }
 
 pub trait RuntimeConfig:
-	Config + StakingConfig + SessionConfig + ReputationConfig + ValidatorConfig
+	Config + StakingConfig + SessionConfig + ReputationConfig + ValidatorConfig + AuthorshipConfig
 {
 }
 
-impl<T: Config + StakingConfig + SessionConfig + ReputationConfig + ValidatorConfig> RuntimeConfig
-	for T
+impl<
+		T: Config
+			+ StakingConfig
+			+ SessionConfig
+			+ ReputationConfig
+			+ ValidatorConfig
+			+ AuthorshipConfig,
+	> RuntimeConfig for T
 {
 }
 
@@ -156,26 +164,27 @@ pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
 		let block = frame_system::Pallet::<T>::current_block_number();
 		pallet_cf_validator::Pallet::<T>::on_initialize(block);
 		pallet_session::Pallet::<T>::on_initialize(block);
-		// frame_system::Pallet::<T>::initialize(
-		// 	&block,
-		// 	&frame_system::Pallet::<T>::block_hash(block),
-		// 	&{
-		// 		let mut digest = sp_runtime::Digest::default();
-		// 		digest.push(sp_runtime::DigestItem::PreRuntime(
-		// 			sp_consensus_aura::AURA_ENGINE_ID,
-		// 			sp_consensus_aura::Slot::from(block).encode(),
-		// 		));
-		// 		digest
-		// 	},
-		// );
+		let g: u64 = block.unique_saturated_into();
+		frame_system::Pallet::<T>::initialize(
+			&block,
+			&frame_system::Pallet::<T>::block_hash(block),
+			&{
+				let mut digest = sp_runtime::Digest::default();
+				digest.push(sp_runtime::DigestItem::PreRuntime(
+					sp_consensus_aura::AURA_ENGINE_ID,
+					sp_consensus_aura::Slot::from(g).encode(),
+				));
+				digest
+			},
+		);
+		pallet_authorship::Pallet::<T>::on_finalize(block);
 
 		iterations += 1;
 		if iterations > 4 {
-
-			// panic!(
-			// 	"Rotation should not take more than 4 iterations. Stuck at {:?}",
-			// 	CurrentRotationPhase::<T>::get()
-			// );
+			panic!(
+				"Rotation should not take more than 4 iterations. Stuck at {:?}",
+				CurrentRotationPhase::<T>::get()
+			);
 		}
 	}
 
