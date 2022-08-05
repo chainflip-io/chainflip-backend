@@ -490,9 +490,17 @@ where
 	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
+	type KeyId;
+	type ValidatorId;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(payload: C::Payload) -> Self::RequestId;
+
+	fn request_signature_full(
+		key_id: Self::KeyId,
+		participants: Vec<Self::ValidatorId>,
+		payload: C::Payload,
+	);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
