@@ -35,9 +35,12 @@ pub mod common {
 	/// Maximum duration a ceremony stage can last
 	pub const MAX_STAGE_DURATION_SECONDS: u32 = 30;
 
-	// Allow for the CFE to receive the finalised block (~3.5*6) for initiation, and some extra time
-	// (~9) for networking / other latency
-	const TIMEOUT_BUFFER_SECONDS: u32 = 120;
+	const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
+	// buffer for final key computation
+	const KEY_DERIVATION_TIMEOUT_SECONDS: u32 = 120;
+
+	const TIMEOUT_BUFFER_SECONDS: u32 = EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) +
+		KEY_DERIVATION_TIMEOUT_SECONDS;
 
 	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
 
