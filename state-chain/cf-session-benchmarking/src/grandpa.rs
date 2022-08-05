@@ -1,5 +1,3 @@
-// #![cfg_attr(not(feature = "std"), no_std)]
-
 use codec::Encode;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
@@ -22,7 +20,7 @@ use pallet_session::Config as SessionConfig;
 
 use frame_support::traits::EnsureOrigin;
 
-use cf_traits::{AuctionOutcome, EpochInfo};
+use cf_traits::{AsyncResult, AuctionOutcome, EpochInfo, VaultRotator};
 
 use fg_primitives::{AuthorityList, GRANDPA_AUTHORITIES_KEY};
 
@@ -180,12 +178,12 @@ pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
 		pallet_authorship::Pallet::<T>::on_finalize(block);
 
 		iterations += 1;
-		if iterations > 4 {
-			panic!(
-				"Rotation should not take more than 4 iterations. Stuck at {:?}",
-				CurrentRotationPhase::<T>::get()
-			);
-		}
+		// if iterations > 4 {
+		// 	panic!(
+		// 		"Rotation should not take more than 4 iterations. Stuck at {:?}",
+		// 		CurrentRotationPhase::<T>::get()
+		// 	);
+		// }
 	}
 
 	assert_eq!(

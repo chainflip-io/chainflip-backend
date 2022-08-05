@@ -881,7 +881,9 @@ impl_runtime_apis! {
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use cf_session_benchmarking::session::Pallet as SessionBench;
+
 			use cf_session_benchmarking::grandpa::Pallet as GrandpaBench;
+
 			use baseline::Pallet as BaselineBench;
 
 			let mut list = Vec::<BenchmarkList>::new();
