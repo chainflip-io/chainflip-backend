@@ -40,7 +40,7 @@ tag = 'chainflip-monthly-2022-06'
 [dependencies.scale-info]
 default-features = false
 features = ['derive']
-version = '2.0.1'
+version = '2.1.1'
 
 [dependencies.sp-std]
 default-features = false
