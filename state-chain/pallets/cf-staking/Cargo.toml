@@ -19,7 +19,7 @@ cf-chains = {path = '../../chains', default-features = false}
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 # Non-substrate external deps
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 
 # Parity deps
 [dependencies.codec]

@@ -20,7 +20,7 @@ rlp = {default-features = false, version = '0.5'}
 hex = {default-features = false, version = '0.4'}
 hex-literal = {optional = true, version = '0.3'}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 
 # Substrate packages
 [dependencies.codec]

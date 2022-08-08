@@ -16,7 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = { path = '../../traits', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
 
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 
 # Required for bechmarking
 pallet-cf-validator = { path = '../cf-validator', optional = true, default-features = false }

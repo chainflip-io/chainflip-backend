@@ -22,7 +22,7 @@ pallet-cf-staking = { path = '../cf-staking', optional = true, default-features 
 pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
 pallet-cf-vaults = { path = '../cf-vaults', optional = true, default-features = false }
 
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 
 # Parity deps
 [dependencies.codec]

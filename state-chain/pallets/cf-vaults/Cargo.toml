@@ -19,7 +19,7 @@ cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', defau
 cf-traits = {path = '../../traits', default-features = false}
 utilities = {path = '../../../utilities', default-features = false}
 
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 
 # Parity deps
 [dependencies.codec]

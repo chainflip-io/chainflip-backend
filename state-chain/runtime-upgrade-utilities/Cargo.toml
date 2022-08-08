@@ -6,7 +6,7 @@ authors = ['Chainflip <https://chainflip.io>']
 description = 'Chainflip utilities for runtime upgrades.'
 
 [dependencies]
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 
 [dependencies.sp-std]
 default-features = false
