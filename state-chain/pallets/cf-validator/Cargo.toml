@@ -34,12 +34,12 @@ version = '3.0.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.scale-info]
 default-features = false
@@ -49,34 +49,34 @@ version = '2.0.1'
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-application-crypto]
 default-features = false
 optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.pallet-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 # Dev dependencies
 [dev-dependencies]
@@ -85,11 +85,11 @@ simple_logger = '2.1.0'
 
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [features]
 default = ['std']
