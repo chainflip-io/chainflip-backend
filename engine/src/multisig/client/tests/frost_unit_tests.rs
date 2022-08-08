@@ -105,7 +105,7 @@ type VerifyLocalSig4 = frost::VerifyLocalSig4<Point>;
 async fn should_report_on_invalid_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let (messages, result_receivers) = signing_ceremony.request().await;
+    let messages = signing_ceremony.request().await;
     let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
     // This account id will send an invalid signature
@@ -122,7 +122,6 @@ async fn should_report_on_invalid_local_sig3() {
     signing_ceremony
         .complete_with_error(
             &[bad_account_id],
-            result_receivers,
             CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare),
         )
         .await;
@@ -132,7 +131,7 @@ async fn should_report_on_invalid_local_sig3() {
 async fn should_report_on_inconsistent_broadcast_comm1() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let (mut messages, result_receivers) = signing_ceremony.request().await;
+    let mut messages = signing_ceremony.request().await;
 
     // This account id will send an invalid signature
     let [bad_account_id] = signing_ceremony.select_account_ids();
@@ -147,7 +146,6 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
     signing_ceremony
         .complete_with_error(
             &[bad_account_id],
-            result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::CoefficientCommitments,
@@ -160,7 +158,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 async fn should_report_on_inconsistent_broadcast_local_sig3() {
     let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-    let (messages, result_receivers) = signing_ceremony.request().await;
+    let messages = signing_ceremony.request().await;
 
     let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
@@ -177,7 +175,6 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
     signing_ceremony
         .complete_with_error(
             &[bad_account_id],
-            result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 BroadcastStageName::LocalSignatures,
@@ -309,7 +306,7 @@ async fn should_sign_with_all_parties() {
     //     Rng::from_seed(DEFAULT_SIGNING_SEED),
     // );
 
-    // let (messages, result_receivers) = signing_ceremony.request().await;
+    // let messages = signing_ceremony.request().await;
     // let messages = run_stages!(
     //     signing_ceremony,
     //     messages,
@@ -318,7 +315,7 @@ async fn should_sign_with_all_parties() {
     //     VerifyLocalSig4
     // );
     // signing_ceremony.distribute_messages(messages).await;
-    // signing_ceremony.complete(result_receivers).await;
+    // signing_ceremony.complete().await;
 }
 
 mod timeout {
@@ -342,7 +339,7 @@ mod timeout {
         async fn should_recover_if_party_appears_offline_to_minority_stage1() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let (mut messages, result_receivers) = signing_ceremony.request().await;
+            let mut messages = signing_ceremony.request().await;
 
             let [non_sending_party_id, timed_out_party_id] = signing_ceremony.select_account_ids();
 
@@ -366,14 +363,14 @@ mod timeout {
 
             let messages = run_stages!(signing_ceremony, messages, LocalSig3, VerifyLocalSig4);
             signing_ceremony.distribute_messages(messages).await;
-            signing_ceremony.complete(result_receivers).await;
+            signing_ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_recover_if_party_appears_offline_to_minority_stage3() {
             let (mut signing_ceremony, _) = new_signing_ceremony_with_keygen().await;
 
-            let (messages, result_receivers) = signing_ceremony.request().await;
+            let messages = signing_ceremony.request().await;
 
             let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
@@ -398,7 +395,7 @@ mod timeout {
                 .await;
 
             signing_ceremony.distribute_messages(messages).await;
-            signing_ceremony.complete(result_receivers).await;
+            signing_ceremony.complete().await;
         }
 
         // ======================
@@ -419,7 +416,7 @@ mod timeout {
 
             let [bad_node_id] = &ceremony.select_account_ids();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
             let messages = ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
 
             let messages = ceremony
@@ -428,7 +425,7 @@ mod timeout {
 
             let messages = ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
             ceremony.distribute_messages(messages).await;
-            ceremony.complete(result_receivers).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
@@ -437,14 +434,14 @@ mod timeout {
 
             let [bad_node_id] = &ceremony.select_account_ids();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
             let messages = run_stages!(ceremony, messages, VerifyComm2, LocalSig3, VerifyLocalSig4);
 
             ceremony
                 .distribute_messages_with_non_sender(messages, bad_node_id)
                 .await;
 
-            ceremony.complete(result_receivers).await;
+            ceremony.complete().await;
         }
 
         // ======================
@@ -467,7 +464,7 @@ mod timeout {
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
-            let (messages, result_receivers) = signing_ceremony.request().await;
+            let messages = signing_ceremony.request().await;
 
             // bad party 1 times out here
             let messages = signing_ceremony
@@ -482,7 +479,6 @@ mod timeout {
             signing_ceremony
                 .complete_with_error(
                     &[non_sending_party_id_1],
-                    result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::CoefficientCommitments,
@@ -500,7 +496,7 @@ mod timeout {
             let [non_sending_party_id_1, non_sending_party_id_2] =
                 signing_ceremony.select_account_ids();
 
-            let (messages, result_receivers) = signing_ceremony.request().await;
+            let messages = signing_ceremony.request().await;
 
             let messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
@@ -520,7 +516,6 @@ mod timeout {
             signing_ceremony
                 .complete_with_error(
                     &[non_sending_party_id_1],
-                    result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         BroadcastStageName::LocalSignatures,

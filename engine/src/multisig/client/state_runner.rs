@@ -254,7 +254,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     /// Process previously delayed messages (which arrived one stage too early)
     // NOTE: Need this boxed to help with async recursion
-    pub fn process_delayed<'a>(
+    fn process_delayed<'a>(
         &'a mut self,
     ) -> BoxFuture<'a, OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason>> {
         async {
