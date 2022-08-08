@@ -1,9 +1,11 @@
 use anyhow::Result;
+use futures::{stream::FuturesUnordered, StreamExt};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::task::JoinError;
 
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::client::keygen::generate_key_data_until_compatible;
@@ -359,11 +361,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                         },
                     }
                 }
-                Some(outcome) = self.signing_states.completion_receiver.recv() => {
-                    // TODO: handle signing outcome
+                Some(finished_ceremony_id) = self.signing_states.ceremony_futures.next() => {
+                    self.signing_states.cleanup_ceremony(finished_ceremony_id, &self.logger);
                 }
-                Some(outcome) = self.keygen_states.completion_receiver.recv() => {
-                    // TODO: handle keygen outcome
+                Some(finished_ceremony_id) = self.keygen_states.ceremony_futures.next() => {
+                    self.keygen_states.cleanup_ceremony(finished_ceremony_id, &self.logger);
                 }
             }
         }
@@ -575,22 +577,16 @@ pub fn generate_keygen_context(
 
 struct CeremonyStates<Ceremony: CeremonyTrait> {
     // all ceremonies
-    inner: HashMap<u64, CeremonyHandle<Ceremony>>,
-    // MAXIM: see if we can await ceremony completion
-    // instead
-    // this will be copied into children ceremonies
-    completion_sender: UnboundedSender<()>,
-    // this is how we will get notified of ceremony outcomes
-    completion_receiver: UnboundedReceiver<()>,
+    inner: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
+    /// used to get notified when a ceremony is finished
+    ceremony_futures: FuturesUnordered<tokio::task::JoinHandle<CeremonyId>>,
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     fn new() -> Self {
-        let (completion_sender, completion_receiver) = chan::<()>();
         Self {
             inner: HashMap::new(),
-            completion_sender,
-            completion_receiver,
+            ceremony_futures: Default::default(),
         }
     }
 
@@ -626,8 +622,23 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         logger: &slog::Logger,
     ) -> &mut CeremonyHandle<Ceremony> {
         self.inner.entry(ceremony_id).or_insert_with(|| {
-            CeremonyHandle::spawn(ceremony_id, self.completion_sender.clone(), logger)
+            let (ceremony_handle, task_handle) = CeremonyHandle::spawn(ceremony_id, logger);
+
+            self.ceremony_futures.push(task_handle);
+
+            ceremony_handle
         })
+    }
+
+    /// Remove any state associated with the ceremony
+    fn cleanup_ceremony(&mut self, id: Result<CeremonyId, JoinError>, logger: &slog::Logger) {
+        match id {
+            Ok(id) => assert!(
+                self.inner.remove(&id).is_some(),
+                "ceremony handler should exist"
+            ),
+            Err(err) => slog::error!(logger, "Ceremony panicked with: {}", err),
+        };
     }
 
     #[cfg(test)]
@@ -653,24 +664,25 @@ struct CeremonyHandle<Ceremony: CeremonyTrait> {
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
     fn spawn(
         cid: CeremonyId,
-        completion_sender: UnboundedSender<()>,
         logger: &slog::Logger,
-    ) -> Self {
+    ) -> (Self, tokio::task::JoinHandle<CeremonyId>) {
         let (msg_s, msg_r) = chan();
         let (req_s, req_r) = chan();
 
-        tokio::spawn(CeremonyRunner::<Ceremony>::run(
+        let task_handle = tokio::spawn(CeremonyRunner::<Ceremony>::run(
             cid,
             msg_r,
             req_r,
-            completion_sender,
             logger.clone(),
         ));
 
-        CeremonyHandle {
-            message_sender: msg_s,
-            request_sender: req_s,
-        }
+        (
+            CeremonyHandle {
+                message_sender: msg_s,
+                request_sender: req_s,
+            },
+            task_handle,
+        )
     }
 
     fn on_request(&mut self, request: CeremonyRequestInner<Ceremony>) {

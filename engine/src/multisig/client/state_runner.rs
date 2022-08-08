@@ -48,13 +48,14 @@ pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
 
 impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     /// Listen for requests until the ceremony is finished
+    /// Returns the id of the ceremony to make it easier to identify
+    /// which ceremony is finished when many are running
     pub async fn run(
         ceremony_id: CeremonyId,
         mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
         mut request_receiver: UnboundedReceiver<CeremonyRequestInner<Ceremony>>,
-        outcome_sender: UnboundedSender<()>,
         logger: slog::Logger,
-    ) {
+    ) -> CeremonyId {
         // We always create unauthorised first, it can get promoted to
         // an authorised one with a ceremony request
         let mut runner = Self::new_unauthorised(ceremony_id, &logger);
@@ -87,17 +88,13 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                     }
 
                 }
-                else => {
-                    // TODO: remove this branch once I'm confident that we can never get here
-                    return;
-                }
             }
         };
 
-        // MAXIM: instead of a channel I should be able to use JoinHandle
-        let _ = outcome_sender.send(());
         // We should always have inner state if we are reporting result
         let _ = runner.inner.unwrap().result_sender.send(outcome);
+
+        ceremony_id
     }
 
     /// Create ceremony state without a ceremony request (which is expected to arrive
