@@ -16,14 +16,10 @@ use pallet_cf_threshold_signature::CeremonyId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
-use utilities::make_periodic_tick;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use crate::{
-    logging::COMPONENT_KEY, multisig::client::CeremonyRequestDetails,
-    multisig_p2p::OutgoingMultisigStageMessages,
-};
+use crate::{logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
 use slog::o;
 use state_chain_runtime::AccountId;
 
@@ -56,7 +52,7 @@ impl std::fmt::Display for KeyId {
 pub fn start_client<C>(
     my_account_id: AccountId,
     key_store: KeyStore<C>,
-    mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+    incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
     latest_ceremony_id: CeremonyId,
     logger: &slog::Logger,
@@ -71,7 +67,7 @@ where
 
     slog::info!(logger, "Starting");
 
-    let (ceremony_request_sender, mut ceremony_request_receiver) =
+    let (ceremony_request_sender, ceremony_request_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     let multisig_client = Arc::new(MultisigClient::new(
@@ -84,67 +80,14 @@ where
     let multisig_client_backend_future = {
         use crate::multisig::client::ceremony_manager::CeremonyManager;
 
-        let mut ceremony_manager = CeremonyManager::<C>::new(
+        let ceremony_manager = CeremonyManager::<C>::new(
             my_account_id,
             outgoing_p2p_message_sender,
             latest_ceremony_id,
             &logger,
         );
 
-        async move {
-            // Stream outputs () approximately every ten seconds
-            let mut check_timeouts_tick = make_periodic_tick(Duration::from_secs(10), false);
-
-            loop {
-                tokio::select! {
-                        Some(request) = ceremony_request_receiver.recv() => {
-                            // Always update the latest ceremony id, even if we are not participating
-                            ceremony_manager.update_latest_ceremony_id(request.ceremony_id);
-
-                            match request.details {
-                                Some(CeremonyRequestDetails::Keygen(details)) => {
-                                    ceremony_manager.on_keygen_request(
-                                        request.ceremony_id,
-                                        details.participants,
-                                        details.rng,
-                                        details.result_sender,
-                                    )
-                                }
-                                Some(CeremonyRequestDetails::Sign(details)) =>{
-                                    ceremony_manager.on_request_to_sign(
-                                        request.ceremony_id,
-                                        details.participants,
-                                        details.data,
-                                        details.keygen_result_info,
-                                        details.rng,
-                                        details.result_sender,
-                                );
-                                }
-                                None => { /* Not participating in the ceremony, so do nothing */ }
-                            }
-                    }
-
-                    Some((sender_id, data)) = incoming_p2p_message_receiver.recv() => {
-
-                        // For now we assume that every message we receive via p2p is a
-                        // secp256k1 MultisigMessage (same as before). We will add
-                        // demultiplexing once we add support for other types of messages.
-
-                        match bincode::deserialize(&data) {
-                            Ok(message) => ceremony_manager.process_p2p_message(sender_id, message),
-                            Err(_) => {
-                                slog::warn!(logger, "Failed to deserialize message from: {}", sender_id);
-                            },
-                        }
-
-                    }
-                    _ = check_timeouts_tick.tick() => {
-                        slog::trace!(logger, "Checking for expired multisig states");
-                        ceremony_manager.check_all_timeouts();
-                    }
-                }
-            }
-        }
+        ceremony_manager.run(ceremony_request_receiver, incoming_p2p_message_receiver)
     };
 
     (multisig_client, multisig_client_backend_future)

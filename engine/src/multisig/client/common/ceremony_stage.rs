@@ -15,7 +15,11 @@ use super::CeremonyFailureReason;
 pub enum StageResult<M, Result, FailureReason> {
     /// Ceremony proceeds to the next stage
     NextStage(
-        Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason> + Send>,
+        Box<
+            dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason>
+                + Send
+                + Sync,
+        >,
     ),
     /// Ceremony aborted (contains parties to report)
     Error(

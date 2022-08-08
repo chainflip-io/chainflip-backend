@@ -49,7 +49,7 @@ async fn should_delay_comm1_before_keygen_request() {
     let (late_msg, early_msgs) =
         split_messages_for(messages.stage_1a_messages.clone(), &test_id, &late_id);
 
-    ceremony.distribute_messages(early_msgs);
+    ceremony.distribute_messages(early_msgs).await;
 
     assert_ok!(ceremony.nodes[&test_id]
         .ensure_ceremony_at_keygen_stage(STAGE_FINISHED_OR_NOT_STARTED, ceremony.ceremony_id));
@@ -58,7 +58,7 @@ async fn should_delay_comm1_before_keygen_request() {
 
     assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(1, ceremony.ceremony_id));
 
-    ceremony.distribute_messages(late_msg);
+    ceremony.distribute_messages(late_msg).await;
 
     assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(2, ceremony.ceremony_id));
 }
@@ -79,24 +79,24 @@ async fn should_delay_stage_data() {
                 target_account_id,
                 &late_account_id,
             );
-            ceremony.distribute_messages(early_messages);
+            ceremony.distribute_messages(early_messages).await;
 
             let (late_messages_next, early_messages) = split_messages_for(
                 messages[stage_number].clone(),
                 target_account_id,
                 &late_account_id,
             );
-            ceremony.distribute_messages(early_messages);
+            ceremony.distribute_messages(early_messages).await;
 
             assert_ok!(ceremony.nodes[target_account_id]
                 .ensure_ceremony_at_keygen_stage(stage_number, ceremony.ceremony_id));
 
-            ceremony.distribute_messages(late_messages);
+            ceremony.distribute_messages(late_messages).await;
 
             assert_ok!(ceremony.nodes[target_account_id]
                 .ensure_ceremony_at_keygen_stage(stage_number + 1, ceremony.ceremony_id));
 
-            ceremony.distribute_messages(late_messages_next);
+            ceremony.distribute_messages(late_messages_next).await;
 
             // Check that the stage correctly advanced or finished
             assert_ok!(
@@ -148,7 +148,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         BlameResponse8,
         VerifyBlameResponses9
     );
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony.complete(result_receivers).await;
 }
 
@@ -174,7 +174,7 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
         .unwrap()
         .remove(timed_out_party_id);
 
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
 
     // This node doesn't receive non_sending_party_id's message, so must timeout
     ceremony
@@ -192,7 +192,7 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
         BlameResponse8,
         VerifyBlameResponses9
     );
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony.complete(result_receivers).await;
 }
 
@@ -254,7 +254,7 @@ async fn should_report_on_invalid_blame_response6() {
     let messages = ceremony
         .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_node_id_1.clone()],
@@ -308,7 +308,7 @@ async fn should_report_on_incomplete_blame_response() {
     let messages = ceremony
         .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_node_id_1.clone()],
@@ -336,7 +336,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                 unexpected_message_sender,
             );
 
-            ceremony.distribute_messages(other_msgs.clone());
+            ceremony.distribute_messages(other_msgs.clone()).await;
 
             for ignored_stage_index in (0..stage_number - 1).chain(stage_number + 1..KEYGEN_STAGES)
             {
@@ -345,7 +345,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                     target_account_id,
                     unexpected_message_sender,
                 );
-                ceremony.distribute_messages(msg_from_1);
+                ceremony.distribute_messages(msg_from_1).await;
             }
 
             assert!(
@@ -355,7 +355,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                 "Failed to ignore a message from an unexpected stage"
             );
 
-            ceremony.distribute_messages(other_msgs);
+            ceremony.distribute_messages(other_msgs).await;
             assert!(
                 ceremony.nodes[target_account_id]
                     .ensure_ceremony_at_keygen_stage(stage_number, ceremony.ceremony_id)
@@ -365,12 +365,14 @@ async fn should_ignore_unexpected_message_for_stage() {
 
             let unknown_id = AccountId::new([0; 32]);
             assert!(!ACCOUNT_IDS.contains(&unknown_id));
-            ceremony.distribute_messages(
-                msg_from_1
-                    .iter()
-                    .map(|(_, message)| (unknown_id.clone(), message.clone()))
-                    .collect(),
-            );
+            ceremony
+                .distribute_messages(
+                    msg_from_1
+                        .iter()
+                        .map(|(_, message)| (unknown_id.clone(), message.clone()))
+                        .collect(),
+                )
+                .await;
             assert!(
                 ceremony.nodes[target_account_id]
                     .ensure_ceremony_at_keygen_stage(stage_number, ceremony.ceremony_id)
@@ -378,7 +380,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                 "Failed to ignore a message from an unknown account id"
             );
 
-            ceremony.distribute_messages(msg_from_1);
+            ceremony.distribute_messages(msg_from_1).await;
 
             assert!(
                 ceremony.nodes[target_account_id]
@@ -424,7 +426,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
     }
 
     let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
@@ -459,7 +461,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 
     let messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2,);
 
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
@@ -503,7 +505,7 @@ async fn should_report_on_invalid_hash_comm1a() {
     }
 
     let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
 
     ceremony
         .complete_with_error(
@@ -549,7 +551,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
     let messages = ceremony
         .run_stage::<keygen::VerifyComplaints7, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
@@ -622,7 +624,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
     let messages = ceremony
         .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
@@ -665,7 +667,7 @@ async fn should_report_on_invalid_comm1() {
     }
 
     let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
 
     ceremony
         .complete_with_error(
@@ -704,7 +706,7 @@ async fn should_report_on_invalid_complaints4() {
     let messages = ceremony
         .run_stage::<keygen::VerifyComplaints7, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id],
@@ -756,7 +758,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
@@ -776,7 +778,7 @@ mod timeout {
                 Complaints6,
                 VerifyComplaints7
             );
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
             ceremony.complete(result_receivers).await;
         }
 
@@ -795,7 +797,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
@@ -813,7 +815,7 @@ mod timeout {
                 Complaints6,
                 VerifyComplaints7
             );
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
             ceremony.complete(result_receivers).await;
         }
 
@@ -840,7 +842,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
@@ -851,7 +853,7 @@ mod timeout {
                 .gather_outgoing_messages::<VerifyComplaints7, KeygenData>()
                 .await;
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
             ceremony.complete(result_receivers).await;
         }
 
@@ -893,7 +895,7 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
@@ -904,7 +906,7 @@ mod timeout {
                 .gather_outgoing_messages::<VerifyBlameResponses9, KeygenData>()
                 .await;
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
             ceremony.complete(result_receivers).await;
         }
     }
@@ -935,7 +937,7 @@ mod timeout {
                 VerifyComplaints7
             );
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
             ceremony.complete(result_receivers).await;
         }
 
@@ -960,7 +962,7 @@ mod timeout {
 
             let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
             ceremony.complete(result_receivers).await;
         }
 
@@ -982,7 +984,9 @@ mod timeout {
             );
 
             let [non_sender_id] = ceremony.select_account_ids();
-            ceremony.distribute_messages_with_non_sender(messages, &non_sender_id);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sender_id)
+                .await;
 
             ceremony.complete(result_receivers).await;
         }
@@ -1020,7 +1024,9 @@ mod timeout {
             );
 
             let [non_sender_id] = ceremony.select_account_ids();
-            ceremony.distribute_messages_with_non_sender(messages, &non_sender_id);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sender_id)
+                .await;
 
             ceremony.complete(result_receivers).await;
         }
@@ -1042,7 +1048,9 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
@@ -1075,7 +1083,9 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
@@ -1116,7 +1126,9 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
@@ -1172,7 +1184,9 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
