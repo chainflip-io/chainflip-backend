@@ -1,14 +1,15 @@
+use chainflip_engine::{
+    eth::{
+        event::Event,
+        rpc::{EthHttpRpcClient, EthWsRpcClient},
+        EthObserver,
+    },
+    settings::{CommandLineOptions, Settings},
+};
 use config::{Config, ConfigError, File};
+use futures::stream::StreamExt;
 use serde::Deserialize;
 use sp_core::H160;
-
-pub const EVENT_STREAM_EMPTY_MESSAGE: &str = r#"
-Event stream was empty.
-- Have you run the setup script to deploy/run the contracts? (tests/scripts/setup.sh)
-- Are you pointing to the correct contract address? (tests/config.toml)
-"#;
-
-pub const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct IntegrationTestSettings {
@@ -31,4 +32,56 @@ impl IntegrationTestSettings {
 
         Ok(s)
     }
+}
+
+pub async fn get_contract_events<Manager>(
+    contract_address: H160,
+    logger: slog::Logger,
+) -> Vec<Event<<Manager as EthObserver>::EventParameters>>
+where
+    Manager: EthObserver + std::marker::Sync,
+{
+    let settings =
+        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
+
+    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger)
+        .await
+        .expect("Couldn't create EthWsRpcClient");
+
+    let eth_http_rpc_client =
+        EthHttpRpcClient::new(&settings.eth, &logger).expect("Couldn't create EthHttpRpcClient");
+
+    let contract_manager = Manager::new(contract_address);
+
+    const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
+
+    // The stream is infinite unless we stop it after a short time
+    // in which it should have already done it's job.
+    let events = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        contract_manager.block_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &logger),
+    )
+    .await
+    .expect(EVENT_STREAM_TIMEOUT_MESSAGE)
+    .unwrap()
+    .map(|block| futures::stream::iter(block.events))
+    .flatten()
+    .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Vec<_>>();
+
+    assert!(
+        !events.is_empty(),
+        "{}",
+        r#"
+    Event stream was empty.
+    - Have you run the setup script to deploy/run the contracts? (tests/scripts/setup.sh)
+    - Are you pointing to the correct contract address? (tests/config.toml)
+    - The deploy script was ran at too large of a block height for this test to reach before the timeout (this test starts at block 0).
+    "#
+    );
+
+    events
 }

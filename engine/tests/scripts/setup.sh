@@ -14,12 +14,12 @@ fi
 
 if [ ! -d "./eth-contracts" ]; then
   if [ -z $DRONE ]; then
-    git clone --depth 1 --branch sandstorm-rc1 git@github.com:chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
+    git clone --depth 1 --branch sandstorm-rc4 git@github.com:chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
   else
-    git clone --depth 1 --branch sandstorm-rc1 https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
+    git clone --depth 1 --branch sandstorm-rc4 https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
   fi
 else
-    ( cd eth-contracts ; git pull origin sandstorm-rc1 )
+    ( cd eth-contracts ; git pull origin sandstorm-rc4 )
 fi
 
 # ensure we have the poetry deps

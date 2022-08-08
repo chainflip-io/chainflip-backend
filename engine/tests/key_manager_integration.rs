@@ -1,14 +1,11 @@
+//! This tests integration with the KeyManager contract
+//! For instruction on how to run this test, see `engine/tests/README.md`
+
 use chainflip_engine::{
-    eth::{
-        key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
-        rpc::{EthHttpRpcClient, EthWsRpcClient},
-        EthObserver,
-    },
+    eth::key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
     logging::utils,
-    settings::{CommandLineOptions, Settings},
 };
 
-use futures::stream::StreamExt;
 use sp_core::H160;
 use std::str::FromStr;
 use web3::types::U256;
@@ -22,45 +19,16 @@ pub async fn test_all_key_manager_events() {
 
     let integration_test_settings =
         IntegrationTestSettings::from_file("tests/config.toml").unwrap();
-    let settings =
-        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
-    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
-        .await
-        .expect("Couldn't create EthWsRpcClient");
-
-    let eth_http_rpc_client = EthHttpRpcClient::new(&settings.eth, &root_logger)
-        .expect("Couldn't create EthHttpRpcClient");
-
-    let key_manager = KeyManager::new(integration_test_settings.eth.key_manager_address);
-
-    // The stream is infinite unless we stop it after a short time
-    // in which it should have already done it's job.
-    let km_events = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        key_manager.block_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &root_logger),
+    let km_events = common::get_contract_events::<KeyManager>(
+        integration_test_settings.eth.key_manager_address,
+        root_logger,
     )
-    .await
-    .expect(common::EVENT_STREAM_TIMEOUT_MESSAGE)
-    .unwrap()
-    .map(|block| futures::stream::iter(block.events))
-    .flatten()
-    .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
-    .collect::<Vec<_>>()
-    .await
-    .into_iter()
-    .collect::<Vec<_>>();
-
-    assert!(
-        !km_events.is_empty(),
-        "{}",
-        common::EVENT_STREAM_EMPTY_MESSAGE
-    );
+    .await;
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
-
     km_events
             .iter()
             .find(|event| match &event.event_parameters {
@@ -131,4 +99,40 @@ pub async fn test_all_key_manager_events() {
             _ => false,
         })
         .expect("Didn't find SignatureAccepted event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            KeyManagerEvent::AggKeyNonceConsumersUpdated { new_addrs } => {
+                assert_eq!(
+                    new_addrs,
+                    &vec![
+                        H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
+                        H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(),
+                        H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()
+                    ]
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find AggKeyNonceConsumersUpdated event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            KeyManagerEvent::AggKeyNonceConsumersSet { addrs } => {
+                assert_eq!(
+                    addrs,
+                    &vec![
+                        H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
+                        H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(),
+                        H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()
+                    ]
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find AggKeyNonceConsumersSet event");
 }

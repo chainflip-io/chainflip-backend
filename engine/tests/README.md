@@ -6,19 +6,7 @@ This folder contains the "integration tests" (as Cargo calls them) for the CFE.
 
 In order to run the integration tests you must go through the following setup process.
 
-### Linux
-
-The following instructions are for Linux distros that use apt like Ubuntu.
-
-### Install Brownie
-
-```sh
-sudo apt-get install pip
-pip install eth-brownie
-pip install umbral
-```
-
-### Install Node.js and Hardhat
+### Install Node.js and Hardhat (Ubuntu)
 
 ```sh
 # These 3 steps install globally
@@ -30,12 +18,22 @@ sudo apt install npm
 npm install --save-dev hardhat
 ```
 
-## Running the integration tests
-
-First get an instance of Hardhat running
+### Install Node, NPX and Hardhat (Mac)
 
 ```sh
-npx hardhat node
+brew install node
+npm install npx
+npm install hardhat
+```
+
+--------
+
+## Running the integration tests
+
+First get an instance of Hardhat running using the interval mining config. Interval mining is need for the integration tests because the block streams will not start until they have seen a new block produced after witnessing has started.
+
+```sh
+npx hardhat node --config hardhat-interval-mining.config.js
 ```
 
 Then run the [setup script](scripts/setup.sh) that creates the events expected by the test. The script will create a a folder and pull the eth-contracts into it from git, so you may want to run the script from a temp folder somewhere. This script will also download and install [poetry](https://github.com/python-poetry/poetry) if you don't have it already.
@@ -53,6 +51,8 @@ Now we can run the stake_manager_integration or key_manager_integration tests wi
 cargo test --package chainflip-engine --test stake_manager_integration -- test_all_stake_manager_events --exact --nocapture
 cargo test --package chainflip-engine --test key_manager_integration -- test_all_key_manager_events --exact --nocapture
 ```
+
+--------
 
 ## Running Subsets of Tests
 
