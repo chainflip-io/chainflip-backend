@@ -500,9 +500,8 @@ where
                                 + (state_chain_client.heartbeat_block_interval / 2))
                                 % blocks_per_heartbeat
                                 == 0) && number_of_blocks_read > BLOCKS_BEFORE_INIT_HEARTBEAT)
-                                // We want to submit a heartbeat at ~1 minute after starting up.
-                                // submitting one *at* startup means we could (falsely) submit many heartbeats
-                                // if we enter a crash/restart loop
+                                // We want to submit a heartbeat at ~1 minute (10 * 6 second blocks) after starting up.
+                                // Submitting earlier may falsely indicate liveness.
                                 || number_of_blocks_read == BLOCKS_BEFORE_INIT_HEARTBEAT
                             {
                                 slog::info!(
