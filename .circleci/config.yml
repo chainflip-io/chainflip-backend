@@ -376,12 +376,6 @@ jobs:
           name: Start Node
           background: true
           command: ./target/release/chainflip-node --chain cf-dev --node-key-file=node_key_file
-      - run: sleep 3
-      - run:
-          name: Start Engine
-          background: true
-          command: ./target/release/chainflip-engine
-      - run: sleep 3
       - run:
           name: Check Node Health
           command: >
@@ -389,12 +383,26 @@ jobs:
             -H "Content-Type:application/json;charset=utf-8"
             --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
             --url 'http://localhost:9933'
+            --connect-timeout 5
+            --max-time 10
+            --retry 3
+            --retry-delay 1
+            --retry-max-time 20
             -vv
+      - run:
+          name: Start Engine
+          background: true
+          command: ./target/release/chainflip-engine
       - run:
           name: Check Engine Health
           command: >
             curl
             --url 'http://localhost:5555/health'
+            --connect-timeout 5
+            --max-time 10
+            --retry 3
+            --retry-delay 1
+            --retry-max-time 20
             -vv
       - run:
           name: Generate State Chain docs
