@@ -414,9 +414,11 @@ impl EthObserver for KeyManager {
     fn get_contract_address(&self) -> H160 {
         self.deployed_address
     }
+}
 
+impl KeyManager {
     /// Loads the contract abi to get the event definitions
-    fn new(deployed_address: H160) -> Self {
+    pub fn new(deployed_address: H160) -> Self {
         Self {
             deployed_address,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())
@@ -424,6 +426,7 @@ impl EthObserver for KeyManager {
         }
     }
 }
+
 // Convenience test to allow us to generate the signatures of the events, allowing us
 // to manually query the contract for the events
 // current signatures below:

@@ -579,8 +579,6 @@ pub trait EthObserver {
 
     fn contract_name(&self) -> &'static str;
 
-    fn new(deployed_address: H160) -> Self;
-
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
     async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc>(
         &self,

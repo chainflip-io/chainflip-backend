@@ -21,8 +21,8 @@ pub async fn test_all_stake_manager_events() {
     let integration_test_settings =
         IntegrationTestSettings::from_file("tests/config.toml").unwrap();
 
-    let sm_events = common::get_contract_events::<StakeManager>(
-        integration_test_settings.eth.stake_manager_address,
+    let sm_events = common::get_contract_events(
+        StakeManager::new(integration_test_settings.eth.stake_manager_address),
         root_logger,
     )
     .await;

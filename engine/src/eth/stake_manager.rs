@@ -247,9 +247,11 @@ impl EthObserver for StakeManager {
             },
         ))
     }
+}
 
+impl StakeManager {
     /// Loads the contract abi to get the event definitions
-    fn new(deployed_address: H160) -> Self {
+    pub fn new(deployed_address: H160) -> Self {
         Self {
             deployed_address,
             contract: ethabi::Contract::load(

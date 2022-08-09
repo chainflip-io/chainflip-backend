@@ -35,7 +35,7 @@ impl IntegrationTestSettings {
 }
 
 pub async fn get_contract_events<Manager>(
-    contract_address: H160,
+    contract_manager: Manager,
     logger: slog::Logger,
 ) -> Vec<Event<<Manager as EthObserver>::EventParameters>>
 where
@@ -50,8 +50,6 @@ where
 
     let eth_http_rpc_client =
         EthHttpRpcClient::new(&settings.eth, &logger).expect("Couldn't create EthHttpRpcClient");
-
-    let contract_manager = Manager::new(contract_address);
 
     const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
 

@@ -9,7 +9,7 @@ use chainflip_engine::{
         key_manager::KeyManager,
         rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         stake_manager::StakeManager,
-        EthBroadcaster, EthObserver,
+        EthBroadcaster,
     },
     health::HealthChecker,
     logging,
@@ -133,7 +133,7 @@ fn main() -> anyhow::Result<()> {
                 >>(latest_block_hash)
                 .await
                 .context("Failed to get StakeManager address from SC")?;
-            let stake_manager_contract = <StakeManager as EthObserver>::new(stake_manager_address.into());
+            let stake_manager_contract = StakeManager::new(stake_manager_address.into());
 
             let key_manager_address = state_chain_client
                 .get_storage_value::<pallet_cf_environment::KeyManagerAddress::<
@@ -143,7 +143,7 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to get KeyManager address from SC")?;
 
             let key_manager_contract =
-                <KeyManager as EthObserver>::new(key_manager_address.into());
+                KeyManager::new(key_manager_address.into());
 
             let latest_ceremony_id = state_chain_client
             .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(

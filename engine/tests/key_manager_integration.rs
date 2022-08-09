@@ -20,8 +20,8 @@ pub async fn test_all_key_manager_events() {
     let integration_test_settings =
         IntegrationTestSettings::from_file("tests/config.toml").unwrap();
 
-    let km_events = common::get_contract_events::<KeyManager>(
-        integration_test_settings.eth.key_manager_address,
+    let km_events = common::get_contract_events(
+        KeyManager::new(integration_test_settings.eth.key_manager_address),
         root_logger,
     )
     .await;
