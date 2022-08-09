@@ -102,6 +102,10 @@ fn expect_sc_observer_start(
             });
     }
 
+    mock_state_chain_rpc_client
+        .expect_submit_extrinsic_rpc()
+        .never();
+
     initial_block_hash
 }
 
