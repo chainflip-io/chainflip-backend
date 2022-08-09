@@ -352,7 +352,8 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
-			let (_, ceremony_id) = MockEthereumThresholdSigner::request_signature(PAYLOAD);
+			let (_, ceremony_id) =
+				MockEthereumThresholdSigner::request_signature(PAYLOAD, None, None);
 			assert_ok!(Test::validate_unsigned(
 				TransactionSource::External,
 				&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }.into()
@@ -381,7 +382,8 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
-			let (_, ceremony_id) = MockEthereumThresholdSigner::request_signature(PAYLOAD);
+			let (_, ceremony_id) =
+				MockEthereumThresholdSigner::request_signature(PAYLOAD, None, None);
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,
@@ -420,6 +422,8 @@ mod failure_reporting {
 	) -> CeremonyContext<Test, Instance1> {
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
 		CeremonyContext::<Test, Instance1> {
+			participants: Vec::from_iter(validator_set),
+			key_id: None,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,

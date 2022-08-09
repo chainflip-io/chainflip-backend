@@ -34,6 +34,9 @@ where
 	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
+	type KeyId = u32;
+
+	type ValidatorId = u64;
 
 	fn request_signature(payload: <C as ChainCrypto>::Payload) -> Self::RequestId {
 		let id = payload.using_encoded(|bytes| bytes[0]) as u32;
@@ -58,5 +61,13 @@ where
 		request_id: Self::RequestId,
 	) -> crate::AsyncResult<<C as ChainCrypto>::ThresholdSignature> {
 		Self::take_storage::<_, AsyncResult<_>>(b"SIG", request_id).unwrap_or(AsyncResult::Void)
+	}
+
+	fn request_signature_full(
+		key_id: Self::KeyId,
+		participants: Vec<Self::ValidatorId>,
+		payload: <C as ChainCrypto>::Payload,
+	) -> Self::RequestId {
+		todo!()
 	}
 }

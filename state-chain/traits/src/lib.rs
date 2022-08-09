@@ -500,7 +500,7 @@ where
 		key_id: Self::KeyId,
 		participants: Vec<Self::ValidatorId>,
 		payload: C::Payload,
-	);
+	) -> Self::RequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.

@@ -70,17 +70,22 @@ pub mod pallet {
 		Twox64Concat,
 	};
 	use frame_system::{ensure_none, pallet_prelude::*};
+	use sp_runtime::KeyTypeId;
 
 	/// Metadata for a pending threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
+		/// Participants in the signing ceremony
+		pub participants: Vec<T::ValidatorId>,
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
+		/// The key id type for signing.
+		pub key_id: Option<T::KeyId>,
 		/// Phantom data member.
 		pub _phantom: PhantomData<I>,
 	}
@@ -328,8 +333,13 @@ pub mod pallet {
 					if let Some((request_id, attempt, payload)) =
 						OpenRequests::<T, I>::take(ceremony_id)
 					{
-						Self::new_ceremony_attempt(request_id, payload, attempt.wrapping_add(1));
-
+						Self::new_ceremony_attempt(
+							request_id,
+							payload,
+							attempt.wrapping_add(1),
+							failed_ceremony_context.key_id,
+							Some(failed_ceremony_context.participants),
+						);
 						Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
 					} else {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
@@ -512,7 +522,11 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
-	fn request_signature(payload: PayloadFor<T, I>) -> (RequestId, CeremonyId) {
+	fn request_signature(
+		payload: PayloadFor<T, I>,
+		key_id: Option<<T as Chainflip>::KeyId>,
+		participants: Option<Vec<T::ValidatorId>>,
+	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
 		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -520,7 +534,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Start a ceremony.
-		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
+		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0, key_id, participants);
 
 		// Schedule an initial retry.
 		Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
@@ -535,19 +549,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id: RequestId,
 		payload: PayloadFor<T, I>,
 		attempt: AttemptCount,
+		key_id: Option<<T as Chainflip>::KeyId>,
+		participants: Option<Vec<T::ValidatorId>>,
 	) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 		OpenRequests::<T, I>::insert(ceremony_id, (request_id, attempt, payload.clone()));
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
 
-		// Get the current signing key.
-		let key_id = T::KeyProvider::current_key_id();
+		let key_id = key_id.unwrap_or(T::KeyProvider::current_key_id());
+		let nominees: Option<Vec<T::ValidatorId>>;
+		if participants.is_none() {
+			nominees = T::SignerNomination::threshold_nomination_with_seed(
+				(ceremony_id, attempt),
+				T::EpochInfo::epoch_index(),
+			);
+		} else {
+			nominees = participants;
+		}
 
-		// Select nominees for threshold signature.
-		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed(
-			(ceremony_id, attempt),
-			T::EpochInfo::epoch_index(),
-		) {
+		if let Some(nominees) = nominees {
 			log::trace!(
 				target: "threshold-signing",
 				"Threshold set selected for request {}, requesting signature ceremony {}.",
@@ -559,9 +579,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
+					participants: nominees.clone(),
 					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
 					blame_counts: Default::default(),
 					participant_count: nominees.len() as u32,
+					key_id: Some(key_id.clone()),
 					_phantom: Default::default(),
 				},
 			);
@@ -585,9 +607,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
+					participants: vec![],
 					remaining_respondents: Default::default(),
 					blame_counts: Default::default(),
 					participant_count: 0,
+					key_id: Some(key_id),
 					_phantom: Default::default(),
 				},
 			);
@@ -634,9 +658,11 @@ where
 	type RequestId = RequestId;
 	type Error = Error<T, I>;
 	type Callback = <T as Config<I>>::ThresholdCallable;
+	type KeyId = T::KeyId;
+	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> Self::RequestId {
-		Self::request_signature(payload).0
+		Self::request_signature(payload, None, None).0
 	}
 
 	fn register_callback(
@@ -660,5 +686,13 @@ where
 		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
 	) {
 		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
+	}
+
+	fn request_signature_full(
+		key_id: Self::KeyId,
+		participants: Vec<Self::ValidatorId>,
+		payload: <T::TargetChain as ChainCrypto>::Payload,
+	) -> Self::RequestId {
+		Self::request_signature(payload, Some(key_id), Some(participants)).0
 	}
 }

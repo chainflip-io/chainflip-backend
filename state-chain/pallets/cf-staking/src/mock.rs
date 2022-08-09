@@ -8,7 +8,7 @@ use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32, BuildStorage,
+	AccountId32, BuildStorage, KeyTypeId,
 };
 use std::time::Duration;
 
@@ -145,6 +145,8 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
+	type KeyId = <Ethereum as ChainCrypto>::KeyTypeId;
+	type ValidatorId = AccountId;
 
 	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
 		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
@@ -168,6 +170,14 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	) {
 		// do nothing, the mock impl of signature_result doesn't take from any storage
 		// so we don't need to insert any storage.
+	}
+
+	fn request_signature_full(
+		key_id: Self::KeyId,
+		participants: Vec<Self::ValidatorId>,
+		payload: <Ethereum as ChainCrypto>::Payload,
+	) -> Self::RequestId {
+		todo!()
 	}
 }
 
