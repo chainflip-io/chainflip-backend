@@ -8,7 +8,7 @@ use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use state_chain_runtime::{AccountId, CfeSettings};
+use state_chain_runtime::{constants::common::SECONDS_PER_BLOCK, AccountId, CfeSettings};
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
@@ -495,7 +495,7 @@ where
                             // All nodes must send a heartbeat regardless of their validator status (at least for now).
                             // We send it in the middle of the online interval (so any node sync issues don't
                             // cause issues (if we tried to send on one of the interval boundaries)
-                            const BLOCKS_BEFORE_INIT_HEARTBEAT: u32 = 10;
+                            const BLOCKS_BEFORE_INIT_HEARTBEAT: u32 = 60 / (SECONDS_PER_BLOCK as u32);
                             if (((current_block_header.number
                                 + (state_chain_client.heartbeat_block_interval / 2))
                                 % blocks_per_heartbeat

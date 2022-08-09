@@ -28,7 +28,7 @@ pub mod common {
 	/// Change this to adjust the block time.
 	pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
-	const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
+	pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
 	// ======= Keygen and signing =======
 
