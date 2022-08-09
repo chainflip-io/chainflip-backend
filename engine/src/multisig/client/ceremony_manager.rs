@@ -588,18 +588,17 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     }
 
     /// Process ceremony data arriving from a peer,
-    /// returns an error if the data is rejected before being processed
     fn process_data(
         &mut self,
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: Ceremony::Data,
-        latest_ceremony_id: CeremonyId,
+        _latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
 
-        // MAXIM: check ceremony id here
+        // TODO: Check ceremony id here, See issue #1972
 
         let ceremony_handle = self.get_state_or_create_unauthorized(ceremony_id, logger);
 

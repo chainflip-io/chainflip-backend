@@ -20,7 +20,7 @@ use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, Account
 
 use super::{
     ceremony_manager::{CeremonyRequestInner, CeremonyResultSender, CeremonyTrait, DynStage},
-    common::CeremonyFailureReason,
+    common::{CeremonyFailureReason, PreProcessStageDataCheck},
     utils::PartyIdxMapping,
 };
 
@@ -109,12 +109,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             sleep_handle,
             logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
-    }
-
-    /// This is to allow calling a private method from tests
-    #[cfg(test)]
-    pub fn new_unauthorised_for_test(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
-        Self::new_unauthorised(ceremony_id, logger)
     }
 
     /// Process ceremony request from the State Chain, which allows
@@ -215,6 +209,17 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
         match &mut self.inner {
             None => {
+                if !data.is_first_stage() {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring data: non-initial stage data for unauthorised ceremony";
+                        "from_id" => sender_id.to_string(),
+                    );
+                    return None;
+                }
+
+                // We do not need to check data_size_is_valid here because stage 1 messages are always the correct size.
+
                 self.add_delayed(sender_id, data);
             }
             Some(authorised_state) => {
@@ -234,6 +239,16 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                         return None;
                     }
                 };
+
+                // Check that the number of elements in the data is what we expect
+                if !data.data_size_is_valid(authorised_state.num_of_participants) {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring data: incorrect number of elements";
+                        "from_id" => sender_id.to_string(),
+                    );
+                    return None;
+                }
 
                 // Check if we should delay this message for the next stage to use
                 if stage.should_delay(&data) {
@@ -368,26 +383,15 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<Ceremony>> {
         self.inner.map(|inner| inner.result_sender)
     }
-
-    #[cfg(test)]
-    pub fn get_stage(&self) -> Option<String> {
-        self.inner
-            .as_ref()
-            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
-    }
-
-    #[cfg(test)]
-    pub fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
-        self.inner.as_ref().and_then(|s| {
-            s.stage
-                .as_ref()
-                .map(|s| s.awaited_parties().len() as AuthorityCount)
-        })
-    }
 }
 
 #[cfg(test)]
 impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
+    /// This is to allow calling a private method from tests
+    pub fn new_unauthorised_for_test(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
+        Self::new_unauthorised(ceremony_id, logger)
+    }
+
     pub fn new_authorised(
         ceremony_id: CeremonyId,
         stage: DynStage<Ceremony>,
@@ -409,5 +413,23 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             sleep_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
             logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
+    }
+
+    pub fn get_stage(&self) -> Option<String> {
+        self.inner
+            .as_ref()
+            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
+    }
+
+    pub fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
+        self.inner.as_ref().and_then(|s| {
+            s.stage
+                .as_ref()
+                .map(|s| s.awaited_parties().len() as AuthorityCount)
+        })
+    }
+
+    pub fn set_timeout(&mut self, time: tokio::time::Instant) {
+        self.sleep_handle.as_mut().reset(time);
     }
 }

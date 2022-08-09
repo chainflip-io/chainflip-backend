@@ -1150,10 +1150,8 @@ pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment<Point> {
 
 impl<C: CeremonyTrait> Node<C> {
     pub fn force_stage_timeout(&mut self) {
-        // TODO: this function needs to be reworked:
-        // ceremony manager is no longer responsible
-        // for checking/forcing ceremony timeouts
-        unimplemented!();
+        self.ceremony_runner
+            .set_timeout(tokio::time::Instant::now() - std::time::Duration::from_secs(1));
     }
 
     pub fn ensure_ceremony_at_signing_stage(
@@ -1162,6 +1160,7 @@ impl<C: CeremonyTrait> Node<C> {
         ceremony_id: CeremonyId,
     ) -> Result<()> {
         // TODO: actually do the check, noop for now
+        //self.ceremony_runner.get_stage()
         Ok(())
     }
 
