@@ -33,11 +33,16 @@ pub mod common {
 	// ======= Keygen and signing =======
 
 	/// Maximum duration a ceremony stage can last
-	pub const MAX_STAGE_DURATION_SECONDS: u32 = 300;
+	pub const MAX_STAGE_DURATION_SECONDS: u32 = 30;
 
-	// Allow for the CFE to receive the finalised block (~3.5*6) for initiation, and some extra time
-	// (~9) for networking / other latency
-	const TIMEOUT_BUFFER_SECONDS: u32 = 30;
+	const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
+	const NETWORK_DELAY_SECONDS: u32 = 6;
+	// buffer for final key computation
+	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
+
+	const TIMEOUT_BUFFER_SECONDS: u32 = EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) +
+		NETWORK_DELAY_SECONDS +
+		KEY_DERIVATION_DELAY_SECONDS;
 
 	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
 
