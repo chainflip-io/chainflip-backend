@@ -123,10 +123,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         &mut self,
         mut stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
-        // MAXIM: change this to Sender<Outcome>?
         result_sender: CeremonyResultSender<Ceremony>,
         num_of_participants: AuthorityCount,
-        // MAXIM: change this to Option<Outcome>
     ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
         if self.inner.is_some() {
             let _result = result_sender.send(Err((
@@ -280,6 +278,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     /// Delay message to be processed in the next stage
     fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
+        // MAXIM: check data size somewhere around here?
         match &self.inner {
             Some(authorised_state) => {
                 let stage = authorised_state

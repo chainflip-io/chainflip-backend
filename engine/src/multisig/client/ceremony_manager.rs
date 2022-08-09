@@ -348,12 +348,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 }
                 Some((sender_id, data)) = incoming_p2p_message_receiver.recv() => {
 
-                    // MAXIM: is this still accurate?
-
-                    // For now we assume that every message we receive via p2p is a
-                    // secp256k1 MultisigMessage (same as before). We will add
-                    // demultiplexing once we add support for other types of messages.
-
+                    // At this point we know the messages to be for the
+                    // appropriate curve (as defined by `C`)
                     match bincode::deserialize(&data) {
                         Ok(message) => self.process_p2p_message(sender_id, message),
                         Err(_) => {
@@ -405,6 +401,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             Ok(request) => request,
             Err(failed_outcome) => {
                 let _ = result_sender.send(failed_outcome);
+                // Do we need to clean up more state here?
                 return;
             }
         };
@@ -603,8 +600,6 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         slog::debug!(logger, "Received data {}", &data);
 
         // MAXIM: check ceremony id here
-
-        // MAXIM: check data size in ceremony runner
 
         let ceremony_handle = self.get_state_or_create_unauthorized(ceremony_id, logger);
 

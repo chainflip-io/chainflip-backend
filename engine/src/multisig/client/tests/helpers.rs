@@ -102,8 +102,6 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool)
     let ceremony_runner =
         CeremonyRunner::new_unauthorised_for_test(INITIAL_LATEST_CEREMONY_ID, &logger);
 
-    // MAXIM: do we need to communicate that we allow high pubkey?
-
     Node {
         outgoing_p2p_message_sender,
         own_account_id: account_id,
@@ -471,11 +469,6 @@ where
             ),
         >,
     >{
-        // MAXIM: This function does not work because Ceremony Runner is not responsible for sending the outcome
-        // via the oneshot channel, but rather it returns it via return value in methods like process_messages,
-        // which then gets sent by the layer above. We will need to change how we collect the outcome to
-        // check the return value and store it somewhere
-
         let results: HashMap<_, _> = self
             .nodes
             .iter_mut()
@@ -486,8 +479,6 @@ where
                 )
             })
             .collect();
-
-        println!("collected results: {}", results.len());
 
         let (ok_results, (all_reported_parties, failure_reasons)): (
             HashMap<_, _>,
