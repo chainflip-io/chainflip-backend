@@ -262,11 +262,6 @@ where
             blocks_per_heartbeat
         );
 
-        state_chain_client
-            .submit_signed_extrinsic(pallet_cf_reputation::Call::heartbeat {}, &logger)
-            .await
-            .expect("Should be able to submit first heartbeat");
-
         let send_instruction = |observe_instruction: ObserveInstruction| {
             witnessing_instruction_sender
                 .send(observe_instruction)
@@ -308,10 +303,12 @@ where
             })
             .await;
 
+        let mut number_of_blocks_read: u32 = 0;
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
                 Some(result_block_header) => {
+                    number_of_blocks_read += 1;
                     match result_block_header {
                         Ok(current_block_header) => {
                             let current_block_hash = current_block_header.hash();
@@ -498,10 +495,15 @@ where
                             // All nodes must send a heartbeat regardless of their validator status (at least for now).
                             // We send it in the middle of the online interval (so any node sync issues don't
                             // cause issues (if we tried to send on one of the interval boundaries)
-                            if (current_block_header.number
+                            const BLOCKS_BEFORE_INIT_HEARTBEAT: u32 = 10;
+                            if (((current_block_header.number
                                 + (state_chain_client.heartbeat_block_interval / 2))
                                 % blocks_per_heartbeat
-                                == 0
+                                == 0) && number_of_blocks_read > BLOCKS_BEFORE_INIT_HEARTBEAT)
+                                // We want to submit a heartbeat at ~1 minute after starting up.
+                                // submitting one *at* startup means we could (falsely) submit many heartbeats
+                                // if we enter a crash/restart loop
+                                || number_of_blocks_read == BLOCKS_BEFORE_INIT_HEARTBEAT
                             {
                                 slog::info!(
                                     logger,

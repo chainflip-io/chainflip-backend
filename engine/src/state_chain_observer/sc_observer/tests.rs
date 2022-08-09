@@ -102,11 +102,6 @@ fn expect_sc_observer_start(
             });
     }
 
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
-
     initial_block_hash
 }
 
@@ -326,12 +321,6 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| Ok(Some(StorageData(1_u32.encode()))));
 
-    // Heartbeat on block number 20
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
-
     // Get events from the block
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
@@ -418,12 +407,6 @@ async fn not_historical_to_authority_on_new_epoch() {
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
-
-    // Heartbeat on block number 20
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
 
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
 
@@ -513,6 +496,70 @@ async fn not_historical_to_authority_on_new_epoch() {
 }
 
 #[tokio::test]
+async fn submits_heartbeat_after_reading_10_blocks() {
+    let start_block = 25;
+    let number_of_blocks = 10;
+    let blocks: Vec<_> = (start_block..(start_block + number_of_blocks))
+        .into_iter()
+        .map(|i| Ok(test_header(i)))
+        .collect();
+
+    let sc_block_stream = tokio_stream::iter(blocks);
+
+    let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
+    let initial_block_hash = expect_sc_observer_start(
+        &mut mock_state_chain_rpc_client,
+        &[3],
+        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
+    );
+
+    mock_state_chain_rpc_client
+        .expect_storage_events_at()
+        .with(predicate::always(), eq(mock_events_key()))
+        .times(number_of_blocks as usize)
+        .returning(|_, _| Ok(vec![]));
+
+    // Heartbeat after reading 10 blocks
+    mock_state_chain_rpc_client
+        .expect_submit_extrinsic_rpc()
+        .times(1)
+        .returning(move |_| Ok(H256::default()));
+
+    let logger = new_test_logger();
+
+    let eth_rpc_mock = MockEthRpcApi::new();
+
+    let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+
+    let multisig_client = Arc::new(MockMultisigClientApi::new());
+
+    let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (instruction_sender, _instruction_receiver) = broadcast::channel(10);
+
+    let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+
+    let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
+        mock_state_chain_rpc_client,
+    ));
+
+    sc_observer::start(
+        state_chain_client,
+        sc_block_stream,
+        eth_broadcaster,
+        multisig_client,
+        account_peer_mapping_change_sender,
+        instruction_sender,
+        cfe_settings_update_sender,
+        initial_block_hash,
+        logger,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn current_authority_to_historical_on_new_epoch_event() {
     // === FAKE BLOCKHEADERS ===
     let empty_block_header = test_header(20);
@@ -533,12 +580,6 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         &[3],
         &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
     );
-
-    // Heartbeat on block number 20
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
 
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
 
