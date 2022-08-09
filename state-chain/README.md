@@ -27,8 +27,10 @@ cargo build --release
 ```
 
 ### Chain Specification Docs
+
 Docs on custom chain specifications can be found at https://docs.substrate.io/main-docs/build/chain-spec/.
-In order to create a custom chain specification use `./target/release/chainflip-node build-spec`.
+
+In order to create a custom chain specification use `./target/release/chainflip-node build-spec --help` to find out how.
 
 ### Benchmark
 
