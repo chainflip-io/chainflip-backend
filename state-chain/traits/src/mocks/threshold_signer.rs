@@ -64,9 +64,9 @@ where
 	}
 
 	fn request_signature_full(
-		key_id: Self::KeyId,
-		participants: Vec<Self::ValidatorId>,
-		payload: <C as ChainCrypto>::Payload,
+		_key_id: Self::KeyId,
+		_participants: Vec<Self::ValidatorId>,
+		_payload: <C as ChainCrypto>::Payload,
 	) -> Self::RequestId {
 		todo!()
 	}

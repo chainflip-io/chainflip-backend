@@ -8,7 +8,7 @@ use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32, BuildStorage, KeyTypeId,
+	AccountId32, BuildStorage,
 };
 use std::time::Duration;
 
@@ -145,7 +145,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
-	type KeyId = <Ethereum as ChainCrypto>::KeyTypeId;
+	type KeyId = <Test as Chainflip>::KeyId;
 	type ValidatorId = AccountId;
 
 	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
@@ -173,9 +173,9 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	}
 
 	fn request_signature_full(
-		key_id: Self::KeyId,
-		participants: Vec<Self::ValidatorId>,
-		payload: <Ethereum as ChainCrypto>::Payload,
+		_key_id: Self::KeyId,
+		_participants: Vec<Self::ValidatorId>,
+		_payload: <Ethereum as ChainCrypto>::Payload,
 	) -> Self::RequestId {
 		todo!()
 	}

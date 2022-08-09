@@ -70,7 +70,6 @@ pub mod pallet {
 		Twox64Concat,
 	};
 	use frame_system::{ensure_none, pallet_prelude::*};
-	use sp_runtime::KeyTypeId;
 
 	/// Metadata for a pending threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
