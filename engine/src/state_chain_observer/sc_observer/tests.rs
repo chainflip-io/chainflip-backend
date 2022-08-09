@@ -510,11 +510,13 @@ async fn submits_heartbeat_after_reading_10_blocks() {
 
     let sc_block_stream = tokio_stream::iter(blocks);
 
+    const EPOCH_THREE: u32 = 3;
+    const EPOCH_FOUR: u32 = 4;
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(
         &mut mock_state_chain_rpc_client,
-        &[3],
-        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
+        &[EPOCH_THREE],
+        &[(EPOCH_THREE, Some(EPOCH_THREE_FROM)), (EPOCH_FOUR, None)],
     );
 
     mock_state_chain_rpc_client
