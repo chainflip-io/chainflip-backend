@@ -556,17 +556,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
 
 		let key_id = key_id.unwrap_or(T::KeyProvider::current_key_id());
-		let nominees: Option<Vec<T::ValidatorId>>;
+		let maybe_nominees: Option<Vec<T::ValidatorId>>;
 		if participants.is_none() {
-			nominees = T::SignerNomination::threshold_nomination_with_seed(
+			maybe_nominees = T::SignerNomination::threshold_nomination_with_seed(
 				(ceremony_id, attempt),
 				T::EpochInfo::epoch_index(),
 			);
 		} else {
-			nominees = participants;
+			maybe_nominees = participants;
 		}
 
-		if let Some(nominees) = nominees {
+		if let Some(nominees) = maybe_nominees {
 			log::trace!(
 				target: "threshold-signing",
 				"Threshold set selected for request {}, requesting signature ceremony {}.",
