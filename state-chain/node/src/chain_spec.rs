@@ -1,6 +1,9 @@
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
+use sp_core::{
+	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
+	sr25519, Pair, Public,
+};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
@@ -10,7 +13,7 @@ use state_chain_runtime::{
 	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
 	SystemConfig, ValidatorConfig, WASM_BINARY,
 };
-use std::{env, marker::PhantomData};
+use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 mod network_env;
@@ -24,7 +27,7 @@ const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf6641
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_RINKEBY;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
-// 50k FLIP in Fliperinos
+// 50k FLIP in FLIPPERINOSs
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
@@ -578,6 +581,18 @@ fn testnet_genesis(
 		},
 		validator: ValidatorConfig {
 			genesis_authorities: initial_authorities.iter().map(|(id, ..)| id.clone()).collect(),
+			genesis_backups: genesis_stakers
+				.iter()
+				.cloned()
+				.collect::<BTreeSet<_>>()
+				.difference(
+					&initial_authorities
+						.iter()
+						.map(|(account_id, _, _)| account_id.clone())
+						.collect::<BTreeSet<_>>(),
+				)
+				.map(|account_id| (account_id.clone(), genesis_stake_amount))
+				.collect(),
 			blocks_per_epoch: 8 * HOURS,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_reward_node_percentage: 20,
@@ -633,7 +648,6 @@ fn testnet_genesis(
 
 pub fn chainflip_properties() -> Properties {
 	let mut properties = Properties::new();
-	// TODO - https://github.com/chainflip-io/chainflip-backend/issues/911
 	properties.insert(
 		"ss58Format".into(),
 		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
@@ -643,4 +657,9 @@ pub fn chainflip_properties() -> Properties {
 	properties.insert("color".into(), "#61CFAA".into());
 
 	properties
+}
+
+/// Sets global that ensures SC AccountId's are printed correctly
+pub fn use_chainflip_account_id_encoding() {
+	set_default_ss58_version(Ss58AddressFormat::custom(CHAINFLIP_SS58_PREFIX));
 }

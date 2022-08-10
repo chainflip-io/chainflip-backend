@@ -663,7 +663,7 @@ pub mod pallet {
 
 	/// The duration of an epoch in blocks.
 	#[pallet::storage]
-	#[pallet::getter(fn epoch_number_of_blocks)]
+	#[pallet::getter(fn blocks_per_epoch)]
 	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Current epoch index.
@@ -778,6 +778,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: Vec<ValidatorIdOf<T>>,
+		pub genesis_backups: BackupMap<T>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
@@ -790,6 +791,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				genesis_authorities: Default::default(),
+				genesis_backups: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
@@ -815,12 +817,11 @@ pub mod pallet {
 				T::ChainflipAccount::set_current_authority(id.into_ref());
 			}
 
-			// TODO: We should have the stakers come in here as backup candidates...
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
 				self.bond,
-				BackupMap::<T>::default(),
+				self.genesis_backups.clone(),
 			);
 		}
 	}
@@ -1014,7 +1015,7 @@ impl<T: Config> Pallet<T> {
 
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
-		// We've got new validators, which means the backups may have changed.
+		// We've got new authorities, which means the backups may have changed.
 		Backups::<T>::put(backup_map);
 	}
 
@@ -1026,9 +1027,15 @@ impl<T: Config> Pallet<T> {
 
 	fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
-			log::info!(
+			log::warn!(
 				target: "cf-validator",
-				"Can't start rotation. System is in maintenance mode."
+				"Can't start authority rotation. System is in maintenance mode."
+			);
+			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
+		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+			log::error!(
+				target: "cf-validator",
+				"Can't start authority rotation. Authority rotation already in progress."
 			);
 			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}
@@ -1085,17 +1092,9 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
-			match T::VaultRotator::start_vault_rotation(candidates) {
-				Ok(()) => {
-					log::info!(target: "cf-validator", "Vault rotation initiated.");
-					Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
-				},
-				Err(e) => {
-					log::error!(target: "cf-validator", "Unable to start vault rotation: {:?}", e);
-					#[cfg(not(test))]
-					debug_assert!(false, "Unable to start vault rotation");
-				},
-			}
+			T::VaultRotator::start_vault_rotation(candidates);
+			log::info!(target: "cf-validator", "Vault rotation initiated.");
+			Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
 		}
 	}
 
@@ -1105,20 +1104,27 @@ impl<T: Config> Pallet<T> {
 			Self::current_authority_count() as usize
 	}
 
-	// Returns the ids of the highest staked backup nodes, who are eligible for the backup rewards
-	pub fn highest_staked_backup_nodes() -> Vec<ValidatorIdOf<T>> {
-		let mut backups_by_desc_amount: Vec<Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> =
-			Backups::<T>::get()
-				.into_iter()
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
-				.collect();
-
-		backups_by_desc_amount.sort_unstable_by_key(|Bid { amount, .. }| Reverse(*amount));
-
-		backups_by_desc_amount
+	// Returns the bids of the highest staked backup nodes, who are eligible for the backup rewards
+	pub fn highest_staked_qualified_backup_node_bids(
+	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
+		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
-			.take(Self::backup_reward_nodes_limit())
-			.map(|bid| bid.bidder_id)
+			.filter(|(bidder_id, _)| T::ValidatorQualification::is_qualified(bidder_id))
+			.collect();
+
+		let limit = Self::backup_reward_nodes_limit();
+		if limit < backups.len() {
+			backups.select_nth_unstable_by_key(limit - 1, |(_, amount)| Reverse(*amount));
+			backups.truncate(limit);
+		}
+
+		backups.into_iter().map(|(bidder_id, amount)| Bid { bidder_id, amount })
+	}
+
+	/// Returns ids as BTreeSet for fast lookups
+	pub fn highest_staked_qualified_backup_nodes_lookup() -> BTreeSet<ValidatorIdOf<T>> {
+		Self::highest_staked_qualified_backup_node_bids()
+			.map(|Bid { bidder_id, .. }| bidder_id)
 			.collect()
 	}
 
@@ -1231,7 +1237,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	fn average_session_length() -> T::BlockNumber {
-		Self::epoch_number_of_blocks()
+		Self::blocks_per_epoch()
 	}
 
 	fn estimate_current_session_progress(
@@ -1259,6 +1265,11 @@ impl<T: Config> EmergencyRotation for Pallet<T> {
 		if CurrentRotationPhase::<T>::get() == RotationPhase::<T>::Idle {
 			Pallet::<T>::deposit_event(Event::EmergencyRotationInitiated);
 			Self::start_authority_rotation();
+		} else {
+			log::warn!(
+				target: "cf-validator",
+				"Can't start emergency rotation. Authority rotation already in progress."
+			);
 		}
 	}
 }
@@ -1305,15 +1316,17 @@ impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 			return
 		}
 
-		// TODO: You shouldn't have to be qualified to be removed from the backup list #1849
-		if T::ValidatorQualification::is_qualified(validator_id) {
-			Backups::<T>::mutate(|backups| {
-				if amount.is_zero() {
-					backups.remove(validator_id).expect("This id should exist in the map");
-				} else {
-					backups.insert(validator_id.clone(), amount);
+		Backups::<T>::mutate(|backups| {
+			if amount.is_zero() {
+				if backups.remove(validator_id).is_none() {
+					#[cfg(not(test))]
+					log::warn!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
+					#[cfg(test)]
+					panic!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
 				}
-			});
-		}
+			} else {
+				backups.insert(validator_id.clone(), amount);
+			}
+		});
 	}
 }

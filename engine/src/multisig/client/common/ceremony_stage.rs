@@ -41,7 +41,7 @@ pub enum ProcessMessageResult {
 }
 
 /// Defines actions that any given stage of a ceremony should be able to perform
-pub trait CeremonyStage: std::fmt::Display {
+pub trait CeremonyStage {
     // Message type to be processed by a particular stage
     type Message;
     // Result to return if the ceremony is successful
@@ -69,8 +69,9 @@ pub trait CeremonyStage: std::fmt::Display {
     fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
-    #[cfg(test)]
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
+
+    fn get_stage_name(&self) -> super::CeremonyStageName;
 }
 
 /// Data useful during any stage of a ceremony

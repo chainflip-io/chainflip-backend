@@ -1,9 +1,9 @@
-use crate::state_chain::client::StateChainClient;
+use crate::state_chain_observer::client::StateChainClient;
 use std::sync::Arc;
 
 use crate::{
     eth::{utils, EthRpcApi, SignatureAndEvent},
-    state_chain::client::StateChainRpcApi,
+    state_chain_observer::client::StateChainRpcApi,
 };
 
 use cf_traits::EpochIndex;
@@ -20,7 +20,7 @@ use async_trait::async_trait;
 
 use anyhow::Result;
 
-use super::{event_common::EventWithCommon, DecodeLogClosure, EthObserver, EventParseError};
+use super::{event::Event, DecodeLogClosure, EthObserver, EventParseError};
 
 pub struct StakeManager {
     pub deployed_address: H160,
@@ -90,7 +90,8 @@ impl EthObserver for StakeManager {
     async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
-        event: EventWithCommon<Self::EventParameters>,
+        _block_number: u64,
+        event: Event<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,

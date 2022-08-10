@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::multisig::{
     client::{
         self,
-        common::{BroadcastStageName, CeremonyFailureReason, SigningFailureReason},
+        common::{CeremonyFailureReason, CeremonyStageName, SigningFailureReason},
         signing,
     },
     crypto::CryptoScheme,
@@ -67,7 +67,7 @@ impl<C: CryptoScheme>
     for AwaitCommitments1<C>
 {
     type Message = Comm1<C::Point>;
-    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
+    const NAME: CeremonyStageName = CeremonyStageName::AwaitCommitments1;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
@@ -116,7 +116,7 @@ impl<C: CryptoScheme>
     for VerifyCommitmentsBroadcast2<C>
 {
     type Message = VerifyComm2<C::Point>;
-    const NAME: BroadcastStageName = BroadcastStageName::CoefficientCommitments;
+    const NAME: CeremonyStageName = CeremonyStageName::VerifyCommitmentsBroadcast2;
 
     /// Simply report all data that we have received from
     /// other parties in the last stage
@@ -143,11 +143,7 @@ impl<C: CryptoScheme>
             }
         };
 
-        slog::debug!(
-            self.common.logger,
-            "{} have been correctly broadcast",
-            Self::NAME
-        );
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         let processor = LocalSigStage3::<C> {
             common: self.common.clone(),
@@ -179,7 +175,7 @@ impl<C: CryptoScheme>
     for LocalSigStage3<C>
 {
     type Message = LocalSig3<C::Point>;
-    const NAME: BroadcastStageName = BroadcastStageName::LocalSignatures;
+    const NAME: CeremonyStageName = CeremonyStageName::LocalSigStage3;
 
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
@@ -240,7 +236,7 @@ impl<C: CryptoScheme>
     for VerifyLocalSigsBroadcastStage4<C>
 {
     type Message = VerifyLocalSig4<C::Point>;
-    const NAME: BroadcastStageName = BroadcastStageName::LocalSignatures;
+    const NAME: CeremonyStageName = CeremonyStageName::VerifyLocalSigsBroadcastStage4;
 
     /// Broadcast all signature shares sent to us
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -270,11 +266,7 @@ impl<C: CryptoScheme>
             }
         };
 
-        slog::debug!(
-            self.common.logger,
-            "{} have been correctly broadcast",
-            Self::NAME
-        );
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         let all_idxs = &self.common.all_idxs;
 

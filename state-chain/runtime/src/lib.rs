@@ -65,7 +65,7 @@ use sp_version::RuntimeVersion;
 
 pub use cf_traits::{
 	BlockNumber, ChainflipAccount, ChainflipAccountData, ChainflipAccountState,
-	ChainflipAccountStore, EpochInfo, FlipBalance, SessionKeysRegistered,
+	ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
@@ -312,7 +312,7 @@ impl pallet_aura::Config for Runtime {
 }
 
 parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::epoch_number_of_blocks().into();
+	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
 }
 
 type KeyOwnerIdentification<T, Id> =
@@ -392,6 +392,21 @@ impl pallet_cf_staking::Config for Runtime {
 	type RegisterClaim = eth::api::EthereumApi;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
+}
+
+impl pallet_cf_tokenholder_governance::Config for Runtime {
+	type Event = Event;
+	type FeePayment = Flip;
+	type Chain = Ethereum;
+	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
+	type StakingInfo = Flip;
+	type ApiCalls = eth::api::EthereumApi;
+	type Broadcaster = EthereumBroadcaster;
+	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
+	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
+	/// 1000 FLIP in FLIPPERINOS
+	type ProposalFee = ConstU128<1_000_000_000_000_000_000_000>;
+	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
 }
 
 impl pallet_cf_governance::Config for Runtime {
@@ -476,7 +491,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type SigningTimeout = ConstU32<5>;
 	type TransmissionTimeout = ConstU32<{ 10 * MINUTES }>;
-	type MaximumAttempts = ConstU32<MAXIMUM_BROADCAST_ATTEMPTS>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
 }
@@ -511,6 +525,7 @@ construct_runtime!(
 		Authorship: pallet_authorship,
 		Grandpa: pallet_grandpa,
 		Governance: pallet_cf_governance,
+		TokenholderGovernance: pallet_cf_tokenholder_governance,
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		Reputation: pallet_cf_reputation,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
@@ -585,6 +600,7 @@ mod benches {
 		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
 		[pallet_cf_governance, Governance]
+		[pallet_cf_tokenholder_governance, TokenholderGovernance]
 		[pallet_cf_vaults, EthereumVault]
 		[pallet_cf_reputation, Reputation]
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
@@ -629,7 +645,7 @@ impl_runtime_apis! {
 			Validator::current_epoch()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::epoch_number_of_blocks()
+			Validator::blocks_per_epoch()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
@@ -662,6 +678,8 @@ impl_runtime_apis! {
 				stake: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
+				is_live: Reputation::is_qualified(&account_id),
+				is_activated: !pallet_cf_staking::AccountRetired::<Runtime>::get(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
@@ -669,7 +687,7 @@ impl_runtime_apis! {
 					ChainflipAccountStateWithPassive::CurrentAuthority
 				} else {
 					// if the node is in this set, they were previously known as backups
-					let backup_or_passive = if Validator::highest_staked_backup_nodes().contains(&account_id) {
+					let backup_or_passive = if Validator::highest_staked_qualified_backup_nodes_lookup().contains(&account_id) {
 						BackupOrPassive::Backup
 					} else {
 						BackupOrPassive::Passive

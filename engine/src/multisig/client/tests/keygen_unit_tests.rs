@@ -1,12 +1,11 @@
 use cf_traits::AuthorityCount;
 use rand_legacy::FromEntropy;
 use std::collections::BTreeSet;
-use utilities::assert_ok;
 
 use crate::multisig::{
     client::{
         common::{
-            BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, KeygenFailureReason,
+            BroadcastFailureReason, CeremonyFailureReason, CeremonyStageName, KeygenFailureReason,
         },
         keygen::{
             self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
@@ -14,8 +13,9 @@ use crate::multisig::{
         },
         tests::helpers::{
             all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
-            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
-            split_messages_for, standard_keygen, KeygenCeremonyRunner,
+            gen_invalid_keygen_comm1, get_invalid_hash_comm, get_keygen_stage_name_from_number,
+            new_nodes, run_keygen, run_stages, split_messages_for, standard_keygen,
+            KeygenCeremonyRunner,
         },
         utils::PartyIdxMapping,
     },
@@ -51,16 +51,30 @@ async fn should_delay_comm1_before_keygen_request() {
 
     ceremony.distribute_messages(early_msgs).await;
 
-    assert_ok!(ceremony.nodes[&test_id]
-        .ensure_ceremony_at_keygen_stage(STAGE_FINISHED_OR_NOT_STARTED, ceremony.ceremony_id));
+    assert_eq!(
+        ceremony.nodes[&test_id]
+            .ceremony_manager
+            .get_keygen_stage_name(ceremony.ceremony_id),
+        None
+    );
 
     ceremony.request().await;
 
-    assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(1, ceremony.ceremony_id));
+    assert_eq!(
+        ceremony.nodes[&test_id]
+            .ceremony_manager
+            .get_keygen_stage_name(ceremony.ceremony_id),
+        Some(CeremonyStageName::HashCommitments1),
+    );
 
     ceremony.distribute_messages(late_msg).await;
 
-    assert_ok!(ceremony.nodes[&test_id].ensure_ceremony_at_keygen_stage(2, ceremony.ceremony_id));
+    assert_eq!(
+        ceremony.nodes[&test_id]
+            .ceremony_manager
+            .get_keygen_stage_name(ceremony.ceremony_id),
+        Some(CeremonyStageName::VerifyHashCommitmentsBroadcast2),
+    );
 }
 
 // Data for any stage that arrives one stage too early should be properly delayed
@@ -88,26 +102,30 @@ async fn should_delay_stage_data() {
             );
             ceremony.distribute_messages(early_messages).await;
 
-            assert_ok!(ceremony.nodes[target_account_id]
-                .ensure_ceremony_at_keygen_stage(stage_number, ceremony.ceremony_id));
+            assert_eq!(
+                ceremony.nodes[target_account_id]
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number)
+            );
 
             ceremony.distribute_messages(late_messages).await;
 
-            assert_ok!(ceremony.nodes[target_account_id]
-                .ensure_ceremony_at_keygen_stage(stage_number + 1, ceremony.ceremony_id));
+            assert_eq!(
+                ceremony.nodes[target_account_id]
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number + 1)
+            );
 
             ceremony.distribute_messages(late_messages_next).await;
 
             // Check that the stage correctly advanced or finished
-            assert_ok!(
-                ceremony.nodes[target_account_id].ensure_ceremony_at_keygen_stage(
-                    if stage_number + 2 > KEYGEN_STAGES {
-                        STAGE_FINISHED_OR_NOT_STARTED
-                    } else {
-                        stage_number + 2
-                    },
-                    ceremony.ceremony_id
-                )
+            assert_eq!(
+                ceremony.nodes[target_account_id]
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number + 2)
             );
         },
     )
@@ -346,18 +364,21 @@ async fn should_ignore_unexpected_message_for_stage() {
                 ceremony.distribute_messages(msg_from_1).await;
             }
 
-            assert!(
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(stage_number, ceremony.ceremony_id)
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unexpected stage"
             );
 
             ceremony.distribute_messages(other_msgs).await;
-            assert!(
+
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(stage_number, ceremony.ceremony_id)
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore duplicate messages"
             );
 
@@ -371,26 +392,21 @@ async fn should_ignore_unexpected_message_for_stage() {
                         .collect(),
                 )
                 .await;
-            assert!(
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(stage_number, ceremony.ceremony_id)
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unknown account id"
             );
 
             ceremony.distribute_messages(msg_from_1).await;
 
-            assert!(
+            assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ensure_ceremony_at_keygen_stage(
-                        if stage_number + 1 > KEYGEN_STAGES {
-                            STAGE_FINISHED_OR_NOT_STARTED
-                        } else {
-                            stage_number + 1
-                        },
-                        ceremony.ceremony_id
-                    )
-                    .is_ok(),
+                    .ceremony_manager
+                    .get_keygen_stage_name(ceremony.ceremony_id),
+                get_keygen_stage_name_from_number(stage_number + 1),
                 "Failed to proceed to next stage"
             );
         },
@@ -430,7 +446,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                BroadcastStageName::CoefficientCommitments,
+                CeremonyStageName::VerifyCommitmentsBroadcast4,
             ),
         )
         .await;
@@ -464,7 +480,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                BroadcastStageName::HashCommitments,
+                CeremonyStageName::VerifyHashCommitmentsBroadcast2,
             ),
         )
         .await;
@@ -552,7 +568,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                BroadcastStageName::Complaints,
+                CeremonyStageName::VerifyComplaintsBroadcastStage7,
             ),
         )
         .await;
@@ -624,7 +640,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                BroadcastStageName::BlameResponses,
+                CeremonyStageName::VerifyBlameResponsesBroadcastStage9,
             ),
         )
         .await;
@@ -1048,7 +1064,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        BroadcastStageName::HashCommitments,
+                        CeremonyStageName::VerifyHashCommitmentsBroadcast2,
                     ),
                 )
                 .await
@@ -1082,7 +1098,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        BroadcastStageName::CoefficientCommitments,
+                        CeremonyStageName::VerifyCommitmentsBroadcast4,
                     ),
                 )
                 .await
@@ -1124,7 +1140,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        BroadcastStageName::Complaints,
+                        CeremonyStageName::VerifyComplaintsBroadcastStage7,
                     ),
                 )
                 .await
@@ -1181,7 +1197,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        BroadcastStageName::BlameResponses,
+                        CeremonyStageName::VerifyBlameResponsesBroadcastStage9,
                     ),
                 )
                 .await

@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult},
-    BroadcastStageName,
+    CeremonyStageName,
 };
 
 pub use super::broadcast_verification::verify_broadcasts;
@@ -33,9 +33,8 @@ pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     /// during this stage
     type Message: Clone + Into<Data> + TryFrom<Data>;
 
-    /// Broadcast Stage Name used for logging.
-    /// A broadcast and its verification will share the same name.
-    const NAME: BroadcastStageName;
+    /// Unique stage name used for logging and testing.
+    const NAME: CeremonyStageName;
 
     /// Init the stage, returning the data to broadcast
     fn init(&mut self) -> DataToSend<Self::Message>;
@@ -91,20 +90,23 @@ impl<Data, Result, Stage, Point, FailureReason> Display
 where
     Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
     Point: ECPoint,
+    BroadcastStage<Data, Result, Stage, Point, FailureReason>: CeremonyStage,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BroadcastStage<{}>", &self.processor)
+        write!(f, "BroadcastStage({})", &self.get_stage_name())
     }
 }
 
-impl<Point, Data, Result, Stage, FailureReason> CeremonyStage
+impl<Point, Data, Result, Stage, FailureReason, TryFromError> CeremonyStage
     for BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
     Point: ECPoint,
     Data: Clone + Display + Into<MultisigData<Point>>,
     Result: Clone,
     Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
-    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message: TryFrom<Data>,
+    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message:
+        TryFrom<Data, Error = TryFromError>,
+    TryFromError: Display,
 {
     type Message = Data;
     type Result = Result;
@@ -176,12 +178,13 @@ where
     fn process_message(&mut self, signer_idx: AuthorityCount, m: Data) -> ProcessMessageResult {
         let m: Stage::Message = match m.try_into() {
             Ok(m) => m,
-            Err(_) => {
+            Err(incorrect_type) => {
                 slog::warn!(
                     self.common.logger,
-                    "Ignoring an unexpected message for stage {} from party [{}]",
-                    self,
-                    signer_idx
+                    "Ignoring unexpected message {} while in stage {}",
+                    incorrect_type,
+                    self;
+                    "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
                 );
                 return ProcessMessageResult::NotReady;
             }
@@ -190,9 +193,9 @@ where
         if self.messages.contains_key(&signer_idx) {
             slog::warn!(
                 self.common.logger,
-                "Ignoring a redundant message for stage {} from party [{}]",
-                self,
-                signer_idx
+                "Ignoring a redundant message for stage {}",
+                self;
+                "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
@@ -200,9 +203,9 @@ where
         if !self.common.all_idxs.contains(&signer_idx) {
             slog::warn!(
                 self.common.logger,
-                "Ignoring a message from non-participant for stage {} from party [{}]",
-                self,
-                signer_idx
+                "Ignoring a message from non-participant for stage {}",
+                self;
+                "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
@@ -239,7 +242,6 @@ where
         self.processor.process(messages)
     }
 
-    #[cfg(test)]
     fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {
         let mut awaited = std::collections::BTreeSet::new();
 
@@ -250,5 +252,9 @@ where
         }
 
         awaited
+    }
+
+    fn get_stage_name(&self) -> CeremonyStageName {
+        <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::NAME
     }
 }

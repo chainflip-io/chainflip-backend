@@ -9,36 +9,27 @@ use web3::{
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq)]
-pub struct EventWithCommon<EventParameters: Debug> {
+pub struct Event<EventParameters: Debug> {
     /// The transaction hash of the transaction that emitted this event
     pub tx_hash: H256,
     /// The index number of this particular log, in the list of logs emitted by the tx_hash
     pub log_index: U256,
-    /// The block number at which the event occurred
-    pub block_number: u64,
-    /// Base fee per unit of gas for the block this event was included in
-    pub base_fee_per_gas: U256,
     /// The event specific parameters
     pub event_parameters: EventParameters,
 }
 
-impl<EventParameters: Debug> std::fmt::Display for EventWithCommon<EventParameters> {
+impl<EventParameters: Debug> std::fmt::Display for Event<EventParameters> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "EventParameters: {:?}; block_number: {}; tx_hash: {:#x}",
-            self.event_parameters, self.block_number, self.tx_hash
+            "EventParameters: {:?}; tx_hash: {:#x}",
+            self.event_parameters, self.tx_hash
         )
     }
 }
 
-impl<EventParameters: Debug> EventWithCommon<EventParameters> {
-    pub fn new_from_unparsed_logs<LogDecoder>(
-        decode_log: &LogDecoder,
-        log: Log,
-        block_number: u64,
-        base_fee_per_gas: U256,
-    ) -> Result<Self>
+impl<EventParameters: Debug> Event<EventParameters> {
+    pub fn new_from_unparsed_logs<LogDecoder>(decode_log: &LogDecoder, log: Log) -> Result<Self>
     where
         LogDecoder: Fn(H256, RawLog) -> Result<EventParameters>,
     {
@@ -49,8 +40,6 @@ impl<EventParameters: Debug> EventWithCommon<EventParameters> {
             log_index: log
                 .log_index
                 .ok_or_else(|| anyhow::Error::msg("Could not get log index from ETH log"))?,
-            base_fee_per_gas,
-            block_number,
             event_parameters: decode_log(
                 *log.topics.first().ok_or_else(|| {
                     anyhow::Error::msg("Could not get event signature from ETH log")
@@ -83,7 +72,7 @@ mod tests {
             H256::from_str("0x621aebbe0bb116ae98d36a195ad8df4c5e7c8785fae5823f5f1fe1b691e91bf2")
                 .unwrap();
 
-        let event = EventWithCommon::new_from_unparsed_logs(
+        let event = Event::new_from_unparsed_logs(
             &key_manager.decode_log_closure().unwrap(),
              web3::types::Log {
                 address: H160::zero(),
@@ -99,8 +88,6 @@ mod tests {
                 log_type: None,
                 removed: None,
             },
-            0,
-            U256::default(),
         ).unwrap();
 
         assert_eq!(event.tx_hash, transaction_hash);

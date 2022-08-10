@@ -188,8 +188,8 @@ mod tests {
 
     use super::*;
 
-    use crate::engine_utils::test_utils::expect_recv_with_timeout;
     use crate::multisig_p2p::OutgoingMultisigStageMessages;
+    use crate::testing::expect_recv_with_timeout;
 
     const ACC_1: AccountId = AccountId::new([b'A'; 32]);
     const ACC_2: AccountId = AccountId::new([b'B'; 32]);

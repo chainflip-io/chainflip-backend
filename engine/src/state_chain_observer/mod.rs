@@ -1,6 +1,5 @@
 pub mod client;
 /// Reads events from state chain
-pub mod sc_observer;
+mod sc_observer;
 
-#[cfg(test)]
-pub mod tests;
+pub use sc_observer::start;

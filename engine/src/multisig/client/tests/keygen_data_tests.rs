@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use cf_traits::AuthorityCount;
 use rand_legacy::SeedableRng;
+use utilities::assert_panics;
 
 use crate::multisig::{
     client::{

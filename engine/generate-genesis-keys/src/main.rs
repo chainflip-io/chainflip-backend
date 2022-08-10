@@ -2,6 +2,7 @@ use chainflip_engine::{
     logging::utils::new_discard_logger,
     multisig::{client::keygen::generate_key_data_until_compatible, eth, PersistentKeyDB, Rng},
 };
+use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use rand_legacy::FromEntropy;
 use state_chain_runtime::AccountId;
 use std::{
@@ -48,6 +49,8 @@ where
 }
 
 fn main() {
+    use_chainflip_account_id_encoding();
+
     let node_id_to_name_map = load_node_ids_from_csv(
         csv::Reader::from_path(&env::var(ENV_VAR_INPUT_FILE).unwrap_or_else(|_| {
             panic!(

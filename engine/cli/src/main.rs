@@ -4,10 +4,11 @@ use chainflip_engine::{
         rpc::{EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         EthBroadcaster,
     },
-    state_chain::client::{
+    state_chain_observer::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
 };
+use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -27,6 +28,8 @@ mod settings;
 
 #[tokio::main]
 async fn main() {
+    use_chainflip_account_id_encoding();
+
     std::process::exit(match run_cli().await {
         Ok(_) => 0,
         Err(err) => {
@@ -239,6 +242,7 @@ async fn register_claim(
                 .expect("Unable to create EthWslRpcClient"),
             EthHttpRpcClient::new(&settings.eth, logger)
                 .expect("Unable to create EthHttpRpcClient"),
+            logger,
         ),
         logger,
     )?;

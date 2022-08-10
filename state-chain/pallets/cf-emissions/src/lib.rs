@@ -183,7 +183,7 @@ pub mod pallet {
 			migrations::PalletMigration::<T>::post_upgrade()
 		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			Self::mint_rewards_for_block();
+			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
 					Self::broadcast_update_total_supply(
@@ -313,12 +313,6 @@ impl<T: Config> Pallet<T> {
 			block_number.saturated_into(),
 			&T::EthEnvironmentProvider::stake_manager_address(),
 		));
-	}
-
-	/// Mints and distributes block author rewards via [RewardsDistribution].
-	fn mint_rewards_for_block() {
-		// Mint and Delegate the distribution.
-		T::RewardsDistribution::distribute();
 	}
 }
 

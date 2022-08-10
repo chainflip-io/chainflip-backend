@@ -12,7 +12,10 @@ use cf_chains::{
 	},
 	ChainAbi,
 };
-use cf_traits::{mocks::threshold_signer::MockThresholdSigner, AsyncResult, ThresholdSigner};
+use cf_traits::{
+	mocks::{epoch_info::MockEpochInfo, threshold_signer::MockThresholdSigner},
+	AsyncResult, EpochInfo, ThresholdSigner,
+};
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
 
@@ -193,7 +196,7 @@ fn test_broadcast_happy_path() {
 }
 
 #[test]
-fn test_abort_after_max_attempt_reached() {
+fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
 
@@ -204,9 +207,8 @@ fn test_abort_after_max_attempt_reached() {
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
-		// A series of failed attempts.  We would expect MAXIMUM_BROADCAST_ATTEMPTS to continue
-		// retrying until the request to retry is aborted with an event emitted
-		for _ in 0..=MAXIMUM_BROADCAST_ATTEMPTS {
+
+		for _ in 0..=MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
 
@@ -341,6 +343,13 @@ fn test_bad_signature() {
 			AwaitingTransactionSignature::<Test, Instance1>::get(broadcast_attempt_id).is_none()
 		);
 		assert!(AwaitingTransmission::<Test, Instance1>::get(broadcast_attempt_id).is_none());
+		// if we have a bad sig then we want to remove the attempt number for that failed attempt
+		// before we retry too
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
+			broadcast_attempt_id.broadcast_id
+		)
+		.unwrap()
+		.is_empty());
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// The nominee was reported.
@@ -807,21 +816,6 @@ fn test_transmission_request_expiry() {
 }
 
 #[test]
-fn no_authorities_available() {
-	new_test_ext().execute_with(|| {
-		// Simulate that no authority is currently online
-		MockNominator::set_nominee(None);
-		MockBroadcast::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
-		// Check the retry queue
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
-	});
-}
-
-#[test]
 fn re_request_threshold_signature() {
 	new_test_ext().execute_with(|| {
 		// Initiate broadcast
@@ -855,8 +849,12 @@ fn re_request_threshold_signature() {
 			MockThresholdSignature::default()
 		)
 		.is_none());
-		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(1).is_none());
-		assert!(ThresholdSignatureData::<Test, Instance1>::get(1).is_none());
+		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
+			broadcast_attempt_id.broadcast_id
+		)
+		.is_none());
+		assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+			.is_none());
 		// Verify that we have a new signature request in the pipeline
 		assert_eq!(
 			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),

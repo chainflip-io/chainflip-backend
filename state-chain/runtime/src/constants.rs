@@ -4,11 +4,12 @@ pub mod common {
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
+	const FLIP_DECIMALS: u32 = 18;
+	pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
+
 	pub const TOTAL_ISSUANCE: FlipBalance = {
-		const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
-		const TOKEN_DECIMALS: u32 = 18;
-		const TOKEN_FRACTIONS: FlipBalance = 10u128.pow(TOKEN_DECIMALS);
-		TOKEN_ISSUANCE * TOKEN_FRACTIONS
+		const TOTAL_ISSUANCE_IN_FLIP: FlipBalance = 90_000_000;
+		TOTAL_ISSUANCE_IN_FLIP * FLIPPERINOS_PER_FLIP
 	};
 
 	pub const MAX_AUTHORITIES: AuthorityCount = 150;
@@ -32,11 +33,16 @@ pub mod common {
 	// ======= Keygen and signing =======
 
 	/// Maximum duration a ceremony stage can last
-	pub const MAX_STAGE_DURATION_SECONDS: u32 = 300;
+	pub const MAX_STAGE_DURATION_SECONDS: u32 = 30;
 
-	// Allow for the CFE to receive the finalised block (~3.5*6) for initiation, and some extra time
-	// (~9) for networking / other latency
-	const TIMEOUT_BUFFER_SECONDS: u32 = 30;
+	const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
+	const NETWORK_DELAY_SECONDS: u32 = 6;
+	// buffer for final key computation
+	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
+
+	const TIMEOUT_BUFFER_SECONDS: u32 = EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) +
+		NETWORK_DELAY_SECONDS +
+		KEY_DERIVATION_DELAY_SECONDS;
 
 	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
 
@@ -48,9 +54,10 @@ pub mod common {
 			SECONDS_PER_BLOCK as u32;
 
 	/// The maximum number of blocks to wait for a keygen to complete.
-	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 =
-		((MAX_STAGE_DURATION_SECONDS * NUM_KEYGEN_STAGES) + TIMEOUT_BUFFER_SECONDS) /
-			SECONDS_PER_BLOCK as u32;
+	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = ((MAX_STAGE_DURATION_SECONDS *
+		(NUM_KEYGEN_STAGES + NUM_THRESHOLD_SIGNING_STAGES)) +
+		TIMEOUT_BUFFER_SECONDS) /
+		SECONDS_PER_BLOCK as u32;
 
 	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
 	pub const SECS_IN_AN_HOUR: u64 = 3600;

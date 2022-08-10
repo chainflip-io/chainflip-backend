@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
-use anyhow::Context;
+use crate::multisig::eth::EthSigning;
+use anyhow::{anyhow, Context};
 use chainflip_engine::{
+    common::format_iterator,
     eth::{
         self, build_broadcast_channel,
         key_manager::KeyManager,
-        rpc::{EthDualRpcClient, EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
+        rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         stake_manager::StakeManager,
         EthBroadcaster,
     },
@@ -15,23 +17,20 @@ use chainflip_engine::{
     multisig_p2p,
     p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
-    state_chain,
+    state_chain_observer,
     task_scope::with_main_task_scope,
 };
+use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-use sp_core::{
-    crypto::{set_default_ss58_version, Ss58AddressFormat},
-    U256,
-};
-use state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX;
-
-use crate::multisig::eth::EthSigning;
+use sp_core::U256;
+use utilities::print_chainflip_ascii_art;
 
 #[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
-    set_default_ss58_version(Ss58AddressFormat::custom(CHAINFLIP_SS58_PREFIX)); // Sets global that ensures SC AccountId's are printed correctly
+    print_chainflip_ascii_art();
+    use_chainflip_account_id_encoding();
 
     let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
@@ -59,15 +58,14 @@ fn main() -> anyhow::Result<()> {
                 EthHttpRpcClient::new(&settings.eth, &root_logger).context("Failed to create EthHttpRpcClient")?;
 
             let eth_dual_rpc =
-                EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone());
+                EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone(), &root_logger);
 
             let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
                 .context("Failed to create ETH broadcaster")?;
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
-                    .await
-                    .context("Failed to connect to state chain")?;
+                state_chain_observer::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
+                    .await?;
 
             state_chain_client
                 .submit_signed_extrinsic(
@@ -92,41 +90,30 @@ fn main() -> anyhow::Result<()> {
                 [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
             ) = build_broadcast_channel(10);
 
+            // validate chain ids
             {
-                // ensure configured eth node is pointing to the correct chain id
-                let chain_id_from_sc = U256::from(state_chain_client
+                let expected_chain_id = U256::from(state_chain_client
                     .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
                         latest_block_hash,
                     )
                     .await
-                    .context("Failed to get EthereumChainId from SC")?);
+                    .context("Failed to get EthereumChainId from state chain")?);
 
-                let chain_id_from_eth_ws = eth_ws_rpc_client
-                    .chain_id()
-                    .await
-                    .context("Failed to fetch chain id")?;
+                let mut errors = [
+                    validate_client_chain_id(
+                        &eth_ws_rpc_client,
+                        expected_chain_id,
+                    ).await,
+                    validate_client_chain_id(
+                        &eth_http_rpc_client,
+                        expected_chain_id,
+                    ).await]
+                    .into_iter()
+                    .filter_map(|res| res.err())
+                    .peekable();
 
-                let chain_id_from_eth_http = eth_http_rpc_client
-                    .chain_id()
-                    .await
-                    .context("Failed to fetch chain id")?;
-
-                let ws_wrong_network = chain_id_from_sc != chain_id_from_eth_ws;
-                let http_wrong_network = chain_id_from_sc != chain_id_from_eth_http;
-
-                if ws_wrong_network || http_wrong_network {
-                    return Err(anyhow::Error::msg(format!(
-                        "the ETH nodes are NOT pointing to the ETH network with ChainId {}, Please ensure they are.{}{}",
-                        chain_id_from_sc,
-                        lazy_format::lazy_format!(
-                            if ws_wrong_network => (" The WS ETH node is currently pointing to an ETH network with ChainId: {}.", chain_id_from_eth_ws)
-                            else => ("")
-                        ),
-                        lazy_format::lazy_format!(
-                            if http_wrong_network => (" The HTTP ETH node is currently pointing to an ETH network with ChainId: {}.", chain_id_from_eth_http)
-                            else => ("")
-                        ),
-                    )));
+                if errors.peek().is_some() {
+                    return Err(anyhow!(format!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors))));
                 }
             }
 
@@ -252,7 +239,7 @@ fn main() -> anyhow::Result<()> {
             );
 
             // Start state chain components
-            let sc_observer_future = state_chain::sc_observer::start(
+            let sc_observer_future = state_chain_observer::start(
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
@@ -261,12 +248,9 @@ fn main() -> anyhow::Result<()> {
                 witnessing_instruction_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
-                &root_logger
+                root_logger.clone()
             );
-            scope.spawn(async move {
-                sc_observer_future.await;
-                Ok(()) // TODO Handle errors/panics from sc_observer
-            });
+            scope.spawn(sc_observer_future);
 
             Ok(())
         }.boxed()

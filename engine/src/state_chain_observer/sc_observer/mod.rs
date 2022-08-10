@@ -1,5 +1,8 @@
+#[cfg(test)]
+mod tests;
+
 use cf_traits::EpochIndex;
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, FutureExt, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::KeygenError;
 use slog::o;
@@ -17,24 +20,26 @@ use crate::{
         KeyId, MessageHash,
     },
     multisig_p2p::AccountPeerMappingChange,
-    state_chain::client::{StateChainClient, StateChainRpcApi},
+    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+    task_scope::{with_task_scope, Scope},
 };
 
-async fn handle_keygen_request<MultisigClient, RpcClient>(
+async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
+    scope: &Scope<'a, anyhow::Result<()>, true>,
     multisig_client: Arc<MultisigClient>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ceremony_id: CeremonyId,
-    validator_candidates: Vec<AccountId32>,
+    keygen_participants: Vec<AccountId32>,
     logger: slog::Logger,
 ) where
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    if validator_candidates.contains(&state_chain_client.our_account_id) {
+    if keygen_participants.contains(&state_chain_client.our_account_id) {
         // Send a keygen request and wait to submit the result to the SC
-        tokio::spawn(async move {
+        scope.spawn(async move {
             let keygen_outcome = multisig_client
-                .keygen(ceremony_id, validator_candidates.clone())
+                .keygen(ceremony_id, keygen_participants.clone())
                 .await;
 
             let keygen_outcome = match keygen_outcome {
@@ -50,7 +55,7 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                         .sign(
                             ceremony_id,
                             KeyId(public_key_bytes.to_vec()),
-                            validator_candidates,
+                            keygen_participants,
                             MessageHash(data_to_sign),
                         )
                         .await
@@ -89,14 +94,16 @@ async fn handle_keygen_request<MultisigClient, RpcClient>(
                     &logger,
                 )
                 .await;
+            Ok(())
         });
     } else {
         // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.not_participating_ceremony(ceremony_id);
+        multisig_client.update_latest_ceremony_id(ceremony_id);
     }
 }
 
-async fn handle_signing_request<MultisigClient, RpcClient>(
+async fn handle_signing_request<'a, MultisigClient, RpcClient>(
+    scope: &Scope<'a, anyhow::Result<()>, true>,
     multisig_client: Arc<MultisigClient>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ceremony_id: CeremonyId,
@@ -110,7 +117,7 @@ async fn handle_signing_request<MultisigClient, RpcClient>(
 {
     if signers.contains(&state_chain_client.our_account_id) {
         // Send a signing request and wait to submit the result to the SC
-        tokio::spawn(async move {
+        scope.spawn(async move {
             match multisig_client
                 .sign(ceremony_id, key_id, signers, data)
                 .await
@@ -138,57 +145,12 @@ async fn handle_signing_request<MultisigClient, RpcClient>(
                         .await;
                 }
             }
+            Ok(())
         });
     } else {
         // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.not_participating_ceremony(ceremony_id);
+        multisig_client.update_latest_ceremony_id(ceremony_id);
     }
-}
-
-#[cfg(test)]
-pub async fn test_handle_keygen_request<MultisigClient, RpcClient>(
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    validator_candidates: Vec<AccountId32>,
-    logger: slog::Logger,
-) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
-{
-    handle_keygen_request(
-        multisig_client,
-        state_chain_client,
-        ceremony_id,
-        validator_candidates,
-        logger,
-    )
-    .await;
-}
-
-#[cfg(test)]
-pub async fn test_handle_signing_request<MultisigClient, RpcClient>(
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    key_id: KeyId,
-    signers: Vec<AccountId>,
-    data: MessageHash,
-    logger: slog::Logger,
-) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
-{
-    handle_signing_request(
-        multisig_client,
-        state_chain_client,
-        ceremony_id,
-        key_id,
-        signers,
-        data,
-        logger,
-    )
-    .await;
 }
 
 async fn start_epoch_observation<RpcClient>(
@@ -280,92 +242,95 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     witnessing_instruction_sender: broadcast::Sender<ObserveInstruction>,
     cfe_settings_update_sender: watch::Sender<CfeSettings>,
     initial_block_hash: H256,
-    logger: &slog::Logger,
-) where
-    BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>>,
+    logger: slog::Logger,
+) -> Result<(), anyhow::Error>
+where
+    BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + 'static,
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
-    EthRpc: EthRpcApi,
+    EthRpc: EthRpcApi + Send + Sync + 'static,
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
 {
-    let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
+    with_task_scope(|scope| async {
+        let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    let blocks_per_heartbeat = std::cmp::max(1, state_chain_client.heartbeat_block_interval / 2);
+        let blocks_per_heartbeat =
+            std::cmp::max(1, state_chain_client.heartbeat_block_interval / 2);
 
-    slog::info!(
-        logger,
-        "Sending heartbeat every {} blocks",
-        blocks_per_heartbeat
-    );
+        slog::info!(
+            logger,
+            "Sending heartbeat every {} blocks",
+            blocks_per_heartbeat
+        );
 
-    state_chain_client
-        .submit_signed_extrinsic(pallet_cf_reputation::Call::heartbeat {}, &logger)
-        .await
-        .expect("Should be able to submit first heartbeat");
+        state_chain_client
+            .submit_signed_extrinsic(pallet_cf_reputation::Call::heartbeat {}, &logger)
+            .await
+            .expect("Should be able to submit first heartbeat");
 
-    let send_instruction = |observe_instruction: ObserveInstruction| {
-        witnessing_instruction_sender
-            .send(observe_instruction)
-            .unwrap();
-    };
+        let send_instruction = |observe_instruction: ObserveInstruction| {
+            witnessing_instruction_sender
+                .send(observe_instruction)
+                .unwrap();
+        };
 
-    let historical_active_epochs = state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
-        initial_block_hash,
-        &state_chain_client.our_account_id
-    ).await.unwrap();
+	    let historical_active_epochs = state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            initial_block_hash,
+	        &state_chain_client.our_account_id
+	    ).await.unwrap();
 
-    assert!(historical_active_epochs.iter().is_sorted());
+	    assert!(historical_active_epochs.iter().is_sorted());
 
-    let mut active_in_current_epoch = stream::iter(historical_active_epochs.into_iter())
-        .fold(false, |acc, epoch| {
-            let state_chain_client = state_chain_client.clone();
-            async move {
-                start_epoch_observation(
-                    send_instruction,
-                    &state_chain_client,
-                    initial_block_hash,
-                    epoch,
-                )
-                .await;
-                if try_end_previous_epoch_observation(
-                    send_instruction,
-                    &state_chain_client,
-                    initial_block_hash,
-                    epoch + 1,
-                )
-                .await
-                {
-                    acc
-                } else {
-                    assert!(!acc);
-                    true
+	    let mut active_in_current_epoch = stream::iter(historical_active_epochs.into_iter())
+            .fold(false, |acc, epoch| {
+                let state_chain_client = state_chain_client.clone();
+                async move {
+                    start_epoch_observation(
+                        send_instruction,
+                        &state_chain_client,
+                        initial_block_hash,
+                        epoch,
+                    )
+                    .await;
+                    if try_end_previous_epoch_observation(
+                        send_instruction,
+                        &state_chain_client,
+                        initial_block_hash,
+                        epoch + 1,
+                    )
+                    .await
+                    {
+                        acc
+                    } else {
+                        assert!(!acc);
+                        true
+                    }
                 }
-            }
-        })
-        .await;
+            })
+            .await;
 
-    let mut sc_block_stream = Box::pin(sc_block_stream);
-    loop {
-        match sc_block_stream.next().await {
-            Some(result_block_header) => {
-                match result_block_header {
-                    Ok(current_block_header) => {
-                        let current_block_hash = current_block_header.hash();
-                        slog::debug!(
-                            logger,
-                            "Processing SC block {} with block hash: {:#x}",
-                            current_block_header.number,
-                            current_block_hash
-                        );
+        let mut sc_block_stream = Box::pin(sc_block_stream);
+        loop {
+            match sc_block_stream.next().await {
+                Some(result_block_header) => {
+                    match result_block_header {
+                        Ok(current_block_header) => {
+                            let current_block_hash = current_block_header.hash();
+                            slog::debug!(
+                                logger,
+                                "Processing SC block {} with block hash: {:#x}",
+                                current_block_header.number,
+                                current_block_hash
+                            );
 
-                        match state_chain_client.get_events(current_block_hash).await {
-                            Ok(events) => {
-                                for (_phase, event, _topics) in events {
-                                    match_event! { logger, event {
+                            match state_chain_client.get_events(current_block_hash).await {
+                                Ok(events) => {
+                                    for (_phase, event, _topics) in events {
+                                        match_event! { logger, event {
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
                                                 if active_in_current_epoch {
-                                                    assert!(try_end_previous_epoch_observation(send_instruction, &state_chain_client, current_block_hash, new_epoch).await);
+                                                    assert!(try_end_previous_epoch_observation(&send_instruction, &state_chain_client, current_block_hash, new_epoch).await);
                                                 }
 
                                                 active_in_current_epoch = state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
@@ -375,7 +340,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                 ).await.unwrap().is_some();
 
                                                 if active_in_current_epoch {
-                                                    start_epoch_observation(send_instruction, &state_chain_client, current_block_hash, new_epoch).await;
+                                                    start_epoch_observation(&send_instruction, &state_chain_client, current_block_hash, new_epoch).await;
                                                 }
                                             }
                                             state_chain_runtime::Event::Validator(
@@ -414,14 +379,15 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                             state_chain_runtime::Event::EthereumVault(
                                                 pallet_cf_vaults::Event::KeygenRequest(
                                                     ceremony_id,
-                                                    validator_candidates,
+                                                    keygen_participants,
                                                 ),
                                             ) => {
                                                 handle_keygen_request(
+                                                    scope,
                                                     multisig_client.clone(),
                                                     state_chain_client.clone(),
                                                     ceremony_id,
-                                                    validator_candidates,
+                                                    keygen_participants,
                                                     logger.clone()
                                                 ).await;
                                             }
@@ -434,6 +400,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                                 ),
                                             ) => {
                                                 handle_signing_request(
+                                                        scope,
                                                     multisig_client.clone(),
                                                     state_chain_client.clone(),
                                                     ceremony_id,
@@ -515,50 +482,52 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
                                             ) => {
                                                 cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                             }
-                                        }
+                                        }}
                                     }
                                 }
+                                Err(error) => {
+                                    slog::error!(
+                                        logger,
+                                        "Failed to decode events at block {}. {}",
+                                        current_block_header.number,
+                                        error,
+                                    );
+                                }
                             }
-                            Err(error) => {
-                                slog::error!(
-                                    logger,
-                                    "Failed to decode events at block {}. {}",
-                                    current_block_header.number,
-                                    error,
-                                );
-                            }
-                        }
 
-                        // All nodes must send a heartbeat regardless of their validator status (at least for now).
-                        // We send it in the middle of the online interval (so any node sync issues don't
-                        // cause issues (if we tried to send on one of the interval boundaries)
-                        if (current_block_header.number
-                            + (state_chain_client.heartbeat_block_interval / 2))
-                            % blocks_per_heartbeat
-                            == 0
-                        {
-                            slog::info!(
-                                logger,
-                                "Sending heartbeat at block: {}",
-                                current_block_header.number
-                            );
-                            let _result = state_chain_client
-                                .submit_signed_extrinsic(
-                                    pallet_cf_reputation::Call::heartbeat {},
-                                    &logger,
-                                )
-                                .await;
+                            // All nodes must send a heartbeat regardless of their validator status (at least for now).
+                            // We send it in the middle of the online interval (so any node sync issues don't
+                            // cause issues (if we tried to send on one of the interval boundaries)
+                            if (current_block_header.number
+                                + (state_chain_client.heartbeat_block_interval / 2))
+                                % blocks_per_heartbeat
+                                == 0
+                            {
+                                slog::info!(
+                                    logger,
+                                    "Sending heartbeat at block: {}",
+                                    current_block_header.number
+                                );
+                                let _result = state_chain_client
+                                    .submit_signed_extrinsic(
+                                        pallet_cf_reputation::Call::heartbeat {},
+                                        &logger,
+                                    )
+                                    .await;
+                            }
                         }
-                    }
-                    Err(error) => {
-                        slog::error!(logger, "Failed to decode block header: {}", error,);
+                        Err(error) => {
+                            slog::error!(logger, "Failed to decode block header: {}", error,);
+                        }
                     }
                 }
-            }
-            None => {
-                slog::error!(logger, "Exiting as State Chain block stream ended");
-                break;
+                None => {
+                    slog::error!(logger, "Exiting as State Chain block stream ended");
+                    break;
+                }
             }
         }
-    }
+        Ok(())
+    }.boxed()).await?;
+    Ok(())
 }

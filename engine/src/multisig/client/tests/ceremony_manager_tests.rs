@@ -11,7 +11,7 @@ use crate::{
         client::{
             self,
             ceremony_manager::CeremonyManager,
-            common::SigningFailureReason,
+            common::{CeremonyStageName, SigningFailureReason},
             keygen::{get_key_data_for_test, KeygenData},
             CeremonyFailureReason, MultisigData,
         },
@@ -62,7 +62,6 @@ fn new_ceremony_manager_for_test(our_account_id: AccountId) -> CeremonyManager<E
 }
 
 #[tokio::test]
-#[should_panic]
 async fn should_panic_keygen_request_if_not_participating() {
     let non_participating_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&non_participating_id));
@@ -72,16 +71,15 @@ async fn should_panic_keygen_request_if_not_participating() {
 
     // Send a keygen request where participants doesn't include non_participating_id
     let (result_sender, _result_receiver) = oneshot::channel();
-    ceremony_manager.on_keygen_request(
+    assert_panics!(ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
         ACCOUNT_IDS.clone(),
         Rng::from_seed(DEFAULT_KEYGEN_SEED),
         result_sender,
-    );
+    ));
 }
 
 #[tokio::test]
-#[should_panic]
 async fn should_panic_rts_if_not_participating() {
     let non_participating_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&non_participating_id));
@@ -90,7 +88,10 @@ async fn should_panic_rts_if_not_participating() {
     let mut ceremony_manager = new_ceremony_manager_for_test(non_participating_id);
 
     // Send a signing request where participants doesn't include non_participating_id
-    let _result_receiver = run_on_request_to_sign(&mut ceremony_manager, ACCOUNT_IDS.clone());
+    assert_panics!(run_on_request_to_sign(
+        &mut ceremony_manager,
+        ACCOUNT_IDS.clone()
+    ));
 }
 
 #[tokio::test]
@@ -239,6 +240,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 }
 
 #[test]
+#[ignore = "temporarily disabled - see issue #1972"]
 fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
     let past_ceremony_id = latest_ceremony_id - 1; // Invalid, because it was used in the past

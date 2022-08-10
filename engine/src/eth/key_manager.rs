@@ -1,8 +1,8 @@
 use crate::eth::{EthRpcApi, EventParseError};
-use crate::state_chain::client::StateChainClient;
+use crate::state_chain_observer::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
-    state_chain::client::StateChainRpcApi,
+    state_chain_observer::client::StateChainRpcApi,
 };
 use cf_chains::eth::SchnorrVerificationComponents;
 use cf_traits::EpochIndex;
@@ -20,7 +20,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::event_common::EventWithCommon;
+use super::event::Event;
 use super::DecodeLogClosure;
 use super::EthObserver;
 
@@ -206,7 +206,8 @@ impl EthObserver for KeyManager {
     async fn handle_event<RpcClient, EthRpcClient>(
         &self,
         _epoch_index: EpochIndex,
-        event: EventWithCommon<Self::EventParameters>,
+        block_number: u64,
+        event: Event<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -225,7 +226,7 @@ impl EthObserver for KeyManager {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
                                         new_agg_key.serialize(),
                                     ),
-                                    block_number: event.block_number,
+                                    block_number,
                                     tx_hash: event.tx_hash,
                                 }
                                 .into(),
@@ -244,7 +245,7 @@ impl EthObserver for KeyManager {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
                                         new_agg_key.serialize(),
                                     ),
-                                    block_number: event.block_number,
+                                    block_number,
                                     tx_hash: event.tx_hash,
                                 }
                                 .into(),

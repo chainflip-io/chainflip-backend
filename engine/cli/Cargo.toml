@@ -2,7 +2,7 @@
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = '2021'
 name = "chainflip-cli"
-version = "0.4.2"
+version = "0.5.0"
 
 [dependencies]
 anyhow = "1.0"

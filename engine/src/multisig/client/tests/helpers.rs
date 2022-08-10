@@ -34,7 +34,7 @@ use crate::{
             },
             common::{
                 broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
-                KeygenFailureReason,
+                CeremonyStageName, KeygenFailureReason, SigningFailureReason,
             },
             keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
             signing,
@@ -61,7 +61,9 @@ use crate::{
         // This determines which crypto scheme will be used in tests
         // (we make arbitrary choice to use eth)
         crypto::eth::{EthSchnorrSignature, EthSigning, Point},
+        tests::fixtures::MESSAGE_HASH,
     },
+    testing::expect_recv_with_timeout,
 };
 
 use state_chain_runtime::AccountId;
@@ -70,27 +72,16 @@ use super::{
     ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, INITIAL_LATEST_CEREMONY_ID,
 };
 
-use crate::multisig::tests::fixtures::MESSAGE_HASH;
-
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 type SigningCeremonyEth = SigningCeremony<EthSigning>;
 type KeygenCeremonyEth = KeygenCeremony<EthSigning>;
 
 use crate::engine_utils::test_utils::expect_recv_with_timeout;
 
-pub struct Node<C: CeremonyTrait> {
-    own_account_id: AccountId,
-    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    // MAXIM: See if we want the same "node" to be used for multiple ceremonies (would need multiple runners)
-    ceremony_runner: CeremonyRunner<C>,
-    outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-    // MAXIM: delete if we don't use this
-    _tag_cache: TagCache,
-    /// If any of the methods we called on the ceremony runner returned the outcome,
-    /// it will be stored here
-    outcome: Option<CeremonyOutcome<C>>,
-    allowing_high_pubkey: bool,
-    logger: slog::Logger,
+pub struct Node {
+    pub ceremony_manager: CeremonyManager<EthSigning>,
+    pub outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+    pub tag_cache: TagCache,
 }
 
 fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {
@@ -1229,4 +1220,29 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
         account_ids.len() as u32,
         logger,
     )
+}
+
+pub fn get_keygen_stage_name_from_number(stage_number: usize) -> Option<CeremonyStageName> {
+    match stage_number {
+        1 => Some(CeremonyStageName::HashCommitments1),
+        2 => Some(CeremonyStageName::VerifyHashCommitmentsBroadcast2),
+        3 => Some(CeremonyStageName::CoefficientCommitments3),
+        4 => Some(CeremonyStageName::VerifyCommitmentsBroadcast4),
+        5 => Some(CeremonyStageName::SecretSharesStage5),
+        6 => Some(CeremonyStageName::ComplaintsStage6),
+        7 => Some(CeremonyStageName::VerifyComplaintsBroadcastStage7),
+        8 => Some(CeremonyStageName::BlameResponsesStage8),
+        9 => Some(CeremonyStageName::VerifyBlameResponsesBroadcastStage9),
+        _ => None,
+    }
+}
+
+pub fn get_signing_stage_name_from_number(stage_number: usize) -> Option<CeremonyStageName> {
+    match stage_number {
+        1 => Some(CeremonyStageName::AwaitCommitments1),
+        2 => Some(CeremonyStageName::VerifyCommitmentsBroadcast2),
+        3 => Some(CeremonyStageName::LocalSigStage3),
+        4 => Some(CeremonyStageName::VerifyLocalSigsBroadcastStage4),
+        _ => None,
+    }
 }

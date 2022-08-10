@@ -27,7 +27,7 @@ use crate::{
     common::{self, format_iterator, read_clean_and_decode_hex_str_file},
     logging::COMPONENT_KEY,
     settings,
-    state_chain::client::{StateChainClient, StateChainRpcApi},
+    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
 };
 
 use utilities::{make_periodic_tick, rpc_error_into_anyhow_error, Port};

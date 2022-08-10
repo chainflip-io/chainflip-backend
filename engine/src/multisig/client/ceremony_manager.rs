@@ -7,6 +7,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinError;
 
+use crate::constants::CEREMONY_ID_WINDOW;
+use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::client::keygen::generate_key_data_until_compatible;
 use crate::multisig::client::{self, CeremonyRequestDetails};
@@ -32,6 +34,9 @@ use crate::multisig::MessageHash;
 use super::common::{CeremonyStage, PreProcessStageDataCheck};
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
+
+#[cfg(test)]
+use client::common::CeremonyStageName;
 
 pub type CeremonyOutcome<Ceremony> = Result<
     <Ceremony as CeremonyTrait>::Artefact,
@@ -546,6 +551,69 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn allow_high_pubkey(&mut self) {
         self.allowing_high_pubkey = true;
     }
+
+    pub fn get_delayed_keygen_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
+        self.keygen_states.get_delayed_messages_len(ceremony_id)
+    }
+
+    pub fn get_delayed_signing_messages_len(&self, ceremony_id: &CeremonyId) -> usize {
+        self.signing_states.get_delayed_messages_len(ceremony_id)
+    }
+
+    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9)
+    pub fn check_ceremony_at_keygen_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: CeremonyId,
+    ) -> Result<()> {
+        let stage = self.keygen_states.get_stage_for(&ceremony_id);
+        let is_at_stage = match stage_number {
+            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<HashCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyHashCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<CoefficientCommitments3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast4>"),
+            5 => stage.as_deref() == Some("BroadcastStage<SecretSharesStage5>"),
+            6 => stage.as_deref() == Some("BroadcastStage<ComplaintsStage6>"),
+            7 => stage.as_deref() == Some("BroadcastStage<VerifyComplaintsBroadcastStage7>"),
+            8 => stage.as_deref() == Some("BroadcastStage<BlameResponsesStage8>"),
+            9 => stage.as_deref() == Some("BroadcastStage<VerifyBlameResponsesBroadcastStage9>"),
+            _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
+        }
+    }
+
+    /// Check is the ceremony is at the specified signing BroadcastStage (0-4)
+    pub fn check_ceremony_at_signing_stage(
+        &self,
+        stage_number: usize,
+        ceremony_id: CeremonyId,
+    ) -> Result<()> {
+        let stage = self.signing_states.get_stage_for(&ceremony_id);
+        let is_at_stage = match stage_number {
+            super::tests::STAGE_FINISHED_OR_NOT_STARTED => stage == None,
+            1 => stage.as_deref() == Some("BroadcastStage<AwaitCommitments1>"),
+            2 => stage.as_deref() == Some("BroadcastStage<VerifyCommitmentsBroadcast2>"),
+            3 => stage.as_deref() == Some("BroadcastStage<LocalSigStage3>"),
+            4 => stage.as_deref() == Some("BroadcastStage<VerifyLocalSigsBroadcastStage4>"),
+            _ => false,
+        };
+        if is_at_stage {
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(format!(
+                "Expected to be at stage {}, but actually at stage {:?}",
+                stage_number, stage
+            )))
+        }
+    }
 }
 
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
@@ -635,7 +703,6 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         };
     }
 
-    #[cfg(test)]
     fn len(&self) -> usize {
         self.inner.len()
     }

@@ -117,6 +117,8 @@ thread_local! {
 			bond: BOND,
 		}
 	));
+
+	pub static NUMBER_OF_AUCTIONS_ATTEMPTED: RefCell<u8> = RefCell::new(0);
 }
 
 impl MockAuctioneer {
@@ -125,12 +127,19 @@ impl MockAuctioneer {
 			*cell.borrow_mut() = behaviour;
 		});
 	}
+
+	pub fn number_of_auctions_attempted() -> u8 {
+		NUMBER_OF_AUCTIONS_ATTEMPTED.with(|cell| *cell.borrow())
+	}
 }
 
 impl Auctioneer<Test> for MockAuctioneer {
 	type Error = &'static str;
 
 	fn resolve_auction() -> Result<RuntimeAuctionOutcome<Test>, Self::Error> {
+		NUMBER_OF_AUCTIONS_ATTEMPTED.with(|cell| {
+			*cell.borrow_mut() += 1;
+		});
 		NEXT_AUCTION_OUTCOME.with(|cell| cell.borrow().clone())
 	}
 }
@@ -275,11 +284,7 @@ macro_rules! assert_invariants {
 			ValidatorPallet::current_authorities()
 				.into_iter()
 				.collect::<BTreeSet<_>>()
-				.is_disjoint(
-					&ValidatorPallet::highest_staked_backup_nodes()
-						.into_iter()
-						.collect::<BTreeSet<_>>()
-				),
+				.is_disjoint(&ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()),
 			"Backup nodes and validators should not overlap",
 		);
 		assert!(
@@ -293,11 +298,11 @@ macro_rules! assert_invariants {
 				.collect::<Vec<_>>(),
 		);
 		assert!(
-			ValidatorPallet::highest_staked_backup_nodes()
+			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
 				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_backup()),
 			"All backup nodes should have their account state set accordingly. Got: {:?}",
-			ValidatorPallet::highest_staked_backup_nodes()
+			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
 				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
 				.collect::<Vec<_>>(),
@@ -352,6 +357,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 			},
 			validator_pallet: ValidatorPalletConfig {
 				genesis_authorities: GENESIS_AUTHORITIES.to_vec(),
+				genesis_backups: Default::default(),
 				blocks_per_epoch: EPOCH_DURATION,
 				bond: GENESIS_BOND,
 				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,

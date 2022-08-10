@@ -24,7 +24,7 @@ use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
 };
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
@@ -44,7 +44,8 @@ pub trait Chainflip: frame_system::Config {
 		+ Copy
 		+ AtLeast32BitUnsigned
 		+ MaybeSerializeDeserialize
-		+ Bounded;
+		+ Bounded
+		+ Sum<Self::Amount>;
 
 	/// An identity for a node
 	type ValidatorId: Member
@@ -186,19 +187,11 @@ pub trait Auctioneer<T: Chainflip> {
 	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RotationError {
-	/// No candidates provided.
-	NoCandidates,
-	/// A rotation is already in progress.
-	RotationInProgress,
-}
-
 pub trait VaultRotator {
 	type ValidatorId;
 
 	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) -> Result<(), RotationError>;
+	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>);
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
@@ -682,4 +675,27 @@ pub trait SystemStateInfo {
 pub trait SystemStateManager {
 	/// Turn system maintenance on.
 	fn activate_maintenance_mode();
+}
+
+/// Allows accounts to pay for things by burning fees.
+pub trait FeePayment {
+	type Amount;
+	type AccountId;
+	/// Helper function to mint FLIP to an account.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
+		unreachable!()
+	}
+	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
+	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
+}
+
+/// Provides information about the on-chain staked funds.
+pub trait StakingInfo {
+	type AccountId;
+	type Balance;
+	/// Returns the stake of an account.
+	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
+	/// Returns the total stake held on-chain.
+	fn total_onchain_stake() -> Self::Balance;
 }

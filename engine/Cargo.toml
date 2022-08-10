@@ -2,7 +2,7 @@
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 edition = '2021'
 name = "chainflip-engine"
-version = "0.4.2"
+version = "0.5.0"
 
 [package.metadata.deb]
 depends = "$auto"
@@ -82,6 +82,7 @@ typenum = "1.15"
 # use the same version as polkadot.
 schnorrkel = "0.9.1"
 rayon = "1.5"
+pin-project = "1.0.11"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
@@ -101,6 +102,7 @@ pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 pallet-cf-witnesser = {path = "../state-chain/pallets/cf-witnesser"}
 custom-rpc = {path = "../state-chain/custom-rpc"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+chainflip-node = {path = "../state-chain/node"}
 utilities = {path = "../utilities"}
 
 [dependencies.rocksdb]

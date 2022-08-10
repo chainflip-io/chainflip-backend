@@ -23,9 +23,7 @@ use sha2::{Digest, Sha256};
 /// A pair of secret single-use nonces (and their
 /// corresponding public commitments). Correspond to (d,e)
 /// generated during the preprocessing stage in Section 5.3 (page 13)
-// TODO: Not sure if it is a good idea to to make
-// the secret values clonable
-#[derive(Debug, Clone, Zeroize)]
+#[derive(Debug, Zeroize)]
 pub struct SecretNoncePair<P: ECPoint> {
     pub d: P::Scalar,
     pub d_pub: P,
@@ -335,6 +333,7 @@ mod tests {
     };
 
     use rand_legacy::SeedableRng;
+    use utilities::assert_panics;
 
     const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
     const NONCE_KEY: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";

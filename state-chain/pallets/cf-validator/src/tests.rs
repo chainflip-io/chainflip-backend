@@ -26,7 +26,7 @@ fn assert_epoch_number(n: EpochIndex) {
 	);
 }
 
-macro_rules! assert_default_auction_outcome {
+macro_rules! assert_default_rotation_outcome {
 	() => {
 		assert_epoch_number(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
@@ -123,48 +123,6 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 }
 
 #[test]
-fn should_retry_rotation_until_success_with_failing_vault_rotations() {
-	new_test_ext().execute_with(|| {
-		MockVaultRotator::set_error_on_start(true);
-		ValidatorPallet::start_authority_rotation();
-
-		// Move forward a few blocks, vault rotations fail because the vault rotator can't start.
-		// We keep trying to resolve the auction.
-		move_forward_blocks(10);
-		assert_epoch_number(GENESIS_EPOCH);
-		assert_eq!(ValidatorPallet::current_rotation_phase(), RotationPhase::Idle);
-
-		// Allow vault rotations to progress.
-		// The keygen ceremony will fail.
-		MockVaultRotator::set_error_on_start(false);
-		MockVaultRotator::failing(vec![]);
-
-		for i in 0..10 {
-			move_forward_blocks(1);
-			assert!(
-				matches!(
-					ValidatorPallet::current_rotation_phase(),
-					RotationPhase::VaultsRotating(..)
-				),
-				"at iteration {i:?}, got {:?}",
-				ValidatorPallet::current_rotation_phase()
-			);
-		}
-
-		assert_epoch_number(GENESIS_EPOCH);
-
-		// Allow keygen to succeed.
-		MockVaultRotator::succeeding();
-
-		// Four blocks - one for keygen, one for each session rotation, then one more because the
-		// vaults on_initialise runs *after* the validator pallet's on_initialise.
-		// TODO: Address this as part of issue [#1702](https://github.com/chainflip-io/chainflip-backend/issues/1702)
-		move_forward_blocks(5);
-		assert_default_auction_outcome!();
-	});
-}
-
-#[test]
 fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().execute_with(|| {
 		ValidatorPallet::start_authority_rotation();
@@ -212,7 +170,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		while ValidatorPallet::epoch_index() == GENESIS_EPOCH {
 			move_forward_blocks(1);
 		}
-		assert_default_auction_outcome!();
+		assert_default_rotation_outcome!();
 	});
 }
 
@@ -532,8 +490,9 @@ fn no_auction_during_maintenance() {
 		assert!(MockSystemStateInfo::is_maintenance_mode());
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
+		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
-		ValidatorPallet::request_emergency_rotation();
+		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
@@ -587,6 +546,28 @@ fn test_reputation_reset() {
 		for id in &[4, 5, 6] {
 			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
 		}
+	});
+}
+
+#[test]
+fn rotating_during_rotation_is_noop() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		assert_eq!(MockAuctioneer::number_of_auctions_attempted(), 0);
+		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
+		// We attempt an auction when we force a rotation
+		assert_eq!(MockAuctioneer::number_of_auctions_attempted(), 1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::VaultsRotating(..)
+		));
+
+		// We don't attempt the auction again, because we're already in a rotation
+		ValidatorPallet::request_emergency_rotation();
+		assert_eq!(MockAuctioneer::number_of_auctions_attempted(), 1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::VaultsRotating(..)
+		));
 	});
 }
 
