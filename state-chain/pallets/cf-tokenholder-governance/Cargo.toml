@@ -65,7 +65,6 @@ pallet-cf-flip = { path = '../cf-flip' }
 
 # Dev dependencies
 [dev-dependencies.sp-io]
-default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
