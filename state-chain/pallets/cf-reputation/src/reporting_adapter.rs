@@ -43,8 +43,8 @@ where
 		(O::ID, offender).using_encoded(<Twox64Concat as StorageHasher>::hash)
 	}
 
-	/// Returns true iff, for this offender, we have already recorded another offence with a later
-	/// time slot.
+	/// Returns true iff, for this offender, we have already recorded another offence with the
+	/// current or a later time slot.
 	fn is_time_slot_stale(offender: &T::ValidatorId, time_slot: &O::TimeSlot) -> bool {
 		OffenceTimeSlotTracker::<T>::get(Self::report_id(offender))
 			.and_then(|bytes| O::TimeSlot::decode(&mut &bytes[..]).ok())
