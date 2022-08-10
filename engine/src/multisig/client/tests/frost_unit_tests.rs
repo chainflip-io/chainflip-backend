@@ -2,22 +2,17 @@
 
 use crate::multisig::client::{
     common::{
-        BroadcastFailureReason, BroadcastStageName, CeremonyFailureReason, CeremonyStageName,
-        SigningFailureReason,
+        BroadcastFailureReason, CeremonyFailureReason, CeremonyStageName, SigningFailureReason,
     },
     signing::frost,
     tests::helpers::{
         for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1,
-        new_signing_ceremony_with_keygen, run_stages, split_messages_for, standard_signing,
-        standard_signing_coroutine, SigningCeremonyRunner,
+        get_signing_stage_name_from_number, new_signing_ceremony_with_keygen, run_stages,
+        split_messages_for, standard_signing, standard_signing_coroutine,
     },
 };
 
 use super::*;
-
-use rand_legacy::SeedableRng;
-
-use utilities::assert_ok;
 
 // Data for any stage that arrives one stage too early should be properly delayed
 // and processed after the stage transition is made
@@ -42,8 +37,8 @@ async fn should_delay_stage_data() {
 
             assert_eq!(
                 ceremony.nodes[&test_account]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number),
             );
 
@@ -52,8 +47,8 @@ async fn should_delay_stage_data() {
 
             assert_eq!(
                 ceremony.nodes[&test_account]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number + 1),
             );
 
@@ -62,8 +57,8 @@ async fn should_delay_stage_data() {
             // Check that the stage correctly advanced or finished
             assert_eq!(
                 ceremony.nodes[&test_account]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number + 2),
             );
         },
@@ -88,8 +83,8 @@ async fn should_delay_comm1_before_rts() {
     let [test_id] = &signing_ceremony.select_account_ids();
     assert_eq!(
         signing_ceremony.nodes[test_id]
-            .ceremony_manager
-            .get_signing_stage_name(signing_ceremony.ceremony_id),
+            .ceremony_runner
+            .get_stage_name(),
         None
     );
 
@@ -99,8 +94,8 @@ async fn should_delay_comm1_before_rts() {
     // It should advance to stage 2 right away if the comm1's were delayed correctly
     assert_eq!(
         signing_ceremony.nodes[test_id]
-            .ceremony_manager
-            .get_signing_stage_name(signing_ceremony.ceremony_id),
+            .ceremony_runner
+            .get_stage_name(),
         Some(CeremonyStageName::VerifyCommitmentsBroadcast2),
     );
 }
@@ -225,8 +220,8 @@ async fn should_ignore_unexpected_message_for_stage() {
             // We should not have progressed further when receiving unexpected messages
             assert_eq!(
                 ceremony.nodes[test_node_id]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unexpected stage"
             );
@@ -235,8 +230,8 @@ async fn should_ignore_unexpected_message_for_stage() {
             ceremony.distribute_messages(other_msgs).await;
             assert_eq!(
                 ceremony.nodes[test_node_id]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number),
                 "Failed to ignore a duplicate message"
             );
@@ -254,8 +249,8 @@ async fn should_ignore_unexpected_message_for_stage() {
                 .await;
             assert_eq!(
                 ceremony.nodes[test_node_id]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unknown account id"
             );
@@ -275,8 +270,8 @@ async fn should_ignore_unexpected_message_for_stage() {
                 .await;
             assert_eq!(
                 ceremony.nodes[test_node_id]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number),
                 "Failed to ignore a message from non-participant account id"
             );
@@ -285,8 +280,8 @@ async fn should_ignore_unexpected_message_for_stage() {
             ceremony.distribute_messages(msg_from_1).await;
             assert_eq!(
                 ceremony.nodes[test_node_id]
-                    .ceremony_manager
-                    .get_signing_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_signing_stage_name_from_number(stage_number + 1),
                 "Failed to proceed to next stage"
             );

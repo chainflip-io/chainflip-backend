@@ -34,7 +34,7 @@ use crate::{
             },
             common::{
                 broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
-                CeremonyStageName, KeygenFailureReason, SigningFailureReason,
+                CeremonyStageName, KeygenFailureReason,
             },
             keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
             signing,
@@ -76,12 +76,19 @@ pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 type SigningCeremonyEth = SigningCeremony<EthSigning>;
 type KeygenCeremonyEth = KeygenCeremony<EthSigning>;
 
-use crate::engine_utils::test_utils::expect_recv_with_timeout;
-
-pub struct Node {
-    pub ceremony_manager: CeremonyManager<EthSigning>,
-    pub outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-    pub tag_cache: TagCache,
+pub struct Node<C: CeremonyTrait> {
+    own_account_id: AccountId,
+    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+    // MAXIM: See if we want the same "node" to be used for multiple ceremonies (would need multiple runners)
+    pub ceremony_runner: CeremonyRunner<C>,
+    outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+    // MAXIM: delete if we don't use this
+    _tag_cache: TagCache,
+    /// If any of the methods we called on the ceremony runner returned the outcome,
+    /// it will be stored here
+    outcome: Option<CeremonyOutcome<C>>,
+    allowing_high_pubkey: bool,
+    logger: slog::Logger,
 }
 
 fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {

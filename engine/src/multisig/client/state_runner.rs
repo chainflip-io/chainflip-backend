@@ -349,43 +349,40 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                     format_iterator(&reported_ids)
                 );
 
-                    Some(Err((
-                        reported_ids,
-                        CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
-                    )))
-                }
-                Some(authorised_state) => {
-                    // We can't simply abort here as we don't know whether other
-                    // participants are going to do the same (e.g. if a malicious
-                    // node targeted us by communicating with everyone but us, it
-                    // would look to the rest of the network like we are the culprit).
-                    // Instead, we delegate the responsibility to the concrete stage
-                    // implementation to try to recover or agree on who to report.
+                Some(Err((
+                    reported_ids,
+                    CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
+                )))
+            }
+            Some(authorised_state) => {
+                // We can't simply abort here as we don't know whether other
+                // participants are going to do the same (e.g. if a malicious
+                // node targeted us by communicating with everyone but us, it
+                // would look to the rest of the network like we are the culprit).
+                // Instead, we delegate the responsibility to the concrete stage
+                // implementation to try to recover or agree on who to report.
 
                 slog::warn!(
                         self.logger,
                         "Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
                     );
 
-                    // Log the account ids of the missing messages
-                    if let Some(stage) = &authorised_state.stage {
-                        let missing_messages_from_accounts = authorised_state
-                            .idx_mapping
-                            .get_ids(stage.awaited_parties());
-                        slog::debug!(
-                            self.logger,
-                            "Stage `{}` is missing messages from {} parties",
-                            stage.get_stage_name(),
-                            missing_messages_from_accounts.len();
-                            "missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
-                        )
-                    }
-
-                    self.finalize_current_stage()
+                // Log the account ids of the missing messages
+                if let Some(stage) = &authorised_state.stage {
+                    let missing_messages_from_accounts = authorised_state
+                        .idx_mapping
+                        .get_ids(stage.awaited_parties());
+                    slog::debug!(
+                        self.logger,
+                        "Stage `{}` is missing messages from {} parties",
+                        stage.get_stage_name(),
+                        missing_messages_from_accounts.len();
+                        "missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
+                    )
                 }
+
+                self.finalize_current_stage().await
             }
-        } else {
-            None
         }
     }
 
@@ -404,27 +401,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<Ceremony>> {
         self.inner.map(|inner| inner.result_sender)
     }
-
-    #[cfg(test)]
-    pub fn get_stage(&self) -> Option<String> {
-        self.inner
-            .as_ref()
-            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
-    }
-
-    #[cfg(test)]
-    pub fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
-        self.inner.as_ref().and_then(|s| {
-            s.stage
-                .as_ref()
-                .map(|s| s.awaited_parties().len() as AuthorityCount)
-        })
-    }
-
-    #[cfg(test)]
-    pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
-        self.should_expire_at = expiry_time;
-    }
+}
 
 #[cfg(test)]
 impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
@@ -454,12 +431,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             sleep_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
             logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
-    }
-
-    pub fn get_stage(&self) -> Option<String> {
-        self.inner
-            .as_ref()
-            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
     }
 
     pub fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {

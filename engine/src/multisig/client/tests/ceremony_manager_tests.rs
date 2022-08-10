@@ -11,7 +11,7 @@ use crate::{
         client::{
             self,
             ceremony_manager::CeremonyManager,
-            common::{CeremonyStageName, SigningFailureReason},
+            common::SigningFailureReason,
             keygen::{get_key_data_for_test, KeygenData},
             CeremonyFailureReason, MultisigData,
         },
@@ -24,7 +24,7 @@ use client::MultisigMessage;
 use rand_legacy::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::oneshot;
-use utilities::threshold_from_share_count;
+use utilities::{assert_panics, threshold_from_share_count};
 
 /// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
 fn run_on_request_to_sign<C: CryptoScheme>(

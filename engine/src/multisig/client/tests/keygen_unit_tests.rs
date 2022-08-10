@@ -52,27 +52,21 @@ async fn should_delay_comm1_before_keygen_request() {
     ceremony.distribute_messages(early_msgs).await;
 
     assert_eq!(
-        ceremony.nodes[&test_id]
-            .ceremony_manager
-            .get_keygen_stage_name(ceremony.ceremony_id),
+        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
         None
     );
 
     ceremony.request().await;
 
     assert_eq!(
-        ceremony.nodes[&test_id]
-            .ceremony_manager
-            .get_keygen_stage_name(ceremony.ceremony_id),
+        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
         Some(CeremonyStageName::HashCommitments1),
     );
 
     ceremony.distribute_messages(late_msg).await;
 
     assert_eq!(
-        ceremony.nodes[&test_id]
-            .ceremony_manager
-            .get_keygen_stage_name(ceremony.ceremony_id),
+        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
         Some(CeremonyStageName::VerifyHashCommitmentsBroadcast2),
     );
 }
@@ -104,8 +98,8 @@ async fn should_delay_stage_data() {
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number)
             );
 
@@ -113,8 +107,8 @@ async fn should_delay_stage_data() {
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number + 1)
             );
 
@@ -123,8 +117,8 @@ async fn should_delay_stage_data() {
             // Check that the stage correctly advanced or finished
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number + 2)
             );
         },
@@ -366,8 +360,8 @@ async fn should_ignore_unexpected_message_for_stage() {
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unexpected stage"
             );
@@ -376,8 +370,8 @@ async fn should_ignore_unexpected_message_for_stage() {
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore duplicate messages"
             );
@@ -394,8 +388,8 @@ async fn should_ignore_unexpected_message_for_stage() {
                 .await;
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unknown account id"
             );
@@ -404,8 +398,8 @@ async fn should_ignore_unexpected_message_for_stage() {
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number + 1),
                 "Failed to proceed to next stage"
             );
