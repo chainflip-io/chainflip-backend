@@ -20,7 +20,7 @@ use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
 
@@ -107,9 +107,7 @@ async fn request_claim(
 
     // Are we in a current auction phase
     if state_chain_client.is_auction_phase().await? {
-        return Err(anyhow::Error::msg(
-            "We are currently in an auction phase. Please wait until the auction phase is over.",
-        ));
+        bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
     }
 
     // Sanitise data
@@ -118,7 +116,7 @@ async fn request_claim(
         .map_err(|error| anyhow::Error::msg(format!("You supplied an invalid ETH address: {}", error)))
         .and_then(|eth_address|
             if eth_address == [0; 20] {
-                Err(anyhow::Error::msg("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
+                Err(anyhow!("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
             } else {
                 Ok(eth_address)
             }
@@ -321,10 +319,10 @@ async fn set_vanity_name(
     logger: &slog::Logger,
 ) -> Result<()> {
     if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
-        return Err(anyhow!(
+        bail!(
             "Name too long. Max length is {} characters.",
             MAX_LENGTH_FOR_VANITY_NAME,
-        ));
+        );
     }
 
     let (_, _, state_chain_client) =

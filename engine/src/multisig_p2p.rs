@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use futures::stream::StreamExt;
 use itertools::Itertools;
 use lazy_format::lazy_format;
@@ -71,9 +71,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .collect::<Vec<_>>();
 
     if listening_addresses.is_empty() {
-        Err(anyhow::Error::msg(
-            "No non-loopback listening addresses reported",
-        ))
+        Err(anyhow!("No non-loopback listening addresses reported",))
     } else if let Some(&peer_id_from_node) =
         common::all_same(listening_addresses.iter().map(|(peer_id, _, _)| peer_id))
     {
@@ -190,10 +188,10 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 
             Ok(())
         } else {
-            Err(anyhow::Error::msg(format!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file configuration option.", peer_id_from_node, peer_id_from_cfe_config)))
+            Err(anyhow!("Your Chainflip Node is using a different peer id ({}) than you provided to your Chainflip Engine ({}). Check the p2p.node_key_file configuration option.", peer_id_from_node, peer_id_from_cfe_config))
         }
     } else {
-        Err(anyhow::Error::msg("Cannot select which peer_id to register as the Chainflip Node is reporting multiple different peer_ids"))
+        Err(anyhow!("Cannot select which peer_id to register as the Chainflip Node is reporting multiple different peer_ids"))
     }
 }
 
@@ -358,7 +356,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                             .iter()
                             .map(|account_id| match account_to_peer_mapping_on_chain.get(account_id) {
                                 Some((peer_id, _, _)) => Ok(peer_id.into()),
-                                None => Err(anyhow::Error::msg(format!("Missing Peer Id mapping for Account Id: {}", account_id))),
+                                None => Err(anyhow!("Missing Peer Id mapping for Account Id: {}", account_id)),
                             })
                             .collect::<Result<Vec<_>, _>>()
                             .and_then(|peer_ids| {
