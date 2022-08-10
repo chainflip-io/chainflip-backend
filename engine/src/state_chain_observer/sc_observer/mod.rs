@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+use anyhow::Context;
 use cf_traits::EpochIndex;
 use futures::{stream, FutureExt, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
@@ -8,8 +9,9 @@ use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
-use state_chain_runtime::{constants::common::SECONDS_PER_BLOCK, AccountId, CfeSettings};
-use std::{collections::BTreeSet, sync::Arc};
+use state_chain_runtime::{AccountId, CfeSettings};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
@@ -303,12 +305,30 @@ where
             })
             .await;
 
-        let mut number_of_blocks_read: u32 = 0;
+
+        // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
+        // liveness
+        let has_submitted_init_heartbeat = Arc::new(AtomicBool::new(false));
+        let sc_client = state_chain_client.clone();
+        let heartbeat_logger = logger.clone();
+        let has_submitted_init_heartbeat_2 = has_submitted_init_heartbeat.clone();
+        scope.spawn(async move {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            sc_client.clone()
+                .submit_signed_extrinsic(
+                    pallet_cf_reputation::Call::heartbeat {},
+                    &heartbeat_logger,
+                )
+                .await
+                .context("Failed to submit initial heartbeat")?;
+            has_submitted_init_heartbeat_2.store(true, Ordering::Relaxed);
+            Ok(())
+        }.boxed());
+
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
                 Some(result_block_header) => {
-                    number_of_blocks_read += 1;
                     match result_block_header {
                         Ok(current_block_header) => {
                             let current_block_hash = current_block_header.hash();
@@ -495,14 +515,11 @@ where
                             // All nodes must send a heartbeat regardless of their validator status (at least for now).
                             // We send it in the middle of the online interval (so any node sync issues don't
                             // cause issues (if we tried to send on one of the interval boundaries)
-                            const BLOCKS_BEFORE_INIT_HEARTBEAT: u32 = 60 / (SECONDS_PER_BLOCK as u32);
-                            if (((current_block_header.number
+                            if ((current_block_header.number
                                 + (state_chain_client.heartbeat_block_interval / 2))
                                 % blocks_per_heartbeat
-                                == 0) && number_of_blocks_read > BLOCKS_BEFORE_INIT_HEARTBEAT)
-                                // We want to submit a heartbeat at ~1 minute (10 * 6 second blocks) after starting up.
-                                // Submitting earlier may falsely indicate liveness.
-                                || number_of_blocks_read == BLOCKS_BEFORE_INIT_HEARTBEAT
+                                // Submitting earlier than one minute in may falsely indicate liveness.
+                                == 0) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                             {
                                 slog::info!(
                                     logger,
