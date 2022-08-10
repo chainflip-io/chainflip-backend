@@ -104,8 +104,7 @@ fn expect_sc_observer_start(
 
     mock_state_chain_rpc_client
         .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
+        .never();
 
     initial_block_hash
 }
@@ -152,7 +151,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
     // ensure we kicked off the witness processes
     assert_eq!(
@@ -206,7 +205,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
     // ensure we kicked off the witness processes
     assert_eq!(
@@ -255,7 +254,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
     // ensure we did NOT kick off the witness processes - as we are *only* backup, not outgoing
     assert!(instruction_receiver.recv().await.is_err());
@@ -326,12 +325,6 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         .times(1)
         .returning(move |_, _| Ok(Some(StorageData(1_u32.encode()))));
 
-    // Heartbeat on block number 20
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
-
     // Get events from the block
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
@@ -374,7 +367,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
     // ensure we did kick off the witness processes at the start
     assert_eq!(
@@ -418,12 +411,6 @@ async fn not_historical_to_authority_on_new_epoch() {
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
-
-    // Heartbeat on block number 20
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
 
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
 
@@ -504,7 +491,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
     // after a new epoch, we should have sent new messages down the channels
     assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_FOUR_START);
@@ -533,12 +520,6 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         &[3],
         &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
     );
-
-    // Heartbeat on block number 20
-    mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
-        .times(1)
-        .returning(move |_| Ok(H256::default()));
 
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
 
@@ -628,7 +609,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
     // ensure we did kick off the witness processes at the start
     assert_eq!(
@@ -759,7 +740,7 @@ async fn only_encodes_and_signs_when_specified() {
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
     // ensure we kicked off the witness processes
     assert_eq!(
@@ -810,7 +791,7 @@ async fn run_the_sc_observer() {
         logger,
     )
     .await
-    .unwrap();
+    .unwrap_err();
 }
 
 // Test that the ceremony requests are calling the correct MultisigClientApi functions
