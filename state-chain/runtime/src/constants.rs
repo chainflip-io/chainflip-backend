@@ -38,7 +38,7 @@ pub mod common {
 	const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
 
 	/// The transaction with the ceremony outcome needs some
-	/// time to propagate to other nodes
+	/// time to propagate to other nodes.
 	const NETWORK_DELAY_SECONDS: u32 = 6;
 	/// Buffer for final key computation
 	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
