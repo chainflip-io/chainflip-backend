@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use cf_traits::EpochIndex;
 use futures::{stream, FutureExt, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
@@ -546,7 +546,7 @@ where
                 }
             }
         }
-        Ok(())
+        bail!("State Chain block stream ended")
     }.boxed()).await?;
     Ok(())
 }

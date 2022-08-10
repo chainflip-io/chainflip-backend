@@ -139,7 +139,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -150,8 +150,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 
     // ensure we kicked off the witness processes
     assert_eq!(
@@ -193,7 +192,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -204,8 +203,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 
     // ensure we kicked off the witness processes
     assert_eq!(
@@ -242,7 +240,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -253,8 +251,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 
     // ensure we did NOT kick off the witness processes - as we are *only* backup, not outgoing
     assert!(instruction_receiver.recv().await.is_err());
@@ -355,7 +352,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -366,8 +363,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 
     // ensure we did kick off the witness processes at the start
     assert_eq!(
@@ -479,7 +475,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -490,8 +486,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 
     // after a new epoch, we should have sent new messages down the channels
     assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_FOUR_START);
@@ -597,7 +592,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -608,8 +603,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 
     // ensure we did kick off the witness processes at the start
     assert_eq!(
@@ -728,7 +722,7 @@ async fn only_encodes_and_signs_when_specified() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         sc_block_stream,
         eth_broadcaster,
@@ -739,8 +733,7 @@ async fn only_encodes_and_signs_when_specified() {
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 
     // ensure we kicked off the witness processes
     assert_eq!(
@@ -779,7 +772,7 @@ async fn run_the_sc_observer() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-    sc_observer::start(
+    let _result = sc_observer::start(
         state_chain_client,
         block_stream,
         eth_broadcaster,
@@ -790,8 +783,7 @@ async fn run_the_sc_observer() {
         initial_block_hash,
         logger,
     )
-    .await
-    .unwrap();
+    .await;
 }
 
 // Test that the ceremony requests are calling the correct MultisigClientApi functions
