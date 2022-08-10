@@ -309,21 +309,22 @@ where
         // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
         // liveness
         let has_submitted_init_heartbeat = Arc::new(AtomicBool::new(false));
-        let sc_client = state_chain_client.clone();
-        let heartbeat_logger = logger.clone();
-        let has_submitted_init_heartbeat_2 = has_submitted_init_heartbeat.clone();
-        scope.spawn(async move {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-            sc_client.clone()
-                .submit_signed_extrinsic(
-                    pallet_cf_reputation::Call::heartbeat {},
-                    &heartbeat_logger,
-                )
-                .await
-                .context("Failed to submit initial heartbeat")?;
-            has_submitted_init_heartbeat_2.store(true, Ordering::Relaxed);
+        scope.spawn({
+            let state_chain_client = state_chain_client.clone();
+            let has_submitted_init_heartbeat = has_submitted_init_heartbeat.clone();
+            let logger = logger.clone();
+            async move {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                    state_chain_client
+                    .submit_signed_extrinsic(
+                        pallet_cf_reputation::Call::heartbeat {},
+                        &logger,
+                    )
+                    .await
+                    .context("Failed to submit initial heartbeat")?;
+                has_submitted_init_heartbeat.store(true, Ordering::Relaxed);
             Ok(())
-        }.boxed());
+        }.boxed()});
 
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
