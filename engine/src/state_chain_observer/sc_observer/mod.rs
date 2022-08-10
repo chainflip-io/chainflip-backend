@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 use cf_traits::EpochIndex;
 use futures::{stream, FutureExt, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
