@@ -546,7 +546,6 @@ where
                 }
             }
         }
-        bail!("State Chain block stream ended")
-    }.boxed()).await?;
-    Ok(())
+        Err(anyhow::anyhow!("State Chain block stream ended"))
+    }.boxed()).await
 }
