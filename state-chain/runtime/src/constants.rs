@@ -40,7 +40,7 @@ pub mod common {
 	/// The transaction with the ceremony outcome needs some
 	/// time to propagate to other nodes.
 	const NETWORK_DELAY_SECONDS: u32 = 6;
-	/// Buffer for final key computation
+	/// Buffer for final key computation.
 	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
 
 	const TIMEOUT_BUFFER_SECONDS: u32 = EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) +
