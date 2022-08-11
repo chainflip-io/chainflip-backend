@@ -555,7 +555,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		OpenRequests::<T, I>::insert(ceremony_id, (request_id, attempt, payload.clone()));
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
 
-		let key_id = key_id.unwrap_or(T::KeyProvider::current_key_id());
+		let key_id = key_id.unwrap_or_else(T::KeyProvider::current_key_id);
 		let maybe_nominees: Option<Vec<T::ValidatorId>>;
 		if participants.is_none() {
 			maybe_nominees = T::SignerNomination::threshold_nomination_with_seed(
