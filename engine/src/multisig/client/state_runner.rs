@@ -441,8 +441,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         })
     }
 
-    pub fn set_timeout(&mut self, time: tokio::time::Instant) {
-        self.sleep_handle.as_mut().reset(time);
+    pub async fn force_timeout(
+        &mut self,
+    ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
+        self.on_timeout().await
     }
 
     pub fn get_stage_name(&self) -> Option<super::common::CeremonyStageName> {

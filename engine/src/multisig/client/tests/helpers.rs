@@ -36,7 +36,10 @@ use crate::{
                 broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
                 CeremonyStageName, KeygenFailureReason,
             },
-            keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
+            keygen::{
+                generate_key_data, get_key_data_for_test, HashComm1, HashContext, SecretShare5,
+                VerifyHashCommitmentsBroadcast2,
+            },
             signing,
             state_runner::CeremonyRunner,
             KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
@@ -69,7 +72,8 @@ use crate::{
 use state_chain_runtime::AccountId;
 
 use super::{
-    ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, INITIAL_LATEST_CEREMONY_ID,
+    ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
+    DEFAULT_SIGNING_SEED, INITIAL_LATEST_CEREMONY_ID,
 };
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
@@ -79,11 +83,8 @@ type KeygenCeremonyEth = KeygenCeremony<EthSigning>;
 pub struct Node<C: CeremonyTrait> {
     own_account_id: AccountId,
     outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-    // MAXIM: See if we want the same "node" to be used for multiple ceremonies (would need multiple runners)
     pub ceremony_runner: CeremonyRunner<C>,
     outgoing_p2p_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-    // MAXIM: delete if we don't use this
-    _tag_cache: TagCache,
     /// If any of the methods we called on the ceremony runner returned the outcome,
     /// it will be stored here
     outcome: Option<CeremonyOutcome<C>>,
@@ -92,7 +93,7 @@ pub struct Node<C: CeremonyTrait> {
 }
 
 fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {
-    let (logger, _tag_cache) = logging::test_utils::new_test_logger_with_tag_cache();
+    let logger = logging::test_utils::new_test_logger();
     let logger = logger.new(slog::o!("account_id" => account_id.to_string()));
     let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -106,7 +107,6 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool)
         ceremony_runner,
         outgoing_p2p_message_receiver,
         allowing_high_pubkey,
-        _tag_cache,
         outcome: None,
         logger,
     }
@@ -129,25 +129,30 @@ pub struct KeygenCeremonyDetails {
 
 impl<C: CeremonyTrait> Node<C> {
     fn on_ceremony_outcome(&mut self, outcome: CeremonyOutcome<C>) {
+        match &outcome {
+            Ok(_) => {
+                slog::debug!(self.logger, "Node got successful outcome");
+            }
+            Err((_, failure_reason)) => {
+                slog::debug!(self.logger, "Node got failure outcome: {}", failure_reason);
+            }
+        }
+
         assert!(
             self.outcome.replace(outcome).is_none(),
-            "should not receive more than one outcome"
+            "Should not receive more than one outcome"
         );
+    }
+
+    pub async fn force_stage_timeout(&mut self) {
+        if let Some(outcome) = self.ceremony_runner.force_timeout().await {
+            self.on_ceremony_outcome(outcome);
+        }
     }
 }
 
 impl Node<SigningCeremonyEth> {
     pub async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails) {
-        // NOTE: We are not interested in result_receiver because the result
-        // is always communicated via return values when calling CeremonyRunner's
-        // methods. Yes, this means that the interface in wrong and CeremonyRunner
-        // shouldn't take the sender in the constructor, and we should fix this
-        // (it is currently used in the exceptional case where the same request
-        // is received more than once). The actual sending through the channel is
-        // done one layer above CeremonyRunner, and we can test that layer separately
-        // if we want.
-        let (result_sender, _result_receiver) = oneshot::channel();
-
         let SigningCeremonyDetails {
             rng,
             ceremony_id,
@@ -185,9 +190,6 @@ impl Node<SigningCeremonyEth> {
 
 impl Node<KeygenCeremonyEth> {
     pub async fn request_keygen(&mut self, keygen_ceremony_details: KeygenCeremonyDetails) {
-        // ditto
-        let (result_sender, _result_receiver) = oneshot::channel();
-
         let KeygenCeremonyDetails {
             ceremony_id,
             rng,
@@ -229,7 +231,10 @@ pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>, C: CeremonyTrait>(
         .collect()
 }
 
-pub fn new_nodes_allow_high_pubkey<AccountIds: IntoIterator<Item = AccountId>, C: CeremonyTrait>(
+pub fn new_nodes_without_allow_high_pubkey<
+    AccountIds: IntoIterator<Item = AccountId>,
+    C: CeremonyTrait,
+>(
     account_ids: AccountIds,
 ) -> HashMap<AccountId, Node<C>> {
     account_ids
@@ -345,7 +350,7 @@ where
             .iter_mut()
             .filter(|(account_id, _)| *account_id != non_sender)
         {
-            node.force_stage_timeout();
+            node.force_stage_timeout().await;
         }
     }
 
@@ -456,7 +461,7 @@ where
         self.gather_outgoing_messages().await
     }
 
-    async fn try_gather_outcomes(
+    async fn check_node_outcomes(
         &mut self,
     ) -> Option<
         Result<
@@ -470,11 +475,12 @@ where
         let results: HashMap<_, _> = self
             .nodes
             .iter_mut()
-            .map(|(account_id, node)| {
-                (
-                    account_id.clone(),
-                    node.outcome.take().expect("no outcome found"),
-                )
+            .filter_map(|(account_id, node)| {
+                if let Some(outcome) = node.outcome.take() {
+                    Some((account_id.clone(), outcome))
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -513,7 +519,7 @@ where
 
     pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
         assert_ok!(self
-            .try_gather_outcomes()
+            .check_node_outcomes()
             .await
             .expect("Failed to get all ceremony outcomes"))
     }
@@ -525,7 +531,7 @@ where
             <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
         >,
     ) -> Option<()> {
-        let (reported, reason) = self.try_gather_outcomes().await?.unwrap_err();
+        let (reported, reason) = self.check_node_outcomes().await?.unwrap_err();
         assert_eq!(
             BTreeSet::from_iter(bad_account_ids.iter()),
             reported.iter().collect()
@@ -746,9 +752,18 @@ pub async fn new_signing_ceremony_with_keygen() -> (
     SigningCeremonyRunner,
     HashMap<AccountId, Node<SigningCeremonyEth>>,
 ) {
-    // TODO: this will need to be reworked because a node can only hold a single
-    // ceremony type (we can request signing with a pre-generated key for example)
-    todo!()
+    let (key_id, key_data) =
+        generate_key_data(&ACCOUNT_IDS, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
+            .expect("Should generate key for test");
+
+    SigningCeremonyRunner::new_with_threshold_subset_of_signers(
+        new_nodes(ACCOUNT_IDS.clone()),
+        DEFAULT_SIGNING_CEREMONY_ID,
+        key_id,
+        key_data,
+        MESSAGE_HASH.clone(),
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
+    )
 }
 
 /// Filters out messages that aren't for receiver_id and splits them into those from sender_id and the others
@@ -979,20 +994,20 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
     (),
 > {
     let mut keygen_ceremony = KeygenCeremonyRunner::new(
-        new_nodes_allow_high_pubkey(account_ids),
+        new_nodes_without_allow_high_pubkey(account_ids),
         DEFAULT_KEYGEN_CEREMONY_ID,
         Rng::from_entropy(),
     );
 
-    let stage_1a_messages = keygen_ceremony.request().await;
-    let stage_2_messages = run_stages!(
+    let stage_1_messages = keygen_ceremony.request().await;
+    let stage_4_messages = run_stages!(
         keygen_ceremony,
-        stage_1a_messages,
+        stage_1_messages,
         keygen::VerifyHashComm2,
         keygen::CoeffComm3<Point>,
         keygen::VerifyCoeffComm4<Point>
     );
-    keygen_ceremony.distribute_messages(stage_2_messages).await;
+    keygen_ceremony.distribute_messages(stage_4_messages).await;
     match keygen_ceremony
         .try_complete_with_error(
             &[],
@@ -1002,16 +1017,16 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
     {
         Some(_) => Err(()),
         None => {
-            let stage_3_messages = keygen_ceremony
+            let stage_5_messages = keygen_ceremony
                 .gather_outgoing_messages::<keygen::SecretShare5<Point>, _>()
                 .await;
-            let stage_5_messages = run_stages!(
+            let stage_7_messages = run_stages!(
                 keygen_ceremony,
-                stage_3_messages,
+                stage_5_messages,
                 keygen::Complaints6,
                 keygen::VerifyComplaints7
             );
-            keygen_ceremony.distribute_messages(stage_5_messages).await;
+            keygen_ceremony.distribute_messages(stage_7_messages).await;
 
             let (key_id, key_data) = keygen_ceremony.complete().await;
 
@@ -1143,33 +1158,6 @@ pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment<Point> {
     SigningCommitment {
         d: Point::random(rng),
         e: Point::random(rng),
-    }
-}
-
-impl<C: CeremonyTrait> Node<C> {
-    pub fn force_stage_timeout(&mut self) {
-        self.ceremony_runner
-            .set_timeout(tokio::time::Instant::now() - std::time::Duration::from_secs(1));
-    }
-
-    pub fn ensure_ceremony_at_signing_stage(
-        &self,
-        stage_number: usize,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        // TODO: actually do the check, noop for now
-        //self.ceremony_runner.get_stage()
-        Ok(())
-    }
-
-    /// Check is the ceremony is at the specified keygen BroadcastStage (0-9).
-    pub fn ensure_ceremony_at_keygen_stage(
-        &self,
-        stage_number: usize,
-        ceremony_id: CeremonyId,
-    ) -> Result<()> {
-        // TODO: actually do the check, noop for now
-        Ok(())
     }
 }
 

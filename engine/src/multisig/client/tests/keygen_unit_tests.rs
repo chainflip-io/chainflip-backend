@@ -191,7 +191,8 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
     // This node doesn't receive non_sending_party_id's message, so must timeout
     ceremony
         .get_mut_node(timed_out_party_id)
-        .force_stage_timeout();
+        .force_stage_timeout()
+        .await;
 
     let messages = ceremony
         .gather_outgoing_messages::<Complaints6, KeygenData>()
@@ -764,7 +765,8 @@ mod timeout {
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyHashComm2, KeygenData>()
@@ -803,7 +805,8 @@ mod timeout {
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyCoeffComm4, KeygenData>()
@@ -848,7 +851,8 @@ mod timeout {
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyComplaints7, KeygenData>()
@@ -901,7 +905,8 @@ mod timeout {
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyBlameResponses9, KeygenData>()

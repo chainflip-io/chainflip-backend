@@ -1,15 +1,22 @@
 #![cfg(test)]
 
-use crate::multisig::client::{
-    common::{
-        BroadcastFailureReason, CeremonyFailureReason, CeremonyStageName, SigningFailureReason,
+use rand_legacy::SeedableRng;
+
+use crate::multisig::{
+    client::{
+        common::{
+            BroadcastFailureReason, CeremonyFailureReason, CeremonyStageName, SigningFailureReason,
+        },
+        keygen::generate_key_data,
+        signing::frost,
+        tests::helpers::{
+            for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1,
+            get_signing_stage_name_from_number, new_signing_ceremony_with_keygen, run_stages,
+            split_messages_for, standard_signing, standard_signing_coroutine,
+        },
     },
-    signing::frost,
-    tests::helpers::{
-        for_each_stage, gen_invalid_local_sig, gen_invalid_signing_comm1,
-        get_signing_stage_name_from_number, new_signing_ceremony_with_keygen, run_stages,
-        split_messages_for, standard_signing, standard_signing_coroutine,
-    },
+    tests::fixtures::MESSAGE_HASH,
+    Rng,
 };
 
 use super::*;
@@ -292,32 +299,29 @@ async fn should_ignore_unexpected_message_for_stage() {
 
 #[tokio::test]
 async fn should_sign_with_all_parties() {
+    let (key_id, key_data) =
+        generate_key_data(&ACCOUNT_IDS, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
+            .expect("Should generate key for test");
 
-    // TODO: this will need to be reworked for the same
-    // reasons as `new_signing_ceremony_with_keygen`
+    let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
+        new_nodes(ACCOUNT_IDS.clone()),
+        DEFAULT_SIGNING_CEREMONY_ID,
+        key_id,
+        key_data,
+        MESSAGE_HASH.clone(),
+        Rng::from_seed(DEFAULT_SIGNING_SEED),
+    );
 
-    // let (key_id, key_data, _messages, nodes) =
-    //     run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
-
-    // let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
-    //     nodes,
-    //     DEFAULT_SIGNING_CEREMONY_ID,
-    //     key_id,
-    //     key_data,
-    //     MESSAGE_HASH.clone(),
-    //     Rng::from_seed(DEFAULT_SIGNING_SEED),
-    // );
-
-    // let messages = signing_ceremony.request().await;
-    // let messages = run_stages!(
-    //     signing_ceremony,
-    //     messages,
-    //     VerifyComm2,
-    //     LocalSig3,
-    //     VerifyLocalSig4
-    // );
-    // signing_ceremony.distribute_messages(messages).await;
-    // signing_ceremony.complete().await;
+    let messages = signing_ceremony.request().await;
+    let messages = run_stages!(
+        signing_ceremony,
+        messages,
+        VerifyComm2,
+        LocalSig3,
+        VerifyLocalSig4
+    );
+    signing_ceremony.distribute_messages(messages).await;
+    signing_ceremony.complete().await;
 }
 
 mod timeout {
@@ -357,7 +361,8 @@ mod timeout {
                 .nodes
                 .get_mut(&timed_out_party_id)
                 .unwrap()
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = signing_ceremony
                 .gather_outgoing_messages::<VerifyComm2, SigningData>()
@@ -390,7 +395,8 @@ mod timeout {
                 .nodes
                 .get_mut(&timed_out_party_id)
                 .unwrap()
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = signing_ceremony
                 .gather_outgoing_messages::<VerifyLocalSig4, SigningData>()
