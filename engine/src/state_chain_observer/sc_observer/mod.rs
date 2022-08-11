@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+use anyhow::Context;
 use cf_traits::EpochIndex;
 use futures::{stream, FutureExt, Stream, StreamExt};
 use pallet_cf_validator::CeremonyId;
@@ -9,7 +10,8 @@ use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{AccountId, CfeSettings};
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
@@ -262,11 +264,6 @@ where
             blocks_per_heartbeat
         );
 
-        state_chain_client
-            .submit_signed_extrinsic(pallet_cf_reputation::Call::heartbeat {}, &logger)
-            .await
-            .expect("Should be able to submit first heartbeat");
-
         let send_instruction = |observe_instruction: ObserveInstruction| {
             witnessing_instruction_sender
                 .send(observe_instruction)
@@ -307,6 +304,27 @@ where
                 }
             })
             .await;
+
+
+        // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
+        // liveness
+        let has_submitted_init_heartbeat = Arc::new(AtomicBool::new(false));
+        scope.spawn({
+            let state_chain_client = state_chain_client.clone();
+            let has_submitted_init_heartbeat = has_submitted_init_heartbeat.clone();
+            let logger = logger.clone();
+            async move {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                    state_chain_client
+                    .submit_signed_extrinsic(
+                        pallet_cf_reputation::Call::heartbeat {},
+                        &logger,
+                    )
+                    .await
+                    .context("Failed to submit initial heartbeat")?;
+                has_submitted_init_heartbeat.store(true, Ordering::Relaxed);
+            Ok(())
+        }.boxed()});
 
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
@@ -498,10 +516,11 @@ where
                             // All nodes must send a heartbeat regardless of their validator status (at least for now).
                             // We send it in the middle of the online interval (so any node sync issues don't
                             // cause issues (if we tried to send on one of the interval boundaries)
-                            if (current_block_header.number
+                            if ((current_block_header.number
                                 + (state_chain_client.heartbeat_block_interval / 2))
                                 % blocks_per_heartbeat
-                                == 0
+                                // Submitting earlier than one minute in may falsely indicate liveness.
+                                == 0) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                             {
                                 slog::info!(
                                     logger,
@@ -527,7 +546,6 @@ where
                 }
             }
         }
-        Ok(())
-    }.boxed()).await?;
-    Ok(())
+        Err(anyhow::anyhow!("State Chain block stream ended"))
+    }.boxed()).await
 }

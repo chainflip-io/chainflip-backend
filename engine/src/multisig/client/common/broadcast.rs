@@ -97,14 +97,16 @@ where
     }
 }
 
-impl<Point, Data, Result, Stage, FailureReason> CeremonyStage
+impl<Point, Data, Result, Stage, FailureReason, TryFromError> CeremonyStage
     for BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
     Point: ECPoint,
     Data: Clone + Display + Into<MultisigData<Point>>,
     Result: Clone,
     Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
-    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message: TryFrom<Data>,
+    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message:
+        TryFrom<Data, Error = TryFromError>,
+    TryFromError: Display,
 {
     type Message = Data;
     type Result = Result;
@@ -176,12 +178,13 @@ where
     fn process_message(&mut self, signer_idx: AuthorityCount, m: Data) -> ProcessMessageResult {
         let m: Stage::Message = match m.try_into() {
             Ok(m) => m,
-            Err(_) => {
+            Err(incorrect_type) => {
                 slog::warn!(
                     self.common.logger,
-                    "Ignoring an unexpected message for stage {} from party [{}]",
-                    self,
-                    signer_idx
+                    "Ignoring unexpected message {} while in stage {}",
+                    incorrect_type,
+                    self;
+                    "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
                 );
                 return ProcessMessageResult::NotReady;
             }
@@ -190,9 +193,9 @@ where
         if self.messages.contains_key(&signer_idx) {
             slog::warn!(
                 self.common.logger,
-                "Ignoring a redundant message for stage {} from party [{}]",
-                self,
-                signer_idx
+                "Ignoring a redundant message for stage {}",
+                self;
+                "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
@@ -200,9 +203,9 @@ where
         if !self.common.all_idxs.contains(&signer_idx) {
             slog::warn!(
                 self.common.logger,
-                "Ignoring a message from non-participant for stage {} from party [{}]",
-                self,
-                signer_idx
+                "Ignoring a message from non-participant for stage {}",
+                self;
+                "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
