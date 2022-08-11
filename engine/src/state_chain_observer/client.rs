@@ -560,9 +560,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             }
         }
         slog::error!(logger, "Exceeded maximum number of retry attempts");
-        Err(anyhow::Error::msg(
-            "Exceeded maximum number of retry attempts",
-        ))
+        Err(anyhow::anyhow!("Exceeded maximum number of retry attempts",))
     }
 
     /// Submit an unsigned extrinsic.
@@ -661,9 +659,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 }
             };
         }
-        Err(anyhow::Error::msg(
-            "Block stream loop exited, no event found",
-        ))
+        Err(anyhow::anyhow!("Block stream loop exited, no event found",))
     }
 
     async fn get_storage_item<
@@ -1121,10 +1117,7 @@ async fn inner_connect_to_state_chain(
                         }
                     }
                 } else {
-                    return Err(anyhow::Error::msg(format!(
-                        "Your Chainflip account {} is not staked",
-                        our_account_id
-                    )));
+                    bail!("Your Chainflip account {} is not staked", our_account_id);
                 }
             }
         };

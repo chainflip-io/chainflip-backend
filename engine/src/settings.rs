@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::bail;
 use config::{Config, ConfigError, Environment, File};
 use serde::{de, Deserialize, Deserializer};
 
@@ -308,7 +309,7 @@ fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
     let parsed_url = Url::parse(url)?;
     let scheme = parsed_url.scheme();
     if !valid_schemes.contains(&scheme) {
-        return Err(anyhow::Error::msg(format!("Invalid scheme: `{}`", scheme)));
+        bail!("Invalid scheme: `{}`", scheme);
     }
     if parsed_url.host() == None
         || parsed_url.username() != ""
@@ -317,7 +318,7 @@ fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
         || parsed_url.fragment() != None
         || parsed_url.cannot_be_a_base()
     {
-        return Err(anyhow::Error::msg("Invalid URL data."));
+        bail!("Invalid URL data.");
     }
 
     Ok(parsed_url)
@@ -325,7 +326,7 @@ fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
 
 fn is_valid_db_path(db_file: &Path) -> Result<()> {
     if db_file.extension() != Some(OsStr::new("db")) {
-        return Err(anyhow::Error::msg("Db path does not have '.db' extension"));
+        bail!("Db path does not have '.db' extension");
     }
     Ok(())
 }

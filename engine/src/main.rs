@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::multisig::eth::EthSigning;
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use chainflip_engine::{
     common::format_iterator,
     eth::{
@@ -113,7 +113,7 @@ fn main() -> anyhow::Result<()> {
                     .peekable();
 
                 if errors.peek().is_some() {
-                    return Err(anyhow!(format!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors))));
+                    bail!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors));
                 }
             }
 

@@ -11,7 +11,7 @@ pub mod rpc;
 
 pub mod utils;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use cf_traits::EpochIndex;
 use pallet_cf_broadcast::BroadcastAttemptId;
@@ -371,7 +371,7 @@ impl TryFrom<Block<H256>> for EthNumberBloom {
     fn try_from(block: Block<H256>) -> Result<Self, Self::Error> {
         if block.number.is_none() || block.logs_bloom.is_none() || block.base_fee_per_gas.is_none()
         {
-            Err(anyhow::Error::msg(
+            Err(anyhow!(
                 "Block<H256> did not contain necessary block number and/or logs bloom and/or base fee per gas",
             ))
         } else {
@@ -706,7 +706,7 @@ pub trait EthObserver {
                 return Ok(Box::pin(events));
             }
         }
-        Err(anyhow::Error::msg("No events in ETH safe head stream"))
+        Err(anyhow!("No events in ETH safe head stream"))
     }
 
     /// Get an block stream for the contract, returning the stream only if the head of the stream is
@@ -957,7 +957,7 @@ pub trait EthObserver {
                                             }));
                                         }
                                         Err(err) => {
-                                            return Err(anyhow::Error::msg(format!("ETH {} stream failed with error, on block {} that we were recovering from: {}", other_protocol_state.protocol, block_events.block_number, err)));
+                                            bail!("ETH {} stream failed with error, on block {} that we were recovering from: {}", other_protocol_state.protocol, block_events.block_number, err);
                                         }
                                     }
                                 }
@@ -976,10 +976,10 @@ pub trait EthObserver {
                             }
                         }
 
-                        return Err(anyhow::Error::msg(format!(
+                        bail!(
                             "ETH {} stream terminated when attempting to recover",
                             other_protocol_state.protocol,
-                        )));
+                        );
                     }
                 }
             } else {

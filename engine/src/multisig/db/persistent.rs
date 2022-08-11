@@ -373,11 +373,10 @@ fn migrate_db_to_latest(
         }
         Ordering::Greater => {
             // We do not support backwards migrations
-            Err(anyhow::Error::msg(
-                    format!("Database schema version {} is ahead of the current schema version {}. Is your Chainflip Engine up to date?",
+            Err(anyhow!("Database schema version {} is ahead of the current schema version {}. Is your Chainflip Engine up to date?",
                     version,
                     LATEST_SCHEMA_VERSION)
-                ))
+                )
         }
         Ordering::Less => {
             slog::info!(
