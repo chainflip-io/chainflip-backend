@@ -18,10 +18,7 @@ use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
 use pallet_cf_vaults::CeremonyId;
 use slog::Logger;
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender},
-    oneshot,
-};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
 
 use crate::{
@@ -37,7 +34,7 @@ use crate::{
                 CeremonyStageName, KeygenFailureReason,
             },
             keygen::{
-                generate_key_data, get_key_data_for_test, HashComm1, HashContext, SecretShare5,
+                generate_key_data, HashComm1, HashContext, SecretShare5,
                 VerifyHashCommitmentsBroadcast2,
             },
             signing,
@@ -55,7 +52,7 @@ use signing::frost::{self, LocalSig3, SigningCommitment, SigningData};
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use crate::{
-    logging::{self, test_utils::TagCache},
+    logging::{self},
     multisig::{
         client::{
             keygen::{self, KeygenData},
@@ -178,7 +175,6 @@ impl Node<SigningCeremonyEth> {
             .on_ceremony_request(
                 request.init_stage,
                 request.idx_mapping,
-                result_sender,
                 request.participants_count,
             )
             .await
@@ -212,7 +208,6 @@ impl Node<KeygenCeremonyEth> {
             .on_ceremony_request(
                 request.init_stage,
                 request.idx_mapping,
-                result_sender,
                 request.participants_count,
             )
             .await
@@ -461,6 +456,7 @@ where
         self.gather_outgoing_messages().await
     }
 
+    // Checks if all nodes have an outcome and the outcomes are consistent, returning the outcome.
     async fn check_node_outcomes(
         &mut self,
     ) -> Option<
@@ -472,6 +468,7 @@ where
             ),
         >,
     >{
+        // Gather the outcomes from all the nodes
         let results: HashMap<_, _> = self
             .nodes
             .iter_mut()
@@ -484,6 +481,16 @@ where
             })
             .collect();
 
+        if results.is_empty() {
+            // No nodes have gotten an outcome yet
+            return None;
+        }
+
+        if results.len() != self.nodes.len() {
+            panic!("Not all nodes had an outcome");
+        }
+
+        // Split up the outcomes into success and fails
         let (ok_results, (all_reported_parties, failure_reasons)): (
             HashMap<_, _>,
             (BTreeSet<_>, BTreeSet<_>),
@@ -494,9 +501,11 @@ where
                 Err((reported_parties, reason)) => Either::Right((reported_parties, reason)),
             });
 
-        if !ok_results.is_empty() && all_reported_parties.is_empty() {
+        if !ok_results.is_empty() && failure_reasons.is_empty() {
+            // All nodes completed successfully
             Some(Ok(self.post_successful_complete_check(ok_results)))
-        } else if ok_results.is_empty() && !all_reported_parties.is_empty() {
+        } else if ok_results.is_empty() && !failure_reasons.is_empty() {
+            // All nodes reported failure, check that the reasons and reported nodes are the same
             assert_eq!(
                 all_reported_parties.len(),
                 1,
@@ -1211,7 +1220,6 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
         ceremony_id,
         stage,
         validator_mapping,
-        oneshot::channel().0,
         account_ids.len() as u32,
         logger,
     )

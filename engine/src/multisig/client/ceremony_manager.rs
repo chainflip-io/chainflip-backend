@@ -34,9 +34,6 @@ use super::common::{CeremonyStage, PreProcessStageDataCheck};
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
-#[cfg(test)]
-use client::common::CeremonyStageName;
-
 pub type CeremonyOutcome<Ceremony> = Result<
     <Ceremony as CeremonyTrait>::Artefact,
     (
@@ -542,14 +539,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
     }
-
-    /// This should not be used in production as it could
-    /// result in pubkeys incompatible with the KeyManager
-    /// contract, but it is useful in tests that need to be
-    /// deterministic and don't interact with the contract
-    pub fn allow_high_pubkey(&mut self) {
-        self.allowing_high_pubkey = true;
-    }
 }
 
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
@@ -639,6 +628,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         };
     }
 
+    #[cfg(test)]
     fn len(&self) -> usize {
         self.inner.len()
     }

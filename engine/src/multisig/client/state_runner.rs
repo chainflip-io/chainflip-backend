@@ -1,15 +1,18 @@
+#[cfg(test)]
+mod tests;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     pin::Pin,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use anyhow::Result;
 use cf_traits::AuthorityCount;
 use futures::future::{BoxFuture, FutureExt};
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     common::format_iterator,
@@ -19,7 +22,7 @@ use crate::{
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
-    ceremony_manager::{CeremonyRequestInner, CeremonyResultSender, CeremonyTrait, DynStage},
+    ceremony_manager::{CeremonyRequestInner, CeremonyTrait, DynStage},
     common::{CeremonyFailureReason, PreProcessStageDataCheck},
     utils::PartyIdxMapping,
 };
@@ -31,7 +34,6 @@ type OptionalCeremonyReturn<CeremonyResult, FailureReason> =
 
 pub struct StateAuthorised<Ceremony: CeremonyTrait> {
     pub stage: Option<DynStage<Ceremony>>,
-    pub result_sender: CeremonyResultSender<Ceremony>,
     pub idx_mapping: Arc<PartyIdxMapping>,
     pub num_of_participants: AuthorityCount,
 }
@@ -59,6 +61,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         // We always create unauthorised first, it can get promoted to
         // an authorised one with a ceremony request
         let mut runner = Self::new_unauthorised(ceremony_id, &logger);
+        let mut final_result_sender = None;
 
         let outcome = loop {
             tokio::select! {
@@ -72,11 +75,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 Some(request) = request_receiver.recv() => {
 
                     let CeremonyRequestInner { init_stage, idx_mapping, result_sender, num_of_participants } = request;
+                    final_result_sender = Some(result_sender);
 
-                    // If we already have an authorised ceremony, we need to be careful that
-                    // a second request does not interfere with it
-
-                    if let Some(res) = runner.on_ceremony_request(init_stage, idx_mapping, result_sender, num_of_participants).await {
+                    if let Some(res) = runner.on_ceremony_request(init_stage, idx_mapping, num_of_participants).await {
                         break res;
                     }
 
@@ -91,8 +92,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             }
         };
 
-        // We should always have inner state if we are reporting result
-        let _ = runner.inner.unwrap().result_sender.send(outcome);
+        if let Some(result_sender) = final_result_sender {
+            let _res = result_sender.send(outcome);
+        }
 
         ceremony_id
     }
@@ -101,7 +103,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
     fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
-        // MAXIM: maybe unauthorised ceremonies should not expire?
         let sleep_handle = Box::pin(tokio::time::sleep(MAX_STAGE_DURATION));
         CeremonyRunner {
             inner: None,
@@ -117,23 +118,15 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         &mut self,
         mut stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: CeremonyResultSender<Ceremony>,
         num_of_participants: AuthorityCount,
     ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
-        if self.inner.is_some() {
-            let _result = result_sender.send(Err((
-                BTreeSet::new(),
-                CeremonyFailureReason::DuplicateCeremonyId,
-            )));
-            return None;
-        }
+        assert!(self.inner.is_none(), "Duplicate ceremony id");
 
         stage.init();
 
         self.inner = Some(StateAuthorised {
             stage: Some(stage),
             idx_mapping,
-            result_sender,
             num_of_participants,
         });
 
@@ -297,7 +290,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     /// Delay message to be processed in the next stage
     fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
-        // MAXIM: check data size somewhere around here?
         match &self.inner {
             Some(authorised_state) => {
                 let stage = authorised_state
@@ -385,22 +377,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             }
         }
     }
-
-    /// returns true if the ceremony is authorized (has received a ceremony request)
-    pub fn is_authorized(&self) -> bool {
-        self.inner.is_some()
-    }
-
-    /// Returns the number of participants in the current ceremony
-    pub fn get_participant_count(&self) -> Option<AuthorityCount> {
-        self.inner
-            .as_ref()
-            .map(|authorised_state| authorised_state.num_of_participants)
-    }
-
-    pub fn try_into_result_sender(self) -> Option<CeremonyResultSender<Ceremony>> {
-        self.inner.map(|inner| inner.result_sender)
-    }
 }
 
 #[cfg(test)]
@@ -414,14 +390,12 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         ceremony_id: CeremonyId,
         stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: CeremonyResultSender<Ceremony>,
         num_of_participants: AuthorityCount,
         logger: slog::Logger,
     ) -> Self {
         let inner = Some(StateAuthorised {
             stage: Some(stage),
             idx_mapping,
-            result_sender,
             num_of_participants,
         });
 

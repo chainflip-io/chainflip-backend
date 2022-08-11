@@ -1,9 +1,6 @@
 use std::collections::BTreeSet;
 
-use super::{
-    helpers::gen_invalid_keygen_stage_2_state,
-    keygen_data_tests::gen_keygen_data_verify_hash_comm2, *,
-};
+use super::*;
 use crate::{
     constants::CEREMONY_ID_WINDOW,
     logging::test_utils::new_test_logger,
@@ -201,41 +198,6 @@ async fn should_ignore_rts_with_unknown_signer_id() {
             BTreeSet::default(),
             CeremonyFailureReason::InvalidParticipants,
         ))
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_stage_data_with_incorrect_size() {
-    let logger = new_test_logger();
-    let rng = Rng::from_seed(DEFAULT_KEYGEN_SEED);
-    let ceremony_id = DEFAULT_KEYGEN_CEREMONY_ID;
-    let num_of_participants = ACCOUNT_IDS.len() as u32;
-
-    // This test only works on message stage data that can have incorrect size (ie. not first stage),
-    // so we must create a stage 2 state and add it to the ceremony managers keygen states,
-    // allowing us to process a stage 2 message.
-    let mut stage_2_state = gen_invalid_keygen_stage_2_state::<<EthSigning as CryptoScheme>::Point>(
-        ceremony_id,
-        &ACCOUNT_IDS[..],
-        rng,
-        logger.clone(),
-    );
-
-    // Built a stage 2 message that has the incorrect number of elements
-    let stage_2_data = gen_keygen_data_verify_hash_comm2(num_of_participants + 1);
-
-    // Process the bad message and it should get rejected
-    assert_eq!(
-        stage_2_state
-            .process_or_delay_message(ACCOUNT_IDS[0].clone(), stage_2_data)
-            .await,
-        None
-    );
-
-    // Check that the bad message was ignored, so the stage is still awaiting all num_of_participants messages.
-    assert_eq!(
-        stage_2_state.get_awaited_parties_count(),
-        Some(num_of_participants)
     );
 }
 
