@@ -1,0 +1,45 @@
+[package]
+name = "simnode-test"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+substrate-simnode = { git = "https://github.com/polytope-labs/substrate-simnode", branch = "master"}
+
+# runtime / etc
+# state-chain-runtime = { path = '../runtime'}
+# chainflip-node = { path = '../node' }
+
+# sc-consensus-aura = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05' }
+# sc-consensus-manual-seal = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05' }
+# sc-service = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05'  }
+# sc-executor = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05'  }
+# sc-consensus = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05'  }
+
+#client
+sc-consensus-aura = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+sc-consensus-manual-seal = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+sc-service = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+sc-executor = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+sc-consensus = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.24" }
+
+[features]
+default = ["std"]
+# This is here so that we can use the `runtime_interface` procedural macro
+std = []
+
+# [dependencies]
+# substrate-simnode = { git = "https://github.com/polytope-labs/substrate-simnode", branch = "master"}
+
+# # runtime / etc
+# state-chain-runtime = { path = '../runtime'}
+# chainflip-node = { path = '../node' }
+
+# #client
+# sc-consensus-aura = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05' }
+# sc-consensus-manual-seal = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05' }
+# sc-service = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05'  }
+# sc-executor = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05'  }
+# sc-consensus = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-05'  }
