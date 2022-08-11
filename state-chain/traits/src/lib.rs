@@ -208,7 +208,10 @@ pub trait EpochTransitionHandler {
 	type ValidatorId;
 
 	/// A new epoch has started
-	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]);
+	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {}
+
+	/// When an epoch has been expired
+	fn on_expired_epoch(_expired: EpochIndex) {}
 }
 
 /// Resetter for Reputation Points and Online Credits of a Validator

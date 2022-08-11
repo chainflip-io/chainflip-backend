@@ -105,7 +105,8 @@ pub mod pallet {
 
 	/// A flag indicating that the CallHash has been executed.
 	#[pallet::storage]
-	pub type CallHashExecuted<T: Config> = StorageMap<_, Identity, CallHash, ()>;
+	pub type CallHashExecuted<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, ()>;
 
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
@@ -290,7 +291,7 @@ impl<T: Config> Pallet<T> {
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
-			CallHashExecuted::<T>::get(&call_hash).is_none()
+			CallHashExecuted::<T>::get(epoch_index, &call_hash).is_none()
 		{
 			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
 				call.combine_and_inject(&mut extra_data)
@@ -310,7 +311,7 @@ impl<T: Config> Pallet<T> {
 						error: e.error,
 					});
 				});
-			CallHashExecuted::<T>::insert(&call_hash, ());
+			CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
 		}
 
 		Ok(().into())
@@ -321,6 +322,37 @@ impl<T: Config> Pallet<T> {
 		call: <T as Config>::Call,
 	) -> DispatchResultWithPostInfo {
 		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index())
+	}
+
+	/// Purge the pallet storage of stale entries. This is defined as Votes that are equal or older
+	/// than the Epoch that just expired. Also purge  
+	fn purge_stale_storage(expired: EpochIndex) {
+		// Remove all vote entries data with stale EpochIndex.
+		Votes::<T>::translate(|epoch_index, call_hash, buffer| -> Option<Vec<u8>> {
+			if epoch_index <= expired {
+				None
+			} else {
+				Some(buffer)
+			}
+		});
+
+		// Rmove extra call data with stale EpochIndex
+		ExtraCallData::<T>::translate(|epoch_index, _, buffer| -> Option<Vec<Vec<u8>>> {
+			if epoch_index <= expired {
+				None
+			} else {
+				Some(buffer)
+			}
+		});
+
+		// Rempve call execution record for the stale calls
+		CallHashExecuted::<T>::translate(|epoch_index, _, ()| -> Option<()> {
+			if epoch_index <= expired {
+				None
+			} else {
+				Some(())
+			}
+		});
 	}
 }
 
@@ -339,6 +371,15 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 		epoch: EpochIndex,
 	) -> DispatchResultWithPostInfo {
 		Self::do_witness_at_epoch(who.into(), call, epoch)
+	}
+}
+
+impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	// purge stale storage when an epoch expires.
+	fn on_expired_epoch(expired: EpochIndex) {
+		Pallet::<T>::purge_stale_storage(expired);
 	}
 }
 

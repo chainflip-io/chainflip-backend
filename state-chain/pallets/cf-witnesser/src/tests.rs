@@ -1,9 +1,9 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
-	CallHash, Error, VoteMask, Votes,
+	CallHash, CallHashExecuted, Error, ExtraCallData, VoteMask, Votes,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo};
+use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
@@ -150,5 +150,93 @@ fn can_continue_to_witness_for_old_epochs() {
 			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call, current_epoch + 1,),
 			Error::<Test>::InvalidEpoch
 		);
+	});
+}
+
+#[test]
+fn can_purge_stale_storage() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let call1 = CallHash(frame_support::Hashable::blake2_256(&*call));
+		let call2 = CallHash(frame_support::Hashable::blake2_256(&*call));
+
+		// fill in Votes storage
+		Votes::<Test>::insert(0, &call1, vec![0, 0, 0]);
+		Votes::<Test>::insert(2, &call2, vec![0, 0, 2]);
+		Votes::<Test>::insert(3, &call1, vec![0, 0, 3]);
+		Votes::<Test>::insert(5, &call2, vec![0, 0, 5]);
+		Votes::<Test>::insert(9, &call1, vec![0, 0, 9]);
+		Votes::<Test>::insert(10, &call1, vec![0, 0, 10]);
+		Votes::<Test>::insert(10, &call2, vec![0, 0, 10]);
+		Votes::<Test>::insert(11, &call1, vec![0, 0, 11]);
+		Votes::<Test>::insert(11, &call2, vec![0, 0, 11]);
+		Votes::<Test>::insert(20, &call1, vec![0, 0, 20]);
+
+		// fill in ExtraCallData storage
+		ExtraCallData::<Test>::insert(0, call1, vec![vec![0], vec![0]]);
+		ExtraCallData::<Test>::insert(2, call2, vec![vec![0], vec![2]]);
+		ExtraCallData::<Test>::insert(3, call1, vec![vec![0], vec![3]]);
+		ExtraCallData::<Test>::insert(5, call2, vec![vec![0], vec![5]]);
+		ExtraCallData::<Test>::insert(9, call1, vec![vec![0], vec![9]]);
+		ExtraCallData::<Test>::insert(10, call1, vec![vec![0], vec![10]]);
+		ExtraCallData::<Test>::insert(10, call2, vec![vec![0], vec![10]]);
+		ExtraCallData::<Test>::insert(11, call1, vec![vec![0], vec![11]]);
+		ExtraCallData::<Test>::insert(11, call2, vec![vec![0], vec![11]]);
+		ExtraCallData::<Test>::insert(20, call1, vec![vec![0], vec![20]]);
+
+		// fill in CallHashExecuted storage
+		CallHashExecuted::<Test>::insert(0, call1, ());
+		CallHashExecuted::<Test>::insert(0, call2, ());
+		CallHashExecuted::<Test>::insert(2, call1, ());
+		CallHashExecuted::<Test>::insert(2, call2, ());
+		CallHashExecuted::<Test>::insert(3, call1, ());
+		CallHashExecuted::<Test>::insert(5, call1, ());
+		CallHashExecuted::<Test>::insert(9, call1, ());
+		CallHashExecuted::<Test>::insert(10, call1, ());
+		CallHashExecuted::<Test>::insert(10, call2, ());
+		CallHashExecuted::<Test>::insert(11, call1, ());
+		CallHashExecuted::<Test>::insert(11, call2, ());
+		CallHashExecuted::<Test>::insert(20, call1, ());
+
+		// Purge stale storage
+		<Witnesser as EpochTransitionHandler>::on_expired_epoch(10);
+
+		// Verify that Votes storage has been purged
+		assert_eq!(Votes::<Test>::get(0, &call1), None);
+		assert_eq!(Votes::<Test>::get(2, &call2), None);
+		assert_eq!(Votes::<Test>::get(3, &call1), None);
+		assert_eq!(Votes::<Test>::get(5, &call2), None);
+		assert_eq!(Votes::<Test>::get(9, &call1), None);
+		assert_eq!(Votes::<Test>::get(10, &call1), None);
+		assert_eq!(Votes::<Test>::get(10, &call2), None);
+		assert_eq!(Votes::<Test>::get(11, &call1), Some(vec![0, 0, 11]));
+		assert_eq!(Votes::<Test>::get(11, &call2), Some(vec![0, 0, 11]));
+		assert_eq!(Votes::<Test>::get(20, &call1), Some(vec![0, 0, 20]));
+
+		// Verify that the ExtraCallData storage has been purged
+		assert_eq!(ExtraCallData::<Test>::get(0, call1), None);
+		assert_eq!(ExtraCallData::<Test>::get(2, call2), None);
+		assert_eq!(ExtraCallData::<Test>::get(3, call1), None);
+		assert_eq!(ExtraCallData::<Test>::get(5, call2), None);
+		assert_eq!(ExtraCallData::<Test>::get(9, call1), None);
+		assert_eq!(ExtraCallData::<Test>::get(10, call1), None);
+		assert_eq!(ExtraCallData::<Test>::get(10, call2), None);
+		assert_eq!(ExtraCallData::<Test>::get(11, call1), Some(vec![vec![0], vec![11]]));
+		assert_eq!(ExtraCallData::<Test>::get(11, call2), Some(vec![vec![0], vec![11]]));
+		assert_eq!(ExtraCallData::<Test>::get(20, call1), Some(vec![vec![0], vec![20]]));
+
+		// Verify that the CallHashExecuted storage has been purged
+		assert_eq!(CallHashExecuted::<Test>::get(0, call1), None);
+		assert_eq!(CallHashExecuted::<Test>::get(0, call2), None);
+		assert_eq!(CallHashExecuted::<Test>::get(2, call1), None);
+		assert_eq!(CallHashExecuted::<Test>::get(2, call2), None);
+		assert_eq!(CallHashExecuted::<Test>::get(3, call1), None);
+		assert_eq!(CallHashExecuted::<Test>::get(5, call1), None);
+		assert_eq!(CallHashExecuted::<Test>::get(9, call1), None);
+		assert_eq!(CallHashExecuted::<Test>::get(10, call1), None);
+		assert_eq!(CallHashExecuted::<Test>::get(10, call2), None);
+		assert_eq!(CallHashExecuted::<Test>::get(11, call1), Some(()));
+		assert_eq!(CallHashExecuted::<Test>::get(11, call2), Some(()));
+		assert_eq!(CallHashExecuted::<Test>::get(20, call1), Some(()));
 	});
 }
