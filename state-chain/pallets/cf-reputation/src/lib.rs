@@ -203,7 +203,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn offence_time_slot_tracker)]
-	/// The penalty to be applied for each offence.
+	/// The time slot in which an offence has been reported. Only applies to offences that are
+	/// reported via the [ChainflipOffenceReportingAdapter].
 	pub type OffenceTimeSlotTracker<T: Config> = StorageMap<_, Identity, ReportId, OpaqueTimeSlot>;
 
 	/// The last block numbers at which validators submitted a heartbeat.
