@@ -198,7 +198,7 @@ pub mod pallet {
 		/// A previously retired account  has been re-activated. \[account_id\]
 		AccountActivated(AccountId<T>),
 
-		/// A claim has expired without being redeemed. \[account_id, nonce, amount\]
+		/// A claim has expired without being executed. \[account_id, nonce, amount\]
 		ClaimExpired(AccountId<T>, FlipBalance<T>),
 
 		/// A stake attempt has failed. \[account_id, eth_address, amount\]
