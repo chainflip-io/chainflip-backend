@@ -34,7 +34,7 @@ use crate::multisig::MessageHash;
 
 use super::common::{CeremonyStage, PreProcessStageDataCheck};
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
-use super::{MultisigData, MultisigMessage};
+use super::{CeremonyRequest, MultisigData, MultisigMessage};
 
 pub type CeremonyOutcome<Ceremony> = Result<
     <Ceremony as CeremonyTrait>::Output,
@@ -402,8 +402,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         ) {
             Ok(request) => request,
             Err(failed_outcome) => {
-                let _ = result_sender.send(failed_outcome);
-                // Do we need to clean up more state here?
+                let _res = result_sender.send(failed_outcome);
+                self.keygen_states
+                    .cleanup_ceremony(Ok(ceremony_id), &logger_with_ceremony_id);
                 return;
             }
         };
@@ -412,7 +413,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .keygen_states
             .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
-        // Ceremony is spawned if we get to this point
         ceremony_handle.on_request(request.into_request_inner(result_sender));
     }
 
@@ -449,7 +449,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
         ) {
             Ok(request) => request,
             Err(failed_outcome) => {
-                let _ = result_sender.send(failed_outcome);
+                let _res = result_sender.send(failed_outcome);
+                self.signing_states
+                    .cleanup_ceremony(Ok(ceremony_id), &logger_with_ceremony_id);
                 return;
             }
         };
@@ -621,10 +623,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     /// Remove any state associated with the ceremony
     fn cleanup_ceremony(&mut self, id: Result<CeremonyId, JoinError>, logger: &slog::Logger) {
         match id {
-            Ok(id) => assert!(
-                self.inner.remove(&id).is_some(),
-                "ceremony handler should exist"
-            ),
+            Ok(id) => {
+                let _removed = self.inner.remove(&id);
+            }
             Err(err) => slog::error!(logger, "Ceremony panicked with: {}", err),
         };
     }
@@ -637,12 +638,6 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 
 // ==================
 
-use super::CeremonyRequest;
-
-pub fn chan<T>() -> (UnboundedSender<T>, UnboundedReceiver<T>) {
-    mpsc::unbounded_channel()
-}
-
 struct CeremonyHandle<Ceremony: CeremonyTrait> {
     // these send to the task
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
@@ -654,8 +649,8 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
         cid: CeremonyId,
         logger: &slog::Logger,
     ) -> (Self, tokio::task::JoinHandle<CeremonyId>) {
-        let (msg_s, msg_r) = chan();
-        let (req_s, req_r) = chan();
+        let (msg_s, msg_r) = mpsc::unbounded_channel();
+        let (req_s, req_r) = mpsc::unbounded_channel();
 
         let task_handle = tokio::spawn(CeremonyRunner::<Ceremony>::run(
             cid,
@@ -674,6 +669,6 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
     }
 
     fn on_request(&mut self, request: CeremonyRequestInner<Ceremony>) {
-        let _ = self.request_sender.send(request);
+        let _res = self.request_sender.send(request);
     }
 }

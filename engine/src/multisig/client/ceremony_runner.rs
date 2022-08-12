@@ -131,9 +131,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         });
 
         // Unlike other state transitions, we don't take into account
-        // any time left in the prior stage when receiving a request
-        // to sign (we don't want other parties to be able to
-        // control when our stages time out)
+        // any time left in the prior stage when receiving a ceremony request.
+        // we don't want other parties to be able to control when our stages time out.
         self.sleep_handle
             .as_mut()
             .reset(tokio::time::Instant::now() + MAX_STAGE_DURATION);
