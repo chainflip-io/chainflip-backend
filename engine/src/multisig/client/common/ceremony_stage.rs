@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, sync::Arc};
 
+use async_trait::async_trait;
 use cf_traits::AuthorityCount;
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
@@ -41,6 +42,7 @@ pub enum ProcessMessageResult {
 }
 
 /// Defines actions that any given stage of a ceremony should be able to perform
+#[async_trait]
 pub trait CeremonyStage {
     // Message type to be processed by a particular stage
     type Message;
@@ -66,7 +68,9 @@ pub trait CeremonyStage {
 
     /// Verify data for this stage after it is received from all other parties,
     /// either abort or proceed to the next stage based on the result
-    fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
+    async fn finalize(
+        self: Box<Self>,
+    ) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;

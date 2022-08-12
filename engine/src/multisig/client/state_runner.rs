@@ -158,7 +158,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             .take()
             .expect("Stage must be present to be finalized");
 
-        match stage.finalize() {
+        match stage.finalize().await {
             StageResult::NextStage(mut next_stage) => {
                 slog::debug!(
                     self.logger,

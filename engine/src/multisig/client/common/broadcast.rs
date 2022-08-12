@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display, marker::PhantomData};
 
+use async_trait::async_trait;
 use cf_traits::AuthorityCount;
 
 use crate::{
@@ -28,6 +29,7 @@ pub enum DataToSend<T> {
 
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
+#[async_trait]
 pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     /// The specific variant of D shared between parties
     /// during this stage
@@ -46,7 +48,7 @@ pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     /// Determines how the data for this stage (of type `Self::Message`)
     /// should be processed once it either received it from all other parties
     /// or the stage timed out (None is used for missing messages)
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> StageResult<Data, Result, FailureReason>;
@@ -97,15 +99,16 @@ where
     }
 }
 
+#[async_trait]
 impl<Point, Data, Result, Stage, FailureReason, TryFromError> CeremonyStage
     for BroadcastStage<Data, Result, Stage, Point, FailureReason>
 where
     Point: ECPoint,
     Data: Clone + Display + Into<MultisigData<Point>>,
     Result: Clone,
-    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
+    Stage: BroadcastStageProcessor<Data, Result, FailureReason> + Send,
     <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message:
-        TryFrom<Data, Error = TryFromError>,
+        TryFrom<Data, Error = TryFromError> + Send,
     TryFromError: Display,
 {
     type Message = Data;
@@ -223,7 +226,7 @@ where
         self.processor.should_delay(m)
     }
 
-    fn finalize(mut self: Box<Self>) -> StageResult<Data, Result, FailureReason> {
+    async fn finalize(mut self: Box<Self>) -> StageResult<Data, Result, FailureReason> {
         // Because we might want to finalize the stage before
         // all data has been received (e.g. due to a timeout),
         // we insert None for any missing data
@@ -239,7 +242,7 @@ where
             .map(|idx| (*idx, received_messages.remove(idx)))
             .collect();
 
-        self.processor.process(messages)
+        self.processor.process(messages).await
     }
 
     fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {
