@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests;
+mod ceremony_runner_tests;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -264,9 +264,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     /// Process previously delayed messages (which arrived one stage too early)
     // NOTE: Need this boxed to help with async recursion
-    fn process_delayed<'a>(
-        &'a mut self,
-    ) -> BoxFuture<'a, OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason>> {
+    fn process_delayed(
+        &mut self,
+    ) -> BoxFuture<OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason>> {
         async {
             let messages = std::mem::take(&mut self.delayed_messages);
 

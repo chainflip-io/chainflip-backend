@@ -29,6 +29,7 @@ use crate::{
                 prepare_keygen_request, prepare_signing_request, CeremonyOutcome, CeremonyTrait,
                 KeygenCeremony, SigningCeremony,
             },
+            ceremony_runner::CeremonyRunner,
             common::{
                 broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
                 CeremonyStageName, KeygenFailureReason,
@@ -37,9 +38,7 @@ use crate::{
                 generate_key_data, HashComm1, HashContext, SecretShare5,
                 VerifyHashCommitmentsBroadcast2,
             },
-            signing,
-            state_runner::CeremonyRunner,
-            KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
+            signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
         },
         crypto::{ECPoint, Rng},
         KeyId, MessageHash,
@@ -473,11 +472,9 @@ where
             .nodes
             .iter_mut()
             .filter_map(|(account_id, node)| {
-                if let Some(outcome) = node.outcome.take() {
-                    Some((account_id.clone(), outcome))
-                } else {
-                    None
-                }
+                node.outcome
+                    .take()
+                    .map(|outcome| (account_id.clone(), outcome))
             })
             .collect();
 
