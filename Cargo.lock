@@ -1587,6 +1587,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "pallet-cf-governance",
  "sc-client-api",
  "serde",
  "sp-api",
@@ -5195,6 +5196,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-version",
 ]
 
 [[package]]

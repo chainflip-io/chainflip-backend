@@ -5,7 +5,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
-	traits::{EnsureOrigin, UnixTime},
+	traits::{EnsureOrigin, Get, UnixTime},
 };
 pub use pallet::*;
 use sp_runtime::DispatchError;
@@ -35,6 +35,7 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::compute_gov_key_call_hash;
 	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
@@ -47,7 +48,7 @@ pub mod pallet {
 	use frame_system::{pallet, pallet_prelude::*};
 	use sp_std::{boxed::Box, vec::Vec};
 
-	use crate::{GovCallHash, WeightInfo};
+	use super::{GovCallHash, WeightInfo};
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -121,7 +122,7 @@ pub mod pallet {
 	/// Any nonces before this have been consumed.
 	#[pallet::storage]
 	#[pallet::getter(fn next_gov_key_call_hash_nonce)]
-	pub(super) type NextGovKeyCallHashNonce<T> = StorageValue<_, u32, ValueQuery>;
+	pub type NextGovKeyCallHashNonce<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// Number of proposals that have been submitted.
 	#[pallet::storage]
@@ -380,8 +381,7 @@ pub mod pallet {
 				BadOrigin,
 			);
 			let next_nonce = NextGovKeyCallHashNonce::<T>::get();
-			let call_hash =
-				frame_support::Hashable::blake2_256(&(call.clone(), next_nonce, T::Version::get()));
+			let call_hash = compute_gov_key_call_hash::<T, _>(call.clone(), next_nonce);
 			match GovKeyWhitelistedCallHash::<T>::get() {
 				Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
 					Self::deposit_event(
@@ -458,6 +458,14 @@ where
 	fn successful_origin() -> OuterOrigin {
 		RawOrigin::GovernanceApproval.into()
 	}
+}
+
+pub fn compute_gov_key_call_hash<T: Config, Data>(data: Data, nonce: u32) -> GovCallHash
+where
+	Data: Clone,
+	(Data, u32, sp_version::RuntimeVersion): Encode + Decode,
+{
+	frame_support::Hashable::blake2_256(&(data, nonce, T::Version::get()))
 }
 
 impl<T: Config> Pallet<T> {

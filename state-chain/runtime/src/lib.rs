@@ -9,7 +9,9 @@ mod migrations;
 pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
+use pallet_cf_governance::{compute_gov_key_call_hash, GovCallHash, NextGovKeyCallHashNonce};
 use runtime_apis::BackupOrPassive;
+
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -733,6 +735,12 @@ impl_runtime_apis! {
 					(offence, suspension.into())
 				})
 				.collect()
+		}
+		fn cf_generate_gov_key_call_hash(
+			call: Vec<u8>,
+		) -> GovCallHash {
+			let next_nonce = NextGovKeyCallHashNonce::<Runtime>::get();
+			compute_gov_key_call_hash::<Runtime, _>(call, next_nonce)
 		}
 	}
 	// END custom runtime APIs
