@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use cf_chains::ChainAbi;
 use cf_traits::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode, FullCodec};
@@ -779,10 +779,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             Protocol::P2p(multihash) => Some(multihash),
                             _ => None,
                         })
-                        .ok_or_else(|| anyhow::Error::msg("Expected P2p Protocol"))
+                        .ok_or_else(|| anyhow!("Expected P2p Protocol"))
                         .and_then(|multihash| {
                             PeerId::from_multihash(*multihash)
-                                .map_err(|_| anyhow::Error::msg("Couldn't decode peer id"))
+                                .map_err(|_| anyhow!("Couldn't decode peer id"))
                         })
                         .with_context(|| string_multiaddr.clone())?,
                     protocols
@@ -791,7 +791,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             Protocol::Tcp(port) => Some(*port),
                             _ => None,
                         })
-                        .ok_or_else(|| anyhow::Error::msg("Expected Tcp Protocol"))
+                        .ok_or_else(|| anyhow!("Expected Tcp Protocol"))
                         .with_context(|| string_multiaddr.clone())?,
                     protocols
                         .iter()
@@ -800,7 +800,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             Protocol::Ip4(ip_address) => Some(ip_address.to_ipv6_mapped()),
                             _ => None,
                         })
-                        .ok_or_else(|| anyhow::Error::msg("Expected Ip Protocol"))
+                        .ok_or_else(|| anyhow!("Expected Ip Protocol"))
                         .with_context(|| string_multiaddr.clone())?,
                 ))
             })
@@ -934,7 +934,7 @@ async fn inner_connect_to_state_chain(
             "State Chain Signing Key",
             |str| {
                 <[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?)
-                    .map_err(|_err| anyhow::Error::msg("Wrong length"))
+                    .map_err(|_err| anyhow!("Wrong length"))
             },
         )?),
     );
@@ -992,7 +992,7 @@ async fn inner_connect_to_state_chain(
                                             )))
                                             .await
                                             .map_err(rpc_error_into_anyhow_error)?,
-                                        anyhow::Error::msg("Finalized block missing hash"),
+                                        anyhow!("Finalized block missing hash"),
                                     )
                                     .unwrap();
                                     let block_header = chain_rpc_client
@@ -1168,7 +1168,7 @@ async fn inner_connect_to_state_chain(
                     .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
                     .await
                     .map_err(rpc_error_into_anyhow_error)?,
-                anyhow::Error::msg("Genesis block doesn't exist?"),
+                anyhow!("Genesis block doesn't exist?"),
             )?,
             signer: signer.clone(),
             state_chain_rpc_client,

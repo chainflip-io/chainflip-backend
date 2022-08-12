@@ -173,7 +173,7 @@ impl EthObserver for StakeManager {
                         utils::decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?
                             .try_into()
                             .map_err(|_| {
-                                anyhow::Error::msg("Could not cast FixedBytes nodeID into [u8;32]")
+                                anyhow::anyhow!("Could not cast FixedBytes nodeID into [u8;32]")
                             })?;
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };

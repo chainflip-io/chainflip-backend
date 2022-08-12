@@ -200,11 +200,11 @@ where
             ))
             .and_then(|opt_block| {
                 opt_block.ok_or_else(|| {
-                    anyhow::Error::msg(format!(
+                    anyhow!(
                         "{} client: Getting ETH transaction receipt with tx_hash {} returned None",
                         T::transport_protocol(),
                         tx_hash
-                    ))
+                    )
                 })
             })
     }
@@ -220,11 +220,11 @@ where
             ))
             .and_then(|opt_block| {
                 opt_block.ok_or_else(|| {
-                    anyhow::Error::msg(format!(
+                    anyhow!(
                         "{} client: Getting ETH block for block number {} returned None",
                         T::transport_protocol(),
                         block_number,
-                    ))
+                    )
                 })
             })
     }
@@ -378,10 +378,10 @@ macro_rules! dual_call_rpc {
                 .await
                 .context("ETH Dual RPC request timed out")?
                 .map_err(|(e_ws, e_http)| {
-                    anyhow::Error::msg(format!(
+                    anyhow!(
                         "ETH Dual RPC request failed: {:?} side: {:?}, {:?} side: {:?}",
                         TransportProtocol::Ws, e_ws, TransportProtocol::Http, e_http
-                    ))
+                    )
                 })
                 .map(|(res, maybe_err)| {
                     if let Some(err) = maybe_err {

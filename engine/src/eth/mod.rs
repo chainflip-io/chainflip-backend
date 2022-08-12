@@ -1133,7 +1133,7 @@ mod merged_stream_tests {
     ) -> BlockWithDecodedEvents<KeyManagerEvent> {
         BlockWithDecodedEvents {
             block_number,
-            decode_events_result: Err(anyhow::Error::msg("NOOOO")),
+            decode_events_result: Err(anyhow!("NOOOO")),
         }
     }
 
