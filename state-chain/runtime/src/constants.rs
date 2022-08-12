@@ -43,9 +43,11 @@ pub mod common {
 	/// Buffer for final key computation.
 	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
 
-	const TIMEOUT_BUFFER_SECONDS: u32 = EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) +
-		NETWORK_DELAY_SECONDS +
-		KEY_DERIVATION_DELAY_SECONDS;
+	const TIMEOUT_BUFFER_SECONDS: u32 =
+		EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) + NETWORK_DELAY_SECONDS;
+
+	const KEYGEN_TIMEOUT_BUFFER_SECONDS: u32 =
+		TIMEOUT_BUFFER_SECONDS + KEY_DERIVATION_DELAY_SECONDS;
 
 	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
 
@@ -59,7 +61,7 @@ pub mod common {
 	/// The maximum number of blocks to wait for a keygen to complete.
 	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = ((MAX_STAGE_DURATION_SECONDS *
 		(NUM_KEYGEN_STAGES + NUM_THRESHOLD_SIGNING_STAGES)) +
-		TIMEOUT_BUFFER_SECONDS) /
+		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
 		SECONDS_PER_BLOCK as u32;
 
 	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
