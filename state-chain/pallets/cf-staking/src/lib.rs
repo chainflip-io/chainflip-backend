@@ -391,8 +391,8 @@ pub mod pallet {
 		///
 		/// Note that calling this doesn't initiate any protocol changes - the `claim` has already
 		/// been authorised by authority multisig. This merely signals that the claimant has in fact
-		/// redeemed their funds via the StakeManager Smart Contract and allows us to finalise any
-		/// on-chain cleanup.
+		/// executed the claim via the StakeManager Smart Contract and has received their funds.
+		/// This allows us to finalise any on-chain cleanup.
 		///
 		/// ## Events
 		///
