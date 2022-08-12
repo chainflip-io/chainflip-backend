@@ -288,9 +288,8 @@ pub mod pallet {
 		/// claim request needs to be signed by a threshold of authorities in order to produce valid
 		/// data that can be submitted to the StakeManager Smart Contract.
 		///
-		/// An account can only have one pending claim at a time, and until this claim has been
-		/// redeemed or expired, the funds wrapped up in the claim are inaccessible and are not
-		/// counted towards a Validator's Auction Bid.
+		/// An account can only have one pending claim at a time, the funds wrapped up in the
+		/// pending claim are inaccessible and are not counted towards a Validator's Auction Bid.
 		///
 		/// ## Events
 		///
