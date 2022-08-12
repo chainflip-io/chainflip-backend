@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(is_sorted)]
 
 #[cfg(test)]
 mod mock;
@@ -599,7 +600,12 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn expire_pending_claims_at(secs_since_unix_epoch: u64) -> Weight {
 		let mut expiries = ClaimExpiries::<T>::get();
-		// Expiries are sorted on insertion so we can just partition the slice.
+
+		debug_assert!(
+			expiries.iter().is_sorted_by_key(|(expiry_time, _account_id)| expiry_time),
+			"Expiries should be sorted on insertion"
+		);
+
 		ClaimExpiries::<T>::set(
 			expiries.split_off(
 				expiries.partition_point(|(expiry, _)| expiry <= &secs_since_unix_epoch),
