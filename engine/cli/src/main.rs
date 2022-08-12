@@ -125,7 +125,7 @@ async fn request_claim(
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(
-        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`. This will send two transactions, required to initiate the claim, a redeem and claim.",
+        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
         amount,
         atomic_amount,
         hex::encode(eth_address)

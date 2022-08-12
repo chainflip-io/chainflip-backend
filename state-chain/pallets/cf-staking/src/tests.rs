@@ -150,7 +150,6 @@ fn cannot_double_claim() {
 			<Error<Test>>::PendingClaim
 		);
 
-		// Redeem the first claim.
 		assert_eq!(
 			ClaimExpiries::<Test>::get()[0].1,
 			ALICE,
@@ -166,7 +165,6 @@ fn cannot_double_claim() {
 		// Should now be able to claim the rest.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2.into(), ETH_DUMMY_ADDR));
 
-		// Redeem the rest.
 		assert_eq!(
 			ClaimExpiries::<Test>::get()[0].1,
 			ALICE,
