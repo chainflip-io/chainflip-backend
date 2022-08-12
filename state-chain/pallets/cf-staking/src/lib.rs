@@ -325,8 +325,8 @@ pub mod pallet {
 			// No new claim requests can be processed if we're currently in an auction phase.
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			// If a claim already exists, return an error. The staker must either redeem their claim
-			// voucher or wait until expiry before creating a new claim.
+			// If a claim already exists, return an error. The staker must either execute their
+			// claim voucher or wait until expiry before creating a new claim.
 			ensure!(!PendingClaims::<T>::contains_key(&account_id), Error::<T>::PendingClaim);
 
 			// Check if a return address exists - if not just go with the provided claim address
