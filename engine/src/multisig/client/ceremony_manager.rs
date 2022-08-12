@@ -37,7 +37,7 @@ use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{MultisigData, MultisigMessage};
 
 pub type CeremonyOutcome<Ceremony> = Result<
-    <Ceremony as CeremonyTrait>::Artefact,
+    <Ceremony as CeremonyTrait>::Output,
     (
         BTreeSet<AccountId>,
         CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>,
@@ -59,9 +59,8 @@ pub trait CeremonyTrait: 'static {
         > + Send
         + 'static;
     type Request: Send + 'static;
-    /// What the ceremony is expected to produce if it is successful
-    /// (might need a better name)
-    type Artefact: Debug + Send + 'static;
+    /// The product of a successful ceremony result
+    type Output: Debug + Send + 'static;
     type FailureReason: Debug + Display + Send + 'static + PartialEq + Ord;
 }
 
@@ -73,7 +72,7 @@ impl<C: CryptoScheme> CeremonyTrait for KeygenCeremony<C> {
     type Crypto = C;
     type Data = KeygenData<<C as CryptoScheme>::Point>;
     type Request = CeremonyRequest<C>;
-    type Artefact = KeygenResultInfo<<C as CryptoScheme>::Point>;
+    type Output = KeygenResultInfo<<C as CryptoScheme>::Point>;
     type FailureReason = KeygenFailureReason;
 }
 
@@ -85,7 +84,7 @@ impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
     type Crypto = C;
     type Data = SigningData<<C as CryptoScheme>::Point>;
     type Request = CeremonyRequest<C>;
-    type Artefact = <C as CryptoScheme>::Signature;
+    type Output = <C as CryptoScheme>::Signature;
     type FailureReason = SigningFailureReason;
 }
 
@@ -104,7 +103,7 @@ pub struct CeremonyManager<C: CryptoScheme> {
 pub type DynStage<Ceremony> = Box<
     dyn CeremonyStage<
             Message = <Ceremony as CeremonyTrait>::Data,
-            Result = <Ceremony as CeremonyTrait>::Artefact,
+            Result = <Ceremony as CeremonyTrait>::Output,
             FailureReason = <Ceremony as CeremonyTrait>::FailureReason,
         > + Send
         + Sync,

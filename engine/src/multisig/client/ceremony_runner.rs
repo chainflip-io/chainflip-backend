@@ -119,7 +119,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         mut stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
         num_of_participants: AuthorityCount,
-    ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
+    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
         assert!(self.inner.is_none(), "Duplicate ceremony id");
 
         stage.init();
@@ -143,7 +143,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     async fn finalize_current_stage(
         &mut self,
-    ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
+    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -203,7 +203,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         &mut self,
         sender_id: AccountId,
         data: Ceremony::Data,
-    ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
+    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
         match &mut self.inner {
             None => {
                 if !data.is_first_stage() {
@@ -266,7 +266,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     // NOTE: Need this boxed to help with async recursion
     fn process_delayed(
         &mut self,
-    ) -> BoxFuture<OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason>> {
+    ) -> BoxFuture<OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason>> {
         async {
             let messages = std::mem::take(&mut self.delayed_messages);
 
@@ -325,7 +325,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     async fn on_timeout(
         &mut self,
-    ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
+    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
         match &self.inner {
             None => {
                 // Report the parties that tried to initiate the ceremony.
@@ -417,7 +417,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     pub async fn force_timeout(
         &mut self,
-    ) -> OptionalCeremonyReturn<Ceremony::Artefact, Ceremony::FailureReason> {
+    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
         self.on_timeout().await
     }
 

@@ -249,7 +249,7 @@ pub trait CeremonyRunnerStrategy {
 
     fn post_successful_complete_check(
         &self,
-        outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Artefact>,
+        outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
     ) -> Self::CheckedOutput;
 
     async fn request_ceremony(&mut self, node_id: &AccountId);
@@ -603,13 +603,13 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
     type CeremonyType = KeygenCeremony<EthSigning>;
     type CheckedOutput = (
         KeyId,
-        HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Artefact>,
+        HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
     );
     type InitialStageData = keygen::HashComm1;
 
     fn post_successful_complete_check(
         &self,
-        outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Artefact>,
+        outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
     ) -> Self::CheckedOutput {
         let (_, public_key) = all_same(outputs.iter().map(|(_, keygen_result_info)| {
             (
@@ -677,7 +677,7 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
 
     fn post_successful_complete_check(
         &self,
-        outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Artefact>,
+        outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
     ) -> Self::CheckedOutput {
         let signature = all_same(outputs.into_iter().map(|(_, signature)| signature))
             .expect("Signatures don't match");
