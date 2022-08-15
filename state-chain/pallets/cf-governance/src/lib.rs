@@ -322,11 +322,10 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(clippy::boxed_local)]
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
-			// TODO: Not possible to fix the clippy warning here. At the moment we
-			// need to ignore it on a global level.
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
