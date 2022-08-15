@@ -448,6 +448,7 @@ pub mod pallet {
 		///
 		/// - [KeygenSuccessReported](Event::KeygenSuccessReported)
 		/// - [KeygenFailureReported](Event::KeygenFailureReported)
+		/// - [KeygenIncompatibleReported](Event::KeygenIncompatibleReported)
 		///
 		/// ## Errors
 		///
