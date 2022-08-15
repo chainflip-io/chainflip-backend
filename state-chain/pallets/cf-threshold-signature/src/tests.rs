@@ -365,7 +365,7 @@ mod unsigned_validation {
 			assert_eq!(ceremony.clone().unwrap().key_id, CUSTOM_KEY_ID);
 			assert_eq!(
 				ceremony.clone().unwrap().remaining_respondents,
-				BTreeSet::from_iter(participants.clone())
+				BTreeSet::from_iter(participants)
 			);
 			assert_eq!(ceremony.unwrap().retry, RetryPolicy::Never);
 			// Process retries.
