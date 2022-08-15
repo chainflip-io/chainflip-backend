@@ -576,7 +576,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(participants, RetryPolicy::Never)
 		};
 
-		let nominees = maybe_nominees.unwrap_or(vec![]);
+		let nominees = maybe_nominees.unwrap_or_default();
 		let nominees_len = nominees.len();
 
 		let (remaining_respondents, event, log_message) = if nominees_len > 0 {
