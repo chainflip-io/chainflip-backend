@@ -233,7 +233,6 @@ fn main() -> anyhow::Result<()> {
                     state_chain_client.clone(),
                     witnessing_instruction_receiver_3,
                     cfe_settings_update_receiver,
-                    eth::chain_data_witnessing::ETH_CHAIN_TRACKING_POLL_INTERVAL,
                     &root_logger
                 )
             );

@@ -24,14 +24,13 @@ use tokio::sync::{broadcast, watch};
 use utilities::{context, make_periodic_tick};
 use web3::types::{BlockNumber, U64};
 
-pub const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
+const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 pub async fn start<EthRpcClient, ScRpcClient>(
     eth_rpc: EthRpcClient,
     state_chain_client: Arc<StateChainClient<ScRpcClient>>,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
     cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
-    poll_interval: Duration,
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
@@ -65,7 +64,7 @@ where
 
                         (
                             scope.spawn_with_handle::<_, _>(async move {
-                                let mut poll_interval = make_periodic_tick(poll_interval, false);
+                                let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, false);
 
                                 loop {
                                     if let Some(_end_block) = *end_observation_signal.lock().unwrap() {
