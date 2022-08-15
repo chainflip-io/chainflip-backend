@@ -46,7 +46,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value());
+		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value(), None, None);
 		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
@@ -60,7 +60,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value());
+		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value(), None, None);
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
@@ -82,6 +82,8 @@ benchmarks_instance_pallet! {
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
+			key_id: <T as Chainflip>::KeyId::benchmark_value(),
+			retry: RetryPolicy::Always,
 			_phantom: Default::default()
 		};
 	} : {
@@ -109,7 +111,7 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1);
+			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, None);
 		}
 		assert_eq!(
 			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),

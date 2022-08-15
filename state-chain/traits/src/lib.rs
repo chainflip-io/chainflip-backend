@@ -57,7 +57,7 @@ pub trait Chainflip: frame_system::Config {
 		+ MaybeSerializeDeserialize;
 
 	/// An id type for keys used in threshold signature ceremonies.
-	type KeyId: Member + Parameter + From<Vec<u8>>;
+	type KeyId: Member + Parameter + From<Vec<u8>> + BenchmarkValue;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
