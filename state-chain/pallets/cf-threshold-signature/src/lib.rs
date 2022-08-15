@@ -564,71 +564,66 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
 
 		let key_id = key_id.unwrap_or_else(T::KeyProvider::current_key_id);
-		let maybe_nominees: Option<Vec<T::ValidatorId>>;
-		let retry: RetryPolicy;
-		if participants.is_none() {
-			maybe_nominees = T::SignerNomination::threshold_nomination_with_seed(
-				(ceremony_id, attempt),
-				T::EpochInfo::epoch_index(),
-			);
-			retry = RetryPolicy::Always;
+		let (maybe_nominees, retry_policy) = if participants.is_none() {
+			(
+				T::SignerNomination::threshold_nomination_with_seed(
+					(ceremony_id, attempt),
+					T::EpochInfo::epoch_index(),
+				),
+				RetryPolicy::Always,
+			)
 		} else {
-			maybe_nominees = participants;
-			retry = RetryPolicy::Never;
-		}
+			(participants, RetryPolicy::Never)
+		};
 
-		if let Some(nominees) = maybe_nominees {
-			log::trace!(
-				target: "threshold-signing",
-				"Threshold set selected for request {}, requesting signature ceremony {}.",
-				request_id,
-				ceremony_id
-			);
+		let nominees = maybe_nominees.unwrap_or_default();
+		let nominees_len = nominees.len();
 
-			// Store the context.
-			PendingCeremonies::<T, I>::insert(
-				ceremony_id,
-				CeremonyContext {
-					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
-					blame_counts: Default::default(),
-					participant_count: nominees.len() as u32,
-					key_id: key_id.clone(),
-					retry,
-					_phantom: Default::default(),
-				},
-			);
-
-			// Emit the request to the CFE.
-			Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
-				ceremony_id,
-				key_id,
-				nominees,
-				payload,
-			));
+		let (event, log_message) = if nominees_len > 0 {
+			(
+				Event::<T, I>::ThresholdSignatureRequest(
+					ceremony_id,
+					key_id.clone(),
+					nominees.clone(),
+					payload,
+				),
+				scale_info::prelude::format!(
+					"Threshold set selected for request {}, requesting signature ceremony {}.",
+					request_id,
+					attempt
+				),
+			)
 		} else {
-			log::trace!(
-				target: "threshold-signing",
-				"Not enough signers for request {} at attempt {}, scheduling retry.",
-				request_id,
-				attempt,
-			);
-
-			// Store the context, schedule a retry for the next block.
-			PendingCeremonies::<T, I>::insert(
-				ceremony_id,
-				CeremonyContext {
-					remaining_respondents: Default::default(),
-					blame_counts: Default::default(),
-					participant_count: 0,
-					key_id,
-					retry,
-					_phantom: Default::default(),
-				},
-			);
-
-			Self::deposit_event(Event::<T, I>::SignersUnavailable(ceremony_id));
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
-		}
+
+			(
+				Event::<T, I>::SignersUnavailable(ceremony_id),
+				scale_info::prelude::format!(
+					"Not enough signers for request {} at attempt {}, scheduling retry.",
+					request_id,
+					attempt
+				),
+			)
+		};
+
+		log::trace!(
+			target: "threshold-signing",
+			"{}", log_message
+		);
+
+		PendingCeremonies::<T, I>::insert(
+			ceremony_id,
+			CeremonyContext {
+				remaining_respondents: BTreeSet::from_iter(nominees),
+				blame_counts: Default::default(),
+				participant_count: nominees_len as u32,
+				key_id,
+				retry: retry_policy,
+				_phantom: Default::default(),
+			},
+		);
+
+		Self::deposit_event(event);
 
 		ceremony_id
 	}
