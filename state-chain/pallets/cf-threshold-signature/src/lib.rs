@@ -588,9 +588,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					nominees,
 					payload,
 				),
-				format!(
+				scale_info::prelude::format!(
 					"Threshold set selected for request {}, requesting signature ceremony {}.",
-					request_id, attempt
+					request_id,
+					attempt
 				),
 			)
 		} else {
@@ -599,9 +600,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(
 				Default::default(),
 				Event::<T, I>::SignersUnavailable(ceremony_id),
-				format!(
+				scale_info::prelude::format!(
 					"Not enough signers for request {} at attempt {}, scheduling retry.",
-					request_id, attempt
+					request_id,
+					attempt
 				),
 			)
 		};
