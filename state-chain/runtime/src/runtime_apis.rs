@@ -1,6 +1,7 @@
 use crate::chainflip::Offence;
 use cf_chains::eth::SigData;
 use codec::{Decode, Encode};
+use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
@@ -79,5 +80,6 @@ decl_runtime_apis!(
 		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimeApiPendingClaim>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
+		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 	}
 );

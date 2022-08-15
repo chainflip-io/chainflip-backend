@@ -42,6 +42,11 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
+[dependencies.sp-version]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -78,6 +83,7 @@ std = [
   'sp-core/std',
   'sp-std/std',
   'sp-runtime/std',
+  'sp-version/std',
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
