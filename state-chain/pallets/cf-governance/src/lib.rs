@@ -35,7 +35,6 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::compute_gov_key_call_hash;
 	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
@@ -380,8 +379,7 @@ pub mod pallet {
 					T::EnsureGovernance::ensure_origin(origin).is_ok()),
 				BadOrigin,
 			);
-			let next_nonce = NextGovKeyCallHashNonce::<T>::get();
-			let call_hash = compute_gov_key_call_hash::<T, _>(call.clone(), next_nonce);
+			let (call_hash, nonce) = Self::compute_gov_key_call_hash::<_>(call.clone());
 			match GovKeyWhitelistedCallHash::<T>::get() {
 				Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
 					Self::deposit_event(
@@ -390,7 +388,7 @@ pub mod pallet {
 							Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
 						},
 					);
-					NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
+					NextGovKeyCallHashNonce::<T>::put(nonce + 1);
 					GovKeyWhitelistedCallHash::<T>::kill();
 
 					Ok(Pays::No.into())
@@ -460,15 +458,15 @@ where
 	}
 }
 
-pub fn compute_gov_key_call_hash<T: Config, Data>(data: Data, nonce: u32) -> GovCallHash
-where
-	Data: Clone,
-	(Data, u32, sp_version::RuntimeVersion): Encode + Decode,
-{
-	frame_support::Hashable::blake2_256(&(data, nonce, T::Version::get()))
-}
-
 impl<T: Config> Pallet<T> {
+	pub fn compute_gov_key_call_hash<CallData>(data: CallData) -> (GovCallHash, u32)
+	where
+		CallData: Clone + Encode + Decode,
+	{
+		let nonce = NextGovKeyCallHashNonce::<T>::get();
+		(frame_support::Hashable::blake2_256(&(data, nonce, T::Version::get())), nonce)
+	}
+
 	/// Checks the expiry state of the proposals
 	fn check_expiry() -> Weight {
 		match ActiveProposals::<T>::decode_len() {
