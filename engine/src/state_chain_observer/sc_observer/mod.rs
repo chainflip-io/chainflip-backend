@@ -43,49 +43,6 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
                 .keygen(ceremony_id, keygen_participants.clone())
                 .await;
 
-            let keygen_outcome = match keygen_outcome {
-                Ok(public_key) => {
-                    // Keygen verification: before the new key is returned to the SC,
-                    // we first ensure that all parties can use it for signing
-
-                    let public_key_bytes = public_key.get_element().serialize();
-
-                    // We arbitrarily choose the data to sign over to be the hash of the generated pubkey
-                    let data_to_sign = sp_core::hashing::blake2_256(&public_key_bytes);
-                    match multisig_client
-                        .sign(
-                            ceremony_id,
-                            KeyId(public_key_bytes.to_vec()),
-                            keygen_participants,
-                            MessageHash(data_to_sign),
-                        )
-                        .await
-                    {
-                        // Report keygen success if we are able to sign
-                        Ok(signature) => Ok((
-                            cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
-                            data_to_sign.into(),
-                            signature.into(),
-                        )),
-                        // Report keygen failure if we failed to sign
-                        Err((bad_account_ids, _reason)) => {
-                            slog::debug!(logger, "Keygen ceremony verification failed"; CEREMONY_ID_KEY => ceremony_id);
-                            Err(KeygenError::Failure(BTreeSet::from_iter(bad_account_ids)))
-                        }
-                    }
-                }
-                Err((bad_account_ids, reason)) => Err({
-                    if let CeremonyFailureReason::<KeygenFailureReason>::Other(
-                        KeygenFailureReason::KeyNotCompatible,
-                    ) = reason
-                    {
-                        KeygenError::Incompatible
-                    } else {
-                        KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
-                    }
-                }),
-            };
-
             let _result = state_chain_client
                 .submit_signed_extrinsic(
                     pallet_cf_vaults::Call::report_keygen_outcome {

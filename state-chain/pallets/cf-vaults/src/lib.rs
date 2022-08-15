@@ -42,16 +42,20 @@ pub enum KeygenError<Id> {
 }
 
 pub type KeygenOutcome<Key, Id> = Result<Key, KeygenError<Id>>;
-pub type ReportedKeygenOutcome<Key, Payload, Signature, Id> =
-	Result<(Key, Payload, Signature), KeygenError<Id>>;
+pub type ReportedKeygenOutcome<Key, Id> = Result<Key, KeygenError<Id>>;
 
-pub type CeremonyId = u64;
-pub type ReportedKeygenOutcomeFor<T, I = ()> = ReportedKeygenOutcome<
+pub type ReportedKeyVerificationOutcome<Key, Payload, Sig, Id> =
+	Result<(Key, Payload, Sig), BTreeSet<Id>>;
+pub type ReportedKeyVerificationOutcomeFor<T, I = ()> = ReportedKeyVerificationOutcome<
 	AggKeyFor<T, I>,
 	PayloadFor<T, I>,
 	ThresholdSignatureFor<T, I>,
 	<T as Chainflip>::ValidatorId,
 >;
+
+pub type CeremonyId = u64;
+pub type ReportedKeygenOutcomeFor<T, I = ()> =
+	ReportedKeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
 	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
@@ -488,15 +492,9 @@ pub mod pallet {
 			// -- Tally the votes.
 
 			match reported_outcome {
-				Ok((key, payload, sig)) =>
-					if <T::Chain as ChainCrypto>::verify_threshold_signature(&key, &payload, &sig) {
-						keygen_status.add_success_vote(&reporter, key)?;
-						Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
-					} else {
-						keygen_status.add_failure_vote(&reporter, Default::default())?;
-						Self::deposit_event(Event::<T, I>::KeygenSignatureVerificationFailed(
-							reporter,
-						));
+				Ok(key) => {
+					keygen_status.add_success_vote(&reporter, key)?;
+					Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
 					},
 				Err(KeygenError::Incompatible) => {
 					keygen_status.add_incompatible_vote(&reporter)?;
