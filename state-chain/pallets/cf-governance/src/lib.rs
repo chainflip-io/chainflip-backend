@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
 	traits::{EnsureOrigin, Get, UnixTime},
@@ -461,7 +461,7 @@ where
 impl<T: Config> Pallet<T> {
 	pub fn compute_gov_key_call_hash<CallData>(data: CallData) -> (GovCallHash, u32)
 	where
-		CallData: Clone + Encode + Decode,
+		CallData: Clone + Codec,
 	{
 		let nonce = NextGovKeyCallHashNonce::<T>::get();
 		(frame_support::Hashable::blake2_256(&(data, nonce, T::Version::get())), nonce)
