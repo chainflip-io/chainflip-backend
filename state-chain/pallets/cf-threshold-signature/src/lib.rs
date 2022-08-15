@@ -579,13 +579,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let nominees = maybe_nominees.unwrap_or_default();
 		let nominees_len = nominees.len();
 
-		let (remaining_respondents, event, log_message) = if nominees_len > 0 {
+		let (event, log_message) = if nominees_len > 0 {
 			(
-				BTreeSet::from_iter(nominees.clone()),
 				Event::<T, I>::ThresholdSignatureRequest(
 					ceremony_id,
 					key_id.clone(),
-					nominees,
+					nominees.clone(),
 					payload,
 				),
 				scale_info::prelude::format!(
@@ -598,7 +597,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
 
 			(
-				Default::default(),
 				Event::<T, I>::SignersUnavailable(ceremony_id),
 				scale_info::prelude::format!(
 					"Not enough signers for request {} at attempt {}, scheduling retry.",
@@ -616,7 +614,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingCeremonies::<T, I>::insert(
 			ceremony_id,
 			CeremonyContext {
-				remaining_respondents,
+				remaining_respondents: BTreeSet::from_iter(nominees),
 				blame_counts: Default::default(),
 				participant_count: nominees_len as u32,
 				key_id,
