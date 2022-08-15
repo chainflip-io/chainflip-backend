@@ -174,7 +174,7 @@ pub mod pallet {
 			+ UnfilteredDispatchable<Origin = Self::RuntimeOrigin>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChain: Chain + ChainCrypto;
+		type TargetChain: ChainCrypto;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
