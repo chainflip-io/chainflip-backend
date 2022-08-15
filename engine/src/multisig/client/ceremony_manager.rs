@@ -49,7 +49,9 @@ pub type CeremonyResultReceiver<Ceremony> = oneshot::Receiver<CeremonyOutcome<Ce
 
 /// Ceremony trait combines type parameters that are often used together
 pub trait CeremonyTrait: 'static {
+    // The chain specific details including point and signature
     type Crypto: CryptoScheme;
+    // The type of data that will be used in p2p for this ceremony type
     type Data: Debug
         + Display
         + PreProcessStageDataCheck
@@ -100,6 +102,7 @@ pub struct CeremonyManager<C: CryptoScheme> {
     logger: slog::Logger,
 }
 
+// A CeremonyStage for either keygen or signing
 pub type DynStage<Ceremony> = Box<
     dyn CeremonyStage<
             Message = <Ceremony as CeremonyTrait>::Data,
@@ -109,13 +112,15 @@ pub type DynStage<Ceremony> = Box<
         + Sync,
 >;
 
+// TODO: rename this and merge with `CeremonyRequestInner`
 pub struct CeremonyRequestProcessed<C: CeremonyTrait> {
     pub init_stage: DynStage<C>,
     pub idx_mapping: Arc<PartyIdxMapping>,
     pub participants_count: AuthorityCount,
 }
 
-pub fn prepare_signing_request<C: CryptoScheme>(
+// Creates the initial stage (and associated data) of a signing ceremony using the details of request
+pub fn init_signing_ceremony<C: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
     signers: Vec<AccountId>,
@@ -156,7 +161,6 @@ pub fn prepare_signing_request<C: CryptoScheme>(
         };
 
     // Prepare initial ceremony stage
-
     let init_stage = {
         use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
 
@@ -188,7 +192,8 @@ pub fn prepare_signing_request<C: CryptoScheme>(
     })
 }
 
-pub fn prepare_keygen_request<C: CryptoScheme>(
+// Creates the initial stage (and associated data) of a keygen ceremony using the details of request
+pub fn init_keygen_ceremony<C: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
     participants: Vec<AccountId>,
@@ -391,7 +396,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             return;
         }
 
-        let request = match prepare_keygen_request(
+        let request = match init_keygen_ceremony(
             ceremony_id,
             &self.my_account_id,
             participants,
@@ -437,7 +442,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             return;
         }
 
-        let request = match prepare_signing_request(
+        let request = match init_signing_ceremony(
             ceremony_id,
             &self.my_account_id,
             signers,
@@ -569,7 +574,7 @@ pub fn generate_keygen_context(
 }
 
 struct CeremonyStates<Ceremony: CeremonyTrait> {
-    // all ceremonies
+    // Collection of all ceremony handles used to send data to the ceremony tasks
     inner: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
     /// used to get notified when a ceremony is finished
     ceremony_futures: FuturesUnordered<tokio::task::JoinHandle<CeremonyId>>,
@@ -624,6 +629,8 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     fn cleanup_ceremony(&mut self, id: Result<CeremonyId, JoinError>, logger: &slog::Logger) {
         match id {
             Ok(id) => {
+                // We cant be sure that we have a ceremony to remove here because
+                // we may/may-not have an unauthorised ceremony to remove.
                 let _removed = self.inner.remove(&id);
             }
             Err(err) => slog::error!(logger, "Ceremony panicked with: {}", err),
@@ -638,8 +645,8 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 
 // ==================
 
+// Contains the channels used to send data to a running ceremony
 struct CeremonyHandle<Ceremony: CeremonyTrait> {
-    // these send to the task
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
     pub request_sender: UnboundedSender<CeremonyRequestInner<Ceremony>>,
 }

@@ -26,7 +26,7 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{
-                prepare_keygen_request, prepare_signing_request, CeremonyOutcome, CeremonyTrait,
+                init_keygen_ceremony, init_signing_ceremony, CeremonyOutcome, CeremonyTrait,
                 KeygenCeremony, SigningCeremony,
             },
             ceremony_runner::CeremonyRunner,
@@ -157,7 +157,7 @@ impl Node<SigningCeremonyEth> {
             keygen_result_info,
         } = signing_ceremony_details;
 
-        let request = prepare_signing_request::<EthSigning>(
+        let request = init_signing_ceremony::<EthSigning>(
             ceremony_id,
             &self.own_account_id,
             signers,
@@ -191,7 +191,7 @@ impl Node<KeygenCeremonyEth> {
             signers,
         } = keygen_ceremony_details;
 
-        let request = prepare_keygen_request::<EthSigning>(
+        let request = init_keygen_ceremony::<EthSigning>(
             ceremony_id,
             &self.own_account_id,
             signers,
@@ -456,7 +456,7 @@ where
     }
 
     // Checks if all nodes have an outcome and the outcomes are consistent, returning the outcome.
-    async fn check_node_outcomes(
+    async fn collect_and_check_outcomes(
         &mut self,
     ) -> Option<
         Result<
@@ -525,7 +525,7 @@ where
 
     pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
         assert_ok!(self
-            .check_node_outcomes()
+            .collect_and_check_outcomes()
             .await
             .expect("Failed to get all ceremony outcomes"))
     }
@@ -537,7 +537,7 @@ where
             <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
         >,
     ) -> Option<()> {
-        let (reported, reason) = self.check_node_outcomes().await?.unwrap_err();
+        let (reported, reason) = self.collect_and_check_outcomes().await?.unwrap_err();
         assert_eq!(
             BTreeSet::from_iter(bad_account_ids.iter()),
             reported.iter().collect()

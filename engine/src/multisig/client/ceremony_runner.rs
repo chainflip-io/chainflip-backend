@@ -40,11 +40,11 @@ pub struct StateAuthorised<Ceremony: CeremonyTrait> {
 
 pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
     inner: Option<StateAuthorised<Ceremony>>,
-    // Note that we use a map here to limit the number of messages
-    // that can be delayed from any one party to one per stage.
+    // Note that because use a map here, the number of messages
+    // that can be delayed from any one party is limited to one per stage.
     delayed_messages: BTreeMap<AccountId, Ceremony::Data>,
     /// This will fire on stage timeout
-    sleep_handle: Pin<Box<tokio::time::Sleep>>,
+    timeout_handle: Pin<Box<tokio::time::Sleep>>,
     logger: slog::Logger,
 }
 
@@ -61,6 +61,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         // We always create unauthorised first, it can get promoted to
         // an authorised one with a ceremony request
         let mut runner = Self::new_unauthorised(ceremony_id, &logger);
+        // We don't get the result sender until the ceremony request comes in
         let mut final_result_sender = None;
 
         let outcome = loop {
@@ -82,7 +83,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                     }
 
                 }
-                () = runner.sleep_handle.as_mut() => {
+                () = runner.timeout_handle.as_mut() => {
 
                     if let Some(res) = runner.on_timeout().await {
                         break res;
@@ -94,6 +95,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
         if let Some(result_sender) = final_result_sender {
             let _res = result_sender.send(outcome);
+        } else {
+            // The ceremony has timed out before being authorised.
+            // There is no way to report this to the SC yet, so just ignore it.
         }
 
         ceremony_id
@@ -103,11 +107,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
     fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
-        let sleep_handle = Box::pin(tokio::time::sleep(MAX_STAGE_DURATION));
         CeremonyRunner {
             inner: None,
             delayed_messages: Default::default(),
-            sleep_handle,
+            timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
             logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
     }
@@ -116,16 +119,16 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     /// the state machine to make progress
     pub async fn on_ceremony_request(
         &mut self,
-        mut stage: DynStage<Ceremony>,
+        mut initial_stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
         num_of_participants: AuthorityCount,
     ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
         assert!(self.inner.is_none(), "Duplicate ceremony id");
 
-        stage.init();
+        initial_stage.init();
 
         self.inner = Some(StateAuthorised {
-            stage: Some(stage),
+            stage: Some(initial_stage),
             idx_mapping,
             num_of_participants,
         });
@@ -133,7 +136,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         // Unlike other state transitions, we don't take into account
         // any time left in the prior stage when receiving a ceremony request.
         // we don't want other parties to be able to control when our stages time out.
-        self.sleep_handle
+        self.timeout_handle
             .as_mut()
             .reset(tokio::time::Instant::now() + MAX_STAGE_DURATION);
 
@@ -176,8 +179,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 // (by sending their data at specific times) thus making some
                 // attacks possible.
                 {
-                    let current_deadline = self.sleep_handle.as_ref().deadline();
-                    self.sleep_handle
+                    let current_deadline = self.timeout_handle.as_ref().deadline();
+                    self.timeout_handle
                         .as_mut()
                         .reset(current_deadline + MAX_STAGE_DURATION);
                 }
@@ -401,7 +404,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         CeremonyRunner {
             inner,
             delayed_messages: Default::default(),
-            sleep_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
+            timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
             logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
     }
