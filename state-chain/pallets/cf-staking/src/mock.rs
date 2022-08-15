@@ -172,7 +172,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 		// so we don't need to insert any storage.
 	}
 
-	fn request_signature_full(
+	fn request_signature_with(
 		_key_id: Self::KeyId,
 		_participants: Vec<Self::ValidatorId>,
 		_payload: <Ethereum as ChainCrypto>::Payload,

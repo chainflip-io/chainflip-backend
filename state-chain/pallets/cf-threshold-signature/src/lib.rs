@@ -59,7 +59,6 @@ pub enum PalletOffence {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum RetryPolicy {
 	Always,
-	Some(u32),
 	Never,
 }
 
@@ -566,12 +565,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let key_id = key_id.unwrap_or_else(T::KeyProvider::current_key_id);
 		let maybe_nominees: Option<Vec<T::ValidatorId>>;
-		let mut retry: RetryPolicy = RetryPolicy::Always;
+		let retry: RetryPolicy;
 		if participants.is_none() {
 			maybe_nominees = T::SignerNomination::threshold_nomination_with_seed(
 				(ceremony_id, attempt),
 				T::EpochInfo::epoch_index(),
 			);
+			retry = RetryPolicy::Always;
 		} else {
 			maybe_nominees = participants;
 			retry = RetryPolicy::Never;
@@ -698,7 +698,7 @@ where
 		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
 	}
 
-	fn request_signature_full(
+	fn request_signature_with(
 		key_id: Self::KeyId,
 		participants: Vec<Self::ValidatorId>,
 		payload: <T::TargetChain as ChainCrypto>::Payload,

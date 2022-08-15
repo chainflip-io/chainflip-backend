@@ -496,7 +496,7 @@ where
 	/// Initiate a signing request and return the request id.
 	fn request_signature(payload: C::Payload) -> Self::RequestId;
 
-	fn request_signature_full(
+	fn request_signature_with(
 		key_id: Self::KeyId,
 		participants: Vec<Self::ValidatorId>,
 		payload: C::Payload,

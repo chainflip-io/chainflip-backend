@@ -63,7 +63,7 @@ where
 		Self::take_storage::<_, AsyncResult<_>>(b"SIG", request_id).unwrap_or(AsyncResult::Void)
 	}
 
-	fn request_signature_full(
+	fn request_signature_with(
 		_key_id: Self::KeyId,
 		_participants: Vec<Self::ValidatorId>,
 		_payload: <C as ChainCrypto>::Payload,
