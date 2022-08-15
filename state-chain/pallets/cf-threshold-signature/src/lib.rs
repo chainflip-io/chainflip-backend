@@ -90,7 +90,7 @@ pub mod pallet {
 		/// The key id type for signing.
 		pub key_id: T::KeyId,
 		/// Retry policy
-		pub retry: RetryPolicy,
+		pub retry_policy: RetryPolicy,
 		/// Phantom data member.
 		pub _phantom: PhantomData<I>,
 	}
@@ -338,7 +338,7 @@ pub mod pallet {
 					if let Some((request_id, attempt, payload)) =
 						OpenRequests::<T, I>::take(ceremony_id)
 					{
-						if failed_ceremony_context.retry == RetryPolicy::Always {
+						if failed_ceremony_context.retry_policy == RetryPolicy::Always {
 							Self::new_ceremony_attempt(
 								request_id,
 								payload,
@@ -618,7 +618,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				blame_counts: Default::default(),
 				participant_count: nominees_len as u32,
 				key_id,
-				retry: retry_policy,
+				retry_policy,
 				_phantom: Default::default(),
 			},
 		);
