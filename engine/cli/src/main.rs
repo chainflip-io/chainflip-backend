@@ -41,7 +41,7 @@ async fn main() {
 
 async fn run_cli() -> Result<()> {
     let command_line_opts = CLICommandLineOptions::parse();
-    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow::Error::msg(format!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err)))?;
+    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
 
     let logger = chainflip_engine::logging::utils::new_discard_logger();
 
@@ -113,7 +113,7 @@ async fn request_claim(
     // Sanitise data
 
     let eth_address = clean_eth_address(eth_address)
-        .map_err(|error| anyhow::Error::msg(format!("You supplied an invalid ETH address: {}", error)))
+        .map_err(|error| anyhow!("You supplied an invalid ETH address: {}", error))
         .and_then(|eth_address|
             if eth_address == [0; 20] {
                 Err(anyhow!("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))

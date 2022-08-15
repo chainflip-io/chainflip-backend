@@ -308,6 +308,7 @@ impl_spawn_ops!('env, true, 'static);
 mod tests {
     use std::sync::atomic::Ordering;
 
+    use anyhow::anyhow;
     use futures::FutureExt;
     use utilities::assert_err;
 
@@ -325,7 +326,7 @@ mod tests {
 
     #[test]
     fn check_waits_for_tasks_to_end_when_error() {
-        inner_check_waits_for_task_to_end(|| Err(anyhow::anyhow!("")));
+        inner_check_waits_for_task_to_end(|| Err(anyhow!("")));
     }
 
     fn inner_check_waits_for_task_to_end<F: Fn() -> anyhow::Result<()> + Send + Sync + 'static>(
@@ -388,7 +389,7 @@ mod tests {
     fn join_handles_handle_errors() {
         with_main_task_scope::<'_, _, ()>(|scope| {
             async {
-                let handle = scope.spawn_with_handle::<(), _>(async { Err(anyhow::anyhow!("")) });
+                let handle = scope.spawn_with_handle::<(), _>(async { Err(anyhow!("")) });
 
                 handle.await;
                 unreachable!()
@@ -419,7 +420,7 @@ mod tests {
                             .collect::<Vec<_>>();
 
                         // Exit scope with error to cause children to be cancelled
-                        anyhow::Result::<()>::Err(anyhow::anyhow!(""))
+                        anyhow::Result::<()>::Err(anyhow!(""))
                     }
                     .boxed()
                 })

@@ -5,7 +5,7 @@
 //! process Rpc requests, and we create and run a background future that processes incoming p2p
 //! messages and sends them to any Rpc subscribers we have (Our local CFE).
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use cf_utilities::{
 	make_periodic_tick, new_json_error, rpc_error_into_anyhow_error, JsonResultExt, Port,
 };
@@ -420,7 +420,7 @@ pub fn new_p2p_network_node<
 
 												Ok(())
 											} else {
-												Err(anyhow::anyhow!("Request to send message to unset peer."))
+												Err(anyhow!("Request to send message to unset peer."))
 											}
 										})() {
 											log::warn!("Error sending outgoing p2p message: {error}");

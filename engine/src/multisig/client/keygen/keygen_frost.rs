@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use zeroize::Zeroize;
 
+use anyhow::anyhow;
+
 use crate::multisig::{
     client::{common::KeygenFailureReason, KeygenResult, KeygenResultInfo, ThresholdParameters},
     crypto::{ECPoint, ECScalar, KeyShare, Rng},
@@ -314,11 +316,11 @@ pub fn derive_aggregate_pubkey<P: ECPoint>(
     let pubkey: P = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
 
     if !allow_high_pubkey && !pubkey.is_compatible() {
-        Err(anyhow::anyhow!("pubkey is not compatible"))
+        Err(anyhow!("pubkey is not compatible"))
     } else if check_high_degree_commitments(commitments) {
         // Sanity check (the chance of this failing is infinitesimal due to the
         // hash commitment stage at the beginning of the ceremony)
-        Err(anyhow::anyhow!("high degree coefficient is zero"))
+        Err(anyhow!("high degree coefficient is zero"))
     } else {
         Ok(ValidAggregateKey(pubkey))
     }

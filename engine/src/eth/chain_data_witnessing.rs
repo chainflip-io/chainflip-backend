@@ -67,6 +67,7 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 mod tests {
     use super::*;
     use crate::logging::test_utils::new_test_logger;
+    use anyhow::anyhow;
 
     #[tokio::test]
     async fn test_get_tracked_data() {
@@ -117,7 +118,7 @@ mod tests {
             .returning(move || {
                 block_numbers
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("No more block numbers"))
+                    .ok_or_else(|| anyhow!("No more block numbers"))
             });
         // ** Rpc Api Assumptions **
 
@@ -148,7 +149,7 @@ mod tests {
             .times(REQUEST_COUNT as usize)
             .returning(move || {
                 let result = if req_number % 5 == 0 {
-                    Err(anyhow::anyhow!("Infura says no."))
+                    Err(anyhow!("Infura says no."))
                 } else {
                     let res = Ok(block_number.into());
                     block_number += 1;
