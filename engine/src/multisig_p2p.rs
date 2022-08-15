@@ -333,11 +333,11 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     loop {
         tokio::select! {
             Some((peer_id, serialised_message)) = internal_incoming_receiver.recv() => {
-                match peer_to_account_mapping_on_chain.get(&peer_id).ok_or_else(|| anyhow::anyhow!("Missing Account Id mapping for Peer Id: {peer_id}")).and_then(|account_id| {
+                match peer_to_account_mapping_on_chain.get(&peer_id).ok_or_else(|| anyhow!("Missing Account Id mapping for Peer Id: {peer_id}")).and_then(|account_id| {
                     incoming_p2p_message_sender.send((
                         account_id.clone(),
                         serialised_message
-                    )).map_err(|error| anyhow::anyhow!("Failed to send message via channel: {error}"))?;
+                    )).map_err(|error| anyhow!("Failed to send message via channel: {error}"))?;
                     Ok(account_id)
                 }) {
                     Ok(account_id) => slog::info!(logger, "Received P2P message from: {}", account_id),

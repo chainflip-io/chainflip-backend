@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use core::{fmt::Display, time::Duration};
 use futures::{stream, Stream};
 
@@ -140,7 +141,7 @@ mod tests_periodic_tick_stream {
 
 // Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
 pub fn rpc_error_into_anyhow_error(error: jsonrpc_core_client::RpcError) -> anyhow::Error {
-    anyhow::anyhow!(error.to_string())
+    anyhow!(error.to_string())
 }
 
 pub trait JsonResultExt {

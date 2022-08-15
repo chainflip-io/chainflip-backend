@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
 use cf_traits::AuthorityCount;
 use futures::{stream, Future, StreamExt};
@@ -1178,7 +1178,7 @@ pub fn verify_sig_with_aggkey(sig: &EthSchnorrSignature, key_id: &KeyId) -> Resu
             &MESSAGE_HASH.0,
             &SchnorrVerificationComponents::from(sig.clone()),
         )
-        .map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
+        .map_err(|e| anyhow!("Failed to verify signature: {:?}", e))?;
 
     Ok(())
 }

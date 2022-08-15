@@ -13,7 +13,7 @@ use web3::{
     types::{TransactionReceipt, H160, H256},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use pallet_cf_governance::GovCallHash;
 
 use std::fmt::Debug;
@@ -403,9 +403,7 @@ impl EthObserver for KeyManager {
                         message: utils::decode_log_param(&log, "message")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
-                        event_signature
-                    )));
+                    return Err(anyhow!(EventParseError::UnexpectedEvent(event_signature)));
                 })
             },
         ))

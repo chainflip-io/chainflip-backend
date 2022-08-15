@@ -560,7 +560,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             }
         }
         slog::error!(logger, "Exceeded maximum number of retry attempts");
-        Err(anyhow::anyhow!("Exceeded maximum number of retry attempts",))
+        Err(anyhow!("Exceeded maximum number of retry attempts",))
     }
 
     /// Submit an unsigned extrinsic.
@@ -659,7 +659,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 }
             };
         }
-        Err(anyhow::anyhow!("Block stream loop exited, no event found",))
+        Err(anyhow!("Block stream loop exited, no event found",))
     }
 
     async fn get_storage_item<
@@ -956,9 +956,9 @@ async fn inner_connect_to_state_chain(
             .subscribe_finalized_heads()
             .map_err(rpc_error_into_anyhow_error)?
             .map_err(rpc_error_into_anyhow_error)
-            .chain(futures::stream::once(std::future::ready(Err(
-                anyhow::anyhow!("sparse_finalized_block_header_stream unexpectedly ended"),
-            ))));
+            .chain(futures::stream::once(std::future::ready(Err(anyhow!(
+                "sparse_finalized_block_header_stream unexpectedly ended"
+            )))));
 
         let mut latest_finalized_header =
             sparse_finalized_block_header_stream.next().await.unwrap()?;

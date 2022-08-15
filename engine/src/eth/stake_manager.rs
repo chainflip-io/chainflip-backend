@@ -18,7 +18,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use super::{event::Event, DecodeLogClosure, EthObserver, EventParseError};
 
@@ -173,7 +173,7 @@ impl EthObserver for StakeManager {
                         utils::decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?
                             .try_into()
                             .map_err(|_| {
-                                anyhow::anyhow!("Could not cast FixedBytes nodeID into [u8;32]")
+                                anyhow!("Could not cast FixedBytes nodeID into [u8;32]")
                             })?;
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
@@ -240,9 +240,7 @@ impl EthObserver for StakeManager {
                         key_manager: utils::decode_log_param(&log, "keyManager")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
-                        event_signature
-                    )));
+                    return Err(anyhow!(EventParseError::UnexpectedEvent(event_signature)));
                 })
             },
         ))
