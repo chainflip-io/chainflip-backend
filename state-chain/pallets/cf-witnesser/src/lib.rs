@@ -290,8 +290,12 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
+		// At the epoch boundary, asynchronicity can cause validators to witness events at a earlier
+		// epoch than intended. We need to check that the same event doesn't get double-triggered in
+		// the current and previous epoch.
 		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
-			CallHashExecuted::<T>::get(epoch_index, &call_hash).is_none()
+			CallHashExecuted::<T>::get(epoch_index, &call_hash).is_none() &&
+			CallHashExecuted::<T>::get(epoch_index.saturating_sub(1u32), &call_hash).is_none()
 		{
 			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
 				call.combine_and_inject(&mut extra_data)
@@ -323,12 +327,34 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResultWithPostInfo {
 		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index())
 	}
+}
+
+impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
+	type AccountId = T::ValidatorId;
+	type Call = <T as pallet::Config>::Call;
+	type BlockNumber = T::BlockNumber;
+
+	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
+		Self::do_witness(who.into(), call)
+	}
+
+	fn witness_at_epoch(
+		who: Self::AccountId,
+		call: Self::Call,
+		epoch: EpochIndex,
+	) -> DispatchResultWithPostInfo {
+		Self::do_witness_at_epoch(who.into(), call, epoch)
+	}
+}
+
+impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
 
 	/// Purge the pallet storage of stale entries. This is defined as Votes that are equal or older
 	/// than the Epoch that just expired. Also purge  
-	fn purge_stale_storage(expired: EpochIndex) {
+	fn on_expired_epoch(expired: EpochIndex) {
 		// Remove all vote entries data with stale EpochIndex.
-		Votes::<T>::translate(|epoch_index, call_hash, buffer| -> Option<Vec<u8>> {
+		Votes::<T>::translate(|epoch_index, _, buffer| -> Option<Vec<u8>> {
 			if epoch_index <= expired {
 				None
 			} else {
@@ -353,33 +379,6 @@ impl<T: Config> Pallet<T> {
 				Some(())
 			}
 		});
-	}
-}
-
-impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
-	type AccountId = T::ValidatorId;
-	type Call = <T as pallet::Config>::Call;
-	type BlockNumber = T::BlockNumber;
-
-	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-		Self::do_witness(who.into(), call)
-	}
-
-	fn witness_at_epoch(
-		who: Self::AccountId,
-		call: Self::Call,
-		epoch: EpochIndex,
-	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who.into(), call, epoch)
-	}
-}
-
-impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-
-	// purge stale storage when an epoch expires.
-	fn on_expired_epoch(expired: EpochIndex) {
-		Pallet::<T>::purge_stale_storage(expired);
 	}
 }
 

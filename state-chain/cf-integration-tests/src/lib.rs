@@ -11,7 +11,7 @@ use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
 	Emissions, EmissionsConfig, EthereumVaultConfig, Flip, FlipConfig, Governance,
 	GovernanceConfig, Origin, Reputation, ReputationConfig, Runtime, SessionConfig, Staking,
-	StakingConfig, System, Timestamp, Validator, ValidatorConfig,
+	StakingConfig, System, Timestamp, Validator, ValidatorConfig, Witnesser,
 };
 
 use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
@@ -277,7 +277,7 @@ mod epoch {
 	use std::collections::BTreeSet;
 
 	use super::*;
-	use crate::genesis::GENESIS_BALANCE;
+	use crate::{genesis::GENESIS_BALANCE, network::Network};
 	use cf_traits::{
 		BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
 	};
@@ -492,6 +492,111 @@ mod epoch {
 					ChainflipAccountState::Backup,
 					ChainflipAccountStore::<Runtime>::get(&late_staker).state,
 					"late staker should be a backup node"
+				);
+			});
+	}
+
+	#[test]
+	// When an epoch expires, purge stale storages in the Witnesser pallet.
+	// This is done through ChainflipEpochTransitions.
+	fn new_epoch_will_purges_stale_witnesser_storage() {
+		const EPOCH_BLOCKS: BlockNumber = 100;
+		const MAX_AUTHORITIES: AuthorityCount = 3;
+		super::genesis::default()
+			.blocks_per_epoch(EPOCH_BLOCKS)
+			.min_authorities(MAX_AUTHORITIES)
+			.build()
+			.execute_with(|| {
+				// Get the list of nodes
+				let mut nodes = Validator::current_authorities();
+				let (mut testnet, mut backup_nodes) = network::Network::create(0, &nodes);
+
+				for backup_node in backup_nodes.clone() {
+					network::Cli::activate_account(&backup_node);
+				}
+
+				nodes.append(&mut backup_nodes);
+				let stake_amount = FLIPPERINOS_PER_FLIP;
+
+				// Moving into epoch 1
+				for node in &nodes {
+					testnet.stake_manager_contract.stake(node.clone(), stake_amount, 1);
+				}
+
+				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
+				assert_eq!(Validator::epoch_index(), 1);
+
+				// Move forward a few more epochs
+				let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
+					let start = Validator::epoch_index();
+					let finish = start + epochs;
+					for epoch in start..finish {
+						testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS + 1);
+						for node in &nodes {
+							testnet.stake_manager_contract.stake(node.clone(), stake_amount, epoch + 1);
+						}
+						testnet.submit_heartbeat_all_engines();
+					}
+				};
+
+				move_forward_by_epochs(3, &mut testnet);
+				
+
+				assert_eq!(Validator::epoch_index(), 4);
+				assert_eq!(Validator::last_expired_epoch(), 2);
+
+				// Create dummy call and call hash
+				let call =
+					Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
+						remark: vec![],
+					}));
+				let call_hash =
+					pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
+				
+				// Add the dummy call into storage	 
+				let validators = Validator::current_authorities();
+				for node in &validators {
+					assert_ok!(Witnesser::witness_at_epoch(
+						Origin::signed(node.clone()),
+						call.clone(),
+						4
+					));
+				}
+				pallet_cf_witnesser::ExtraCallData::<Runtime>::insert(
+					4,
+					&call_hash,
+					vec![vec![0u8]],
+				);
+
+				// Execute the call after voting has passed.
+				testnet.move_forward_blocks(1);
+
+				// Votes are registered in storage.
+				assert_eq!(
+					pallet_cf_witnesser::Votes::<Runtime>::get(4, &call_hash),
+					Some(vec![224])
+				);
+				assert_eq!(
+					pallet_cf_witnesser::ExtraCallData::<Runtime>::get(4, &call_hash),
+					Some(vec![vec![0u8]])
+				);
+				assert_eq!(
+					pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(4, &call_hash),
+					Some(())
+				);
+
+				// Move forward in time until Epoch 4 is expired.
+				move_forward_by_epochs(2, &mut testnet);
+
+				assert_eq!(Validator::epoch_index(), 6);
+				assert_eq!(Validator::last_expired_epoch(), 4);
+
+				// Test that the storage has been purged.
+				assert_eq!(pallet_cf_witnesser::Votes::<Runtime>::get(4, &call_hash), None);
+				assert_eq!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(4, &call_hash), None);
+				assert_eq!(
+					pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(4, &call_hash),
+					None
 				);
 			});
 	}
