@@ -56,6 +56,13 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum RetryPolicy {
+	Always,
+	Some(u32),
+	Never,
+}
+
 #[cfg(feature = "std")]
 const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
 
@@ -75,8 +82,6 @@ pub mod pallet {
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
-		/// Participants in the signing ceremony
-		pub participants: Vec<T::ValidatorId>,
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
@@ -84,7 +89,9 @@ pub mod pallet {
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
 		/// The key id type for signing.
-		pub key_id: Option<T::KeyId>,
+		pub key_id: T::KeyId,
+		/// Retry policy
+		pub retry: RetryPolicy,
 		/// Phantom data member.
 		pub _phantom: PhantomData<I>,
 	}
@@ -332,14 +339,16 @@ pub mod pallet {
 					if let Some((request_id, attempt, payload)) =
 						OpenRequests::<T, I>::take(ceremony_id)
 					{
-						Self::new_ceremony_attempt(
-							request_id,
-							payload,
-							attempt.wrapping_add(1),
-							failed_ceremony_context.key_id,
-							Some(failed_ceremony_context.participants),
-						);
-						Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
+						if failed_ceremony_context.retry == RetryPolicy::Always {
+							Self::new_ceremony_attempt(
+								request_id,
+								payload,
+								attempt.wrapping_add(1),
+								Some(failed_ceremony_context.key_id),
+								None,
+							);
+							Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
+						}
 					} else {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
 					}
@@ -557,6 +566,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let key_id = key_id.unwrap_or_else(T::KeyProvider::current_key_id);
 		let maybe_nominees: Option<Vec<T::ValidatorId>>;
+		let mut retry: RetryPolicy = RetryPolicy::Always;
 		if participants.is_none() {
 			maybe_nominees = T::SignerNomination::threshold_nomination_with_seed(
 				(ceremony_id, attempt),
@@ -564,6 +574,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 		} else {
 			maybe_nominees = participants;
+			retry = RetryPolicy::Never;
 		}
 
 		if let Some(nominees) = maybe_nominees {
@@ -578,11 +589,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					participants: nominees.clone(),
 					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
 					blame_counts: Default::default(),
 					participant_count: nominees.len() as u32,
-					key_id: Some(key_id.clone()),
+					key_id: key_id.clone(),
+					retry,
 					_phantom: Default::default(),
 				},
 			);
@@ -606,11 +617,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingCeremonies::<T, I>::insert(
 				ceremony_id,
 				CeremonyContext {
-					participants: vec![],
 					remaining_respondents: Default::default(),
 					blame_counts: Default::default(),
 					participant_count: 0,
-					key_id: Some(key_id),
+					key_id,
+					retry,
 					_phantom: Default::default(),
 				},
 			);

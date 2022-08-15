@@ -342,10 +342,40 @@ fn test_not_enough_signers_for_threshold() {
 #[cfg(test)]
 mod unsigned_validation {
 	use super::*;
-	use crate::Call as PalletCall;
+	use crate::{Call as PalletCall, PendingCeremonies, RetryPolicy, RetryQueues};
 	use cf_chains::ChainCrypto;
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
+
+	#[test]
+	fn start_custom_signing_ceremony() {
+		new_test_ext().execute_with(|| {
+			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+			const CUSTOM_KEY_ID: &[u8] = b"K-ID-2";
+			let participants: Vec<u64> = vec![1, 2, 3, 4, 5, 6];
+			let (_, ceremony_id) = MockEthereumThresholdSigner::request_signature(
+				PAYLOAD,
+				Some(CUSTOM_KEY_ID.to_vec()),
+				Some(participants.clone()),
+			);
+			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id);
+			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
+			assert_eq!(ceremony.clone().unwrap().key_id, CUSTOM_KEY_ID);
+			assert_eq!(
+				ceremony.clone().unwrap().remaining_respondents,
+				BTreeSet::from_iter(participants.clone())
+			);
+			assert_eq!(ceremony.unwrap().retry, RetryPolicy::Never);
+			// Process retries.
+			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+				retry_block,
+			);
+			assert!(RetryQueues::<Test, Instance1>::take(retry_block).is_empty());
+			assert!(PendingCeremonies::<Test, Instance1>::take(retry_block).is_none());
+		});
+	}
 
 	#[test]
 	fn valid_unsigned_extrinsic() {
@@ -414,19 +444,19 @@ mod unsigned_validation {
 #[cfg(test)]
 mod failure_reporting {
 	use super::*;
-	use crate::CeremonyContext;
-	use cf_traits::mocks::epoch_info::MockEpochInfo;
+	use crate::{CeremonyContext, RetryPolicy};
+	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider};
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
 	) -> CeremonyContext<Test, Instance1> {
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
 		CeremonyContext::<Test, Instance1> {
-			participants: Vec::from_iter(validator_set),
-			key_id: None,
+			key_id: MockKeyProvider::current_key_id(),
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,
+			retry: RetryPolicy::Always,
 			_phantom: Default::default(),
 		}
 	}
