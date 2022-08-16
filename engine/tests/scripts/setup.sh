@@ -7,6 +7,8 @@ set -ex
 #
 # =============================================================
 
+readonly CONTRACT_VERSION_TAG=sandstorm-rc4
+
 if ! which poetry; then
   curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
   . $HOME/.poetry/env
@@ -14,12 +16,12 @@ fi
 
 if [ ! -d "./eth-contracts" ]; then
   if [ -z $DRONE ]; then
-    git clone --depth 1 --branch sandstorm-rc4 git@github.com:chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
+    git clone --depth 1 --branch $CONTRACT_VERSION_TAG git@github.com:chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
   else
-    git clone --depth 1 --branch sandstorm-rc4 https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
+    git clone --depth 1 --branch $CONTRACT_VERSION_TAG https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
   fi
 else
-    ( cd eth-contracts ; git pull origin sandstorm-rc4 )
+    ( cd eth-contracts ; git pull origin $CONTRACT_VERSION_TAG )
 fi
 
 # ensure we have the poetry deps
