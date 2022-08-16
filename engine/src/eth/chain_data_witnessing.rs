@@ -30,7 +30,7 @@ where
         "ETH-Chain-Data-Witnesser".into(),
         state_chain_client,
         epoch_start_receiver,
-        |epoch_start| epoch_start.participant && epoch_start.current,
+        |epoch_start| epoch_start.current,
         None,
         move |
             state_chain_client,

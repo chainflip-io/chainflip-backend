@@ -58,7 +58,7 @@ where
                         option_state = Some(handle.await);
                     }
 
-                    if observer_condition(&epoch_start) {
+                    if epoch_start.participant && observer_condition(&epoch_start) {
                         handle_and_end_observation_signal = Some({
                             let end_observation_signal = Arc::new(Mutex::new(None));
 

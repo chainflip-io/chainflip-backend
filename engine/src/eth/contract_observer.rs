@@ -32,7 +32,7 @@ where
         format!("{}-Observer", contract_observer.contract_name()),
         state_chain_client,
         epoch_starts_receiver,
-        |epoch_start| epoch_start.participant,
+        |_epoch_start| true,
         (),
         move |state_chain_client, end_observation_signal, epoch_start, (), logger| {
             let eth_ws_rpc = eth_ws_rpc.clone();
