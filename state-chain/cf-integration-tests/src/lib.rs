@@ -507,7 +507,8 @@ mod epoch {
 			.min_authorities(MAX_AUTHORITIES)
 			.build()
 			.execute_with(|| {
-				let nodes = Validator::current_authorities();
+				let mut nodes = Validator::current_authorities();
+				nodes.sort();
 				let (mut testnet, _) = network::Network::create(0, &nodes);
 
 				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
@@ -525,7 +526,9 @@ mod epoch {
 				move_forward_by_epochs(3, &mut testnet);
 				assert_eq!(Validator::epoch_index(), 4);
 				assert_eq!(Validator::last_expired_epoch(), 2);
-				assert_eq!(nodes, Validator::current_authorities());
+				let mut current_authorities_after_some_epochs = Validator::current_authorities();
+				current_authorities_after_some_epochs.sort();
+				assert_eq!(nodes, current_authorities_after_some_epochs);
 
 				let call =
 					Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
