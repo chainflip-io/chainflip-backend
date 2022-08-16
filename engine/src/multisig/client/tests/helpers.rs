@@ -1192,7 +1192,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
     mut rng: Rng,
     logger: Logger,
 ) -> CeremonyRunner<KeygenCeremony<EthSigning>> {
-    let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(account_ids));
+    let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(account_ids).unwrap());
     let common = CeremonyCommon {
         ceremony_id,
         own_idx: 0,

@@ -209,7 +209,16 @@ pub fn init_keygen_ceremony<C: CryptoScheme>(
     result_sender: CeremonyResultSender<KeygenCeremony<C>>,
     logger: &slog::Logger,
 ) -> Result<InitializedRequest<KeygenCeremony<C>>, InitCeremonyFailure<KeygenCeremony<C>>> {
-    let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
+    let validator_map = Arc::new(
+        match PartyIdxMapping::from_unsorted_signers(&participants) {
+            Ok(map) => map,
+            Err(reason) => {
+                slog::debug!(logger, "Keygen request invalid: {}", reason);
+
+                return Err((CeremonyFailureReason::InvalidParticipants, result_sender));
+            }
+        },
+    );
 
     let (our_idx, signer_idxs) =
         match map_ceremony_parties(own_account_id, &participants, &validator_map) {

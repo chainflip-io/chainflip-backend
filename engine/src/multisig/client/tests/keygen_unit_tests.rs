@@ -217,7 +217,8 @@ async fn should_report_on_invalid_blame_response6() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
     let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
         &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
-    );
+    )
+    .unwrap();
     let [bad_node_id_1, bad_node_id_2, target_node_id] = ceremony.select_account_ids();
 
     let messages = ceremony.request().await;
@@ -575,7 +576,8 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
 
     let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
         &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
-    );
+    )
+    .unwrap();
 
     let messages = ceremony.request().await;
 

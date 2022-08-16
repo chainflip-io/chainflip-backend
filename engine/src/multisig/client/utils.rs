@@ -48,7 +48,7 @@ impl PartyIdxMapping {
             .collect()
     }
 
-    pub fn from_unsorted_signers(signers: &[AccountId]) -> Self {
+    pub fn from_unsorted_signers(signers: &[AccountId]) -> Result<Self, &'static str> {
         let mut signers = signers.to_owned();
         signers.sort();
 
@@ -56,13 +56,18 @@ impl PartyIdxMapping {
 
         for (i, account_id) in signers.iter().enumerate() {
             // indexes start with 1 for signing
-            id_to_idx.insert(account_id.clone(), i as AuthorityCount + 1);
+            if id_to_idx
+                .insert(account_id.clone(), i as AuthorityCount + 1)
+                .is_some()
+            {
+                return Err("non unique participants");
+            }
         }
 
-        PartyIdxMapping {
+        Ok(PartyIdxMapping {
             id_to_idx,
             account_ids: signers,
-        }
+        })
     }
 }
 
@@ -123,10 +128,21 @@ mod utils_tests {
 
         let signers = [a, c.clone(), b];
 
-        let map = PartyIdxMapping::from_unsorted_signers(&signers);
+        let map = PartyIdxMapping::from_unsorted_signers(&signers).unwrap();
 
         assert_eq!(map.get_idx(&c), Some(3));
         assert_eq!(map.get_id(3), Some(&c));
+    }
+
+    #[test]
+    fn from_unsorted_signers_fails_on_duplicate_signer() {
+        let a = AccountId::new([b'A'; 32]);
+        let b = AccountId::new([b'B'; 32]);
+        let c = AccountId::new([b'C'; 32]);
+
+        let signers = [a, c.clone(), b, c];
+
+        assert!(PartyIdxMapping::from_unsorted_signers(&signers).is_err());
     }
 }
 

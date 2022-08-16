@@ -576,7 +576,8 @@ pub mod genesis {
 
         let agg_pubkey = derive_aggregate_pubkey(&commitments, allow_high_pubkey)?;
 
-        let validator_map = PartyIdxMapping::from_unsorted_signers(signers);
+        let validator_map = PartyIdxMapping::from_unsorted_signers(signers)
+            .expect("Should be valid list of signers");
 
         let keygen_result_infos: HashMap<_, _> = (1..=n)
             .map(|idx| {
