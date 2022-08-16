@@ -165,6 +165,7 @@ impl Node<SigningCeremonyEth> {
             message_hash,
             &self.outgoing_p2p_message_sender,
             rng,
+            tokio::sync::oneshot::channel().0,
             &self.logger,
         )
         .expect("invalid request");
@@ -198,6 +199,7 @@ impl Node<KeygenCeremonyEth> {
             &self.outgoing_p2p_message_sender,
             rng,
             self.allowing_high_pubkey,
+            tokio::sync::oneshot::channel().0,
             &self.logger,
         )
         .expect("invalid request");

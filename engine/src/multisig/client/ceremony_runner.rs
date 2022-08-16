@@ -22,7 +22,7 @@ use crate::{
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
-    ceremony_manager::{CeremonyRequestInner, CeremonyTrait, DynStage},
+    ceremony_manager::{CeremonyTrait, DynStage, InitializedRequest},
     common::{CeremonyFailureReason, PreProcessStageDataCheck},
     utils::PartyIdxMapping,
 };
@@ -55,7 +55,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub async fn run(
         ceremony_id: CeremonyId,
         mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
-        mut request_receiver: UnboundedReceiver<CeremonyRequestInner<Ceremony>>,
+        mut request_receiver: UnboundedReceiver<InitializedRequest<Ceremony>>,
         logger: slog::Logger,
     ) -> CeremonyId {
         // We always create unauthorised first, it can get promoted to
@@ -75,10 +75,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 }
                 Some(request) = request_receiver.recv() => {
 
-                    let CeremonyRequestInner { init_stage, idx_mapping, result_sender, num_of_participants } = request;
+                    let InitializedRequest { init_stage, idx_mapping, participants_count, result_sender } = request;
                     final_result_sender = Some(result_sender);
 
-                    if let Some(res) = runner.on_ceremony_request(init_stage, idx_mapping, num_of_participants).await {
+                    if let Some(res) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await {
                         break res;
                     }
 

@@ -112,12 +112,19 @@ pub type DynStage<Ceremony> = Box<
         + Sync,
 >;
 
-// TODO: rename this and merge with `CeremonyRequestInner`
-pub struct CeremonyRequestProcessed<C: CeremonyTrait> {
+// A ceremony request that has passed initial checks and setup its initial stage
+pub struct InitializedRequest<C: CeremonyTrait> {
     pub init_stage: DynStage<C>,
     pub idx_mapping: Arc<PartyIdxMapping>,
     pub participants_count: AuthorityCount,
+    pub result_sender: CeremonyResultSender<C>,
 }
+
+// If the ceremony request is invalid, a failure reason is returned with the result sender
+type InitCeremonyFailure<Ceremony> = (
+    CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>,
+    CeremonyResultSender<Ceremony>,
+);
 
 // Creates the initial stage (and associated data) of a signing ceremony using the details of request
 pub fn init_signing_ceremony<C: CryptoScheme>(
@@ -128,8 +135,9 @@ pub fn init_signing_ceremony<C: CryptoScheme>(
     data: MessageHash,
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
     rng: Rng,
+    result_sender: CeremonyResultSender<SigningCeremony<C>>,
     logger: &slog::Logger,
-) -> Result<CeremonyRequestProcessed<SigningCeremony<C>>, CeremonyOutcome<SigningCeremony<C>>> {
+) -> Result<InitializedRequest<SigningCeremony<C>>, InitCeremonyFailure<SigningCeremony<C>>> {
     // Check that we have enough signers
     let minimum_signers_needed = key_info.params.threshold + 1;
     let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
@@ -141,10 +149,10 @@ pub fn init_signing_ceremony<C: CryptoScheme>(
             minimum_signers_needed
         );
 
-        return Err(Err((
-            BTreeSet::new(),
+        return Err((
             CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
-        )));
+            result_sender,
+        ));
     }
 
     // Generate signer indexes
@@ -153,10 +161,7 @@ pub fn init_signing_ceremony<C: CryptoScheme>(
             Ok(res) => res,
             Err(reason) => {
                 slog::debug!(logger, "Request to sign invalid: {}", reason);
-                return Err(Err((
-                    BTreeSet::new(),
-                    CeremonyFailureReason::InvalidParticipants,
-                )));
+                return Err((CeremonyFailureReason::InvalidParticipants, result_sender));
             }
         };
 
@@ -185,10 +190,11 @@ pub fn init_signing_ceremony<C: CryptoScheme>(
         Box::new(BroadcastStage::new(processor, common))
     };
 
-    Ok(CeremonyRequestProcessed {
+    Ok(InitializedRequest {
         init_stage,
         idx_mapping: key_info.validator_map,
         participants_count: signers_len,
+        result_sender,
     })
 }
 
@@ -200,8 +206,9 @@ pub fn init_keygen_ceremony<C: CryptoScheme>(
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
     rng: Rng,
     allowing_high_pubkey: bool,
+    result_sender: CeremonyResultSender<KeygenCeremony<C>>,
     logger: &slog::Logger,
-) -> Result<CeremonyRequestProcessed<KeygenCeremony<C>>, CeremonyOutcome<KeygenCeremony<C>>> {
+) -> Result<InitializedRequest<KeygenCeremony<C>>, InitCeremonyFailure<KeygenCeremony<C>>> {
     let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
     let (our_idx, signer_idxs) =
@@ -210,10 +217,7 @@ pub fn init_keygen_ceremony<C: CryptoScheme>(
             Err(reason) => {
                 slog::debug!(logger, "Keygen request invalid: {}", reason);
 
-                return Err(Err((
-                    BTreeSet::new(),
-                    CeremonyFailureReason::InvalidParticipants,
-                )));
+                return Err((CeremonyFailureReason::InvalidParticipants, result_sender));
             }
         };
 
@@ -242,33 +246,12 @@ pub fn init_keygen_ceremony<C: CryptoScheme>(
         Box::new(BroadcastStage::new(processor, common))
     };
 
-    Ok(CeremonyRequestProcessed {
+    Ok(InitializedRequest {
         init_stage,
         idx_mapping: validator_map,
         participants_count: num_of_participants,
+        result_sender,
     })
-}
-
-/// Request parameter to be sent to the ceremony task/thread
-pub struct CeremonyRequestInner<Ceremony: CeremonyTrait> {
-    pub init_stage: DynStage<Ceremony>,
-    pub idx_mapping: Arc<PartyIdxMapping>,
-    pub result_sender: CeremonyResultSender<Ceremony>,
-    pub num_of_participants: AuthorityCount,
-}
-
-impl<C: CeremonyTrait> CeremonyRequestProcessed<C> {
-    pub fn into_request_inner(
-        self,
-        result_sender: CeremonyResultSender<C>,
-    ) -> CeremonyRequestInner<C> {
-        CeremonyRequestInner {
-            init_stage: self.init_stage,
-            idx_mapping: self.idx_mapping,
-            result_sender,
-            num_of_participants: self.participants_count,
-        }
-    }
 }
 
 fn map_ceremony_parties(
@@ -403,11 +386,15 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             &self.outgoing_p2p_message_sender,
             rng,
             self.allowing_high_pubkey,
+            result_sender,
             &logger_with_ceremony_id,
         ) {
             Ok(request) => request,
-            Err(failed_outcome) => {
-                let _res = result_sender.send(failed_outcome);
+            Err((failed_outcome, result_sender)) => {
+                let _res = result_sender.send(CeremonyOutcome::<KeygenCeremony<C>>::Err((
+                    BTreeSet::new(),
+                    failed_outcome,
+                )));
                 self.keygen_states
                     .cleanup_ceremony(Ok(ceremony_id), &logger_with_ceremony_id);
                 return;
@@ -418,7 +405,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .keygen_states
             .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
-        ceremony_handle.on_request(request.into_request_inner(result_sender));
+        ceremony_handle.on_request(request);
     }
 
     /// Process a request to sign
@@ -450,11 +437,15 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             data,
             &self.outgoing_p2p_message_sender,
             rng,
+            result_sender,
             &logger_with_ceremony_id,
         ) {
             Ok(request) => request,
-            Err(failed_outcome) => {
-                let _res = result_sender.send(failed_outcome);
+            Err((failed_outcome, result_sender)) => {
+                let _res = result_sender.send(CeremonyOutcome::<SigningCeremony<C>>::Err((
+                    BTreeSet::new(),
+                    failed_outcome,
+                )));
                 self.signing_states
                     .cleanup_ceremony(Ok(ceremony_id), &logger_with_ceremony_id);
                 return;
@@ -466,7 +457,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .signing_states
             .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
-        ceremony_handle.on_request(request.into_request_inner(result_sender));
+        ceremony_handle.on_request(request);
     }
 
     /// Process message from another validator
@@ -648,7 +639,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 // Contains the channels used to send data to a running ceremony
 struct CeremonyHandle<Ceremony: CeremonyTrait> {
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
-    pub request_sender: UnboundedSender<CeremonyRequestInner<Ceremony>>,
+    pub request_sender: UnboundedSender<InitializedRequest<Ceremony>>,
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
@@ -675,7 +666,7 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
         )
     }
 
-    fn on_request(&mut self, request: CeremonyRequestInner<Ceremony>) {
+    fn on_request(&mut self, request: InitializedRequest<Ceremony>) {
         let _res = self.request_sender.send(request);
     }
 }
