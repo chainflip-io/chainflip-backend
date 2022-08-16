@@ -1,5 +1,6 @@
 pub mod chain_data_witnessing;
 pub mod contract_observer;
+mod epoch_observer;
 mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;
