@@ -153,6 +153,7 @@ pub mod pallet {
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
+		#[allow(clippy::boxed_local)]
 		#[pallet::weight(
 			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
 				T::EpochInfo::authority_count_at_epoch(T::EpochInfo::epoch_index()).unwrap_or(1u32) as u64)
@@ -182,6 +183,7 @@ pub mod pallet {
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
+		#[allow(clippy::boxed_local)]
 		#[pallet::weight(
 			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
