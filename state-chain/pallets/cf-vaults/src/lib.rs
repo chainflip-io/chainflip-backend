@@ -10,11 +10,7 @@ use cf_traits::{
 	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SystemStateManager,
 	VaultRotator,
 };
-use frame_support::{
-	dispatch::DispatchResult,
-	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, StorageVersion},
-};
+use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
@@ -26,7 +22,6 @@ use sp_std::{
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migrations;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -278,8 +273,6 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
-
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -288,7 +281,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
-	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -396,20 +388,6 @@ pub mod pallet {
 			}
 
 			weight
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::post_upgrade()
 		}
 	}
 

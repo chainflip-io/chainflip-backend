@@ -14,7 +14,6 @@ pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migrations;
 mod rotation_state;
 
 use cf_traits::{
@@ -26,7 +25,7 @@ use cf_traits::{
 use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
-	traits::{EstimateNextSessionRotation, OnKilledAccount, OnRuntimeUpgrade, StorageVersion},
+	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
 pub use pallet::*;
 use sp_core::ed25519;
@@ -40,8 +39,6 @@ use sp_std::{
 };
 
 use crate::rotation_state::RotationState;
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 type SessionIndex = u32;
 
@@ -123,7 +120,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
-	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -308,20 +304,6 @@ pub mod pallet {
 					),
 			};
 			weight
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
