@@ -37,7 +37,7 @@ where
         move |state_chain_client, end_observation_signal, epoch_start, (), logger| {
             let eth_ws_rpc = eth_ws_rpc.clone();
             let eth_http_rpc = eth_http_rpc.clone();
-            let dual_rpc = EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone());
+            let dual_rpc = EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone(), &logger);
             let contract_observer = contract_observer.clone();
 
             async move {
