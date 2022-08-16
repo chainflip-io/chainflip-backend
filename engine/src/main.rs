@@ -208,7 +208,7 @@ fn main() -> anyhow::Result<()> {
 
             // Start eth observers
             scope.spawn(
-                eth::start_contract_observer(
+                eth::contract_observer::start(
                     stake_manager_contract,
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
@@ -218,7 +218,7 @@ fn main() -> anyhow::Result<()> {
                 )
             );
             scope.spawn(
-                eth::start_contract_observer(
+                eth::contract_observer::start(
                     key_manager_contract,
                     eth_ws_rpc_client,
                     eth_http_rpc_client,
