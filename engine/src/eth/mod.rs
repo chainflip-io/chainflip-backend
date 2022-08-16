@@ -105,17 +105,13 @@ impl SignatureAndEvent {
     }
 }
 
-/// Instructions for starting and ending witnessing. Start is inclusive, End is exclusive.
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum ObserveInstruction {
-    Start {
-        epoch: EpochIndex,
-        start_eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
-        current_epoch: bool,
-    },
-    End {
-        end_eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
-    },
+#[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq, Debug))]
+pub struct EpochStart {
+    pub index: EpochIndex,
+    pub eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
+    pub current: bool,
+    pub participant: bool,
 }
 
 /// Helper that generates a broadcast channel with multiple receivers.
@@ -132,7 +128,7 @@ pub async fn start_contract_observer<ContractObserver, StateChainRpc>(
     contract_observer: ContractObserver,
     eth_ws_rpc: EthWsRpcClient,
     eth_http_rpc: EthHttpRpcClient,
-    mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
+    mut epoch_starts_receiver: broadcast::Receiver<EpochStart>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
@@ -147,102 +143,90 @@ where
             );
             slog::info!(logger, "Starting");
 
-            type TaskEndBlock = Arc<Mutex<Option<u64>>>;
-
-            let mut option_handle_end_block: Option<(ScopedJoinHandle<()>, TaskEndBlock)> = None;
+            let mut handle_and_end_observation_signal: Option<(
+                ScopedJoinHandle<()>,
+                Arc<Mutex<Option<u64>>>,
+            )> = None;
 
             let contract_observer = Arc::new(contract_observer);
 
-            while let Ok(observe_instruction) = instruction_receiver.recv().await.map_err(|e| {
-                slog::error!(logger, "Witnessing instruction receiver failed: {:?}", e)
-            }) {
-                match observe_instruction {
-                    ObserveInstruction::End { end_eth_block } => {
-                        let (handle, end_at_block) = option_handle_end_block
-                            .take()
-                            .expect("Received two 'end' events in a row. This should not occur.");
-                        // We already have a thread, we want to tell it when to stop and await on it
-                        *end_at_block.lock().unwrap() = Some(end_eth_block);
-                        handle.await;
-                    }
-                    ObserveInstruction::Start {
-                        epoch,
-                        start_eth_block,
-                        current_epoch: _current_epoch,
-                    } => {
-                        assert!(
-                            option_handle_end_block.is_none(),
-                            "Received two 'start' events in a row. This should not occur."
-                        );
-                        option_handle_end_block = Some({
-                            let task_end_at_block = Arc::new(Mutex::new(None));
+            while let Ok(epoch_start) = epoch_starts_receiver
+                .recv()
+                .await
+                .map_err(|e| slog::error!(logger, "Epoch start receiver failed: {:?}", e))
+            {
+                if let Some((handle, end_observation_signal)) =
+                    handle_and_end_observation_signal.take()
+                {
+                    *end_observation_signal.lock().unwrap() = Some(epoch_start.eth_block);
+                    handle.await;
+                }
 
-                            // clone for capture by tokio task
-                            let task_end_at_block_c = task_end_at_block.clone();
-                            let eth_ws_rpc = eth_ws_rpc.clone();
-                            let eth_http_rpc = eth_http_rpc.clone();
-                            let dual_rpc = EthDualRpcClient::new(
-                                eth_ws_rpc.clone(),
-                                eth_http_rpc.clone(),
-                                &logger,
-                            );
-                            let logger = logger.clone();
-                            let contract_observer = contract_observer.clone();
-                            let state_chain_client = state_chain_client.clone();
-                            (
-                                scope.spawn_with_handle(async move {
-                                    slog::info!(
-                                        logger,
-                                        "Start observing from ETH block: {}",
-                                        start_eth_block
-                                    );
-                                    let mut block_stream = contract_observer
-                                        .block_stream(
-                                            eth_ws_rpc,
-                                            eth_http_rpc,
-                                            start_eth_block,
-                                            &logger,
-                                        )
-                                        .await
-                                        .expect("Failed to initialise block stream");
+                if epoch_start.participant {
+                    handle_and_end_observation_signal = Some({
+                        let end_observation_signal = Arc::new(Mutex::new(None));
 
-                                    // TOOD: Handle None on stream, and result event being an error
-                                    while let Some(block) = block_stream.next().await {
-                                        if let Some(end_at_block) =
-                                            *task_end_at_block.lock().unwrap()
-                                        {
-                                            if block.block_number >= end_at_block {
-                                                slog::info!(
-                                                    logger,
-                                                    "Finished observing events at ETH block: {}",
-                                                    block.block_number
-                                                );
-                                                // we have reached the block height we wanted to witness up to
-                                                // so can stop the witness process
-                                                break;
-                                            }
-                                        }
+                        // clone for capture by tokio task
+                        let end_observation_signal_c = end_observation_signal.clone();
+                        let eth_ws_rpc = eth_ws_rpc.clone();
+                        let eth_http_rpc = eth_http_rpc.clone();
+                        let dual_rpc =
+                            EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone());
+                        let logger = logger.clone();
+                        let contract_observer = contract_observer.clone();
+                        let state_chain_client = state_chain_client.clone();
+                        (
+                            scope.spawn_with_handle(async move {
+                                slog::info!(
+                                    logger,
+                                    "Start observing from ETH block: {}",
+                                    epoch_start.eth_block
+                                );
+                                let mut block_stream = contract_observer
+                                    .block_stream(
+                                        eth_ws_rpc,
+                                        eth_http_rpc,
+                                        epoch_start.eth_block,
+                                        &logger,
+                                    )
+                                    .await
+                                    .expect("Failed to initialise block stream");
 
-                                        for event in block.events {
-                                            contract_observer
-                                                .handle_event(
-                                                    epoch,
-                                                    block.block_number,
-                                                    event,
-                                                    state_chain_client.clone(),
-                                                    &dual_rpc,
-                                                    &logger,
-                                                )
-                                                .await;
+                                // TOOD: Handle None on stream, and result event being an error
+                                while let Some(block) = block_stream.next().await {
+                                    if let Some(end_block) = *end_observation_signal.lock().unwrap()
+                                    {
+                                        if block.block_number >= end_block {
+                                            slog::info!(
+                                                logger,
+                                                "Finished observing events at ETH block: {}",
+                                                block.block_number
+                                            );
+                                            // we have reached the block height we wanted to witness up to
+                                            // so can stop the witness process
+                                            break;
                                         }
                                     }
 
-                                    Ok(())
-                                }),
-                                task_end_at_block_c,
-                            )
-                        })
-                    }
+                                    for event in block.events {
+                                        contract_observer
+                                            .handle_event(
+                                                epoch_start.index,
+                                                block.block_number,
+                                                event,
+                                                state_chain_client.clone(),
+                                                &dual_rpc,
+                                                &logger,
+                                            )
+                                            .await;
+                                    }
+                                }
+
+                                Ok(())
+                            }),
+                            end_observation_signal_c,
+                        )
+                    })
                 }
             }
 
@@ -256,7 +240,7 @@ where
 pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
     eth_rpc: EthRpcClient,
     state_chain_client: Arc<StateChainClient<ScRpcClient>>,
-    mut instruction_receiver: broadcast::Receiver<ObserveInstruction>,
+    mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
     cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
     poll_interval: Duration,
     logger: &slog::Logger,
@@ -270,90 +254,73 @@ where
             let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
             slog::info!(&logger, "Starting");
 
-            type TaskEndBlock = Arc<Mutex<Option<u64>>>;
+            let mut last_observed_block_hash = None;
+            let mut handle_and_end_observation_signal: Option<(ScopedJoinHandle<Option<H256>>, Arc<Mutex<Option<u64>>>)> = None;
 
-            let mut last_block_hash = None;
-            let mut option_handle_end_block: Option<(ScopedJoinHandle<Option<H256>>, TaskEndBlock)> = None;
+            while let Ok(epoch_start) = epoch_start_receiver.recv().await {
+                if let Some((handle, end_observation_signal)) = handle_and_end_observation_signal.take() {
+                    *end_observation_signal.lock().unwrap() = Some(epoch_start.eth_block);
+                    handle.await;
+                }
 
-            while let Ok(observe_instruction) = instruction_receiver.recv().await {
-                match observe_instruction {
-                    ObserveInstruction::End { end_eth_block } => {
-                        if let Some((handle, end_at_block)) = option_handle_end_block.take() {
-                            // We already have a thread, we want to tell it when to stop and await on it
-                            *end_at_block.lock().unwrap() = Some(end_eth_block);
-                            last_block_hash = handle.await;
-                        }
-                    }
-                    ObserveInstruction::Start {
-                        epoch: _epoch,
-                        start_eth_block: _start_eth_block,
-                        current_epoch,
-                    } => {
-                        assert!(
-                            option_handle_end_block.is_none(),
-                            "Received two 'start' events in a row. This should not occur."
-                        );
+                if epoch_start.participant && epoch_start.current {
+                    handle_and_end_observation_signal = Some({
+                        let end_observation_signal = Arc::new(Mutex::new(None));
 
-                        if current_epoch {
-                            option_handle_end_block = Some({
-                                let task_end_at_block = Arc::new(Mutex::new(None));
+                        // clone for capture by tokio task
+                        let end_observation_signal_c = end_observation_signal.clone();
+                        let eth_rpc_c = eth_rpc.clone();
+                        let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
+                        let state_chain_client = state_chain_client.clone();
+                        let logger = logger.clone();
 
-                                // clone for capture by tokio task
-                                let task_end_at_block_c = task_end_at_block.clone();
-                                let etc_rpc_c = eth_rpc.clone();
-                                let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
-                                let state_chain_client = state_chain_client.clone();
-                                let logger = logger.clone();
+                        (
+                            scope.spawn_with_handle::<_, _>(async move {
+                                let mut poll_interval = make_periodic_tick(poll_interval, false);
 
-                                (
-                                    scope.spawn_with_handle::<_, _>(async move {
-                                        let mut poll_interval = make_periodic_tick(poll_interval, false);
+                                loop {
+                                    if let Some(_end_block) = *end_observation_signal.lock().unwrap() {
+                                        break;
+                                    }
 
-                                        loop {
-                                            if let Some(_end_at_block) = *task_end_at_block.lock().unwrap() {
-                                                break;
+                                    let block_number = eth_rpc_c.block_number().await?;
+                                    let block_hash = eth_rpc_c.block(block_number).await?.hash.context(format!("Missing hash for block {}.", block_number))?;
+                                    if last_observed_block_hash != Some(block_hash) {
+                                        last_observed_block_hash = Some(block_hash);
+
+                                        let priority_fee = cfe_settings_update_receiver
+                                            .borrow()
+                                            .eth_priority_fee_percentile;
+                                        match get_tracked_data(&eth_rpc_c, block_number.as_u64(), priority_fee).await {
+                                            Ok(tracked_data) => {
+                                                state_chain_client
+                                                    .submit_signed_extrinsic(
+                                                        state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
+                                                            call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                                                pallet_cf_chain_tracking::Call::update_chain_state {
+                                                                    state: tracked_data,
+                                                                },
+                                                            )),
+                                                        }),
+                                                        &logger,
+                                                    )
+                                                    .await
+                                                    .context("Failed to submit signed extrinsic")?;
                                             }
-
-                                            let block_number = etc_rpc_c.block_number().await?;
-                                            let block_hash = etc_rpc_c.block(block_number).await?.hash.context(format!("Missing hash for block {}.", block_number))?;
-                                            if last_block_hash.map_or(true, |last_hash| last_hash != block_hash) {
-                                                let priority_fee = cfe_settings_update_receiver
-                                                    .borrow()
-                                                    .eth_priority_fee_percentile;
-                                                match get_tracked_data(&etc_rpc_c, block_number.as_u64(), priority_fee).await {
-                                                    Ok(tracked_data) => {
-                                                        state_chain_client
-                                                        .submit_signed_extrinsic(
-                                                            state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
-                                                                call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
-                                                                    pallet_cf_chain_tracking::Call::update_chain_state {
-                                                                        state: tracked_data,
-                                                                    },
-                                                                )),
-                                                            }),
-                                                            &logger,
-                                                        )
-                                                        .await
-                                                        .context("Failed to submit signed extrinsic")?;
-                                                    }
-                                                    Err(e) => {
-                                                        slog::error!(&logger, "Failed to get tracked data: {:?}", e);
-                                                    }
-                                                }
-
-                                                last_block_hash = Some(block_hash);
+                                            Err(e) => {
+                                                slog::error!(&logger, "Failed to get tracked data: {:?}", e);
                                             }
-
-                                            poll_interval.tick().await;
                                         }
+                                    }
 
-                                        Ok(last_block_hash)
-                                    }),
-                                    task_end_at_block_c
-                                )
-                            })
-                        }
-                    }
+                                    poll_interval.tick().await;
+                                }
+
+                                Ok(last_observed_block_hash)
+                            }),
+                            end_observation_signal_c
+                        )
+                    })
                 }
             }
             slog::info!(&logger, "Stopping witnesser");

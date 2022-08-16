@@ -1,41 +1,12 @@
 pub mod util;
 
-use std::time::Duration;
-
-use crate::logging::COMPONENT_KEY;
-
-use super::rpc::EthRpcApi;
-
 use cf_chains::{eth::TrackedData, Ethereum};
-use futures::{future, Stream, StreamExt};
-use slog::o;
 
 use sp_core::U256;
-use utilities::{context, periodic_tick_stream};
+use utilities::context;
 use web3::types::{BlockNumber, U64};
 
-/// Returns a stream of latest eth block numbers by polling at regular intervals.
-///
-/// Uses polling.
-pub fn poll_latest_block_numbers<'a, EthRpc: EthRpcApi + Send + Sync + 'a>(
-    eth_rpc: &'a EthRpc,
-    polling_interval: Duration,
-    logger: &slog::Logger,
-) -> impl Stream<Item = u64> + 'a {
-    let logger = logger.new(o!(COMPONENT_KEY => "ETH_Poll_LatestBlockStream"));
-
-    periodic_tick_stream(polling_interval)
-        .then(move |_| eth_rpc.block_number())
-        .filter_map(move |rpc_result| {
-            future::ready(match rpc_result {
-                Ok(block_number) => Some(block_number.as_u64()),
-                Err(e) => {
-                    slog::warn!(logger, "Error fetching ETH block number: {}", e);
-                    None
-                }
-            })
-        })
-}
+use super::rpc::EthRpcApi;
 
 /// Queries the rpc node and builds the `TrackedData` for Ethereum at the requested block number.
 ///
@@ -66,8 +37,6 @@ pub async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::test_utils::new_test_logger;
-    use anyhow::anyhow;
 
     #[tokio::test]
     async fn test_get_tracked_data() {
@@ -99,73 +68,6 @@ mod tests {
                 base_fee: BASE_FEE,
                 priority_fee: PRIORITY_FEE,
             }
-        );
-    }
-
-    #[tokio::test]
-    async fn test_poll_latest_block_numbers() {
-        use crate::eth::rpc::MockEthRpcApi;
-
-        const BLOCK_COUNT: u64 = 10;
-        let mut block_numbers = (0..BLOCK_COUNT).map(Into::into);
-
-        let mut rpc = MockEthRpcApi::new();
-        let logger = new_test_logger();
-
-        // ** Rpc Api Assumptions **
-        rpc.expect_block_number()
-            .times(BLOCK_COUNT as usize)
-            .returning(move || {
-                block_numbers
-                    .next()
-                    .ok_or_else(|| anyhow!("No more block numbers"))
-            });
-        // ** Rpc Api Assumptions **
-
-        assert_eq!(
-            poll_latest_block_numbers(&rpc, Duration::from_millis(10), &logger)
-                .take(BLOCK_COUNT as usize)
-                .collect::<Vec<_>>()
-                .await,
-            (0..BLOCK_COUNT).collect::<Vec<_>>()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_poll_latest_block_numbers_skips_errors() {
-        use crate::eth::rpc::MockEthRpcApi;
-
-        const REQUEST_COUNT: usize = 10;
-        const BLOCK_COUNT: usize = 8;
-
-        let mut rpc = MockEthRpcApi::new();
-        let logger = new_test_logger();
-
-        // ** Rpc Api Assumptions **
-        // Simulates a realistic infura sever: one in five requests errors.
-        let mut req_number = 0;
-        let mut block_number = 0;
-        rpc.expect_block_number()
-            .times(REQUEST_COUNT as usize)
-            .returning(move || {
-                let result = if req_number % 5 == 0 {
-                    Err(anyhow!("Infura says no."))
-                } else {
-                    let res = Ok(block_number.into());
-                    block_number += 1;
-                    res
-                };
-                req_number += 1;
-                result
-            });
-        // ** Rpc Api Assumptions **
-
-        assert_eq!(
-            poll_latest_block_numbers(&rpc, Duration::from_millis(10), &logger)
-                .take(BLOCK_COUNT)
-                .collect::<Vec<_>>()
-                .await,
-            (0..BLOCK_COUNT as u64).collect::<Vec<_>>()
         );
     }
 }

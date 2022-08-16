@@ -7,6 +7,7 @@ use cf_chains::{
 use codec::Encode;
 use frame_system::Phase;
 use futures::FutureExt;
+use itertools::Itertools;
 use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::{Vault, Vaults};
@@ -23,7 +24,7 @@ use web3::types::{Bytes, SignedTransaction};
 use crate::{
     eth::{
         rpc::{EthWsRpcClient, MockEthRpcApi},
-        EthBroadcaster, ObserveInstruction,
+        EpochStart, EthBroadcaster,
     },
     logging::test_utils::new_test_logger,
     multisig::client::{mocks::MockMultisigClientApi, CeremonyFailureReason},
@@ -48,29 +49,17 @@ fn test_header(number: u32) -> Header {
     }
 }
 
-/// ETH From Block for epoch three
-const EPOCH_THREE_FROM: <cf_chains::Ethereum as Chain>::ChainBlockNumber = 30;
-const EPOCH_THREE_START: ObserveInstruction = ObserveInstruction::Start {
-    start_eth_block: EPOCH_THREE_FROM,
-    epoch: 3,
-    current_epoch: true,
-};
-const EPOCH_THREE_END: ObserveInstruction = ObserveInstruction::End {
-    end_eth_block: EPOCH_FOUR_FROM,
-};
+/// Epoch index for epoch index
+const EPOCH_FOUR_INDEX: u32 = 4;
 /// ETH From Block for epoch four
 const EPOCH_FOUR_FROM: <cf_chains::Ethereum as Chain>::ChainBlockNumber = 40;
-const EPOCH_FOUR_START: ObserveInstruction = ObserveInstruction::Start {
-    start_eth_block: EPOCH_FOUR_FROM,
-    epoch: 4,
-    current_epoch: true,
-};
 
-fn expect_sc_observer_start(
+fn expectations_on_start(
     mock_state_chain_rpc_client: &mut MockStateChainRpcApi,
-    historical_active_epochs: &[u32],
-    epochs_active_from_block: &[(u32, Option<u64>)],
-) -> H256 {
+    historical_epochs: &[(u32, bool, u64)],
+) -> (H256, Vec<EpochStart>) {
+    assert!(!historical_epochs.is_empty());
+
     let initial_block_hash = H256::default();
 
     mock_state_chain_rpc_client
@@ -85,11 +74,30 @@ fn expect_sc_observer_start(
         )
         .times(1)
         .returning({
-            let historical_active_epochs = Vec::from(historical_active_epochs);
+            let historical_active_epochs = historical_epochs
+                .iter()
+                .filter(|(_epoch, participant, _eth_block)| *participant)
+                .map(|(epoch, ..)| *epoch)
+                .collect::<Vec<_>>();
             move |_, _| Ok(Some(StorageData(historical_active_epochs.encode())))
         });
 
-    for &(epoch, option_active_from_block) in epochs_active_from_block {
+    mock_state_chain_rpc_client
+        .expect_storage()
+        .with(
+            eq(initial_block_hash),
+            eq(StorageKey(
+                pallet_cf_validator::CurrentEpoch::<state_chain_runtime::Runtime>::hashed_key()
+                    .into(),
+            )),
+        )
+        .times(1)
+        .returning({
+            let last_epoch = historical_epochs.last().unwrap().0;
+            move |_, _| Ok(Some(StorageData(last_epoch.encode())))
+        });
+
+    for &(epoch, _participate, eth_block) in historical_epochs {
         mock_state_chain_rpc_client
             .expect_storage()
             .with(
@@ -100,15 +108,13 @@ fn expect_sc_observer_start(
             )
             .times(1)
             .returning(move |_, _| {
-                Ok(option_active_from_block.map(|active_from_block| {
-                    StorageData(
-                        Vault::<Ethereum> {
-                            public_key: AggKey::from_pubkey_compressed([0; 33]),
-                            active_from_block,
-                        }
-                        .encode(),
-                    )
-                }))
+                Ok(Some(StorageData(
+                    Vault::<Ethereum> {
+                        public_key: AggKey::from_pubkey_compressed([0; 33]),
+                        active_from_block: eth_block,
+                    }
+                    .encode(),
+                )))
             });
     }
 
@@ -116,17 +122,35 @@ fn expect_sc_observer_start(
         .expect_submit_extrinsic_rpc()
         .never();
 
-    initial_block_hash
+    (
+        initial_block_hash,
+        // Expected EpochStart's output via epoch_start_sender
+        historical_epochs
+            .iter()
+            .with_position()
+            .map(|epoch| {
+                let current = matches!(
+                    &epoch,
+                    itertools::Position::Only(_) | itertools::Position::Last(_)
+                );
+                let (epoch, participant, eth_block) = epoch.into_inner();
+
+                EpochStart {
+                    index: *epoch,
+                    eth_block: *eth_block,
+                    current,
+                    participant: *participant,
+                }
+            })
+            .collect(),
+    )
 }
 
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_on_startup() {
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash = expect_sc_observer_start(
-        &mut mock_state_chain_rpc_client,
-        &[3],
-        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
-    );
+    let (initial_block_hash, expected_epoch_starts) =
+        expectations_on_start(&mut mock_state_chain_rpc_client, &[(3, true, 30)]);
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
@@ -145,7 +169,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -155,7 +179,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -163,23 +187,20 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     .await
     .unwrap_err();
 
-    // ensure we kicked off the witness processes
-    assert_eq!(
-        instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
+    for epoch_start in expected_epoch_starts {
+        assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
+    }
 }
 
 #[tokio::test]
 async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup() {
-    // Current epoch is set to 4. Our last_active_epoch is set to 3.
-    // So we should be deemed historical, and submit the block height windows as expected to the nodes
-
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash = expect_sc_observer_start(
+    let (initial_block_hash, expected_epoch_starts) = expectations_on_start(
         &mut mock_state_chain_rpc_client,
-        &[3],
-        &[(3, Some(EPOCH_THREE_FROM)), (4, Some(EPOCH_FOUR_FROM))],
+        &[
+            (EPOCH_FOUR_INDEX - 1, true, EPOCH_FOUR_FROM - 10),
+            (EPOCH_FOUR_INDEX, false, EPOCH_FOUR_FROM),
+        ],
     );
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
@@ -199,7 +220,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -209,7 +230,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -217,21 +238,18 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
     .await
     .unwrap_err();
 
-    // ensure we kicked off the witness processes
-    assert_eq!(
-        instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
+    for epoch_start in expected_epoch_starts {
+        assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
+    }
 
-    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_THREE_END);
-
-    assert!(instruction_receiver.recv().await.is_err());
+    assert!(epoch_start_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
 async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
+    let (initial_block_hash, expected_epoch_starts) =
+        expectations_on_start(&mut mock_state_chain_rpc_client, &[(3, false, 30)]);
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
     ));
@@ -249,7 +267,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
     sc_observer::start(
@@ -258,7 +276,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -266,8 +284,11 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     .await
     .unwrap_err();
 
-    // ensure we did NOT kick off the witness processes - as we are *only* backup, not outgoing
-    assert!(instruction_receiver.recv().await.is_err());
+    for epoch_start in expected_epoch_starts {
+        assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
+    }
+
+    assert!(epoch_start_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -293,17 +314,17 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash = expect_sc_observer_start(
+    let (initial_block_hash, expected_epoch_starts) = expectations_on_start(
         &mut mock_state_chain_rpc_client,
-        &[3],
-        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
+        &[(EPOCH_FOUR_INDEX, true, EPOCH_FOUR_FROM - 10)],
     );
 
-    let vault_key_after_new_epoch =
-        StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&4));
+    let vault_key_after_new_epoch = StorageKey(
+        Vaults::<Runtime, EthereumInstance>::hashed_key_for(&EPOCH_FOUR_INDEX),
+    );
 
     mock_state_chain_rpc_client
         .expect_storage()
@@ -311,7 +332,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
             eq(new_epoch_block_header_hash),
             eq(vault_key_after_new_epoch),
         )
-        .times(2)
+        .times(1)
         .returning(move |_, _| {
             Ok(Some(StorageData(
                 Vault::<Ethereum> {
@@ -327,7 +348,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
                 pallet_cf_validator::AuthorityIndex::<Runtime>::hashed_key_for(
-                    &4,
+                    &EPOCH_FOUR_INDEX,
                     &AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                 ),
             )),
@@ -352,7 +373,9 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
             Ok(vec![storage_change_set_from(
                 vec![(
                     Phase::ApplyExtrinsic(0),
-                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
+                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
+                        EPOCH_FOUR_INDEX,
+                    )),
                     vec![H256::default()],
                 )],
                 new_epoch_block_header_hash,
@@ -371,7 +394,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -379,18 +402,21 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     .await
     .unwrap_err();
 
-    // ensure we did kick off the witness processes at the start
+    for epoch_start in expected_epoch_starts {
+        assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
+    }
+
     assert_eq!(
-        instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
+        epoch_start_receiver.recv().await.unwrap(),
+        EpochStart {
+            index: EPOCH_FOUR_INDEX,
+            eth_block: EPOCH_FOUR_FROM,
+            current: true,
+            participant: true
+        }
     );
 
-    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_THREE_END);
-
-    // after a new epoch, we should have sent new messages down the channels
-    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_FOUR_START);
-
-    assert!(instruction_receiver.recv().await.is_err());
+    assert!(epoch_start_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -417,14 +443,15 @@ async fn not_historical_to_authority_on_new_epoch() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash = expect_sc_observer_start(&mut mock_state_chain_rpc_client, &[], &[]);
+    let (initial_block_hash, expected_epoch_starts) = expectations_on_start(
+        &mut mock_state_chain_rpc_client,
+        &[(EPOCH_FOUR_INDEX - 1, false, EPOCH_FOUR_FROM - 10)],
+    );
 
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
-
-    let new_epoch = 4;
 
     // We'll get the vault from the new epoch `new_epoch` when we become active
     mock_state_chain_rpc_client
@@ -432,7 +459,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         .with(
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
-                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&new_epoch),
+                Vaults::<Runtime, EthereumInstance>::hashed_key_for(&EPOCH_FOUR_INDEX),
             )),
         )
         .times(1)
@@ -451,7 +478,7 @@ async fn not_historical_to_authority_on_new_epoch() {
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
                 pallet_cf_validator::AuthorityIndex::<Runtime>::hashed_key_for(
-                    &4,
+                    &EPOCH_FOUR_INDEX,
                     &AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                 ),
             )),
@@ -476,7 +503,9 @@ async fn not_historical_to_authority_on_new_epoch() {
             Ok(vec![storage_change_set_from(
                 vec![(
                     Phase::ApplyExtrinsic(0),
-                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
+                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
+                        EPOCH_FOUR_INDEX,
+                    )),
                     vec![H256::default()],
                 )],
                 new_epoch_block_header_hash,
@@ -495,7 +524,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -503,10 +532,21 @@ async fn not_historical_to_authority_on_new_epoch() {
     .await
     .unwrap_err();
 
-    // after a new epoch, we should have sent new messages down the channels
-    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_FOUR_START);
+    for epoch_start in expected_epoch_starts {
+        assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
+    }
 
-    assert!(instruction_receiver.recv().await.is_err());
+    assert_eq!(
+        epoch_start_receiver.recv().await.unwrap(),
+        EpochStart {
+            index: EPOCH_FOUR_INDEX,
+            eth_block: EPOCH_FOUR_FROM,
+            current: true,
+            participant: true
+        }
+    );
+
+    assert!(epoch_start_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -525,16 +565,15 @@ async fn current_authority_to_historical_on_new_epoch_event() {
     ]);
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash = expect_sc_observer_start(
-        &mut mock_state_chain_rpc_client,
-        &[3],
-        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
-    );
+    let (initial_block_hash, expected_epoch_starts) =
+        expectations_on_start(&mut mock_state_chain_rpc_client, &[(3, true, 30)]);
 
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
 
     // get the current vault
-    let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(&4));
+    let vault_key = StorageKey(Vaults::<Runtime, EthereumInstance>::hashed_key_for(
+        &EPOCH_FOUR_INDEX,
+    ));
 
     // NB: Because we're outgoing, we use the same vault key, now we have a close to the window
     mock_state_chain_rpc_client
@@ -556,7 +595,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
             eq(new_epoch_block_header_hash),
             eq(StorageKey(
                 pallet_cf_validator::AuthorityIndex::<Runtime>::hashed_key_for(
-                    &4,
+                    &EPOCH_FOUR_INDEX,
                     &AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                 ),
             )),
@@ -573,7 +612,9 @@ async fn current_authority_to_historical_on_new_epoch_event() {
             Ok(vec![storage_change_set_from(
                 vec![(
                     Phase::ApplyExtrinsic(0),
-                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(4)),
+                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
+                        EPOCH_FOUR_INDEX,
+                    )),
                     vec![H256::default()],
                 )],
                 new_epoch_block_header_hash,
@@ -603,7 +644,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -613,7 +654,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -621,15 +662,21 @@ async fn current_authority_to_historical_on_new_epoch_event() {
     .await
     .unwrap_err();
 
-    // ensure we did kick off the witness processes at the start
+    for epoch_start in expected_epoch_starts {
+        assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
+    }
+
     assert_eq!(
-        instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
+        epoch_start_receiver.recv().await.unwrap(),
+        EpochStart {
+            index: EPOCH_FOUR_INDEX,
+            eth_block: EPOCH_FOUR_FROM,
+            current: true,
+            participant: false
+        }
     );
 
-    assert_eq!(instruction_receiver.recv().await.unwrap(), EPOCH_THREE_END);
-
-    assert!(instruction_receiver.recv().await.is_err());
+    assert!(epoch_start_receiver.recv().await.is_err());
 }
 
 // TODO: We should test that this works for historical epochs too. We should be able to sign for historical epochs we
@@ -671,11 +718,8 @@ async fn only_encodes_and_signs_when_specified() {
         .returning(|tx| Ok(Keccak256::hash(&tx.0[..])));
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
-    let initial_block_hash = expect_sc_observer_start(
-        &mut mock_state_chain_rpc_client,
-        &[3],
-        &[(3, Some(EPOCH_THREE_FROM)), (4, None)],
-    );
+    let (initial_block_hash, expected_epoch_starts) =
+        expectations_on_start(&mut mock_state_chain_rpc_client, &[(3, true, 30)]);
 
     // Submitting `transaction_ready_for_broadcast()`
     mock_state_chain_rpc_client
@@ -734,7 +778,7 @@ async fn only_encodes_and_signs_when_specified() {
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (instruction_sender, mut instruction_receiver) = broadcast::channel(10);
+    let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -744,7 +788,7 @@ async fn only_encodes_and_signs_when_specified() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -752,13 +796,11 @@ async fn only_encodes_and_signs_when_specified() {
     .await
     .unwrap_err();
 
-    // ensure we kicked off the witness processes
-    assert_eq!(
-        instruction_receiver.recv().await.unwrap(),
-        EPOCH_THREE_START
-    );
+    for epoch_start in expected_epoch_starts {
+        assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
+    }
 
-    assert!(instruction_receiver.recv().await.is_err());
+    assert!(epoch_start_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
@@ -785,7 +827,7 @@ async fn run_the_sc_observer() {
 
     let multisig_client = Arc::new(MockMultisigClientApi::new());
 
-    let (instruction_sender, _) = broadcast::channel(10);
+    let (epoch_start_sender, _) = broadcast::channel(10);
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -795,7 +837,7 @@ async fn run_the_sc_observer() {
         eth_broadcaster,
         multisig_client,
         account_peer_mapping_change_sender,
-        instruction_sender,
+        epoch_start_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,

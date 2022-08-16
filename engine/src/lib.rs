@@ -1,5 +1,4 @@
 #![feature(ip)]
-#![feature(is_sorted)]
 
 pub mod common;
 pub mod constants;
