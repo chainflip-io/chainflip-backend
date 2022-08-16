@@ -12,7 +12,14 @@ substrate-simnode = { git = "https://github.com/chainflip-io/substrate-simnode",
 state-chain-runtime = { path = '../runtime'}
 chainflip-node = { path = '../node' }
 
+jsonrpc-core = {version = "18.0.0"}
+sc-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05" }
+sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-05", features = ["wasmtime"] }
+
 sc-consensus-aura = { git = 'https://github.com/chainflip-io/substrate', tag = 'chainflip-monthly-2022-05' }
+sp-consensus-aura = { git = 'https://github.com/chainflip-io/substrate', tag = 'chainflip-monthly-2022-05' }
 sc-consensus-manual-seal = { git = 'https://github.com/chainflip-io/substrate', tag = 'chainflip-monthly-2022-05' }
 sc-service = { git = 'https://github.com/chainflip-io/substrate', tag = 'chainflip-monthly-2022-05'  }
 sc-executor = { git = 'https://github.com/chainflip-io/substrate', tag = 'chainflip-monthly-2022-05'  }

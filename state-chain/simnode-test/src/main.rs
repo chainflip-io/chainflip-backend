@@ -1,7 +1,10 @@
+use sc_cli::CliConfiguration;
+use sc_consensus::BlockImport;
 use sc_consensus_manual_seal::consensus::{
 	aura::AuraConsensusDataProvider, timestamp::SlotTimestampProvider,
 };
 use sc_service::TFullBackend;
+use state_chain_runtime::Block;
 use std::sync::Arc;
 use substrate_simnode::{
 	ChainInfo, FullClientFor, RpcHandlerArgs, SignatureVerificationOverride, SimnodeCli,
@@ -9,15 +12,14 @@ use substrate_simnode::{
 
 pub struct NodeTemplateChainInfo;
 
-impl ChainInfo for NodeTemplateChainInfo {
+impl substrate_simnode::ChainInfo for NodeTemplateChainInfo {
 	// Opaque block type!
-	type Block = node_primitives::Block;
+	type Block = Block;
 	type ExecutorDispatch = ExecutorDispatch;
 	type Runtime = state_chain_runtime::Runtime;
 	type RuntimeApi = state_chain_runtime::RuntimeApi;
 	type SelectChain = sc_consensus::LongestChain<TFullBackend<Self::Block>, Self::Block>;
-	type BlockImport =
-		BlockImport<Self::Block, TFullBackend<Self::Block>, FullClientFor<Self>, Self::SelectChain>;
+	type BlockImport = Arc<FullClientFor<Self>>;
 	// Inherent providers
 	type InherentDataProviders = (
 		//  Here we use [`SlotTimestampProvider`] to provide us with the next timestamp,
@@ -35,13 +37,21 @@ impl ChainInfo for NodeTemplateChainInfo {
 	) -> jsonrpc_core::MetaIoHandler<sc_rpc::Metadata> {
 		Default::default()
 	}
+
+	type SignedExtras = state_chain_runtime::SignedExtra;
+
+	fn signed_extras(
+		from: <Self::Runtime as frame_system::Config>::AccountId,
+	) -> Self::SignedExtras {
+		todo!()
+	}
 }
 
 pub struct ChainflipCli;
 
 impl SimnodeCli for ChainflipCli {
 	type CliConfig = sc_cli::RunCmd;
-	type SubstrateCli = polkadot_cli::Cli;
+	type SubstrateCli = chainflip_node::cli::Cli;
 
 	fn cli_config(cli: &Self::SubstrateCli) -> &Self::CliConfig {
 		&cli.run.base

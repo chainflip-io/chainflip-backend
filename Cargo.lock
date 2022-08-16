@@ -262,9 +262,9 @@ checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
 
 [[package]]
 name = "async-trait"
-version = "0.1.53"
+version = "0.1.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed6aa3524a2dfcf9fe180c51eae2b58738348d819517ceadf95789c51fff7600"
+checksum = "0b98e84bbb4cbcdd97da190ba0c58a1bb0de2c1fdf67d159e192ed766aeca722"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8210,11 +8210,17 @@ name = "simnode-test"
 version = "0.1.0"
 dependencies = [
  "chainflip-node",
+ "frame-benchmarking",
+ "frame-system",
+ "jsonrpc-core",
+ "sc-cli",
  "sc-consensus",
  "sc-consensus-aura",
  "sc-consensus-manual-seal",
  "sc-executor",
+ "sc-rpc",
  "sc-service",
+ "sp-consensus-aura",
  "state-chain-runtime",
  "substrate-simnode",
 ]
@@ -9287,13 +9293,13 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "syn"
-version = "1.0.99"
+version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58dbef6ec655055e20b86b15a8cc6d439cca19b667537ac6a1369572d151ab13"
+checksum = "7ff7c592601f11445996a06f8ad0c27f094a58857c2f89e97974ab9235b92c52"
 dependencies = [
  "proc-macro2",
  "quote",
- "unicode-ident",
+ "unicode-xid",
 ]
 
 [[package]]
