@@ -507,48 +507,29 @@ mod epoch {
 			.min_authorities(MAX_AUTHORITIES)
 			.build()
 			.execute_with(|| {
-				// Get the list of nodes
 				let mut nodes = Validator::current_authorities();
-				let (mut testnet, mut backup_nodes) = network::Network::create(0, &nodes);
-
-				for backup_node in backup_nodes.clone() {
-					network::Cli::activate_account(&backup_node);
-				}
-
-				nodes.append(&mut backup_nodes);
-				let stake_amount = FLIPPERINOS_PER_FLIP;
-
-				// Moving into epoch 1
-				for node in &nodes {
-					testnet.stake_manager_contract.stake(node.clone(), stake_amount, 1);
-				}
+				nodes.sort();
+				let (mut testnet, _) = network::Network::create(0, &nodes);
 
 				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
 				assert_eq!(Validator::epoch_index(), 1);
 
-				// Create a helper function that moves forwards in time by number of epochs.
 				let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
 					let start = Validator::epoch_index();
 					let finish = start + epochs;
-					for epoch in start..finish {
+					for _ in start..finish {
 						testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS + 1);
-						for node in &nodes {
-							testnet.stake_manager_contract.stake(
-								node.clone(),
-								stake_amount,
-								epoch + 1,
-							);
-						}
 						testnet.submit_heartbeat_all_engines();
 					}
 				};
 
-				// Move forward a few epochs
 				move_forward_by_epochs(3, &mut testnet);
 				assert_eq!(Validator::epoch_index(), 4);
 				assert_eq!(Validator::last_expired_epoch(), 2);
+				let mut current_authorities_after_some_epochs = Validator::current_authorities();
+				current_authorities_after_some_epochs.sort();
+				assert_eq!(nodes, current_authorities_after_some_epochs);
 
-				// Create dummy call and call hash
 				let call =
 					Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
 						remark: vec![],
@@ -556,9 +537,7 @@ mod epoch {
 				let call_hash =
 					pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
 
-				// Add the dummy call into storage
-				let validators = Validator::current_authorities();
-				for node in &validators {
+				for node in &nodes {
 					assert_ok!(Witnesser::witness_at_epoch(
 						Origin::signed(node.clone()),
 						call.clone(),
