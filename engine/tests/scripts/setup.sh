@@ -15,11 +15,7 @@ if ! which poetry; then
 fi
 
 if [ ! -d "./eth-contracts" ]; then
-  if [ -z $DRONE ]; then
-    git clone --depth 1 --branch $CONTRACT_VERSION_TAG git@github.com:chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
-  else
     git clone --depth 1 --branch $CONTRACT_VERSION_TAG https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
-  fi
 else
     ( cd eth-contracts ; git pull origin $CONTRACT_VERSION_TAG )
 fi
