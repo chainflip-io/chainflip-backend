@@ -12,17 +12,16 @@ use std::str::FromStr;
 use web3::types::U256;
 
 mod common;
-use crate::common::IntegrationTestSettings;
+use crate::common::IntegrationTestConfig;
 
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
     let root_logger = utils::new_cli_logger();
 
-    let integration_test_settings =
-        IntegrationTestSettings::from_file("tests/config.toml").unwrap();
+    let integration_test_config = IntegrationTestConfig::from_file("tests/config.toml").unwrap();
 
     let sm_events = common::get_contract_events(
-        StakeManager::new(integration_test_settings.eth.stake_manager_address),
+        StakeManager::new(integration_test_config.eth.stake_manager_address),
         root_logger,
     )
     .await;

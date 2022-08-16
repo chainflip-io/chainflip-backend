@@ -6,22 +6,21 @@ use chainflip_engine::{
     logging::utils,
 };
 
-use sp_core::H160;
+use sp_core::{H160, H256};
 use std::str::FromStr;
 use web3::types::U256;
 
 mod common;
-use crate::common::IntegrationTestSettings;
+use crate::common::IntegrationTestConfig;
 
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
     let root_logger = utils::new_cli_logger();
 
-    let integration_test_settings =
-        IntegrationTestSettings::from_file("tests/config.toml").unwrap();
+    let integration_test_config = IntegrationTestConfig::from_file("tests/config.toml").unwrap();
 
     let km_events = common::get_contract_events(
-        KeyManager::new(integration_test_settings.eth.key_manager_address),
+        KeyManager::new(integration_test_config.eth.key_manager_address),
         root_logger,
     )
     .await;
@@ -86,7 +85,7 @@ pub async fn test_all_key_manager_events() {
             KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
                 assert_eq!(
                     sig_data.key_man_addr,
-                    integration_test_settings.eth.key_manager_address
+                    integration_test_config.eth.key_manager_address
                 );
                 assert_eq!(sig_data.chain_id, U256::from_dec_str("31337").unwrap());
                 assert_eq!(sig_data.nonce, U256::from_dec_str("0").unwrap());

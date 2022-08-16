@@ -12,7 +12,7 @@ use serde::Deserialize;
 use sp_core::H160;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct IntegrationTestSettings {
+pub struct IntegrationTestConfig {
     pub eth: Eth,
 }
 
@@ -22,7 +22,7 @@ pub struct Eth {
     pub stake_manager_address: H160,
 }
 
-impl IntegrationTestSettings {
+impl IntegrationTestConfig {
     /// Load integration test settings from a TOML file
     pub fn from_file(file: &str) -> Result<Self, ConfigError> {
         let s = Config::builder()
