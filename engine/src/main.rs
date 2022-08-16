@@ -228,12 +228,12 @@ fn main() -> anyhow::Result<()> {
                 )
             );
             scope.spawn(
-                eth::start_chain_data_witnesser(
+                eth::chain_data_witnessing::start(
                     eth_dual_rpc,
                     state_chain_client.clone(),
                     witnessing_instruction_receiver_3,
                     cfe_settings_update_receiver,
-                    eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
+                    eth::chain_data_witnessing::ETH_CHAIN_TRACKING_POLL_INTERVAL,
                     &root_logger
                 )
             );

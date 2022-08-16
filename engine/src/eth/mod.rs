@@ -1,4 +1,4 @@
-mod chain_data_witnessing;
+pub mod chain_data_witnessing;
 mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;
@@ -17,7 +17,6 @@ use cf_traits::EpochIndex;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
 use sp_runtime::traits::Keccak256;
-use state_chain_runtime::CfeSettings;
 use utilities::make_periodic_tick;
 
 use crate::{
@@ -36,7 +35,6 @@ use crate::{
     state_chain_observer::client::{StateChainClient, StateChainRpcApi},
     task_scope::{with_task_scope, ScopedJoinHandle},
 };
-use chain_data_witnessing::*;
 use ethbloom::{Bloom, Input};
 use futures::{stream, FutureExt, StreamExt};
 use slog::o;
@@ -50,7 +48,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::broadcast;
 use web3::{
     ethabi::{self, Address, Contract},
     signing::{Key, SecretKeyRef},
@@ -75,8 +73,6 @@ pub struct EthNumberBloom {
 }
 
 use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
-
-pub const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 const EIP1559_TX_ID: u64 = 2;
 
@@ -235,98 +231,6 @@ where
         .boxed()
     })
     .await
-}
-
-pub async fn start_chain_data_witnesser<EthRpcClient, ScRpcClient>(
-    eth_rpc: EthRpcClient,
-    state_chain_client: Arc<StateChainClient<ScRpcClient>>,
-    mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
-    cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
-    poll_interval: Duration,
-    logger: &slog::Logger,
-) -> anyhow::Result<()>
-where
-    EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
-    ScRpcClient: 'static + StateChainRpcApi + Send + Sync,
-{
-    with_task_scope(|scope| {
-        async {
-            let logger = logger.new(o!(COMPONENT_KEY => "ETH-Chain-Data-Witnesser"));
-            slog::info!(&logger, "Starting");
-
-            let mut last_observed_block_hash = None;
-            let mut handle_and_end_observation_signal: Option<(ScopedJoinHandle<Option<H256>>, Arc<Mutex<Option<u64>>>)> = None;
-
-            while let Ok(epoch_start) = epoch_start_receiver.recv().await {
-                if let Some((handle, end_observation_signal)) = handle_and_end_observation_signal.take() {
-                    *end_observation_signal.lock().unwrap() = Some(epoch_start.eth_block);
-                    handle.await;
-                }
-
-                if epoch_start.participant && epoch_start.current {
-                    handle_and_end_observation_signal = Some({
-                        let end_observation_signal = Arc::new(Mutex::new(None));
-
-                        // clone for capture by tokio task
-                        let end_observation_signal_c = end_observation_signal.clone();
-                        let eth_rpc_c = eth_rpc.clone();
-                        let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
-                        let state_chain_client = state_chain_client.clone();
-                        let logger = logger.clone();
-
-                        (
-                            scope.spawn_with_handle::<_, _>(async move {
-                                let mut poll_interval = make_periodic_tick(poll_interval, false);
-
-                                loop {
-                                    if let Some(_end_block) = *end_observation_signal.lock().unwrap() {
-                                        break;
-                                    }
-
-                                    let block_number = eth_rpc_c.block_number().await?;
-                                    let block_hash = eth_rpc_c.block(block_number).await?.hash.context(format!("Missing hash for block {}.", block_number))?;
-                                    if last_observed_block_hash != Some(block_hash) {
-                                        last_observed_block_hash = Some(block_hash);
-
-                                        let priority_fee = cfe_settings_update_receiver
-                                            .borrow()
-                                            .eth_priority_fee_percentile;
-                                        match get_tracked_data(&eth_rpc_c, block_number.as_u64(), priority_fee).await {
-                                            Ok(tracked_data) => {
-                                                state_chain_client
-                                                    .submit_signed_extrinsic(
-                                                        state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
-                                                            call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
-                                                                pallet_cf_chain_tracking::Call::update_chain_state {
-                                                                    state: tracked_data,
-                                                                },
-                                                            )),
-                                                        }),
-                                                        &logger,
-                                                    )
-                                                    .await
-                                                    .context("Failed to submit signed extrinsic")?;
-                                            }
-                                            Err(e) => {
-                                                slog::error!(&logger, "Failed to get tracked data: {:?}", e);
-                                            }
-                                        }
-                                    }
-
-                                    poll_interval.tick().await;
-                                }
-
-                                Ok(last_observed_block_hash)
-                            }),
-                            end_observation_signal_c
-                        )
-                    })
-                }
-            }
-            slog::info!(&logger, "Stopping witnesser");
-            Ok(())
-        }.boxed()
-    }).await
 }
 
 impl TryFrom<Block<H256>> for EthNumberBloom {
