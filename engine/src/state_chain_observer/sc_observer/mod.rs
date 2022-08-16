@@ -163,8 +163,8 @@ async fn start_epoch_observation<RpcClient>(
 ) where
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    send_instruction(ObserveInstruction::Start(
-        state_chain_client
+    send_instruction(ObserveInstruction::Start {
+        start_eth_block: state_chain_client
             .get_storage_map::<pallet_cf_vaults::Vaults<
                 state_chain_runtime::Runtime,
                 state_chain_runtime::EthereumInstance,
@@ -174,7 +174,8 @@ async fn start_epoch_observation<RpcClient>(
             .unwrap()
             .active_from_block,
         epoch,
-    ));
+        current_epoch: true,
+    });
 }
 
 async fn try_end_previous_epoch_observation<RpcClient>(
@@ -194,7 +195,9 @@ where
         .await
         .unwrap()
     {
-        send_instruction(ObserveInstruction::End(vault.active_from_block));
+        send_instruction(ObserveInstruction::End {
+            end_eth_block: vault.active_from_block,
+        });
         true
     } else {
         false

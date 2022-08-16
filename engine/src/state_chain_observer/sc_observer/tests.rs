@@ -50,11 +50,21 @@ fn test_header(number: u32) -> Header {
 
 /// ETH From Block for epoch three
 const EPOCH_THREE_FROM: <cf_chains::Ethereum as Chain>::ChainBlockNumber = 30;
-const EPOCH_THREE_START: ObserveInstruction = ObserveInstruction::Start(EPOCH_THREE_FROM, 3);
-const EPOCH_THREE_END: ObserveInstruction = ObserveInstruction::End(EPOCH_FOUR_FROM);
+const EPOCH_THREE_START: ObserveInstruction = ObserveInstruction::Start {
+    start_eth_block: EPOCH_THREE_FROM,
+    epoch: 3,
+    current_epoch: true,
+};
+const EPOCH_THREE_END: ObserveInstruction = ObserveInstruction::End {
+    end_eth_block: EPOCH_FOUR_FROM,
+};
 /// ETH From Block for epoch four
 const EPOCH_FOUR_FROM: <cf_chains::Ethereum as Chain>::ChainBlockNumber = 40;
-const EPOCH_FOUR_START: ObserveInstruction = ObserveInstruction::Start(EPOCH_FOUR_FROM, 4);
+const EPOCH_FOUR_START: ObserveInstruction = ObserveInstruction::Start {
+    start_eth_block: EPOCH_FOUR_FROM,
+    epoch: 4,
+    current_epoch: true,
+};
 
 fn expect_sc_observer_start(
     mock_state_chain_rpc_client: &mut MockStateChainRpcApi,
