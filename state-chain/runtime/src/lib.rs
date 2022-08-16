@@ -5,7 +5,6 @@
 #![feature(int_abs_diff)]
 pub mod chainflip;
 pub mod constants;
-mod migrations;
 pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
@@ -568,19 +567,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	// Note: the following run *before* all pallet migrations.
-	(
-		migrations::VersionedMigration<
-			(
-				migrations::DeleteRewardsPallet,
-				migrations::UnifyCeremonyIds,
-				migrations::migrate_contract_addresses::Migration,
-				migrations::add_flip_contract_address::Migration,
-				migrations::migrate_claims::Migration,
-			),
-			112,
-		>,
-	),
+	(),
 >;
 
 #[cfg(feature = "runtime-benchmarks")]

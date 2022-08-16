@@ -9,8 +9,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod migrations;
-
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -21,10 +19,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
-	sp_runtime::traits::Saturating,
-	traits::{Get, OnRuntimeUpgrade, StorageVersion},
-	Twox64Concat,
+	dispatch::DispatchResultWithPostInfo, sp_runtime::traits::Saturating, traits::Get, Twox64Concat,
 };
 
 use cf_traits::KeyProvider;
@@ -33,8 +28,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 /// A unique id for each broadcast.
 pub type BroadcastId = u32;
@@ -201,7 +194,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -385,20 +377,6 @@ pub mod pallet {
 				Self::start_next_broadcast_attempt(retry);
 			}
 			next_broadcast_weight * retries_len as Weight
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::post_upgrade()
 		}
 	}
 

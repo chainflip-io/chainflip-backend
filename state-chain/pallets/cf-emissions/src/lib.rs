@@ -10,7 +10,6 @@ pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migrations;
 
 #[cfg(test)]
 mod mock;
@@ -18,10 +17,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
-
 use cf_traits::{BlockEmissions, EpochTransitionHandler, Issuance, RewardsDistribution};
-use frame_support::traits::{Get, Imbalance, OnRuntimeUpgrade, StorageVersion};
+use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedDiv, UniqueSaturatedInto, Zero},
@@ -106,7 +103,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::storage]
@@ -169,19 +165,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::post_upgrade()
-		}
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {

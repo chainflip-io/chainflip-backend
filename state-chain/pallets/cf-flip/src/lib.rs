@@ -135,9 +135,6 @@ pub mod pallet {
 		InvalidSlashingRate,
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Set the Slashing Rate. Slashing Rate is a percentage. It, therefore, has to be between 0

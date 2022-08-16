@@ -9,8 +9,6 @@ mod mock;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-mod migrations;
-
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -25,15 +23,13 @@ use cf_traits::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnRuntimeUpgrade, StorageVersion, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{prelude::*, time::Duration};
 
 use cf_traits::SystemStateInfo;
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
@@ -111,7 +107,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -162,20 +157,6 @@ pub mod pallet {
 			}
 
 			Self::expire_pending_claims_at(T::TimeSource::now().as_secs())
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::post_upgrade()
 		}
 	}
 
