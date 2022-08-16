@@ -533,7 +533,11 @@ mod epoch {
 					for epoch in start..finish {
 						testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS + 1);
 						for node in &nodes {
-							testnet.stake_manager_contract.stake(node.clone(), stake_amount, epoch + 1);
+							testnet.stake_manager_contract.stake(
+								node.clone(),
+								stake_amount,
+								epoch + 1,
+							);
 						}
 						testnet.submit_heartbeat_all_engines();
 					}
@@ -551,8 +555,8 @@ mod epoch {
 					}));
 				let call_hash =
 					pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
-				
-				// Add the dummy call into storage	 
+
+				// Add the dummy call into storage
 				let validators = Validator::current_authorities();
 				for node in &validators {
 					assert_ok!(Witnesser::witness_at_epoch(

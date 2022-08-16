@@ -141,9 +141,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Called as a witness of some external event.
 		///
-		/// The provided `call` will be dispatched when the configured threshold number of validators
-		/// have submitted an identical transaction. This can be thought of as a vote for the
-		/// encoded [Call](Config::Call) value.
+		/// The provided `call` will be dispatched when the configured threshold number of
+		/// validators have submitted an identical transaction. This can be thought of as a vote for
+		/// the encoded [Call](Config::Call) value.
 		///
 		/// ## Events
 		///
