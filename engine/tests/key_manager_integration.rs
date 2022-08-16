@@ -102,6 +102,24 @@ pub async fn test_all_key_manager_events() {
     km_events
         .iter()
         .find(|event| match &event.event_parameters {
+            KeyManagerEvent::AggKeyNonceConsumersSet { addrs } => {
+                assert_eq!(
+                    addrs,
+                    &vec![
+                        H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
+                        H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(),
+                        H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()
+                    ]
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find AggKeyNonceConsumersSet event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
             KeyManagerEvent::AggKeyNonceConsumersUpdated { new_addrs } => {
                 assert_eq!(
                     new_addrs,
@@ -120,18 +138,74 @@ pub async fn test_all_key_manager_events() {
     km_events
         .iter()
         .find(|event| match &event.event_parameters {
-            KeyManagerEvent::AggKeyNonceConsumersSet { addrs } => {
+            KeyManagerEvent::CommKeySetByCommKey {
+                old_comm_key,
+                new_comm_key,
+            } => {
                 assert_eq!(
-                    addrs,
-                    &vec![
-                        H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
-                        H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(),
-                        H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()
-                    ]
+                    old_comm_key,
+                    &H160::from_str("0x976ea74026e726554db657fa54763abd0c3a0aa9").unwrap()
+                );
+                assert_eq!(
+                    new_comm_key,
+                    &H160::from_str("0x14dc79964da2c08b23698b3d3cc7ca32193d9955").unwrap()
                 );
                 true
             }
             _ => false,
         })
-        .expect("Didn't find AggKeyNonceConsumersSet event");
+        .expect("Didn't find CommKeySetByCommKey event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            KeyManagerEvent::CommKeySetByAggKey {
+                old_comm_key,
+                new_comm_key,
+            } => {
+                assert_eq!(
+                    old_comm_key,
+                    &H160::from_str("0x14dc79964da2c08b23698b3d3cc7ca32193d9955").unwrap()
+                );
+                assert_eq!(
+                    new_comm_key,
+                    &H160::from_str("0x976ea74026e726554db657fa54763abd0c3a0aa9").unwrap()
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find CommKeySetByAggKey event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            KeyManagerEvent::GovernanceAction { message } => {
+                assert_eq!(message, &H256::from_low_u64_be(42069).as_ref());
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find GovernanceAction event");
+
+    km_events
+        .iter()
+        .find(|event| match &event.event_parameters {
+            KeyManagerEvent::GovKeySetByAggKey {
+                old_gov_key,
+                new_gov_key,
+            } => {
+                assert_eq!(
+                    old_gov_key,
+                    &H160::from_str("0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc").unwrap()
+                );
+                assert_eq!(
+                    new_gov_key,
+                    &H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap()
+                );
+                true
+            }
+            _ => false,
+        })
+        .expect("Didn't find GovKeySetByAggKey event");
 }
