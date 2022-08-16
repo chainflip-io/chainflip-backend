@@ -141,7 +141,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Called as a witness of some external event.
 		///
-		/// The provided `call` will be dispatched when the configured threshold number of validtors
+		/// The provided `call` will be dispatched when the configured threshold number of validators
 		/// have submitted an identical transaction. This can be thought of as a vote for the
 		/// encoded [Call](Config::Call) value.
 		///
@@ -362,7 +362,7 @@ impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
 			}
 		});
 
-		// Rmove extra call data with stale EpochIndex
+		// Remove extra call data with stale EpochIndex
 		ExtraCallData::<T>::translate(|epoch_index, _, buffer| -> Option<Vec<Vec<u8>>> {
 			if epoch_index <= expired {
 				None
@@ -371,7 +371,7 @@ impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
 			}
 		});
 
-		// Rempve call execution record for the stale calls
+		// Remove call execution record for the stale calls
 		CallHashExecuted::<T>::translate(|epoch_index, _, ()| -> Option<()> {
 			if epoch_index <= expired {
 				None

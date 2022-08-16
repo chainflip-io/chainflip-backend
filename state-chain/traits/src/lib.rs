@@ -302,7 +302,7 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides a unqiue nonce for some [Chain].
+/// Provides a unique nonce for some [Chain].
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	fn replay_protection() -> Abi::ReplayProtection;
 }
@@ -527,7 +527,7 @@ where
 		id
 	}
 
-	/// Helper function to enable benchmarking of the brodcast pallet
+	/// Helper function to enable benchmarking of the broadcast pallet
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(_request_id: Self::RequestId, _signature: C::ThresholdSignature) {
 		unimplemented!();

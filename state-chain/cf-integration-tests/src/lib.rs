@@ -526,7 +526,7 @@ mod epoch {
 				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
 				assert_eq!(Validator::epoch_index(), 1);
 
-				// Move forward a few more epochs
+				// Create a helper function that moves forwards in time by number of epochs.
 				let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
 					let start = Validator::epoch_index();
 					let finish = start + epochs;
@@ -539,9 +539,8 @@ mod epoch {
 					}
 				};
 
+				// Move forward a few epochs
 				move_forward_by_epochs(3, &mut testnet);
-				
-
 				assert_eq!(Validator::epoch_index(), 4);
 				assert_eq!(Validator::last_expired_epoch(), 2);
 
@@ -571,7 +570,7 @@ mod epoch {
 				// Execute the call after voting has passed.
 				testnet.move_forward_blocks(1);
 
-				// Votes are registered in storage.
+				// Ensure Votes and calldata are registered in storage.
 				assert_eq!(
 					pallet_cf_witnesser::Votes::<Runtime>::get(4, &call_hash),
 					Some(vec![224])
@@ -852,7 +851,7 @@ mod authorities {
 					);
 				}
 
-				// Allow the stakes to be registered, then initialise the account keys and peer
+				// Allow the stakes to be registered, then initialize the account keys and peer
 				// ids.
 				testnet.move_forward_blocks(1);
 
