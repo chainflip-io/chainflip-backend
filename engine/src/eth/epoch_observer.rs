@@ -16,9 +16,9 @@ pub async fn start<G, F, Fut, State, StateChainRpc>(
     name: String,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
-    mut observer_condition: G,
+    mut should_observe_epoch: G,
     initial_state: State,
-    mut spawn_epoch_observer: F,
+    mut epoch_observer_generator: F,
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
@@ -58,7 +58,7 @@ where
                         option_state = Some(handle.await);
                     }
 
-                    if epoch_start.participant && observer_condition(&epoch_start) {
+                    if epoch_start.participant && should_observe_epoch(&epoch_start) {
                         handle_and_end_observation_signal = Some({
                             let end_observation_signal = Arc::new(Mutex::new(None));
 
@@ -68,7 +68,7 @@ where
                             let logger = logger.clone();
 
                             (
-                                scope.spawn_with_handle::<_, _>(spawn_epoch_observer(
+                                scope.spawn_with_handle::<_, _>(epoch_observer_generator(
                                     state_chain_client,
                                     end_observation_signal,
                                     epoch_start,
