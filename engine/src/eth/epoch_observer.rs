@@ -43,31 +43,30 @@ where
                 slog::info!(&logger, "Starting");
 
                 let mut option_state = Some(initial_state);
-                let mut handle_and_end_observation_signal: Option<(
-                    ScopedJoinHandle<State>,
+                let mut end_observation_signal_and_handle: Option<(
                     Arc<Mutex<Option<u64>>>,
+                    ScopedJoinHandle<State>,
                 )> = None;
 
                 loop {
                     let epoch_start = epoch_start_receiver.recv().await?;
 
-                    if let Some((handle, end_observation_signal)) =
-                        handle_and_end_observation_signal.take()
+                    if let Some((end_observation_signal, handle)) =
+                        end_observation_signal_and_handle.take()
                     {
                         *end_observation_signal.lock().unwrap() = Some(epoch_start.eth_block);
                         option_state = Some(handle.await);
                     }
 
                     if epoch_start.participant && should_observe_epoch(&epoch_start) {
-                        handle_and_end_observation_signal = Some({
+                        end_observation_signal_and_handle = Some({
                             let end_observation_signal = Arc::new(Mutex::new(None));
 
-                            // clone for capture by tokio task
-                            let end_observation_signal_c = end_observation_signal.clone();
                             let state_chain_client = state_chain_client.clone();
                             let logger = logger.clone();
 
                             (
+                                end_observation_signal.clone(),
                                 scope.spawn_with_handle::<_, _>(epoch_observer_generator(
                                     state_chain_client,
                                     end_observation_signal,
@@ -75,7 +74,6 @@ where
                                     option_state.take().unwrap(),
                                     logger,
                                 )),
-                                end_observation_signal_c,
                             )
                         });
                     }
