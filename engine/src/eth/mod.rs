@@ -788,7 +788,8 @@ pub trait EthContractWitnesser {
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
-    ) where
+    ) -> anyhow::Result<()>
+    where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send;
 

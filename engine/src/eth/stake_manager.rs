@@ -95,7 +95,8 @@ impl EthContractWitnesser for StakeManager {
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
-    ) where
+    ) -> anyhow::Result<()>
+    where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
@@ -147,6 +148,8 @@ impl EthContractWitnesser for StakeManager {
                 slog::trace!(logger, "Ignoring unused event: {}", event);
             }
         }
+
+        Ok(())
     }
 
     fn get_contract_address(&self) -> H160 {
