@@ -3,7 +3,6 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use futures::{FutureExt, Stream, StreamExt};
-use itertools::Itertools;
 use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::KeygenError;
 use slog::o;
@@ -241,10 +240,10 @@ where
         };
 
         {
-            let historical_active_epochs = state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
                 initial_block_hash,
                 &state_chain_client.our_account_id
-            ).await.unwrap();
+            ).await.unwrap());
 
             let current_epoch = state_chain_client
                 .get_storage_value::<pallet_cf_validator::CurrentEpoch<
@@ -253,33 +252,14 @@ where
                 .await
                 .unwrap();
 
-            if historical_active_epochs.is_empty() {
-                start_epoch(initial_block_hash, current_epoch, true, false).await;
-            } else {
-                assert!(historical_active_epochs.iter().tuple_windows().all(|(epoch, next_epoch)| epoch < next_epoch)); // is_strictly_sorted
-                assert!(historical_active_epochs.last().unwrap() <= &current_epoch);
-                let earliest_historical_active_epoch = historical_active_epochs.first().unwrap();
-
-                for either_or_both in Itertools::merge_join_by(
-                    *earliest_historical_active_epoch..=current_epoch,
-                    historical_active_epochs,
-                    |inactive_epoch, active_epoch| inactive_epoch.cmp(active_epoch)
-                ) {
-                    let (epoch, participant) = match either_or_both {
-                        itertools::EitherOrBoth::Both(_, active_epoch) => {
-                            (active_epoch, true)
-                        },
-                        itertools::EitherOrBoth::Left(inactive_epoch) => {
-                            (inactive_epoch, false)
-                        },
-                        itertools::EitherOrBoth::Right(_) => unreachable!(),
-                    };
-
-                    start_epoch(initial_block_hash, epoch, epoch == current_epoch, participant).await;
+            if let Some(earliest_historical_active_epoch) = historical_active_epochs.iter().next() {
+                for epoch in *earliest_historical_active_epoch..current_epoch {
+                    start_epoch(initial_block_hash, epoch, false, historical_active_epochs.contains(&epoch)).await;
                 }
             }
-        }
 
+            start_epoch(initial_block_hash, current_epoch, true, historical_active_epochs.contains(&current_epoch)).await;
+        }
 
         // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
         // liveness
