@@ -10,7 +10,7 @@ set -ex
 readonly CONTRACT_VERSION_TAG=sandstorm-rc4
 
 if ! which poetry; then
-  curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
+  curl -sSL https://install.python-poetry.org | python3 -
   . $HOME/.poetry/env
 fi
 
