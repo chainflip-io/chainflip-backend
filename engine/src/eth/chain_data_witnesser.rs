@@ -26,7 +26,7 @@ where
     EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
     ScRpcClient: 'static + StateChainRpcApi + Send + Sync,
 {
-    super::epoch_observer::start(
+    super::epoch_witnesser::start(
         "ETH-Chain-Data-Witnesser".into(),
         state_chain_client,
         epoch_start_receiver,
@@ -34,9 +34,9 @@ where
         None,
         move |
             state_chain_client,
-            end_observation_signal,
+            end_witnessing_signal,
             _epoch_start,
-            mut last_observed_block_hash,
+            mut last_witnessed_block_hash,
             logger
         | {
             let eth_rpc = eth_rpc.clone();
@@ -46,14 +46,14 @@ where
                 let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, false);
 
                 loop {
-                    if let Some(_end_block) = *end_observation_signal.lock().unwrap() {
+                    if let Some(_end_block) = *end_witnessing_signal.lock().unwrap() {
                         break;
                     }
 
                     let block_number = eth_rpc.block_number().await?;
                     let block_hash = eth_rpc.block(block_number).await?.hash.context(format!("Missing hash for block {}.", block_number))?;
-                    if last_observed_block_hash != Some(block_hash) {
-                        last_observed_block_hash = Some(block_hash);
+                    if last_witnessed_block_hash != Some(block_hash) {
+                        last_witnessed_block_hash = Some(block_hash);
 
                         let priority_fee = cfe_settings_update_receiver
                             .borrow()
@@ -83,7 +83,7 @@ where
                     poll_interval.tick().await;
                 }
 
-                Ok(last_observed_block_hash)
+                Ok(last_witnessed_block_hash)
             }
         },
         logger,

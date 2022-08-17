@@ -16,9 +16,9 @@ pub async fn start<G, F, Fut, State, StateChainRpc>(
     name: String,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
-    mut should_observe_epoch: G,
+    mut should_witness_epoch: G,
     initial_state: State,
-    mut epoch_observer_generator: F,
+    mut epoch_witnesser_generator: F,
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
@@ -43,7 +43,7 @@ where
                 slog::info!(&logger, "Starting");
 
                 let mut option_state = Some(initial_state);
-                let mut end_observation_signal_and_handle: Option<(
+                let mut end_witnessing_signal_and_handle: Option<(
                     Arc<Mutex<Option<u64>>>,
                     ScopedJoinHandle<State>,
                 )> = None;
@@ -51,25 +51,25 @@ where
                 loop {
                     let epoch_start = epoch_start_receiver.recv().await?;
 
-                    if let Some((end_observation_signal, handle)) =
-                        end_observation_signal_and_handle.take()
+                    if let Some((end_witnessing_signal, handle)) =
+                        end_witnessing_signal_and_handle.take()
                     {
-                        *end_observation_signal.lock().unwrap() = Some(epoch_start.eth_block);
+                        *end_witnessing_signal.lock().unwrap() = Some(epoch_start.eth_block);
                         option_state = Some(handle.await);
                     }
 
-                    if epoch_start.participant && should_observe_epoch(&epoch_start) {
-                        end_observation_signal_and_handle = Some({
-                            let end_observation_signal = Arc::new(Mutex::new(None));
+                    if epoch_start.participant && should_witness_epoch(&epoch_start) {
+                        end_witnessing_signal_and_handle = Some({
+                            let end_witnessing_signal = Arc::new(Mutex::new(None));
 
                             let state_chain_client = state_chain_client.clone();
                             let logger = logger.clone();
 
                             (
-                                end_observation_signal.clone(),
-                                scope.spawn_with_handle::<_, _>(epoch_observer_generator(
+                                end_witnessing_signal.clone(),
+                                scope.spawn_with_handle::<_, _>(epoch_witnesser_generator(
                                     state_chain_client,
-                                    end_observation_signal,
+                                    end_witnessing_signal,
                                     epoch_start,
                                     option_state.take().unwrap(),
                                     logger,

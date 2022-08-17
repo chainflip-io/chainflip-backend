@@ -1,6 +1,6 @@
-pub mod chain_data_witnessing;
-pub mod contract_observer;
-mod epoch_observer;
+pub mod chain_data_witnesser;
+pub mod contract_witnesser;
+mod epoch_witnesser;
 mod http_safe_stream;
 pub mod key_manager;
 pub mod stake_manager;
@@ -328,7 +328,7 @@ pub struct BlockWithEvents<EventParameters: Debug> {
 }
 
 #[async_trait]
-pub trait EthObserver {
+pub trait EthContractWitnesser {
     type EventParameters: Debug + Send + Sync + 'static;
 
     fn contract_name(&self) -> &'static str;
@@ -354,7 +354,7 @@ pub trait EthObserver {
         // only allow pulling from the stream once we are actually at our from_block number
         while let Some(best_safe_block_header) = safe_head_stream.next().await {
             let best_safe_block_number = best_safe_block_header.block_number;
-            // we only want to start observing once we reach the from_block specified
+            // we only want to start witnessing once we reach the from_block specified
             if best_safe_block_number < from_block {
                 slog::trace!(
                     logger,

@@ -60,7 +60,7 @@ mod tests {
 
     use sp_core::H160;
 
-    use crate::eth::{key_manager::KeyManager, EthObserver};
+    use crate::eth::{key_manager::KeyManager, EthContractWitnesser};
 
     use super::*;
 

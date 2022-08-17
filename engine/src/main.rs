@@ -206,9 +206,9 @@ fn main() -> anyhow::Result<()> {
                 Ok(())
             });
 
-            // Start eth observers
+            // Start eth witnessers
             scope.spawn(
-                eth::contract_observer::start(
+                eth::contract_witnesser::start(
                     stake_manager_contract,
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
@@ -218,7 +218,7 @@ fn main() -> anyhow::Result<()> {
                 )
             );
             scope.spawn(
-                eth::contract_observer::start(
+                eth::contract_witnesser::start(
                     key_manager_contract,
                     eth_ws_rpc_client,
                     eth_http_rpc_client,
@@ -228,7 +228,7 @@ fn main() -> anyhow::Result<()> {
                 )
             );
             scope.spawn(
-                eth::chain_data_witnessing::start(
+                eth::chain_data_witnesser::start(
                     eth_dual_rpc,
                     state_chain_client.clone(),
                     witnessing_instruction_receiver_3,

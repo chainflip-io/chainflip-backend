@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth::{
         event::Event,
         rpc::{EthHttpRpcClient, EthWsRpcClient},
-        EthObserver,
+        EthContractWitnesser,
     },
     settings::{CommandLineOptions, Settings},
 };
@@ -37,9 +37,9 @@ impl IntegrationTestConfig {
 pub async fn get_contract_events<Manager>(
     contract_manager: Manager,
     logger: slog::Logger,
-) -> Vec<Event<<Manager as EthObserver>::EventParameters>>
+) -> Vec<Event<<Manager as EthContractWitnesser>::EventParameters>>
 where
-    Manager: EthObserver + std::marker::Sync,
+    Manager: EthContractWitnesser + std::marker::Sync,
 {
     let settings =
         Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();

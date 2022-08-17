@@ -22,7 +22,7 @@ use async_trait::async_trait;
 
 use super::event::Event;
 use super::DecodeLogClosure;
-use super::EthObserver;
+use super::EthContractWitnesser;
 
 pub struct KeyManager {
     pub deployed_address: H160,
@@ -196,7 +196,7 @@ pub enum KeyManagerEvent {
 }
 
 #[async_trait]
-impl EthObserver for KeyManager {
+impl EthContractWitnesser for KeyManager {
     type EventParameters = KeyManagerEvent;
 
     fn contract_name(&self) -> &'static str {

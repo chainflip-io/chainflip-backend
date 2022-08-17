@@ -10,12 +10,12 @@ use crate::{
 
 use super::{
     rpc::{EthHttpRpcClient, EthWsRpcClient},
-    EpochStart, EthObserver,
+    EpochStart, EthContractWitnesser,
 };
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
-pub async fn start<ContractObserver, StateChainRpc>(
-    contract_observer: ContractObserver,
+pub async fn start<ContractWitnesser, StateChainRpc>(
+    contract_witnesser: ContractWitnesser,
     eth_ws_rpc: EthWsRpcClient,
     eth_http_rpc: EthHttpRpcClient,
     epoch_starts_receiver: broadcast::Receiver<EpochStart>,
@@ -23,41 +23,41 @@ pub async fn start<ContractObserver, StateChainRpc>(
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
-    ContractObserver: 'static + EthObserver + Sync + Send,
+    ContractWitnesser: 'static + EthContractWitnesser + Sync + Send,
     StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
 {
-    let contract_observer = Arc::new(contract_observer);
+    let contract_witnesser = Arc::new(contract_witnesser);
 
-    super::epoch_observer::start(
-        format!("{}-Observer", contract_observer.contract_name()),
+    super::epoch_witnesser::start(
+        format!("{}-Witnesser", contract_witnesser.contract_name()),
         state_chain_client,
         epoch_starts_receiver,
         |_epoch_start| true,
         (),
-        move |state_chain_client, end_observation_signal, epoch_start, (), logger| {
+        move |state_chain_client, end_witnessing_signal, epoch_start, (), logger| {
             let eth_ws_rpc = eth_ws_rpc.clone();
             let eth_http_rpc = eth_http_rpc.clone();
             let dual_rpc = EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone(), &logger);
-            let contract_observer = contract_observer.clone();
+            let contract_witnesser = contract_witnesser.clone();
 
             async move {
                 slog::info!(
                     logger,
-                    "Start observing from ETH block: {}",
+                    "Start witnessing from ETH block: {}",
                     epoch_start.eth_block
                 );
-                let mut block_stream = contract_observer
+                let mut block_stream = contract_witnesser
                     .block_stream(eth_ws_rpc, eth_http_rpc, epoch_start.eth_block, &logger)
                     .await
                     .expect("Failed to initialise block stream");
 
                 // TOOD: Handle None on stream, and result event being an error
                 while let Some(block) = block_stream.next().await {
-                    if let Some(end_block) = *end_observation_signal.lock().unwrap() {
+                    if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
                         if block.block_number >= end_block {
                             slog::info!(
                                 logger,
-                                "Finished observing events at ETH block: {}",
+                                "Finished witnessing events at ETH block: {}",
                                 block.block_number
                             );
                             // we have reached the block height we wanted to witness up to
@@ -67,7 +67,7 @@ where
                     }
 
                     for event in block.events {
-                        contract_observer
+                        contract_witnesser
                             .handle_event(
                                 epoch_start.index,
                                 block.block_number,
