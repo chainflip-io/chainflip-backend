@@ -73,13 +73,14 @@ fn expectations_on_start(
             )))),
         )
         .times(1)
-        .returning({
+        .return_once({
             let historical_active_epochs = historical_epochs
                 .iter()
                 .filter(|(_epoch, participant, _eth_block)| *participant)
                 .map(|(epoch, ..)| *epoch)
-                .collect::<Vec<_>>();
-            move |_, _| Ok(Some(StorageData(historical_active_epochs.encode())))
+                .collect::<Vec<_>>()
+                .encode();
+            move |_, _| Ok(Some(StorageData(historical_active_epochs)))
         });
 
     mock_state_chain_rpc_client
@@ -190,6 +191,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     for epoch_start in expected_epoch_starts {
         assert_eq!(epoch_start_receiver.recv().await.unwrap(), epoch_start);
     }
+
+    assert!(epoch_start_receiver.recv().await.is_err());
 }
 
 #[tokio::test]
