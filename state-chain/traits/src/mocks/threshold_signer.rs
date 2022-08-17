@@ -1,4 +1,4 @@
-use crate::AsyncResult;
+use crate::{AsyncResult, RetryPolicy};
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
@@ -67,6 +67,7 @@ where
 		_key_id: Self::KeyId,
 		_participants: Vec<Self::ValidatorId>,
 		_payload: <C as ChainCrypto>::Payload,
+		_retry_policy: RetryPolicy,
 	) -> Self::RequestId {
 		todo!()
 	}

@@ -482,6 +482,12 @@ pub trait KeyProvider<C: ChainCrypto> {
 	}
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum RetryPolicy {
+	Always,
+	Never,
+}
+
 /// Api trait for pallets that need to sign things.
 pub trait ThresholdSigner<C>
 where
@@ -500,6 +506,7 @@ where
 		key_id: Self::KeyId,
 		participants: Vec<Self::ValidatorId>,
 		payload: C::Payload,
+		retry_policy: RetryPolicy,
 	) -> Self::RequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the

@@ -19,7 +19,7 @@ use scale_info::TypeInfo;
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	KeyProvider, SignerNomination,
+	KeyProvider, RetryPolicy, SignerNomination,
 };
 use frame_support::{
 	ensure,
@@ -56,12 +56,6 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum RetryPolicy {
-	Always,
-	Never,
-}
-
 #[cfg(feature = "std")]
 const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
 
@@ -96,6 +90,23 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> CeremonyContext<T, I> {
+		pub fn new(
+			key_id: T::KeyId,
+			participants: impl IntoIterator<Item = T::ValidatorId>,
+			retry_policy: RetryPolicy,
+		) -> Self {
+			let remaining_respondents: BTreeSet<_> = participants.into_iter().collect();
+			let participant_count = remaining_respondents.len() as u32;
+			Self {
+				remaining_respondents,
+				blame_counts: BTreeMap::new(),
+				participant_count,
+				key_id,
+				retry_policy,
+				_phantom: PhantomData::default(),
+			}
+		}
+
 		/// Based on the reported blame_counts, decide which nodes should be reported for failure.
 		///
 		/// We assume that at least 2/3 of participants need to blame a node for it to be reliable.
@@ -346,6 +357,7 @@ pub mod pallet {
 									attempt.wrapping_add(1),
 									Some(failed_ceremony_context.key_id),
 									None,
+									RetryPolicy::Always,
 								);
 								Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
 							},
@@ -547,6 +559,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		payload: PayloadFor<T, I>,
 		key_id: Option<<T as Chainflip>::KeyId>,
 		participants: Option<Vec<T::ValidatorId>>,
+		retry_policy: RetryPolicy,
 	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
 		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
@@ -555,9 +568,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Start a ceremony.
-		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0, key_id, participants);
+		let ceremony_id =
+			Self::new_ceremony_attempt(request_id, payload, 0, key_id, participants, retry_policy);
 
-		// Schedule an initial retry.
+		// Schedule a retry on timeout.
 		Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
 
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
@@ -572,28 +586,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		attempt: AttemptCount,
 		key_id: Option<<T as Chainflip>::KeyId>,
 		participants: Option<Vec<T::ValidatorId>>,
+		retry_policy: RetryPolicy,
 	) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 		OpenRequests::<T, I>::insert(ceremony_id, (request_id, attempt, payload.clone()));
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
 
 		let key_id = key_id.unwrap_or_else(T::KeyProvider::current_key_id);
-		let (maybe_nominees, retry_policy) = if participants.is_none() {
-			(
+
+		let (event, log_message, ceremony_context) = if let Some(nominees) =
+			participants.or_else(|| {
 				T::SignerNomination::threshold_nomination_with_seed(
 					(ceremony_id, attempt),
 					T::EpochInfo::epoch_index(),
-				),
-				RetryPolicy::Always,
-			)
-		} else {
-			(participants, RetryPolicy::Never)
-		};
-
-		let nominees = maybe_nominees.unwrap_or_default();
-		let nominees_len = nominees.len();
-
-		let (event, log_message) = if nominees_len > 0 {
+				)
+			}) {
 			(
 				Event::<T, I>::ThresholdSignatureRequest(
 					ceremony_id,
@@ -606,6 +613,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt
 				),
+				CeremonyContext::new(key_id, nominees, retry_policy),
 			)
 		} else {
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
@@ -617,6 +625,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt
 				),
+				CeremonyContext::new(key_id, [], retry_policy),
 			)
 		};
 
@@ -625,17 +634,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			"{}", log_message
 		);
 
-		PendingCeremonies::<T, I>::insert(
-			ceremony_id,
-			CeremonyContext {
-				remaining_respondents: BTreeSet::from_iter(nominees),
-				blame_counts: Default::default(),
-				participant_count: nominees_len as u32,
-				key_id,
-				retry_policy,
-				_phantom: Default::default(),
-			},
-		);
+		PendingCeremonies::<T, I>::insert(ceremony_id, ceremony_context);
 
 		Self::deposit_event(event);
 
@@ -681,7 +680,7 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> Self::RequestId {
-		Self::request_signature(payload, None, None).0
+		Self::request_signature(payload, None, None, RetryPolicy::Always).0
 	}
 
 	fn register_callback(
@@ -711,7 +710,8 @@ where
 		key_id: Self::KeyId,
 		participants: Vec<Self::ValidatorId>,
 		payload: <T::TargetChain as ChainCrypto>::Payload,
+		retry_policy: RetryPolicy,
 	) -> Self::RequestId {
-		Self::request_signature(payload, Some(key_id), Some(participants)).0
+		Self::request_signature(payload, Some(key_id), Some(participants), retry_policy).0
 	}
 }

@@ -176,8 +176,9 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 		_key_id: Self::KeyId,
 		_participants: Vec<Self::ValidatorId>,
 		_payload: <Ethereum as ChainCrypto>::Payload,
+		_retry_policy: cf_traits::RetryPolicy,
 	) -> Self::RequestId {
-		todo!()
+		unimplemented!()
 	}
 }
 

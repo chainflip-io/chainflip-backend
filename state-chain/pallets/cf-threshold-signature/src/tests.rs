@@ -342,8 +342,9 @@ fn test_not_enough_signers_for_threshold() {
 #[cfg(test)]
 mod unsigned_validation {
 	use super::*;
-	use crate::{Call as PalletCall, PendingCeremonies, RetryPolicy, RetryQueues};
+	use crate::{Call as PalletCall, LiveCeremonies, PendingCeremonies, RetryPolicy, RetryQueues};
 	use cf_chains::ChainCrypto;
+	use cf_traits::ThresholdSigner;
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
 
@@ -357,6 +358,7 @@ mod unsigned_validation {
 				PAYLOAD,
 				Some(CUSTOM_KEY_ID.to_vec()),
 				Some(participants.clone()),
+				RetryPolicy::Never,
 			);
 			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id);
 			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
@@ -382,8 +384,9 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
-			let (_, ceremony_id) =
-				MockEthereumThresholdSigner::request_signature(PAYLOAD, None, None);
+			let request_id =
+				<MockEthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
 			assert_ok!(Test::validate_unsigned(
 				TransactionSource::External,
 				&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }.into()
@@ -412,8 +415,9 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
-			let (_, ceremony_id) =
-				MockEthereumThresholdSigner::request_signature(PAYLOAD, None, None);
+			let request_id =
+				<MockEthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,
