@@ -392,7 +392,7 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 		// Charlie is not a success voter
 		assert!(!success_voters.contains(&CHARLIE));
 
-		// We're pending until we initialize the block
+		// We're pending until we initialise the block
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),

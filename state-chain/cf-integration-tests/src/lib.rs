@@ -497,9 +497,9 @@ mod epoch {
 	}
 
 	#[test]
-	// When an epoch expires, purge stale storages in the Witnesser pallet.
-	// This is done through ChainflipEpochTransitions.
-	fn new_epoch_will_purges_stale_witnesser_storage() {
+	/// When an epoch expires, purge stale storages in the Witnesser pallet.
+	/// This is done through ChainflipEpochTransitions.
+	fn new_epoch_will_purge_stale_witnesser_storage() {
 		const EPOCH_BLOCKS: BlockNumber = 100;
 		const MAX_AUTHORITIES: AuthorityCount = 3;
 		super::genesis::default()
@@ -524,6 +524,7 @@ mod epoch {
 				};
 
 				move_forward_by_epochs(3, &mut testnet);
+				let storage_epoch = 4;
 				assert_eq!(Validator::epoch_index(), 4);
 				assert_eq!(Validator::last_expired_epoch(), 2);
 				let mut current_authorities_after_some_epochs = Validator::current_authorities();
@@ -541,11 +542,11 @@ mod epoch {
 					assert_ok!(Witnesser::witness_at_epoch(
 						Origin::signed(node.clone()),
 						call.clone(),
-						4
+						storage_epoch
 					));
 				}
 				pallet_cf_witnesser::ExtraCallData::<Runtime>::insert(
-					4,
+					storage_epoch,
 					&call_hash,
 					vec![vec![0u8]],
 				);
@@ -554,32 +555,40 @@ mod epoch {
 				testnet.move_forward_blocks(1);
 
 				// Ensure Votes and calldata are registered in storage.
-				assert_eq!(
-					pallet_cf_witnesser::Votes::<Runtime>::get(4, &call_hash),
-					Some(vec![224])
+				assert!(
+					pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_some()
 				);
-				assert_eq!(
-					pallet_cf_witnesser::ExtraCallData::<Runtime>::get(4, &call_hash),
-					Some(vec![vec![0u8]])
-				);
-				assert_eq!(
-					pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(4, &call_hash),
-					Some(())
-				);
+				assert!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(
+					storage_epoch,
+					&call_hash
+				)
+				.is_some());
+				assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(
+					storage_epoch,
+					&call_hash
+				)
+				.is_some());
 
 				// Move forward in time until Epoch 4 is expired.
 				move_forward_by_epochs(2, &mut testnet);
 
 				assert_eq!(Validator::epoch_index(), 6);
-				assert_eq!(Validator::last_expired_epoch(), 4);
+				assert_eq!(Validator::last_expired_epoch(), storage_epoch);
 
 				// Test that the storage has been purged.
-				assert_eq!(pallet_cf_witnesser::Votes::<Runtime>::get(4, &call_hash), None);
-				assert_eq!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(4, &call_hash), None);
-				assert_eq!(
-					pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(4, &call_hash),
-					None
+				assert!(
+					pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_none()
 				);
+				assert!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(
+					storage_epoch,
+					&call_hash
+				)
+				.is_none());
+				assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(
+					storage_epoch,
+					&call_hash
+				)
+				.is_none());
 			});
 	}
 }
@@ -834,7 +843,7 @@ mod authorities {
 					);
 				}
 
-				// Allow the stakes to be registered, then initialize the account keys and peer
+				// Allow the stakes to be registered, then initialise the account keys and peer
 				// ids.
 				testnet.move_forward_blocks(1);
 

@@ -9,9 +9,6 @@ license = 'TBC'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend/pallets/'
 
-[lib]
-doctest = false
-
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 

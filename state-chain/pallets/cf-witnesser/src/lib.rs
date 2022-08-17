@@ -142,8 +142,8 @@ pub mod pallet {
 		/// Called as a witness of some external event.
 		///
 		/// The provided `call` will be dispatched when the configured threshold number of
-		/// validators have submitted an identical transaction. This can be thought of as a vote for
-		/// the encoded [Call](Config::Call) value.
+		/// authorities have submitted an identical transaction. This can be thought of as a vote
+		/// for the encoded [Call](Config::Call) value.
 		///
 		/// ## Events
 		///
@@ -233,8 +233,10 @@ impl<T: Config> Pallet<T> {
 		mut call: <T as Config>::Call,
 		epoch_index: EpochIndex,
 	) -> DispatchResultWithPostInfo {
+		let last_expired_epoch = T::EpochInfo::last_expired_epoch();
+		let current_epoch = T::EpochInfo::epoch_index();
 		// Ensure the epoch has not yet expired
-		ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
+		ensure!(epoch_index > last_expired_epoch, Error::<T>::EpochExpired);
 
 		// The number of authorities for the epoch
 		// This value is updated alongside ValidatorIndex, so if we have a authority, we have an
@@ -291,18 +293,18 @@ impl<T: Config> Pallet<T> {
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		// At the epoch boundary, asynchronicity can cause validators to witness events at a earlier
-		// epoch than intended. We need to check that the same event doesn't get double-triggered in
-		// the current and previous epoch.
+		// epoch than intended. We need to check that the same event has not already been witnessed
+		// in the past.
 		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
-			CallHashExecuted::<T>::get(epoch_index, &call_hash).is_none() &&
-			CallHashExecuted::<T>::get(epoch_index.saturating_sub(1u32), &call_hash).is_none()
+			(last_expired_epoch..current_epoch)
+				.all(|epoch| CallHashExecuted::<T>::get(epoch, &call_hash).is_none())
 		{
 			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
 				call.combine_and_inject(&mut extra_data)
 			}
 			let _result = call
 				.dispatch_bypass_filter(
-					(if epoch_index == T::EpochInfo::epoch_index() {
+					(if epoch_index == current_epoch {
 						RawOrigin::CurrentEpochWitnessThreshold
 					} else {
 						RawOrigin::HistoricalActiveEpochWitnessThreshold
@@ -317,7 +319,6 @@ impl<T: Config> Pallet<T> {
 				});
 			CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
 		}
-
 		Ok(().into())
 	}
 
@@ -350,35 +351,12 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
-	/// Purge the pallet storage of stale entries. This is defined as Votes that are equal or older
-	/// than the Epoch that just expired. Also purge  
+	/// Purge the pallet storage of stale entries. This is prevent the storage from growing
+	/// indefinitely.
 	fn on_expired_epoch(expired: EpochIndex) {
-		// Remove all vote entries data with stale EpochIndex.
-		Votes::<T>::translate(|epoch_index, _, buffer| -> Option<Vec<u8>> {
-			if epoch_index <= expired {
-				None
-			} else {
-				Some(buffer)
-			}
-		});
-
-		// Remove extra call data with stale EpochIndex
-		ExtraCallData::<T>::translate(|epoch_index, _, buffer| -> Option<Vec<Vec<u8>>> {
-			if epoch_index <= expired {
-				None
-			} else {
-				Some(buffer)
-			}
-		});
-
-		// Remove call execution record for the stale calls
-		CallHashExecuted::<T>::translate(|epoch_index, _, ()| -> Option<()> {
-			if epoch_index <= expired {
-				None
-			} else {
-				Some(())
-			}
-		});
+		Votes::<T>::remove_prefix(expired, None);
+		ExtraCallData::<T>::remove_prefix(expired, None);
+		CallHashExecuted::<T>::remove_prefix(expired, None);
 	}
 }
 
