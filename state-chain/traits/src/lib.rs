@@ -496,7 +496,7 @@ where
 	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
-	type KeyId;
+	type KeyId: TryInto<C::AggKey>;
 	type ValidatorId;
 
 	/// Initiate a signing request and return the request id.

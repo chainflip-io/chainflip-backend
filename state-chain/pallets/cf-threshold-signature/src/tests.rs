@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, PalletOffence, RequestId, THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT,
+	Error, PalletOffence, RequestContext, RequestId,
+	THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT,
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{AsyncResult, Chainflip};
@@ -15,10 +16,10 @@ fn get_ceremony_context(
 	expected_request_id: RequestId,
 	expected_attempt: AttemptCount,
 ) -> CeremonyContext<Test, Instance1> {
-	let (request_id, attempt, _) =
+	let RequestContext { request_id, attempt_count, .. } =
 		MockEthereumThresholdSigner::open_requests(ceremony_id).expect("Expected a request_id");
 	assert_eq!(request_id, expected_request_id);
-	assert_eq!(attempt, expected_attempt);
+	assert_eq!(attempt_count, expected_attempt);
 	MockEthereumThresholdSigner::pending_ceremonies(ceremony_id)
 		.unwrap_or_else(|| panic!("Expected a ceremony with id {:?}", ceremony_id))
 }
@@ -60,7 +61,7 @@ impl MockCfe {
 					payload,
 				),
 			) => {
-				assert_eq!(key_id, MOCK_KEY_ID);
+				assert_eq!(key_id, &MOCK_AGG_KEY);
 				assert_eq!(signers, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
@@ -139,7 +140,8 @@ fn happy_path_no_callback() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let (request_id, ..) = MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
+			let RequestContext { request_id, .. } =
+				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -169,7 +171,8 @@ fn happy_path_with_callback() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let (request_id, ..) = MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
+			let RequestContext { request_id, .. } =
+				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			tick(&[cfe]);
@@ -200,7 +203,7 @@ fn fail_path_with_timeout() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let (request_id, attempt, _) =
+			let RequestContext { request_id, attempt_count, .. } =
 				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
@@ -241,7 +244,7 @@ fn fail_path_with_timeout() {
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
-			let context = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);
+			let context = get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1);
 			assert_eq!(
 				context.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
@@ -260,7 +263,7 @@ fn fail_path_no_timeout() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let (request_id, attempt, _) =
+			let RequestContext { request_id, attempt_count, .. } =
 				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
@@ -310,7 +313,7 @@ fn fail_path_no_timeout() {
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
-			let pending = get_ceremony_context(ceremony_id + 1, request_id, attempt + 1);
+			let pending = get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
@@ -344,7 +347,7 @@ mod unsigned_validation {
 	use super::*;
 	use crate::{Call as PalletCall, LiveCeremonies, PendingCeremonies, RetryPolicy, RetryQueues};
 	use cf_chains::ChainCrypto;
-	use cf_traits::ThresholdSigner;
+	use cf_traits::{KeyProvider, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
 
@@ -352,19 +355,20 @@ mod unsigned_validation {
 	fn start_custom_signing_ceremony() {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-			const CUSTOM_KEY_ID: &[u8] = b"K-ID-2";
+			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
 			let participants: Vec<u64> = vec![1, 2, 3, 4, 5, 6];
-			let (_, ceremony_id) = MockEthereumThresholdSigner::request_signature(
+			let request_id = MockEthereumThresholdSigner::request_signature_with(
+				CUSTOM_AGG_KEY.into(),
+				participants.clone(),
 				PAYLOAD,
-				Some(CUSTOM_KEY_ID.to_vec()),
-				Some(participants.clone()),
 				RetryPolicy::Never,
 			);
+			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
 			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id);
 			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
 				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
-			assert_eq!(ceremony.clone().unwrap().key_id, CUSTOM_KEY_ID);
+			assert_eq!(ceremony.clone().unwrap().key_id, &CUSTOM_AGG_KEY);
 			assert_eq!(
 				ceremony.clone().unwrap().remaining_respondents,
 				BTreeSet::from_iter(participants)
@@ -387,10 +391,17 @@ mod unsigned_validation {
 			let request_id =
 				<MockEthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
-			assert_ok!(Test::validate_unsigned(
-				TransactionSource::External,
-				&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }.into()
-			));
+			assert!(
+				Test::validate_unsigned(
+					TransactionSource::External,
+					&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }.into(),
+				)
+				.is_ok(),
+				"Validation Failed: {:?} / {:?} / {:?}",
+				MockKeyProvider::current_key(),
+				MockKeyProvider::current_key_id(),
+				<[u8; 4]>::try_from(MockKeyProvider::current_key_id()).unwrap()
+			);
 		});
 	}
 

@@ -34,7 +34,7 @@ where
 	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
-	type KeyId = u32;
+	type KeyId = Vec<u8>;
 
 	type ValidatorId = u64;
 

@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
 	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,
-	OpenRequests, PalletOffence, RequestId,
+	OpenRequests, PalletOffence, RequestContext, RequestId,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
@@ -164,7 +164,6 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 }
 
 // Mock KeyProvider
-pub const MOCK_KEY_ID: &[u8] = b"K-ID";
 pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
 
 pub struct MockKeyProvider;
@@ -173,7 +172,7 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	type KeyId = Vec<u8>;
 
 	fn current_key_id() -> Self::KeyId {
-		MOCK_KEY_ID.to_vec()
+		MOCK_AGG_KEY.into()
 	}
 
 	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
@@ -251,7 +250,7 @@ impl ExtBuilder {
 				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
 			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
-				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().2,
+				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
 				*message
 			);
 			assert_eq!(attempt, 0);
@@ -282,7 +281,7 @@ impl ExtBuilder {
 				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
 			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
-				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().2,
+				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
 				*message
 			);
 			assert_eq!(attempt, 0);
@@ -321,16 +320,23 @@ impl TestExternalitiesWithCheck {
 
 	/// Checks conditions that should always hold.
 	pub fn do_consistency_check() {
-		OpenRequests::<Test, _>::iter().for_each(|(ceremony_id, (request_id, attempt, _))| {
-			assert_eq!(LiveCeremonies::<Test, _>::get(request_id).unwrap(), (ceremony_id, attempt));
-		});
-		LiveCeremonies::<Test, _>::iter().for_each(|(ceremony_id, (request_id, attempt))| {
-			assert!(matches!(
-				OpenRequests::<Test, _>::get(request_id),
-				Some((ceremony_id_read, attempt_read, _))
-					if (ceremony_id_read, attempt_read) == (ceremony_id, attempt),
-			));
-		});
+		OpenRequests::<Test, _>::iter().for_each(
+			|(ceremony_id, RequestContext { request_id, attempt_count, .. })| {
+				assert_eq!(
+					LiveCeremonies::<Test, _>::get(request_id).unwrap(),
+					(ceremony_id, attempt_count)
+				);
+			},
+		);
+		LiveCeremonies::<Test, _>::iter().for_each(
+			|(live_request_id, (live_ceremony_id, live_attempt_count))| {
+				assert!(matches!(
+					OpenRequests::<Test, _>::get(live_ceremony_id),
+					Some(RequestContext { request_id, attempt_count, .. })
+						if (request_id, attempt_count) == (live_request_id, live_attempt_count),
+				));
+			},
+		);
 	}
 }
 
