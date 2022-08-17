@@ -338,15 +338,29 @@ pub mod pallet {
 					if let Some((request_id, attempt, payload)) =
 						OpenRequests::<T, I>::take(ceremony_id)
 					{
-						if failed_ceremony_context.retry_policy == RetryPolicy::Always {
-							Self::new_ceremony_attempt(
-								request_id,
-								payload,
-								attempt.wrapping_add(1),
-								Some(failed_ceremony_context.key_id),
-								None,
-							);
-							Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
+						match failed_ceremony_context.retry_policy {
+							RetryPolicy::Always => {
+								Self::new_ceremony_attempt(
+									request_id,
+									payload,
+									attempt.wrapping_add(1),
+									Some(failed_ceremony_context.key_id),
+									None,
+								);
+								Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
+							},
+							RetryPolicy::Never => {
+								let offenders = failed_ceremony_context
+									.blame_counts
+									.iter()
+									.map(|(offender, _)| offender.clone())
+									.collect::<Vec<T::ValidatorId>>();
+								Self::deposit_event(Event::<T, I>::ThresholdSignatureFailed(
+									ceremony_id,
+									failed_ceremony_context.key_id,
+									offenders,
+								));
+							},
 						}
 					} else {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
