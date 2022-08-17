@@ -13,7 +13,7 @@ use crate::{
 use super::EpochStart;
 
 pub async fn start<G, F, Fut, State, StateChainRpc>(
-    name: String,
+    log_key: &'static str,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
     mut should_participant_witness_epoch: G,
@@ -39,7 +39,7 @@ where
     with_task_scope(|scope| {
         {
             async {
-                let logger = logger.new(o!(COMPONENT_KEY => name));
+                let logger = logger.new(o!(COMPONENT_KEY => format!("{}-Witnesser", log_key)));
                 slog::info!(&logger, "Starting");
 
                 let mut option_state = Some(initial_state);

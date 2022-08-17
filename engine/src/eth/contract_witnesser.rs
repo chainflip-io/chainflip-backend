@@ -29,7 +29,7 @@ where
     let contract_witnesser = Arc::new(contract_witnesser);
 
     super::epoch_witnesser::start(
-        format!("{}-Witnesser", contract_witnesser.contract_name()),
+        contract_witnesser.contract_name(),
         state_chain_client,
         epoch_starts_receiver,
         |_epoch_start| true,
