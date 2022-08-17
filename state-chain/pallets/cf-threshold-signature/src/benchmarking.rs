@@ -3,7 +3,8 @@
 
 use super::*;
 
-use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
+use cf_traits::{Chainflip, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
@@ -37,7 +38,8 @@ benchmarks_instance_pallet! {
 		where
 			T: frame_system::Config
 			+ pallet_cf_validator::Config
-			+ pallet_cf_reputation::Config
+			+ pallet_cf_reputation::Config,
+			<T::TargetChain as ChainCrypto>::AggKey: TryFrom<<T as Chainflip>::KeyId>,
 	}
 
 	// Note: this benchmark does not include the cost of the dispatched extrinsic.
@@ -46,7 +48,8 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value(), None, None);
+		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
+		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
 		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
@@ -60,7 +63,8 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (_, ceremony_id) = Pallet::<T, I>::request_signature(PayloadFor::<T, I>::benchmark_value(), None, None);
+		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
+		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
@@ -111,7 +115,7 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, None);
+			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, None, RetryPolicy::Always);
 		}
 		assert_eq!(
 			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
