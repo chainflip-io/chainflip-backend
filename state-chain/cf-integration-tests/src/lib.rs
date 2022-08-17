@@ -510,7 +510,7 @@ mod epoch {
 				let mut nodes = Validator::current_authorities();
 				nodes.sort();
 				let (mut testnet, _) = network::Network::create(0, &nodes);
-				
+
 				assert_eq!(Validator::epoch_index(), 1);
 
 				let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
