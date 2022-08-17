@@ -53,8 +53,6 @@ where
                     let block_number = eth_rpc.block_number().await?;
                     let block_hash = eth_rpc.block(block_number).await?.hash.context(format!("Missing hash for block {}.", block_number))?;
                     if last_witnessed_block_hash != Some(block_hash) {
-                        last_witnessed_block_hash = Some(block_hash);
-
                         let priority_fee = cfe_settings_update_receiver
                             .borrow()
                             .eth_priority_fee_percentile;
@@ -73,6 +71,7 @@ where
                                     )
                                     .await
                                     .context("Failed to submit signed extrinsic")?;
+                                last_witnessed_block_hash = Some(block_hash);
                             }
                             Err(e) => {
                                 slog::error!(&logger, "Failed to get tracked data: {:?}", e);
