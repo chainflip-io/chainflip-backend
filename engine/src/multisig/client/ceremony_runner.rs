@@ -12,7 +12,7 @@ use anyhow::Result;
 use cf_traits::AuthorityCount;
 use futures::future::{BoxFuture, FutureExt};
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
 use crate::{
     common::format_iterator,
@@ -55,7 +55,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub async fn run(
         ceremony_id: CeremonyId,
         mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
-        mut request_receiver: UnboundedReceiver<PreparedRequest<Ceremony>>,
+        mut request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
         logger: slog::Logger,
     ) -> CeremonyId {
         // We always create unauthorised first, it can get promoted to
@@ -73,9 +73,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                     }
 
                 }
-                Some(request) = request_receiver.recv() => {
+                request = &mut request_receiver => {
 
-                    let PreparedRequest { init_stage, idx_mapping, participants_count, result_sender } = request;
+                    let PreparedRequest { init_stage, idx_mapping, participants_count, result_sender } = request.expect("Ceremony request channel was dropped unexpectedly");
                     final_result_sender = Some(result_sender);
 
                     if let Some(res) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await {
@@ -123,7 +123,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         idx_mapping: Arc<PartyIdxMapping>,
         num_of_participants: AuthorityCount,
     ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
-        assert!(self.inner.is_none(), "Duplicate ceremony id");
+        // This is not possible because `on_ceremony_request` is only called from a oneshot channel.
+        // So it should never get called twice. Unless in a unit test.
+        assert!(self.inner.is_none());
 
         initial_stage.init();
 

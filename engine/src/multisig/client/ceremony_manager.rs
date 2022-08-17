@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::{Debug, Display};
@@ -405,7 +405,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .keygen_states
             .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
-        ceremony_handle.on_request(request);
+        ceremony_handle
+            .on_request(request)
+            .with_context(|| format!("Invalid keygen request with ceremony id {}", ceremony_id))
+            .unwrap();
     }
 
     /// Process a request to sign
@@ -457,7 +460,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .signing_states
             .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
-        ceremony_handle.on_request(request);
+        ceremony_handle
+            .on_request(request)
+            .with_context(|| format!("Invalid sign request with ceremony id {}", ceremony_id))
+            .unwrap();
     }
 
     /// Process message from another validator
@@ -640,7 +646,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 // Contains the channels used to send data to a running ceremony
 struct CeremonyHandle<Ceremony: CeremonyTrait> {
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
-    pub request_sender: UnboundedSender<PreparedRequest<Ceremony>>,
+    pub request_sender: Option<oneshot::Sender<PreparedRequest<Ceremony>>>,
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
@@ -649,7 +655,7 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
         logger: &slog::Logger,
     ) -> (Self, tokio::task::JoinHandle<CeremonyId>) {
         let (msg_s, msg_r) = mpsc::unbounded_channel();
-        let (req_s, req_r) = mpsc::unbounded_channel();
+        let (req_s, req_r) = oneshot::channel();
 
         let task_handle = tokio::spawn(CeremonyRunner::<Ceremony>::run(
             cid,
@@ -661,13 +667,19 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
         (
             CeremonyHandle {
                 message_sender: msg_s,
-                request_sender: req_s,
+                request_sender: Some(req_s),
             },
             task_handle,
         )
     }
 
-    fn on_request(&mut self, request: PreparedRequest<Ceremony>) {
-        let _res = self.request_sender.send(request);
+    fn on_request(&mut self, request: PreparedRequest<Ceremony>) -> Result<()> {
+        if let Some(request_sender) = self.request_sender.take() {
+            let _res = request_sender.send(request);
+            Ok(())
+        } else {
+            // A request has already been sent to this ceremony
+            bail!("Duplicate ceremony id");
+        }
     }
 }
