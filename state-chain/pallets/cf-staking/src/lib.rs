@@ -473,25 +473,28 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureThresholdSigned::ensure_origin(origin)?;
 
-			let signature = T::ThresholdSigner::signature_result(signature_request_id)
+			let maybe_signature = T::ThresholdSigner::signature_result(signature_request_id)
 				.ready_or_else(|r| {
 					// This should never happen unless there is a mistake in the implementation.
 					log::error!("Callback triggered with no signature. Signature status {:?}", r);
 					Error::<T>::SignatureNotReady
 				})?;
 
-			let claim_details_signed = PendingClaims::<T>::get(&account_id)
-				.ok_or(Error::<T>::NoPendingClaim)?
-				.signed(&signature);
+			match maybe_signature {
+				Some(signature) => {
+					let claim_details_signed = PendingClaims::<T>::get(&account_id)
+						.ok_or(Error::<T>::NoPendingClaim)?
+						.signed(&signature);
 
-			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
-
-			Self::deposit_event(Event::ClaimSignatureIssued(
-				account_id,
-				claim_details_signed.abi_encoded(),
-			));
-
-			Ok(().into())
+					PendingClaims::<T>::insert(&account_id, &claim_details_signed);
+					Self::deposit_event(Event::ClaimSignatureIssued(
+						account_id,
+						claim_details_signed.abi_encoded(),
+					));
+					Ok(().into())
+				},
+				None => Err(Error::<T>::SignatureNotReady.into()),
+			}
 		}
 
 		/// Signals a node's intent to withdraw their stake after the next auction and desist

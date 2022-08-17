@@ -59,8 +59,9 @@ where
 
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> crate::AsyncResult<<C as ChainCrypto>::ThresholdSignature> {
-		Self::take_storage::<_, AsyncResult<_>>(b"SIG", request_id).unwrap_or(AsyncResult::Void)
+	) -> crate::AsyncResult<Option<<C as ChainCrypto>::ThresholdSignature>> {
+		Self::take_storage::<_, AsyncResult<_>>(b"SIG", Some(request_id))
+			.unwrap_or(AsyncResult::Void)
 	}
 
 	fn request_signature_with(

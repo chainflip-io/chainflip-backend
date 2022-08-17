@@ -517,7 +517,7 @@ where
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
-	fn signature_result(request_id: Self::RequestId) -> AsyncResult<C::ThresholdSignature>;
+	fn signature_result(request_id: Self::RequestId) -> AsyncResult<Option<C::ThresholdSignature>>;
 
 	/// Request a signature and register a callback for when the signature is available.
 	///

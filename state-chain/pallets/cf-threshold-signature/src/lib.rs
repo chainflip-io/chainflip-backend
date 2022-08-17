@@ -260,7 +260,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn signatures)]
 	pub type Signatures<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, RequestId, AsyncResult<SignatureFor<T, I>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, RequestId, AsyncResult<Option<SignatureFor<T, I>>>, ValueQuery>;
 
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.
@@ -384,6 +384,7 @@ pub mod pallet {
 									.iter()
 									.map(|(offender, _)| offender.clone())
 									.collect::<Vec<T::ValidatorId>>();
+								Signatures::<T, I>::insert(request_id, AsyncResult::Ready(None));
 								Self::deposit_event(Event::<T, I>::ThresholdSignatureFailed(
 									ceremony_id,
 									failed_ceremony_context.key_id,
@@ -488,7 +489,7 @@ pub mod pallet {
 				attempt_count
 			);
 
-			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
+			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Some(signature)));
 
 			// Dispatch the callback if one has been registered.
 			if let Some(call) = RequestCallback::<T, I>::take(request_id) {
@@ -720,7 +721,7 @@ where
 
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> cf_traits::AsyncResult<<T::TargetChain as ChainCrypto>::ThresholdSignature> {
+	) -> cf_traits::AsyncResult<Option<<T::TargetChain as ChainCrypto>::ThresholdSignature>> {
 		Signatures::<T, I>::take(request_id)
 	}
 
