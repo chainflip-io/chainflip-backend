@@ -296,7 +296,7 @@ impl<T: Config> Pallet<T> {
 		// epoch than intended. We need to check that the same event has not already been witnessed
 		// in the past.
 		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
-			(last_expired_epoch..current_epoch)
+			(last_expired_epoch..=current_epoch)
 				.all(|epoch| CallHashExecuted::<T>::get(epoch, &call_hash).is_none())
 		{
 			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
