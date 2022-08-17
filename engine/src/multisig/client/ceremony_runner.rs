@@ -22,7 +22,7 @@ use crate::{
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
-    ceremony_manager::{CeremonyTrait, DynStage, InitializedRequest},
+    ceremony_manager::{CeremonyTrait, DynStage, PreparedRequest},
     common::{CeremonyFailureReason, PreProcessStageDataCheck},
     utils::PartyIdxMapping,
 };
@@ -55,7 +55,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub async fn run(
         ceremony_id: CeremonyId,
         mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
-        mut request_receiver: UnboundedReceiver<InitializedRequest<Ceremony>>,
+        mut request_receiver: UnboundedReceiver<PreparedRequest<Ceremony>>,
         logger: slog::Logger,
     ) -> CeremonyId {
         // We always create unauthorised first, it can get promoted to
@@ -75,7 +75,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 }
                 Some(request) = request_receiver.recv() => {
 
-                    let InitializedRequest { init_stage, idx_mapping, participants_count, result_sender } = request;
+                    let PreparedRequest { init_stage, idx_mapping, participants_count, result_sender } = request;
                     final_result_sender = Some(result_sender);
 
                     if let Some(res) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await {
@@ -134,7 +134,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         });
 
         // Unlike other state transitions, we don't take into account
-        // any time left in the prior stage when receiving a ceremony request.
+        // any time left in the prior stage when receiving a ceremony request because
         // we don't want other parties to be able to control when our stages time out.
         self.timeout_handle
             .as_mut()

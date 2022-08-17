@@ -49,7 +49,7 @@ pub type CeremonyResultReceiver<Ceremony> = oneshot::Receiver<CeremonyOutcome<Ce
 
 /// Ceremony trait combines type parameters that are often used together
 pub trait CeremonyTrait: 'static {
-    // The chain specific details including point and signature
+    // Determines which curve and signing method to use
     type Crypto: CryptoScheme;
     // The type of data that will be used in p2p for this ceremony type
     type Data: Debug
@@ -113,7 +113,7 @@ pub type DynStage<Ceremony> = Box<
 >;
 
 // A ceremony request that has passed initial checks and setup its initial stage
-pub struct InitializedRequest<C: CeremonyTrait> {
+pub struct PreparedRequest<C: CeremonyTrait> {
     pub init_stage: DynStage<C>,
     pub idx_mapping: Arc<PartyIdxMapping>,
     pub participants_count: AuthorityCount,
@@ -126,8 +126,8 @@ type InitCeremonyFailure<Ceremony> = (
     CeremonyResultSender<Ceremony>,
 );
 
-// Creates the initial stage (and associated data) of a signing ceremony using the details of request
-pub fn init_signing_ceremony<C: CryptoScheme>(
+// Initial checks and setup before sending the request to the `CeremonyRunner`
+pub fn prepare_signing_request<C: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
     signers: Vec<AccountId>,
@@ -137,7 +137,7 @@ pub fn init_signing_ceremony<C: CryptoScheme>(
     rng: Rng,
     result_sender: CeremonyResultSender<SigningCeremony<C>>,
     logger: &slog::Logger,
-) -> Result<InitializedRequest<SigningCeremony<C>>, InitCeremonyFailure<SigningCeremony<C>>> {
+) -> Result<PreparedRequest<SigningCeremony<C>>, InitCeremonyFailure<SigningCeremony<C>>> {
     // Check that we have enough signers
     let minimum_signers_needed = key_info.params.threshold + 1;
     let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
@@ -190,7 +190,7 @@ pub fn init_signing_ceremony<C: CryptoScheme>(
         Box::new(BroadcastStage::new(processor, common))
     };
 
-    Ok(InitializedRequest {
+    Ok(PreparedRequest {
         init_stage,
         idx_mapping: key_info.validator_map,
         participants_count: signers_len,
@@ -198,8 +198,8 @@ pub fn init_signing_ceremony<C: CryptoScheme>(
     })
 }
 
-// Creates the initial stage (and associated data) of a keygen ceremony using the details of request
-pub fn init_keygen_ceremony<C: CryptoScheme>(
+// Initial checks and setup before sending the request to the `CeremonyRunner`
+pub fn prepare_keygen_request<C: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
     participants: Vec<AccountId>,
@@ -208,7 +208,7 @@ pub fn init_keygen_ceremony<C: CryptoScheme>(
     allowing_high_pubkey: bool,
     result_sender: CeremonyResultSender<KeygenCeremony<C>>,
     logger: &slog::Logger,
-) -> Result<InitializedRequest<KeygenCeremony<C>>, InitCeremonyFailure<KeygenCeremony<C>>> {
+) -> Result<PreparedRequest<KeygenCeremony<C>>, InitCeremonyFailure<KeygenCeremony<C>>> {
     let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
     let (our_idx, signer_idxs) =
@@ -246,7 +246,7 @@ pub fn init_keygen_ceremony<C: CryptoScheme>(
         Box::new(BroadcastStage::new(processor, common))
     };
 
-    Ok(InitializedRequest {
+    Ok(PreparedRequest {
         init_stage,
         idx_mapping: validator_map,
         participants_count: num_of_participants,
@@ -379,7 +379,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             return;
         }
 
-        let request = match init_keygen_ceremony(
+        let request = match prepare_keygen_request(
             ceremony_id,
             &self.my_account_id,
             participants,
@@ -429,7 +429,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             return;
         }
 
-        let request = match init_signing_ceremony(
+        let request = match prepare_signing_request(
             ceremony_id,
             &self.my_account_id,
             signers,
@@ -620,8 +620,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     fn cleanup_ceremony(&mut self, id: Result<CeremonyId, JoinError>, logger: &slog::Logger) {
         match id {
             Ok(id) => {
-                // We cant be sure that we have a ceremony to remove here because
+                // We can't be sure that we have a ceremony to remove here because
                 // we may/may-not have an unauthorised ceremony to remove.
+                // This is due to unauthorised ceremonies being able to timeout.
                 let _removed = self.inner.remove(&id);
             }
             Err(err) => slog::error!(logger, "Ceremony panicked with: {}", err),
@@ -639,7 +640,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 // Contains the channels used to send data to a running ceremony
 struct CeremonyHandle<Ceremony: CeremonyTrait> {
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
-    pub request_sender: UnboundedSender<InitializedRequest<Ceremony>>,
+    pub request_sender: UnboundedSender<PreparedRequest<Ceremony>>,
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
@@ -666,7 +667,7 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
         )
     }
 
-    fn on_request(&mut self, request: InitializedRequest<Ceremony>) {
+    fn on_request(&mut self, request: PreparedRequest<Ceremony>) {
         let _res = self.request_sender.send(request);
     }
 }

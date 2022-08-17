@@ -26,7 +26,7 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{
-                init_keygen_ceremony, init_signing_ceremony, CeremonyOutcome, CeremonyTrait,
+                prepare_keygen_request, prepare_signing_request, CeremonyOutcome, CeremonyTrait,
                 KeygenCeremony, SigningCeremony,
             },
             ceremony_runner::CeremonyRunner,
@@ -157,7 +157,7 @@ impl Node<SigningCeremonyEth> {
             keygen_result_info,
         } = signing_ceremony_details;
 
-        let request = init_signing_ceremony::<EthSigning>(
+        let request = prepare_signing_request::<EthSigning>(
             ceremony_id,
             &self.own_account_id,
             signers,
@@ -192,7 +192,7 @@ impl Node<KeygenCeremonyEth> {
             signers,
         } = keygen_ceremony_details;
 
-        let request = init_keygen_ceremony::<EthSigning>(
+        let request = prepare_keygen_request::<EthSigning>(
             ceremony_id,
             &self.own_account_id,
             signers,
