@@ -12,7 +12,7 @@ use sp_runtime::{Digest, DigestItem};
 use cf_traits::AuctionOutcome;
 
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
+use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, storage_alias};
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 
 mod p2p_crypto {
@@ -22,9 +22,8 @@ mod p2p_crypto {
 }
 
 // For accessing missed aura slot tracking.
-frame_support::generate_storage_alias!(
-	AuraSlotExtraction, LastSeenSlot => Value<u64>
-);
+#[storage_alias]
+type LastSeenSlot = StorageValue<AuraSlotExtraction, u64>;
 
 pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + ReputationConfig {}
 

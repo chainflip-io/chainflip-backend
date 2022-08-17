@@ -29,9 +29,7 @@ use frame_support::{
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto},
 	DispatchError, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -210,6 +208,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
+			use sp_runtime::traits::Zero;
 			Self { total_issuance: Zero::zero() }
 		}
 	}

@@ -11,8 +11,7 @@ version = '0.1.0'
 [dependencies]
 hex = {version = "0.4.3", default-features = false}
 anyhow = {version = '1.0', optional = true}
-jsonrpc-core = {version = "18.0.0", optional = true}
-jsonrpc-core-client = {version = '18.0.0', optional = true}
+jsonrpsee = { version = "0.13.0", optional = true, features = ["client"] }
 predicates = {version = "2.1.1", optional = true}
 mockall = {version = "0.11.0", optional = true}
 futures = {version = "0.3.14", optional = true}
@@ -22,8 +21,7 @@ tokio = {version = "1.13.1", features = ["full"], optional = true}
 default = ['std']
 std = [
   'anyhow',
-  'jsonrpc-core',
-  'jsonrpc-core-client',
+  'jsonrpsee',
   'predicates',
   'mockall',
   'futures',

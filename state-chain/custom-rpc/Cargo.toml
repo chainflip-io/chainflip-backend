@@ -9,9 +9,7 @@ edition = '2021'
 path = '../runtime'
 
 [dependencies]
-jsonrpc-derive = '18.0.0'
-jsonrpc-core = '18.0.0'
-jsonrpc-core-client = '18.0.0'
+jsonrpsee = { version = "0.13.0", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }
 cf-chains = { path = '../chains' }
 cf-utilities = { package = 'utilities', path = '../../utilities' }

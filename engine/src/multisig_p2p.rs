@@ -8,13 +8,14 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use futures::stream::StreamExt;
 use itertools::Itertools;
+use jsonrpsee::ws_client::WsClientBuilder;
 use lazy_format::lazy_format;
 use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use slog::o;
 use sp_core::{storage::StorageKey, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-pub use multisig_p2p_transport::P2PRpcClient;
+pub use multisig_p2p_transport::P2PValidatorNetworkNodeRpcApiClient;
 use state_chain_runtime::AccountId;
 
 use codec::Encode;
@@ -30,7 +31,7 @@ use crate::{
     state_chain_observer::client::{StateChainClient, StateChainRpcApi},
 };
 
-use utilities::{make_periodic_tick, rpc_error_into_anyhow_error, Port};
+use utilities::{make_periodic_tick, Port};
 
 #[derive(Debug)]
 pub enum AccountPeerMappingChange {
@@ -218,14 +219,11 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 ) -> Result<()> {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 
-    // Use StateChainClient's RpcChannel
-    let client = jsonrpc_core_client::transports::ws::connect::<P2PRpcClient>(
-        &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).with_context(|| {
-            format!("Invalid ws endpoint: {}", settings.state_chain.ws_endpoint)
-        })?,
-    )
-    .await
-    .map_err(rpc_error_into_anyhow_error)?;
+    let client = WsClientBuilder::default()
+        // TODO: consider adding something like this
+        // .max_request_body_size(TEN_MB_SIZE_BYTES * X)
+        .build(settings.state_chain.ws_endpoint.as_str())
+        .await?;
 
     let mut account_to_peer_mapping_on_chain = state_chain_client
         .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, Port, pallet_cf_validator::Ipv6Addr)>(
@@ -293,7 +291,6 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                 .collect(),
         )
         .await
-        .map_err(rpc_error_into_anyhow_error)
         .with_context(|| {
             format!(
                 "Failed to add peers to reserved set: {:?}",
@@ -390,7 +387,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                             entry.insert(account_id.clone());
                             account_to_peer_mapping_on_chain.insert(account_id, (peer_id, port, ip_address));
                             if peer_id_from_cfe_config != peer_id {
-                                if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await.map_err(rpc_error_into_anyhow_error) {
+                                if let Err(error) = client.add_peer(PeerIdTransferable::from(&peer_id), port, ip_address).await {
                                     slog::error!(logger, "Couldn't add peer {} to reserved set: {}", peer_id, error);
                                 } else {
                                     slog::info!(logger, "Added peer {} to reserved set", peer_id);
@@ -405,7 +402,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
                             account_to_peer_mapping_on_chain.remove(&account_id);
                             peer_to_account_mapping_on_chain.remove(&peer_id);
                             if peer_id_from_cfe_config != peer_id {
-                                if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await.map_err(rpc_error_into_anyhow_error) {
+                                if let Err(error) = client.remove_peer(PeerIdTransferable::from(&peer_id)).await {
                                     slog::error!(logger, "Couldn't remove peer {} to reserved set: {}", peer_id, error);
                                 } else {
                                     slog::info!(logger, "Removed peer {} to reserved set", peer_id);

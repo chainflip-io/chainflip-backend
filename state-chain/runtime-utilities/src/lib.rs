@@ -64,10 +64,20 @@ where
 mod test {
 	use super::*;
 	use codec::{Decode, Encode};
+	use frame_support::{storage_alias, traits::StorageInstance};
 
-	frame_support::generate_storage_alias!(
-		Test, Store => Value<MyEnumType>
-	);
+	struct Pallet;
+
+	impl StorageInstance for Pallet {
+		fn pallet_prefix() -> &'static str {
+			Self::STORAGE_PREFIX
+		}
+
+		const STORAGE_PREFIX: &'static str = "Test";
+	}
+
+	#[storage_alias]
+	type Store = StorageValue<Pallet, MyEnumType>;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 	enum MyEnumType {
@@ -91,11 +101,19 @@ mod test {
 mod test_derive {
 	use super::*;
 	use codec::{Decode, Encode};
-	use frame_support::Twox64Concat;
+	use frame_support::{storage_alias, traits::StorageInstance, Twox64Concat};
 
-	frame_support::generate_storage_alias!(
-		Test, ValueStore => Value<MyEnumType>
-	);
+	struct Pallet;
+
+	impl StorageInstance for Pallet {
+		fn pallet_prefix() -> &'static str {
+			Self::STORAGE_PREFIX
+		}
+
+		const STORAGE_PREFIX: &'static str = "Test";
+	}
+	#[storage_alias]
+	type ValueStore = StorageValue<Pallet, MyEnumType>;
 
 	trait Config {
 		type Inner: FullCodec;
@@ -107,9 +125,8 @@ mod test_derive {
 		type Inner = u32;
 	}
 
-	frame_support::generate_storage_alias!(
-		Test, MapStore<T: Config> => Map<(Twox64Concat, u32), MyGenericEnumType<T>>
-	);
+	#[storage_alias]
+	type MapStore<T> = StorageMap<Pallet, Twox64Concat, u32, MyGenericEnumType<T>>;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumVariant)]
 	enum MyEnumType {

@@ -138,7 +138,10 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		// If and only if *all* candidates agree on the same key, return success.
 		if let Some((key, votes)) = self.success_votes.iter().next() {
 			if *votes == self.candidate_count {
-				SuccessVoters::<T, I>::remove_all(None);
+				// This *should* be safe since it's bounded by the number of candidates.
+				// We may want to revise.
+				// See https://github.com/paritytech/substrate/pull/11490
+				let _ = SuccessVoters::<T, I>::clear(u32::MAX, None);
 				return Ok(*key)
 			}
 		}
@@ -159,7 +162,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		{
 			FailureVoters::<T, I>::kill();
 		} else {
-			SuccessVoters::<T, I>::remove_all(None);
+			let _empty = SuccessVoters::<T, I>::clear(u32::MAX, None);
 			FailureVoters::<T, I>::kill();
 			IncompatibleVoters::<T, I>::kill();
 			log::warn!("Unable to determine a consensus outcome for keygen.");

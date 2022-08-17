@@ -1,6 +1,6 @@
-use anyhow::anyhow;
 use core::{fmt::Display, time::Duration};
 use futures::{stream, Stream};
+use jsonrpsee::core::RpcResult;
 
 #[macro_export]
 macro_rules! assert_panics {
@@ -139,30 +139,17 @@ mod tests_periodic_tick_stream {
     }
 }
 
-// Needed due to the jsonrpc maintainer's not definitely unquestionable decision to impl their error types without the Sync trait
-pub fn rpc_error_into_anyhow_error(error: jsonrpc_core_client::RpcError) -> anyhow::Error {
-    anyhow!(error.to_string())
-}
-
-pub trait JsonResultExt {
+pub trait RpcResultExt {
     type T;
 
-    fn map_to_json_error(self) -> jsonrpc_core::Result<Self::T>;
+    fn map_to_rpc_error(self) -> RpcResult<Self::T>;
 }
 
-pub fn new_json_error<E: Display>(error: E) -> jsonrpc_core::Error {
-    jsonrpc_core::Error {
-        code: jsonrpc_core::ErrorCode::ServerError(0),
-        message: error.to_string(),
-        data: None,
-    }
-}
-
-impl<T, E: Display> JsonResultExt for std::result::Result<T, E> {
+impl<T, E: Display> RpcResultExt for std::result::Result<T, E> {
     type T = T;
 
-    fn map_to_json_error(self) -> jsonrpc_core::Result<Self::T> {
-        self.map_err(new_json_error)
+    fn map_to_rpc_error(self) -> RpcResult<Self::T> {
+        self.map_err(|error| anyhow::anyhow!("{error}").into())
     }
 }
 
