@@ -218,7 +218,7 @@ where
             blocks_per_heartbeat
         );
 
-        let epoch_start = |block_hash: H256, index: u32, current: bool, participant: bool| {
+        let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let epoch_start_sender = &epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
@@ -254,7 +254,7 @@ where
                 .unwrap();
 
             if historical_active_epochs.is_empty() {
-                epoch_start(initial_block_hash, current_epoch, true, false).await;
+                start_epoch(initial_block_hash, current_epoch, true, false).await;
             } else {
                 assert!(historical_active_epochs.iter().tuple_windows().all(|(epoch, next_epoch)| epoch < next_epoch)); // is_strictly_sorted
                 assert!(historical_active_epochs.last().unwrap() <= &current_epoch);
@@ -275,7 +275,7 @@ where
                         itertools::EitherOrBoth::Right(_) => unreachable!(),
                     };
 
-                    epoch_start(initial_block_hash, epoch, epoch == current_epoch, participant).await;
+                    start_epoch(initial_block_hash, epoch, epoch == current_epoch, participant).await;
                 }
             }
         }
@@ -322,7 +322,7 @@ where
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
-                                                epoch_start(current_block_hash, new_epoch, true, state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
+                                                start_epoch(current_block_hash, new_epoch, true, state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
                                                     current_block_hash,
                                                     &new_epoch,
                                                     &state_chain_client.our_account_id
