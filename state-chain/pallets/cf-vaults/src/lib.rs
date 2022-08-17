@@ -609,16 +609,7 @@ pub mod pallet {
 
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
-			// For the new epoch we create a new vault with the new public key and its active
-			// window at for the block after that reported
-			Vaults::<T, I>::insert(
-				CurrentEpochIndex::<T>::get().saturating_add(1),
-				Vault {
-					public_key: new_public_key,
-					active_from_block: block_number
-						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-				},
-			);
+			Self::set_next_vault(new_public_key, block_number);
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
 
@@ -651,17 +642,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			// We set the new key as the key for the next epoch.
-			Vaults::<T, I>::insert(
-				CurrentEpochIndex::<T>::get().saturating_add(1),
-				Vault {
-					public_key: new_public_key,
-					active_from_block: block_number
-						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-				},
-			);
+			Self::set_next_vault(new_public_key, block_number);
 
-			// Put the system into maintenance mode.
 			T::SystemStateManager::activate_maintenance_mode();
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
@@ -727,6 +709,20 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn set_next_vault(
+		new_public_key: AggKeyFor<T, I>,
+		rotated_at_block_number: ChainBlockNumberFor<T, I>,
+	) {
+		Vaults::<T, I>::insert(
+			CurrentEpochIndex::<T>::get().saturating_add(1),
+			Vault {
+				public_key: new_public_key,
+				active_from_block: rotated_at_block_number
+					.saturating_add(ChainBlockNumberFor::<T, I>::one()),
+			},
+		);
+	}
+
 	// Called once there's consensus between the authorities that the keygen was successful
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		T::Broadcaster::threshold_sign_and_broadcast(
