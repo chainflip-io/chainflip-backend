@@ -235,7 +235,7 @@ where
                         .active_from_block,
                     current,
                     participant,
-                }).ok().unwrap();
+                }).unwrap();
             }
         };
 

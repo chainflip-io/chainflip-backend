@@ -101,8 +101,8 @@ impl SignatureAndEvent {
     }
 }
 
-#[derive(Clone)]
-#[cfg_attr(test, derive(PartialEq, Debug))]
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct EpochStart {
     pub index: EpochIndex,
     pub eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
