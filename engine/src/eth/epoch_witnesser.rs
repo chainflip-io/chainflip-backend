@@ -16,7 +16,7 @@ pub async fn start<G, F, Fut, State, StateChainRpc>(
     name: String,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
-    mut should_witness_epoch: G,
+    mut should_participant_witness_epoch: G,
     initial_state: State,
     mut epoch_witnesser_generator: F,
     logger: &slog::Logger,
@@ -58,7 +58,7 @@ where
                         option_state = Some(handle.await);
                     }
 
-                    if epoch_start.participant && should_witness_epoch(&epoch_start) {
+                    if epoch_start.participant && should_participant_witness_epoch(&epoch_start) {
                         end_witnessing_signal_and_handle = Some({
                             let end_witnessing_signal = Arc::new(Mutex::new(None));
 
