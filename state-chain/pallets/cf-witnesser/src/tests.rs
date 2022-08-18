@@ -1,9 +1,9 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
-	CallHash, Error, VoteMask, Votes,
+	CallHash, CallHashExecuted, Error, ExtraCallData, VoteMask, Votes,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo};
+use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
@@ -150,5 +150,49 @@ fn can_continue_to_witness_for_old_epochs() {
 			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call, current_epoch + 1,),
 			Error::<Test>::InvalidEpoch
 		);
+	});
+}
+
+#[test]
+fn can_purge_stale_storage() {
+	new_test_ext().execute_with(|| {
+		let call = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
+			pallet_dummy::Call::<Test>::increment_value {},
+		))));
+
+		for e in [2u32, 9, 10, 11] {
+			Votes::<Test>::insert(e, &call, vec![0, 0, e as u8]);
+			ExtraCallData::<Test>::insert(e, &call, vec![vec![0], vec![e as u8]]);
+			CallHashExecuted::<Test>::insert(e, &call, ());
+		}
+
+		// Purge storage in epoch 2.
+		Witnesser::on_expired_epoch(2);
+
+		// Storage items for epoch 2 should be removed.
+		assert_eq!(Votes::<Test>::get(2u32, &call), None);
+		assert_eq!(ExtraCallData::<Test>::get(2u32, call), None);
+		assert_eq!(CallHashExecuted::<Test>::get(2u32, call), None);
+		// Future epoch items are unaffected.
+		for e in [9u32, 10, 11] {
+			Votes::<Test>::insert(e, &call, vec![0, 0, e as u8]);
+			ExtraCallData::<Test>::insert(e, &call, vec![vec![0], vec![e as u8]]);
+			CallHashExecuted::<Test>::insert(e, &call, ());
+		}
+
+		// Remove storage items for epoch 9 and 10.
+		Witnesser::on_expired_epoch(9);
+		Witnesser::on_expired_epoch(10);
+
+		for e in [9u32, 10] {
+			assert_eq!(Votes::<Test>::get(e, &call), None);
+			assert_eq!(ExtraCallData::<Test>::get(e, call), None);
+			assert_eq!(CallHashExecuted::<Test>::get(e, call), None);
+		}
+
+		// Epoch 11's storage items are unaffected.
+		assert_eq!(Votes::<Test>::get(11u32, &call), Some(vec![0, 0, 11]));
+		assert_eq!(ExtraCallData::<Test>::get(11u32, call), Some(vec![vec![0], vec![11]]));
+		assert_eq!(CallHashExecuted::<Test>::get(11u32, call), Some(()));
 	});
 }

@@ -207,8 +207,11 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 
-	/// A new epoch has started
-	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]);
+	/// A new epoch has started.
+	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {}
+
+	/// When an epoch has been expired.
+	fn on_expired_epoch(_expired: EpochIndex) {}
 }
 
 /// Resetter for Reputation Points and Online Credits of a Validator
@@ -299,7 +302,7 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides a unqiue nonce for some [Chain].
+/// Provides a unique nonce for some [Chain].
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	fn replay_protection() -> Abi::ReplayProtection;
 }
@@ -541,7 +544,7 @@ where
 		id
 	}
 
-	/// Helper function to enable benchmarking of the brodcast pallet
+	/// Helper function to enable benchmarking of the broadcast pallet
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(_request_id: Self::RequestId, _signature: C::ThresholdSignature) {
 		unimplemented!();

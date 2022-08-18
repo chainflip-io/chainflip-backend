@@ -967,6 +967,7 @@ impl<T: Config> Pallet<T> {
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
+		T::EpochTransitionHandler::on_expired_epoch(epoch);
 		T::ValidatorWeightInfo::expire_epoch(num_expired_authorities)
 	}
 
