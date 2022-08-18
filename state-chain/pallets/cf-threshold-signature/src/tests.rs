@@ -345,7 +345,10 @@ fn test_not_enough_signers_for_threshold() {
 #[cfg(test)]
 mod unsigned_validation {
 	use super::*;
-	use crate::{Call as PalletCall, LiveCeremonies, PendingCeremonies, RetryPolicy, RetryQueues};
+	use crate::{
+		Call as PalletCall, LiveCeremonies, OpenRequests, PendingCeremonies, RetryPolicy,
+		RetryQueues,
+	};
 	use cf_chains::ChainCrypto;
 	use cf_traits::{KeyProvider, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
@@ -365,6 +368,7 @@ mod unsigned_validation {
 			);
 			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
 			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id);
+			let request = OpenRequests::<Test, Instance1>::get(ceremony_id);
 			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
 				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
@@ -373,7 +377,7 @@ mod unsigned_validation {
 				ceremony.clone().unwrap().remaining_respondents,
 				BTreeSet::from_iter(participants)
 			);
-			assert_eq!(ceremony.unwrap().retry_policy, RetryPolicy::Never);
+			assert_eq!(request.unwrap().retry_policy, RetryPolicy::Never);
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				retry_block,
@@ -459,7 +463,7 @@ mod unsigned_validation {
 #[cfg(test)]
 mod failure_reporting {
 	use super::*;
-	use crate::{CeremonyContext, RetryPolicy};
+	use crate::CeremonyContext;
 	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider};
 
 	fn init_context(
@@ -471,7 +475,6 @@ mod failure_reporting {
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,
-			retry_policy: RetryPolicy::Always,
 			_phantom: Default::default(),
 		}
 	}
