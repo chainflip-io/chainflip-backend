@@ -6,6 +6,7 @@ use chainflip_engine::{
     common::format_iterator,
     eth::{
         self, build_broadcast_channel,
+        chain_data_witnesser::{NoTransactionParticipants, ETH_CHAIN_TRACKING_POLL_INTERVAL},
         key_manager::KeyManager,
         rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         stake_manager::StakeManager,
@@ -233,6 +234,8 @@ fn main() -> anyhow::Result<()> {
                     state_chain_client.clone(),
                     witnessing_instruction_receiver_3,
                     cfe_settings_update_receiver,
+                    Arc::new(NoTransactionParticipants{}),
+                    ETH_CHAIN_TRACKING_POLL_INTERVAL,
                     &root_logger
                 )
             );

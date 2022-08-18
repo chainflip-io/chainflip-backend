@@ -52,7 +52,6 @@ where
                             let end_witnessing_signal = Arc::new(Mutex::new(None));
 
                             let logger = logger.clone();
-
                             (
                                 end_witnessing_signal.clone(),
                                 scope.spawn_with_handle::<_, _>(epoch_witnesser_generator(
