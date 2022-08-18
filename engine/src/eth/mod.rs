@@ -34,7 +34,7 @@ use crate::{
     },
     logging::{COMPONENT_KEY, ETH_HTTP_STREAM_YIELDED, ETH_STREAM_BEHIND, ETH_WS_STREAM_YIELDED},
     settings,
-    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+    state_chain_observer::client::SubmitSignedExtrinsic,
 };
 use ethbloom::{Bloom, Input};
 use futures::{stream, FutureExt, StreamExt};
@@ -779,16 +779,16 @@ pub trait EthContractWitnesser {
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-    async fn handle_event<RpcClient, EthRpcClient>(
+    async fn handle_event<StateChainClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
         block_number: u64,
         event: Event<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        state_chain_client: Arc<StateChainClient>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
-        RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        StateChainClient: 'static + SubmitSignedExtrinsic + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send;
 
     fn get_contract_address(&self) -> H160;

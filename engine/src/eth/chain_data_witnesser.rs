@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::state_chain_observer::client::{StateChainClient, StateChainRpcApi};
+use crate::state_chain_observer::client::SubmitSignedExtrinsic;
 
 use super::{rpc::EthRpcApi, EpochStart};
 
@@ -15,16 +15,16 @@ use web3::types::{BlockNumber, U64};
 
 const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
-pub async fn start<EthRpcClient, ScRpcClient>(
+pub async fn start<StateChainClient, EthRpcClient>(
     eth_rpc: EthRpcClient,
-    state_chain_client: Arc<StateChainClient<ScRpcClient>>,
+    state_chain_client: Arc<StateChainClient>,
     epoch_start_receiver: broadcast::Receiver<EpochStart>,
     cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
+    StateChainClient: 'static + SubmitSignedExtrinsic + Sync + Send,
     EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
-    ScRpcClient: 'static + StateChainRpcApi + Send + Sync,
 {
     super::epoch_witnesser::start(
         "ETH-Chain-Data",

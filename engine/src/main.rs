@@ -17,7 +17,7 @@ use chainflip_engine::{
     multisig_p2p,
     p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
-    state_chain_observer,
+    state_chain_observer::{self, client::SubmitSignedExtrinsic},
     task_scope::with_main_task_scope,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;

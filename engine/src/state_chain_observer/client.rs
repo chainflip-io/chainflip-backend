@@ -229,6 +229,17 @@ impl StateChainRpcApi for StateChainRpcClient {
     }
 }
 
+#[async_trait]
+pub trait SubmitSignedExtrinsic {
+    async fn submit_signed_extrinsic<Call>(
+        &self,
+        call: Call,
+        logger: &slog::Logger,
+    ) -> Result<H256>
+    where
+        Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync;
+}
+
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     events_storage_key: StorageKey,
     pub heartbeat_block_interval: u32,
@@ -437,130 +448,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             signature,
             extra,
         )
-    }
-
-    /// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
-    pub async fn submit_signed_extrinsic<Call>(
-        &self,
-        call: Call,
-        logger: &slog::Logger,
-    ) -> Result<H256>
-    where
-        Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug,
-    {
-        for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
-            // use the previous value but increment it for the next thread that loads/fetches it
-            let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
-            let runtime_version = { self.runtime_version.read().await.clone() };
-            match self
-                .state_chain_rpc_client
-                .submit_extrinsic_rpc(self.create_and_sign_extrinsic(
-                    call.clone().into(),
-                    &runtime_version,
-                    self.genesis_hash,
-                    nonce,
-                ))
-                .await
-            {
-                Ok(tx_hash) => {
-                    slog::info!(
-                        logger,
-                        "{:?} submitted successfully with tx_hash: {:#x}",
-                        &call,
-                        tx_hash
-                    );
-                    return Ok(tx_hash);
-                }
-                Err(rpc_err) => match rpc_err {
-                    // This occurs when a transaction with the same nonce is in the transaction pool (and the priority is
-                    // <= priority of that existing tx)
-                    RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "priority is too low" i.e. nonce is too low
-                        code: ErrorCode::ServerError(1014),
-                        ..
-                    }) => {
-                        slog::error!(
-                            logger,
-                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
-                            nonce,
-                            rpc_err
-                        );
-                    }
-                    // This occurs when the nonce has already been *consumed* i.e a transaction with that nonce
-                    // is in a block
-                    RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
-                        code: ErrorCode::ServerError(1010),
-                        data: Some(Value::String(ref invalid_transaction)),
-                        ..
-                    }) if invalid_transaction
-                        == <&'static str>::from(InvalidTransaction::Stale) =>
-                    {
-                        slog::error!(
-                            logger,
-                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
-                            nonce,
-                            rpc_err
-                        );
-                    }
-                    RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "transaction has bad signature" -> when the runtime is updated, since the
-                        // runtime version and/or metadata is now incorrect
-                        code: ErrorCode::ServerError(1010),
-                        data: Some(Value::String(ref invalid_transaction)),
-                        ..
-                    }) if invalid_transaction
-                        == <&'static str>::from(InvalidTransaction::BadProof) =>
-                    {
-                        slog::error!(
-                            logger,
-                            "Extrinsic submission failed with nonce: {}. Error: {:?}. Refetching the runtime version.",
-                            nonce,
-                            rpc_err
-                        );
-
-                        // we want to reset the nonce, either for the next extrinsic, or for when
-                        // we retry this one, with the updated runtime_version
-                        self.nonce.fetch_sub(1, Ordering::Relaxed);
-
-                        let latest_block_hash =
-                            self.state_chain_rpc_client.latest_block_hash().await?;
-
-                        let runtime_version = self
-                            .state_chain_rpc_client
-                            .fetch_runtime_version(latest_block_hash)
-                            .await?;
-
-                        {
-                            let runtime_version_locked =
-                                { self.runtime_version.read().await.clone() };
-
-                            if runtime_version_locked == runtime_version {
-                                slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
-                                // break, as the error is now very unlikely to be solved by fetching again
-                                break;
-                            }
-
-                            *(self.runtime_version.write().await) = runtime_version;
-                        }
-                        // don't `return`, therefore go back to the top of the loop and retry sending the transaction
-                    }
-                    err => {
-                        let err = rpc_error_into_anyhow_error(err);
-                        slog::error!(
-                            logger,
-                            "Extrinsic failed with error: {}. Extrinsic: {:?}",
-                            err,
-                            &call,
-                        );
-                        self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        return Err(err);
-                    }
-                },
-            }
-        }
-        slog::error!(logger, "Exceeded maximum number of retry attempts");
-        Err(anyhow!("Exceeded maximum number of retry attempts",))
     }
 
     /// Submit an unsigned extrinsic.
@@ -893,6 +780,131 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
     pub async fn is_auction_phase(&self) -> Result<bool> {
         self.state_chain_rpc_client.is_auction_phase().await
+    }
+}
+
+#[async_trait]
+impl<RpcClient: StateChainRpcApi + Send + Sync> SubmitSignedExtrinsic
+    for StateChainClient<RpcClient>
+{
+    /// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it fails on an invalid nonce.
+    async fn submit_signed_extrinsic<Call>(&self, call: Call, logger: &slog::Logger) -> Result<H256>
+    where
+        Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync,
+    {
+        for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
+            // use the previous value but increment it for the next thread that loads/fetches it
+            let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
+            let runtime_version = { self.runtime_version.read().await.clone() };
+            match self
+                .state_chain_rpc_client
+                .submit_extrinsic_rpc(self.create_and_sign_extrinsic(
+                    call.clone().into(),
+                    &runtime_version,
+                    self.genesis_hash,
+                    nonce,
+                ))
+                .await
+            {
+                Ok(tx_hash) => {
+                    slog::info!(
+                        logger,
+                        "{:?} submitted successfully with tx_hash: {:#x}",
+                        &call,
+                        tx_hash
+                    );
+                    return Ok(tx_hash);
+                }
+                Err(rpc_err) => match rpc_err {
+                    // This occurs when a transaction with the same nonce is in the transaction pool (and the priority is
+                    // <= priority of that existing tx)
+                    RpcError::JsonRpcError(Error {
+                        // this is the error returned when the "priority is too low" i.e. nonce is too low
+                        code: ErrorCode::ServerError(1014),
+                        ..
+                    }) => {
+                        slog::error!(
+                            logger,
+                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
+                            nonce,
+                            rpc_err
+                        );
+                    }
+                    // This occurs when the nonce has already been *consumed* i.e a transaction with that nonce
+                    // is in a block
+                    RpcError::JsonRpcError(Error {
+                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
+                        code: ErrorCode::ServerError(1010),
+                        data: Some(Value::String(ref invalid_transaction)),
+                        ..
+                    }) if invalid_transaction
+                        == <&'static str>::from(InvalidTransaction::Stale) =>
+                    {
+                        slog::error!(
+                            logger,
+                            "Extrinsic submission failed with nonce: {}. Error: {:?}",
+                            nonce,
+                            rpc_err
+                        );
+                    }
+                    RpcError::JsonRpcError(Error {
+                        // this is the error returned when the "transaction has bad signature" -> when the runtime is updated, since the
+                        // runtime version and/or metadata is now incorrect
+                        code: ErrorCode::ServerError(1010),
+                        data: Some(Value::String(ref invalid_transaction)),
+                        ..
+                    }) if invalid_transaction
+                        == <&'static str>::from(InvalidTransaction::BadProof) =>
+                    {
+                        slog::error!(
+                            logger,
+                            "Extrinsic submission failed with nonce: {}. Error: {:?}. Refetching the runtime version.",
+                            nonce,
+                            rpc_err
+                        );
+
+                        // we want to reset the nonce, either for the next extrinsic, or for when
+                        // we retry this one, with the updated runtime_version
+                        self.nonce.fetch_sub(1, Ordering::Relaxed);
+
+                        let latest_block_hash =
+                            self.state_chain_rpc_client.latest_block_hash().await?;
+
+                        let runtime_version = self
+                            .state_chain_rpc_client
+                            .fetch_runtime_version(latest_block_hash)
+                            .await?;
+
+                        {
+                            let runtime_version_locked =
+                                { self.runtime_version.read().await.clone() };
+
+                            if runtime_version_locked == runtime_version {
+                                slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
+                                // break, as the error is now very unlikely to be solved by fetching again
+                                break;
+                            }
+
+                            *(self.runtime_version.write().await) = runtime_version;
+                        }
+                        // don't `return`, therefore go back to the top of the loop and retry sending the transaction
+                    }
+                    err => {
+                        let err = rpc_error_into_anyhow_error(err);
+                        slog::error!(
+                            logger,
+                            "Extrinsic failed with error: {}. Extrinsic: {:?}",
+                            err,
+                            &call,
+                        );
+                        self.nonce.fetch_sub(1, Ordering::Relaxed);
+                        return Err(err);
+                    }
+                },
+            }
+        }
+        slog::error!(logger, "Exceeded maximum number of retry attempts");
+        Err(anyhow!("Exceeded maximum number of retry attempts",))
     }
 }
 

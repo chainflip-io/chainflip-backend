@@ -21,7 +21,7 @@ use crate::{
         KeyId, MessageHash,
     },
     multisig_p2p::AccountPeerMappingChange,
-    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+    state_chain_observer::client::{StateChainClient, StateChainRpcApi, SubmitSignedExtrinsic},
     task_scope::{with_task_scope, Scope},
 };
 

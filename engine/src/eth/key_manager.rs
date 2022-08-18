@@ -1,12 +1,10 @@
 use crate::eth::{EthRpcApi, EventParseError};
-use crate::state_chain_observer::client::StateChainClient;
 use crate::{
     eth::{utils, SignatureAndEvent},
-    state_chain_observer::client::StateChainRpcApi,
+    state_chain_observer::client::SubmitSignedExtrinsic,
 };
 use cf_chains::eth::SchnorrVerificationComponents;
 use cf_traits::EpochIndex;
-use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
@@ -17,6 +15,7 @@ use anyhow::{anyhow, Result};
 use pallet_cf_governance::GovCallHash;
 
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
@@ -203,16 +202,16 @@ impl EthContractWitnesser for KeyManager {
         "KeyManager"
     }
 
-    async fn handle_event<RpcClient, EthRpcClient>(
+    async fn handle_event<StateChainClient, EthRpcClient>(
         &self,
         _epoch_index: EpochIndex,
         block_number: u64,
         event: Event<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        state_chain_client: Arc<StateChainClient>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
-        RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        StateChainClient: 'static + SubmitSignedExtrinsic + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
         slog::info!(logger, "Handling event: {}", event);

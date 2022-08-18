@@ -6,6 +6,7 @@ use chainflip_engine::{
     },
     state_chain_observer::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
+        SubmitSignedExtrinsic,
     },
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;

@@ -1,9 +1,8 @@
-use crate::state_chain_observer::client::StateChainClient;
 use std::sync::Arc;
 
 use crate::{
     eth::{utils, EthRpcApi, SignatureAndEvent},
-    state_chain_observer::client::StateChainRpcApi,
+    state_chain_observer::client::SubmitSignedExtrinsic,
 };
 
 use cf_traits::EpochIndex;
@@ -87,16 +86,16 @@ impl EthContractWitnesser for StakeManager {
         "StakeManager"
     }
 
-    async fn handle_event<RpcClient, EthRpcClient>(
+    async fn handle_event<StateChainClient, EthRpcClient>(
         &self,
         epoch: EpochIndex,
         _block_number: u64,
         event: Event<Self::EventParameters>,
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        state_chain_client: Arc<StateChainClient>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) where
-        RpcClient: 'static + StateChainRpcApi + Sync + Send,
+        StateChainClient: 'static + SubmitSignedExtrinsic + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
         slog::info!(logger, "Handling event: {}", event);
