@@ -408,40 +408,42 @@ pub trait EthContractWitnesser {
 
                 let decode_log_fn = self.decode_log_closure()?;
 
-                // convert from heads to events
-                let events = past_and_fut_heads
-                    .then(move |header| {
-                        let eth_rpc = eth_rpc_c.clone();
+                // convert from heads to blocks with events
+                return Ok(Box::pin(
+                    past_and_fut_heads
+                        .then(move |header| {
+                            let eth_rpc = eth_rpc_c.clone();
 
-                        async move {
-                            let block_number = header.block_number;
-                            let mut contract_bloom = Bloom::default();
-                            contract_bloom.accrue(Input::Raw(&contract_address.0));
+                            async move {
+                                let block_number = header.block_number;
+                                let mut contract_bloom = Bloom::default();
+                                contract_bloom.accrue(Input::Raw(&contract_address.0));
 
-                            // if we have logs for this block, fetch them.
-                            let result_logs = if header.logs_bloom.contains_bloom(&contract_bloom) {
-                                eth_rpc
-                                    .get_logs(
-                                        FilterBuilder::default()
-                                            // from_block *and* to_block are *inclusive*
-                                            .from_block(BlockNumber::Number(block_number))
-                                            .to_block(BlockNumber::Number(block_number))
-                                            .address(vec![contract_address])
-                                            .build(),
-                                    )
-                                    .await
-                            } else {
-                                // we know there won't be interesting logs, so don't fetch for events
-                                Ok(vec![])
-                            };
+                                // if we have logs for this block, fetch them.
+                                let result_logs =
+                                    if header.logs_bloom.contains_bloom(&contract_bloom) {
+                                        eth_rpc
+                                            .get_logs(
+                                                FilterBuilder::default()
+                                                    // from_block *and* to_block are *inclusive*
+                                                    .from_block(BlockNumber::Number(block_number))
+                                                    .to_block(BlockNumber::Number(block_number))
+                                                    .address(vec![contract_address])
+                                                    .build(),
+                                            )
+                                            .await
+                                    } else {
+                                        // we know there won't be interesting logs, so don't fetch for events
+                                        Ok(vec![])
+                                    };
 
-                            (block_number.as_u64(), result_logs)
-                        }
-                    })
-                    .map(move |(block_number, result_logs)| BlockWithDecodedEvents {
-                        block_number,
-                        decode_events_result: result_logs.and_then(|logs| {
-                            logs.into_iter()
+                                (block_number.as_u64(), result_logs)
+                            }
+                        })
+                        .map(move |(block_number, result_logs)| BlockWithDecodedEvents {
+                            block_number,
+                            decode_events_result: result_logs.and_then(|logs| {
+                                logs.into_iter()
                                     .map(
                                         |unparsed_log| -> Result<
                                             Event<Self::EventParameters>,
@@ -454,10 +456,9 @@ pub trait EthContractWitnesser {
                                         },
                                     )
                                     .collect::<Result<Vec<_>>>()
+                            }),
                         }),
-                    });
-
-                return Ok(Box::pin(events));
+                ));
             }
         }
         Err(anyhow!("No events in ETH safe head stream"))
