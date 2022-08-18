@@ -568,7 +568,7 @@ mod tests {
 
 	async fn new_p2p_network_node_with_test_probes() -> (
 		tokio::sync::mpsc::UnboundedSender<Event>,
-		WsClient,
+		Arc<WsClient>,
 		Arc<SharedState>,
 		Arc<LockedMockPeerNetwork>,
 		sc_service::TaskManager,
@@ -605,7 +605,7 @@ mod tests {
 
 		network_expectations.lock().checkpoint();
 
-		(event_sender, client, shared_state, network_expectations, task_manager)
+		(event_sender, Arc::new(client), shared_state, network_expectations, task_manager)
 	}
 
 	async fn expect_reserve_peer_changes_during_closure<F: Future, C: FnOnce() -> F>(
@@ -678,8 +678,6 @@ mod tests {
 	async fn add_and_remove_peers() {
 		let (_event_sender, client, shared_state, network_expectations, _task_manager) =
 			new_p2p_network_node_with_test_probes().await;
-
-		let client = Arc::new(client);
 
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
@@ -833,8 +831,6 @@ mod tests {
 		let (_event_sender, client, shared_state, network_expectations, _task_manager) =
 			new_p2p_network_node_with_test_probes().await;
 
-		let client = Arc::new(client);
-
 		let peer_0 = PeerIdTransferable::from(&PeerId::random());
 		let peer_1 = PeerIdTransferable::from(&PeerId::random());
 		let peer_2 = PeerIdTransferable::from(&PeerId::random());
@@ -948,7 +944,7 @@ mod tests {
 		let message = vec![4, 5, 6, 7, 8];
 
 		let (ipc_outgoing_sender, _ipc_incoming_stream) =
-			setup_ipc_connections(&client).await.unwrap();
+			setup_ipc_connections(client.as_ref()).await.unwrap();
 
 		network_expectations.lock().expect_reserve_peer().times(2).return_const(());
 		client
@@ -1047,7 +1043,7 @@ mod tests {
 		let other_message = vec![2, 3, 4, 5, 6];
 
 		let (_ipc_outgoing_sender, mut ipc_incoming_stream) =
-			setup_ipc_connections(&client).await.unwrap();
+			setup_ipc_connections(client.as_ref()).await.unwrap();
 
 		// Tests
 
