@@ -20,7 +20,7 @@ use async_trait::async_trait;
 
 use anyhow::{anyhow, Result};
 
-use super::{event::Event, DecodeLogClosure, EthObserver, EventParseError};
+use super::{event::Event, DecodeLogClosure, EthContractWitnesser, EventParseError};
 
 pub struct StakeManager {
     pub deployed_address: H160,
@@ -80,7 +80,7 @@ pub enum StakeManagerEvent {
 }
 
 #[async_trait]
-impl EthObserver for StakeManager {
+impl EthContractWitnesser for StakeManager {
     type EventParameters = StakeManagerEvent;
 
     fn contract_name(&self) -> &'static str {

@@ -15,9 +15,9 @@ pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
 pub const UNAUTHORIZED_SIGNING_EXPIRED: &str = "E8";
 pub const UNAUTHORIZED_KEYGEN_EXPIRED: &str = "E9";
 
-// ==== Logging Eth Observer constants ====
-pub const ETH_HTTP_STREAM_YIELDED: &str = "eth-observer-http-yielded";
-pub const ETH_WS_STREAM_YIELDED: &str = "eth-observer-ws-yielded";
+// ==== Logging Eth Witnesser constants ====
+pub const ETH_HTTP_STREAM_YIELDED: &str = "eth-witnesser-http-yielded";
+pub const ETH_WS_STREAM_YIELDED: &str = "eth-witnesser-ws-yielded";
 pub const ETH_STREAM_BEHIND: &str = "eth-stream-behind";
 
 // ==== Logging Trace/Debug Tag constants ====
