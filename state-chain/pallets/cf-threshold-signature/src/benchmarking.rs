@@ -87,7 +87,6 @@ benchmarks_instance_pallet! {
 			blame_counts,
 			participant_count:a,
 			key_id: <T as Chainflip>::KeyId::benchmark_value(),
-			retry_policy: RetryPolicy::Always,
 			_phantom: Default::default()
 		};
 	} : {

@@ -735,7 +735,7 @@ where
 		request_id: Self::RequestId,
 		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
 	) {
-		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
+		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Some(signature)));
 	}
 
 	fn request_signature_with(
