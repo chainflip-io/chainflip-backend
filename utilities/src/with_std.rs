@@ -1,6 +1,5 @@
-use core::{fmt::Display, time::Duration};
+use core::time::Duration;
 use futures::{stream, Stream};
-use jsonrpsee::core::RpcResult;
 
 #[macro_export]
 macro_rules! assert_panics {
@@ -136,20 +135,6 @@ mod tests_periodic_tick_stream {
             EXPECTED_DURATION_MS,
         );
         assert_eq!(result, (1..=REPETITIONS).collect::<Vec<_>>());
-    }
-}
-
-pub trait RpcResultExt {
-    type T;
-
-    fn map_to_rpc_error(self) -> RpcResult<Self::T>;
-}
-
-impl<T, E: Display> RpcResultExt for std::result::Result<T, E> {
-    type T = T;
-
-    fn map_to_rpc_error(self) -> RpcResult<Self::T> {
-        self.map_err(|error| anyhow::anyhow!("{error}").into())
     }
 }
 

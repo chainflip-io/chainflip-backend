@@ -1,6 +1,5 @@
 use cf_chains::eth::SigData;
-use cf_utilities::RpcResultExt;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
@@ -145,6 +144,10 @@ where
 	}
 }
 
+fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee::core::Error {
+	CallError::from_std_error(e).into()
+}
+
 impl<C, B> CustomApiServer for CustomRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
@@ -155,14 +158,14 @@ where
 		self.client
 			.runtime_api()
 			.cf_is_auction_phase(&self.query_block_id(at))
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 	fn cf_eth_flip_token_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
 		let eth_flip_token_address = self
 			.client
 			.runtime_api()
 			.cf_eth_flip_token_address(&self.query_block_id(at))
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(hex::encode(eth_flip_token_address))
 	}
 	fn cf_eth_stake_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
@@ -170,7 +173,7 @@ where
 			.client
 			.runtime_api()
 			.cf_eth_stake_manager_address(&self.query_block_id(at))
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(hex::encode(eth_stake_manager_address))
 	}
 	fn cf_eth_key_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
@@ -178,14 +181,14 @@ where
 			.client
 			.runtime_api()
 			.cf_eth_key_manager_address(&self.query_block_id(at))
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(hex::encode(eth_key_manager_address))
 	}
 	fn cf_eth_chain_id(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u64> {
 		self.client
 			.runtime_api()
 			.cf_eth_chain_id(&self.query_block_id(at))
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 	fn cf_eth_vault(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<(String, u32)> {
 		let eth_vault = self
@@ -206,33 +209,33 @@ where
 		self.client
 			.runtime_api()
 			.cf_auction_parameters(&self.query_block_id(at))
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 	fn cf_min_stake(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<NumberOrHex> {
 		let min_stake = self
 			.client
 			.runtime_api()
 			.cf_min_stake(&self.query_block_id(at))
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(min_stake.into())
 	}
 	fn cf_current_epoch(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u32> {
 		self.client
 			.runtime_api()
 			.cf_current_epoch(&self.query_block_id(at))
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 	fn cf_epoch_duration(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u32> {
 		self.client
 			.runtime_api()
 			.cf_epoch_duration(&self.query_block_id(at))
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 	fn cf_current_epoch_started_at(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u32> {
 		self.client
 			.runtime_api()
 			.cf_current_epoch_started_at(&self.query_block_id(at))
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 	fn cf_authority_emission_per_block(
 		&self,
@@ -242,7 +245,7 @@ where
 			.client
 			.runtime_api()
 			.cf_authority_emission_per_block(&self.query_block_id(at))
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(authority_emission_per_block.into())
 	}
 	fn cf_backup_emission_per_block(
@@ -253,7 +256,7 @@ where
 			.client
 			.runtime_api()
 			.cf_backup_emission_per_block(&self.query_block_id(at))
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(backup_emission_per_block.into())
 	}
 	fn cf_flip_supply(
@@ -264,7 +267,7 @@ where
 			.client
 			.runtime_api()
 			.cf_flip_supply(&self.query_block_id(at))
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 		Ok((issuance.into(), offchain.into()))
 	}
 	fn cf_accounts(
@@ -275,7 +278,7 @@ where
 			.client
 			.runtime_api()
 			.cf_accounts(&self.query_block_id(at))
-			.map_to_rpc_error()?
+			.map_err(to_rpc_error)?
 			.into_iter()
 			.map(|(account_id, vanity_name_bytes)| {
 				// we can use from_utf8_lossy here because we're guaranteed utf8 when we
@@ -293,7 +296,7 @@ where
 			.client
 			.runtime_api()
 			.cf_account_info(&self.query_block_id(at), account_id)
-			.map_to_rpc_error()?;
+			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfo {
 			stake: account_info.stake.into(),
@@ -316,7 +319,7 @@ where
 			.client
 			.runtime_api()
 			.cf_pending_claim(&self.query_block_id(at), account_id)
-			.map_to_rpc_error()?
+			.map_err(to_rpc_error)?
 		{
 			Some(pending_claim) => pending_claim,
 			None => return Ok(None),
@@ -337,7 +340,7 @@ where
 			.client
 			.runtime_api()
 			.cf_penalties(&self.query_block_id(at))
-			.map_to_rpc_error()?
+			.map_err(to_rpc_error)?
 			.iter()
 			.map(|(offence, runtime_api_penalty)| {
 				(
@@ -354,7 +357,7 @@ where
 		self.client
 			.runtime_api()
 			.cf_suspensions(&self.query_block_id(at))
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 
 	fn cf_generate_gov_key_call_hash(
@@ -365,6 +368,6 @@ where
 		self.client
 			.runtime_api()
 			.cf_generate_gov_key_call_hash(&self.query_block_id(at), call)
-			.map_to_rpc_error()
+			.map_err(to_rpc_error)
 	}
 }
