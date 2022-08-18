@@ -168,3 +168,27 @@ whitelisted key is ignored. This is confusing since mostly this is used in the c
 storage, which is easy to confuse with whitelisting the actual account.
 
 See [this PR](https://github.com/paritytech/substrate/pull/6815) for a decent explanation.
+
+## Cargo.toml's std section
+
+The substrate runtime (and by extension, all the pallets and their dependencies) need to be able to compile without the standard library. So each of their Cargo.toml files pulls in the dependencies with `default-features = false` to exclude anything that requires `std` to be enabled.
+
+However for testing and also for native execution, the runtime *can* make use of `std` features. So we can instruct the compiler to *include* these features only if the `std` feature is activated. You can also use this to activate optional features that are only available for certain compilation targets, for example.
+
+For example, if you have something like this:
+
+```
+[package]
+name = 'my-crate'
+
+[dependencies]
+my-dep = { version = "1", default-features = false }
+my-optional-dep = { version = "1", optional = true }
+
+[features]
+std = ['my-dep/std', 'my-optional-dep']
+```
+
+It means that, by default, `my-crate` will pull in `my-dep` without any default features activated, and will *not* pull in `my-optional-dep` at all.
+
+However if you compile `my-crate` with feature `std`, then it will pull `my-dep` *and* `my-optional-dep` with `std` feature activated.
