@@ -30,15 +30,15 @@ where
 
     super::epoch_witnesser::start(
         contract_witnesser.contract_name(),
-        state_chain_client,
         epoch_starts_receiver,
         |_epoch_start| true,
         (),
-        move |state_chain_client, end_witnessing_signal, epoch_start, (), logger| {
+        move |end_witnessing_signal, epoch_start, (), logger| {
             let eth_ws_rpc = eth_ws_rpc.clone();
             let eth_http_rpc = eth_http_rpc.clone();
             let dual_rpc = EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone(), &logger);
             let contract_witnesser = contract_witnesser.clone();
+            let state_chain_client = state_chain_client.clone();
 
             async move {
                 slog::info!(
