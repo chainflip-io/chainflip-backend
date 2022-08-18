@@ -54,7 +54,7 @@ impl Eth {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HealthCheck {
     pub hostname: String,
     pub port: Port,

@@ -591,7 +591,7 @@ fn test_check_withdrawal_address() {
 		);
 		let stake_attempts = FailedStakeAttempts::<Test>::get(ALICE);
 		assert_eq!(stake_attempts.len(), 1);
-		let stake_attempt = stake_attempts.get(0);
+		let stake_attempt = stake_attempts.first();
 		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
 		for e in System::events().into_iter().map(|e| e.event) {

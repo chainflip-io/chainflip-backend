@@ -407,14 +407,14 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn set_current_authority(account_id: &Self::AccountId) {
 		log::debug!("Setting current authority {:?}", account_id);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state = ChainflipAccountState::CurrentAuthority;
+			account_data.state = ChainflipAccountState::CurrentAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	fn set_historical_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state = ChainflipAccountState::HistoricalAuthority;
+			account_data.state = ChainflipAccountState::HistoricalAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
@@ -422,7 +422,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn from_historical_to_backup(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
 			ChainflipAccountState::HistoricalAuthority => {
-				(*account_data).state = ChainflipAccountState::Backup;
+				account_data.state = ChainflipAccountState::Backup;
 			},
 			_ => {
 				const ERROR_MESSAGE: &str = "Attempted to transition to backup from historical, on a non-historical authority";

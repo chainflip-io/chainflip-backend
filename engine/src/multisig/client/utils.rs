@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Mappings from signer_idx to Validator Id and back
 /// for the corresponding ceremony
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PartyIdxMapping {
     id_to_idx: HashMap<AccountId, AuthorityCount>,
     // TODO: create SortedVec and use it here:

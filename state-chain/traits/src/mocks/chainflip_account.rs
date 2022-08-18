@@ -37,7 +37,7 @@ impl ChainflipAccount for MockChainflipAccount {
 					);
 				},
 				Some(item) => {
-					(*item).state = ChainflipAccountState::CurrentAuthority;
+					item.state = ChainflipAccountState::CurrentAuthority;
 				},
 			}
 		});

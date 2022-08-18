@@ -141,7 +141,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				// This *should* be safe since it's bounded by the number of candidates.
 				// We may want to revise.
 				// See https://github.com/paritytech/substrate/pull/11490
-				let _ = SuccessVoters::<T, I>::clear(u32::MAX, None);
+				let _ignored = SuccessVoters::<T, I>::clear(u32::MAX, None);
 				return Ok(*key)
 			}
 		}

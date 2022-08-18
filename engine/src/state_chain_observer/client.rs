@@ -759,7 +759,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .storage_events_at(Some(block_hash), storage_key)
             .await?
             .into_iter()
-            .map(|storage_change_set| {
+            .flat_map(|storage_change_set| {
                 let StorageChangeSet { block: _, changes } = storage_change_set;
                 changes
                     .into_iter()
@@ -768,7 +768,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             .map(|data| context!(StorageType::decode(&mut &data.0[..])).unwrap())
                     })
             })
-            .flatten()
             .collect())
     }
 
@@ -944,7 +943,7 @@ pub async fn connect_to_state_chain(
         .context("Failed to connect to state chain node")
 }
 
-#[allow(clippy::eval_order_dependence)]
+// #[allow(clippy::mixed_read_write_in_expression)]
 async fn inner_connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
     wait_for_staking: bool,
@@ -1203,7 +1202,6 @@ async fn inner_connect_to_state_chain(
     ))
 }
 
-#[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain_without_signer(
     state_chain_settings: &settings::StateChain,
 ) -> Result<StateChainRpcClient<impl ChainflipClient>> {
