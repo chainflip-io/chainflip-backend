@@ -373,10 +373,7 @@ mod unsigned_validation {
 				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
 			assert_eq!(ceremony.clone().unwrap().key_id, &CUSTOM_AGG_KEY);
-			assert_eq!(
-				ceremony.clone().unwrap().remaining_respondents,
-				BTreeSet::from_iter(participants)
-			);
+			assert_eq!(ceremony.unwrap().remaining_respondents, BTreeSet::from_iter(participants));
 			assert_eq!(request.unwrap().retry_policy, RetryPolicy::Never);
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
