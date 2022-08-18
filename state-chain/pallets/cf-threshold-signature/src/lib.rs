@@ -82,6 +82,8 @@ pub mod pallet {
 		pub payload: PayloadFor<T, I>,
 		/// The key id that was requested, if any. If `None` the current epoch's key is used.
 		pub key_id: Option<T::KeyId>,
+		/// Determines how/if we deal with ceremony failure.
+		pub retry_policy: RetryPolicy,
 	}
 
 	/// Context for tracking the progress of a threshold signature ceremony.
@@ -94,10 +96,8 @@ pub mod pallet {
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
-		/// The key id type for signing.
+		/// The key id being used for verification of this ceremony.
 		pub key_id: T::KeyId,
-		/// Retry policy
-		pub retry_policy: RetryPolicy,
 		/// Phantom data member.
 		pub _phantom: PhantomData<I>,
 	}
@@ -106,7 +106,6 @@ pub mod pallet {
 		pub fn new(
 			key_id: T::KeyId,
 			participants: impl IntoIterator<Item = T::ValidatorId>,
-			retry_policy: RetryPolicy,
 		) -> Self {
 			let remaining_respondents: BTreeSet<_> = participants.into_iter().collect();
 			let participant_count = remaining_respondents.len() as u32;
@@ -115,7 +114,6 @@ pub mod pallet {
 				blame_counts: BTreeMap::new(),
 				participant_count,
 				key_id,
-				retry_policy,
 				_phantom: PhantomData::default(),
 			}
 		}
@@ -364,9 +362,10 @@ pub mod pallet {
 						attempt_count,
 						payload,
 						key_id: requested_key_id,
+						retry_policy,
 					}) = OpenRequests::<T, I>::take(ceremony_id)
 					{
-						match failed_ceremony_context.retry_policy {
+						match retry_policy {
 							RetryPolicy::Always => {
 								Self::new_ceremony_attempt(
 									request_id,
@@ -634,7 +633,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count
 				),
-				CeremonyContext::new(ceremony_key_id, nominees, retry_policy),
+				CeremonyContext::new(ceremony_key_id, nominees),
 			)
 		} else {
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
@@ -646,7 +645,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count
 				),
-				CeremonyContext::new(ceremony_key_id, [], retry_policy),
+				CeremonyContext::new(ceremony_key_id, []),
 			)
 		};
 
@@ -658,7 +657,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingCeremonies::<T, I>::insert(ceremony_id, ceremony_context);
 		OpenRequests::<T, I>::insert(
 			ceremony_id,
-			RequestContext { request_id, attempt_count, payload, key_id: requested_key_id },
+			RequestContext {
+				request_id,
+				attempt_count,
+				payload,
+				key_id: requested_key_id,
+				retry_policy,
+			},
 		);
 		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt_count));
 

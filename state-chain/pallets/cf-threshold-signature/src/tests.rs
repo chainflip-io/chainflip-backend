@@ -373,7 +373,6 @@ mod unsigned_validation {
 				ceremony.clone().unwrap().remaining_respondents,
 				BTreeSet::from_iter(participants)
 			);
-			assert_eq!(ceremony.unwrap().retry_policy, RetryPolicy::Never);
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				retry_block,
@@ -471,7 +470,6 @@ mod failure_reporting {
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,
-			retry_policy: RetryPolicy::Always,
 			_phantom: Default::default(),
 		}
 	}
