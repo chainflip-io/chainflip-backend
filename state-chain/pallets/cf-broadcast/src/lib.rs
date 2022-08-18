@@ -567,7 +567,7 @@ pub mod pallet {
 					);
 					Error::<T, I>::ThresholdSignatureUnavailable
 				})?
-				.ok_or(Error::<T, I>::ThresholdSignatureUnavailable)?;
+				.expect("signature can not be unavailable");
 
 			Self::start_broadcast(
 				&signature,
