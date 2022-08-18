@@ -219,6 +219,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 ) -> Result<()> {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 
+    // TODO: Use StateChainClient's RpcChannel
     let client = WsClientBuilder::default()
         // TODO: consider adding something like this
         // .max_request_body_size(TEN_MB_SIZE_BYTES * X)
