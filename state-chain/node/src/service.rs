@@ -302,7 +302,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 				Ok(module)
 			};
-			build().map_err(|e: jsonrpsee::core::Error| e.to_string().into())
+			build().map_err(sc_service::Error::Application)
 		})
 	};
 
