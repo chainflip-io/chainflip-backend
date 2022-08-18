@@ -258,7 +258,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			task_manager.spawn_handle(),
 			multisig_p2p_transport::RETRY_SEND_INTERVAL,
 		);
-	let rpc_request_handler = Arc::new(rpc_request_handler);
 
 	let rpc_builder = {
 		let client = client.clone();

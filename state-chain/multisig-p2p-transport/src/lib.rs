@@ -255,7 +255,7 @@ pub fn new_p2p_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 	p2p_network_service: Arc<PN>,
 	message_sender_spawner: sc_service::SpawnTaskHandle,
 	retry_send_period: Duration,
-) -> (RpcRequestHandler<PN>, impl futures::Future<Output = ()>) {
+) -> (Arc<RpcRequestHandler<PN>>, impl futures::Future<Output = ()>) {
 	let shared_state = Arc::new(SharedState::default());
 
 	(
@@ -430,12 +430,12 @@ pub fn new_p2p_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 				}
 			}
 
-			RpcRequestHandler {
+			Arc::new(RpcRequestHandler {
 				message_sender_spawner: message_sender_spawner.clone(),
 				shared_state: shared_state.clone(),
 				p2p_network_service: p2p_network_service.clone(),
 				retry_send_period,
-			}
+			})
 		},
 		// P2P Event Handler
 		{
@@ -596,7 +596,7 @@ mod tests {
 		let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 		let addr = format!("ws://{}", server.local_addr().unwrap());
 		server
-			.start(P2PValidatorNetworkNodeRpcApiServer::into_rpc(Arc::new(rpc_request_handler)))
+			.start(P2PValidatorNetworkNodeRpcApiServer::into_rpc(rpc_request_handler))
 			.unwrap();
 
 		let client = WsClientBuilder::default().build(addr).await.unwrap();
