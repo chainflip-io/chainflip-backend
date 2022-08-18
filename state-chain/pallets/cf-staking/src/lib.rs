@@ -463,15 +463,13 @@ pub mod pallet {
 
 			let claim_details_signed = PendingClaims::<T>::get(&account_id)
 				.ok_or(Error::<T>::NoPendingClaim)?
-				.signed(&signature);
+				.signed(&signature.expect("signature can not be unavailable"));
 
 			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
-
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id,
 				claim_details_signed.abi_encoded(),
 			));
-
 			Ok(().into())
 		}
 

@@ -536,22 +536,22 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
-			let sig =
-				T::ThresholdSigner::signature_result(threshold_request_id).ready_or_else(|r| {
+			let signature = T::ThresholdSigner::signature_result(threshold_request_id)
+				.ready_or_else(|r| {
 					log::error!(
 						"Signature not found for threshold request {:?}. Request status: {:?}",
 						threshold_request_id,
 						r
 					);
 					Error::<T, I>::ThresholdSignatureUnavailable
-				})?;
+				})?
+				.expect("signature can not be unavailable");
 
 			Self::start_broadcast(
-				&sig,
-				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&sig)),
+				&signature,
+				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
 				api_call,
 			);
-
 			Ok(().into())
 		}
 

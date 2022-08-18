@@ -145,6 +145,8 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
+	type KeyId = <Test as Chainflip>::KeyId;
+	type ValidatorId = AccountId;
 
 	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
 		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
@@ -157,8 +159,8 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 	fn signature_result(
 		_: Self::RequestId,
-	) -> cf_traits::AsyncResult<<Ethereum as ChainCrypto>::ThresholdSignature> {
-		AsyncResult::Ready(ETH_DUMMY_SIG)
+	) -> cf_traits::AsyncResult<Result<<Ethereum as ChainCrypto>::ThresholdSignature, ()>> {
+		AsyncResult::Ready(Ok(ETH_DUMMY_SIG))
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -168,6 +170,15 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	) {
 		// do nothing, the mock impl of signature_result doesn't take from any storage
 		// so we don't need to insert any storage.
+	}
+
+	fn request_signature_with(
+		_key_id: Self::KeyId,
+		_participants: Vec<Self::ValidatorId>,
+		_payload: <Ethereum as ChainCrypto>::Payload,
+		_retry_policy: cf_traits::RetryPolicy,
+	) -> Self::RequestId {
+		unimplemented!()
 	}
 }
 
