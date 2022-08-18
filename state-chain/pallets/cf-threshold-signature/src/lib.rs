@@ -22,6 +22,7 @@ use cf_traits::{
 	KeyProvider, RetryPolicy, SignerNomination,
 };
 use frame_support::{
+	dispatch::UnfilteredDispatchable,
 	ensure,
 	traits::{EnsureOrigin, Get},
 };
@@ -64,7 +65,7 @@ pub mod pallet {
 	use super::*;
 	use cf_traits::AsyncResult;
 	use frame_support::{
-		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
@@ -304,7 +305,7 @@ pub mod pallet {
 		/// \[ceremony_id, key_id, signatories, payload\]
 		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
 		/// \[ceremony_id, key_id, offenders\]
-		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
+		ThresholdSignatureFailed(RequestId, CeremonyId, T::KeyId, Vec<T::ValidatorId>),
 		/// The threshold signature posted back to the chain was verified.
 		ThresholdSignatureSuccess(CeremonyId),
 		/// We have had a signature success and we have dispatched the associated callback
@@ -378,13 +379,10 @@ pub mod pallet {
 								Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
 							},
 							RetryPolicy::Never => {
-								let offenders = failed_ceremony_context
-									.blame_counts
-									.iter()
-									.map(|(offender, _)| offender.clone())
-									.collect::<Vec<T::ValidatorId>>();
 								Signatures::<T, I>::insert(request_id, AsyncResult::Ready(None));
+								Self::maybe_dispatch_callback(request_id, ceremony_id);
 								Self::deposit_event(Event::<T, I>::ThresholdSignatureFailed(
+									request_id,
 									ceremony_id,
 									failed_ceremony_context.key_id,
 									offenders,
@@ -489,20 +487,7 @@ pub mod pallet {
 			);
 
 			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Some(signature)));
-
-			// Dispatch the callback if one has been registered.
-			if let Some(call) = RequestCallback::<T, I>::take(request_id) {
-				let dispatch_result =
-					call.dispatch_bypass_filter(Origin(Default::default()).into());
-
-				Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
-					ceremony_id,
-					dispatch_result.map(|_| ()).map_err(|e| {
-						log::error!("Threshold dispatch failed for ceremony {}.", ceremony_id);
-						e.error
-					}),
-				));
-			}
+			Self::maybe_dispatch_callback(request_id, ceremony_id);
 
 			Ok(().into())
 		}
@@ -677,6 +662,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			frame_system::Pallet::<T>::current_block_number().saturating_add(retry_delay),
 			id,
 		);
+	}
+
+	/// Dispatches the callback if one has been registered.
+	fn maybe_dispatch_callback(request_id: RequestId, ceremony_id: CeremonyId) {
+		if let Some(call) = RequestCallback::<T, I>::take(request_id) {
+			let dispatch_result = call.dispatch_bypass_filter(Origin(Default::default()).into());
+
+			Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
+				ceremony_id,
+				dispatch_result.map(|_| ()).map_err(|e| {
+					log::error!("Threshold dispatch failed for ceremony {}.", ceremony_id);
+					e.error
+				}),
+			));
+		}
 	}
 }
 
