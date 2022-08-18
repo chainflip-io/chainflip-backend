@@ -1,11 +1,12 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::{
+	account_data::ChainflipAccountData,
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		system_state_info::MockSystemStateInfo,
 	},
-	Chainflip, ChainflipAccountData,
+	Chainflip,
 };
 use frame_support::{construct_runtime, parameter_types, traits::ValidatorRegistration};
 use sp_core::H256;

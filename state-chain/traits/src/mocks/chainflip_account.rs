@@ -1,4 +1,4 @@
-use crate::{ChainflipAccount, ChainflipAccountData, ChainflipAccountState};
+use crate::account_data::{ChainflipAccount, ChainflipAccountData, ChainflipAccountState};
 use std::{cell::RefCell, collections::HashMap};
 thread_local! {
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());

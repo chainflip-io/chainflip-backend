@@ -1,13 +1,13 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::{
+	account_data::{ChainflipAccountData, ChainflipAccountStore},
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	Bid, Chainflip, ChainflipAccountData, ChainflipAccountStore, QualifyNode,
-	RuntimeAuctionOutcome,
+	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,

@@ -17,9 +17,9 @@ mod benchmarking;
 mod rotation_state;
 
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bid,
-	BidderProvider, Bonding, Chainflip, ChainflipAccount, EmergencyRotation, EpochIndex, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
+	account_data::ChainflipAccount, offence_reporting::OffenceReporter, AsyncResult, Auctioneer,
+	AuthorityCount, Bid, BidderProvider, Bonding, Chainflip, EmergencyRotation, EpochIndex,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
 	QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;

@@ -50,8 +50,8 @@ mod genesis {
 
 	use super::*;
 	use cf_traits::{
-		ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, QualifyNode,
-		StakeTransfer,
+		account_data::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore},
+		EpochInfo, QualifyNode, StakeTransfer,
 	};
 	pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -158,7 +158,8 @@ mod epoch {
 	use super::*;
 	use crate::{genesis::GENESIS_BALANCE, network::Network};
 	use cf_traits::{
-		BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
+		account_data::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore},
+		BidderProvider, EpochInfo,
 	};
 	use pallet_cf_validator::RotationPhase;
 	use state_chain_runtime::Validator;
@@ -639,8 +640,8 @@ mod authorities {
 		genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 	};
 	use cf_traits::{
-		AuthorityCount, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
-		FlipBalance, StakeTransfer,
+		account_data::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore},
+		AuthorityCount, EpochInfo, FlipBalance, StakeTransfer,
 	};
 	use sp_runtime::AccountId32;
 	use state_chain_runtime::{Flip, Runtime, Validator};

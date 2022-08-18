@@ -61,8 +61,10 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_traits::{
-	BlockNumber, ChainflipAccount, ChainflipAccountData, ChainflipAccountState,
-	ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
+	account_data::{
+		ChainflipAccount, ChainflipAccountData, ChainflipAccountState, ChainflipAccountStore,
+	},
+	BlockNumber, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
@@ -167,7 +169,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
 	type VaultRotator = EthereumVault;
-	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
+	type ChainflipAccount = ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;

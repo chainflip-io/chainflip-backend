@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use cf_chains::ChainAbi;
-use cf_traits::{ChainflipAccountData, EpochIndex};
+use cf_traits::{account_data::ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
 use frame_metadata::RuntimeMetadata;
@@ -1208,7 +1208,7 @@ pub async fn connect_to_state_chain_without_signer(
 
 #[cfg(test)]
 pub mod test_utils {
-    use cf_traits::ChainflipAccountState;
+    use cf_traits::account_data::ChainflipAccountState;
     use frame_system::AccountInfo;
 
     use super::*;
