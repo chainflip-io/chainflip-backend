@@ -1208,7 +1208,7 @@ pub async fn connect_to_state_chain_without_signer(
 
 #[cfg(test)]
 pub mod test_utils {
-    use cf_traits::account_data::ChainflipAccountState;
+    use cf_traits::account_data::ValidatorAccountState;
     use frame_system::AccountInfo;
 
     use super::*;
@@ -1234,7 +1234,7 @@ pub mod test_utils {
             providers: 2,
             sufficients: 0,
             data: ChainflipAccountData {
-                state: ChainflipAccountState::CurrentAuthority,
+                state: ValidatorAccountState::CurrentAuthority,
             },
         };
 

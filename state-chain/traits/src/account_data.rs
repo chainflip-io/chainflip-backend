@@ -8,20 +8,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ChainflipAccountState {
+pub enum ValidatorAccountState {
 	CurrentAuthority,
 	/// Historical implies backup too
 	HistoricalAuthority,
 	Backup,
 }
 
-impl ChainflipAccountState {
+impl ValidatorAccountState {
 	pub fn is_authority(&self) -> bool {
-		matches!(self, ChainflipAccountState::CurrentAuthority)
+		matches!(self, ValidatorAccountState::CurrentAuthority)
 	}
 
 	pub fn is_backup(&self) -> bool {
-		matches!(self, ChainflipAccountState::HistoricalAuthority | ChainflipAccountState::Backup)
+		matches!(self, ValidatorAccountState::HistoricalAuthority | ValidatorAccountState::Backup)
 	}
 }
 
@@ -29,12 +29,12 @@ impl ChainflipAccountState {
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ChainflipAccountData {
-	pub state: ChainflipAccountState,
+	pub state: ValidatorAccountState,
 }
 
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Backup }
+		ChainflipAccountData { state: ValidatorAccountState::Backup }
 	}
 }
 
@@ -67,22 +67,22 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn set_current_authority(account_id: &Self::AccountId) {
 		log::debug!("Setting current authority {:?}", account_id);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ChainflipAccountState::CurrentAuthority;
+			account_data.state = ValidatorAccountState::CurrentAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	fn set_historical_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ChainflipAccountState::HistoricalAuthority;
+			account_data.state = ValidatorAccountState::HistoricalAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	fn from_historical_to_backup(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
-			ChainflipAccountState::HistoricalAuthority => {
-				account_data.state = ChainflipAccountState::Backup;
+			ValidatorAccountState::HistoricalAuthority => {
+				account_data.state = ValidatorAccountState::Backup;
 			},
 			_ => {
 				const ERROR_MESSAGE: &str = "Attempted to transition to backup from historical, on a non-historical authority";

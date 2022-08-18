@@ -50,7 +50,7 @@ mod genesis {
 
 	use super::*;
 	use cf_traits::{
-		account_data::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore},
+		account_data::{ChainflipAccount, ChainflipAccountStore, ValidatorAccountState},
 		EpochInfo, QualifyNode, StakeTransfer,
 	};
 	pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
@@ -143,7 +143,7 @@ mod genesis {
 			for account in accounts.iter() {
 				let account_data = ChainflipAccountStore::<Runtime>::get(account);
 				// TODO: Check historical epochs
-				assert_eq!(ChainflipAccountState::CurrentAuthority, account_data.state);
+				assert_eq!(ValidatorAccountState::CurrentAuthority, account_data.state);
 			}
 		});
 	}
@@ -158,7 +158,7 @@ mod epoch {
 	use super::*;
 	use crate::{genesis::GENESIS_BALANCE, network::Network};
 	use cf_traits::{
-		account_data::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore},
+		account_data::{ChainflipAccount, ChainflipAccountStore, ValidatorAccountState},
 		BidderProvider, EpochInfo,
 	};
 	use pallet_cf_validator::RotationPhase;
@@ -342,7 +342,7 @@ mod epoch {
 				for account in keyless_nodes.iter() {
 					// TODO: Check historical epochs
 					assert_eq!(
-						ChainflipAccountState::Backup,
+						ValidatorAccountState::Backup,
 						ChainflipAccountStore::<Runtime>::get(account).state,
 						"should be a backup node"
 					);
@@ -351,7 +351,7 @@ mod epoch {
 				for account in &Validator::current_authorities() {
 					// TODO: Check historical epochs
 					assert_eq!(
-						ChainflipAccountState::CurrentAuthority,
+						ValidatorAccountState::CurrentAuthority,
 						ChainflipAccountStore::<Runtime>::get(account).state,
 						"should be CurrentAuthority"
 					);
@@ -369,7 +369,7 @@ mod epoch {
 				testnet.move_forward_blocks(1);
 
 				assert_eq!(
-					ChainflipAccountState::Backup,
+					ValidatorAccountState::Backup,
 					ChainflipAccountStore::<Runtime>::get(&late_staker).state,
 					"late staker should be a backup node"
 				);
@@ -640,7 +640,7 @@ mod authorities {
 		genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 	};
 	use cf_traits::{
-		account_data::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore},
+		account_data::{ChainflipAccount, ChainflipAccountStore, ValidatorAccountState},
 		AuthorityCount, EpochInfo, FlipBalance, StakeTransfer,
 	};
 	use sp_runtime::AccountId32;
@@ -762,7 +762,7 @@ mod authorities {
 
 				current_authorities.iter().for_each(|account_id| {
 					let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-					assert_eq!(account_data.state, ChainflipAccountState::CurrentAuthority);
+					assert_eq!(account_data.state, ValidatorAccountState::CurrentAuthority);
 					// we were active in teh first epoch
 
 					// TODO: Check historical epochs
@@ -783,7 +783,7 @@ mod authorities {
 				highest_staked_backup_nodes.iter().for_each(|account_id| {
 					let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 					// we were active in the first epoch
-					assert_eq!(account_data.state, ChainflipAccountState::HistoricalAuthority);
+					assert_eq!(account_data.state, ValidatorAccountState::HistoricalAuthority);
 					// TODO: Check historical epochs
 				});
 

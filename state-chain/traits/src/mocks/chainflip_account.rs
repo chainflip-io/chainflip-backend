@@ -1,4 +1,4 @@
-use crate::account_data::{ChainflipAccount, ChainflipAccountData, ChainflipAccountState};
+use crate::account_data::{ChainflipAccount, ChainflipAccountData, ValidatorAccountState};
 use std::{cell::RefCell, collections::HashMap};
 thread_local! {
 	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
@@ -14,7 +14,7 @@ impl MockChainflipAccount {
 	pub fn is_backup(account_id: &u64) -> bool {
 		matches!(
 			Self::get(account_id).state,
-			ChainflipAccountState::HistoricalAuthority | ChainflipAccountState::Backup
+			ValidatorAccountState::HistoricalAuthority | ValidatorAccountState::Backup
 		)
 	}
 }
@@ -33,11 +33,11 @@ impl ChainflipAccount for MockChainflipAccount {
 				None => {
 					map.insert(
 						*account_id,
-						ChainflipAccountData { state: ChainflipAccountState::CurrentAuthority },
+						ChainflipAccountData { state: ValidatorAccountState::CurrentAuthority },
 					);
 				},
 				Some(item) => {
-					item.state = ChainflipAccountState::CurrentAuthority;
+					item.state = ValidatorAccountState::CurrentAuthority;
 				},
 			}
 		});

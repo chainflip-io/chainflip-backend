@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 use cf_traits::{
-	account_data::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore},
+	account_data::{ChainflipAccount, ChainflipAccountStore, ValidatorAccountState},
 	EpochIndex, EpochInfo, FlipBalance,
 };
 use codec::Encode;
@@ -175,13 +175,13 @@ impl Engine {
 		Engine { node_id, live: true, threshold_signer: signer, engine_state: EngineState::None }
 	}
 
-	fn state(&self) -> ChainflipAccountState {
+	fn state(&self) -> ValidatorAccountState {
 		ChainflipAccountStore::<Runtime>::get(&self.node_id).state
 	}
 
 	// Handle events from contract
 	fn on_contract_event(&self, event: &ContractEvent) {
-		if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
+		if self.state() == ValidatorAccountState::CurrentAuthority && self.live {
 			match event {
 				ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
 					// Witness event -> send transaction to state chain
@@ -210,7 +210,7 @@ impl Engine {
 		// If active handle events
 		if self.live {
 			// Being a CurrentAuthority we would respond to certain events
-			if self.state() == ChainflipAccountState::CurrentAuthority {
+			if self.state() == ValidatorAccountState::CurrentAuthority {
 				on_events!(
 					events,
 					Event::Validator(

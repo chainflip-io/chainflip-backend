@@ -62,7 +62,7 @@ use sp_version::RuntimeVersion;
 
 pub use cf_traits::{
 	account_data::{
-		ChainflipAccount, ChainflipAccountData, ChainflipAccountState, ChainflipAccountStore,
+		ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, ValidatorAccountState,
 	},
 	BlockNumber, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
@@ -670,7 +670,7 @@ impl_runtime_apis! {
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
-				state: if account_data.state == ChainflipAccountState::CurrentAuthority {
+				state: if account_data.state == ValidatorAccountState::CurrentAuthority {
 					ChainflipAccountStateWithPassive::CurrentAuthority
 				} else {
 					// if the node is in this set, they were previously known as backups
@@ -681,8 +681,8 @@ impl_runtime_apis! {
 					};
 
 					match account_data.state {
-						ChainflipAccountState::Backup => ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
-						ChainflipAccountState::HistoricalAuthority => ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
+						ValidatorAccountState::Backup => ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
+						ValidatorAccountState::HistoricalAuthority => ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
 						_ => unreachable!("Already checked for current authority")
 					}
 				},
