@@ -6,15 +6,13 @@ use tokio::sync::broadcast;
 
 use crate::{
     logging::COMPONENT_KEY,
-    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
     task_scope::{with_task_scope, ScopedJoinHandle},
 };
 
 use super::EpochStart;
 
-pub async fn start<G, F, Fut, State, StateChainRpc>(
+pub async fn start<G, F, Fut, State>(
     log_key: &'static str,
-    state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
     mut should_epoch_participant_witness: G,
     initial_state: State,
@@ -22,16 +20,7 @@ pub async fn start<G, F, Fut, State, StateChainRpc>(
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
-    StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
-    F: FnMut(
-            Arc<StateChainClient<StateChainRpc>>,
-            Arc<Mutex<Option<u64>>>,
-            EpochStart,
-            State,
-            slog::Logger,
-        ) -> Fut
-        + Send
-        + 'static,
+    F: FnMut(Arc<Mutex<Option<u64>>>, EpochStart, State, slog::Logger) -> Fut + Send + 'static,
     Fut: Future<Output = anyhow::Result<State>> + Send + 'static,
     State: Send + 'static,
     G: FnMut(&EpochStart) -> bool + Send + 'static,
@@ -62,13 +51,11 @@ where
                         end_witnessing_signal_and_handle = Some({
                             let end_witnessing_signal = Arc::new(Mutex::new(None));
 
-                            let state_chain_client = state_chain_client.clone();
                             let logger = logger.clone();
 
                             (
                                 end_witnessing_signal.clone(),
                                 scope.spawn_with_handle::<_, _>(epoch_witnesser_generator(
-                                    state_chain_client,
                                     end_witnessing_signal,
                                     epoch_start,
                                     option_state.take().unwrap(),

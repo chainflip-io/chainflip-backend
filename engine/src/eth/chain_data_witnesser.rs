@@ -28,12 +28,10 @@ where
 {
     super::epoch_witnesser::start(
         "ETH-Chain-Data",
-        state_chain_client,
         epoch_start_receiver,
         |epoch_start| epoch_start.current,
         None,
         move |
-            state_chain_client,
             end_witnessing_signal,
             _epoch_start,
             mut last_witnessed_block_hash,
@@ -42,6 +40,7 @@ where
             let eth_rpc = eth_rpc.clone();
             let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
 
+            let state_chain_client = state_chain_client.clone();
             async move {
                 let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, false);
 
