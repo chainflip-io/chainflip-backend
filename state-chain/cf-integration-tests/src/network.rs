@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 use cf_traits::{
-	account_data::{ChainflipAccount, ChainflipAccountStore, ValidatorAccountState},
+	account_data::{ChainflipAccountStore, ValidatorAccount, ValidatorAccountState},
 	EpochIndex, EpochInfo, FlipBalance,
 };
 use codec::Encode;

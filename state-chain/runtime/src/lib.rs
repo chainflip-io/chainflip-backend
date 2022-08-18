@@ -1,14 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
+
+#[cfg(test)]
+mod tests;
+
 pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
 mod weights;
-pub use frame_system::Call as SystemCall;
-use pallet_cf_governance::GovCallHash;
-use runtime_apis::BackupOrPassive;
-
 use crate::{
 	chainflip::Offence,
 	runtime_apis::{
@@ -32,13 +32,16 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+pub use frame_system::Call as SystemCall;
 pub use pallet_cf_environment::cfe::CfeSettings;
+use pallet_cf_governance::GovCallHash;
 use pallet_cf_staking::MinimumStake;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
+use runtime_apis::BackupOrPassive;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
@@ -62,7 +65,8 @@ use sp_version::RuntimeVersion;
 
 pub use cf_traits::{
 	account_data::{
-		ChainflipAccount, ChainflipAccountData, ChainflipAccountStore, ValidatorAccountState,
+		AccountType, ChainflipAccountData, ChainflipAccountStore, ValidatorAccount,
+		ValidatorAccountState,
 	},
 	BlockNumber, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
@@ -670,7 +674,7 @@ impl_runtime_apis! {
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
-				state: if account_data.state == ValidatorAccountState::CurrentAuthority {
+				state: if account_data.account_type.is_authority() {
 					ChainflipAccountStateWithPassive::CurrentAuthority
 				} else {
 					// if the node is in this set, they were previously known as backups
@@ -680,10 +684,12 @@ impl_runtime_apis! {
 						BackupOrPassive::Passive
 					};
 
-					match account_data.state {
-						ValidatorAccountState::Backup => ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
-						ValidatorAccountState::HistoricalAuthority => ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
-						_ => unreachable!("Already checked for current authority")
+					match account_data.account_type {
+						AccountType::Validator { state: ValidatorAccountState::HistoricalAuthority } =>
+							ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
+						// The rpc doesn't support other account types yet. Treat any other account as Backup or Passive.
+						_ =>
+							ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
 					}
 				},
 			}

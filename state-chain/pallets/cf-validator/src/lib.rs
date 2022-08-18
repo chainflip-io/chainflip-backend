@@ -17,7 +17,7 @@ mod benchmarking;
 mod rotation_state;
 
 use cf_traits::{
-	account_data::ChainflipAccount, offence_reporting::OffenceReporter, AsyncResult, Auctioneer,
+	account_data::ValidatorAccount, offence_reporting::OffenceReporter, AsyncResult, Auctioneer,
 	AuthorityCount, Bid, BidderProvider, Bonding, Chainflip, EmergencyRotation, EpochIndex,
 	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
 	QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo, VaultRotator,
@@ -146,7 +146,7 @@ pub mod pallet {
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For looking up Chainflip Account data.
-		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
+		type ChainflipAccount: ValidatorAccount<AccountId = Self::AccountId>;
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;

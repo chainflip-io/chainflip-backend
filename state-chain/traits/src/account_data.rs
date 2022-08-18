@@ -8,6 +8,21 @@ use serde::{Deserialize, Serialize};
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum AccountType {
+	Undefined,
+	Validator { state: ValidatorAccountState },
+	LiquidityProvider,
+	Relayer,
+}
+
+impl Default for AccountType {
+	fn default() -> Self {
+		AccountType::Undefined
+	}
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ValidatorAccountState {
 	CurrentAuthority,
 	/// Historical implies backup too
@@ -15,30 +30,33 @@ pub enum ValidatorAccountState {
 	Backup,
 }
 
-impl ValidatorAccountState {
+impl Default for ValidatorAccountState {
+	fn default() -> Self {
+		ValidatorAccountState::Backup
+	}
+}
+
+impl AccountType {
 	pub fn is_authority(&self) -> bool {
-		matches!(self, ValidatorAccountState::CurrentAuthority)
+		matches!(self, Self::Validator { state: ValidatorAccountState::CurrentAuthority })
 	}
 
 	pub fn is_backup(&self) -> bool {
-		matches!(self, ValidatorAccountState::HistoricalAuthority | ValidatorAccountState::Backup)
+		matches!(
+			self,
+			Self::Validator { state: ValidatorAccountState::HistoricalAuthority } |
+				Self::Validator { state: ValidatorAccountState::Backup }
+		)
 	}
 }
 
-// TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[derive(Default, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ChainflipAccountData {
-	pub state: ValidatorAccountState,
+	pub account_type: AccountType,
 }
 
-impl Default for ChainflipAccountData {
-	fn default() -> Self {
-		ChainflipAccountData { state: ValidatorAccountState::Backup }
-	}
-}
-
-pub trait ChainflipAccount {
+pub trait ValidatorAccount {
 	type AccountId;
 
 	/// Get the account data for the given account id.
@@ -54,7 +72,23 @@ pub trait ChainflipAccount {
 
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
-impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
+impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccountStore<T> {
+	pub fn mutate_validator_state(
+		account_id: &T::AccountId,
+		f: impl Fn(&mut ValidatorAccountState),
+	) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			assert!(matches!(account_data.account_type, AccountType::Validator { .. }));
+			match account_data.account_type {
+				AccountType::Validator { ref mut state } => f(state),
+				_ => unreachable!(),
+			}
+		})
+		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+	}
+}
+
+impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccount
 	for ChainflipAccountStore<T>
 {
 	type AccountId = T::AccountId;
@@ -63,26 +97,32 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::get(account_id)
 	}
 
-	/// Set the last epoch number and set the account state to Validator
+	/// Set the account state to Validator.
+	///
+	/// **Only call this on Validator accounts.**
 	fn set_current_authority(account_id: &Self::AccountId) {
 		log::debug!("Setting current authority {:?}", account_id);
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ValidatorAccountState::CurrentAuthority;
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+		Self::mutate_validator_state(account_id, |state| {
+			*state = ValidatorAccountState::CurrentAuthority;
+		});
 	}
 
+	/// Set the account state to HistoricalAuthority.
+	///
+	/// **Only call this on Validator accounts.**
 	fn set_historical_authority(account_id: &Self::AccountId) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ValidatorAccountState::HistoricalAuthority;
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+		Self::mutate_validator_state(account_id, |state| {
+			*state = ValidatorAccountState::HistoricalAuthority;
+		});
 	}
 
+	/// Set the account state to Backup.
+	///
+	/// **Only call this on Validator accounts.**
 	fn from_historical_to_backup(account_id: &Self::AccountId) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
+		Self::mutate_validator_state(account_id, |state| match state {
 			ValidatorAccountState::HistoricalAuthority => {
-				account_data.state = ValidatorAccountState::Backup;
+				*state = ValidatorAccountState::Backup;
 			},
 			_ => {
 				const ERROR_MESSAGE: &str = "Attempted to transition to backup from historical, on a non-historical authority";
@@ -90,7 +130,6 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 				#[cfg(test)]
 				panic!("{}", ERROR_MESSAGE);
 			},
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
+		});
 	}
 }
