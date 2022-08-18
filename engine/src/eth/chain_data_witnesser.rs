@@ -4,7 +4,6 @@ use crate::state_chain_observer::client::{StateChainClient, StateChainRpcApi};
 
 use super::{rpc::EthRpcApi, EpochStart};
 
-use anyhow::Context;
 use cf_chains::{eth::TrackedData, Ethereum};
 
 use sp_core::U256;
@@ -50,32 +49,29 @@ where
                     }
 
                     let block_number = eth_rpc.block_number().await?;
-                    let block_hash = eth_rpc.block(block_number).await?.hash.context(format!("Missing hash for block {}.", block_number))?;
+                    let block_hash = context!(eth_rpc.block(block_number).await?.hash)?;
                     if last_witnessed_block_hash != Some(block_hash) {
+                        last_witnessed_block_hash = Some(block_hash);
+
                         let priority_fee = cfe_settings_update_receiver
                             .borrow()
                             .eth_priority_fee_percentile;
-                        match get_tracked_data(&eth_rpc, block_number.as_u64(), priority_fee).await {
-                            Ok(tracked_data) => {
-                                state_chain_client
-                                    .submit_signed_extrinsic(
-                                        state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
-                                            call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
-                                                pallet_cf_chain_tracking::Call::update_chain_state {
-                                                    state: tracked_data,
-                                                },
-                                            )),
-                                        }),
-                                        &logger,
-                                    )
-                                    .await
-                                    .context("Failed to submit signed extrinsic")?;
-                                last_witnessed_block_hash = Some(block_hash);
-                            }
-                            Err(e) => {
-                                slog::error!(&logger, "Failed to get tracked data: {:?}", e);
-                            }
-                        }
+                        let _result = state_chain_client
+                            .submit_signed_extrinsic(
+                                state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
+                                    call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                        pallet_cf_chain_tracking::Call::update_chain_state {
+                                            state: get_tracked_data(
+                                                &eth_rpc,
+                                                block_number.as_u64(),
+                                                priority_fee
+                                            ).await?,
+                                        },
+                                    )),
+                                }),
+                                &logger,
+                            )
+                            .await;
                     }
 
                     poll_interval.tick().await;
