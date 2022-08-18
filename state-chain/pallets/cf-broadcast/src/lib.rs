@@ -558,7 +558,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
-			let maybe_sig = T::ThresholdSigner::signature_result(threshold_request_id)
+			let signature = T::ThresholdSigner::signature_result(threshold_request_id)
 				.ready_or_else(|r| {
 					log::error!(
 						"Signature not found for threshold request {:?}. Request status: {:?}",
@@ -566,19 +566,15 @@ pub mod pallet {
 						r
 					);
 					Error::<T, I>::ThresholdSignatureUnavailable
-				})?;
+				})?
+				.ok_or(Error::<T, I>::ThresholdSignatureUnavailable)?;
 
-			match maybe_sig {
-				Some(sig) => {
-					Self::start_broadcast(
-						&sig,
-						T::TransactionBuilder::build_transaction(&api_call.clone().signed(&sig)),
-						api_call,
-					);
-					Ok(().into())
-				},
-				None => Err(Error::<T, I>::ThresholdSignatureUnavailable.into()),
-			}
+			Self::start_broadcast(
+				&signature,
+				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
+				api_call,
+			);
+			Ok(().into())
 		}
 
 		/// Nodes have witnessed that a signature was accepted on the target chain.
