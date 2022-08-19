@@ -32,7 +32,9 @@ pub type EpochIndex = u32;
 pub type AuthorityCount = u32;
 
 /// Common base config for Chainflip pallets.
-pub trait Chainflip: frame_system::Config {
+pub trait Chainflip:
+	frame_system::Config<AccountData = account_data::ChainflipAccountData>
+{
 	/// An amount for a bid
 	type Amount: Member
 		+ Parameter

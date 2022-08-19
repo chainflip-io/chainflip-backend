@@ -17,12 +17,13 @@ mod tests;
 
 use cf_chains::RegisterClaim;
 use cf_traits::{
-	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
-	StakeTransfer, ThresholdSigner,
+	account_data::*, Bid, BidderProvider, EpochInfo, EthEnvironmentProvider,
+	ReplayProtectionProvider, StakeTransfer, ThresholdSigner,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
+	pallet_prelude::DispatchResult,
 	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
@@ -111,10 +112,9 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Store the list of staked accounts and whether or not they are retired.
+	/// Store the list of active bidders.
 	#[pallet::storage]
-	pub type AccountRetired<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
+	pub type ActiveBidders<T: Config> = StorageValue<_, Vec<AccountId<T>>, ValueQuery>;
 
 	/// PendingClaims can be in one of two states:
 	/// - Pending threshold signature to allow registration of the claim.
@@ -231,6 +231,9 @@ pub mod pallet {
 
 		/// The claim signature could not be found.
 		SignatureNotReady,
+
+		/// Account type is invalid for this operation.
+		InvalidAccountType,
 	}
 
 	#[pallet::call]
@@ -567,20 +570,18 @@ pub mod pallet {
 			ClaimTTL::<T>::set(self.claim_ttl.as_secs());
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
-				match Pallet::<T>::activate(staker) {
-					Ok(_) => {
-						// Activated account successful.
-						log::info!("Activated genesis account {:?}", staker);
+				ChainflipAccountStore::<T>::try_mutate_account_data::<_, Error<T>, _>(
+					staker,
+					|ChainflipAccountData { ref mut account_type }| {
+						assert_eq!(*account_type, AccountType::Undefined);
+						*account_type = AccountType::Validator {
+							state: ValidatorAccountState::Backup,
+							is_active_bidder: true,
+						};
+						Ok(())
 					},
-					Err(Error::AlreadyActive) => {
-						// If the account is already active, we don't need to do anything.
-						log::warn!("Account already activated {:?}", staker);
-					},
-					Err(e) => {
-						// This should never happen unless there is a mistake in the implementation.
-						log::error!("Unexpected error while activating account {:?}", e);
-					},
-				}
+				)
+				.unwrap();
 			}
 		}
 	}
@@ -644,63 +645,91 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Add stake to an account, creating the account if it doesn't exist, and activating the
-	/// account if it is in retired state.
+	/// Add stake to an account, creating the account if it doesn't exist.
 	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
-			AccountRetired::<T>::insert(&account_id, true);
 		}
 
 		T::Flip::credit_stake(account_id, amount)
 	}
 
-	/// Sets the `retired` flag associated with the account to true, signalling that the account no
-	/// longer wishes to participate in auctions.
+	/// Changes the active bidder status to false.
 	///
-	/// Returns an error if the account has already been retired, or if the account has no stake
-	/// associated.
-	fn retire(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
-			match maybe_status.as_mut() {
-				Some(retired) => {
-					if *retired {
-						return Err(Error::AlreadyRetired)
-					}
-					*retired = true;
-					Self::deposit_event(Event::AccountRetired(account_id.clone()));
-					Ok(())
-				},
-				None => Err(Error::UnknownAccount),
+	/// Returns an error in the following cases:
+	/// - Account is already retired.
+	/// - Account doesn't exist.
+	/// - Account is not of type [AccountType::Validator].
+	fn retire(account_id: &AccountId<T>) -> DispatchResult {
+		ChainflipAccountStore::<T>::try_mutate_account_data(account_id, |account_data| {
+			match account_data.account_type {
+				AccountType::Validator { ref mut is_active_bidder, .. } =>
+					if !*is_active_bidder {
+						Err(Error::<T>::AlreadyRetired)
+					} else {
+						*is_active_bidder = false;
+						Ok(())
+					},
+				_ => Err(Error::<T>::InvalidAccountType),
 			}
-		})
+		})?;
+
+		ActiveBidders::<T>::mutate(|active_bidders| {
+			active_bidders.retain(|bidder| bidder != account_id);
+		});
+
+		Self::deposit_event(Event::AccountRetired(account_id.clone()));
+
+		Ok(())
 	}
 
-	/// Sets the `retired` flag associated with the account to false, signalling that the account
-	/// wishes to come out of retirement.
+	/// Activates a validator's account such it will actively bid for an authority slot.
 	///
-	/// Returns an error if the account is not retired, or if the account has no stake associated.
-	fn activate(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
-			match maybe_status.as_mut() {
-				Some(retired) => {
-					if !*retired {
-						return Err(Error::AlreadyActive)
-					}
-					*retired = false;
-					Self::deposit_event(Event::AccountActivated(account_id.clone()));
-					Ok(())
-				},
-				None => Err(Error::UnknownAccount),
+	/// Returns an error in the following cases:
+	/// - Account is already activated.
+	/// - Account doesn't exist.
+	/// - Account is not of type [AccountType::Validator].
+	fn activate(account_id: &AccountId<T>) -> DispatchResult {
+		ChainflipAccountStore::<T>::try_mutate_account_data(account_id, |account_data| {
+			match account_data.account_type {
+				AccountType::Validator { ref mut is_active_bidder, .. } =>
+					if *is_active_bidder {
+						Err(Error::<T>::AlreadyActive)
+					} else {
+						*is_active_bidder = true;
+						Ok(())
+					},
+				_ => Err(Error::<T>::InvalidAccountType),
 			}
-		})
+		})?;
+
+		ActiveBidders::<T>::append(account_id);
+
+		Self::deposit_event(Event::AccountActivated(account_id.clone()));
+
+		Ok(())
 	}
 
-	/// Checks if an account has signalled their intention to retire. If the account
-	/// has never staked any tokens, returns [Error::UnknownAccount].
-	pub fn is_retired(account: &AccountId<T>) -> Result<bool, Error<T>> {
-		AccountRetired::<T>::try_get(account).map_err(|_| Error::UnknownAccount)
+	/// Checks if an account has signalled its intention to retire.
+	///
+	/// Returns an error in the following cases:
+	/// - Account is not of type [AccountType::Validator].
+	/// - Account doesn't exist.
+	pub fn is_retired(account_id: &AccountId<T>) -> Result<bool, Error<T>> {
+		use sp_std::ops::Not;
+		Self::is_active_bidder(account_id).map(Not::not)
+	}
+
+	/// Check if an account is actively bidding in auctions.
+	///
+	/// Returns an error in the following cases:
+	/// - Account is not of type [AccountType::Validator].
+	pub fn is_active_bidder(account_id: &AccountId<T>) -> Result<bool, Error<T>> {
+		match ChainflipAccountStore::<T>::get(account_id).account_type {
+			AccountType::Validator { is_active_bidder, .. } => Ok(is_active_bidder),
+			_ => Err(Error::<T>::InvalidAccountType),
+		}
 	}
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
@@ -728,14 +757,11 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type Amount = T::Balance;
 
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		AccountRetired::<T>::iter()
-			.filter_map(|(bidder_id, retired)| {
-				if retired {
-					None
-				} else {
-					let amount = T::Flip::staked_balance(&bidder_id);
-					Some(Bid { bidder_id, amount })
-				}
+		ActiveBidders::<T>::get()
+			.into_iter()
+			.map(|bidder_id| {
+				let amount = T::Flip::staked_balance(&bidder_id);
+				Bid { bidder_id, amount }
 			})
 			.collect()
 	}

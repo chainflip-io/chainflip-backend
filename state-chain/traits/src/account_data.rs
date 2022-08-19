@@ -1,3 +1,4 @@
+use sp_runtime::DispatchError;
 use sp_std::marker::PhantomData;
 
 use codec::{Decode, Encode};
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountType {
 	Undefined,
-	Validator { state: ValidatorAccountState },
+	Validator { state: ValidatorAccountState, is_active_bidder: bool },
 	LiquidityProvider,
 	Relayer,
 }
@@ -38,14 +39,14 @@ impl Default for ValidatorAccountState {
 
 impl AccountType {
 	pub fn is_authority(&self) -> bool {
-		matches!(self, Self::Validator { state: ValidatorAccountState::CurrentAuthority })
+		matches!(self, Self::Validator { state: ValidatorAccountState::CurrentAuthority, .. })
 	}
 
 	pub fn is_backup(&self) -> bool {
 		matches!(
 			self,
-			Self::Validator { state: ValidatorAccountState::HistoricalAuthority } |
-				Self::Validator { state: ValidatorAccountState::Backup }
+			Self::Validator { state: ValidatorAccountState::HistoricalAuthority, .. } |
+				Self::Validator { state: ValidatorAccountState::Backup, .. }
 		)
 	}
 }
@@ -60,6 +61,8 @@ pub trait ValidatorAccount {
 	type AccountId;
 
 	/// Get the account data for the given account id.
+	///
+	/// Note: if the account does not exist, returns the [Default].
 	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	/// Set the node to be a current authority
 	fn set_current_authority(account_id: &Self::AccountId);
@@ -73,6 +76,23 @@ pub trait ValidatorAccount {
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccountStore<T> {
+	pub fn try_mutate_account_data<
+		R,
+		E: Into<DispatchError>,
+		F: FnOnce(&mut ChainflipAccountData) -> Result<R, E>,
+	>(
+		account_id: &T::AccountId,
+		f: F,
+	) -> Result<R, DispatchError> {
+		frame_system::Pallet::<T>::try_mutate_exists(account_id, |maybe_account_data| {
+			maybe_account_data
+				.as_mut()
+				.map_or(Err(DispatchError::CannotLookup), |account_data| {
+					f(account_data).map_err(Into::into)
+				})
+		})
+	}
+
 	pub fn mutate_validator_state(
 		account_id: &T::AccountId,
 		f: impl Fn(&mut ValidatorAccountState),
@@ -80,7 +100,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
 			assert!(matches!(account_data.account_type, AccountType::Validator { .. }));
 			match account_data.account_type {
-				AccountType::Validator { ref mut state } => f(state),
+				AccountType::Validator { ref mut state, .. } => f(state),
 				_ => unreachable!(),
 			}
 		})

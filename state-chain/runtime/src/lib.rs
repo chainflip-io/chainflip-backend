@@ -670,7 +670,7 @@ impl_runtime_apis! {
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
 				is_live: Reputation::is_qualified(&account_id),
-				is_activated: !pallet_cf_staking::AccountRetired::<Runtime>::get(&account_id),
+				is_activated: pallet_cf_staking::Pallet::<Runtime>::is_active_bidder(&account_id).unwrap_or(false),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
@@ -685,7 +685,7 @@ impl_runtime_apis! {
 					};
 
 					match account_data.account_type {
-						AccountType::Validator { state: ValidatorAccountState::HistoricalAuthority } =>
+						AccountType::Validator { state: ValidatorAccountState::HistoricalAuthority, .. } =>
 							ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
 						// The rpc doesn't support other account types yet. Treat any other account as Backup or Passive.
 						_ =>
