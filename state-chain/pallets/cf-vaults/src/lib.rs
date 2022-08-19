@@ -672,7 +672,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 	}
 
-	// Called once there's consensus between the authorities that the keygen was successful
+	// Once we've generated the key, and successfully completed a signing ceremony with the new key
+	// we can start the process of rotating to that new key
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		T::Broadcaster::threshold_sign_and_broadcast(
 			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
