@@ -170,18 +170,13 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				.flat_map(|(_k, dissenters)| dissenters)
 				.chain(FailureVoters::<T, I>::take())
 				.chain(IncompatibleVoters::<T, I>::take())
-				.chain(
-					self.blame_votes
-						.iter()
-						.filter_map(|(id, vote_count)| {
-							if *vote_count >= super_majority_threshold as u32 {
-								Some(id)
-							} else {
-								None
-							}
-						})
-						.cloned(),
-				)
+				.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
+					if vote_count >= super_majority_threshold as u32 {
+						Some(id)
+					} else {
+						None
+					}
+				}))
 				.chain(self.remaining_candidates.clone())
 				.collect(),
 		))
