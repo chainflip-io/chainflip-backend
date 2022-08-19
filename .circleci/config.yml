@@ -393,7 +393,7 @@ jobs:
             SIGNING_DB_FILE: data.db
             STATE_CHAIN_WS_ENDPOINT: ws://localhost:9944
           background: true
-          command: ./target/release/chainflip-engine
+          command: ./target/release/chainflip-engine --config-path engine/config/Default.toml
       - run:
           name: Check Engine Health
           command: >
