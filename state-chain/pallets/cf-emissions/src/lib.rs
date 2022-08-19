@@ -21,7 +21,7 @@ use cf_traits::{BlockEmissions, EpochTransitionHandler, Issuance, RewardsDistrib
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedDiv, UniqueSaturatedInto, Zero},
+	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
 	SaturatedConversion,
 };
 
@@ -60,7 +60,9 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ AtLeast32BitUnsigned
-			+ UniqueSaturatedFrom<Self::BlockNumber>;
+			+ UniqueSaturatedFrom<Self::BlockNumber>
+			+ Into<u128>
+			+ From<u128>;
 
 		/// An imbalance type representing freshly minted, unallocated funds.
 		type Surplus: Imbalance<Self::FlipBalance>;
@@ -312,15 +314,11 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 
 	fn calculate_block_emissions() {
 		fn inflation_to_block_reward<T: Config>(inflation: BasisPoints) -> T::FlipBalance {
-			const DAYS_IN_YEAR: u32 = 365;
-
-			((T::Issuance::total_issuance() * inflation.into()) /
-				10_000u32.into() / DAYS_IN_YEAR.into())
-			.checked_div(&T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()))
-			.unwrap_or_else(|| {
-				log::error!("blocks per day should be greater than zero");
-				Zero::zero()
-			})
+			calculate_inflation_to_block_reward(
+				T::Issuance::total_issuance(),
+				inflation.into(),
+				T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()),
+			)
 		}
 
 		Self::update_authority_block_emission(inflation_to_block_reward::<T>(
@@ -340,4 +338,27 @@ impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		// Calculate block emissions on every epoch
 		Self::calculate_block_emissions();
 	}
+}
+
+fn calculate_inflation_to_block_reward<T>(issuance: T, inflation: T, blocks_per_day: T) -> T
+where
+	T: Into<u128> + From<u128>,
+{
+	const DAYS_IN_YEAR: u128 = 365;
+	use sp_runtime::helpers_128bit::multiply_by_rational;
+
+	(multiply_by_rational(issuance.into(), inflation.into(), 10_000u32.into()).unwrap_or_else(
+		|_e| {
+			log::error!(
+				"Error calculating block rewards, Either Issuance or inflation value too big",
+			);
+			0_u128
+		},
+	) / DAYS_IN_YEAR)
+		.checked_div(blocks_per_day.into())
+		.unwrap_or_else(|| {
+			log::error!("blocks per day should be greater than zero");
+			Zero::zero()
+		})
+		.into()
 }
