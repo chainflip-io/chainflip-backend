@@ -495,7 +495,7 @@ pub mod pallet {
 				Ok(key) => {
 					keygen_status.add_success_vote(&reporter, key)?;
 					Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
-					},
+				},
 				Err(KeygenError::Incompatible) => {
 					keygen_status.add_incompatible_vote(&reporter)?;
 					Self::deposit_event(Event::<T, I>::KeygenIncompatibleReported(reporter));
