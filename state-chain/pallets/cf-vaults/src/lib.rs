@@ -85,10 +85,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		}
 	}
 
-	/// The success threshold is the smallest number of respondents able to reach consensus.
-	///
-	/// Note this is not the same as the threshold defined in the signing literature.
-	fn success_threshold(&self) -> AuthorityCount {
+	fn super_majority_threshold(&self) -> AuthorityCount {
 		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
@@ -146,7 +143,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			}
 		}
 
-		let super_majority_threshold = self.success_threshold() as usize;
+		let super_majority_threshold = self.super_majority_threshold() as usize;
 
 		// We remove who we don't want to punish, and then punish the rest
 		if let Some(key) = SuccessVoters::<T, I>::iter_keys().find(|key| {
