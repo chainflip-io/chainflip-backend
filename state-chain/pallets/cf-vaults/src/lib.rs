@@ -177,7 +177,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 						None
 					}
 				}))
-				.chain(self.remaining_candidates.clone())
+				.chain(self.remaining_candidates)
 				.collect(),
 		))
 	}
