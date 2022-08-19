@@ -92,11 +92,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
-	/// The blame threshold is the number of blame votes that result in punishment.
-	fn blame_threshold(&self) -> AuthorityCount {
-		self.success_threshold()
-	}
-
 	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
 		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
 
@@ -182,7 +177,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 					self.blame_votes
 						.iter()
 						.filter_map(|(id, vote_count)| {
-							if *vote_count >= self.blame_threshold() {
+							if *vote_count >= self.success_threshold() {
 								Some(id)
 							} else {
 								None
