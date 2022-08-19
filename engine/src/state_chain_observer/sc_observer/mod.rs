@@ -360,7 +360,7 @@ where
                                                 pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
                                                     ceremony_id,
                                                     key_id,
-                                                    validators,
+                                                    signers,
                                                     payload,
                                                 ),
                                             ) => {
@@ -370,7 +370,7 @@ where
                                                     state_chain_client.clone(),
                                                     ceremony_id,
                                                     KeyId(key_id),
-                                                    validators,
+                                                    signers,
                                                     MessageHash(payload.to_fixed_bytes()),
                                                     logger.clone(),
                                                 ).await;
