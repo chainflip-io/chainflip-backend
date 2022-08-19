@@ -15,7 +15,7 @@ use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
     eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
-    logging::{CEREMONY_ID_KEY, COMPONENT_KEY},
+    logging::COMPONENT_KEY,
     multisig::{
         client::{CeremonyFailureReason, KeygenFailureReason, MultisigClientApi},
         KeyId, MessageHash,
@@ -41,7 +41,20 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
         scope.spawn(async move {
             let keygen_outcome = multisig_client
                 .keygen(ceremony_id, keygen_participants.clone())
-                .await;
+                .await
+                .map(|point| {
+                    cf_chains::eth::AggKey::from_pubkey_compressed(point.get_element().serialize())
+                })
+                .map_err(|(bad_account_ids, reason)| {
+                    if let CeremonyFailureReason::<KeygenFailureReason>::Other(
+                        KeygenFailureReason::KeyNotCompatible,
+                    ) = reason
+                    {
+                        KeygenError::Incompatible
+                    } else {
+                        KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
+                    }
+                });
 
             let _result = state_chain_client
                 .submit_signed_extrinsic(
