@@ -177,7 +177,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 					self.blame_votes
 						.iter()
 						.filter_map(|(id, vote_count)| {
-							if *vote_count >= self.success_threshold() {
+							if *vote_count >= super_majority_threshold as u32 {
 								Some(id)
 							} else {
 								None
