@@ -151,88 +151,48 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			}
 		}
 
-		let remaining_success_voters = || {
-			SuccessVoters::<T, I>::drain()
-				.map(|(_k, dissenters)| dissenters)
-				.flatten()
-				.collect()
-		};
+		let super_majority_threshold = self.success_threshold() as usize;
 
-		let mut to_punish = self.remaining_candidates.clone();
-		match self.consensus_outcome() {
-			Some(Ok(consensus_key)) => {
-				SuccessVoters::<T, I>::remove(consensus_key);
-				to_punish.append(&mut remaining_success_voters());
-				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
-				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
-			},
-			Some(Err(KeygenError::Incompatible)) => {
-				IncompatibleVoters::<T, I>::kill();
-				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
-				to_punish.append(&mut remaining_success_voters());
-			},
-			Some(Err(KeygenError::Failure(mut blamed))) => {
-				FailureVoters::<T, I>::kill();
-				to_punish.append(&mut blamed);
-				to_punish.append(&mut remaining_success_voters());
-				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
-			},
-			None => {
-				SuccessVoters::<T, I>::remove_all(None);
-				FailureVoters::<T, I>::kill();
-				IncompatibleVoters::<T, I>::kill();
-				log::warn!("Unable to determine a consensus outcome for keygen.")
-			},
-		};
-
-		Err(KeygenError::Failure(to_punish))
-	}
-
-	/// Determines the keygen outcome based on threshold consensus.
-	/// - If less than `self.success_threshold()` voted for failure or success returns `None`.
-	/// - Returns `Some(Ok(key))` *iff any* key has at least `self.success_threshold()` number of
-	/// votes.
-	/// - Returns `Some(Err(KeygenError::Failure(blamed_nodes)))` *iff* at least
-	///   `self.success_threshold()` number of nodes voted
-	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
-	/// votes.
-	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
-		let success_threshold = self.success_threshold() as usize;
-		if (self.candidate_count.saturating_sub(self.remaining_candidate_count()) as usize) <
-			success_threshold
+		// We remove who we don't want to punish, and then punish the rest
+		if let Some(key) = SuccessVoters::<T, I>::iter_keys().find(|key| {
+			SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= super_majority_threshold
+		}) {
+			SuccessVoters::<T, I>::remove(key);
+		} else if IncompatibleVoters::<T, I>::decode_len().unwrap_or_default() >=
+			super_majority_threshold
 		{
-			return None
+			IncompatibleVoters::<T, I>::kill();
+		} else if FailureVoters::<T, I>::decode_len().unwrap_or_default() >=
+			super_majority_threshold
+		{
+			FailureVoters::<T, I>::kill();
+		} else {
+			SuccessVoters::<T, I>::remove_all(None);
+			FailureVoters::<T, I>::kill();
+			IncompatibleVoters::<T, I>::kill();
+			log::warn!("Unable to determine a consensus outcome for keygen.");
 		}
 
-		for key in SuccessVoters::<T, I>::iter_keys() {
-			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= success_threshold {
-				return Some(Ok(key))
-			}
-		}
-
-		if IncompatibleVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
-			return Some(Err(KeygenError::Incompatible))
-		}
-
-		if FailureVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
-			Some(Err(KeygenError::Failure(
-				self.blame_votes
-					.iter()
-					.filter_map(
-						|(id, vote_count)| {
+		Err(KeygenError::Failure(
+			SuccessVoters::<T, I>::drain()
+				.flat_map(|(_k, dissenters)| dissenters)
+				.chain(FailureVoters::<T, I>::take())
+				.chain(IncompatibleVoters::<T, I>::take())
+				.chain(
+					self.blame_votes
+						.iter()
+						.filter_map(|(id, vote_count)| {
 							if *vote_count >= self.blame_threshold() {
 								Some(id)
 							} else {
 								None
 							}
-						},
-					)
-					.cloned()
-					.collect(),
-			)))
-		} else {
-			None
-		}
+						})
+						.cloned(),
+				)
+				.chain(self.remaining_candidates.clone())
+				.collect(),
+		))
 	}
 }
 
