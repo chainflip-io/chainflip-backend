@@ -138,3 +138,13 @@ fn no_update_of_update_total_supply_during_maintanance() {
 		);
 	});
 }
+
+#[test]
+fn test_example_block_reward_calcaulation() {
+	use crate::calculate_inflation_to_block_reward;
+	let issuance: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip
+	let inflation: u128 = 1000; //10 percent
+	let blocks_per_day = 14400;
+	let expected: u128 = 1_902_587_519_025_875_190;
+	assert_eq!(calculate_inflation_to_block_reward(issuance, inflation, blocks_per_day), expected);
+}

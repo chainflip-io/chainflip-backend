@@ -361,7 +361,7 @@ fn calculate_inflation_to_block_reward<T>(issuance: T, inflation: T, blocks_per_
 where
 	T: Into<u128> + From<u128>,
 {
-	const DAYS_IN_YEAR: u32 = 365;
+	const DAYS_IN_YEAR: u128 = 365;
 	use sp_runtime::helpers_128bit::multiply_by_rational;
 
 	(multiply_by_rational(issuance.into(), inflation.into(), 10_000u32.into()).unwrap_or_else(
@@ -371,20 +371,11 @@ where
 			);
 			0_u128
 		},
-	) / DAYS_IN_YEAR as u128)
+	) / DAYS_IN_YEAR)
 		.checked_div(blocks_per_day.into())
 		.unwrap_or_else(|| {
 			log::error!("blocks per day should be greater than zero");
 			Zero::zero()
 		})
 		.into()
-}
-
-#[test]
-fn test_example_block_reward_calcaulation() {
-	let issuance: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip
-	let inflation: u128 = 1000; //10 percent
-	let blocks_per_day = 14400;
-	let expected: u128 = 1_902_587_519_025_875_190;
-	assert_eq!(calculate_inflation_to_block_reward(issuance, inflation, blocks_per_day), expected);
 }
