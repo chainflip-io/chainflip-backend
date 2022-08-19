@@ -643,42 +643,42 @@ mod keygen_reporting {
 		// The success threshold is the smallest number of participants that *can* reach consensus.
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..144))
-				.success_threshold(),
+				.super_majority_threshold(),
 			96
 		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..145))
-				.success_threshold(),
+				.super_majority_threshold(),
 			97
 		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..146))
-				.success_threshold(),
+				.super_majority_threshold(),
 			98
 		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..147))
-				.success_threshold(),
+				.super_majority_threshold(),
 			98
 		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..148))
-				.success_threshold(),
+				.super_majority_threshold(),
 			99
 		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..149))
-				.success_threshold(),
+				.super_majority_threshold(),
 			100
 		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..150))
-				.success_threshold(),
+				.super_majority_threshold(),
 			100
 		);
 		assert_eq!(
 			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..151))
-				.success_threshold(),
+				.super_majority_threshold(),
 			101
 		);
 	}
