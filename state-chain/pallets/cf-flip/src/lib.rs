@@ -24,7 +24,7 @@ pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
 	ensure,
-	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
+	traits::{Get, Hooks, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -123,6 +123,9 @@ pub mod pallet {
 
 		/// Slashing has been performed. /[account_id, amount/]
 		SlashingPerformed(T::AccountId, T::Balance),
+
+		/// An account has been reaped. /[account_id, dust_burned/]
+		AccountReaped(T::AccountId, T::Balance),
 	}
 
 	#[pallet::error]
@@ -133,6 +136,28 @@ pub mod pallet {
 		InsufficientReserves,
 		/// Invalid Slashing Rate: Has to be between 0 and 100
 		InvalidSlashingRate,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Reap any accounts that are below ED, and burn the dust.
+		fn on_idle(_block_number: BlockNumberFor<T>, _remaining_weight: Weight) -> Weight {
+			let mut count = 0u64;
+			Account::<T>::translate(
+				|account_id, flip_account| -> Option<FlipAccount<T::Balance>> {
+					if Pallet::<T>::total_balance_of(&account_id) < T::ExistentialDeposit::get() {
+						let dust = Pallet::<T>::total_balance_of(&account_id);
+						Pallet::<T>::settle(&account_id, Pallet::<T>::burn(dust).into());
+						Self::deposit_event(Event::AccountReaped(account_id, dust));
+						count += 1;
+						None
+					} else {
+						Some(flip_account)
+					}
+				},
+			);
+			count.saturating_mul(T::WeightInfo::reap_one_account())
+		}
 	}
 
 	#[pallet::call]
@@ -251,9 +276,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Slashable funds for an account.
 	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
-		Account::<T>::get(account_id)
-			.total()
-			.saturating_sub(T::ExistentialDeposit::get())
+		Account::<T>::get(account_id).total()
 	}
 
 	/// Debits an account's staked balance.

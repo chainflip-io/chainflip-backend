@@ -29,6 +29,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_flip.
 pub trait WeightInfo {
 	fn set_slashing_rate() -> Weight;
+	fn reap_one_account() -> Weight;
 }
 
 /// Weights for pallet_cf_flip using the Substrate node and recommended hardware.
@@ -40,6 +41,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		(3_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
+
+	fn reap_one_account() -> Weight {
+		0
+	}
 }
 
 // For backwards compatibility and tests
@@ -49,5 +54,9 @@ impl WeightInfo for () {
 		#[allow(clippy::unnecessary_cast)]
 		(3_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+
+	fn reap_one_account() -> Weight {
+		0
 	}
 }
