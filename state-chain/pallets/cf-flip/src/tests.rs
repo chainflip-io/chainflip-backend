@@ -291,13 +291,10 @@ impl FlipOperation {
 				if initial_balance.saturating_sub(expected_slash) != balance_after {
 					return false
 				}
-				assert_eq!(
-					System::events().last().unwrap().event,
-					Event::Flip(crate::Event::<Test>::SlashingPerformed(
-						*account_id,
-						expected_slash
-					)),
-				);
+				System::assert_last_event(Event::Flip(crate::Event::<Test>::SlashingPerformed {
+					who: *account_id,
+					amount: expected_slash,
+				}));
 			},
 			// Account to account transfer
 			FlipOperation::AccountToAccount(account_id_1, account_id_2, amount_1, amount_2) => {
@@ -617,5 +614,6 @@ fn can_reap_dust_account() {
 		assert_eq!(Account::<Test>::get(BOB), FlipAccount { stake: 10, bond: 0 });
 
 		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { stake: 11, bond: 0 });
+		System::assert_last_event(Event::Flip(crate::Event::AccountReaped { who: ALICE, dust: 9 }));
 	})
 }

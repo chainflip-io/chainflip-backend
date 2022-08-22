@@ -119,13 +119,13 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Some imbalance could not be settled and the remainder will be reverted. /[reverted_to,
 		/// amount/]
-		RemainingImbalance(ImbalanceSource<T::AccountId>, T::Balance),
+		RemainingImbalance { who: ImbalanceSource<T::AccountId>, amount: T::Balance },
 
 		/// Slashing has been performed. /[account_id, amount/]
-		SlashingPerformed(T::AccountId, T::Balance),
+		SlashingPerformed { who: T::AccountId, amount: T::Balance },
 
 		/// An account has been reaped. /[account_id, dust_burned/]
-		AccountReaped(T::AccountId, T::Balance),
+		AccountReaped { who: T::AccountId, dust: T::Balance },
 	}
 
 	#[pallet::error]
@@ -153,7 +153,7 @@ pub mod pallet {
 					if Pallet::<T>::total_balance_of(&account_id) < T::ExistentialDeposit::get() {
 						let dust = Pallet::<T>::total_balance_of(&account_id);
 						Pallet::<T>::settle(&account_id, Pallet::<T>::burn(dust).into());
-						Self::deposit_event(Event::AccountReaped(account_id, dust));
+						Self::deposit_event(Event::AccountReaped { who: account_id, dust });
 						count += 1;
 						None
 					} else {
@@ -350,7 +350,7 @@ impl<T: Config> Pallet<T> {
 				SignedImbalance::Positive(surplus) => (surplus.source.clone(), surplus.peek()),
 				SignedImbalance::Negative(deficit) => (deficit.source.clone(), deficit.peek()),
 			};
-			Self::deposit_event(Event::<T>::RemainingImbalance(source, remainder));
+			Self::deposit_event(Event::<T>::RemainingImbalance { who: source, amount: remainder });
 		}
 	}
 
@@ -556,6 +556,9 @@ where
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
-		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed(account_id.clone(), total_burn));
+		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
+			who: account_id.clone(),
+			amount: total_burn,
+		});
 	}
 }
