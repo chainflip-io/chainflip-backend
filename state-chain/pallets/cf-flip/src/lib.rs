@@ -500,8 +500,8 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 			amount <= Self::claimable_balance(account_id),
 			DispatchError::from(Error::<T>::InsufficientLiquidity)
 		);
-
 		Self::settle(account_id, Self::transfer_to_pending_claims(account_id, amount).into());
+		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 
 		Ok(())
 	}
