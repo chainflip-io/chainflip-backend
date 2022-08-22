@@ -347,7 +347,7 @@ pub mod pallet {
 						&offenders[..],
 					);
 
-					// Clean up old ceremony and start a new one.
+					// Clean up old ceremony and start a new one if the retry policy allows it
 					if let Some(RequestContext {
 						request_id,
 						attempt_count,
