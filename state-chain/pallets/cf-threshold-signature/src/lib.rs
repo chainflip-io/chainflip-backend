@@ -666,12 +666,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Dispatches the callback if one has been registered.
 	fn maybe_dispatch_callback(request_id: RequestId, ceremony_id: CeremonyId) {
 		if let Some(call) = RequestCallback::<T, I>::take(request_id) {
-			let dispatch_result = call.dispatch_bypass_filter(Origin(Default::default()).into());
-
 			Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
 				ceremony_id,
-				dispatch_result.map(|_| ()).map_err(|e| {
-					log::error!("Threshold dispatch failed for ceremony {}.", ceremony_id);
+				call.dispatch_bypass_filter(Origin(Default::default()).into())
+					.map(|_| ())
+					.map_err(|e| {
+						log::error!("Threshold dispatch failed for ceremony {}.", ceremony_id);
 					e.error
 				}),
 			));
