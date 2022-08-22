@@ -261,10 +261,16 @@ pub trait StakeTransfer {
 	///
 	/// Note this function makes no assumptions about how many claims may be pending simultaneously:
 	/// if enough funds are available, it succeeds. Otherwise, it fails.
-	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError>;
+	fn try_initiate_claim(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError>;
 
-	/// Performs any necessary settlement once a claim has been confirmed off-chain.
-	fn settle_claim(amount: Self::Balance);
+	/// Performs necessary settlement once a claim has been confirmed off-chain.
+	fn finalize_claim(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError>;
 
 	/// Reverts a pending claim in the case of an expiry or cancellation.
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance);

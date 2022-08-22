@@ -62,7 +62,7 @@ macro_rules! impl_mock_stake_transfer {
 				BALANCES.with(|cell| *cell.borrow_mut().entry(account_id.clone()).or_default() += amount);
 				Self::get_balance(account_id.clone())
 			}
-			fn try_claim(
+			fn try_initiate_claim(
 				account_id: &Self::AccountId,
 				amount: Self::Balance,
 			) -> Result<(), sp_runtime::DispatchError> {
@@ -75,7 +75,7 @@ macro_rules! impl_mock_stake_transfer {
 						.ok_or("Overflow".into())
 				})
 			}
-			fn settle_claim(_amount: Self::Balance) {
+			fn finalize_claim(_account_id: &Self::AccountId, _amount: Self::Balance) -> Result<(), sp_runtime::DispatchError> {
 				unimplemented!()
 			}
 			fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {

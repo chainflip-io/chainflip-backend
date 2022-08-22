@@ -20,6 +20,8 @@ pub enum InternalSource<AccountId> {
 	Account(AccountId),
 	/// Reserved funds. Could be a pot of rewards, a treasury balance, etc.
 	Reserve(ReserveId),
+	/// Pending claims for different accounts.
+	PendingClaim(AccountId),
 }
 
 /// The origin of an imbalance.
@@ -40,6 +42,10 @@ impl<AccountId> ImbalanceSource<AccountId> {
 
 	pub fn from_reserve(id: ReserveId) -> Self {
 		Self::Internal(InternalSource::Reserve(id))
+	}
+
+	pub fn from_pending_claims(id: AccountId) -> Self {
+		Self::Internal(InternalSource::PendingClaim(id))
 	}
 }
 
@@ -121,6 +127,19 @@ impl<T: Config> Surplus<T> {
 			}
 		})
 		.ok()
+	}
+
+	/// Tries to withdraw funds from a Pending Claims reserve for the corresponding Account ID.
+	/// Fails if the pending claim doesn't exist for that ID
+	pub(super) fn try_from_pending_claims_reserve(account_id: &T::AccountId) -> Option<Self> {
+		if Flip::PendingClaimsReserve::<T>::try_get(&account_id).is_ok() {
+			Some(Self::new(
+				Flip::PendingClaimsReserve::<T>::take(&account_id),
+				ImbalanceSource::from_pending_claims(account_id.clone()),
+			))
+		} else {
+			None
+		}
 	}
 
 	/// Withdraw funds from a reserve. Deducts *up to* the requested amount, depending on available
@@ -216,6 +235,15 @@ impl<T: Config> Deficit<T> {
 			};
 			Self::new(added, ImbalanceSource::from_reserve(reserve_id))
 		})
+	}
+
+	/// Creates a pending claims reserve account for the given account ID.
+	pub(super) fn from_pending_claims_reserve(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+	) -> Self {
+		Flip::PendingClaimsReserve::<T>::insert(&account_id, amount);
+		Self::new(amount, ImbalanceSource::from_pending_claims(account_id.clone()))
 	}
 
 	/// Funds deficit from offchain.
@@ -392,6 +420,11 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 							*rsrv = rsrv.saturating_add(self.amount)
 						})
 					},
+					InternalSource::PendingClaim(account_id) => {
+						// This means we took funds from a pending claim but didn't put them
+						// anywhere. Add the funds back to the account again.
+						Flip::PendingClaimsReserve::<T>::insert(account_id, self.amount);
+					},
 				}
 			},
 		};
@@ -427,6 +460,11 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
 							*rsrv = rsrv.saturating_sub(self.amount)
 						})
+					},
+					InternalSource::PendingClaim(account_id) => {
+						// This means we added funds to a pending claim without specifying a source.
+						// Deduct them again.
+						Flip::PendingClaimsReserve::<T>::remove(account_id);
 					},
 				}
 			},

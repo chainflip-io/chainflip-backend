@@ -99,6 +99,11 @@ pub mod pallet {
 	pub type Reserve<T: Config> =
 		StorageMap<_, Blake2_128Concat, ReserveId, T::Balance, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn pending_claims_reserve)]
+	pub type PendingClaimsReserve<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance, ValueQuery>;
+
 	/// The total number of tokens issued.
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
@@ -133,6 +138,11 @@ pub mod pallet {
 		InsufficientReserves,
 		/// Invalid Slashing Rate: Has to be between 0 and 100
 		InvalidSlashingRate,
+		/// No pending claim for this ID.
+		NoPendingClaimForThisID,
+		/// The reported claim amount by witnessers is not equal to the pending claim amount on the
+		/// state chain.
+		ErrorFinalizingClaim,
 	}
 
 	#[pallet::call]
@@ -367,10 +377,24 @@ impl<T: Config> Pallet<T> {
 			.ok_or_else(|| Error::<T>::InsufficientReserves.into())
 	}
 
+	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has
+	/// insufficient funds.
+	pub fn try_withdraw_pending_claim(
+		account_id: &T::AccountId,
+	) -> Result<Surplus<T>, DispatchError> {
+		Surplus::try_from_pending_claims_reserve(account_id)
+			.ok_or_else(|| Error::<T>::NoPendingClaimForThisID.into())
+	}
+
 	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it
 	/// doesn't exist already.
 	pub fn deposit_reserves(reserve_id: ReserveId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_reserve(reserve_id, amount)
+	}
+
+	/// create a pending claims reserve identified by a `account_id`.
+	pub fn transfer_to_pending_claims(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
+		Deficit::from_pending_claims_reserve(account_id, amount)
 	}
 }
 
@@ -468,24 +492,37 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Self::total_balance_of(account_id)
 	}
 
-	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError> {
+	fn try_initiate_claim(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError> {
 		ensure!(
 			amount <= Self::claimable_balance(account_id),
 			DispatchError::from(Error::<T>::InsufficientLiquidity)
 		);
 
-		Self::settle(account_id, Self::bridge_out(amount).into());
-		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		Self::settle(account_id, Self::transfer_to_pending_claims(account_id, amount).into());
 
 		Ok(())
 	}
 
-	fn settle_claim(_amount: Self::Balance) {
-		// Nothing to do.
+	fn finalize_claim(
+		account_id: &T::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError> {
+		ensure!(
+			PendingClaimsReserve::<T>::get(&account_id) == amount,
+			DispatchError::from(Error::<T>::ErrorFinalizingClaim)
+		);
+		Self::try_withdraw_pending_claim(account_id)
+			.unwrap()
+			.offset(Self::bridge_out(amount));
+		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		Ok(())
 	}
 
-	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
-		Self::settle(account_id, Self::bridge_in(amount).into());
+	fn revert_claim(account_id: &Self::AccountId, _amount: Self::Balance) {
+		Self::settle(account_id, Self::try_withdraw_pending_claim(account_id).unwrap().into());
 		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 		// claim reverts automatically when dropped
 	}

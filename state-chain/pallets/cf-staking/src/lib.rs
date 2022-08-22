@@ -40,7 +40,7 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 pub mod pallet {
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{assert_ok, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -333,7 +333,7 @@ pub mod pallet {
 
 			// Throw an error if the staker tries to claim too much. Otherwise decrement the stake
 			// by the amount claimed.
-			T::Flip::try_claim(&account_id, amount)?;
+			T::Flip::try_initiate_claim(&account_id, amount)?;
 
 			// Set expiry and build the claim parameters.
 			let expiry =
@@ -411,7 +411,7 @@ pub mod pallet {
 			expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
 			ClaimExpiries::<T>::set(expiries);
 
-			T::Flip::settle_claim(claimed_amount);
+			assert_ok!(T::Flip::finalize_claim(&account_id, claimed_amount));
 
 			if T::Flip::staked_balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
