@@ -36,15 +36,15 @@ pub enum ImbalanceSource<AccountId> {
 }
 
 impl<AccountId> ImbalanceSource<AccountId> {
-	pub fn from_acct(id: AccountId) -> Self {
+	pub fn acct(id: AccountId) -> Self {
 		Self::Internal(InternalSource::Account(id))
 	}
 
-	pub fn from_reserve(id: ReserveId) -> Self {
+	pub fn reserve(id: ReserveId) -> Self {
 		Self::Internal(InternalSource::Reserve(id))
 	}
 
-	pub fn from_pending_claims(id: AccountId) -> Self {
+	pub fn pending_claims(id: AccountId) -> Self {
 		Self::Internal(InternalSource::PendingClaim(id))
 	}
 }
@@ -93,7 +93,7 @@ impl<T: Config> Surplus<T> {
 					Err(())
 				} else {
 					account.stake = account.stake.saturating_sub(amount);
-					Ok(Self::new(amount, ImbalanceSource::from_acct(account_id.clone())))
+					Ok(Self::new(amount, ImbalanceSource::acct(account_id.clone())))
 				}
 			} else {
 				Err(())
@@ -111,7 +111,7 @@ impl<T: Config> Surplus<T> {
 		Flip::Account::<T>::mutate(account_id, |account| {
 			let deducted = account.stake.min(amount);
 			account.stake = account.stake.saturating_sub(deducted);
-			Self::new(deducted, ImbalanceSource::from_acct(account_id.clone()))
+			Self::new(deducted, ImbalanceSource::acct(account_id.clone()))
 		})
 	}
 
@@ -123,7 +123,7 @@ impl<T: Config> Surplus<T> {
 				Err(())
 			} else {
 				(*balance) = (*balance).saturating_sub(amount);
-				Ok(Self::new(amount, ImbalanceSource::from_reserve(reserve_id)))
+				Ok(Self::new(amount, ImbalanceSource::reserve(reserve_id)))
 			}
 		})
 		.ok()
@@ -135,7 +135,7 @@ impl<T: Config> Surplus<T> {
 		if Flip::PendingClaimsReserve::<T>::try_get(&account_id).is_ok() {
 			Some(Self::new(
 				Flip::PendingClaimsReserve::<T>::take(&account_id),
-				ImbalanceSource::from_pending_claims(account_id.clone()),
+				ImbalanceSource::pending_claims(account_id.clone()),
 			))
 		} else {
 			None
@@ -151,7 +151,7 @@ impl<T: Config> Surplus<T> {
 		Flip::Reserve::<T>::mutate(reserve_id, |balance| {
 			let deducted = (*balance).min(amount);
 			*balance = (*balance).saturating_sub(deducted);
-			Self::new(deducted, ImbalanceSource::from_reserve(reserve_id))
+			Self::new(deducted, ImbalanceSource::reserve(reserve_id))
 		})
 	}
 
@@ -214,7 +214,7 @@ impl<T: Config> Deficit<T> {
 				},
 				None => Zero::zero(),
 			};
-			Self::new(added, ImbalanceSource::from_acct(account_id.clone()))
+			Self::new(added, ImbalanceSource::acct(account_id.clone()))
 		})
 	}
 
@@ -233,7 +233,7 @@ impl<T: Config> Deficit<T> {
 				},
 				None => Zero::zero(),
 			};
-			Self::new(added, ImbalanceSource::from_reserve(reserve_id))
+			Self::new(added, ImbalanceSource::reserve(reserve_id))
 		})
 	}
 
@@ -243,7 +243,7 @@ impl<T: Config> Deficit<T> {
 		amount: T::Balance,
 	) -> Self {
 		Flip::PendingClaimsReserve::<T>::insert(&account_id, amount);
-		Self::new(amount, ImbalanceSource::from_pending_claims(account_id.clone()))
+		Self::new(amount, ImbalanceSource::pending_claims(account_id.clone()))
 	}
 
 	/// Funds deficit from offchain.
