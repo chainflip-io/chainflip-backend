@@ -384,16 +384,8 @@ jobs:
             -vv
       - run:
           name: Start Engine
-          environment:
-            ETH_PRIVATE_KEY_FILE: eth_private_key_file
-            HEALTH_CHECK_HOSTNAME: localhost
-            HEALTH_CHECK_PORT: 5555
-            NODE_KEY_FILE: node_key_file
-            STATE_CHAIN_SIGNING_KEY_FILE: signing_key_file
-            SIGNING_DB_FILE: data.db
-            STATE_CHAIN_WS_ENDPOINT: ws://localhost:9944
           background: true
-          command: ./target/release/chainflip-engine --config-path engine/config/Default.toml
+          command: ./target/release/chainflip-engine --config-path engine/config/CI.toml
       - run:
           name: Check Engine Health
           command: >
