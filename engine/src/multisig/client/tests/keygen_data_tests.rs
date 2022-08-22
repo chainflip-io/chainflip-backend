@@ -5,17 +5,25 @@ use rand_legacy::SeedableRng;
 
 use crate::multisig::{
     client::{
-        common::{BroadcastVerificationMessage, PreProcessStageDataCheck},
+        common::{BroadcastVerificationMessage, CeremonyStageName, PreProcessStageDataCheck},
         keygen::{BlameResponse8, Complaints6, KeygenData, SecretShare5},
     },
     crypto::Rng,
     eth::Point,
 };
 
-use super::helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm};
+use super::{
+    helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm},
+    KEYGEN_STAGES,
+};
 
 /// ==========================
 // Generate invalid keygen data with the given number of elements in its inner and outer collection(s)
+
+pub fn gen_keygen_data_hash_comm1() -> KeygenData<Point> {
+    let mut rng = Rng::from_seed([0; 32]);
+    KeygenData::HashComm1(get_invalid_hash_comm(&mut rng))
+}
 
 pub fn gen_keygen_data_verify_hash_comm2(length: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
@@ -46,6 +54,11 @@ fn gen_keygen_data_verify_coeff_comm4(
             })
             .collect(),
     })
+}
+
+fn gen_keygen_secret_shares5() -> KeygenData<Point> {
+    let mut rng = Rng::from_seed([0; 32]);
+    KeygenData::SecretShares5(SecretShare5::create_random(&mut rng))
 }
 
 fn gen_keygen_data_complaints6(length: AuthorityCount) -> KeygenData<Point> {
@@ -233,4 +246,49 @@ fn check_data_size_verify_blame_responses9() {
         !gen_keygen_data_verify_blame_response9(expected_len, expected_len + 1)
             .data_size_is_valid(expected_len)
     );
+}
+
+#[test]
+fn should_delay_correct_data_for_stage() {
+    let default_length = 1;
+    let stage_name = [
+        CeremonyStageName::HashCommitments1,
+        CeremonyStageName::VerifyHashCommitmentsBroadcast2,
+        CeremonyStageName::CoefficientCommitments3,
+        CeremonyStageName::VerifyCommitmentsBroadcast4,
+        CeremonyStageName::SecretSharesStage5,
+        CeremonyStageName::ComplaintsStage6,
+        CeremonyStageName::VerifyComplaintsBroadcastStage7,
+        CeremonyStageName::BlameResponsesStage8,
+        CeremonyStageName::VerifyBlameResponsesBroadcastStage9,
+    ];
+    let stage_data = [
+        gen_keygen_data_hash_comm1(),
+        gen_keygen_data_verify_hash_comm2(default_length),
+        gen_keygen_data_coeff_comm3(default_length),
+        gen_keygen_data_verify_coeff_comm4(default_length, default_length),
+        gen_keygen_secret_shares5(),
+        gen_keygen_data_complaints6(default_length),
+        gen_keygen_data_verify_complaints7(default_length, default_length),
+        gen_keygen_data_blame_response8(default_length),
+        gen_keygen_data_verify_blame_response9(default_length, default_length),
+    ];
+
+    for stage_index in 0..KEYGEN_STAGES {
+        for data_index in 0..KEYGEN_STAGES {
+            if stage_index + 1 == data_index {
+                // Should delay the next stage data (stage_index + 1)
+                assert!(KeygenData::should_delay(
+                    stage_name[stage_index],
+                    &stage_data[data_index]
+                ));
+            } else {
+                // Should not delay any other stage
+                assert!(!KeygenData::should_delay(
+                    stage_name[stage_index],
+                    &stage_data[data_index]
+                ));
+            }
+        }
+    }
 }

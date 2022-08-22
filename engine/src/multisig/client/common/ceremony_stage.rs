@@ -10,7 +10,7 @@ use crate::{
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
-use super::CeremonyFailureReason;
+use super::{CeremonyFailureReason, CeremonyStageName};
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result, FailureReason> {
@@ -63,9 +63,6 @@ pub trait CeremonyStage {
         m: Self::Message,
     ) -> ProcessMessageResult;
 
-    /// This is how individual stages signal messages that should be processed in the next stage
-    fn should_delay(&self, m: &Self::Message) -> bool;
-
     /// Verify data for this stage after it is received from all other parties,
     /// either abort or proceed to the next stage based on the result
     async fn finalize(
@@ -101,4 +98,5 @@ impl CeremonyCommon {
 pub trait PreProcessStageDataCheck {
     fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool;
     fn is_first_stage(&self) -> bool;
+    fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool;
 }

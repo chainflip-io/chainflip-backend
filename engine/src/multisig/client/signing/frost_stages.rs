@@ -28,14 +28,6 @@ type SigningStageResult<C> = StageResult<
     SigningFailureReason,
 >;
 
-macro_rules! should_delay {
-    ($variant:path) => {
-        fn should_delay(&self, m: &SigningData<C::Point>) -> bool {
-            matches!(m, $variant(_))
-        }
-    };
-}
-
 // *********** Await Commitments1 *************
 
 /// Stage 1: Generate an broadcast our secret nonce pair
@@ -77,8 +69,6 @@ impl<C: CryptoScheme>
             e: self.nonces.e_pub,
         })
     }
-
-    should_delay!(SigningData::BroadcastVerificationStage2<C::Point>);
 
     async fn process(
         self,
@@ -128,8 +118,6 @@ impl<C: CryptoScheme>
 
         DataToSend::Broadcast(VerifyComm2 { data })
     }
-
-    should_delay!(SigningData::LocalSigStage3<C::Point>);
 
     /// Verify that all values have been broadcast correctly during stage 1
     async fn process(
@@ -202,8 +190,6 @@ impl<C: CryptoScheme>
         data
     }
 
-    should_delay!(SigningData::VerifyLocalSigsStage4<C::Point>);
-
     /// Nothing to process here yet, simply creating the new stage once all of the
     /// data has been collected
     async fn process(
@@ -248,11 +234,6 @@ impl<C: CryptoScheme>
         let data = self.local_sigs.clone();
 
         DataToSend::Broadcast(VerifyLocalSig4 { data })
-    }
-
-    fn should_delay(&self, _: &SigningData<C::Point>) -> bool {
-        // Nothing to delay as we don't expect any further stages
-        false
     }
 
     /// Verify that signature shares have been broadcast correctly, and if so,

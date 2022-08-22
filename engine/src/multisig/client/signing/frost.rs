@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use crate::multisig::{
-    client::common::{BroadcastVerificationMessage, PreProcessStageDataCheck},
+    client::common::{BroadcastVerificationMessage, CeremonyStageName, PreProcessStageDataCheck},
     crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
 };
 
@@ -121,6 +121,26 @@ impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
 
     fn is_first_stage(&self) -> bool {
         matches!(self, SigningData::CommStage1(_))
+    }
+
+    /// Returns true if this message should be delayed for the given stage
+    fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool {
+        match stage_name {
+            CeremonyStageName::AwaitCommitments1 => {
+                matches!(message, SigningData::BroadcastVerificationStage2(_))
+            }
+            CeremonyStageName::VerifyCommitmentsBroadcast2 => {
+                matches!(message, SigningData::LocalSigStage3(_))
+            }
+            CeremonyStageName::LocalSigStage3 => {
+                matches!(message, SigningData::VerifyLocalSigsStage4(_))
+            }
+            CeremonyStageName::VerifyLocalSigsBroadcastStage4 => {
+                // Last stage, nothing to delay
+                false
+            }
+            _ => false,
+        }
     }
 }
 
@@ -328,7 +348,7 @@ mod tests {
     use super::*;
 
     use crate::multisig::{
-        client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1},
+        client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1, SIGNING_STAGES},
         crypto::eth::{EthSigning, Point, Scalar},
     };
 
@@ -341,6 +361,29 @@ mod tests {
     // Through integration tests with the KeyManager contract we know this
     // to be deemed valid by the contract for the data above
     const EXPECTED_SIGMA: &str = "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538";
+
+    fn gen_signing_data_stage2(length: AuthorityCount) -> SigningData<Point> {
+        let mut rng = Rng::from_seed([0; 32]);
+        SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
+            data: (0..length)
+                .map(|i| {
+                    (
+                        i as AuthorityCount,
+                        Some(gen_invalid_signing_comm1(&mut rng)),
+                    )
+                })
+                .collect(),
+        })
+    }
+
+    fn gen_signing_data_stage4(length: AuthorityCount) -> SigningData<Point> {
+        let mut rng = Rng::from_seed([0; 32]);
+        SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
+            data: (0..length)
+                .map(|i| (i as AuthorityCount, Some(gen_invalid_local_sig(&mut rng))))
+                .collect(),
+        })
+    }
 
     #[test]
     fn signature_is_contract_compatible() {
@@ -386,19 +429,8 @@ mod tests {
 
     #[test]
     fn check_data_size_stage2() {
-        let mut rng = Rng::from_seed([0; 32]);
         let test_size = 4;
-        let data_to_check =
-            SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
-                data: (0..test_size)
-                    .map(|i| {
-                        (
-                            i as AuthorityCount,
-                            Some(gen_invalid_signing_comm1(&mut rng)),
-                        )
-                    })
-                    .collect(),
-            });
+        let data_to_check = gen_signing_data_stage2(test_size);
 
         // Should fail on sizes larger or smaller then expected
         assert!(data_to_check.data_size_is_valid(test_size));
@@ -408,18 +440,49 @@ mod tests {
 
     #[test]
     fn check_data_size_stage4() {
-        let mut rng = Rng::from_seed([0; 32]);
         let test_size = 4;
-        let data_to_check =
-            SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
-                data: (0..test_size)
-                    .map(|i| (i as AuthorityCount, Some(gen_invalid_local_sig(&mut rng))))
-                    .collect(),
-            });
+        let data_to_check = gen_signing_data_stage4(test_size);
 
         // Should fail on sizes larger or smaller then expected
         assert!(data_to_check.data_size_is_valid(test_size));
         assert!(!data_to_check.data_size_is_valid(test_size - 1));
         assert!(!data_to_check.data_size_is_valid(test_size + 1));
+    }
+
+    #[test]
+    fn should_delay_correct_data_for_stage() {
+        let mut rng = Rng::from_seed([0; 32]);
+        let default_length = 1;
+
+        let stage_name = [
+            CeremonyStageName::AwaitCommitments1,
+            CeremonyStageName::VerifyCommitmentsBroadcast2,
+            CeremonyStageName::LocalSigStage3,
+            CeremonyStageName::VerifyLocalSigsBroadcastStage4,
+        ];
+        let stage_data = [
+            SigningData::<Point>::CommStage1(gen_invalid_signing_comm1(&mut rng)),
+            gen_signing_data_stage2(default_length),
+            SigningData::<Point>::LocalSigStage3(gen_invalid_local_sig(&mut rng)),
+            gen_signing_data_stage4(default_length),
+        ];
+
+        for stage_index in 0..SIGNING_STAGES {
+            for data_index in 0..SIGNING_STAGES {
+                if stage_index + 1 == data_index {
+                    // Should delay the next stage data (stage_index + 1)
+        assert!(SigningData::should_delay(
+                        stage_name[stage_index],
+                        &stage_data[data_index]
+        ));
+                } else {
+                    // Should not delay any other stage
+        assert!(!SigningData::should_delay(
+                        stage_name[stage_index],
+                        &stage_data[data_index]
+        ));
+                }
+            }
+        }
     }
 }

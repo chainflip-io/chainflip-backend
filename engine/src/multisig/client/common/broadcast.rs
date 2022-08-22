@@ -41,10 +41,6 @@ pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     /// Init the stage, returning the data to broadcast
     fn init(&mut self) -> DataToSend<Self::Message>;
 
-    /// For a given message, signal if it needs to be delayed
-    /// until the next stage
-    fn should_delay(&self, m: &Data) -> bool;
-
     /// Determines how the data for this stage (of type `Self::Message`)
     /// should be processed once it either received it from all other parties
     /// or the stage timed out (None is used for missing messages)
@@ -220,10 +216,6 @@ where
         } else {
             ProcessMessageResult::NotReady
         }
-    }
-
-    fn should_delay(&self, m: &Data) -> bool {
-        self.processor.should_delay(m)
     }
 
     async fn finalize(mut self: Box<Self>) -> StageResult<Data, Result, FailureReason> {
