@@ -117,15 +117,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Some imbalance could not be settled and the remainder will be reverted. /[reverted_to,
-		/// amount/]
-		RemainingImbalance { who: ImbalanceSource<T::AccountId>, amount: T::Balance },
+		/// Some imbalance could not be settled and the remainder will be reverted.
+		RemainingImbalance {
+			who: ImbalanceSource<T::AccountId>,
+			remaining_imbalance: T::Balance,
+		},
 
-		/// Slashing has been performed. /[account_id, amount/]
-		SlashingPerformed { who: T::AccountId, amount: T::Balance },
+		SlashingPerformed {
+			who: T::AccountId,
+			amount: T::Balance,
+		},
 
-		/// An account has been reaped. /[account_id, dust_burned/]
-		AccountReaped { who: T::AccountId, dust: T::Balance },
+		AccountReaped {
+			who: T::AccountId,
+			dust_burned: T::Balance,
+		},
 	}
 
 	#[pallet::error]
@@ -140,27 +146,25 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Reap any accounts that are below ED, and burn the dust.
+		/// Reap any accounts that are below `T::ExistentialDeposit`, and burn the dust.
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			// If remaining weight is too small, do thing.
-			if remaining_weight < T::WeightInfo::reap_one_account() {
+			let max_accounts_to_reap = remaining_weight
+				.checked_div(T::WeightInfo::reap_one_account())
+				.unwrap_or_default();
+			if max_accounts_to_reap == 0 {
 				return 0
 			}
 
 			let mut count = 0u64;
-			Account::<T>::translate(
-				|account_id, flip_account| -> Option<FlipAccount<T::Balance>> {
-					if Pallet::<T>::total_balance_of(&account_id) < T::ExistentialDeposit::get() {
-						let dust = Pallet::<T>::total_balance_of(&account_id);
-						Pallet::<T>::settle(&account_id, Pallet::<T>::burn(dust).into());
-						Self::deposit_event(Event::AccountReaped { who: account_id, dust });
-						count += 1;
-						None
-					} else {
-						Some(flip_account)
-					}
-				},
-			);
+			Account::<T>::iter()
+				.filter(|(_account_id, flip_account)| {
+					flip_account.total() < T::ExistentialDeposit::get()
+				})
+				.take(max_accounts_to_reap as usize)
+				.for_each(|(account_id, _flip_account)| {
+					BurnFlipAccount::<T>::on_killed_account(&account_id);
+					count += 1u64;
+				});
 			count.saturating_mul(T::WeightInfo::reap_one_account())
 		}
 	}
@@ -350,7 +354,10 @@ impl<T: Config> Pallet<T> {
 				SignedImbalance::Positive(surplus) => (surplus.source.clone(), surplus.peek()),
 				SignedImbalance::Negative(deficit) => (deficit.source.clone(), deficit.peek()),
 			};
-			Self::deposit_event(Event::<T>::RemainingImbalance { who: source, amount: remainder });
+			Self::deposit_event(Event::<T>::RemainingImbalance {
+				who: source,
+				remaining_imbalance: remainder,
+			});
 		}
 	}
 
@@ -528,6 +535,10 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 		let dust = Pallet::<T>::total_balance_of(account_id);
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
 		Account::<T>::remove(account_id);
+		Pallet::<T>::deposit_event(Event::AccountReaped {
+			who: account_id.clone(),
+			dust_burned: dust,
+		});
 	}
 }
 

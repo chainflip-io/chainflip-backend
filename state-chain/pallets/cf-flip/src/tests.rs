@@ -614,6 +614,9 @@ fn can_reap_dust_account() {
 		assert_eq!(Account::<Test>::get(BOB), FlipAccount { stake: 10, bond: 0 });
 
 		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { stake: 11, bond: 0 });
-		System::assert_last_event(Event::Flip(crate::Event::AccountReaped { who: ALICE, dust: 9 }));
+		System::assert_last_event(Event::Flip(crate::Event::AccountReaped {
+			who: ALICE,
+			dust_burned: 9,
+		}));
 	})
 }

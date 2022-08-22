@@ -3,7 +3,6 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
-use sp_runtime::traits::BlockNumberProvider;
 
 benchmarks! {
 	set_slashing_rate {
@@ -18,7 +17,7 @@ benchmarks! {
 	reap_one_account {
 		let caller: T::AccountId = whitelisted_caller();
 		Account::<T>::insert(&caller, FlipAccount { stake: T::Balance::from(0u32), bond: T::Balance::from(0u32)});
-	}: { Pallet::<T>::on_idle(frame_system::Pallet::<T>::current_block_number(), 1_000_000_000_000u64); }
+	}: { BurnFlipAccount::<T>::on_killed_account(&caller); }
 	verify {
 		assert!(!Account::<T>::contains_key(&caller));
 	}
