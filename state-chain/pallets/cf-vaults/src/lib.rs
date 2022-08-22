@@ -204,15 +204,6 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	Failed { offenders: Vec<T::ValidatorId> },
 }
 
-impl<T: Config<I>, I: 'static> VaultRotationStatus<T, I> {
-	fn new(id: CeremonyId, candidates: BTreeSet<T::ValidatorId>) -> Self {
-		Self::AwaitingKeygen {
-			keygen_ceremony_id: id,
-			response_status: KeygenResponseStatus::new(candidates),
-		}
-	}
-}
-
 /// A single vault.
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct Vault<T: ChainAbi> {
@@ -712,10 +703,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::new(
-			ceremony_id,
-			BTreeSet::from_iter(candidates.clone()),
-		));
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
+			keygen_ceremony_id: ceremony_id,
+			response_status: KeygenResponseStatus::new(BTreeSet::from_iter(candidates.clone())),
+		});
 
 		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
 		// block
