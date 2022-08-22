@@ -141,7 +141,12 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Reap any accounts that are below ED, and burn the dust.
-		fn on_idle(_block_number: BlockNumberFor<T>, _remaining_weight: Weight) -> Weight {
+		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			// If remaining weight is too small, do thing.
+			if remaining_weight < T::WeightInfo::reap_one_account() {
+				return 0
+			}
+
 			let mut count = 0u64;
 			Account::<T>::translate(
 				|account_id, flip_account| -> Option<FlipAccount<T::Balance>> {
