@@ -37,30 +37,29 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
     if keygen_participants.contains(&state_chain_client.our_account_id) {
-        // Send a keygen request and wait to submit the result to the SC
         scope.spawn(async move {
-            let keygen_outcome = multisig_client
-                .keygen(ceremony_id, keygen_participants.clone())
-                .await
-                .map(|point| {
-                    cf_chains::eth::AggKey::from_pubkey_compressed(point.get_element().serialize())
-                })
-                .map_err(|(bad_account_ids, reason)| {
-                    if let CeremonyFailureReason::<KeygenFailureReason>::Other(
-                        KeygenFailureReason::KeyNotCompatible,
-                    ) = reason
-                    {
-                        KeygenError::Incompatible
-                    } else {
-                        KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
-                    }
-                });
-
             let _result = state_chain_client
                 .submit_signed_extrinsic(
                     pallet_cf_vaults::Call::report_keygen_outcome {
                         ceremony_id,
-                        reported_outcome: keygen_outcome,
+                        reported_outcome: multisig_client
+                            .keygen(ceremony_id, keygen_participants.clone())
+                            .await
+                            .map(|point| {
+                                cf_chains::eth::AggKey::from_pubkey_compressed(
+                                    point.get_element().serialize(),
+                                )
+                            })
+                            .map_err(|(bad_account_ids, reason)| {
+                                if let CeremonyFailureReason::<KeygenFailureReason>::Other(
+                                    KeygenFailureReason::KeyNotCompatible,
+                                ) = reason
+                                {
+                                    KeygenError::Incompatible
+                                } else {
+                                    KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
+                                }
+                            }),
                     },
                     &logger,
                 )
