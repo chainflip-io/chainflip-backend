@@ -276,7 +276,8 @@ impl<T: Config> Pallet<T> {
 		Surplus::try_from_acct(account_id, amount, false)
 	}
 
-	/// TODO: write a nice doc comment here.
+	/// Like `try_debit` but debits only the accounts liquid balance. Ensures that we don't burn
+	/// more then the available liquid balance of the account.
 	pub fn try_debit_from_liquid_funds(
 		account_id: &T::AccountId,
 		amount: T::Balance,

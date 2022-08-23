@@ -79,15 +79,16 @@ impl<T: Config> Surplus<T> {
 	}
 
 	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has
-	/// insufficient funds.
+	/// insufficient funds. Also ensures that we only burn funds from the the liquid balance if
+	/// `check_liquidity` is true.
 	pub(super) fn try_from_acct(
 		account_id: &T::AccountId,
 		amount: T::Balance,
-		respect_bond: bool,
+		check_liquidity: bool,
 	) -> Option<Self> {
 		Flip::Account::<T>::try_mutate_exists(account_id, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {
-				if respect_bond && account.liquid() < amount {
+				if check_liquidity && account.liquid() < amount {
 					return Err(())
 				}
 				if account.stake < amount {
