@@ -96,7 +96,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
-		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
 		self.candidates_voted_success.push(voter.clone());
 
 		*self.success_votes.entry(key).or_default() += 1;
@@ -111,8 +110,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		voter: &T::ValidatorId,
 		blamed: BTreeSet<T::ValidatorId>,
 	) -> DispatchResult {
-		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
-
 		for id in blamed {
 			*self.blame_votes.entry(id).or_default() += 1
 		}
@@ -123,8 +120,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	fn add_incompatible_vote(&mut self, voter: &T::ValidatorId) -> DispatchResult {
-		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
-
 		IncompatibleVoters::<T, I>::append(voter);
 
 		Ok(())
@@ -515,6 +510,10 @@ pub mod pallet {
 			);
 			// Make sure the ceremony id matches
 			ensure!(pending_ceremony_id == ceremony_id, Error::<T, I>::InvalidCeremonyId);
+			ensure!(
+				keygen_status.remaining_candidates.remove(&reporter),
+				Error::<T, I>::InvalidRespondent
+			);
 
 			// -- Tally the votes.
 
