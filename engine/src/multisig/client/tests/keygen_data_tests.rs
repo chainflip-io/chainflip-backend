@@ -12,10 +12,7 @@ use crate::multisig::{
     eth::Point,
 };
 
-use super::{
-    helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm},
-    KEYGEN_STAGES,
-};
+use super::helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm};
 
 /// ==========================
 // Generate invalid keygen data with the given number of elements in its inner and outer collection(s)
@@ -274,20 +271,14 @@ fn should_delay_correct_data_for_stage() {
         gen_keygen_data_verify_blame_response9(default_length, default_length),
     ];
 
-    for stage_index in 0..KEYGEN_STAGES {
-        for data_index in 0..KEYGEN_STAGES {
+    for (stage_index, name) in stage_name.iter().enumerate() {
+        for (data_index, data) in stage_data.iter().enumerate() {
             if stage_index + 1 == data_index {
                 // Should delay the next stage data (stage_index + 1)
-                assert!(KeygenData::should_delay(
-                    stage_name[stage_index],
-                    &stage_data[data_index]
-                ));
+                assert!(KeygenData::should_delay(*name, data));
             } else {
                 // Should not delay any other stage
-                assert!(!KeygenData::should_delay(
-                    stage_name[stage_index],
-                    &stage_data[data_index]
-                ));
+                assert!(!KeygenData::should_delay(*name, data));
             }
         }
     }

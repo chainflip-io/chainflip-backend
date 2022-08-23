@@ -37,6 +37,9 @@ pub use utils::PartyIdxMapping;
 #[cfg(test)]
 pub use utils::ensure_unsorted;
 
+#[cfg(test)]
+pub use signing::frost::tests::{gen_signing_data_stage1, gen_signing_data_stage4};
+
 use self::{
     ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
     key_store::KeyStore,

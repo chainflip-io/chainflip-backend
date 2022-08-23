@@ -101,7 +101,7 @@ pub enum BroadcastFailureReason {
     Inconsistency,
 }
 
-#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum CeremonyStageName {
     // Keygen
     #[error("Hash Commitments")]

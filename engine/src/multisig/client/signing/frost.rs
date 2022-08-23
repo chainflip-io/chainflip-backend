@@ -343,12 +343,12 @@ pub fn aggregate_signature<C: CryptoScheme>(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use super::*;
 
     use crate::multisig::{
-        client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1, SIGNING_STAGES},
+        client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1},
         crypto::eth::{EthSigning, Point, Scalar},
     };
 
@@ -361,6 +361,11 @@ mod tests {
     // Through integration tests with the KeyManager contract we know this
     // to be deemed valid by the contract for the data above
     const EXPECTED_SIGMA: &str = "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538";
+
+    pub fn gen_signing_data_stage1() -> SigningData<Point> {
+        let mut rng = Rng::from_seed([0; 32]);
+        SigningData::<Point>::CommStage1(gen_invalid_signing_comm1(&mut rng))
+    }
 
     fn gen_signing_data_stage2(length: AuthorityCount) -> SigningData<Point> {
         let mut rng = Rng::from_seed([0; 32]);
@@ -376,7 +381,7 @@ mod tests {
         })
     }
 
-    fn gen_signing_data_stage4(length: AuthorityCount) -> SigningData<Point> {
+    pub fn gen_signing_data_stage4(length: AuthorityCount) -> SigningData<Point> {
         let mut rng = Rng::from_seed([0; 32]);
         SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
             data: (0..length)
@@ -461,26 +466,20 @@ mod tests {
             CeremonyStageName::VerifyLocalSigsBroadcastStage4,
         ];
         let stage_data = [
-            SigningData::<Point>::CommStage1(gen_invalid_signing_comm1(&mut rng)),
+            gen_signing_data_stage1(),
             gen_signing_data_stage2(default_length),
             SigningData::<Point>::LocalSigStage3(gen_invalid_local_sig(&mut rng)),
             gen_signing_data_stage4(default_length),
         ];
 
-        for stage_index in 0..SIGNING_STAGES {
-            for data_index in 0..SIGNING_STAGES {
+        for (stage_index, name) in stage_name.iter().enumerate() {
+            for (data_index, data) in stage_data.iter().enumerate() {
                 if stage_index + 1 == data_index {
                     // Should delay the next stage data (stage_index + 1)
-        assert!(SigningData::should_delay(
-                        stage_name[stage_index],
-                        &stage_data[data_index]
-        ));
+                    assert!(SigningData::should_delay(*name, data));
                 } else {
                     // Should not delay any other stage
-        assert!(!SigningData::should_delay(
-                        stage_name[stage_index],
-                        &stage_data[data_index]
-        ));
+                    assert!(!SigningData::should_delay(*name, data));
                 }
             }
         }

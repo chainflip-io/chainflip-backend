@@ -238,7 +238,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                     None => {
                         slog::debug!(
                             self.logger,
-                            "Sender {} is not a valid participant",
+                            "Ignoring data: sender {} is not a valid participant",
                             sender_id
                         );
                         return None;
