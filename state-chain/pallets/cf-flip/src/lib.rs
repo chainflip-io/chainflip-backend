@@ -140,9 +140,6 @@ pub mod pallet {
 		InvalidSlashingRate,
 		/// No pending claim for this ID.
 		NoPendingClaimForThisID,
-		/// The reported claim amount by witnessers is not equal to the pending claim amount on the
-		/// state chain.
-		ErrorFinalizingClaim,
 	}
 
 	#[pallet::call]
