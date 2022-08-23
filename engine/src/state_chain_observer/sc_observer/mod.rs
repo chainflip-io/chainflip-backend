@@ -57,7 +57,7 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
                                 {
                                     KeygenError::Incompatible
                                 } else {
-                                    KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
+                                    KeygenError::Failure(bad_account_ids)
                                 }
                             }),
                     },
