@@ -5,10 +5,10 @@
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster,
+	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster, CeremonyId,
 	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
-	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SystemStateManager,
-	VaultRotator,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RetryPolicy, SystemStateManager,
+	ThresholdSigner, VaultRotator,
 };
 use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::{ensure_signed, pallet_prelude::*};
@@ -53,7 +53,6 @@ pub type ReportedKeyVerificationOutcomeFor<T, I = ()> = ReportedKeyVerificationO
 	<T as Chainflip>::ValidatorId,
 >;
 
-pub type CeremonyId = u64;
 pub type ReportedKeygenOutcomeFor<T, I = ()> =
 	ReportedKeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
@@ -71,6 +70,8 @@ pub type ThresholdSignatureFor<T, I = ()> =
 pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
 	candidate_count: AuthorityCount,
+	/// The candidates who have voted for success.
+	candidates_voted_success: Vec<T::ValidatorId>,
 	/// The candidates that have yet to reply.
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
@@ -83,6 +84,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
 			candidate_count: candidates.len() as AuthorityCount,
+			candidates_voted_success: Default::default(),
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
@@ -95,6 +97,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 
 	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
 		ensure!(self.remaining_candidates.remove(voter), Error::<T, I>::InvalidRespondent);
+		self.candidates_voted_success.push(voter.clone());
 
 		*self.success_votes.entry(key).or_default() += 1;
 
@@ -196,6 +199,9 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T, I> },
+	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
+	/// verify the new key
+	AwaitingKeygenVerification { new_public_key: AggKeyFor<T, I> },
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
 	/// The key has been successfully updated on the contract.
@@ -221,6 +227,8 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 
+	use cf_traits::ThresholdSigner;
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -237,6 +245,9 @@ pub mod pallet {
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
+		/// Ensure that only threshold signature consensus can trigger a key_verification success
+		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+
 		/// Offences supported in this runtime.
 		type Offence: From<PalletOffence>;
 
@@ -245,6 +256,15 @@ pub mod pallet {
 
 		/// The supported api calls for the chain.
 		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
+
+		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
+		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
+
+		type ThresholdSigner: ThresholdSigner<
+			Self::Chain,
+			Callback = <Self as Config<I>>::Call,
+			ValidatorId = Self::ValidatorId,
+		>;
 
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
@@ -287,49 +307,59 @@ pub mod pallet {
 				response_status,
 			}) = PendingVaultRotation::<T, I>::get()
 			{
-				let resolve = if response_status.remaining_candidate_count() == 0 {
+				let remaining_candidate_count = response_status.remaining_candidate_count();
+				if remaining_candidate_count == 0 {
 					log::debug!("All keygen candidates have reported, resolving outcome...");
-					true
 				} else if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
 					KeygenResponseTimeout::<T, I>::get()
 				{
 					log::debug!("Keygen response timeout has elapsed, reporting keygen failure.");
 					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(keygen_ceremony_id));
-					true
 				} else {
-					false
+					return weight
 				};
 
-				if resolve {
-					let candidate_count = response_status.candidate_count;
-					match response_status.resolve_keygen_outcome() {
-						Ok(new_public_key) => {
-							weight += T::WeightInfo::on_initialize_success();
-							Self::on_keygen_success(keygen_ceremony_id, new_public_key);
-						},
-						Err(KeygenError::Incompatible) => {
-							PendingVaultRotation::<T, I>::put(
-								VaultRotationStatus::<T, I>::Failed { offenders: Vec::new() },
-							);
-							Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
-						},
-						Err(KeygenError::Failure(offenders)) => {
-							weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-							let offenders = if (offenders.len() as AuthorityCount) <
+				let candidate_count = response_status.candidate_count;
+				let candidates_voted_success = response_status.candidates_voted_success.clone();
+				match response_status.resolve_keygen_outcome() {
+					Ok(new_public_key) => {
+						assert_eq!(
+							remaining_candidate_count, 0,
+							"Can't have success unless all candidates responded"
+						);
+						assert_eq!(
+							candidate_count,
+							candidates_voted_success.len() as u32,
+							"All candidates must vote for success for keygen to succeed"
+						);
+						weight += T::WeightInfo::on_initialize_success();
+						Self::trigger_keygen_verification(
+							keygen_ceremony_id,
+							new_public_key,
+							candidates_voted_success,
+						);
+					},
+					Err(KeygenError::Incompatible) => {
+						PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
+							offenders: Vec::new(),
+						});
+						Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
+					},
+					Err(KeygenError::Failure(offenders)) => {
+						weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
+						Self::terminate_keygen_procedure(
+							keygen_ceremony_id,
+							&if (offenders.len() as AuthorityCount) <
 								utilities::failure_threshold_from_share_count(candidate_count)
 							{
-								offenders
+								offenders.into_iter().collect::<Vec<_>>()
 							} else {
-								BTreeSet::default()
-							};
-							Self::on_keygen_failure(
-								keygen_ceremony_id,
-								&offenders.into_iter().collect::<Vec<_>>(),
-							);
-						},
-					}
-					KeygenResolutionPendingSince::<T, I>::kill();
+								Vec::default()
+							},
+						);
+					},
 				}
+				KeygenResolutionPendingSince::<T, I>::kill();
 			}
 
 			weight
@@ -400,6 +430,8 @@ pub mod pallet {
 		KeygenFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
 		KeygenSuccess(CeremonyId),
+		/// The new key was successfully used to sign.
+		KeygenVerificationSuccess { agg_key: <T::Chain as ChainCrypto>::AggKey },
 		/// Keygen was incompatible \[ceremony_id\]
 		KeygenIncompatible(CeremonyId),
 		/// Keygen has failed \[ceremony_id\]
@@ -431,6 +463,8 @@ pub mod pallet {
 		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
+		/// There is no threshold signature available
+		ThresholdSignatureUnavailable,
 	}
 
 	#[pallet::call]
@@ -499,6 +533,55 @@ pub mod pallet {
 
 			PendingVaultRotation::<T, I>::put(rotation);
 
+			Ok(().into())
+		}
+
+		/// A callback to be used when the threshold signing ceremony used for keygen verification
+		/// completes.
+		///
+		/// ## Events
+		///
+		/// - [KeygenVerificationSuccess](Event::KeygenVerificationSuccess)
+		/// - [KeygenFailure](Event::KeygenFailure)
+		///
+		/// ## Errors
+		///
+		/// - [ThresholdSignatureUnavailable](Error::ThresholdSignatureUnavailable)
+		#[pallet::weight(0)]
+		pub fn on_keygen_verification_result(
+			origin: OriginFor<T>,
+			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId,
+			ceremony_id: CeremonyId,
+			new_public_key: AggKeyFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureThresholdSigned::ensure_origin(origin)?;
+
+			match T::ThresholdSigner::signature_result(threshold_request_id).ready_or_else(|r| {
+				log::error!(
+					"Signature not found for threshold request {:?}. Request status: {:?}",
+					threshold_request_id,
+					r
+				);
+				Error::<T, I>::ThresholdSignatureUnavailable
+			})? {
+				Ok(_) => {
+					T::Broadcaster::threshold_sign_and_broadcast(
+						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
+							<T::ReplayProtectionProvider>::replay_protection(),
+							new_public_key,
+						),
+					);
+
+					PendingVaultRotation::<T, I>::put(
+						VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
+					);
+
+					Self::deposit_event(Event::KeygenVerificationSuccess {
+						agg_key: new_public_key,
+					})
+				},
+				Err(offenders) => Self::terminate_keygen_procedure(ceremony_id, &offenders[..]),
+			};
 			Ok(().into())
 		}
 
@@ -663,24 +746,42 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 	}
 
-	// Once we've generated the key, and successfully completed a signing ceremony with the new key
-	// we can start the process of rotating to that new key
-	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
-		T::Broadcaster::threshold_sign_and_broadcast(
-			<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-				<T::ReplayProtectionProvider>::replay_protection(),
-				new_public_key,
-			),
+	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
+	// the key is useable
+	fn trigger_keygen_verification(
+		keygen_ceremony_id: CeremonyId,
+		new_public_key: AggKeyFor<T, I>,
+		participants: Vec<T::ValidatorId>,
+	) {
+		let byte_key: Vec<u8> = new_public_key.into();
+		let (request_id, signing_ceremony_id) = T::ThresholdSigner::request_signature_with(
+			byte_key.into(),
+			participants,
+			new_public_key.into(),
+			RetryPolicy::Never,
 		);
-
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
-			new_public_key,
+		T::ThresholdSigner::register_callback(request_id, {
+			Call::on_keygen_verification_result {
+				threshold_request_id: request_id,
+				ceremony_id: signing_ceremony_id,
+				new_public_key,
+			}
+			.into()
+		})
+		.unwrap_or_else(|e| {
+			log::error!(
+				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
+				e.into()
+			);
 		});
-		Self::deposit_event(Event::KeygenSuccess(ceremony_id));
+
+		PendingVaultRotation::<T, I>::put(
+			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
+		);
+		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id))
 	}
 
-	// Called once there's consensus between the authorities that the keygen was unsuccessful
-	fn on_keygen_failure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
+	fn terminate_keygen_procedure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.to_vec(),
@@ -719,6 +820,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<T::ValidatorId>>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
+			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::Complete) => AsyncResult::Ready(Ok(())),
 			Some(VaultRotationStatusVariant::Failed) => match PendingVaultRotation::<T, I>::get() {

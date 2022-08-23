@@ -1,4 +1,4 @@
-use crate::{AsyncResult, RetryPolicy};
+use crate::{AsyncResult, CeremonyId, RetryPolicy};
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
@@ -46,7 +46,8 @@ where
 
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> crate::AsyncResult<Result<<C as ChainCrypto>::ThresholdSignature, ()>> {
+	) -> crate::AsyncResult<Result<<C as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>>
+	{
 		Self::take_storage::<_, AsyncResult<_>>(b"SIG", request_id).unwrap_or(AsyncResult::Void)
 	}
 
@@ -55,7 +56,7 @@ where
 		_participants: Vec<Self::ValidatorId>,
 		_payload: <C as ChainCrypto>::Payload,
 		_retry_policy: RetryPolicy,
-	) -> Self::RequestId {
+	) -> (Self::RequestId, CeremonyId) {
 		todo!()
 	}
 }

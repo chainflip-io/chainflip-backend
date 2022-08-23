@@ -53,7 +53,14 @@ pub trait Age<C: Chain> {
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord + BenchmarkValue;
+	type AggKey: TryFrom<Vec<u8>>
+		+ Into<Vec<u8>>
+		+ Into<Self::Payload>
+		+ Member
+		+ Parameter
+		+ Copy
+		+ Ord
+		+ BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 	type TransactionHash: Member + Parameter + Default;

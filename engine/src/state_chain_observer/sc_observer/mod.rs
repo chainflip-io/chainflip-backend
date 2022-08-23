@@ -2,8 +2,8 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
+use cf_traits::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
-use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::H256;

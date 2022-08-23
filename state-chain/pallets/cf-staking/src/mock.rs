@@ -159,7 +159,9 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 	fn signature_result(
 		_: Self::RequestId,
-	) -> cf_traits::AsyncResult<Result<<Ethereum as ChainCrypto>::ThresholdSignature, ()>> {
+	) -> cf_traits::AsyncResult<
+		Result<<Ethereum as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>,
+	> {
 		AsyncResult::Ready(Ok(ETH_DUMMY_SIG))
 	}
 
