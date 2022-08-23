@@ -273,7 +273,15 @@ impl<T: Config> Pallet<T> {
 	/// available, otherwise returns `None`. Unlike [debit](Self::debit), does not create the
 	/// account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
-		Surplus::try_from_acct(account_id, amount)
+		Surplus::try_from_acct(account_id, amount, false)
+	}
+
+	/// TODO: write a nice doc comment here.
+	pub fn try_debit_from_liquid_funds(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+	) -> Option<Surplus<T>> {
+		Surplus::try_from_acct(account_id, amount, true)
 	}
 
 	/// Credits an account with some staked funds. If the amount provided would result in overflow,
@@ -400,7 +408,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 		account_id: &Self::AccountId,
 		amount: Self::Amount,
 	) -> sp_runtime::DispatchResult {
-		if let Some(surplus) = Pallet::<T>::try_debit(account_id, amount) {
+		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
 			let _ = surplus.offset(Pallet::<T>::burn(amount));
 			Ok(())
 		} else {
