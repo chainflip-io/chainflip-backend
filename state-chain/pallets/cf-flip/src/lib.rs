@@ -102,7 +102,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn pending_claims_reserve)]
 	pub type PendingClaimsReserve<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;
 
 	/// The total number of tokens issued.
 	#[pallet::storage]
@@ -377,8 +377,7 @@ impl<T: Config> Pallet<T> {
 			.ok_or_else(|| Error::<T>::InsufficientReserves.into())
 	}
 
-	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has
-	/// insufficient funds.
+	/// Tries to withdraw funds from a pending claim. Fails if the claim doesn't exist
 	pub fn try_withdraw_pending_claim(
 		account_id: &T::AccountId,
 	) -> Result<Surplus<T>, DispatchError> {
@@ -392,7 +391,7 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}
 
-	/// create a pending claims reserve identified by a `account_id`.
+	/// Create a pending claims reserve owned by some `account_id`.
 	pub fn transfer_to_pending_claims(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_pending_claims_reserve(account_id, amount)
 	}
@@ -506,19 +505,11 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Ok(())
 	}
 
-	fn finalize_claim(
-		account_id: &T::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
-		ensure!(
-			PendingClaimsReserve::<T>::get(&account_id) == amount,
-			DispatchError::from(Error::<T>::ErrorFinalizingClaim)
-		);
+	fn finalize_claim(account_id: &T::AccountId) {
 		Self::try_withdraw_pending_claim(account_id)
 			.unwrap()
-			.offset(Self::bridge_out(amount));
+			.offset(Self::bridge_out(PendingClaimsReserve::<T>::get(account_id).unwrap()));
 		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
-		Ok(())
 	}
 
 	fn revert_claim(account_id: &Self::AccountId, _amount: Self::Balance) {

@@ -75,7 +75,7 @@ macro_rules! impl_mock_stake_transfer {
 						.ok_or("Overflow".into())
 				})
 			}
-			fn finalize_claim(_account_id: &Self::AccountId, _amount: Self::Balance) -> Result<(), sp_runtime::DispatchError> {
+			fn finalize_claim(_account_id: &Self::AccountId) {
 				unimplemented!()
 			}
 			fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {

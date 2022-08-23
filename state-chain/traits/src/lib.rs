@@ -267,10 +267,7 @@ pub trait StakeTransfer {
 	) -> Result<(), DispatchError>;
 
 	/// Performs necessary settlement once a claim has been confirmed off-chain.
-	fn finalize_claim(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError>;
+	fn finalize_claim(account_id: &Self::AccountId);
 
 	/// Reverts a pending claim in the case of an expiry or cancellation.
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance);
