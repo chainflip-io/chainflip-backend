@@ -55,6 +55,7 @@ pub trait ChainCrypto: Chain {
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
 	type AggKey: TryFrom<Vec<u8>>
 		+ Into<Vec<u8>>
+		// We use the AggKey as the payload for keygen verification ceremonies
 		+ Into<Self::Payload>
 		+ Member
 		+ Parameter
