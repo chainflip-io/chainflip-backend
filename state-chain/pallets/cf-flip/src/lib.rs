@@ -449,10 +449,6 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type Balance = T::Balance;
 	type Handler = T::StakeHandler;
 
-	fn locked_balance(account_id: &T::AccountId) -> Self::Balance {
-		Account::<T>::get(account_id).bond()
-	}
-
 	fn staked_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
 	}
