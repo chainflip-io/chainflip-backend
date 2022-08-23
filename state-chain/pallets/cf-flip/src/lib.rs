@@ -24,7 +24,7 @@ pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
 	ensure,
-	traits::{Get, Hooks, Imbalance, OnKilledAccount, SignedImbalance},
+	traits::{Get, HandleLifetime, Hooks, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -155,17 +155,17 @@ pub mod pallet {
 				return 0
 			}
 
-			let mut count = 0u64;
+			let mut number_of_accounts_reaped = 0u64;
 			Account::<T>::iter()
 				.filter(|(_account_id, flip_account)| {
 					flip_account.total() < T::ExistentialDeposit::get()
 				})
 				.take(max_accounts_to_reap as usize)
 				.for_each(|(account_id, _flip_account)| {
-					BurnFlipAccount::<T>::on_killed_account(&account_id);
-					count += 1u64;
+					let _reap_result = frame_system::Provider::<T>::killed(&account_id);
+					number_of_accounts_reaped += 1u64;
 				});
-			count.saturating_mul(T::WeightInfo::reap_one_account())
+			number_of_accounts_reaped.saturating_mul(T::WeightInfo::reap_one_account())
 		}
 	}
 
