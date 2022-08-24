@@ -238,7 +238,7 @@ fn main() -> anyhow::Result<()> {
             );
 
             // Start state chain components
-            let sc_observer_future = state_chain_observer::start(
+            scope.spawn(state_chain_observer::start(
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
@@ -248,8 +248,7 @@ fn main() -> anyhow::Result<()> {
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()
-            );
-            scope.spawn(sc_observer_future);
+            ));
 
             Ok(())
         }.boxed()

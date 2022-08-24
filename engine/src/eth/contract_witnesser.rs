@@ -48,8 +48,7 @@ where
                 );
                 let mut block_stream = contract_witnesser
                     .block_stream(eth_ws_rpc, eth_http_rpc, epoch_start.eth_block, &logger)
-                    .await
-                    .expect("Failed to initialise block stream");
+                    .await?;
 
                 // TOOD: Handle None on stream, and result event being an error
                 while let Some(block) = block_stream.next().await {
@@ -76,7 +75,7 @@ where
                                 &dual_rpc,
                                 &logger,
                             )
-                            .await;
+                            .await?;
                     }
                 }
 
