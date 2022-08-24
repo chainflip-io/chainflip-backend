@@ -61,8 +61,6 @@ pub type ThresholdSignatureFor<T, I = ()> =
 pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
 	candidate_count: AuthorityCount,
-	/// The candidates who have voted for success.
-	candidates_voted_success: Vec<T::ValidatorId>,
 	/// The candidates that have yet to reply.
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
@@ -75,7 +73,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
 			candidate_count: candidates.len() as AuthorityCount,
-			candidates_voted_success: Default::default(),
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
@@ -87,8 +84,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 	}
 
 	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
-		self.candidates_voted_success.push(voter.clone());
-
 		*self.success_votes.entry(key).or_default() += 1;
 
 		SuccessVoters::<T, I>::append(key, voter);
@@ -184,7 +179,11 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
-	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T, I> },
+	AwaitingKeygen {
+		keygen_ceremony_id: CeremonyId,
+		keygen_participants: Vec<T::ValidatorId>,
+		response_status: KeygenResponseStatus<T, I>,
+	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.
 	AwaitingKeygenVerification { new_public_key: AggKeyFor<T, I> },
@@ -292,6 +291,7 @@ pub mod pallet {
 			// Check if we need to finalize keygen
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id,
+				keygen_participants,
 				response_status,
 			}) = PendingVaultRotation::<T, I>::get()
 			{
@@ -308,23 +308,17 @@ pub mod pallet {
 				};
 
 				let candidate_count = response_status.candidate_count;
-				let candidates_voted_success = response_status.candidates_voted_success.clone();
 				match response_status.resolve_keygen_outcome() {
 					Ok(new_public_key) => {
 						debug_assert_eq!(
 							remaining_candidate_count, 0,
 							"Can't have success unless all candidates responded"
 						);
-						debug_assert_eq!(
-							candidate_count,
-							candidates_voted_success.len() as u32,
-							"All candidates must vote for success for keygen to succeed"
-						);
 						weight += T::WeightInfo::on_initialize_success();
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
-							candidates_voted_success,
+							keygen_participants,
 						);
 					},
 					Err(KeygenError::Incompatible) => {
@@ -494,7 +488,7 @@ pub mod pallet {
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, keygen_status) = ensure_variant!(
 				VaultRotationStatus::<T, I>::AwaitingKeygen {
-					keygen_ceremony_id, ref mut response_status
+					keygen_ceremony_id, keygen_participants: _, ref mut response_status,
 				} => (keygen_ceremony_id, response_status),
 				rotation,
 				Error::<T, I>::InvalidRotationStatus,
@@ -798,6 +792,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			keygen_ceremony_id: ceremony_id,
+			keygen_participants: candidates.clone(),
 			response_status: KeygenResponseStatus::new(BTreeSet::from_iter(candidates.clone())),
 		});
 
@@ -831,6 +826,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
 					keygen_ceremony_id: Default::default(),
+					keygen_participants: Default::default(),
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},
