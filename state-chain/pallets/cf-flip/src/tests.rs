@@ -1,13 +1,13 @@
 use std::mem;
 
 use crate::{
-	mock::*, Account as FlipAccount, Bonder, Config, Error, FlipIssuance, FlipSlasher,
-	OffchainFunds, Reserve, SlashingRate, TotalIssuance,
+	mock::*, Account, Bonder, Config, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
+	Reserve, SlashingRate, TotalIssuance,
 };
 use cf_traits::{Bonding, Issuance, Slashing, StakeTransfer};
 use frame_support::{
 	assert_noop,
-	traits::{HandleLifetime, Imbalance},
+	traits::{HandleLifetime, Hooks, Imbalance},
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
@@ -291,13 +291,10 @@ impl FlipOperation {
 				if initial_balance.saturating_sub(expected_slash) != balance_after {
 					return false
 				}
-				assert_eq!(
-					System::events().last().unwrap().event,
-					Event::Flip(crate::Event::<Test>::SlashingPerformed(
-						*account_id,
-						expected_slash
-					)),
-				);
+				System::assert_last_event(Event::Flip(crate::Event::<Test>::SlashingPerformed {
+					who: *account_id,
+					amount: expected_slash,
+				}));
 			},
 			// Account to account transfer
 			FlipOperation::AccountToAccount(account_id_1, account_id_2, amount_1, amount_2) => {
@@ -423,14 +420,14 @@ fn test_try_debit() {
 		// account.
 		assert!(Flip::try_debit(&CHARLIE, 1).is_none());
 		assert_eq!(Flip::total_balance_of(&CHARLIE), 0);
-		assert!(!FlipAccount::<Test>::contains_key(&CHARLIE));
+		assert!(!Account::<Test>::contains_key(&CHARLIE));
 
 		// Using standard `debit` *does* create an account as a side-effect.
 		{
 			let zero_surplus = Flip::debit(&CHARLIE, 1);
 			assert_eq!(zero_surplus.peek(), 0);
 		}
-		assert!(FlipAccount::<Test>::contains_key(&CHARLIE));
+		assert!(Account::<Test>::contains_key(&CHARLIE));
 	});
 }
 
@@ -601,4 +598,28 @@ mod test_tx_payments {
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000 - POST_FEE);
 		});
 	}
+}
+
+#[test]
+fn can_reap_dust_account() {
+	new_test_ext().execute_with(|| {
+		Account::<Test>::insert(ALICE, FlipAccount { stake: 9, bond: 0 });
+		Account::<Test>::insert(BOB, FlipAccount { stake: 10, bond: 0 });
+		Account::<Test>::insert(CHARLIE, FlipAccount { stake: 11, bond: 0 });
+
+		// Dust accounts are reaped on_idle
+		Flip::on_idle(1, 1_000_000_000_000);
+
+		assert!(!Account::<Test>::contains_key(ALICE));
+		assert_eq!(Account::<Test>::get(BOB), FlipAccount { stake: 10, bond: 0 });
+
+		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { stake: 11, bond: 0 });
+		System::assert_has_event(Event::Flip(crate::Event::AccountReaped {
+			who: ALICE,
+			dust_burned: 9,
+		}));
+		System::assert_last_event(Event::System(frame_system::Event::KilledAccount {
+			account: ALICE,
+		}));
+	})
 }
