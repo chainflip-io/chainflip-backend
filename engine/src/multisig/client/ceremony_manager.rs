@@ -12,7 +12,9 @@ use crate::multisig_p2p::OutgoingMultisigStageMessages;
 use cf_traits::AuthorityCount;
 use state_chain_runtime::AccountId;
 
-use client::{signing::frost::SigningData, state_runner::CeremonyRunner, utils::PartyIdxMapping};
+use client::{
+    ceremony_runner::CeremonyRunner, signing::frost::SigningData, utils::PartyIdxMapping,
+};
 use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
