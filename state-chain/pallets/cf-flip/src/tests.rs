@@ -619,7 +619,7 @@ fn can_reap_dust_account() {
 			dust_burned: 9,
 		}));
 		System::assert_last_event(Event::System(frame_system::Event::KilledAccount {
-			account: 123,
+			account: ALICE,
 		}));
 	})
 }
