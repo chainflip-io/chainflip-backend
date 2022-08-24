@@ -104,21 +104,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config<I>, I: 'static> CeremonyContext<T, I> {
-		pub fn new(
-			key_id: T::KeyId,
-			participants: impl IntoIterator<Item = T::ValidatorId>,
-		) -> Self {
-			let remaining_respondents: BTreeSet<_> = participants.into_iter().collect();
-			let participant_count = remaining_respondents.len() as u32;
-			Self {
-				remaining_respondents,
-				blame_counts: BTreeMap::new(),
-				participant_count,
-				key_id,
-				_phantom: PhantomData::default(),
-			}
-		}
-
 		/// Based on the reported blame_counts, decide which nodes should be reported for failure.
 		///
 		/// We assume that at least 2/3 of participants need to blame a node for it to be reliable.
@@ -604,8 +589,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ceremony_key_id =
 			requested_key_id.clone().unwrap_or_else(T::KeyProvider::current_key_id);
 
-		let (event, log_message, ceremony_context) = if let Some(nominees) =
-			participants.or_else(|| {
+		let (event, log_message, ceremony_participants) = if let Some(nominees) = participants
+			.or_else(|| {
 				T::SignerNomination::threshold_nomination_with_seed(
 					(ceremony_id, attempt_count),
 					T::EpochInfo::epoch_index(),
@@ -623,7 +608,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count
 				),
-				CeremonyContext::new(ceremony_key_id, nominees),
+				nominees,
 			)
 		} else {
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
@@ -635,7 +620,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count
 				),
-				CeremonyContext::new(ceremony_key_id, []),
+				Vec::default(),
 			)
 		};
 
@@ -644,7 +629,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			"{}", log_message
 		);
 
-		PendingCeremonies::<T, I>::insert(ceremony_id, ceremony_context);
+		PendingCeremonies::<T, I>::insert(ceremony_id, {
+			let remaining_respondents: BTreeSet<_> = ceremony_participants.into_iter().collect();
+			CeremonyContext {
+				blame_counts: BTreeMap::new(),
+				participant_count: remaining_respondents.len() as u32,
+				remaining_respondents,
+				key_id: ceremony_key_id,
+				_phantom: PhantomData::default(),
+			}
+		});
 		OpenRequests::<T, I>::insert(
 			ceremony_id,
 			RequestContext {
