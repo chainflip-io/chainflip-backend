@@ -2,9 +2,10 @@
 use crate::benchmarking_value::BenchmarkValue;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
+use ethereum_types::H256;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	Parameter, RuntimeDebug,
+	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Saturating};
@@ -53,15 +54,7 @@ pub trait Age<C: Chain> {
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<Vec<u8>>
-		+ Into<Vec<u8>>
-		// We use the AggKey as the payload for keygen verification ceremonies
-		+ Into<Self::Payload>
-		+ Member
-		+ Parameter
-		+ Copy
-		+ Ord
-		+ BenchmarkValue;
+	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord + BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 	type TransactionHash: Member + Parameter + Default;
@@ -72,6 +65,9 @@ pub trait ChainCrypto: Chain {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool;
+
+	/// We use the AggKey as the payload for keygen verification ceremonies.
+	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
 }
 
 /// Common abi-related types and operations for some external chain.
@@ -197,6 +193,10 @@ impl ChainCrypto for Ethereum {
 			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
 			.is_ok()
 	}
+
+	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+	}
 }
 
 pub mod mocks {
@@ -302,6 +302,10 @@ pub mod mocks {
 			signature: &Self::ThresholdSignature,
 		) -> bool {
 			signature.signing_key == *agg_key && signature.signed_payload == *payload
+		}
+
+		fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+			agg_key
 		}
 	}
 

@@ -10,7 +10,6 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint,
 };
-use frame_support::{Blake2_256, StorageHasher};
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -238,12 +237,6 @@ pub struct AggKey {
 	pub pub_key_x: [u8; 32],
 	/// The parity bit can be odd or even.
 	pub pub_key_y_parity: ParityBit,
-}
-
-impl From<AggKey> for H256 {
-	fn from(agg_key: AggKey) -> Self {
-		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
-	}
 }
 
 pub fn to_ethereum_address(pubkey: PublicKey) -> [u8; 20] {

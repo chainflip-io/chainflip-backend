@@ -749,7 +749,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let (request_id, signing_ceremony_id) = T::ThresholdSigner::request_signature_with(
 			byte_key.clone().into(),
 			T::SignerNomination::nomination_from_participant_set(byte_key, participants),
-			new_public_key.into(),
+			T::Chain::agg_key_to_payload(new_public_key),
 			RetryPolicy::Never,
 		);
 		T::ThresholdSigner::register_callback(request_id, {
