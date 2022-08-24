@@ -330,7 +330,6 @@ pub mod pallet {
 					Err(KeygenError::Failure(offenders)) => {
 						weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 						Self::terminate_keygen_procedure(
-							keygen_ceremony_id,
 							&if (offenders.len() as AuthorityCount) <
 								utilities::failure_threshold_from_share_count(candidate_count)
 							{
@@ -338,6 +337,7 @@ pub mod pallet {
 							} else {
 								Vec::default()
 							},
+							Event::KeygenFailure(keygen_ceremony_id),
 						);
 					},
 				}
@@ -414,12 +414,15 @@ pub mod pallet {
 		KeygenSuccess(CeremonyId),
 		/// The new key was successfully used to sign.
 		KeygenVerificationSuccess { agg_key: <T::Chain as ChainCrypto>::AggKey },
+		/// Verification of the new key has failed.
+		KeygenVerificationFailure {
+			keygen_ceremony_id: CeremonyId,
+			failed_signing_ceremony_id: CeremonyId,
+		},
 		/// Keygen was incompatible \[ceremony_id\]
 		KeygenIncompatible(CeremonyId),
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
-		/// KeygenSignatureVerificationFailed \[validator_id\]
-		KeygenSignatureVerificationFailed(T::ValidatorId),
 		/// Keygen response timeout has occurred \[ceremony_id\]
 		KeygenResponseTimeout(CeremonyId),
 		/// Keygen response timeout was updated \[new_timeout\]
@@ -536,8 +539,9 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn on_keygen_verification_result(
 			origin: OriginFor<T>,
+			keygen_ceremony_id: CeremonyId,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId,
-			ceremony_id: CeremonyId,
+			signing_ceremony_id: CeremonyId,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureThresholdSigned::ensure_origin(origin)?;
@@ -566,7 +570,13 @@ pub mod pallet {
 						agg_key: new_public_key,
 					})
 				},
-				Err(offenders) => Self::terminate_keygen_procedure(ceremony_id, &offenders[..]),
+				Err(offenders) => Self::terminate_keygen_procedure(
+					&offenders[..],
+					Event::KeygenVerificationFailure {
+						keygen_ceremony_id,
+						failed_signing_ceremony_id: signing_ceremony_id,
+					},
+				),
 			};
 			Ok(().into())
 		}
@@ -748,8 +758,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {
+				keygen_ceremony_id,
 				threshold_request_id: request_id,
-				ceremony_id: signing_ceremony_id,
+				signing_ceremony_id,
 				new_public_key,
 			}
 			.into()
@@ -767,12 +778,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id))
 	}
 
-	fn terminate_keygen_procedure(ceremony_id: CeremonyId, offenders: &[T::ValidatorId]) {
+	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.to_vec(),
 		});
-		Self::deposit_event(Event::KeygenFailure(ceremony_id));
+		Self::deposit_event(event);
 	}
 }
 
