@@ -434,6 +434,24 @@ fn test_try_debit() {
 	});
 }
 
+#[test]
+fn test_try_debit_from_liquid_funds() {
+	new_test_ext().execute_with(|| {
+		// Ensure the initial balance of ALICE
+		assert_eq!(Flip::total_balance_of(&ALICE), 100);
+		// Bond the account
+		Bonder::<Test>::update_bond(&ALICE, 50);
+		// Try to debit more then liquid funds available in the account
+		assert!(Flip::try_debit_from_liquid_funds(&ALICE, 60).is_none());
+		// Try to debit less and burn the fee
+		Flip::try_debit_from_liquid_funds(&ALICE, 10)
+			.expect("Debit of funds failed!")
+			.offset(Flip::burn(10));
+		// Expect the account balance to be reduced
+		assert_eq!(Flip::total_balance_of(&ALICE), 90);
+	});
+}
+
 #[cfg(test)]
 mod test_issuance {
 	use super::*;
