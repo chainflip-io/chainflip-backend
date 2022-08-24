@@ -422,10 +422,4 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub async fn force_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
         self.on_timeout().await
     }
-
-    pub fn get_stage_name(&self) -> Option<super::common::CeremonyStageName> {
-        self.inner
-            .as_ref()
-            .and_then(|s| s.stage.as_ref().map(|s| s.get_stage_name()))
-    }
 }
