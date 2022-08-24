@@ -48,7 +48,7 @@ async unsafe fn inner_with_task_scope<
                     Ok(child_future_result) => child_future_result?,
                 }
             }
-            // child_task_result_stream has eneded meaning scope has been dropped and all children have finished running
+            // child_task_result_stream has ended meaning scope has been dropped and all children have finished running
             Ok(())
         },
         // This async scope ensures scope is dropped when c and its returned future finish (Instead of when this function exits)
@@ -289,7 +289,7 @@ pub async fn with_task_scope<
     c: C,
 ) -> anyhow::Result<T> {
     // Safe as closures/futures are forced to have static lifetimes
-    unsafe { inner_with_task_scope(c).await }
+    unsafe { inner_with_task_scope(parent_task).await }
 }
 
 impl<'a, T: Send + 'static> Scope<'a, T, true> {
