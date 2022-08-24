@@ -51,8 +51,6 @@ where
                     let block_number = eth_rpc.block_number().await?;
                     let block_hash = context!(eth_rpc.block(block_number).await?.hash)?;
                     if last_witnessed_block_hash != Some(block_hash) {
-                        last_witnessed_block_hash = Some(block_hash);
-
                         let priority_fee = cfe_settings_update_receiver
                             .borrow()
                             .eth_priority_fee_percentile;
@@ -72,6 +70,8 @@ where
                                 &logger,
                             )
                             .await;
+
+                        last_witnessed_block_hash = Some(block_hash);
                     }
 
                     poll_interval.tick().await;
