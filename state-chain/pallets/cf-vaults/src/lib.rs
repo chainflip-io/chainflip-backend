@@ -311,11 +311,11 @@ pub mod pallet {
 				let candidates_voted_success = response_status.candidates_voted_success.clone();
 				match response_status.resolve_keygen_outcome() {
 					Ok(new_public_key) => {
-						assert_eq!(
+						debug_assert_eq!(
 							remaining_candidate_count, 0,
 							"Can't have success unless all candidates responded"
 						);
-						assert_eq!(
+						debug_assert_eq!(
 							candidate_count,
 							candidates_voted_success.len() as u32,
 							"All candidates must vote for success for keygen to succeed"
