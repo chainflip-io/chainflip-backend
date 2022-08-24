@@ -44,15 +44,6 @@ pub enum KeygenError<Id> {
 pub type KeygenOutcome<Key, Id> = Result<Key, KeygenError<Id>>;
 pub type ReportedKeygenOutcome<Key, Id> = Result<Key, KeygenError<Id>>;
 
-pub type ReportedKeyVerificationOutcome<Key, Payload, Sig, Id> =
-	Result<(Key, Payload, Sig), BTreeSet<Id>>;
-pub type ReportedKeyVerificationOutcomeFor<T, I = ()> = ReportedKeyVerificationOutcome<
-	AggKeyFor<T, I>,
-	PayloadFor<T, I>,
-	ThresholdSignatureFor<T, I>,
-	<T as Chainflip>::ValidatorId,
->;
-
 pub type ReportedKeygenOutcomeFor<T, I = ()> =
 	ReportedKeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
