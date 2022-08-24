@@ -35,7 +35,7 @@ const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub enum KeygenError<Id> {
-	/// Generated key is incompatible with requirements
+	/// Generated key is incompatible with requirements.
 	Incompatible,
 	/// Keygen failed with the enclosed guilty parties.
 	Failure(BTreeSet<Id>),
@@ -186,7 +186,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen { keygen_ceremony_id: CeremonyId, response_status: KeygenResponseStatus<T, I> },
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
-	/// verify the new key
+	/// verify the new key.
 	AwaitingKeygenVerification { new_public_key: AggKeyFor<T, I> },
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
