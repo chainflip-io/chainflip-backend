@@ -10,6 +10,28 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 
+/*
+The idea here is very similiar to the thread_scope feature in the std library: https://doc.rust-lang.org/nightly/std/thread/fn.scope.html
+The important differences being it:
+    - is designed to work with futures
+    - propagates errors returned by tasks (instead of only panics): https://doc.rust-lang.org/nightly/std/thread/fn.scope.html#panics
+    - when tasks panic or return errors, this will cause all other still running tasks to be cancelled: https://blog.yoshuawuyts.com/async-cancellation-1/
+
+A scope is designed to allow you to spawn asynchronous tasks, wait for all those tasks to finished, and handle errors/panics caused by those tasks.
+
+When you create a scope, you must provide a parent task/"async closure", which is passed a handle via which
+you can spawn further child tasks, which run asychronously to the parent task. The scope will not exit/return
+until all the tasks have completed. Iff any of the scope's tasks panic or return an error, the scope will
+cancel all remaining tasks, and end by respectively panicking or returning the error (For "with_task_scope",
+in this case the scope will not wait for all tasks to complete).
+
+The reason "with_task_scope" does not wait for all tasks to complete in the error/panic case,
+is that this is not currently possible in all cases (and it doesn't really matter) given the way futures work. For more information
+look into AsyncDrop (https://rust-lang.github.io/async-fundamentals-initiative/roadmap/async_drop.html).
+
+For the public functions in this module, if they are used incorrectly the code will not compile.
+*/
+
 /// Allows a parent closure/future to spawn child tasks, such that if the parent or child fail, they
 /// will all be cancelled, and the panic/Error will be propagated by this function.
 /// Note: This function is unsafe as if the function is called with TASKS_HAVE_STATIC_LIFETIMES=false
@@ -22,7 +44,7 @@ async unsafe fn inner_with_task_scope<
     T,
     const TASKS_HAVE_STATIC_LIFETIMES: bool,
 >(
-    c: C,
+    parent_task: C,
 ) -> anyhow::Result<T> {
     let (scope, mut child_task_result_stream) = new_task_scope();
 
@@ -53,7 +75,7 @@ async unsafe fn inner_with_task_scope<
         },
         // This async scope ensures scope is dropped when c and its returned future finish (Instead of when this function exits)
         async move {
-            c(&scope).await
+            parent_task(&scope).await
         }
     ).map(|(_, t)| t)
 }
@@ -253,10 +275,10 @@ pub async fn with_main_task_scope<
     ) -> futures::future::BoxFuture<'scope, anyhow::Result<T>>,
     T,
 >(
-    c: C,
+    parent_task: C,
 ) -> anyhow::Result<T> {
     // Safe as the provided future (via closure) is never cancelled
-    unsafe { inner_with_task_scope(c).await }
+    unsafe { inner_with_task_scope(parent_task).await }
 }
 
 impl<'env, T: Send + 'static> Scope<'env, T, false> {
@@ -286,7 +308,7 @@ pub async fn with_task_scope<
     ) -> futures::future::BoxFuture<'b, anyhow::Result<T>>,
     T,
 >(
-    c: C,
+    parent_task: C,
 ) -> anyhow::Result<T> {
     // Safe as closures/futures are forced to have static lifetimes
     unsafe { inner_with_task_scope(parent_task).await }
