@@ -212,7 +212,7 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 		self.stake.saturating_sub(self.bond)
 	}
 
-	// The current bond
+	/// The current bond
 	pub fn bond(&self) -> Balance {
 		self.bond
 	}
@@ -277,7 +277,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Like `try_debit` but debits only the accounts liquid balance. Ensures that we don't burn
-	/// more then the available liquid balance of the account.
+	/// more than the available liquidity of the account and never touch the bonded balance.
 	pub fn try_debit_from_liquid_funds(
 		account_id: &T::AccountId,
 		amount: T::Balance,

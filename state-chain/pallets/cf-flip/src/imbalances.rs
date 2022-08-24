@@ -79,8 +79,8 @@ impl<T: Config> Surplus<T> {
 	}
 
 	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has
-	/// insufficient funds. Also ensures that we only burn funds from the the liquid balance if
-	/// `check_liquidity` is true.
+	/// insufficient funds. Also ensures that we only touch funds from the bonded balance if
+	/// `check_liquidity` is `false`.
 	pub(super) fn try_from_acct(
 		account_id: &T::AccountId,
 		amount: T::Balance,
