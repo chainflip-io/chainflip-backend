@@ -18,9 +18,9 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
-use super::{event::Event, DecodeLogClosure, EthObserver, EventParseError};
+use super::{event::Event, DecodeLogClosure, EthContractWitnesser, EventParseError};
 
 pub struct StakeManager {
     pub deployed_address: H160,
@@ -80,7 +80,7 @@ pub enum StakeManagerEvent {
 }
 
 #[async_trait]
-impl EthObserver for StakeManager {
+impl EthContractWitnesser for StakeManager {
     type EventParameters = StakeManagerEvent;
 
     fn contract_name(&self) -> &'static str {
@@ -95,7 +95,8 @@ impl EthObserver for StakeManager {
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
-    ) where
+    ) -> anyhow::Result<()>
+    where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
@@ -147,6 +148,8 @@ impl EthObserver for StakeManager {
                 slog::trace!(logger, "Ignoring unused event: {}", event);
             }
         }
+
+        Ok(())
     }
 
     fn get_contract_address(&self) -> H160 {
@@ -173,7 +176,7 @@ impl EthObserver for StakeManager {
                         utils::decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?
                             .try_into()
                             .map_err(|_| {
-                                anyhow::Error::msg("Could not cast FixedBytes nodeID into [u8;32]")
+                                anyhow!("Could not cast FixedBytes nodeID into [u8;32]")
                             })?;
                     Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
                 };
@@ -240,9 +243,7 @@ impl EthObserver for StakeManager {
                         key_manager: utils::decode_log_param(&log, "keyManager")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
-                        event_signature
-                    )));
+                    return Err(anyhow!(EventParseError::UnexpectedEvent(event_signature)));
                 })
             },
         ))

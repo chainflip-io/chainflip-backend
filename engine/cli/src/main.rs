@@ -20,7 +20,7 @@ use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
 
@@ -41,7 +41,7 @@ async fn main() {
 
 async fn run_cli() -> Result<()> {
     let command_line_opts = CLICommandLineOptions::parse();
-    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow::Error::msg(format!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err)))?;
+    let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
 
     let logger = chainflip_engine::logging::utils::new_discard_logger();
 
@@ -107,18 +107,16 @@ async fn request_claim(
 
     // Are we in a current auction phase
     if state_chain_client.is_auction_phase().await? {
-        return Err(anyhow::Error::msg(
-            "We are currently in an auction phase. Please wait until the auction phase is over.",
-        ));
+        bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
     }
 
     // Sanitise data
 
     let eth_address = clean_eth_address(eth_address)
-        .map_err(|error| anyhow::Error::msg(format!("You supplied an invalid ETH address: {}", error)))
+        .map_err(|error| anyhow!("You supplied an invalid ETH address: {}", error))
         .and_then(|eth_address|
             if eth_address == [0; 20] {
-                Err(anyhow::Error::msg("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
+                Err(anyhow!("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
             } else {
                 Ok(eth_address)
             }
@@ -127,7 +125,7 @@ async fn request_claim(
     let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
 
     println!(
-        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`. This will send two transactions, required to initiate the claim, a redeem and claim.",
+        "Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
         amount,
         atomic_amount,
         hex::encode(eth_address)
@@ -321,10 +319,10 @@ async fn set_vanity_name(
     logger: &slog::Logger,
 ) -> Result<()> {
     if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
-        return Err(anyhow!(
+        bail!(
             "Name too long. Max length is {} characters.",
             MAX_LENGTH_FOR_VANITY_NAME,
-        ));
+        );
     }
 
     let (_, _, state_chain_client) =

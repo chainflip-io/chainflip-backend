@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::multisig::eth::EthSigning;
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use chainflip_engine::{
     common::format_iterator,
     eth::{
@@ -113,7 +113,7 @@ fn main() -> anyhow::Result<()> {
                     .peekable();
 
                 if errors.peek().is_some() {
-                    return Err(anyhow!(format!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors))));
+                    bail!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors));
                 }
             }
 
@@ -206,9 +206,9 @@ fn main() -> anyhow::Result<()> {
                 Ok(())
             });
 
-            // Start eth observers
+            // Start eth witnessers
             scope.spawn(
-                eth::start_contract_observer(
+                eth::contract_witnesser::start(
                     stake_manager_contract,
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
@@ -218,7 +218,7 @@ fn main() -> anyhow::Result<()> {
                 )
             );
             scope.spawn(
-                eth::start_contract_observer(
+                eth::contract_witnesser::start(
                     key_manager_contract,
                     eth_ws_rpc_client,
                     eth_http_rpc_client,
@@ -228,18 +228,17 @@ fn main() -> anyhow::Result<()> {
                 )
             );
             scope.spawn(
-                eth::start_chain_data_witnesser(
+                eth::chain_data_witnesser::start(
                     eth_dual_rpc,
                     state_chain_client.clone(),
                     witnessing_instruction_receiver_3,
                     cfe_settings_update_receiver,
-                    eth::ETH_CHAIN_TRACKING_POLL_INTERVAL,
                     &root_logger
                 )
             );
 
             // Start state chain components
-            let sc_observer_future = state_chain_observer::start(
+            scope.spawn(state_chain_observer::start(
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
@@ -249,8 +248,7 @@ fn main() -> anyhow::Result<()> {
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()
-            );
-            scope.spawn(sc_observer_future);
+            ));
 
             Ok(())
         }.boxed()

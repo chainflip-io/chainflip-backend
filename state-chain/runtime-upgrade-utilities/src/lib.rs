@@ -9,7 +9,7 @@ use sp_std::marker::PhantomData;
 mod helper_functions;
 pub use helper_functions::*;
 
-/// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to verion `TO`.
+/// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to version `TO`.
 ///
 /// In order for the runtime upgrade `U` to proceed, two conditions should be satisfied:
 ///   1. `P`'s stored version should be equal to `FROM`.

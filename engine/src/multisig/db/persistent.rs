@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
@@ -253,10 +253,10 @@ fn create_backup_with_directory_name(
     // This db backup folder should not exist yet
     let backup_dir_path = backups_path.join(backup_dir_name);
     if backup_dir_path.exists() {
-        return Err(anyhow::Error::msg(format!(
+        bail!(
             "Backup directory already exists {}",
             backup_dir_path.display()
-        )));
+        );
     }
 
     // Copy the files
@@ -295,7 +295,7 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
             slog::info!(logger, "Found db_schema_version of {}", version);
             version
         })
-        .ok_or_else(|| anyhow::Error::msg("Could not find db schema version"))
+        .ok_or_else(|| anyhow!("Could not find db schema version"))
 }
 
 /// Get the genesis hash from the metadata column in the db.
@@ -373,11 +373,10 @@ fn migrate_db_to_latest(
         }
         Ordering::Greater => {
             // We do not support backwards migrations
-            Err(anyhow::Error::msg(
-                    format!("Database schema version {} is ahead of the current schema version {}. Is your Chainflip Engine up to date?",
+            Err(anyhow!("Database schema version {} is ahead of the current schema version {}. Is your Chainflip Engine up to date?",
                     version,
                     LATEST_SCHEMA_VERSION)
-                ))
+                )
         }
         Ordering::Less => {
             slog::info!(

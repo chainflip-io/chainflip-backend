@@ -5,11 +5,12 @@
 #![feature(int_abs_diff)]
 pub mod chainflip;
 pub mod constants;
-mod migrations;
 pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
+use pallet_cf_governance::GovCallHash;
 use runtime_apis::BackupOrPassive;
+
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -126,10 +127,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 112,
+	spec_version: 1,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 2,
+	transaction_version: 1,
 	state_version: 1,
 };
 
@@ -566,19 +567,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	// Note: the following run *before* all pallet migrations.
-	(
-		migrations::VersionedMigration<
-			(
-				migrations::DeleteRewardsPallet,
-				migrations::UnifyCeremonyIds,
-				migrations::migrate_contract_addresses::Migration,
-				migrations::add_flip_contract_address::Migration,
-				migrations::migrate_claims::Migration,
-			),
-			112,
-		>,
-	),
+	(),
 >;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -733,6 +722,11 @@ impl_runtime_apis! {
 					(offence, suspension.into())
 				})
 				.collect()
+		}
+		fn cf_generate_gov_key_call_hash(
+			call: Vec<u8>,
+		) -> GovCallHash {
+			Governance::compute_gov_key_call_hash::<_>(call).0
 		}
 	}
 	// END custom runtime APIs

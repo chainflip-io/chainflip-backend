@@ -1,14 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(is_sorted)]
 
 #[cfg(test)]
 mod mock;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-
-mod migrations;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -24,15 +23,13 @@ use cf_traits::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnRuntimeUpgrade, StorageVersion, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::{prelude::*, time::Duration};
 
 use cf_traits::SystemStateInfo;
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
@@ -110,7 +107,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -162,20 +158,6 @@ pub mod pallet {
 
 			Self::expire_pending_claims_at(T::TimeSource::now().as_secs())
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::post_upgrade()
-		}
 	}
 
 	#[pallet::event]
@@ -198,7 +180,7 @@ pub mod pallet {
 		/// A previously retired account  has been re-activated. \[account_id\]
 		AccountActivated(AccountId<T>),
 
-		/// A claim has expired without being redeemed. \[account_id, nonce, amount\]
+		/// A claim has expired without being executed. \[account_id, nonce, amount\]
 		ClaimExpired(AccountId<T>, FlipBalance<T>),
 
 		/// A stake attempt has failed. \[account_id, eth_address, amount\]
@@ -287,9 +269,8 @@ pub mod pallet {
 		/// claim request needs to be signed by a threshold of authorities in order to produce valid
 		/// data that can be submitted to the StakeManager Smart Contract.
 		///
-		/// An account can only have one pending claim at a time, and until this claim has been
-		/// redeemed or expired, the funds wrapped up in the claim are inaccessible and are not
-		/// counted towards a Validator's Auction Bid.
+		/// An account can only have one pending claim at a time, the funds wrapped up in the
+		/// pending claim are inaccessible and are not counted towards a Validator's Auction Bid.
 		///
 		/// ## Events
 		///
@@ -325,8 +306,8 @@ pub mod pallet {
 			// No new claim requests can be processed if we're currently in an auction phase.
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			// If a claim already exists, return an error. The staker must either redeem their claim
-			// voucher or wait until expiry before creating a new claim.
+			// If a claim already exists, return an error. The staker must either execute their
+			// claim voucher or wait until expiry before creating a new claim.
 			ensure!(!PendingClaims::<T>::contains_key(&account_id), Error::<T>::PendingClaim);
 
 			// Check if a return address exists - if not just go with the provided claim address
@@ -391,8 +372,8 @@ pub mod pallet {
 		///
 		/// Note that calling this doesn't initiate any protocol changes - the `claim` has already
 		/// been authorised by authority multisig. This merely signals that the claimant has in fact
-		/// redeemed their funds via the StakeManager Smart Contract and allows us to finalise any
-		/// on-chain cleanup.
+		/// executed the claim via the StakeManager Smart Contract and has received their funds.
+		/// This allows us to finalise any on-chain cleanup.
 		///
 		/// ## Events
 		///
@@ -482,15 +463,13 @@ pub mod pallet {
 
 			let claim_details_signed = PendingClaims::<T>::get(&account_id)
 				.ok_or(Error::<T>::NoPendingClaim)?
-				.signed(&signature);
+				.signed(&signature.expect("signature can not be unavailable"));
 
 			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
-
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id,
 				claim_details_signed.abi_encoded(),
 			));
-
 			Ok(().into())
 		}
 
@@ -599,7 +578,12 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn expire_pending_claims_at(secs_since_unix_epoch: u64) -> Weight {
 		let mut expiries = ClaimExpiries::<T>::get();
-		// Expiries are sorted on insertion so we can just partition the slice.
+
+		debug_assert!(
+			expiries.iter().is_sorted_by_key(|(expiry_time, _account_id)| expiry_time),
+			"Expiries should be sorted on insertion"
+		);
+
 		ClaimExpiries::<T>::set(
 			expiries.split_off(
 				expiries.partition_point(|(expiry, _)| expiry <= &secs_since_unix_epoch),

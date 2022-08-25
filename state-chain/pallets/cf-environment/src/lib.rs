@@ -65,9 +65,6 @@ pub mod pallet {
 
 	type EthereumAddress = [u8; 20];
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because we want to emit events when there is a config change during

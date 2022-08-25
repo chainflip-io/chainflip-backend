@@ -10,11 +10,7 @@ use cf_traits::{
 	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, SystemStateManager,
 	VaultRotator,
 };
-use frame_support::{
-	dispatch::DispatchResult,
-	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, StorageVersion},
-};
+use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
@@ -26,7 +22,6 @@ use sp_std::{
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migrations;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -90,16 +85,8 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		}
 	}
 
-	/// The success threshold is the smallest number of respondents able to reach consensus.
-	///
-	/// Note this is not the same as the threshold defined in the signing literature.
-	fn success_threshold(&self) -> AuthorityCount {
+	fn super_majority_threshold(&self) -> AuthorityCount {
 		utilities::success_threshold_from_share_count(self.candidate_count)
-	}
-
-	/// The blame threshold is the number of blame votes that result in punishment.
-	fn blame_threshold(&self) -> AuthorityCount {
-		self.success_threshold()
 	}
 
 	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
@@ -156,88 +143,43 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			}
 		}
 
-		let remaining_success_voters = || {
-			SuccessVoters::<T, I>::drain()
-				.map(|(_k, dissenters)| dissenters)
-				.flatten()
-				.collect()
-		};
+		let super_majority_threshold = self.super_majority_threshold() as usize;
 
-		let mut to_punish = self.remaining_candidates.clone();
-		match self.consensus_outcome() {
-			Some(Ok(consensus_key)) => {
-				SuccessVoters::<T, I>::remove(consensus_key);
-				to_punish.append(&mut remaining_success_voters());
-				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
-				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
-			},
-			Some(Err(KeygenError::Incompatible)) => {
-				IncompatibleVoters::<T, I>::kill();
-				to_punish.append(&mut FailureVoters::<T, I>::take().into_iter().collect());
-				to_punish.append(&mut remaining_success_voters());
-			},
-			Some(Err(KeygenError::Failure(mut blamed))) => {
-				FailureVoters::<T, I>::kill();
-				to_punish.append(&mut blamed);
-				to_punish.append(&mut remaining_success_voters());
-				to_punish.append(&mut IncompatibleVoters::<T, I>::take().into_iter().collect());
-			},
-			None => {
-				SuccessVoters::<T, I>::remove_all(None);
-				FailureVoters::<T, I>::kill();
-				IncompatibleVoters::<T, I>::kill();
-				log::warn!("Unable to determine a consensus outcome for keygen.")
-			},
-		};
-
-		Err(KeygenError::Failure(to_punish))
-	}
-
-	/// Determines the keygen outcome based on threshold consensus.
-	/// - If less than `self.success_threshold()` voted for failure or success returns `None`.
-	/// - Returns `Some(Ok(key))` *iff any* key has at least `self.success_threshold()` number of
-	/// votes.
-	/// - Returns `Some(Err(KeygenError::Failure(blamed_nodes)))` *iff* at least
-	///   `self.success_threshold()` number of nodes voted
-	/// for failure, where `blamed_nodes` are the nodes with at least `self.success_threshold()`
-	/// votes.
-	fn consensus_outcome(&self) -> Option<KeygenOutcomeFor<T, I>> {
-		let success_threshold = self.success_threshold() as usize;
-		if (self.candidate_count.saturating_sub(self.remaining_candidate_count()) as usize) <
-			success_threshold
+		// We remove who we don't want to punish, and then punish the rest
+		if let Some(key) = SuccessVoters::<T, I>::iter_keys().find(|key| {
+			SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= super_majority_threshold
+		}) {
+			SuccessVoters::<T, I>::remove(key);
+		} else if IncompatibleVoters::<T, I>::decode_len().unwrap_or_default() >=
+			super_majority_threshold
 		{
-			return None
-		}
-
-		for key in SuccessVoters::<T, I>::iter_keys() {
-			if SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= success_threshold {
-				return Some(Ok(key))
-			}
-		}
-
-		if IncompatibleVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
-			return Some(Err(KeygenError::Incompatible))
-		}
-
-		if FailureVoters::<T, I>::decode_len().unwrap_or_default() >= success_threshold {
-			Some(Err(KeygenError::Failure(
-				self.blame_votes
-					.iter()
-					.filter_map(
-						|(id, vote_count)| {
-							if *vote_count >= self.blame_threshold() {
-								Some(id)
-							} else {
-								None
-							}
-						},
-					)
-					.cloned()
-					.collect(),
-			)))
+			IncompatibleVoters::<T, I>::kill();
+		} else if FailureVoters::<T, I>::decode_len().unwrap_or_default() >=
+			super_majority_threshold
+		{
+			FailureVoters::<T, I>::kill();
 		} else {
-			None
+			SuccessVoters::<T, I>::remove_all(None);
+			FailureVoters::<T, I>::kill();
+			IncompatibleVoters::<T, I>::kill();
+			log::warn!("Unable to determine a consensus outcome for keygen.");
 		}
+
+		Err(KeygenError::Failure(
+			SuccessVoters::<T, I>::drain()
+				.flat_map(|(_k, dissenters)| dissenters)
+				.chain(FailureVoters::<T, I>::take())
+				.chain(IncompatibleVoters::<T, I>::take())
+				.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
+					if vote_count >= super_majority_threshold as u32 {
+						Some(id)
+					} else {
+						None
+					}
+				}))
+				.chain(self.remaining_candidates)
+				.collect(),
+		))
 	}
 }
 
@@ -278,8 +220,6 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
-
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -288,7 +228,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
-	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -396,20 +335,6 @@ pub mod pallet {
 			}
 
 			weight
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::post_upgrade()
 		}
 	}
 
@@ -631,16 +556,7 @@ pub mod pallet {
 
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
-			// For the new epoch we create a new vault with the new public key and its active
-			// window at for the block after that reported
-			Vaults::<T, I>::insert(
-				CurrentEpochIndex::<T>::get().saturating_add(1),
-				Vault {
-					public_key: new_public_key,
-					active_from_block: block_number
-						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-				},
-			);
+			Self::set_next_vault(new_public_key, block_number);
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
 
@@ -673,17 +589,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			// We set the new key as the key for the next epoch.
-			Vaults::<T, I>::insert(
-				CurrentEpochIndex::<T>::get().saturating_add(1),
-				Vault {
-					public_key: new_public_key,
-					active_from_block: block_number
-						.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-				},
-			);
+			Self::set_next_vault(new_public_key, block_number);
 
-			// Put the system into maintenance mode.
 			T::SystemStateManager::activate_maintenance_mode();
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
@@ -749,6 +656,20 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn set_next_vault(
+		new_public_key: AggKeyFor<T, I>,
+		rotated_at_block_number: ChainBlockNumberFor<T, I>,
+	) {
+		Vaults::<T, I>::insert(
+			CurrentEpochIndex::<T>::get().saturating_add(1),
+			Vault {
+				public_key: new_public_key,
+				active_from_block: rotated_at_block_number
+					.saturating_add(ChainBlockNumberFor::<T, I>::one()),
+			},
+		);
+	}
+
 	// Called once there's consensus between the authorities that the keygen was successful
 	fn on_keygen_success(ceremony_id: CeremonyId, new_public_key: AggKeyFor<T, I>) {
 		T::Broadcaster::threshold_sign_and_broadcast(

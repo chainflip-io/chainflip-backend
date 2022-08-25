@@ -13,7 +13,7 @@ use web3::{
     types::{TransactionReceipt, H160, H256},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use pallet_cf_governance::GovCallHash;
 
 use std::fmt::Debug;
@@ -22,7 +22,7 @@ use async_trait::async_trait;
 
 use super::event::Event;
 use super::DecodeLogClosure;
-use super::EthObserver;
+use super::EthContractWitnesser;
 
 pub struct KeyManager {
     pub deployed_address: H160,
@@ -196,7 +196,7 @@ pub enum KeyManagerEvent {
 }
 
 #[async_trait]
-impl EthObserver for KeyManager {
+impl EthContractWitnesser for KeyManager {
     type EventParameters = KeyManagerEvent;
 
     fn contract_name(&self) -> &'static str {
@@ -211,7 +211,8 @@ impl EthObserver for KeyManager {
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
-    ) where
+    ) -> anyhow::Result<()>
+    where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
@@ -261,13 +262,10 @@ impl EthObserver for KeyManager {
                         gas_used,
                         effective_gas_price,
                         ..
-                    } = eth_rpc
-                        .transaction_receipt(event.tx_hash)
-                        .await
-                        .expect("Failed to get transaction");
-                    let gas_used = gas_used.expect("TransactionReceipt should have gas_used. This might be due to using a light client.");
+                    } = eth_rpc.transaction_receipt(event.tx_hash).await?;
+                    let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?;
                     let effective_gas_price = effective_gas_price
-                        .expect("TransactionReceipt should have effective gas price");
+                        .context("TransactionReceipt should have effective gas price")?;
                     gas_used.saturating_mul(effective_gas_price)
                 };
                 let _result = state_chain_client
@@ -281,7 +279,8 @@ impl EthObserver for KeyManager {
                                     },
                                     tx_fee: tx_fee
                                         .try_into()
-                                        .expect("Failed to convert tx fee to u128"),
+                                        .map_err(anyhow::Error::msg)
+                                        .context("Failed to convert tx fee to u128")?,
                                     tx_hash: event.tx_hash,
                                 }
                                 .into(),
@@ -310,6 +309,8 @@ impl EthObserver for KeyManager {
                 slog::trace!(logger, "Ignoring unused event: {}", event);
             }
         }
+
+        Ok(())
     }
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
@@ -403,9 +404,7 @@ impl EthObserver for KeyManager {
                         message: utils::decode_log_param(&log, "message")?,
                     }
                 } else {
-                    return Err(anyhow::anyhow!(EventParseError::UnexpectedEvent(
-                        event_signature
-                    )));
+                    return Err(anyhow!(EventParseError::UnexpectedEvent(event_signature)));
                 })
             },
         ))

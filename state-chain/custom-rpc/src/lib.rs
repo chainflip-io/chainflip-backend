@@ -1,7 +1,9 @@
+pub use self::gen_client::Client as CustomClient;
 use cf_chains::eth::SigData;
 use cf_utilities::JsonResultExt;
 use jsonrpc_core::serde::{Deserialize, Serialize};
 use jsonrpc_derive::rpc;
+use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
@@ -12,8 +14,6 @@ use state_chain_runtime::{
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
 };
 use std::{marker::PhantomData, sync::Arc};
-
-pub use self::gen_client::Client as CustomClient;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -45,7 +45,7 @@ pub struct RpcPenalty {
 type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 
 #[rpc]
-/// The custom RPC endoints for the state chain node.
+/// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
 	/// Returns true if the current phase is the auction phase.
 	#[rpc(name = "cf_is_auction_phase")]
@@ -152,6 +152,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> Result<RpcSuspensions, jsonrpc_core::Error>;
+	#[rpc(name = "cf_generate_gov_key_call_hash")]
+	fn cf_generate_gov_key_call_hash(
+		&self,
+		call: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<GovCallHash, jsonrpc_core::Error>;
 }
 
 /// An RPC extension for the state chain node.
@@ -416,6 +422,17 @@ where
 		self.client
 			.runtime_api()
 			.cf_suspensions(&self.query_block_id(at))
+			.map_to_json_error()
+	}
+
+	fn cf_generate_gov_key_call_hash(
+		&self,
+		call: Vec<u8>,
+		at: Option<<B as BlockT>::Hash>,
+	) -> Result<GovCallHash, jsonrpc_core::Error> {
+		self.client
+			.runtime_api()
+			.cf_generate_gov_key_call_hash(&self.query_block_id(at), call)
 			.map_to_json_error()
 	}
 }

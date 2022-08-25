@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use sp_core::U256;
 
 use std::fmt::Debug;
@@ -36,14 +36,14 @@ impl<EventParameters: Debug> Event<EventParameters> {
         Ok(Self {
             tx_hash: log
                 .transaction_hash
-                .ok_or_else(|| anyhow::Error::msg("Could not get transaction hash from ETH log"))?,
+                .ok_or_else(|| anyhow!("Could not get transaction hash from ETH log"))?,
             log_index: log
                 .log_index
-                .ok_or_else(|| anyhow::Error::msg("Could not get log index from ETH log"))?,
+                .ok_or_else(|| anyhow!("Could not get log index from ETH log"))?,
             event_parameters: decode_log(
-                *log.topics.first().ok_or_else(|| {
-                    anyhow::Error::msg("Could not get event signature from ETH log")
-                })?,
+                *log.topics
+                    .first()
+                    .ok_or_else(|| anyhow!("Could not get event signature from ETH log"))?,
                 RawLog {
                     topics: log.topics,
                     data: log.data.0,
@@ -60,7 +60,7 @@ mod tests {
 
     use sp_core::H160;
 
-    use crate::eth::{key_manager::KeyManager, EthObserver};
+    use crate::eth::{key_manager::KeyManager, EthContractWitnesser};
 
     use super::*;
 

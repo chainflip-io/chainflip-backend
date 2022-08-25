@@ -138,7 +138,7 @@ pub mod tests {
     use crate::logging::test_utils::new_test_logger;
     use crate::{constants::ETH_BLOCK_SAFETY_MARGIN, eth::rpc::mocks::MockEthHttpRpcClient};
 
-    use anyhow::Result;
+    use anyhow::{anyhow, Result};
 
     pub fn dummy_block(block_number: u64) -> Result<Block<H256>> {
         Ok(Block {
@@ -483,7 +483,7 @@ pub mod tests {
             .expect_block_number()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(move || Err(anyhow::Error::msg("Failed to get block number, you fool")));
+            .returning(move || Err(anyhow!("Failed to get block number, you fool")));
 
         mock_eth_http_rpc_client
             .expect_block_number()
@@ -556,7 +556,7 @@ pub mod tests {
             .expect_block()
             .times(1)
             .in_sequence(&mut seq)
-            .returning(move |_number| Err(anyhow::Error::msg("Fetch block failed :(")));
+            .returning(move |_number| Err(anyhow!("Fetch block failed :(")));
 
         // === second block success ===
         // We don't refetch the block number here. We don't need to, since we still need to yield block 11

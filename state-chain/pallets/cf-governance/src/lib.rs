@@ -2,10 +2,10 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
-	traits::{EnsureOrigin, UnixTime},
+	traits::{EnsureOrigin, Get, UnixTime},
 };
 pub use pallet::*;
 use sp_runtime::DispatchError;
@@ -47,7 +47,7 @@ pub mod pallet {
 	use frame_system::{pallet, pallet_prelude::*};
 	use sp_std::{boxed::Box, vec::Vec};
 
-	use crate::{GovCallHash, WeightInfo};
+	use super::{GovCallHash, WeightInfo};
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -121,7 +121,7 @@ pub mod pallet {
 	/// Any nonces before this have been consumed.
 	#[pallet::storage]
 	#[pallet::getter(fn next_gov_key_call_hash_nonce)]
-	pub(super) type NextGovKeyCallHashNonce<T> = StorageValue<_, u32, ValueQuery>;
+	pub type NextGovKeyCallHashNonce<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// Number of proposals that have been submitted.
 	#[pallet::storage]
@@ -322,11 +322,10 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(clippy::boxed_local)]
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
-			// TODO: Not possible to fix the clippy warning here. At the moment we
-			// need to ignore it on a global level.
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -379,9 +378,7 @@ pub mod pallet {
 					T::EnsureGovernance::ensure_origin(origin).is_ok()),
 				BadOrigin,
 			);
-			let next_nonce = NextGovKeyCallHashNonce::<T>::get();
-			let call_hash =
-				frame_support::Hashable::blake2_256(&(call.clone(), next_nonce, T::Version::get()));
+			let (call_hash, nonce) = Self::compute_gov_key_call_hash::<_>(call.clone());
 			match GovKeyWhitelistedCallHash::<T>::get() {
 				Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
 					Self::deposit_event(
@@ -390,7 +387,7 @@ pub mod pallet {
 							Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
 						},
 					);
-					NextGovKeyCallHashNonce::<T>::put(next_nonce + 1);
+					NextGovKeyCallHashNonce::<T>::put(nonce + 1);
 					GovKeyWhitelistedCallHash::<T>::kill();
 
 					Ok(Pays::No.into())
@@ -461,6 +458,14 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn compute_gov_key_call_hash<CallData>(data: CallData) -> (GovCallHash, u32)
+	where
+		CallData: Clone + Codec,
+	{
+		let nonce = NextGovKeyCallHashNonce::<T>::get();
+		(frame_support::Hashable::blake2_256(&(data, nonce, T::Version::get())), nonce)
+	}
+
 	/// Checks the expiry state of the proposals
 	fn check_expiry() -> Weight {
 		match ActiveProposals::<T>::decode_len() {

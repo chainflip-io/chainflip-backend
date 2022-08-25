@@ -28,7 +28,7 @@ pub mod common {
 	/// Change this to adjust the block time.
 	pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
-	const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
+	pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
 	// ======= Keygen and signing =======
 
@@ -36,13 +36,18 @@ pub mod common {
 	pub const MAX_STAGE_DURATION_SECONDS: u32 = 30;
 
 	const EXPECTED_FINALITY_DELAY_BLOCKS: u32 = 4;
+
+	/// The transaction with the ceremony outcome needs some
+	/// time to propagate to other nodes.
 	const NETWORK_DELAY_SECONDS: u32 = 6;
-	// buffer for final key computation
+	/// Buffer for final key computation.
 	const KEY_DERIVATION_DELAY_SECONDS: u32 = 120;
 
-	const TIMEOUT_BUFFER_SECONDS: u32 = EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) +
-		NETWORK_DELAY_SECONDS +
-		KEY_DERIVATION_DELAY_SECONDS;
+	const TIMEOUT_BUFFER_SECONDS: u32 =
+		EXPECTED_FINALITY_DELAY_BLOCKS * (SECONDS_PER_BLOCK as u32) + NETWORK_DELAY_SECONDS;
+
+	const KEYGEN_TIMEOUT_BUFFER_SECONDS: u32 =
+		TIMEOUT_BUFFER_SECONDS + KEY_DERIVATION_DELAY_SECONDS;
 
 	const NUM_THRESHOLD_SIGNING_STAGES: u32 = 4;
 
@@ -56,7 +61,7 @@ pub mod common {
 	/// The maximum number of blocks to wait for a keygen to complete.
 	pub const KEYGEN_CEREMONY_TIMEOUT_BLOCKS: u32 = ((MAX_STAGE_DURATION_SECONDS *
 		(NUM_KEYGEN_STAGES + NUM_THRESHOLD_SIGNING_STAGES)) +
-		TIMEOUT_BUFFER_SECONDS) /
+		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
 		SECONDS_PER_BLOCK as u32;
 
 	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.

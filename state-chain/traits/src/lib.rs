@@ -57,7 +57,7 @@ pub trait Chainflip: frame_system::Config {
 		+ MaybeSerializeDeserialize;
 
 	/// An id type for keys used in threshold signature ceremonies.
-	type KeyId: Member + Parameter + From<Vec<u8>>;
+	type KeyId: Member + Parameter + From<Vec<u8>> + BenchmarkValue;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
@@ -207,8 +207,11 @@ pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
 
-	/// A new epoch has started
-	fn on_new_epoch(epoch_authorities: &[Self::ValidatorId]);
+	/// A new epoch has started.
+	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {}
+
+	/// When an epoch has been expired.
+	fn on_expired_epoch(_expired: EpochIndex) {}
 }
 
 /// Resetter for Reputation Points and Online Credits of a Validator
@@ -241,9 +244,6 @@ pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
 	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
-
-	/// The amount of locked tokens in the current epoch - aka the bond
-	fn locked_balance(account_id: &Self::AccountId) -> Self::Balance;
 
 	/// An account's tokens that are free to be staked.
 	fn staked_balance(account_id: &Self::AccountId) -> Self::Balance;
@@ -299,7 +299,7 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides a unqiue nonce for some [Chain].
+/// Provides a unique nonce for some [Chain].
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	fn replay_protection() -> Abi::ReplayProtection;
 }
@@ -482,6 +482,12 @@ pub trait KeyProvider<C: ChainCrypto> {
 	}
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum RetryPolicy {
+	Always,
+	Never,
+}
+
 /// Api trait for pallets that need to sign things.
 pub trait ThresholdSigner<C>
 where
@@ -490,9 +496,18 @@ where
 	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
+	type KeyId: TryInto<C::AggKey>;
+	type ValidatorId;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(payload: C::Payload) -> Self::RequestId;
+
+	fn request_signature_with(
+		key_id: Self::KeyId,
+		participants: Vec<Self::ValidatorId>,
+		payload: C::Payload,
+		retry_policy: RetryPolicy,
+	) -> Self::RequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -502,7 +517,9 @@ where
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
-	fn signature_result(request_id: Self::RequestId) -> AsyncResult<C::ThresholdSignature>;
+	fn signature_result(
+		request_id: Self::RequestId,
+	) -> AsyncResult<Result<C::ThresholdSignature, ()>>;
 
 	/// Request a signature and register a callback for when the signature is available.
 	///
@@ -524,7 +541,7 @@ where
 		id
 	}
 
-	/// Helper function to enable benchmarking of the brodcast pallet
+	/// Helper function to enable benchmarking of the broadcast pallet
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(_request_id: Self::RequestId, _signature: C::ThresholdSignature) {
 		unimplemented!();

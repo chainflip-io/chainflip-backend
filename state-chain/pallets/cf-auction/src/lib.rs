@@ -5,7 +5,6 @@
 mod auction_resolver;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -19,15 +18,10 @@ pub use auction_resolver::*;
 use cf_traits::{
 	AuctionOutcome, Auctioneer, Bid, BidderProvider, Chainflip, EpochInfo, QualifyNode,
 };
-use frame_support::{
-	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, StorageVersion},
-};
+use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::prelude::*;
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -36,7 +30,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
-	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -52,24 +45,6 @@ pub mod pallet {
 		type AuctionQualification: QualifyNode<ValidatorId = Self::ValidatorId>;
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
-	}
-
-	/// Pallet implements \[Hooks\] trait
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::post_upgrade()
-		}
 	}
 
 	/// Auction parameters.

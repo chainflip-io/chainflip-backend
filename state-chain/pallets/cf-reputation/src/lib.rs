@@ -7,8 +7,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
-
 use cf_traits::{
 	offence_reporting::*, Chainflip, Heartbeat, NetworkState, ReputationResetter, Slashing,
 };
@@ -16,10 +14,7 @@ use cf_traits::{
 pub mod weights;
 pub use weights::WeightInfo;
 
-use frame_support::{
-	pallet_prelude::*,
-	traits::{Get, OnRuntimeUpgrade, StorageVersion},
-};
+use frame_support::{pallet_prelude::*, traits::Get};
 pub use pallet::*;
 use sp_runtime::traits::Zero;
 use sp_std::{
@@ -30,7 +25,6 @@ use sp_std::{
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod migrations;
 
 mod reporting_adapter;
 mod reputation;
@@ -98,7 +92,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
@@ -156,21 +149,6 @@ pub mod pallet {
 			}
 			T::WeightInfo::on_initialize_no_action()
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade();
-			T::WeightInfo::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::PalletMigration::<T>::post_upgrade()
-		}
 	}
 
 	/// The ratio at which one accrues Reputation points in exchange for online credits
@@ -203,7 +181,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn offence_time_slot_tracker)]
-	/// The penalty to be applied for each offence.
+	/// The time slot in which an offence has been reported. Only applies to offences that are
+	/// reported via the [ChainflipOffenceReportingAdapter].
 	pub type OffenceTimeSlotTracker<T: Config> = StorageMap<_, Identity, ReportId, OpaqueTimeSlot>;
 
 	/// The last block numbers at which validators submitted a heartbeat.

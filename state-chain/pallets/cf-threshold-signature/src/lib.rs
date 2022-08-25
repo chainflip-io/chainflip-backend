@@ -19,9 +19,10 @@ use scale_info::TypeInfo;
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	KeyProvider, SignerNomination,
+	KeyProvider, RetryPolicy, SignerNomination,
 };
 use frame_support::{
+	dispatch::UnfilteredDispatchable,
 	ensure,
 	traits::{EnsureOrigin, Get},
 };
@@ -64,14 +65,29 @@ pub mod pallet {
 	use super::*;
 	use cf_traits::AsyncResult;
 	use frame_support::{
-		dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
-		pallet_prelude::*,
+		dispatch::DispatchResultWithPostInfo,
+		pallet_prelude::{InvalidTransaction, *},
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
 	};
 	use frame_system::{ensure_none, pallet_prelude::*};
 
-	/// Metadata for a pending threshold signature ceremony.
+	/// Context for tracking the progress of a threshold signature request.
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct RequestContext<T: Config<I>, I: 'static> {
+		pub request_id: RequestId,
+		/// The number of ceremonies attempted so far, excluding the current one.
+		pub attempt_count: AttemptCount,
+		/// The payload to be signed over.
+		pub payload: PayloadFor<T, I>,
+		/// The key id that was requested, if any. If `None` the current epoch's key is used.
+		pub key_id: Option<T::KeyId>,
+		/// Determines how/if we deal with ceremony failure.
+		pub retry_policy: RetryPolicy,
+	}
+
+	/// Context for tracking the progress of a threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
@@ -81,6 +97,8 @@ pub mod pallet {
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: u32,
+		/// The key id being used for verification of this ceremony.
+		pub key_id: T::KeyId,
 		/// Phantom data member.
 		pub _phantom: PhantomData<I>,
 	}
@@ -207,7 +225,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn open_requests)]
 	pub type OpenRequests<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, CeremonyId, (RequestId, AttemptCount, PayloadFor<T, I>)>;
+		StorageMap<_, Twox64Concat, CeremonyId, RequestContext<T, I>>;
 
 	/// A mapping from request id to to the live ceremony id for that request and what
 	/// and how many times we have attempted to sign this request.
@@ -225,8 +243,13 @@ pub mod pallet {
 	/// Generated signatures.
 	#[pallet::storage]
 	#[pallet::getter(fn signatures)]
-	pub type Signatures<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, RequestId, AsyncResult<SignatureFor<T, I>>, ValueQuery>;
+	pub type Signatures<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		RequestId,
+		AsyncResult<Result<SignatureFor<T, I>, ()>>,
+		ValueQuery,
+	>;
 
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.
@@ -272,7 +295,7 @@ pub mod pallet {
 		/// \[ceremony_id, key_id, signatories, payload\]
 		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
 		/// \[ceremony_id, key_id, offenders\]
-		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
+		ThresholdSignatureFailed(RequestId, CeremonyId, T::KeyId, Vec<T::ValidatorId>),
 		/// The threshold signature posted back to the chain was verified.
 		ThresholdSignatureSuccess(CeremonyId),
 		/// We have had a signature success and we have dispatched the associated callback
@@ -325,12 +348,37 @@ pub mod pallet {
 					);
 
 					// Clean up old ceremony and start a new one.
-					if let Some((request_id, attempt, payload)) =
-						OpenRequests::<T, I>::take(ceremony_id)
+					if let Some(RequestContext {
+						request_id,
+						attempt_count,
+						payload,
+						key_id: requested_key_id,
+						retry_policy,
+					}) = OpenRequests::<T, I>::take(ceremony_id)
 					{
-						Self::new_ceremony_attempt(request_id, payload, attempt.wrapping_add(1));
-
-						Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
+						match retry_policy {
+							RetryPolicy::Always => {
+								Self::new_ceremony_attempt(
+									request_id,
+									payload,
+									attempt_count.wrapping_add(1),
+									requested_key_id,
+									None,
+									RetryPolicy::Always,
+								);
+								Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
+							},
+							RetryPolicy::Never => {
+								Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Err(())));
+								Self::maybe_dispatch_callback(request_id, ceremony_id);
+								Self::deposit_event(Event::<T, I>::ThresholdSignatureFailed(
+									request_id,
+									ceremony_id,
+									failed_ceremony_context.key_id,
+									offenders,
+								));
+							},
+						}
 					} else {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
 					}
@@ -350,18 +398,22 @@ pub mod pallet {
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::validate_unsigned]
-	impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I>
+	where
+		<T as Chainflip>::KeyId: TryInto<<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey>,
+	{
 		type Call = Call<T, I>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::<T, I>::signature_success { ceremony_id, signature } = call {
-				let (_, _, payload) =
+				let RequestContext { payload, .. } =
 					OpenRequests::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
+				let CeremonyContext { key_id, .. } =
+					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
+				let key = key_id.try_into().map_err(|_| InvalidTransaction::BadProof)?;
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
-					&T::KeyProvider::current_key(),
-					&payload,
-					signature,
+					&key, &payload, signature,
 				) {
 					ValidTransaction::with_tag_prefix(Self::name())
 						// We only expect one success per ceremony.
@@ -403,7 +455,7 @@ pub mod pallet {
 			ensure_none(origin)?;
 
 			// The request succeeded, remove it.
-			let (request_id, attempts, _) =
+			let RequestContext { request_id, attempt_count, .. } =
 				OpenRequests::<T, I>::take(ceremony_id).ok_or_else(|| {
 					// We check the ceremony_id in the ValidateUnsigned transaction, so if this
 					// happens, there is something seriously wrong with our assumptions.
@@ -421,24 +473,11 @@ pub mod pallet {
 				"Threshold signature request {} suceeded at ceremony {} after {} attempts.",
 				request_id,
 				ceremony_id,
-				attempts
+				attempt_count
 			);
 
-			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
-
-			// Dispatch the callback if one has been registered.
-			if let Some(call) = RequestCallback::<T, I>::take(request_id) {
-				let dispatch_result =
-					call.dispatch_bypass_filter(Origin(Default::default()).into());
-
-				Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
-					ceremony_id,
-					dispatch_result.map(|_| ()).map_err(|e| {
-						log::error!("Threshold dispatch failed for ceremony {}.", ceremony_id);
-						e.error
-					}),
-				));
-			}
+			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
+			Self::maybe_dispatch_callback(request_id, ceremony_id);
 
 			Ok(().into())
 		}
@@ -512,7 +551,12 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
-	fn request_signature(payload: PayloadFor<T, I>) -> (RequestId, CeremonyId) {
+	fn inner_request_signature(
+		payload: PayloadFor<T, I>,
+		key_id: Option<<T as Chainflip>::KeyId>,
+		participants: Option<Vec<T::ValidatorId>>,
+		retry_policy: RetryPolicy,
+	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
 		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -520,9 +564,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Start a ceremony.
-		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0);
+		let ceremony_id =
+			Self::new_ceremony_attempt(request_id, payload, 0, key_id, participants, retry_policy);
 
-		// Schedule an initial retry.
+		// Schedule a retry on timeout.
 		Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
 
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
@@ -534,67 +579,79 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn new_ceremony_attempt(
 		request_id: RequestId,
 		payload: PayloadFor<T, I>,
-		attempt: AttemptCount,
+		attempt_count: AttemptCount,
+		requested_key_id: Option<<T as Chainflip>::KeyId>,
+		participants: Option<Vec<T::ValidatorId>>,
+		retry_policy: RetryPolicy,
 	) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
-		OpenRequests::<T, I>::insert(ceremony_id, (request_id, attempt, payload.clone()));
-		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt));
 
-		// Get the current signing key.
-		let key_id = T::KeyProvider::current_key_id();
+		let ceremony_key_id =
+			requested_key_id.clone().unwrap_or_else(T::KeyProvider::current_key_id);
 
-		// Select nominees for threshold signature.
-		if let Some(nominees) = T::SignerNomination::threshold_nomination_with_seed(
-			(ceremony_id, attempt),
-			T::EpochInfo::epoch_index(),
-		) {
-			log::trace!(
-				target: "threshold-signing",
-				"Threshold set selected for request {}, requesting signature ceremony {}.",
-				request_id,
-				ceremony_id
-			);
-
-			// Store the context.
-			PendingCeremonies::<T, I>::insert(
-				ceremony_id,
-				CeremonyContext {
-					remaining_respondents: BTreeSet::from_iter(nominees.clone()),
-					blame_counts: Default::default(),
-					participant_count: nominees.len() as u32,
-					_phantom: Default::default(),
-				},
-			);
-
-			// Emit the request to the CFE.
-			Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
-				ceremony_id,
-				key_id,
+		let (event, log_message, ceremony_participants) = if let Some(nominees) = participants
+			.or_else(|| {
+				T::SignerNomination::threshold_nomination_with_seed(
+					(ceremony_id, attempt_count),
+					T::EpochInfo::epoch_index(),
+				)
+			}) {
+			(
+				Event::<T, I>::ThresholdSignatureRequest(
+					ceremony_id,
+					ceremony_key_id.clone(),
+					nominees.clone(),
+					payload.clone(),
+				),
+				scale_info::prelude::format!(
+					"Threshold set selected for request {}, requesting signature ceremony {}.",
+					request_id,
+					attempt_count
+				),
 				nominees,
-				payload,
-			));
+			)
 		} else {
-			log::trace!(
-				target: "threshold-signing",
-				"Not enough signers for request {} at attempt {}, scheduling retry.",
-				request_id,
-				attempt,
-			);
-
-			// Store the context, schedule a retry for the next block.
-			PendingCeremonies::<T, I>::insert(
-				ceremony_id,
-				CeremonyContext {
-					remaining_respondents: Default::default(),
-					blame_counts: Default::default(),
-					participant_count: 0,
-					_phantom: Default::default(),
-				},
-			);
-
-			Self::deposit_event(Event::<T, I>::SignersUnavailable(ceremony_id));
 			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
-		}
+
+			(
+				Event::<T, I>::SignersUnavailable(ceremony_id),
+				scale_info::prelude::format!(
+					"Not enough signers for request {} at attempt {}, scheduling retry.",
+					request_id,
+					attempt_count
+				),
+				Vec::default(),
+			)
+		};
+
+		log::trace!(
+			target: "threshold-signing",
+			"{}", log_message
+		);
+
+		PendingCeremonies::<T, I>::insert(ceremony_id, {
+			let remaining_respondents: BTreeSet<_> = ceremony_participants.into_iter().collect();
+			CeremonyContext {
+				blame_counts: BTreeMap::new(),
+				participant_count: remaining_respondents.len() as u32,
+				remaining_respondents,
+				key_id: ceremony_key_id,
+				_phantom: PhantomData::default(),
+			}
+		});
+		OpenRequests::<T, I>::insert(
+			ceremony_id,
+			RequestContext {
+				request_id,
+				attempt_count,
+				payload,
+				key_id: requested_key_id,
+				retry_policy,
+			},
+		);
+		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt_count));
+
+		Self::deposit_event(event);
 
 		ceremony_id
 	}
@@ -604,6 +661,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			frame_system::Pallet::<T>::current_block_number().saturating_add(retry_delay),
 			id,
 		);
+	}
+
+	/// Dispatches the callback if one has been registered.
+	fn maybe_dispatch_callback(request_id: RequestId, ceremony_id: CeremonyId) {
+		if let Some(call) = RequestCallback::<T, I>::take(request_id) {
+			let dispatch_result = call.dispatch_bypass_filter(Origin(Default::default()).into());
+
+			Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
+				ceremony_id,
+				dispatch_result.map(|_| ()).map_err(|e| {
+					log::error!("Threshold dispatch failed for ceremony {}.", ceremony_id);
+					e.error
+				}),
+			));
+		}
 	}
 }
 
@@ -630,13 +702,16 @@ where
 impl<T, I: 'static> cf_traits::ThresholdSigner<T::TargetChain> for Pallet<T, I>
 where
 	T: Config<I>,
+	<T as Chainflip>::KeyId: TryInto<<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey>,
 {
 	type RequestId = RequestId;
 	type Error = Error<T, I>;
 	type Callback = <T as Config<I>>::ThresholdCallable;
+	type KeyId = T::KeyId;
+	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> Self::RequestId {
-		Self::request_signature(payload).0
+		Self::inner_request_signature(payload, None, None, RetryPolicy::Always).0
 	}
 
 	fn register_callback(
@@ -650,7 +725,7 @@ where
 
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> cf_traits::AsyncResult<<T::TargetChain as ChainCrypto>::ThresholdSignature> {
+	) -> cf_traits::AsyncResult<Result<<T::TargetChain as ChainCrypto>::ThresholdSignature, ()>> {
 		Signatures::<T, I>::take(request_id)
 	}
 
@@ -659,6 +734,15 @@ where
 		request_id: Self::RequestId,
 		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
 	) {
-		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(signature));
+		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
+	}
+
+	fn request_signature_with(
+		key_id: Self::KeyId,
+		participants: Vec<Self::ValidatorId>,
+		payload: <T::TargetChain as ChainCrypto>::Payload,
+		retry_policy: RetryPolicy,
+	) -> Self::RequestId {
+		Self::inner_request_signature(payload, Some(key_id), Some(participants), retry_policy).0
 	}
 }
