@@ -163,9 +163,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A node has staked some FLIP on the Ethereum chain. \[account_id, stake_added,
-		/// total_stake\]
-		Staked(AccountId<T>, FlipBalance<T>, FlipBalance<T>),
+		/// A node has staked some FLIP on the Ethereum chain.
+		Staked {
+			account_id: AccountId<T>,
+			tx_hash: EthTransactionHash,
+			stake_added: FlipBalance<T>,
+			total_staked: FlipBalance<T>,
+		},
 
 		/// A node has claimed their FLIP on the Ethereum chain. \[account_id,
 		/// claimed_amount\]
@@ -251,12 +255,18 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 			withdrawal_address: EthereumAddress,
 			// Required to ensure this call is unique per staking event.
-			_tx_hash: EthTransactionHash,
+			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
-				Self::stake_account(&account_id, amount);
+				let total_staked = Self::stake_account(&account_id, amount);
+				Self::deposit_event(Event::Staked {
+					account_id,
+					tx_hash,
+					stake_added: amount,
+					total_staked,
+				});
 			}
 			Ok(().into())
 		}
@@ -635,16 +645,14 @@ impl<T: Config> Pallet<T> {
 
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the
 	/// account if it is in retired state.
-	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) {
+	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
 			AccountRetired::<T>::insert(&account_id, true);
 		}
 
-		let new_total = T::Flip::credit_stake(account_id, amount);
-
-		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
+		T::Flip::credit_stake(account_id, amount)
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no
