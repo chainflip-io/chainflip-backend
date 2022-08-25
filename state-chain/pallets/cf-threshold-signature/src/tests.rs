@@ -6,7 +6,7 @@ use crate::{
 	THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT,
 };
 use cf_chains::mocks::MockEthereum;
-use cf_traits::{AsyncResult, Chainflip};
+use cf_traits::{mocks::signer_nomination::MockNominator, AsyncResult, Chainflip};
 use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::BlockNumberProvider;

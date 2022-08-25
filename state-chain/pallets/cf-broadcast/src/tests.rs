@@ -13,8 +13,11 @@ use cf_chains::{
 	ChainAbi,
 };
 use cf_traits::{
-	mocks::{epoch_info::MockEpochInfo, threshold_signer::MockThresholdSigner},
-	AsyncResult, EpochInfo, ThresholdSigner,
+	mocks::{
+		epoch_info::MockEpochInfo, signer_nomination::MockNominator,
+		threshold_signer::MockThresholdSigner,
+	},
+	AsyncResult, EpochInfo, SignerNomination, ThresholdSigner,
 };
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
@@ -61,7 +64,7 @@ impl MockCfe {
 							// only nominee can return the signed tx
 							assert_eq!(
 								nominee,
-								MockNominator::get_nominee().unwrap(),
+								MockNominator::nomination_with_seed((), &[]).unwrap(),
 								"CFE using wrong nomination"
 							);
 							assert_noop!(
@@ -80,8 +83,11 @@ impl MockCfe {
 							// Ignore the request.
 						},
 						_ => {
-							assert_eq!(nominee, MockNominator::get_nominee().unwrap());
 							// Only the nominee can return the signed tx.
+							assert_eq!(
+								nominee,
+								MockNominator::nomination_with_seed((), &[]).unwrap()
+							);
 							assert_noop!(
 								MockBroadcast::transaction_ready_for_transmission(
 									RawOrigin::Signed(nominee + 1).into(),
@@ -160,7 +166,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 #[test]
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -198,9 +204,11 @@ fn test_broadcast_happy_path() {
 #[test]
 fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		let authority_count = MockEpochInfo::current_authority_count();
+		MockNominator::set_nominees_by_count(authority_count);
 
-		let starting_nomination = MockNominator::get_nominee().unwrap();
+		let starting_nomination = MockNominator::nomination_with_seed((), &[]).unwrap();
+		println!("Starting nomination: {}", starting_nomination);
 
 		let mut broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
@@ -208,12 +216,13 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			MockApiCall::default(),
 		);
 
-		for _ in 0..=MockEpochInfo::current_authority_count() {
+		for i in 0..=authority_count {
+			println!("Running for authority: {}", i);
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
 
 			// make the nomination unique, so we can test that all the authorities
-			// so we can test all the failed authorities reported
+			// and so we can test all the failed authorities reported
 			MockNominator::increment_nominee();
 
 			// retry should kick off at end of block if sufficient block space is free.
@@ -241,7 +250,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 #[test]
 fn on_idle_caps_broadcasts_when_not_enough_weight() {
 	new_test_ext().execute_with(|| {
-		// kick off two broadcasts
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -278,7 +287,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 #[test]
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -321,7 +330,7 @@ fn test_transaction_signing_failed() {
 #[test]
 fn test_bad_signature() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -352,10 +361,10 @@ fn test_bad_signature() {
 		.is_empty());
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
-		// The nominee was reported.
 		MockOffenceReporter::assert_reported(
 			PalletOffence::InvalidTransactionAuthored,
-			vec![MockNominator::get_nominee().unwrap()],
+			// get the nominee that was used in the broadcast call
+			vec![MockNominator::nomination_with_seed((), &[]).unwrap()],
 		);
 	})
 }
@@ -401,7 +410,7 @@ fn test_invalid_sigdata_is_noop() {
 #[test]
 fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -577,7 +586,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 #[test]
 fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -632,7 +641,7 @@ fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister()
 #[test]
 fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -690,7 +699,7 @@ fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 #[test]
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -758,7 +767,7 @@ fn test_signature_request_expiry() {
 #[test]
 fn test_transmission_request_expiry() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast and pass the signing stage;
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -818,7 +827,7 @@ fn test_transmission_request_expiry() {
 #[test]
 fn re_request_threshold_signature() {
 	new_test_ext().execute_with(|| {
-		// Initiate broadcast
+		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,

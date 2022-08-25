@@ -1,41 +1,53 @@
-#[macro_export]
-macro_rules! impl_mock_signer_nomination {
-	($account_id:ty) => {
-		thread_local! {
-			pub static CANDIDATES: std::cell::RefCell<Vec<$account_id>> = Default::default();
-		}
+use crate::{EpochIndex, SignerNomination};
 
-		use cf_traits::EpochIndex;
+thread_local! {
+	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<Vec<u64>>> = Default::default();
+	pub static LAST_NOMINATED_INDEX: std::cell::RefCell<usize> = Default::default();
+}
 
-		pub struct MockSignerNomination;
+pub struct MockNominator;
 
-		impl MockSignerNomination {
-			pub fn set_candidates(candidates: Vec<$account_id>) {
-				CANDIDATES.with(|cell| *(cell.borrow_mut()) = candidates)
-			}
-		}
+impl SignerNomination for MockNominator {
+	type SignerId = u64;
 
-		impl cf_traits::SignerNomination for MockSignerNomination {
-			type SignerId = $account_id;
+	fn nomination_with_seed<S>(
+		_seed: S,
+		_exclude_ids: &[Self::SignerId],
+	) -> Option<Self::SignerId> {
+		Self::get_nominees()
+			.unwrap()
+			.get(LAST_NOMINATED_INDEX.with(|cell| *cell.borrow()))
+			.copied()
+	}
 
-			fn nomination_with_seed<H: frame_support::Hashable>(
-				_seed: H,
-			) -> Option<Self::SignerId> {
-				CANDIDATES.with(|cell| cell.borrow().iter().next().cloned())
-			}
+	fn threshold_nomination_with_seed<S>(
+		_seed: S,
+		_epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
+		Self::get_nominees()
+	}
+}
 
-			fn threshold_nomination_with_seed<H: frame_support::Hashable>(
-				_seed: H,
-				_epoch_index: EpochIndex,
-			) -> Option<Vec<Self::SignerId>> {
-				Some(CANDIDATES.with(|cell| cell.borrow().clone())).and_then(|v| {
-					if v.is_empty() {
-						None
-					} else {
-						Some(v)
-					}
-				})
-			}
-		}
-	};
+// Remove some threadlocal + refcell complexity from test code
+impl MockNominator {
+	pub fn get_nominees() -> Option<Vec<u64>> {
+		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
+	}
+
+	pub fn set_nominees(nominees: Option<Vec<u64>>) {
+		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees);
+	}
+
+	pub fn set_nominees_by_count(authority_count: u32) {
+		let authorities = (0..=(authority_count as u64)).into_iter().collect();
+		Self::set_nominees(Some(authorities));
+	}
+
+	/// Increments nominee, if it's a Some
+	pub fn increment_nominee() {
+		LAST_NOMINATED_INDEX.with(|cell| {
+			let mut nomination = cell.borrow_mut();
+			*nomination += 1;
+		});
+	}
 }
