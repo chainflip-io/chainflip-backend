@@ -11,10 +11,10 @@ use tokio::{
 };
 
 /*
-The idea here is very similiar to the thread_scope feature in the std library: https://doc.rust-lang.org/nightly/std/thread/fn.scope.html
+The idea here is very similiar to the thread_scope feature in the std library: https://doc.rust-lang.org/1.63.0/std/thread/fn.scope.html
 The important differences being it:
     - is designed to work with futures
-    - propagates errors returned by tasks (instead of only panics): https://doc.rust-lang.org/nightly/std/thread/fn.scope.html#panics
+    - propagates errors returned by tasks (instead of only panics): https://doc.rust-lang.org/1.63.0/std/thread/fn.scope.html#panics
     - when tasks panic or return errors, this will cause all other still running tasks to be cancelled: https://blog.yoshuawuyts.com/async-cancellation-1/
 
 A scope is designed to allow you to spawn asynchronous tasks, wait for all those tasks to finished, and handle errors/panics caused by those tasks.
