@@ -2,7 +2,13 @@ use crate::eth::EventParseError;
 use anyhow::Result;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
-use web3::{contract::tokens::Tokenizable, ethabi::Log};
+use web3::{
+    contract::tokens::Tokenizable,
+    ethabi::Log,
+    types::{Address, U64},
+};
+
+use super::rpc::EthRpcApi;
 
 /// Helper method to decode the parameters from an ETH log
 pub fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
@@ -55,4 +61,37 @@ mod utils_tests {
 
         assert_eq!(pubkey_to_eth_addr(pk), expected);
     }
+}
+
+pub struct TransactionParticipants {
+    pub from: Address,
+    pub to: Address,
+}
+
+pub async fn log_transactions<EthRpc>(
+    block_number: U64,
+    participants: &[TransactionParticipants],
+    eth_rpc: &EthRpc,
+    logger: &slog::Logger,
+) -> Result<()>
+where
+    EthRpc: EthRpcApi,
+{
+    let block = eth_rpc.block(block_number).await?;
+    for tx_hash in &block.transactions {
+        let tx = eth_rpc.transaction_receipt(*tx_hash).await?;
+        if let Some(tx_to) = tx.to {
+            participants.iter().for_each(|tx_participants| {
+                if tx.from == tx_participants.from && tx_to == tx_participants.to {
+                    slog::info!(
+                        &logger,
+                        "Observed transaction from {:?} to {:?}",
+                        tx_participants.from,
+                        tx_participants.to
+                    );
+                }
+            });
+        }
+    }
+    Ok(())
 }
