@@ -208,7 +208,6 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 		MockNominator::set_nominees_by_count(authority_count);
 
 		let starting_nomination = MockNominator::nomination_with_seed((), &[]).unwrap();
-		println!("Starting nomination: {}", starting_nomination);
 
 		let mut broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
@@ -216,8 +215,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			MockApiCall::default(),
 		);
 
-		for i in 0..=authority_count {
-			println!("Running for authority: {}", i);
+		for _ in 0..=authority_count {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
 
