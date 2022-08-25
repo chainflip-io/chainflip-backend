@@ -1,4 +1,7 @@
-use crate::eth::{rpc::EthRpcApi, EventParseError};
+use crate::{
+    constants::ETH_TO_WEI_FACTOR,
+    eth::{rpc::EthRpcApi, EventParseError},
+};
 use anyhow::Result;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
@@ -84,7 +87,7 @@ where
                         slog::info!(
                             &logger,
                             "Observed transaction of {:?} ETH from {:?} to {:?}",
-                            tx.value,
+                            (tx.value.as_u128() as f64) / (ETH_TO_WEI_FACTOR as f64),
                             tx_participants.from,
                             tx_participants.to
                         );

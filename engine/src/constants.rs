@@ -38,3 +38,5 @@ pub const ETH_HTTP_NODE_ENDPOINT: &str = "ETH__HTTP_NODE_ENDPOINT";
 
 /// A WebSocket node endpoint for Ethereum
 pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__WS_NODE_ENDPOINT";
+
+pub const ETH_TO_WEI_FACTOR: u64 = 10u64.pow(18);
