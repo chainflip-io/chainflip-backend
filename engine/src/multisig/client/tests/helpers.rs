@@ -24,14 +24,13 @@ use crate::{
     multisig::{
         client::{
             ceremony_manager::{CeremonyManager, CeremonyResultReceiver},
+            ceremony_runner::CeremonyRunner,
             common::{
                 broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
                 CeremonyStageName, KeygenFailureReason, SigningFailureReason,
             },
             keygen::{HashComm1, HashContext, SecretShare5, VerifyHashCommitmentsBroadcast2},
-            signing,
-            state_runner::CeremonyRunner,
-            KeygenResultInfo, MultisigData, PartyIdxMapping, ThresholdParameters,
+            signing, KeygenResultInfo, MultisigData, PartyIdxMapping, ThresholdParameters,
         },
         crypto::{ECPoint, Rng},
         KeyId, MessageHash,
