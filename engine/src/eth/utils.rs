@@ -8,7 +8,7 @@ use sp_runtime::traits::Keccak256;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::Log,
-    types::{Address, U64},
+    types::{Address, BlockId},
 };
 
 /// Helper method to decode the parameters from an ETH log
@@ -65,7 +65,7 @@ mod utils_tests {
 }
 
 pub async fn log_transactions<EthRpc>(
-    block_number: U64,
+    block: BlockId,
     monitored_addresses: &[Address],
     eth_rpc: &EthRpc,
     logger: &slog::Logger,
@@ -73,7 +73,7 @@ pub async fn log_transactions<EthRpc>(
 where
     EthRpc: EthRpcApi,
 {
-    let block = eth_rpc.block_with_txs(block_number).await?;
+    let block = eth_rpc.block_with_txs(block).await?;
     for tx in &block.transactions {
         if let Some(tx_to) = tx.to {
             monitored_addresses.iter().for_each(|address| {

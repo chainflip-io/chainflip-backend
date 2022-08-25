@@ -4,7 +4,7 @@ use web3::{
     api::SubscriptionStream,
     signing::SecretKeyRef,
     types::{
-        Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
+        Block, BlockHeader, BlockId, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
         SignedTransaction, SyncState, Transaction, TransactionParameters, TransactionReceipt, U64,
     },
     Web3,
@@ -110,7 +110,7 @@ pub trait EthRpcApi: Send + Sync {
     /// - Request succeeds, but doesn't return a block
     async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
-    async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
+    async fn block_with_txs(&self, block: BlockId) -> Result<Block<Transaction>>;
 
     async fn fee_history(
         &self,
@@ -231,10 +231,10 @@ where
             })
     }
 
-    async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+    async fn block_with_txs(&self, block: BlockId) -> Result<Block<Transaction>> {
         self.web3
             .eth()
-            .block_with_txs(block_number.into())
+            .block_with_txs(block)
             .await
             .context(format!(
                 "{} client: Failed to fetch block with transactions",
@@ -245,7 +245,7 @@ where
                     anyhow!(
                         "{} client: Getting ETH block for block number {} returned None",
                         T::transport_protocol(),
-                        block_number,
+                        block,
                     )
                 })
             })
@@ -459,8 +459,8 @@ impl EthRpcApi for EthDualRpcClient {
         dual_call_rpc!(self, block, block_number)
     }
 
-    async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
-        dual_call_rpc!(self, block_with_txs, block_number)
+    async fn block_with_txs(&self, block: BlockId) -> Result<Block<Transaction>> {
+        dual_call_rpc!(self, block_with_txs, block)
     }
 
     async fn fee_history(
@@ -515,7 +515,7 @@ pub mod mocks {
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
-            async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
+            async fn block_with_txs(&self, block: BlockId) -> Result<Block<Transaction>>;
 
             async fn fee_history(
                 &self,
