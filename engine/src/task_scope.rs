@@ -30,6 +30,63 @@ is that this is not currently possible in all cases (and it doesn't really matte
 look into AsyncDrop (https://rust-lang.github.io/async-fundamentals-initiative/roadmap/async_drop.html).
 
 For the public functions in this module, if they are used incorrectly the code will not compile.
+
+Usage:
+
+`scope.spawn()` should be used instead of `tokio::spawn()`.
+
+`scope.spawn_blocking()` (To be added) should be used instead of `tokio::spawn_blocking()` unless you are running an operation that is
+guaranteed to exit after a finite period, and you are awaiting on the JoinHandle immediately after spawning. This exception is
+made as in this case the task_scope system offers no advantage, and may make the code more complex as you need to pass around a scope.
+TODO: Possibly introduce a function to express this exception.
+
+Where `scope.spawn_blocking` is used to run a long running operation it is that if the rest of the non-spawn-blocking tasks are cancelled
+and unwind (i.e. dropping everything), that the long running operation is guaranteed to terminate. For example:
+
+{
+    let (sender, receiver) = std::sync::mpsc::channel(10);
+
+    scope.spawn(async move {
+        loop {
+            sender.send("HELLO WORLD").unwrap();
+            tokio::sleep(Duration::from_secs(1)).await;
+        }
+    });
+
+    scope.spawn_blocking(|| {
+        loop {
+            let message = receiver.recv().unwrap();
+            println!("{}", message);
+        }
+    });
+
+    scope.spawn(async move {
+        tokio::sleep(Duration::from_secs(100)).await;
+        panic!();
+        // When this panics the other `spawn()` at the top will be cancelled and unwind, which will cause
+        // the channel sender to be dropped, so when the spawn_blocking tries to `recv()` it will panic at
+        // the `unwrap()` with this: https://doc.rust-lang.org/std/sync/mpsc/struct.RecvError.html
+
+        // Of course you may wish to make the spawn_blocking in this case return an error instead of panicking, or possibly
+        // `return Ok(())`.
+    });
+}
+
+If you don't do the above when an error occurs the scope will not ever exit, and will wait for the spawn_blocking to exit
+forever i.e. if the spawn_blocking was like this instead:
+
+{
+    scope.spawn_blocking(|| {
+        loop {
+            match receiver.recv() {
+                Ok(message) => println!("{}", message),
+                Err(_) => {} // We ignore the error and so the spawn_blocking will never exit of course
+            };
+        }
+    });
+
+}
+
 */
 
 /// Allows a parent closure/future to spawn child tasks, such that if the parent or child fail, they
