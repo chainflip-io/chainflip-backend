@@ -75,20 +75,22 @@ pub async fn log_transactions<EthRpc>(
 where
     EthRpc: EthRpcApi,
 {
-    let block = eth_rpc.block(block_number).await?;
-    for tx_hash in &block.transactions {
-        let tx = eth_rpc.transaction_receipt(*tx_hash).await?;
+    let block = eth_rpc.block_with_txs(block_number).await?;
+    for tx in &block.transactions {
         if let Some(tx_to) = tx.to {
-            participants.iter().for_each(|tx_participants| {
-                if tx.from == tx_participants.from && tx_to == tx_participants.to {
-                    slog::info!(
-                        &logger,
-                        "Observed transaction from {:?} to {:?}",
-                        tx_participants.from,
-                        tx_participants.to
-                    );
-                }
-            });
+            if let Some(tx_from) = tx.from {
+                participants.iter().for_each(|tx_participants| {
+                    if tx_from == tx_participants.from && tx_to == tx_participants.to {
+                        slog::info!(
+                            &logger,
+                            "Observed transaction of {:?} ETH from {:?} to {:?}",
+                            tx.value,
+                            tx_participants.from,
+                            tx_participants.to
+                        );
+                    }
+                });
+            }
         }
     }
     Ok(())
