@@ -64,14 +64,9 @@ mod utils_tests {
     }
 }
 
-pub struct TransactionParticipants {
-    pub from: Address,
-    pub to: Address,
-}
-
 pub async fn log_transactions<EthRpc>(
     block_number: U64,
-    participants: &[TransactionParticipants],
+    monitored_addresses: &[Address],
     eth_rpc: &EthRpc,
     logger: &slog::Logger,
 ) -> Result<()>
@@ -81,19 +76,16 @@ where
     let block = eth_rpc.block_with_txs(block_number).await?;
     for tx in &block.transactions {
         if let Some(tx_to) = tx.to {
-            if let Some(tx_from) = tx.from {
-                participants.iter().for_each(|tx_participants| {
-                    if tx_from == tx_participants.from && tx_to == tx_participants.to {
-                        slog::info!(
-                            &logger,
-                            "Observed transaction of {:?} ETH from {:?} to {:?}",
-                            (tx.value.as_u128() as f64) / (ETH_TO_WEI_FACTOR as f64),
-                            tx_participants.from,
-                            tx_participants.to
-                        );
-                    }
-                });
-            }
+            monitored_addresses.iter().for_each(|address| {
+                if tx_to == *address {
+                    slog::info!(
+                        &logger,
+                        "Observed transaction of {:?} ETH to {:?}",
+                        (tx.value.as_u128() as f64) / (ETH_TO_WEI_FACTOR as f64),
+                        address
+                    );
+                }
+            });
         }
     }
     Ok(())
