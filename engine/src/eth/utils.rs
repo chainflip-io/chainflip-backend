@@ -1,4 +1,4 @@
-use crate::eth::EventParseError;
+use crate::eth::{rpc::EthRpcApi, EventParseError};
 use anyhow::Result;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
@@ -7,8 +7,6 @@ use web3::{
     ethabi::Log,
     types::{Address, U64},
 };
-
-use super::rpc::EthRpcApi;
 
 /// Helper method to decode the parameters from an ETH log
 pub fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
