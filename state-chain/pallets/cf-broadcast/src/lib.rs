@@ -758,7 +758,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// We will abort the broadcast once all authorities have attempt to sign the transaction
 	fn schedule_retry(failed_broadcast_attempt: BroadcastAttempt<T, I>) {
 		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count <
-			T::EpochInfo::current_authority_count()
+			// -1 to exclude the first node
+			(T::EpochInfo::current_authority_count() - 1)
 		{
 			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
 			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(

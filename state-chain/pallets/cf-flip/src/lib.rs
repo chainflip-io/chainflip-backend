@@ -24,7 +24,7 @@ pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
 	ensure,
-	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
+	traits::{Get, HandleLifetime, Hooks, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -123,12 +123,21 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Some imbalance could not be settled and the remainder will be reverted. /[reverted_to,
-		/// amount/]
-		RemainingImbalance(ImbalanceSource<T::AccountId>, T::Balance),
+		/// Some imbalance could not be settled and the remainder will be reverted.
+		RemainingImbalance {
+			who: ImbalanceSource<T::AccountId>,
+			remaining_imbalance: T::Balance,
+		},
 
-		/// Slashing has been performed. /[account_id, amount/]
-		SlashingPerformed(T::AccountId, T::Balance),
+		SlashingPerformed {
+			who: T::AccountId,
+			amount: T::Balance,
+		},
+
+		AccountReaped {
+			who: T::AccountId,
+			dust_burned: T::Balance,
+		},
 	}
 
 	#[pallet::error]
@@ -141,6 +150,31 @@ pub mod pallet {
 		InvalidSlashingRate,
 		/// No pending claim for this ID.
 		NoPendingClaimForThisID,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Reap any accounts that are below `T::ExistentialDeposit`, and burn the dust.
+		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let max_accounts_to_reap = remaining_weight
+				.checked_div(T::WeightInfo::reap_one_account())
+				.unwrap_or_default();
+			if max_accounts_to_reap == 0 {
+				return 0
+			}
+
+			let mut number_of_accounts_reaped = 0u64;
+			Account::<T>::iter()
+				.filter(|(_account_id, flip_account)| {
+					flip_account.total() < T::ExistentialDeposit::get()
+				})
+				.take(max_accounts_to_reap as usize)
+				.for_each(|(account_id, _flip_account)| {
+					let _reap_result = frame_system::Provider::<T>::killed(&account_id);
+					number_of_accounts_reaped += 1u64;
+				});
+			number_of_accounts_reaped.saturating_mul(T::WeightInfo::reap_one_account())
+		}
 	}
 
 	#[pallet::call]
@@ -220,7 +254,7 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 		self.stake.saturating_sub(self.bond)
 	}
 
-	// The current bond
+	/// The current bond
 	pub fn bond(&self) -> Balance {
 		self.bond
 	}
@@ -259,9 +293,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Slashable funds for an account.
 	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
-		Account::<T>::get(account_id)
-			.total()
-			.saturating_sub(T::ExistentialDeposit::get())
+		Account::<T>::get(account_id).total()
 	}
 
 	/// Debits an account's staked balance.
@@ -281,7 +313,16 @@ impl<T: Config> Pallet<T> {
 	/// available, otherwise returns `None`. Unlike [debit](Self::debit), does not create the
 	/// account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
-		Surplus::try_from_acct(account_id, amount)
+		Surplus::try_from_acct(account_id, amount, false)
+	}
+
+	/// Like `try_debit` but debits only the accounts liquid balance. Ensures that we don't burn
+	/// more than the available liquidity of the account and never touch the bonded balance.
+	pub fn try_debit_from_liquid_funds(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+	) -> Option<Surplus<T>> {
+		Surplus::try_from_acct(account_id, amount, true)
 	}
 
 	/// Credits an account with some staked funds. If the amount provided would result in overflow,
@@ -330,7 +371,10 @@ impl<T: Config> Pallet<T> {
 				SignedImbalance::Positive(surplus) => (surplus.source.clone(), surplus.peek()),
 				SignedImbalance::Negative(deficit) => (deficit.source.clone(), deficit.peek()),
 			};
-			Self::deposit_event(Event::<T>::RemainingImbalance(source, remainder));
+			Self::deposit_event(Event::<T>::RemainingImbalance {
+				who: source,
+				remaining_imbalance: remainder,
+			});
 		}
 	}
 
@@ -421,7 +465,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 		account_id: &Self::AccountId,
 		amount: Self::Amount,
 	) -> sp_runtime::DispatchResult {
-		if let Some(surplus) = Pallet::<T>::try_debit(account_id, amount) {
+		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
 			let _ = surplus.offset(Pallet::<T>::burn(amount));
 			Ok(())
 		} else {
@@ -469,10 +513,6 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 	type Handler = T::StakeHandler;
-
-	fn locked_balance(account_id: &T::AccountId) -> Self::Balance {
-		Account::<T>::get(account_id).bond()
-	}
 
 	fn staked_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
@@ -526,6 +566,10 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 		let dust = Pallet::<T>::total_balance_of(account_id);
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
 		Account::<T>::remove(account_id);
+		Pallet::<T>::deposit_event(Event::AccountReaped {
+			who: account_id.clone(),
+			dust_burned: dust,
+		});
 	}
 }
 
@@ -554,6 +598,9 @@ where
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
-		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed(account_id.clone(), total_burn));
+		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
+			who: account_id.clone(),
+			amount: total_burn,
+		});
 	}
 }

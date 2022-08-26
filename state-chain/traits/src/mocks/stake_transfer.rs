@@ -49,9 +49,6 @@ macro_rules! impl_mock_stake_transfer {
 			type Balance = $balance;
 			type Handler = MockStakeHandler;
 
-			fn locked_balance(account_id: &Self::AccountId) -> Self::Balance {
-				Self::get_balance(account_id.clone())
-			}
 			fn staked_balance(account_id: &Self::AccountId) -> Self::Balance {
 				Self::get_balance(account_id.clone())
 			}

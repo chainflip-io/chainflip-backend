@@ -245,9 +245,6 @@ pub trait StakeTransfer {
 	type Balance;
 	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
-	/// The amount of locked tokens in the current epoch - aka the bond
-	fn locked_balance(account_id: &Self::AccountId) -> Self::Balance;
-
 	/// An account's tokens that are free to be staked.
 	fn staked_balance(account_id: &Self::AccountId) -> Self::Balance;
 

@@ -11,8 +11,6 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use runtime_apis::BackupOrPassive;
 
-#[cfg(test)]
-mod tests;
 use crate::{
 	chainflip::Offence,
 	runtime_apis::{

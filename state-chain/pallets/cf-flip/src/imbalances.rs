@@ -85,16 +85,23 @@ impl<T: Config> Surplus<T> {
 	}
 
 	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has
-	/// insufficient funds.
-	pub(super) fn try_from_acct(account_id: &T::AccountId, amount: T::Balance) -> Option<Self> {
+	/// insufficient funds. Also ensures that we only touch funds from the bonded balance if
+	/// `check_liquidity` is `false`.
+	pub(super) fn try_from_acct(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+		check_liquidity: bool,
+	) -> Option<Self> {
 		Flip::Account::<T>::try_mutate_exists(account_id, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {
-				if account.stake < amount {
-					Err(())
-				} else {
-					account.stake = account.stake.saturating_sub(amount);
-					Ok(Self::new(amount, ImbalanceSource::acct(account_id.clone())))
+				if check_liquidity && account.liquid() < amount {
+					return Err(())
 				}
+				if account.stake < amount {
+					return Err(())
+				}
+				account.stake = account.stake.saturating_sub(amount);
+				Ok(Self::new(amount, ImbalanceSource::from_acct(account_id.clone())))
 			} else {
 				Err(())
 			}

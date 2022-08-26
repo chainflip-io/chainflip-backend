@@ -169,9 +169,7 @@ workflows:
             - git-clone-docgen-repo
           context:
             - ghcr-credentials
-            - do-credentials
             - infura-endpoints
-            - aws-credentials
       - docgen-store-artifacts:
           requires:
             - test-single-node
@@ -354,11 +352,6 @@ jobs:
             - chainflip-docgen/*
 
   test-single-node:
-    parameters:
-      cluster_name:
-        description: Name of the cluster to authenticate to
-        type: string
-        default: cluster-staging
     executor: chainflip-master
     steps:
       - checkout
@@ -368,10 +361,9 @@ jobs:
           name: Setup config
           command: |
             mkdir config
-            sops -d Default.enc.toml > config/Default.toml
             echo -n $BASHFUL_SIGNING_KEY > signing_key_file
-            echo -n $ETH_PRIVATE_KEY > private_key_file
-            echo -n $NODE_KEY_FILE > node_key_file
+            echo -n $ETH_PRIVATE_KEY > eth_private_key_file
+            echo -n $NODE_KEY > node_key_file
       - run:
           name: Start Node
           background: true
@@ -393,7 +385,7 @@ jobs:
       - run:
           name: Start Engine
           background: true
-          command: ./target/release/chainflip-engine
+          command: ./target/release/chainflip-engine --config-path engine/config/CI.toml
       - run:
           name: Check Engine Health
           command: >

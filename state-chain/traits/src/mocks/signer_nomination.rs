@@ -1,41 +1,58 @@
-#[macro_export]
-macro_rules! impl_mock_signer_nomination {
-	($account_id:ty) => {
-		thread_local! {
-			pub static CANDIDATES: std::cell::RefCell<Vec<$account_id>> = Default::default();
-		}
+use crate::{EpochIndex, EpochInfo, SignerNomination};
 
-		use cf_traits::EpochIndex;
+thread_local! {
+	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<Vec<u64>>> = Default::default();
+	pub static LAST_NOMINATED_INDEX: std::cell::RefCell<Option<usize>> = Default::default();
+}
 
-		pub struct MockSignerNomination;
+pub struct MockNominator;
 
-		impl MockSignerNomination {
-			pub fn set_candidates(candidates: Vec<$account_id>) {
-				CANDIDATES.with(|cell| *(cell.borrow_mut()) = candidates)
-			}
-		}
+impl SignerNomination for MockNominator {
+	type SignerId = u64;
 
-		impl cf_traits::SignerNomination for MockSignerNomination {
-			type SignerId = $account_id;
+	fn nomination_with_seed<S>(
+		_seed: S,
+		_exclude_ids: &[Self::SignerId],
+	) -> Option<Self::SignerId> {
+		let next_nomination_index = LAST_NOMINATED_INDEX.with(|cell| {
+			let mut last_nomination = cell.borrow_mut();
+			let next_nomination_index =
+				if let Some(last_nomination) = *last_nomination { last_nomination + 1 } else { 0 };
+			*last_nomination = Some(next_nomination_index);
+			next_nomination_index
+		});
 
-			fn nomination_with_seed<H: frame_support::Hashable>(
-				_seed: H,
-			) -> Option<Self::SignerId> {
-				CANDIDATES.with(|cell| cell.borrow().iter().next().cloned())
-			}
+		Self::get_nominees().unwrap().get(next_nomination_index).copied()
+	}
 
-			fn threshold_nomination_with_seed<H: frame_support::Hashable>(
-				_seed: H,
-				_epoch_index: EpochIndex,
-			) -> Option<Vec<Self::SignerId>> {
-				Some(CANDIDATES.with(|cell| cell.borrow().clone())).and_then(|v| {
-					if v.is_empty() {
-						None
-					} else {
-						Some(v)
-					}
-				})
-			}
-		}
-	};
+	fn threshold_nomination_with_seed<S>(
+		_seed: S,
+		_epoch_index: EpochIndex,
+	) -> Option<Vec<Self::SignerId>> {
+		Self::get_nominees()
+	}
+}
+
+// Remove some threadlocal + refcell complexity from test code
+impl MockNominator {
+	pub fn get_nominees() -> Option<Vec<u64>> {
+		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
+	}
+
+	pub fn set_nominees(nominees: Option<Vec<u64>>) {
+		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees);
+	}
+
+	pub fn get_last_nominee() -> Option<u64> {
+		Self::get_nominees()
+			.unwrap()
+			.get(LAST_NOMINATED_INDEX.with(|cell| cell.borrow().expect("No one nominated yet")))
+			.copied()
+	}
+
+	pub fn use_current_authorities_as_nominees<
+		E: EpochInfo<ValidatorId = <Self as SignerNomination>::SignerId>,
+	>() {
+		Self::set_nominees(Some(E::current_authorities()));
+	}
 }

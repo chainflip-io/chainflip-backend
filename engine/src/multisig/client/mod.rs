@@ -1,10 +1,10 @@
 #[macro_use]
 mod utils;
+mod ceremony_runner;
 mod common;
 pub mod key_store;
 pub mod keygen;
 pub mod signing;
-mod state_runner;
 
 #[cfg(test)]
 mod tests;
