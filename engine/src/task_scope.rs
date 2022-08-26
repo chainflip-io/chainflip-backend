@@ -137,7 +137,7 @@ async unsafe fn inner_with_task_scope<
             // child_task_result_stream has ended meaning scope has been dropped and all children have finished running
             Ok(())
         },
-        // This async scope ensures scope is dropped when c and its returned future finish (Instead of when this function exits)
+        // This async scope ensures scope is dropped when parent_task and its returned future finish (Instead of when this function exits)
         async move {
             parent_task(&scope).await
         }
