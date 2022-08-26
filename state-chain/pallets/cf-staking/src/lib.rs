@@ -168,7 +168,8 @@ pub mod pallet {
 			account_id: AccountId<T>,
 			tx_hash: EthTransactionHash,
 			stake_added: FlipBalance<T>,
-			total_staked: FlipBalance<T>,
+			// may include rewards earned
+			total_stake: FlipBalance<T>,
 		},
 
 		/// A node has claimed their FLIP on the Ethereum chain. \[account_id,
@@ -260,12 +261,12 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
-				let total_staked = Self::stake_account(&account_id, amount);
+				let total_stake = Self::stake_account(&account_id, amount);
 				Self::deposit_event(Event::Staked {
 					account_id,
 					tx_hash,
 					stake_added: amount,
-					total_staked,
+					total_stake,
 				});
 			}
 			Ok(().into())

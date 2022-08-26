@@ -82,20 +82,20 @@ fn staked_amount_is_added_and_subtracted() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE_A1,
-				total_staked: STAKE_A1
+				total_stake: STAKE_A1
 			}),
 			Event::Staking(crate::Event::Staked {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE_A2,
-				total_staked: STAKE_A1 + STAKE_A2
+				total_stake: STAKE_A1 + STAKE_A2
 			}),
 			Event::System(frame_system::Event::NewAccount { account: BOB }),
 			Event::Staking(crate::Event::Staked {
 				account_id: BOB,
 				tx_hash: TX_HASH,
 				stake_added: STAKE_B,
-				total_staked: STAKE_B
+				total_stake: STAKE_B
 			})
 		);
 	});
@@ -141,7 +141,7 @@ fn claiming_unclaimable_is_err() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			})
 		);
 	});
@@ -253,7 +253,7 @@ fn staked_and_claimed_events_must_match() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			}),
 			Event::System(frame_system::Event::KilledAccount { account: ALICE }),
 			Event::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
@@ -308,7 +308,7 @@ fn signature_is_inserted() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			}),
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
@@ -426,7 +426,7 @@ fn test_retirement() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			}),
 			Event::Staking(crate::Event::AccountActivated(ALICE))
 		);
@@ -487,14 +487,14 @@ fn claim_expiry() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			}),
 			Event::System(frame_system::Event::NewAccount { account: BOB }),
 			Event::Staking(crate::Event::Staked {
 				account_id: BOB,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			}),
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
@@ -564,7 +564,7 @@ fn test_claim_all() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			})
 		);
 	});
@@ -659,7 +659,7 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
-				total_staked: STAKE
+				total_stake: STAKE
 			}),
 			Event::Staking(crate::Event::FailedStakeAttempt(ALICE, ETH_DUMMY_ADDR, STAKE))
 		);
