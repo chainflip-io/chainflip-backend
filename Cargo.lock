@@ -1391,6 +1391,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "create2"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e77400797683577a98863496c945600573f30a738651ee5cc047234f9a4cc821"
+dependencies = [
+ "hex",
+ "sha3 0.8.2",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5375,6 +5385,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-traits",
+ "create2",
  "frame-benchmarking 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
  "frame-support 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
  "frame-system 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
@@ -8196,6 +8207,19 @@ dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
  "digest 0.10.3",
+]
+
+[[package]]
+name = "sha3"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd26bc0e7a2e3a7c959bc494caf58b72ee0c71d67704e9520f736ca7e4853ecf"
+dependencies = [
+ "block-buffer 0.7.3",
+ "byte-tools",
+ "digest 0.8.1",
+ "keccak",
+ "opaque-debug 0.2.3",
 ]
 
 [[package]]

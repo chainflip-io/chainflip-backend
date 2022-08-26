@@ -1,5 +1,6 @@
 use cf_chains::eth;
 use codec::{Decode, Encode};
+use create2::calc_addr;
 use frame_support::{pallet_prelude::*, sp_runtime::traits::BlockNumberProvider};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -99,10 +100,17 @@ pub mod pallet {
 				block: frame_system::Pallet::<T>::current_block_number(),
 				index: next_index,
 			};
+
+			// Generate a hash over the payload
 			let tx_hash = H256(Blake2_256::hash(swap_data.encode().as_slice()));
-			let ingress_address = Self::derive_ingress_address(swap_data.clone());
-			let swap_intent = SwapIntent { swap_data, ingress_address, tx_hash };
-			SwapIntents::<T>::insert(tx_hash, swap_intent);
+
+			// Derive the ingress address based on the from part of the trait tuple
+			let ingress_address = match swap_data.trade.0 {
+				ETH =>
+					ChainAddress::ETH(calc_addr(&[0; 20], tx_hash.as_fixed_bytes(), &[0; 1]).into()),
+			};
+
+			SwapIntents::<T>::insert(tx_hash, SwapIntent { swap_data, ingress_address, tx_hash });
 			IndexCounter::<T>::put(next_index);
 			Self::deposit_event(Event::<T>::NewSwapIntent(ingress_address, tx_hash));
 			Ok(().into())
@@ -113,14 +121,6 @@ pub mod pallet {
 			Relayers::<T>::append(relayer.clone());
 			Self::deposit_event(Event::<T>::NewRelayer(relayer));
 			Ok(().into())
-		}
-	}
-
-	impl<T: Config> Pallet<T> {
-		fn derive_ingress_address(swap_intent: SwapData<T>) -> ChainAddress {
-			match swap_intent.trade.0 {
-				ETH => ChainAddress::ETH(eth::Address::default()),
-			}
 		}
 	}
 }
