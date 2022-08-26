@@ -2,7 +2,7 @@ use crate::{EpochIndex, EpochInfo, SignerNomination};
 
 thread_local! {
 	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<Vec<u64>>> = Default::default();
-	pub static LAST_NOMINATED_INDEX: std::cell::RefCell<usize> = Default::default();
+	pub static LAST_NOMINATED_INDEX: std::cell::RefCell<Option<usize>> = Default::default();
 }
 
 pub struct MockNominator;
@@ -14,10 +14,15 @@ impl SignerNomination for MockNominator {
 		_seed: S,
 		_exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId> {
-		Self::get_nominees()
-			.unwrap()
-			.get(LAST_NOMINATED_INDEX.with(|cell| *cell.borrow()))
-			.copied()
+		let next_nomination_index = LAST_NOMINATED_INDEX.with(|cell| {
+			let mut last_nomination = cell.borrow_mut();
+			let next_nomination_index =
+				if let Some(last_nomination) = *last_nomination { last_nomination + 1 } else { 0 };
+			*last_nomination = Some(next_nomination_index);
+			next_nomination_index
+		});
+
+		Self::get_nominees().unwrap().get(next_nomination_index).copied()
 	}
 
 	fn threshold_nomination_with_seed<S>(
@@ -38,17 +43,16 @@ impl MockNominator {
 		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees);
 	}
 
+	pub fn get_last_nominee() -> Option<u64> {
+		Self::get_nominees()
+			.unwrap()
+			.get(LAST_NOMINATED_INDEX.with(|cell| cell.borrow().expect("No one nominated yet")))
+			.copied()
+	}
+
 	pub fn use_current_authorities_as_nominees<
 		E: EpochInfo<ValidatorId = <Self as SignerNomination>::SignerId>,
 	>() {
 		Self::set_nominees(Some(E::current_authorities()));
-	}
-
-	/// Increments nominee, if it's a Some
-	pub fn increment_nominee() {
-		LAST_NOMINATED_INDEX.with(|cell| {
-			let mut nomination = cell.borrow_mut();
-			*nomination += 1;
-		});
 	}
 }

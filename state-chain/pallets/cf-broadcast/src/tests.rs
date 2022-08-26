@@ -17,7 +17,7 @@ use cf_traits::{
 		epoch_info::MockEpochInfo, signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
-	AsyncResult, EpochInfo, SignerNomination, ThresholdSigner,
+	AsyncResult, EpochInfo, ThresholdSigner,
 };
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
@@ -58,13 +58,12 @@ impl MockCfe {
 					nominee,
 					unsigned_tx,
 				) => {
-					if let Scenario::Timeout = scenario {}
 					match scenario {
 						Scenario::SigningFailure => {
 							// only nominee can return the signed tx
 							assert_eq!(
 								nominee,
-								MockNominator::nomination_with_seed((), &[]).unwrap(),
+								MockNominator::get_last_nominee().unwrap(),
 								"CFE using wrong nomination"
 							);
 							assert_noop!(
@@ -83,10 +82,11 @@ impl MockCfe {
 							// Ignore the request.
 						},
 						_ => {
-							// Only the nominee can return the signed tx.
+							// only nominee can return the signed tx
 							assert_eq!(
 								nominee,
-								MockNominator::nomination_with_seed((), &[]).unwrap()
+								MockNominator::get_last_nominee().unwrap(),
+								"CFE using wrong nomination"
 							);
 							assert_noop!(
 								MockBroadcast::transaction_ready_for_transmission(
@@ -216,10 +216,6 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
 
-			// make the nomination unique, so we can test that all the authorities
-			// and so we can test all the failed authorities reported
-			MockNominator::increment_nominee();
-
 			// retry should kick off at end of block if sufficient block space is free.
 			MockBroadcast::on_idle(0, LARGE_EXCESS_WEIGHT);
 			MockBroadcast::on_initialize(0);
@@ -252,14 +248,18 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
+
+		MockCfe::respond(Scenario::SigningFailure);
+
 		let broadcast_attempt_id_2 = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
 
-		// respond failure to both
 		MockCfe::respond(Scenario::SigningFailure);
+
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
 
 		let start_next_broadcast_weight: Weight =
 			<() as WeightInfo>::start_next_broadcast_attempt();
@@ -360,7 +360,7 @@ fn test_bad_signature() {
 		MockOffenceReporter::assert_reported(
 			PalletOffence::InvalidTransactionAuthored,
 			// get the nominee that was used in the broadcast call
-			vec![MockNominator::nomination_with_seed((), &[]).unwrap()],
+			vec![MockNominator::get_last_nominee().unwrap()],
 		);
 	})
 }
