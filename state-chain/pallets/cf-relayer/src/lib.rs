@@ -7,6 +7,12 @@ pub use pallet::*;
 use sp_core::H256;
 use sp_std::ops::Add;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum Chain {
 	ETH,
