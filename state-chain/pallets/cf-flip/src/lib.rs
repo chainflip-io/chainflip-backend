@@ -246,7 +246,7 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 		self.stake.saturating_sub(self.bond)
 	}
 
-	// The current bond
+	/// The current bond
 	pub fn bond(&self) -> Balance {
 		self.bond
 	}
@@ -305,7 +305,16 @@ impl<T: Config> Pallet<T> {
 	/// available, otherwise returns `None`. Unlike [debit](Self::debit), does not create the
 	/// account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
-		Surplus::try_from_acct(account_id, amount)
+		Surplus::try_from_acct(account_id, amount, false)
+	}
+
+	/// Like `try_debit` but debits only the accounts liquid balance. Ensures that we don't burn
+	/// more than the available liquidity of the account and never touch the bonded balance.
+	pub fn try_debit_from_liquid_funds(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+	) -> Option<Surplus<T>> {
+		Surplus::try_from_acct(account_id, amount, true)
 	}
 
 	/// Credits an account with some staked funds. If the amount provided would result in overflow,
@@ -435,7 +444,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 		account_id: &Self::AccountId,
 		amount: Self::Amount,
 	) -> sp_runtime::DispatchResult {
-		if let Some(surplus) = Pallet::<T>::try_debit(account_id, amount) {
+		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
 			let _ = surplus.offset(Pallet::<T>::burn(amount));
 			Ok(())
 		} else {
