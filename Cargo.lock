@@ -5373,6 +5373,7 @@ dependencies = [
 name = "pallet-cf-relayer"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
  "frame-support 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",

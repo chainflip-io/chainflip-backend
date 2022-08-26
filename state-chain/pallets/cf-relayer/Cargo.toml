@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Internal dependencies
 cf-traits = { path = '../../traits', default-features = false }
+cf-chains = {path = '../../chains', default-features = false}
 
 # Parity deps
 [dependencies.codec]
@@ -44,6 +45,11 @@ git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
 [dependencies.sp-std]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
+
+[dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
