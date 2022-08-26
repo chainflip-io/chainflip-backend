@@ -80,6 +80,9 @@
 //!
 //! }
 //! ```
+//!
+//! We should not ever use `tokio::runtime::Runtime::block_on` to avoid this [issue](https://github.com/tokio-rs/tokio/issues/4862). Also it is
+//! possible for this task_scope to provide the same functionality without causing that bug to occur (TODO).
 
 use std::{
     pin::Pin,
