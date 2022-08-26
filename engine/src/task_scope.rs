@@ -67,7 +67,7 @@
 //! If you don't do the above when an error occurs the scope will not ever exit, and will wait for the spawn_blocking to exit
 //! forever i.e. if the spawn_blocking was like this instead:
 //!
-//! ```
+//! ```rust
 //! {
 //!     scope.spawn_blocking(|| {
 //!         loop {
