@@ -101,7 +101,7 @@ impl<T: Config> Surplus<T> {
 					return Err(())
 				}
 				account.stake = account.stake.saturating_sub(amount);
-				Ok(Self::new(amount, ImbalanceSource::from_acct(account_id.clone())))
+				Ok(Self::new(amount, ImbalanceSource::acct(account_id.clone())))
 			} else {
 				Err(())
 			}
