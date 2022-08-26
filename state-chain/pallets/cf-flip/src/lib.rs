@@ -504,9 +504,9 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	}
 
 	fn finalize_claim(account_id: &T::AccountId) {
-		Self::try_withdraw_pending_claim(account_id)
-			.unwrap()
-			.offset(Self::bridge_out(PendingClaimsReserve::<T>::get(account_id).unwrap()));
+		let imbalance = Self::try_withdraw_pending_claim(account_id).unwrap();
+		let amount = imbalance.peek();
+		imbalance.offset(Self::bridge_out(amount));
 		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 	}
 

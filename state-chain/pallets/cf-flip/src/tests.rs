@@ -271,6 +271,7 @@ impl FlipOperation {
 					expected_claimable_balance,
 					<Flip as StakeTransfer>::claimable_balance(account_id)
 				);
+				<Flip as StakeTransfer>::finalize_claim(account_id);
 				if !MockStakeHandler::has_stake_updated(account_id) {
 					return false
 				}
