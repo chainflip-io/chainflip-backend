@@ -18,8 +18,8 @@ use scale_info::TypeInfo;
 
 use cf_chains::{Chain, ChainCrypto};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	KeyProvider, RetryPolicy, SignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, CeremonyIdProvider, Chainflip,
+	EpochInfo, KeyProvider, RetryPolicy, SignerNomination,
 };
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -47,7 +47,7 @@ pub type CeremonyId = u64;
 pub type RequestId = u32;
 
 /// The type used for counting signing attempts.
-type AttemptCount = u32;
+type AttemptCount = AuthorityCount;
 
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
