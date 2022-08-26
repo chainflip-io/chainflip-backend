@@ -8,13 +8,12 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
-use cf_traits::AuthorityCount;
+use cf_traits::{AuthorityCount, CeremonyId};
 use futures::{stream, Future, StreamExt};
 use itertools::{Either, Itertools};
 
 use rand_legacy::{FromEntropy, RngCore, SeedableRng};
 
-use pallet_cf_vaults::CeremonyId;
 use slog::Logger;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};

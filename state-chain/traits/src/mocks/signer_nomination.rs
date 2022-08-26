@@ -25,6 +25,13 @@ impl SignerNomination for MockNominator {
 		Self::get_nominees().unwrap().get(next_nomination_index).copied()
 	}
 
+	fn nomination_from_participant_set<H: frame_support::Hashable>(
+		_seed: H,
+		participants: Vec<Self::SignerId>,
+	) -> Vec<Self::SignerId> {
+		participants
+	}
+
 	fn threshold_nomination_with_seed<S>(
 		_seed: S,
 		_epoch_index: EpochIndex,

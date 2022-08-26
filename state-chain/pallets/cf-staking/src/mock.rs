@@ -2,7 +2,7 @@ use crate as pallet_cf_staking;
 use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
 use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	AuthorityCount, ThresholdSigner, WaivedFees,
+	AuthorityCount, CeremonyId, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
@@ -179,7 +179,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 		_participants: Vec<Self::ValidatorId>,
 		_payload: <Ethereum as ChainCrypto>::Payload,
 		_retry_policy: cf_traits::RetryPolicy,
-	) -> Self::RequestId {
+	) -> (Self::RequestId, CeremonyId) {
 		unimplemented!()
 	}
 }

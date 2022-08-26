@@ -19,7 +19,8 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		system_state_info::MockSystemStateInfo,
+		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
+		threshold_signer::MockThresholdSigner,
 	},
 	Chainflip,
 };
@@ -200,7 +201,11 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
+	type Call = Call;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
+	type SignerNomination = MockNominator;
 	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;

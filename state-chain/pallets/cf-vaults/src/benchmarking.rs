@@ -39,16 +39,6 @@ fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
 	AggKeyFor::<T, I>::decode(&mut &encoded[..]).unwrap()
 }
 
-fn payload_from_slice<T: Config<I>, I: 'static>(payload: &[u8]) -> PayloadFor<T, I> {
-	let encoded = payload.encode();
-	PayloadFor::<T, I>::decode(&mut &encoded[..]).unwrap()
-}
-
-fn threshold_sig_from_slice<T: Config<I>, I: 'static>(sig: &[u8]) -> ThresholdSignatureFor<T, I> {
-	let encoded = sig.encode();
-	ThresholdSignatureFor::<T, I>::decode(&mut &encoded[..]).unwrap()
-}
-
 // ======================================================================================
 
 benchmarks_instance_pallet! {
@@ -57,17 +47,18 @@ benchmarks_instance_pallet! {
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
+		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
 		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.clone().into());
-		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates.clone());
+		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
-		for validator_id in candidates {
-			let _result = keygen_response_status.add_failure_vote(&validator_id, blamed.clone());
+		for validator_id in &keygen_participants {
+			let _result = keygen_response_status.add_failure_vote(validator_id, blamed.clone());
 		}
 
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
+				keygen_participants: keygen_participants.into_iter().collect(),
 				response_status: keygen_response_status
 			},
 		);
@@ -84,12 +75,12 @@ benchmarks_instance_pallet! {
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let candidates: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
-		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(candidates.clone());
+		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
+		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
-		for validator_id in candidates {
+		for validator_id in &keygen_participants {
 			let _result = keygen_response_status.add_success_vote(
-				&validator_id,
+				validator_id,
 				aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..])
 			);
 		}
@@ -97,6 +88,7 @@ benchmarks_instance_pallet! {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
+				keygen_participants: keygen_participants.into_iter().collect(),
 				response_status: keygen_response_status
 			},
 		);
@@ -112,20 +104,22 @@ benchmarks_instance_pallet! {
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
 
+		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
-				response_status: KeygenResponseStatus::<T, I>::new(generate_authority_set::<T, I>(150, caller.clone().into()))
+				keygen_participants: keygen_participants.clone().into_iter().collect(),
+				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants)
 			},
 		);
-		use cf_chains::eth::sig_constants::{AGG_KEY_PUB, MSG_HASH, SIG};
+		use cf_chains::eth::sig_constants::{AGG_KEY_PUB, SIG};
 		let bad_sig_byte = (SIG[SIG.len() - 1] + 1) % u8::MAX;
 		let bad_sig = [SIG[..SIG.len() - 1].to_vec(), vec![bad_sig_byte]].concat();
 
 		// Submit a key that doesn't verify the signature. This is approximately the same cost as success at time of writing.
 		// But is much easier to write, and we might add slashing, which would increase the cost of the failure. Making this test the more
 		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
-	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Ok((aggkey_from_slice::<T, I>(&AGG_KEY_PUB), payload_from_slice::<T, I>(&MSG_HASH), threshold_sig_from_slice::<T, I>(&bad_sig))))
+	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Ok(aggkey_from_slice::<T, I>(&AGG_KEY_PUB)))
 	verify {
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),

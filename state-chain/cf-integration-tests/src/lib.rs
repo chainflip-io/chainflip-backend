@@ -317,13 +317,14 @@ mod epoch {
 					RotationPhase::VaultsRotating(..)
 				));
 
-				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 10);
+
+				println!("Moved forward some vault rotation blocks");
 
 				assert_eq!(
 					GENESIS_EPOCH + 1,
 					Validator::epoch_index(),
-					"We should be in the next epoch. {:?}",
-					Staking::get_bidders()
+					"We should be in the next epoch."
 				);
 
 				assert_eq!(

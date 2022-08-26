@@ -3,7 +3,6 @@ use crate::{
 	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
 	VaultRotationStatus, Vaults,
 };
-use cf_chains::mocks::MockThresholdSignature;
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
@@ -29,13 +28,6 @@ fn current_ceremony_id() -> CeremonyId {
 
 const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
 
-/// A Threshold signature that will verify against the Mock verifier
-const MOCK_THRESHOLD_SIG: MockThresholdSignature<[u8; 4], [u8; 4]> =
-	MockThresholdSignature::<[u8; 4], [u8; 4]> {
-		signing_key: NEW_AGG_PUB_KEY,
-		signed_payload: [0; 4],
-	};
-
 #[test]
 #[should_panic]
 fn start_vault_rotation_panics_with_no_candidates() {
@@ -53,7 +45,6 @@ fn keygen_request_emitted() {
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
-		// Check the event emitted
 		assert_eq!(
 			last_event::<MockRuntime>(),
 			PalletEvent::<MockRuntime, _>::KeygenRequest(
@@ -75,12 +66,12 @@ fn start_vault_rotation_panics_if_called_while_vault_rotation_in_progress() {
 }
 
 #[test]
-fn keygen_success() {
+fn keygen_success_triggers_keygen_verification() {
 	new_test_ext().execute_with(|| {
 		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
 
-		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
+		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, ALL_CANDIDATES.to_vec());
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
@@ -98,13 +89,13 @@ fn keygen_failure() {
 
 		let ceremony_id = current_ceremony_id();
 
-		// The ceremony failed.
-		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES);
+		VaultsPallet::terminate_keygen_procedure(
+			BAD_CANDIDATES,
+			PalletEvent::KeygenFailure(ceremony_id),
+		);
 
-		// KeygenAborted event emitted.
 		assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
-		// Outcome is ready.
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Ready(Err(BAD_CANDIDATES.to_vec()))
@@ -121,11 +112,7 @@ fn keygen_failure() {
 fn no_active_rotation() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			VaultsPallet::report_keygen_outcome(
-				Origin::signed(ALICE),
-				1,
-				Ok((NEW_AGG_PUB_KEY, Default::default(), Default::default()))
-			),
+			VaultsPallet::report_keygen_outcome(Origin::signed(ALICE), 1, Ok(NEW_AGG_PUB_KEY)),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
@@ -149,7 +136,7 @@ fn cannot_report_keygen_success_twice() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Can't report twice.
@@ -157,7 +144,7 @@ fn cannot_report_keygen_success_twice() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -177,7 +164,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Can't report failure after reporting success
@@ -205,7 +192,7 @@ fn only_participants_can_report_keygen_outcome() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Only participants can respond.
@@ -215,7 +202,7 @@ fn only_participants_can_report_keygen_outcome() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(non_participant),
 				ceremony_id,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -235,7 +222,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Ceremony id in the past (not the pending one we're waiting for)
@@ -243,7 +230,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id - 1,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -257,7 +244,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id + 1,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -279,7 +266,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		assert_eq!(
@@ -298,7 +285,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// A resolution is still pending - we require 100% response rate.
@@ -318,7 +305,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// This time we should have enough votes for consensus.
@@ -327,9 +314,10 @@ fn keygen_report_success() {
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
-		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id, response_status } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id, response_status, keygen_participants } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
 			assert_eq!(keygen_ceremony_id, ceremony_id);
 			assert_eq!(response_status.success_votes.get(&NEW_AGG_PUB_KEY).expect("new key should have votes"), &3);
+			assert_eq!(keygen_participants, ALL_CANDIDATES.to_vec());
 		} else {
 			panic!("Expected to be in AwaitingKeygen state");
 		}
@@ -367,21 +355,21 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Charlie responds success but with an invalid sig, so the vote should fail.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, Default::default(), Default::default()))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		assert!(FailureVoters::<MockRuntime, _>::get().contains(&CHARLIE));
@@ -541,7 +529,11 @@ fn vault_key_rotated() {
 
 		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
 		let ceremony_id = current_ceremony_id();
-		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
+		VaultsPallet::trigger_keygen_verification(
+			ceremony_id,
+			NEW_AGG_PUB_KEY,
+			ALL_CANDIDATES.to_vec(),
+		);
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
