@@ -29,7 +29,7 @@
 //! made as in this case the task_scope system offers no advantage, and may make the code more complex as you need to pass around a scope.
 //! TODO: Possibly introduce a function to express this exception.
 //! 
-//! Where `scope.spawn_blocking()` is used for a long running operations the developer must ensure that if the rest of the non-spawn-blocking tasks are cancelled
+//! Where `scope.spawn_blocking()` is used for long running operations the developer must ensure that if the rest of the non-spawn-blocking tasks are cancelled
 //! and unwind (i.e. dropping everything), that the long running operation is guaranteed to terminate. For example:
 //! 
 //! ```rust
