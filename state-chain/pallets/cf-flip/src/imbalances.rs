@@ -417,7 +417,9 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 					InternalSource::PendingClaim(account_id) => {
 						// This means we took funds from a pending claim but didn't put them
 						// anywhere. Add the funds back to the account again.
-						Flip::PendingClaimsReserve::<T>::insert(account_id, self.amount);
+						if self.amount != 0_u128.into() {
+							Flip::PendingClaimsReserve::<T>::insert(account_id, self.amount);
+						}
 					},
 				}
 			},
@@ -458,7 +460,9 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 					InternalSource::PendingClaim(account_id) => {
 						// This means we added funds to a pending claim without specifying a source.
 						// Deduct them again.
-						Flip::PendingClaimsReserve::<T>::remove(account_id);
+						if self.amount != 0_u128.into() {
+							Flip::PendingClaimsReserve::<T>::remove(account_id);
+						}
 					},
 				}
 			},

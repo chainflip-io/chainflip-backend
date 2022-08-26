@@ -64,7 +64,8 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
-			+ Debug;
+			+ Debug
+			+ From<u128>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
