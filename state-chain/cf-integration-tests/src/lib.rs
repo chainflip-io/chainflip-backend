@@ -2,6 +2,8 @@
 
 mod network;
 
+mod signer_nomination;
+
 mod mock_runtime;
 
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
