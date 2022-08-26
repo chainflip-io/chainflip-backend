@@ -1,4 +1,4 @@
-use crate::{EpochIndex, SignerNomination};
+use crate::{EpochIndex, EpochInfo, SignerNomination};
 
 thread_local! {
 	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<Vec<u64>>> = Default::default();
@@ -38,9 +38,10 @@ impl MockNominator {
 		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees);
 	}
 
-	pub fn set_nominees_by_count(authority_count: u32) {
-		let authorities = (0..=(authority_count as u64)).into_iter().collect();
-		Self::set_nominees(Some(authorities));
+	pub fn use_current_authorities_as_nominees<
+		E: EpochInfo<ValidatorId = <Self as SignerNomination>::SignerId>,
+	>() {
+		Self::set_nominees(Some(E::current_authorities()));
 	}
 
 	/// Increments nominee, if it's a Some

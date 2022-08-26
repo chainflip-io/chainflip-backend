@@ -166,7 +166,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 #[test]
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -204,10 +204,7 @@ fn test_broadcast_happy_path() {
 #[test]
 fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
-		let authority_count = MockEpochInfo::current_authority_count();
-		MockNominator::set_nominees_by_count(authority_count);
-
-		let starting_nomination = MockNominator::nomination_with_seed((), &[]).unwrap();
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 
 		let mut broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
@@ -215,7 +212,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			MockApiCall::default(),
 		);
 
-		for _ in 0..=authority_count {
+		for _ in 0..MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
 			MockCfe::respond(Scenario::SigningFailure);
 
@@ -235,10 +232,11 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			Event::MockBroadcast(crate::Event::BroadcastAborted(1))
 		);
 
+		// all the authorities have attempted to sign, and all have failed
+		// therefore all are reported
 		MockOffenceReporter::assert_reported(
 			PalletOffence::FailedToSignTransaction,
-			(starting_nomination..=(starting_nomination + (MAXIMUM_BROADCAST_ATTEMPTS as u64)))
-				.collect::<Vec<_>>(),
+			MockEpochInfo::current_authorities(),
 		);
 
 		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
@@ -248,7 +246,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 #[test]
 fn on_idle_caps_broadcasts_when_not_enough_weight() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -285,7 +283,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 #[test]
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -328,7 +326,7 @@ fn test_transaction_signing_failed() {
 #[test]
 fn test_bad_signature() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -408,7 +406,7 @@ fn test_invalid_sigdata_is_noop() {
 #[test]
 fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_attempt_id_is_noop() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -584,7 +582,7 @@ fn cfe_responds_signature_success_already_expired_transaction_sig_broadcast_atte
 #[test]
 fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -639,7 +637,7 @@ fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister()
 #[test]
 fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -697,7 +695,7 @@ fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 #[test]
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -765,7 +763,7 @@ fn test_signature_request_expiry() {
 #[test]
 fn test_transmission_request_expiry() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
@@ -825,7 +823,7 @@ fn test_transmission_request_expiry() {
 #[test]
 fn re_request_threshold_signature() {
 	new_test_ext().execute_with(|| {
-		MockNominator::set_nominees_by_count(MockEpochInfo::current_authority_count());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = MockBroadcast::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
