@@ -17,24 +17,29 @@ pub enum ChainAddress {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub struct SwapData {
+#[scale_info(skip_type_params(T))]
+#[codec(mel_bound(T: Config))]
+pub struct SwapData<T: Config> {
 	trade: (Chain, Chain),
 	payout_address: ChainAddress,
+	fee: u32,
+	block: T::BlockNumber,
+	index: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[scale_info(skip_type_params(T))]
 #[codec(mel_bound(T: Config))]
 pub struct SwapIntent<T: Config> {
-	swap_data: SwapData,
-	fee: u32,
+	swap_data: SwapData<T>,
 	tx_hash: H256,
-	block: T::BlockNumber,
-	index: u64,
+	ingress_address: ChainAddress,
 }
 
 #[frame_support::pallet]
 pub mod pallet {
+	use frame_support::StorageHasher;
+
 	use super::*;
 	use crate::Chain::ETH;
 
@@ -80,20 +85,26 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn request_swap_intent(
 			origin: OriginFor<T>,
-			swap_data: SwapData,
+			trade: (Chain, Chain),
+			payout_address: ChainAddress,
+			fee: u32,
 		) -> DispatchResultWithPostInfo {
 			let relayer = ensure_signed(origin)?;
 			ensure!(Relayers::<T>::get().contains(&relayer), Error::<T>::CallerIsNoRelayer);
 			let next_index = IndexCounter::<T>::get().add(1);
-			let swap_intent = SwapIntent {
-				swap_data,
-				fee: 1,
-				tx_hash: H256::default(),
+			let swap_data = SwapData {
+				trade,
+				payout_address,
+				fee,
 				block: frame_system::Pallet::<T>::current_block_number(),
 				index: next_index,
 			};
-			let ingress_address = Self::derive_ingress_address(swap_intent.clone());
-			Self::deposit_event(Event::<T>::NewSwapIntent(ingress_address, swap_intent.tx_hash));
+			let tx_hash = H256(Blake2_256::hash(swap_data.encode().as_slice()));
+			let ingress_address = Self::derive_ingress_address(swap_data.clone());
+			let swap_intent = SwapIntent { swap_data, ingress_address, tx_hash };
+			SwapIntents::<T>::insert(tx_hash, swap_intent);
+			IndexCounter::<T>::put(next_index);
+			Self::deposit_event(Event::<T>::NewSwapIntent(ingress_address, tx_hash));
 			Ok(().into())
 		}
 		#[pallet::weight(10_000)]
@@ -106,8 +117,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn derive_ingress_address(swap_intent: SwapIntent<T>) -> ChainAddress {
-			match swap_intent.swap_data.trade.0 {
+		fn derive_ingress_address(swap_intent: SwapData<T>) -> ChainAddress {
+			match swap_intent.trade.0 {
 				ETH => ChainAddress::ETH(eth::Address::default()),
 			}
 		}
