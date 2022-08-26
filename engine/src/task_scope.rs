@@ -11,11 +11,13 @@ use tokio::{
 };
 
 /*
-The idea here is very similiar to the thread_scope feature in the std library: https://doc.rust-lang.org/1.63.0/std/thread/fn.scope.html
+# Task Scope
+
+The idea here is very similiar to the [thread_scope](https://doc.rust-lang.org/1.63.0/std/thread/fn.scope.html) feature in the std library.
 The important differences being it:
     - is designed to work with futures
-    - propagates errors returned by tasks (instead of only panics): https://doc.rust-lang.org/1.63.0/std/thread/fn.scope.html#panics
-    - when tasks panic or return errors, this will cause all other still running tasks to be cancelled: https://blog.yoshuawuyts.com/async-cancellation-1/
+    - propagates errors returned by tasks ([instead of only panics](https://doc.rust-lang.org/1.63.0/std/thread/fn.scope.html#panics))
+    - when tasks panic or return errors, this will cause all other still running tasks to be [cancelled](https://blog.yoshuawuyts.com/async-cancellation-1/)
 
 A scope is designed to allow you to spawn asynchronous tasks, wait for all those tasks to finished, and handle errors/panics caused by those tasks.
 
@@ -27,11 +29,11 @@ in this case the scope will not wait for all tasks to complete).
 
 The reason "with_task_scope" does not wait for all tasks to complete in the error/panic case,
 is that this is not currently possible in all cases (and it doesn't really matter) given the way futures work. For more information
-look into AsyncDrop (https://rust-lang.github.io/async-fundamentals-initiative/roadmap/async_drop.html).
+look into [AsyncDrop](https://rust-lang.github.io/async-fundamentals-initiative/roadmap/async_drop.html).
 
 For the public functions in this module, if they are used incorrectly the code will not compile.
 
-Usage:
+# Usage
 
 `scope.spawn()` should be used instead of `tokio::spawn()`.
 
@@ -40,9 +42,10 @@ guaranteed to exit after a finite period, and you are awaiting on the JoinHandle
 made as in this case the task_scope system offers no advantage, and may make the code more complex as you need to pass around a scope.
 TODO: Possibly introduce a function to express this exception.
 
-Where `scope.spawn_blocking` is used to run a long running operation it is that if the rest of the non-spawn-blocking tasks are cancelled
+Where `scope.spawn_blocking()` is used for a long running operations the developer must ensure that if the rest of the non-spawn-blocking tasks are cancelled
 and unwind (i.e. dropping everything), that the long running operation is guaranteed to terminate. For example:
 
+```rust
 {
     let (sender, receiver) = std::sync::mpsc::channel(10);
 
@@ -71,10 +74,12 @@ and unwind (i.e. dropping everything), that the long running operation is guaran
         // `return Ok(())`.
     });
 }
+```
 
 If you don't do the above when an error occurs the scope will not ever exit, and will wait for the spawn_blocking to exit
 forever i.e. if the spawn_blocking was like this instead:
 
+```
 {
     scope.spawn_blocking(|| {
         loop {
@@ -86,7 +91,7 @@ forever i.e. if the spawn_blocking was like this instead:
     });
 
 }
-
+```
 */
 
 /// Allows a parent closure/future to spawn child tasks, such that if the parent or child fail, they
