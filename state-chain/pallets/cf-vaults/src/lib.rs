@@ -174,7 +174,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen {
 		keygen_ceremony_id: CeremonyId,
-		keygen_participants: Vec<T::ValidatorId>,
+		keygen_participants: BTreeSet<T::ValidatorId>,
 		response_status: KeygenResponseStatus<T, I>,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
@@ -383,7 +383,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Request a key generation \[ceremony_id, participants\]
-		KeygenRequest(CeremonyId, Vec<T::ValidatorId>),
+		KeygenRequest(CeremonyId, BTreeSet<T::ValidatorId>),
 		/// The vault for the request has rotated
 		VaultRotationCompleted,
 		/// The Keygen ceremony has been aborted \[ceremony_id\]
@@ -738,7 +738,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn trigger_keygen_verification(
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
-		participants: Vec<T::ValidatorId>,
+		participants: BTreeSet<T::ValidatorId>,
 	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
 		let byte_key: Vec<u8> = new_public_key.into();
 		let (request_id, signing_ceremony_id) = T::ThresholdSigner::request_signature_with(
@@ -784,9 +784,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
 	/// # Panics
-	/// - If an empty Vec of candidates is provided
+	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>) {
+	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
 		assert_ne!(Self::get_vault_rotation_outcome(), AsyncResult::Pending);
