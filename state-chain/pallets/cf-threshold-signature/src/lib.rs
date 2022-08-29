@@ -18,8 +18,8 @@ use scale_info::TypeInfo;
 
 use cf_chains::ChainCrypto;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, CeremonyId, CeremonyIdProvider, Chainflip,
-	EpochInfo, KeyProvider, RetryPolicy, SignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, CeremonyId,
+	CeremonyIdProvider, Chainflip, EpochInfo, KeyProvider, RetryPolicy, SignerNomination,
 };
 use frame_support::{
 	dispatch::UnfilteredDispatchable,

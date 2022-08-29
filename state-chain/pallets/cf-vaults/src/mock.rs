@@ -13,7 +13,7 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto, eth};
+use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
@@ -60,9 +60,6 @@ pub enum SystemState {
 // TODO: Unify with staking pallet mock
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
 	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
-
-	
-
 
 // do not know how to solve this mock
 pub struct MockSystemStateManager;
