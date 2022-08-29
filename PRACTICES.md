@@ -2,7 +2,7 @@
 
 The rust development team as a whole has identified problems in our development process. This document is intended to help us avoid these problems.
 
-The core of the problems we identified are frequent disagreements, regarding both code and development operations, that do not conclude or result in agreement. This lead to frustration among the development team which caused a lack of dialog between developers, distrust among the team members, and developers wasting significant time disagreeing without making progressing on problems. Regularly issues or pull requests would be paralzed due to an extended heated discussion about a detail which did not result in agreement. Instead everyone ended up being entrenched and so discussion stopped as it felt no progress towards a conclusion or agreement could be made.
+The core of the problems we identified are frequent disagreements, regarding both code and development operations, that do not conclude or result in agreement. This lead to frustration among the development team which caused a lack of dialog between developers, distrust among the team members, and developers wasting significant time disagreeing without making progressing on problems. Regularly issues or pull requests would be paralysed due to an extended heated discussion about a detail which did not result in agreement. Instead everyone ended up being entrenched and so discussion stopped as it felt no progress towards a conclusion or agreement could be made.
 
 This document and the practices within serve to resolve these problems by:
 - Making our practices highly visible
