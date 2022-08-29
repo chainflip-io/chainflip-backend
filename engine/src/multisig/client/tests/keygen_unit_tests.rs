@@ -215,9 +215,8 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 #[tokio::test]
 async fn should_report_on_invalid_blame_response6() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
-    let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
-        &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
-    );
+    let party_idx_mapping =
+        PartyIdxMapping::from_participants(BTreeSet::from_iter(ceremony.nodes.keys().cloned()));
     let [bad_node_id_1, bad_node_id_2, target_node_id] = ceremony.select_account_ids();
 
     let messages = ceremony.request().await;
@@ -573,9 +572,8 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
 async fn should_report_on_inconsistent_broadcast_blame_responses6() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let party_idx_mapping = PartyIdxMapping::from_unsorted_signers(
-        &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
-    );
+    let party_idx_mapping =
+        PartyIdxMapping::from_participants(BTreeSet::from_iter(ceremony.nodes.keys().cloned()));
 
     let messages = ceremony.request().await;
 
@@ -1209,13 +1207,14 @@ async fn genesis_keys_can_sign() {
     use crate::multisig::crypto::eth::Point;
     use crate::multisig::tests::fixtures::MESSAGE_HASH;
 
-    let account_ids: Vec<_> = [1, 2, 3, 4]
+    let account_ids: BTreeSet<_> = [1, 2, 3, 4]
         .iter()
         .map(|i| AccountId::new([*i; 32]))
         .collect();
 
     let rng = Rng::from_entropy();
-    let (key_id, key_data) = generate_key_data_until_compatible::<Point>(&account_ids, 20, rng);
+    let (key_id, key_data) =
+        generate_key_data_until_compatible::<Point>(account_ids.clone(), 20, rng);
 
     let (mut signing_ceremony, _non_signing_nodes) =
         SigningCeremonyRunner::new_with_threshold_subset_of_signers(

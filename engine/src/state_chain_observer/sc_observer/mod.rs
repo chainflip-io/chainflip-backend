@@ -30,7 +30,7 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
     multisig_client: Arc<MultisigClient>,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ceremony_id: CeremonyId,
-    keygen_participants: Vec<AccountId32>,
+    keygen_participants: BTreeSet<AccountId32>,
     logger: slog::Logger,
 ) where
     MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
@@ -78,7 +78,7 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ceremony_id: CeremonyId,
     key_id: KeyId,
-    signers: Vec<AccountId>,
+    signers: BTreeSet<AccountId>,
     data: MessageHash,
     logger: slog::Logger,
 ) where
