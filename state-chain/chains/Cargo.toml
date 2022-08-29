@@ -18,7 +18,8 @@ rlp = {default-features = false, version = '0.5'}
 
 # Other
 hex = {default-features = false, version = '0.4'}
-hex-literal = {optional = true, version = '0.3'}
+hex-literal = '0.3.1'
+# hex-literal = {default-features = false, version = '0.3', optional = true}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 log = { version = '0.4.16', default-features = false }
 
@@ -55,7 +56,6 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06'
 
-
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
 hex-literal = {version = '0.3'}
@@ -81,6 +81,5 @@ std = [
 runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'hex-literal',
 ]
 runtime-integration-tests = []
