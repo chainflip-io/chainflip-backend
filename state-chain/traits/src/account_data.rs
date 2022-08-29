@@ -83,7 +83,10 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	>(
 		account_id: &T::AccountId,
 		f: F,
-	) -> Result<R, DispatchError> {
+		// Note this `try_mutate_exists` is *not* analogous to the storage method with the same
+		// name. Notably, the `Account` storage in `frame_system` is *Value* storage, so if the
+		// returned value is equal to the default value, it will be coerced to `None` before being
+		// passed into the closure!
 		frame_system::Pallet::<T>::try_mutate_exists(account_id, |maybe_account_data| {
 			maybe_account_data
 				.as_mut()
