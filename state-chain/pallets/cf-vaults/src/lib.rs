@@ -10,7 +10,7 @@ use cf_traits::{
 	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RetryPolicy, SignerNomination,
 	SystemStateManager, ThresholdSigner, VaultRotator,
 };
-use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
+use frame_support::pallet_prelude::*;
 use frame_system::{ensure_signed, pallet_prelude::*};
 pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
