@@ -123,22 +123,17 @@ impl Default for ThresholdSigner {
 impl ThresholdSigner {
 	pub fn sign_with_key(
 		&self,
-		key_id: &Vec<u8>,
+		key_id: &[u8],
 		message: &cf_chains::eth::H256,
 	) -> SchnorrVerificationComponents {
-		let curr_key_id = self.key_components.agg_key.to_pubkey_compressed().to_vec();
-		if key_id == &curr_key_id {
+		let curr_key_id = self.key_components.agg_key.to_pubkey_compressed();
+		if key_id == curr_key_id {
 			println!("Signing with current key");
 			return self.key_components.sign(message)
 		}
-		let next_key_id = self
-			.proposed_key_components
-			.as_ref()
-			.unwrap()
-			.agg_key
-			.to_pubkey_compressed()
-			.to_vec();
-		if key_id == &next_key_id {
+		let next_key_id =
+			self.proposed_key_components.as_ref().unwrap().agg_key.to_pubkey_compressed();
+		if key_id == next_key_id {
 			println!("Signing with proposed key");
 			self.proposed_key_components.as_ref().unwrap().sign(message)
 		} else {
@@ -246,7 +241,7 @@ impl Engine {
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 							ceremony_id,
 							key_id,
-							ref signers,
+							_signers,
 							payload)) => {
 
 						// if we unwrap on this, we'll panic, because we will have already succeeded

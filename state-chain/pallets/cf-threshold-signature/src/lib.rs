@@ -100,6 +100,9 @@ pub mod pallet {
 		pub _phantom: PhantomData<I>,
 	}
 
+	pub type SignatureResultFor<T, I> =
+		Result<SignatureFor<T, I>, Vec<<T as Chainflip>::ValidatorId>>;
+
 	impl<T: Config<I>, I: 'static> CeremonyContext<T, I> {
 		/// Based on the reported blame_counts, decide which nodes should be reported for failure.
 		///
@@ -240,13 +243,8 @@ pub mod pallet {
 	/// Generated signatures.
 	#[pallet::storage]
 	#[pallet::getter(fn signatures)]
-	pub type Signatures<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		RequestId,
-		AsyncResult<Result<SignatureFor<T, I>, Vec<T::ValidatorId>>>,
-		ValueQuery,
-	>;
+	pub type Signatures<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, RequestId, AsyncResult<SignatureResultFor<T, I>>, ValueQuery>;
 
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.
@@ -725,12 +723,7 @@ where
 
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> cf_traits::AsyncResult<
-		Result<
-			<T::TargetChain as ChainCrypto>::ThresholdSignature,
-			Vec<<T as Chainflip>::ValidatorId>,
-		>,
-	> {
+	) -> cf_traits::AsyncResult<SignatureResultFor<T, I>> {
 		Signatures::<T, I>::take(request_id)
 	}
 
