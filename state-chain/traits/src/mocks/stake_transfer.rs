@@ -30,54 +30,5 @@ macro_rules! impl_mock_stake_transfer {
 				});
 			}
 		}
-
-		pub struct MockStakeTransfer;
-
-		impl MockStakeTransfer {
-			pub fn get_balance(account_id: $account_id) -> $balance {
-				BALANCES.with(|cell| {
-					cell.borrow()
-						.get(&account_id)
-						.map(ToOwned::to_owned)
-						.unwrap_or_default()
-				})
-			}
-		}
-
-		impl cf_traits::StakeTransfer for MockStakeTransfer {
-			type AccountId = $account_id;
-			type Balance = $balance;
-			type Handler = MockStakeHandler;
-
-			fn staked_balance(account_id: &Self::AccountId) -> Self::Balance {
-				Self::get_balance(account_id.clone())
-			}
-			fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance {
-				Self::get_balance(account_id.clone())
-			}
-			fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
-				BALANCES.with(|cell| *cell.borrow_mut().entry(account_id.clone()).or_default() += amount);
-				Self::get_balance(account_id.clone())
-			}
-			fn try_initiate_claim(
-				account_id: &Self::AccountId,
-				amount: Self::Balance,
-			) -> Result<(), sp_runtime::DispatchError> {
-				BALANCES.with(|cell| {
-					cell.borrow_mut()
-						.entry(account_id.clone())
-						.or_default()
-						.checked_sub(amount)
-						.map(|_| ())
-						.ok_or("Overflow".into())
-				})
-			}
-			fn finalize_claim(_account_id: &Self::AccountId) {
-				unimplemented!()
-			}
-			fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
-				Self::credit_stake(account_id, amount);
-			}
-		}
 	};
 }
