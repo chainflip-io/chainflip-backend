@@ -4,6 +4,8 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+// pub mod ingress_address;
+
 use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{

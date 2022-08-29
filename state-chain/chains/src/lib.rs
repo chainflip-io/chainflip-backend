@@ -15,6 +15,7 @@ use sp_std::{
 	prelude::*,
 };
 
+pub mod assets;
 pub mod benchmarking_value;
 
 pub mod eth;
@@ -120,6 +121,18 @@ where
 
 	/// Refresh any time-sensitive data e.g. gas price.
 	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
+}
+
+/// TODO: Add a nice doc comment here
+pub trait IngressAddress {
+	type AddressType;
+	/// Returns an ingress address
+	fn derive_address(self, vault_key: Self::AddressType, intent_id: u32) -> Self::AddressType;
+}
+
+pub trait VaultAddressProvider {
+	type AddressType;
+	fn get_vault_key_address() -> Self::AddressType;
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
