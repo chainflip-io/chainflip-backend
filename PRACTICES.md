@@ -28,7 +28,7 @@ When documenting a practice you should write a clear explanation with a justific
 
 # Application
 
-It is expected we "commit and disagree" with the contents of this document. If you feel a particular practice should be changed, you should still follow the practice until the team agrees to a change.
+It is expected we "disagree and commit" with the contents of this document. If you feel a particular practice should be changed, you should still follow the practice until the team agrees to a change.
 
 These practices should be used to help resolve disagreements. If that is not possible, the disagreement should be escalated so it can be resolved. If possible the conclusion should be recorded in this document either by removing, adding, or changing practices.
 
