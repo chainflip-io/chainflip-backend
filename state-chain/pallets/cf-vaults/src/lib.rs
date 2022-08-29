@@ -83,32 +83,22 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		utilities::success_threshold_from_share_count(self.candidate_count)
 	}
 
-	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) -> DispatchResult {
+	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) {
 		*self.success_votes.entry(key).or_default() += 1;
 
 		SuccessVoters::<T, I>::append(key, voter);
-
-		Ok(())
 	}
 
-	fn add_failure_vote(
-		&mut self,
-		voter: &T::ValidatorId,
-		blamed: BTreeSet<T::ValidatorId>,
-	) -> DispatchResult {
+	fn add_failure_vote(&mut self, voter: &T::ValidatorId, blamed: BTreeSet<T::ValidatorId>) {
 		for id in blamed {
 			*self.blame_votes.entry(id).or_default() += 1
 		}
 
 		FailureVoters::<T, I>::append(voter);
-
-		Ok(())
 	}
 
-	fn add_incompatible_vote(&mut self, voter: &T::ValidatorId) -> DispatchResult {
+	fn add_incompatible_vote(&mut self, voter: &T::ValidatorId) {
 		IncompatibleVoters::<T, I>::append(voter);
-
-		Ok(())
 	}
 
 	/// How many candidates are we still awaiting a response from?
@@ -507,15 +497,15 @@ pub mod pallet {
 
 			match reported_outcome {
 				Ok(key) => {
-					keygen_status.add_success_vote(&reporter, key)?;
+					keygen_status.add_success_vote(&reporter, key);
 					Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
 				},
 				Err(KeygenError::Incompatible) => {
-					keygen_status.add_incompatible_vote(&reporter)?;
+					keygen_status.add_incompatible_vote(&reporter);
 					Self::deposit_event(Event::<T, I>::KeygenIncompatibleReported(reporter));
 				},
 				Err(KeygenError::Failure(blamed)) => {
-					keygen_status.add_failure_vote(&reporter, blamed)?;
+					keygen_status.add_failure_vote(&reporter, blamed);
 					Self::deposit_event(Event::<T, I>::KeygenFailureReported(reporter));
 				},
 			}

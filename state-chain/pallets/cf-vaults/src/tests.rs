@@ -547,13 +547,6 @@ mod keygen_reporting {
 	use frame_support::assert_err;
 	use sp_std::collections::btree_set::BTreeSet;
 
-	macro_rules! assert_ok_no_repeat {
-		($ex:expr) => {{
-			assert_ok!($ex);
-			assert_err!($ex, Error::<MockRuntime, _>::InvalidRespondent);
-		}};
-	}
-
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
 			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
@@ -680,13 +673,15 @@ mod keygen_reporting {
 		for (index, outcome) in outcomes.iter().enumerate() {
 			let id = 1 + index as u64;
 			match outcome {
-				ReportedOutcome::Success =>
-					assert_ok_no_repeat!(status.add_success_vote(&id, NEW_AGG_PUB_KEY)),
-				ReportedOutcome::BadKey =>
-					assert_ok_no_repeat!(status.add_success_vote(&id, *b"bad!")),
-				ReportedOutcome::Failure => assert_ok_no_repeat!(
-					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)))
-				),
+				ReportedOutcome::Success => {
+					status.add_success_vote(&id, NEW_AGG_PUB_KEY);
+				},
+				ReportedOutcome::BadKey => {
+					status.add_success_vote(&id, *b"bad!");
+				},
+				ReportedOutcome::Failure => {
+					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)));
+				},
 				ReportedOutcome::Timeout => {},
 			}
 		}
