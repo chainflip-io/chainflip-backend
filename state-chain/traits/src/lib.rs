@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
+pub mod liquidity;
 pub mod mocks;
 pub mod offence_reporting;
 
