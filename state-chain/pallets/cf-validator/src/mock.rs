@@ -245,7 +245,6 @@ impl Config for Test {
 	type ValidatorWeightInfo = ();
 	type Auctioneer = MockAuctioneer;
 	type VaultRotator = MockVaultRotator;
-	type ChainflipAccount = ChainflipAccountStore<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
@@ -286,21 +285,21 @@ macro_rules! assert_invariants {
 		assert!(
 			ValidatorPallet::current_authorities()
 				.iter()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_authority()),
+				.all(|id| ChainflipAccountStore::<Test>::get(id).account_type.is_authority()),
 			"All authorities should have their account state set accordingly. Got: {:?}",
 			ValidatorPallet::current_authorities()
 				.iter()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
+				.map(|id| (id, ChainflipAccountStore::<Test>::get(id).account_type))
 				.collect::<Vec<_>>(),
 		);
 		assert!(
 			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_backup()),
+				.all(|id| ChainflipAccountStore::<Test>::get(id).account_type.is_backup()),
 			"All backup nodes should have their account state set accordingly. Got: {:?}",
 			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
+				.map(|id| (id, ChainflipAccountStore::<Test>::get(id).account_type))
 				.collect::<Vec<_>>(),
 		);
 	};

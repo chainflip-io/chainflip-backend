@@ -17,10 +17,12 @@ mod benchmarking;
 mod rotation_state;
 
 use cf_traits::{
-	account_data::ValidatorAccount, offence_reporting::OffenceReporter, AsyncResult, Auctioneer,
-	AuthorityCount, Bid, BidderProvider, Bonding, Chainflip, EmergencyRotation, EpochIndex,
-	EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots,
-	QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo, VaultRotator,
+	account_data::{ChainflipAccountStore, ValidatorAccount},
+	offence_reporting::OffenceReporter,
+	AsyncResult, Auctioneer, AuthorityCount, Bid, BidderProvider, Bonding, Chainflip,
+	EmergencyRotation, EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
+	SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -144,9 +146,6 @@ pub mod pallet {
 
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
-
-		/// For looking up Chainflip Account data.
-		type ChainflipAccount: ValidatorAccount<AccountId = Self::AccountId>;
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -796,7 +795,7 @@ pub mod pallet {
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 			for id in &self.genesis_authorities {
-				T::ChainflipAccount::set_current_authority(id.into_ref());
+				ChainflipAccountStore::<T>::set_current_authority(id.into_ref());
 			}
 
 			Pallet::<T>::initialise_new_epoch(
@@ -922,7 +921,7 @@ impl<T: Config> Pallet<T> {
 			.filter(|authority| !new_authorities_lookup.contains(authority))
 		{
 			log::trace!(target: "cf-validator", "Setting old authority {:?} to historical.", historical_authority);
-			T::ChainflipAccount::set_historical_authority(historical_authority.into_ref());
+			ChainflipAccountStore::<T>::set_historical_authority(historical_authority.into_ref());
 		}
 
 		for incoming_authority in new_authorities_lookup
@@ -930,7 +929,7 @@ impl<T: Config> Pallet<T> {
 			.filter(|authority| !old_authorities_lookup.contains(authority))
 		{
 			log::trace!(target: "cf-validator", "Setting new authority {:?} to current authority.", incoming_authority);
-			T::ChainflipAccount::set_current_authority(incoming_authority.into_ref());
+			ChainflipAccountStore::<T>::set_current_authority(incoming_authority.into_ref());
 		}
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
@@ -962,7 +961,7 @@ impl<T: Config> Pallet<T> {
 			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
-				T::ChainflipAccount::from_historical_to_backup(authority.into_ref());
+				ChainflipAccountStore::<T>::from_historical_to_backup(authority.into_ref());
 				T::ReputationResetter::reset_reputation(authority);
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
