@@ -64,20 +64,10 @@ where
 mod test {
 	use super::*;
 	use codec::{Decode, Encode};
-	use frame_support::{storage_alias, traits::StorageInstance};
-
-	struct Pallet;
-
-	impl StorageInstance for Pallet {
-		fn pallet_prefix() -> &'static str {
-			Self::STORAGE_PREFIX
-		}
-
-		const STORAGE_PREFIX: &'static str = "Test";
-	}
+	use frame_support::storage_alias;
 
 	#[storage_alias]
-	type Store = StorageValue<Pallet, MyEnumType>;
+	type Store = StorageValue<Test, MyEnumType>;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 	enum MyEnumType {
@@ -101,19 +91,10 @@ mod test {
 mod test_derive {
 	use super::*;
 	use codec::{Decode, Encode};
-	use frame_support::{storage_alias, traits::StorageInstance, Twox64Concat};
+	use frame_support::{storage_alias, Twox64Concat};
 
-	struct Pallet;
-
-	impl StorageInstance for Pallet {
-		fn pallet_prefix() -> &'static str {
-			Self::STORAGE_PREFIX
-		}
-
-		const STORAGE_PREFIX: &'static str = "Test";
-	}
 	#[storage_alias]
-	type ValueStore = StorageValue<Pallet, MyEnumType>;
+	type ValueStore = StorageValue<Test, MyEnumType>;
 
 	trait Config {
 		type Inner: FullCodec;
