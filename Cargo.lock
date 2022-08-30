@@ -9922,7 +9922,6 @@ dependencies = [
  "anyhow",
  "futures 0.3.21",
  "hex",
- "jsonrpsee",
  "mockall",
  "predicates",
  "tokio",
