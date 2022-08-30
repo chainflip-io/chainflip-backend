@@ -45,14 +45,12 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 
 mod genesis {
 	use sp_std::collections::btree_set::BTreeSet;
+	use state_chain_runtime::ValidatorAccount;
 
 	use crate::mock_runtime::ExtBuilder;
 
 	use super::*;
-	use cf_traits::{
-		account_data::{ChainflipAccountStore, ValidatorAccount, ValidatorAccountState},
-		EpochInfo, QualifyNode, StakeTransfer,
-	};
+	use cf_traits::{account_data::ChainflipAccountStore, EpochInfo, QualifyNode, StakeTransfer};
 	pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 	pub fn default() -> ExtBuilder {
@@ -141,9 +139,9 @@ mod genesis {
 			}
 
 			for account in accounts.iter() {
-				let account_data = ChainflipAccountStore::<Runtime>::get(account);
-				// TODO: Check historical epochs
-				assert_eq!(ValidatorAccountState::CurrentAuthority, account_data.state);
+				assert!(ChainflipAccountStore::<Runtime>::try_get_validator_state(account)
+					.expect("Account type should be validator.")
+					.is_authority());
 			}
 		});
 	}
@@ -343,7 +341,8 @@ mod epoch {
 					// TODO: Check historical epochs
 					assert_eq!(
 						ValidatorAccountState::Backup,
-						ChainflipAccountStore::<Runtime>::get(account).state,
+						ChainflipAccountStore::<Runtime>::try_get_validator_state(account)
+							.expect("Account should be validator account."),
 						"should be a backup node"
 					);
 				}
@@ -352,7 +351,8 @@ mod epoch {
 					// TODO: Check historical epochs
 					assert_eq!(
 						ValidatorAccountState::CurrentAuthority,
-						ChainflipAccountStore::<Runtime>::get(account).state,
+						ChainflipAccountStore::<Runtime>::try_get_validator_state(account)
+							.expect("Account should be validator account."),
 						"should be CurrentAuthority"
 					);
 				}
@@ -370,7 +370,8 @@ mod epoch {
 
 				assert_eq!(
 					ValidatorAccountState::Backup,
-					ChainflipAccountStore::<Runtime>::get(&late_staker).state,
+					ChainflipAccountStore::<Runtime>::try_get_validator_state(&late_staker)
+						.expect("Account should be validator account."),
 					"late staker should be a backup node"
 				);
 			});
@@ -640,11 +641,11 @@ mod authorities {
 		genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 	};
 	use cf_traits::{
-		account_data::{ChainflipAccountStore, ValidatorAccount, ValidatorAccountState},
+		account_data::{ChainflipAccountStore, ValidatorAccountState},
 		AuthorityCount, EpochInfo, FlipBalance, StakeTransfer,
 	};
 	use sp_runtime::AccountId32;
-	use state_chain_runtime::{Flip, Runtime, Validator};
+	use state_chain_runtime::{Flip, Runtime, Validator, ValidatorAccount};
 	use std::collections::HashMap;
 
 	#[test]
@@ -761,8 +762,11 @@ mod authorities {
 				);
 
 				current_authorities.iter().for_each(|account_id| {
-					let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-					assert_eq!(account_data.state, ValidatorAccountState::CurrentAuthority);
+					assert_eq!(
+						ChainflipAccountStore::<Runtime>::try_get_validator_state(account_id)
+							.expect("Should be validator account."),
+						ValidatorAccountState::CurrentAuthority
+					);
 					// we were active in teh first epoch
 
 					// TODO: Check historical epochs
@@ -781,9 +785,12 @@ mod authorities {
 				);
 
 				highest_staked_backup_nodes.iter().for_each(|account_id| {
-					let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 					// we were active in the first epoch
-					assert_eq!(account_data.state, ValidatorAccountState::HistoricalAuthority);
+					assert_eq!(
+						ChainflipAccountStore::<Runtime>::try_get_validator_state(account_id)
+							.expect("Should be validator account."),
+						ValidatorAccountState::HistoricalAuthority
+					);
 					// TODO: Check historical epochs
 				});
 

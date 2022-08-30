@@ -1,14 +1,14 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 use cf_traits::{
-	account_data::{ChainflipAccountStore, ValidatorAccount, ValidatorAccountState},
+	account_data::{ChainflipAccountStore, ValidatorAccountState},
 	EpochIndex, EpochInfo, FlipBalance,
 };
 use codec::Encode;
 use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
 use sp_core::H256;
-use state_chain_runtime::{Authorship, Event, Origin};
+use state_chain_runtime::{Authorship, Event, Origin, ValidatorAccount};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 // arbitrary units of block time
@@ -176,7 +176,8 @@ impl Engine {
 	}
 
 	fn state(&self) -> ValidatorAccountState {
-		ChainflipAccountStore::<Runtime>::get(&self.node_id).state
+		ChainflipAccountStore::<Runtime>::try_get_validator_state(&self.node_id)
+			.expect("Node should be a validator node.")
 	}
 
 	// Handle events from contract

@@ -1234,7 +1234,10 @@ pub mod test_utils {
             providers: 2,
             sufficients: 0,
             data: ChainflipAccountData {
-                state: ValidatorAccountState::CurrentAuthority,
+                account_type: state_chain_runtime::AccountType::Validator {
+                    state: ValidatorAccountState::CurrentAuthority,
+                    is_active_bidder: false,
+                },
             },
         };
 
