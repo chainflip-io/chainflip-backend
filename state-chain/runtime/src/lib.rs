@@ -662,35 +662,36 @@ impl_runtime_apis! {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
-			let account_data = ChainflipAccountStore::<Runtime>::get(&account_id);
 
 			RuntimeApiAccountInfo {
 				stake: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
 				is_live: Reputation::is_qualified(&account_id),
-				is_activated: pallet_cf_staking::Pallet::<Runtime>::is_active_bidder(&account_id).unwrap_or(false),
+				is_activated: pallet_cf_staking::Pallet::<Runtime>::is_active_bidder(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
-				state: if account_data.account_type.is_authority() {
-					ChainflipAccountStateWithPassive::CurrentAuthority
-				} else {
-					// if the node is in this set, they were previously known as backups
-					let backup_or_passive = if Validator::highest_staked_qualified_backup_nodes_lookup().contains(&account_id) {
-						BackupOrPassive::Backup
-					} else {
-						BackupOrPassive::Passive
-					};
+				state: ChainflipAccountStore::<Runtime>::try_get_validator_state(&account_id)
+					.map(|validator_state| {
+						if validator_state.is_authority() {
+							ChainflipAccountStateWithPassive::CurrentAuthority
+						} else {
+								// if the node is in this set, they were previously known as backups
+							let backup_or_passive = if Validator::highest_staked_qualified_backup_nodes_lookup().contains(&account_id) {
+								BackupOrPassive::Backup
+							} else {
+								BackupOrPassive::Passive
+							};
 
-					match account_data.account_type {
-						AccountType::Validator { state: ValidatorAccountState::HistoricalAuthority, .. } =>
-							ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
-						// The rpc doesn't support other account types yet. Treat any other account as Backup or Passive.
-						_ =>
-							ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
-					}
-				},
+							match validator_state {
+								ValidatorAccountState::HistoricalAuthority => ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
+								_ =>
+								ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
+							}
+						}
+					})
+					.unwrap_or(ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive)),
 			}
 		}
 
