@@ -344,7 +344,7 @@ pub mod pallet {
 
 			// Throw an error if the staker tries to claim too much. Otherwise decrement the stake
 			// by the amount claimed.
-			T::Flip::try_claim(&account_id, amount)?;
+			T::Flip::try_initiate_claim(&account_id, amount)?;
 
 			// Set expiry and build the claim parameters.
 			let expiry =
@@ -422,7 +422,7 @@ pub mod pallet {
 			expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
 			ClaimExpiries::<T>::set(expiries);
 
-			T::Flip::settle_claim(claimed_amount);
+			T::Flip::finalize_claim(&account_id).expect("This should never return an error because we already ensured above that the pending claim does indeed exist");
 
 			if T::Flip::staked_balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
@@ -607,7 +607,8 @@ impl<T: Config> Pallet<T> {
 			if let Some(pending_claim) = PendingClaims::<T>::take(&account_id) {
 				let claim_amount = pending_claim.amount().into();
 				// Re-credit the account
-				T::Flip::revert_claim(&account_id, claim_amount);
+				T::Flip::revert_claim(&account_id, claim_amount)
+					.expect("Pending Claim should exist since the corresponding expiry exists");
 
 				Self::deposit_event(Event::<T>::ClaimExpired(account_id, claim_amount));
 			}

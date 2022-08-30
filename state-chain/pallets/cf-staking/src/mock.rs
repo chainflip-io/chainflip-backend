@@ -212,7 +212,7 @@ pub const MIN_STAKE: u128 = 10;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000 },
+		flip: FlipConfig { total_issuance: 1_000_000 },
 		staking: StakingConfig {
 			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
 			minimum_stake: MIN_STAKE,

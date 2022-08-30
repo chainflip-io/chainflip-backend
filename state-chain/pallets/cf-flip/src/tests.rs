@@ -249,7 +249,7 @@ impl FlipOperation {
 
 				// Now try to claim
 				assert_noop!(
-					<Flip as StakeTransfer>::try_claim(account_id, 1),
+					<Flip as StakeTransfer>::try_initiate_claim(account_id, 1),
 					Error::<Test>::InsufficientLiquidity
 				);
 
@@ -262,12 +262,17 @@ impl FlipOperation {
 					return false
 				}
 				assert!(
-					<Flip as StakeTransfer>::try_claim(account_id, expected_claimable_balance)
-						.is_ok(),
+					<Flip as StakeTransfer>::try_initiate_claim(
+						account_id,
+						expected_claimable_balance
+					)
+					.is_ok(),
 					"expexted: {}, claimable: {}",
 					expected_claimable_balance,
 					<Flip as StakeTransfer>::claimable_balance(account_id)
 				);
+				<Flip as StakeTransfer>::finalize_claim(account_id)
+					.expect("Pending Claim should exist");
 				if !MockStakeHandler::has_stake_updated(account_id) {
 					return false
 				}
