@@ -7,7 +7,7 @@ pub mod benchmarking;
 pub mod ingress_address;
 
 use crate::{
-	assets::{AddressDerivation, AssetAddress},
+	assets::{AddressDerivation, Asset},
 	*,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -725,7 +725,7 @@ impl AddressDerivation for EthAddressDerivation {
 	type AddressType = eth::Address;
 
 	fn generate_address(
-		asset: &str,
+		asset: Asset,
 		vault_address: Self::AddressType,
 		intent_id: u32,
 	) -> Self::AddressType {

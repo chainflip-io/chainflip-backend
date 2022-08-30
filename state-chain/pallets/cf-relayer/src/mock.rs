@@ -1,4 +1,6 @@
 use crate::{self as pallet_cf_relayer};
+use cf_chains::{assets::AddressDerivation, eth};
+use cf_traits::VaultAddressProvider;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -56,8 +58,33 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+pub struct MockEthVaultAddressProvider;
+pub struct MockEthAddressDerivation;
+
+impl VaultAddressProvider for MockEthVaultAddressProvider {
+	type AddressType = eth::Address;
+
+	fn get_vault_address() -> Self::AddressType {
+		todo!()
+	}
+}
+
+impl AddressDerivation for MockEthAddressDerivation {
+	type AddressType = eth::Address;
+
+	fn generate_address(
+		asset: cf_chains::assets::Asset,
+		vault_address: Self::AddressType,
+		intent_id: u32,
+	) -> Self::AddressType {
+		todo!()
+	}
+}
+
 impl pallet_cf_relayer::Config for Test {
 	type Event = Event;
+	type EthVaultAddressProvider = MockEthVaultAddressProvider;
+	type EthAddressDerivation = MockEthAddressDerivation;
 }
 
 // Build genesis storage according to the mock runtime.

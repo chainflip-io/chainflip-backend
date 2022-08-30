@@ -92,14 +92,13 @@ pub mod pallet {
 				index: next_index,
 			};
 
-			// Generate a hash over the payload
 			let tx_hash = H256(Blake2_256::hash(swap_data.encode().as_slice()));
 
 			let vault_address = T::EthVaultAddressProvider::get_vault_address();
 
 			let ingress_address = match trade.0 {
 				Asset::EthEth => AssetAddress::ETH(T::EthAddressDerivation::generate_address(
-					"ETH:ETH",
+					Asset::EthEth,
 					vault_address,
 					next_index,
 				)),

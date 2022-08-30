@@ -15,7 +15,7 @@ pub enum AssetAddress {
 pub trait AddressDerivation {
 	type AddressType;
 	fn generate_address(
-		asset: &str,
+		asset: Asset,
 		vault_address: Self::AddressType,
 		intent_id: u32,
 	) -> Self::AddressType;
