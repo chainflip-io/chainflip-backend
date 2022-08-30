@@ -571,7 +571,7 @@ async fn finalize_keygen<KeygenData, P: ECPoint>(
 ) -> StageResult<KeygenData, KeygenResultInfo<P>, KeygenFailureReason> {
     let params = ThresholdParameters::from_share_count(common.all_idxs.len() as AuthorityCount);
 
-    let local_pubkeys =
+    let party_public_keys =
         tokio::task::spawn_blocking(move || derive_local_pubkeys_for_parties(params, &commitments))
             .await
             .unwrap();
@@ -582,7 +582,7 @@ async fn finalize_keygen<KeygenData, P: ECPoint>(
                 y: agg_pubkey.0,
                 x_i: compute_secret_key_share(secret_shares),
             },
-            party_public_keys: local_pubkeys,
+            party_public_keys,
         }),
         validator_map: common.validator_mapping,
         params,

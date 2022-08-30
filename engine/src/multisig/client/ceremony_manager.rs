@@ -158,7 +158,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
     // Generate signer indexes
     let (own_idx, signer_idxs) =
         match map_ceremony_parties(own_account_id, &signers, &key_info.validator_map) {
-            Ok(res) => res,
+            Ok(result) => result,
             Err(reason) => {
                 slog::debug!(logger, "Request to sign invalid: {}", reason);
                 return Err((CeremonyFailureReason::InvalidParticipants, result_sender));

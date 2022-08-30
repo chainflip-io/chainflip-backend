@@ -29,8 +29,15 @@ use super::{
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
-type OptionalCeremonyReturn<CeremonyResult, FailureReason> =
-    Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>>;
+type OptionalCeremonyReturn<Ceremony> = Option<
+    Result<
+        <Ceremony as CeremonyTrait>::Output,
+        (
+            BTreeSet<AccountId>,
+            CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>,
+        ),
+    >,
+>;
 
 pub struct StateAuthorised<Ceremony: CeremonyTrait> {
     pub stage: Option<DynStage<Ceremony>>,
@@ -40,7 +47,7 @@ pub struct StateAuthorised<Ceremony: CeremonyTrait> {
 
 pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
     inner: Option<StateAuthorised<Ceremony>>,
-    // Note that because use a map here, the number of messages
+    // Note that because we use a map here, the number of messages
     // that can be delayed from any one party is limited to one per stage.
     delayed_messages: BTreeMap<AccountId, Ceremony::Data>,
     /// This will fire on stage timeout
@@ -68,8 +75,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             tokio::select! {
                 Some((sender_id, message)) = message_receiver.recv() => {
 
-                    if let Some(res) = runner.process_or_delay_message(sender_id, message).await {
-                        break res;
+                    if let Some(result) = runner.process_or_delay_message(sender_id, message).await {
+                        break result;
                     }
 
                 }
@@ -78,15 +85,15 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                     let PreparedRequest { init_stage, idx_mapping, participants_count, result_sender } = request.expect("Ceremony request channel was dropped unexpectedly");
                     final_result_sender = Some(result_sender);
 
-                    if let Some(res) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await {
-                        break res;
+                    if let Some(result) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await {
+                        break result;
                     }
 
                 }
                 () = runner.timeout_handle.as_mut() => {
 
-                    if let Some(res) = runner.on_timeout().await {
-                        break res;
+                    if let Some(result) = runner.on_timeout().await {
+                        break result;
                     }
 
                 }
@@ -94,7 +101,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         };
 
         if let Some(result_sender) = final_result_sender {
-            let _res = result_sender.send(outcome);
+            let _result = result_sender.send(outcome);
         } else {
             // The ceremony has timed out before being authorised.
             // There is no way to report this to the SC yet, so just ignore it.
@@ -115,16 +122,17 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         }
     }
 
-    /// Process ceremony request from the State Chain, which allows
-    /// the state machine to make progress
+    /// Process ceremony request from the State Chain,
+    /// initializing the ceremony into an authorised stage 1 state.
     pub async fn on_ceremony_request(
         &mut self,
         mut initial_stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
         num_of_participants: AuthorityCount,
-    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
-        // This is not possible because `on_ceremony_request` is only called from a oneshot channel.
-        // So it should never get called twice. Unless in a unit test.
+    ) -> OptionalCeremonyReturn<Ceremony> {
+        // This function is only ever called from a oneshot channel,
+        // so it should never get called twice.
+        // Therefore we can assume the inner is not initialized yet.
         assert!(self.inner.is_none());
 
         initial_stage.init();
@@ -138,16 +146,12 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         // Unlike other state transitions, we don't take into account
         // any time left in the prior stage when receiving a ceremony request because
         // we don't want other parties to be able to control when our stages time out.
-        self.timeout_handle
-            .as_mut()
-            .reset(tokio::time::Instant::now() + MAX_STAGE_DURATION);
+        self.timeout_handle = Box::pin(tokio::time::sleep(MAX_STAGE_DURATION));
 
         self.process_delayed().await
     }
 
-    async fn finalize_current_stage(
-        &mut self,
-    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
+    async fn finalize_current_stage(&mut self) -> OptionalCeremonyReturn<Ceremony> {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -207,7 +211,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         &mut self,
         sender_id: AccountId,
         data: Ceremony::Data,
-    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
+    ) -> OptionalCeremonyReturn<Ceremony> {
         match &mut self.inner {
             None => {
                 if !data.is_first_stage() {
@@ -268,9 +272,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     /// Process previously delayed messages (which arrived one stage too early)
     // NOTE: Need this boxed to help with async recursion
-    fn process_delayed(
-        &mut self,
-    ) -> BoxFuture<OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason>> {
+    fn process_delayed(&mut self) -> BoxFuture<OptionalCeremonyReturn<Ceremony>> {
         async {
             let messages = std::mem::take(&mut self.delayed_messages);
 
@@ -327,9 +329,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         );
     }
 
-    async fn on_timeout(
-        &mut self,
-    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
+    async fn on_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
         match &self.inner {
             None => {
                 // Report the parties that tried to initiate the ceremony.
@@ -419,9 +419,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         })
     }
 
-    pub async fn force_timeout(
-        &mut self,
-    ) -> OptionalCeremonyReturn<Ceremony::Output, Ceremony::FailureReason> {
+    pub async fn force_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
         self.on_timeout().await
     }
 
