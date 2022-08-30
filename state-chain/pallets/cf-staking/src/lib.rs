@@ -714,18 +714,17 @@ impl<T: Config> Pallet<T> {
 	/// - Account is not of type [AccountType::Validator].
 	/// - Account doesn't exist.
 	pub fn is_retired(account_id: &AccountId<T>) -> Result<bool, Error<T>> {
-		use sp_std::ops::Not;
-		Self::is_active_bidder(account_id).map(Not::not)
+		match ChainflipAccountStore::<T>::get(account_id).account_type {
+			AccountType::Validator { is_active_bidder, .. } => Ok(!is_active_bidder),
+			_ => Err(Error::<T>::InvalidAccountType),
+		}
 	}
 
 	/// Check if an account is actively bidding in auctions.
-	///
-	/// Returns an error in the following cases:
-	/// - Account is not of type [AccountType::Validator].
-	pub fn is_active_bidder(account_id: &AccountId<T>) -> Result<bool, Error<T>> {
+	pub fn is_active_bidder(account_id: &AccountId<T>) -> bool {
 		match ChainflipAccountStore::<T>::get(account_id).account_type {
-			AccountType::Validator { is_active_bidder, .. } => Ok(is_active_bidder),
-			_ => Err(Error::<T>::InvalidAccountType),
+			AccountType::Validator { is_active_bidder, .. } => is_active_bidder,
+			_ => false,
 		}
 	}
 

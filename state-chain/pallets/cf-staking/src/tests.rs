@@ -1,10 +1,11 @@
 use crate::{
-	mock::*, pallet, AccountRetired, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts,
-	Pallet, PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts, Pallet,
+	PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::RegisterClaim;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
+	account_data::{AccountError, AccountType, ChainflipAccountStore},
 	mocks::{system_state_info::MockSystemStateInfo, time_source},
 	Bonding,
 };
@@ -23,10 +24,13 @@ const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 #[test]
 fn genesis_nodes_are_activated_by_default() {
 	new_test_ext().execute_with(|| {
-		// Expect the genesis node to be activated.
-		assert!(AccountRetired::<Test>::contains_key(&CHARLIE));
-		// Expect a not genesis node not to be activated.
-		assert!(!AccountRetired::<Test>::contains_key(&ALICE));
+		// Expect the genesis node to be an actively bidding validator.
+		assert!(Pallet::<Test>::is_active_bidder(&CHARLIE));
+		// Non-genesis nodes are not initialized as validators.
+		assert_eq!(
+			Pallet::<Test>::is_retired(&ALICE).map_err(Into::into),
+			Err(DispatchError::from(Error::<Test>::InvalidAccountType))
+		);
 	});
 }
 
@@ -394,11 +398,14 @@ fn test_retirement() {
 		MockEpochInfo::add_authorities(ALICE);
 		const STAKE: u128 = 100;
 
-		// Need to be staked in order to retire or activate.
-		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::UnknownAccount);
+		// Need to be staked and initialised as validator in order to retire or activate.
+		assert_noop!(
+			Staking::retire_account(Origin::signed(ALICE)),
+			DispatchError::from(AccountError::AccountNotInitialised)
+		);
 		assert_noop!(
 			Staking::activate_account(Origin::signed(ALICE)),
-			<Error<Test>>::UnknownAccount
+			DispatchError::from(AccountError::AccountNotInitialised)
 		);
 		ChainflipAccountStore::<Test>::upgrade_account_type(
 			&ALICE,
