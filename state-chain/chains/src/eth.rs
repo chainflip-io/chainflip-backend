@@ -6,7 +6,10 @@ pub mod benchmarking;
 
 pub mod ingress_address;
 
-use crate::*;
+use crate::{
+	assets::{AddressDerivation, AssetAddress},
+	*,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -25,7 +28,7 @@ use sp_std::{
 	str, vec,
 };
 
-use self::api::EthereumReplayProtection;
+use self::{api::EthereumReplayProtection, ingress_address::get_create_2_address};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -713,6 +716,20 @@ impl core::fmt::Debug for TransactionHash {
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
+	}
+}
+
+pub struct EthAddressDerivation;
+
+impl AddressDerivation for EthAddressDerivation {
+	type AddressType = eth::Address;
+
+	fn generate_address(
+		asset: &str,
+		vault_address: Self::AddressType,
+		intent_id: u32,
+	) -> Self::AddressType {
+		get_create_2_address(asset, vault_address.into(), intent_id).into()
 	}
 }
 

@@ -17,6 +17,7 @@ use crate::{
 };
 
 use cf_chains::{
+	assets::{Asset, AssetAddress},
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},

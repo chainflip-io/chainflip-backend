@@ -687,3 +687,8 @@ pub trait IngressApi {
 pub trait AddressDerivationApi {
 	fn generate_address(ingress_asset: ForeignChainAsset) -> (ForeignChainAddress, IntentId);
 }
+
+pub trait VaultAddressProvider {
+	type AddressType;
+	fn get_vault_address() -> Self::AddressType;
+}

@@ -1,4 +1,4 @@
-use crate::{eth, IngressAddress};
+use crate::eth;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -12,11 +12,11 @@ pub enum AssetAddress {
 	ETH(eth::Address),
 }
 
-impl IngressAddress for Asset {
-	type AddressType = AssetAddress;
-	fn derive_address(self, vault_key: Self::AddressType, intent_id: u32) -> Self::AddressType {
-		match self {
-			Asset::EthEth => todo!(),
-		}
-	}
+pub trait AddressDerivation {
+	type AddressType;
+	fn generate_address(
+		asset: &str,
+		vault_address: Self::AddressType,
+		intent_id: u32,
+	) -> Self::AddressType;
 }

@@ -1,6 +1,5 @@
 use cf_chains::assets::{Asset, AssetAddress};
 use codec::{Decode, Encode};
-use create2::calc_addr;
 use frame_support::{pallet_prelude::*, sp_runtime::traits::BlockNumberProvider};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -21,7 +20,7 @@ pub struct SwapData<T: Config> {
 	payout_address: AssetAddress,
 	fee: u32,
 	block: T::BlockNumber,
-	index: u64,
+	index: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
@@ -35,6 +34,11 @@ pub struct SwapIntent<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_chains::{
+		assets::{AddressDerivation, Asset, AssetAddress},
+		eth::{self},
+	};
+	use cf_traits::VaultAddressProvider;
 	use frame_support::StorageHasher;
 
 	use super::*;
@@ -42,6 +46,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type EthVaultAddressProvider: VaultAddressProvider<AddressType = eth::Address>;
+		type EthAddressDerivation: AddressDerivation<AddressType = eth::Address>;
 	}
 
 	#[pallet::pallet]
@@ -51,7 +57,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// TODO: write a doc comment
-	pub type IndexCounter<T> = StorageValue<_, u64, ValueQuery>;
+	pub type IndexCounter<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// TODO: nice comment needed
 	#[pallet::storage]
@@ -76,6 +82,7 @@ pub mod pallet {
 			fee: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
+
 			let next_index = IndexCounter::<T>::get().add(1);
 			let swap_data = SwapData {
 				trade,
@@ -88,10 +95,14 @@ pub mod pallet {
 			// Generate a hash over the payload
 			let tx_hash = H256(Blake2_256::hash(swap_data.encode().as_slice()));
 
-			// Derive the ingress address based on the from part of the trait tuple
-			let ingress_address = match swap_data.trade.0 {
-				ETH =>
-					AssetAddress::ETH(calc_addr(&[0; 20], tx_hash.as_fixed_bytes(), &[0; 1]).into()),
+			let vault_address = T::EthVaultAddressProvider::get_vault_address();
+
+			let ingress_address = match trade.0 {
+				Asset::EthEth => AssetAddress::ETH(T::EthAddressDerivation::generate_address(
+					"ETH:ETH",
+					vault_address,
+					next_index,
+				)),
 			};
 
 			SwapIntents::<T>::insert(tx_hash, SwapIntent { swap_data, ingress_address, tx_hash });
