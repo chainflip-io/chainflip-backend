@@ -191,19 +191,15 @@ where
 			.map_err(to_rpc_error)
 	}
 	fn cf_eth_vault(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<(String, u32)> {
-		let eth_vault = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_eth_vault(&self.query_block_id(at))
-			.expect("The runtime API should not return error.");
-
-		Ok((hex::encode(eth_vault.0), eth_vault.1))
+			.map(|(public_key, active_from_block)| (hex::encode(public_key), active_from_block))
+			.map_err(to_rpc_error)
 	}
 	// FIXME: Respect the block hash argument here
 	fn cf_tx_fee_multiplier(&self, _at: Option<<B as BlockT>::Hash>) -> RpcResult<u64> {
-		Ok(TX_FEE_MULTIPLIER
-			.try_into()
-			.expect("We never set a fee multiplier greater than u64::MAX"))
+		TX_FEE_MULTIPLIER.try_into().map_err(to_rpc_error)
 	}
 	fn cf_auction_parameters(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<(u32, u32)> {
 		self.client
