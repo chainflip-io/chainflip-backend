@@ -1,8 +1,13 @@
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 use sp_runtime::DispatchError;
 use sp_std::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use frame_support::{traits::StoredMap, RuntimeDebug};
+use frame_support::{
+	error::BadOrigin,
+	traits::{EnsureOrigin, StoredMap},
+	RuntimeDebug,
+};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -253,6 +258,230 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 				account_id,
 				e
 			);
+		});
+	}
+}
+
+macro_rules! define_ensure_origin {
+	( $fn_name:ident, $struct_name:ident, $account_variant:pat ) => {
+		/// Implements EnsureOrigin, enforcing the correct [AccountType].
+		pub struct $struct_name<T>(PhantomData<T>);
+
+		impl<T> EnsureOrigin<OriginFor<T>> for $struct_name<T>
+		where
+			T: frame_system::Config<AccountData = ChainflipAccountData>,
+		{
+			type Success = ();
+
+			fn try_origin(o: OriginFor<T>) -> Result<Self::Success, OriginFor<T>> {
+				match o.clone().into() {
+					Ok(RawOrigin::Signed(ref account_id)) =>
+						match ChainflipAccountStore::<T>::get(account_id).account_type {
+							$account_variant => Ok(()),
+							_ => Err(o),
+						},
+					Ok(o) => Err(o.into()),
+					Err(o) => Err(o),
+				}
+			}
+		}
+
+		/// Ensure that the origin is signed and that the signer operates the correct [AccountType].
+		pub fn $fn_name<T>(o: OriginFor<T>) -> Result<T::AccountId, BadOrigin>
+		where
+			T: frame_system::Config<AccountData = ChainflipAccountData>,
+		{
+			ensure_signed(o).and_then(|account_id| {
+				match ChainflipAccountStore::<T>::get(&account_id).account_type {
+					$account_variant => Ok(account_id),
+					_ => Err(BadOrigin),
+				}
+			})
+		}
+	};
+}
+
+define_ensure_origin!(ensure_relayer, EnsureRelayer, AccountType::Relayer);
+define_ensure_origin!(ensure_validator, EnsureValidator, AccountType::Validator { .. });
+define_ensure_origin!(
+	ensure_liquidity_provider,
+	EnsureLiquidityProvider,
+	AccountType::LiquidityProvider
+);
+
+#[cfg(test)]
+mod test {
+	use frame_support::traits::{ConstU16, ConstU64, HandleLifetime};
+	use frame_system::Provider;
+	use sp_core::H256;
+	use sp_runtime::{
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+	};
+
+	use super::*;
+
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
+	type AccountId = u64;
+
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system,
+		}
+	);
+
+	impl frame_system::Config for Test {
+		type BaseCallFilter = frame_support::traits::Everything;
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
+		type Origin = Origin;
+		type Call = Call;
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type AccountId = AccountId;
+		type Lookup = IdentityLookup<Self::AccountId>;
+		type Header = Header;
+		type Event = Event;
+		type BlockHashCount = ConstU64<250>;
+		type Version = ();
+		type PalletInfo = PalletInfo;
+		type AccountData = ChainflipAccountData;
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
+		type SS58Prefix = ConstU16<42>;
+		type OnSetCode = ();
+		type MaxConsumers = frame_support::traits::ConstU32<5>;
+	}
+
+	pub fn new_test_ext() -> sp_io::TestExternalities {
+		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	}
+
+	const ALICE: u64 = 1;
+	const BOB: u64 = 2;
+	const CHARLIE: u64 = 3;
+
+	#[test]
+	fn test_ensure_origin_struct() {
+		new_test_ext().execute_with(|| {
+			// Root and none should be invalid.
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
+			EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
+			EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
+			EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
+			EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
+
+			// Validation should fail for non-existent accounts.
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap_err();
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+
+			// Create the accounts.
+			Provider::<Test>::created(&ALICE).unwrap();
+			Provider::<Test>::created(&BOB).unwrap();
+			Provider::<Test>::created(&CHARLIE).unwrap();
+
+			// Validation should fail for uninitalised accounts.
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap_err();
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+
+			// Upgrade the accounts.
+			ChainflipAccountStore::<Test>::upgrade_account_type(&ALICE, AccountType::Relayer)
+				.unwrap();
+			ChainflipAccountStore::<Test>::upgrade_account_type(
+				&BOB,
+				AccountType::Validator {
+					state: ValidatorAccountState::Backup,
+					is_active_bidder: false,
+				},
+			)
+			.unwrap();
+			ChainflipAccountStore::<Test>::upgrade_account_type(
+				&CHARLIE,
+				AccountType::LiquidityProvider,
+			)
+			.unwrap();
+
+			// Each account should validate as the correct account type and fail otherwise.
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap();
+			EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+			EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE))
+				.unwrap_err();
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap_err();
+			EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap();
+			EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB))
+				.unwrap_err();
+			EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+			EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+			EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE))
+				.unwrap();
+		});
+	}
+
+	#[test]
+	fn test_ensure_origin_fn() {
+		new_test_ext().execute_with(|| {
+			// Root and none should be invalid.
+			ensure_relayer::<Test>(OriginFor::<Test>::root()).unwrap_err();
+			ensure_relayer::<Test>(OriginFor::<Test>::none()).unwrap_err();
+			ensure_validator::<Test>(OriginFor::<Test>::root()).unwrap_err();
+			ensure_validator::<Test>(OriginFor::<Test>::none()).unwrap_err();
+			ensure_liquidity_provider::<Test>(OriginFor::<Test>::root()).unwrap_err();
+			ensure_liquidity_provider::<Test>(OriginFor::<Test>::none()).unwrap_err();
+
+			// Validation should fail for non-existent accounts.
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+
+			// Create the accounts.
+			Provider::<Test>::created(&ALICE).unwrap();
+			Provider::<Test>::created(&BOB).unwrap();
+			Provider::<Test>::created(&CHARLIE).unwrap();
+
+			// Validation should fail for uninitalised accounts.
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+
+			// Upgrade the accounts.
+			ChainflipAccountStore::<Test>::upgrade_account_type(&ALICE, AccountType::Relayer)
+				.unwrap();
+			ChainflipAccountStore::<Test>::upgrade_account_type(
+				&BOB,
+				AccountType::Validator {
+					state: ValidatorAccountState::Backup,
+					is_active_bidder: false,
+				},
+			)
+			.unwrap();
+			ChainflipAccountStore::<Test>::upgrade_account_type(
+				&CHARLIE,
+				AccountType::LiquidityProvider,
+			)
+			.unwrap();
+
+			// Each account should validate as the correct account type and fail otherwise.
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap();
+			ensure_validator::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+			ensure_liquidity_provider::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
+			ensure_validator::<Test>(OriginFor::<Test>::signed(BOB)).unwrap();
+			ensure_liquidity_provider::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
+			ensure_relayer::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+			ensure_validator::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+			ensure_liquidity_provider::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap();
 		});
 	}
 }
