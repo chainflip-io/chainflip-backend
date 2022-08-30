@@ -136,7 +136,11 @@ benchmarks_instance_pallet! {
 		let origin = T::EnsureThresholdSigned::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
-
+		assert!(matches!(
+			PendingVaultRotation::<T, I>::get().unwrap(),
+			VaultRotationStatus::AwaitingRotation { new_public_key }
+				if new_public_key == agg_key
+		))
 	}
 	vault_key_rotated {
 		let new_public_key = AggKeyFor::<T, I>::benchmark_value();
