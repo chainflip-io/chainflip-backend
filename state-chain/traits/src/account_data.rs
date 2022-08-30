@@ -56,6 +56,17 @@ pub struct ChainflipAccountData {
 pub trait ValidatorAccount {
 	type AccountId;
 
+	/// Tries to get the validator's account state. Can fail if the account is not a validator
+	/// account.
+	fn try_get_validator_state(
+		account_id: &Self::AccountId,
+	) -> Result<ValidatorAccountState, AccountError>;
+	/// Tries to mutate the validator's account state. Can fail if the account is not a validator
+	/// account.
+	fn try_mutate_validator_state<R>(
+		account_id: &Self::AccountId,
+		f: impl FnOnce(&mut ValidatorAccountState) -> R,
+	) -> Result<R, AccountError>;
 	/// Set the node to be a current authority
 	fn set_current_authority(account_id: &Self::AccountId);
 	/// Sets the authority state to historical
@@ -151,9 +162,15 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 			)
 		})
 	}
+}
 
-	pub fn try_mutate_validator_state<R>(
-		account_id: &T::AccountId,
+impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccount
+	for ChainflipAccountStore<T>
+{
+	type AccountId = T::AccountId;
+
+	fn try_mutate_validator_state<R>(
+		account_id: &Self::AccountId,
 		f: impl FnOnce(&mut ValidatorAccountState) -> R,
 	) -> Result<R, AccountError> {
 		Self::try_mutate_account_data(account_id, |account_data| match account_data.account_type {
@@ -162,20 +179,14 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		})
 	}
 
-	pub fn try_get_validator_state(
-		account_id: &T::AccountId,
+	fn try_get_validator_state(
+		account_id: &Self::AccountId,
 	) -> Result<ValidatorAccountState, AccountError> {
 		match ChainflipAccountStore::<T>::get(account_id).account_type {
 			AccountType::Validator { state, .. } => Ok(state),
 			_ => Err(AccountError::InvalidAccountType),
 		}
 	}
-}
-
-impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccount
-	for ChainflipAccountStore<T>
-{
-	type AccountId = T::AccountId;
 
 	/// Set the account state to Validator.
 	///
