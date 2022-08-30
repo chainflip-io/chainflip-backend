@@ -56,10 +56,6 @@ pub struct ChainflipAccountData {
 pub trait ValidatorAccount {
 	type AccountId;
 
-	/// Get the account data for the given account id.
-	///
-	/// Note: if the account does not exist, returns the [Default].
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
 	/// Set the node to be a current authority
 	fn set_current_authority(account_id: &Self::AccountId);
 	/// Sets the authority state to historical
@@ -101,6 +97,13 @@ impl From<AccountError> for DispatchError {
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccountStore<T> {
+	/// Get the account data for the given account id.
+	///
+	/// Note: if the account does not exist, returns the [Default].
+	pub fn get(account_id: &T::AccountId) -> ChainflipAccountData {
+		frame_system::Pallet::<T>::get(account_id)
+	}
+
 	/// Upgrade an account from its initial [AccountType::Undefined] state.
 	///
 	/// Fails if the account has already been upgraded.
@@ -173,10 +176,6 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 	for ChainflipAccountStore<T>
 {
 	type AccountId = T::AccountId;
-
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
-		frame_system::Pallet::<T>::get(account_id)
-	}
 
 	/// Set the account state to Validator.
 	///
