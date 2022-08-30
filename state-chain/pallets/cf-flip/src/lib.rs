@@ -543,17 +543,22 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Ok(())
 	}
 
-	fn finalize_claim(account_id: &T::AccountId) {
-		let imbalance = Self::try_withdraw_pending_claim(account_id).unwrap();
+	fn finalize_claim(account_id: &T::AccountId) -> Result<(), DispatchError> {
+		let imbalance = Self::try_withdraw_pending_claim(account_id)?;
 		let amount = imbalance.peek();
 		imbalance.offset(Self::bridge_out(amount));
-		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		Ok(())
 	}
 
-	fn revert_claim(account_id: &Self::AccountId, _amount: Self::Balance) {
-		Self::settle(account_id, Self::try_withdraw_pending_claim(account_id).unwrap().into());
-		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+	fn revert_claim(
+		account_id: &Self::AccountId,
+		_amount: Self::Balance,
+	) -> Result<(), DispatchError> {
 		// claim reverts automatically when dropped
+		let imbalance = Self::try_withdraw_pending_claim(account_id)?;
+		Self::settle(account_id, imbalance.into());
+		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		Ok(())
 	}
 }
 
