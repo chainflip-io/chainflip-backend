@@ -152,19 +152,7 @@ pub trait StateChainRpcApi {
 #[async_trait]
 impl<C> StateChainRpcApi for StateChainRpcClient<C>
 where
-    C: CustomApiClient
-        + SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
-        + StateApiClient<state_chain_runtime::Hash>
-        + AuthorApiClient<
-            state_chain_runtime::Hash,
-            <state_chain_runtime::Block as sp_runtime::traits::Block>::Hash,
-        > + ChainApiClient<
-            state_chain_runtime::BlockNumber,
-            state_chain_runtime::Hash,
-            state_chain_runtime::Header,
-            state_chain_runtime::SignedBlock,
-        > + Send
-        + Sync,
+    C: ChainflipClient + Send + Sync,
 {
     async fn submit_extrinsic_rpc(
         &self,
