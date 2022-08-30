@@ -570,18 +570,15 @@ pub mod pallet {
 			ClaimTTL::<T>::set(self.claim_ttl.as_secs());
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
-				ChainflipAccountStore::<T>::try_mutate_account_data::<_, Error<T>, _>(
+				ChainflipAccountStore::<T>::upgrade_account_type(
 					staker,
-					|ChainflipAccountData { ref mut account_type }| {
-						assert_eq!(*account_type, AccountType::Undefined);
-						*account_type = AccountType::Validator {
-							state: ValidatorAccountState::Backup,
-							is_active_bidder: true,
-						};
-						Ok(())
+					AccountType::Validator {
+						state: ValidatorAccountState::Backup,
+						is_active_bidder: false,
 					},
 				)
 				.unwrap();
+				Pallet::<T>::activate(staker).unwrap();
 			}
 		}
 	}

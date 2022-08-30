@@ -101,6 +101,28 @@ impl From<AccountError> for DispatchError {
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccountStore<T> {
+	/// Upgrade an account from its initial [AccountType::Undefined] state.
+	///
+	/// Fails if the account has already been upgraded.
+	pub fn upgrade_account_type(
+		account_id: &<T as frame_system::Config>::AccountId,
+		account_type: AccountType,
+	) -> Result<(), AccountError> {
+		frame_system::Pallet::<T>::try_mutate_exists(account_id, |maybe_account_data| {
+			// The system pallet treats all accounts as non-existent if their AccountData is
+			// Default. So instead of just checking for None, we also need to check for
+			// Some(Default::default()).
+			if maybe_account_data
+				.replace(ChainflipAccountData { account_type })
+				.unwrap_or_default() !=
+				Default::default()
+			{
+				Err(AccountError::InvalidAccountTypeUpgrade)
+			} else {
+				Ok(())
+			}
+		})
+	}
 	/// Try to apply a mutation to the account data.
 	///
 	/// Fails if the account has not been initialised. If the provided closure returns an `Err`,

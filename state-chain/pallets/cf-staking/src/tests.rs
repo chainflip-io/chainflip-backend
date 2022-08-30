@@ -400,6 +400,14 @@ fn test_retirement() {
 			Staking::activate_account(Origin::signed(ALICE)),
 			<Error<Test>>::UnknownAccount
 		);
+		ChainflipAccountStore::<Test>::upgrade_account_type(
+			&ALICE,
+			AccountType::Validator {
+				state: Default::default(),
+				is_active_bidder: Default::default(),
+			},
+		)
+		.unwrap();
 
 		// Try again with some stake, should succeed this time.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
