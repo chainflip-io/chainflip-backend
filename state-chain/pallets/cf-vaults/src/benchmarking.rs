@@ -13,7 +13,7 @@ use frame_system::RawOrigin;
 // another chain we've to take this in account in our weight calculation benchmark.
 
 const CEREMONY_ID: u64 = 1;
-const NEW_PUBLIC_KEY: [u8; 33] = [0x02; 33];
+const NEW_PUBLIC_KEY: [u8; 33] = [0x01; 33];
 const TX_HASH: [u8; 32] = [0xab; 32];
 
 /// Generate an authority set
@@ -98,7 +98,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(
 			PendingVaultRotation::<T, I>::decode_variant(),
-			Some(VaultRotationStatusVariant::AwaitingRotation),
+			Some(VaultRotationStatusVariant::AwaitingKeygenVerification),
 		);
 	}
 	report_keygen_outcome {
