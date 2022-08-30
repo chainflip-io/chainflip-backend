@@ -37,17 +37,13 @@ impl Default for ValidatorAccountState {
 	}
 }
 
-impl AccountType {
+impl ValidatorAccountState {
 	pub fn is_authority(&self) -> bool {
-		matches!(self, Self::Validator { state: ValidatorAccountState::CurrentAuthority, .. })
+		matches!(self, Self::CurrentAuthority)
 	}
 
 	pub fn is_backup(&self) -> bool {
-		matches!(
-			self,
-			Self::Validator { state: ValidatorAccountState::HistoricalAuthority, .. } |
-				Self::Validator { state: ValidatorAccountState::Backup, .. }
-		)
+		matches!(self, Self::HistoricalAuthority | Self::Backup)
 	}
 }
 
@@ -139,6 +135,15 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 			AccountType::Validator { ref mut state, .. } => Ok(f(state)),
 			_ => Err(AccountError::InvalidAccountType),
 		})
+	}
+
+	pub fn try_get_validator_state(
+		account_id: &T::AccountId,
+	) -> Result<ValidatorAccountState, AccountError> {
+		match ChainflipAccountStore::<T>::get(account_id).account_type {
+			AccountType::Validator { state, .. } => Ok(state),
+			_ => Err(AccountError::InvalidAccountType),
+		}
 	}
 }
 

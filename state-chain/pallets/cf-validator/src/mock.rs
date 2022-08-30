@@ -283,23 +283,27 @@ macro_rules! assert_invariants {
 			"Backup nodes and validators should not overlap",
 		);
 		assert!(
-			ValidatorPallet::current_authorities()
-				.iter()
-				.all(|id| ChainflipAccountStore::<Test>::get(id).account_type.is_authority()),
+			ValidatorPallet::current_authorities().iter().all(|id| {
+				ChainflipAccountStore::<Test>::try_get_validator_state(id)
+					.expect("Account type should be validator")
+					.is_authority()
+			}),
 			"All authorities should have their account state set accordingly. Got: {:?}",
 			ValidatorPallet::current_authorities()
 				.iter()
-				.map(|id| (id, ChainflipAccountStore::<Test>::get(id).account_type))
+				.map(|id| (id, ChainflipAccountStore::<Test>::try_get_validator_state(id)))
 				.collect::<Vec<_>>(),
 		);
 		assert!(
 			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
-				.all(|id| ChainflipAccountStore::<Test>::get(id).account_type.is_backup()),
+				.all(|id| ChainflipAccountStore::<Test>::try_get_validator_state(id)
+					.expect("Account type should be validator")
+					.is_backup()),
 			"All backup nodes should have their account state set accordingly. Got: {:?}",
 			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
 				.iter()
-				.map(|id| (id, ChainflipAccountStore::<Test>::get(id).account_type))
+				.map(|id| (id, ChainflipAccountStore::<Test>::try_get_validator_state(id)))
 				.collect::<Vec<_>>(),
 		);
 	};
