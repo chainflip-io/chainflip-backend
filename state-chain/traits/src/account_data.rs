@@ -73,9 +73,42 @@ pub trait ValidatorAccount {
 	fn from_historical_to_backup(account_id: &Self::AccountId);
 }
 
+#[derive(Debug)]
+pub enum AccountError {
+	InvalidAccountType,
+	AccountNotInitialised,
+	/// Accounts can only be upgraded from the initial [AccountType::Undefined] state.
+	InvalidAccountTypeUpgrade,
+	AccountDataMutationFailed(DispatchError),
+	Other(DispatchError),
+}
+
+impl From<DispatchError> for AccountError {
+	fn from(e: DispatchError) -> Self {
+		AccountError::Other(e)
+	}
+}
+
+impl From<AccountError> for DispatchError {
+	fn from(e: AccountError) -> Self {
+		match e {
+			AccountError::InvalidAccountType => DispatchError::Other("InvalidAccountType"),
+			AccountError::AccountNotInitialised => DispatchError::Other("UnitialisedAccount"),
+			AccountError::InvalidAccountTypeUpgrade =>
+				DispatchError::Other("InvalidAccountTypeUpgrade"),
+			AccountError::AccountDataMutationFailed(e) => e,
+			AccountError::Other(e) => e,
+		}
+	}
+}
+
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccountStore<T> {
+	/// Try to apply a mutation to the account data.
+	///
+	/// Fails if the account has not been initialised. If the provided closure returns an `Err`,
+	/// does not mutate.
 	pub fn try_mutate_account_data<
 		R,
 		E: Into<DispatchError>,
@@ -83,31 +116,29 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	>(
 		account_id: &T::AccountId,
 		f: F,
+	) -> Result<R, AccountError> {
 		// Note this `try_mutate_exists` is *not* analogous to the storage method with the same
 		// name. Notably, the `Account` storage in `frame_system` is *Value* storage, so if the
 		// returned value is equal to the default value, it will be coerced to `None` before being
 		// passed into the closure!
 		frame_system::Pallet::<T>::try_mutate_exists(account_id, |maybe_account_data| {
-			maybe_account_data
-				.as_mut()
-				.map_or(Err(DispatchError::CannotLookup), |account_data| {
-					f(account_data).map_err(Into::into)
-				})
+			maybe_account_data.as_mut().map_or(
+				Err(AccountError::AccountNotInitialised),
+				|account_data| {
+					f(account_data).map_err(|e| AccountError::AccountDataMutationFailed(e.into()))
+				},
+			)
 		})
 	}
 
-	pub fn mutate_validator_state(
+	pub fn try_mutate_validator_state<R>(
 		account_id: &T::AccountId,
-		f: impl Fn(&mut ValidatorAccountState),
-	) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			assert!(matches!(account_data.account_type, AccountType::Validator { .. }));
-			match account_data.account_type {
-				AccountType::Validator { ref mut state, .. } => f(state),
-				_ => unreachable!(),
-			}
+		f: impl FnOnce(&mut ValidatorAccountState) -> R,
+	) -> Result<R, AccountError> {
+		Self::try_mutate_account_data(account_id, |account_data| match account_data.account_type {
+			AccountType::Validator { ref mut state, .. } => Ok(f(state)),
+			_ => Err(AccountError::InvalidAccountType),
 		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 }
 
@@ -125,8 +156,11 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 	/// **Only call this on Validator accounts.**
 	fn set_current_authority(account_id: &Self::AccountId) {
 		log::debug!("Setting current authority {:?}", account_id);
-		Self::mutate_validator_state(account_id, |state| {
+		Self::try_mutate_validator_state(account_id, |state| {
 			*state = ValidatorAccountState::CurrentAuthority;
+		})
+		.unwrap_or_else(|e| {
+			log::error!("Failed to set current authority {:?}: {:?}", account_id, e);
 		});
 	}
 
@@ -134,8 +168,11 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 	///
 	/// **Only call this on Validator accounts.**
 	fn set_historical_authority(account_id: &Self::AccountId) {
-		Self::mutate_validator_state(account_id, |state| {
+		Self::try_mutate_validator_state(account_id, |state| {
 			*state = ValidatorAccountState::HistoricalAuthority;
+		})
+		.unwrap_or_else(|e| {
+			log::error!("Failed to set historical authority {:?}: {:?}", account_id, e);
 		});
 	}
 
@@ -143,7 +180,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 	///
 	/// **Only call this on Validator accounts.**
 	fn from_historical_to_backup(account_id: &Self::AccountId) {
-		Self::mutate_validator_state(account_id, |state| match state {
+		Self::try_mutate_validator_state(account_id, |state| match state {
 			ValidatorAccountState::HistoricalAuthority => {
 				*state = ValidatorAccountState::Backup;
 			},
@@ -153,6 +190,13 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 				#[cfg(test)]
 				panic!("{}", ERROR_MESSAGE);
 			},
+		})
+		.unwrap_or_else(|e| {
+			log::error!(
+				"Failed to convert account from historical to backup {:?}: {:?}",
+				account_id,
+				e
+			);
 		});
 	}
 }
