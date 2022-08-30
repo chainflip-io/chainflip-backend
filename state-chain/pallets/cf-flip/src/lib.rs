@@ -434,7 +434,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Create a pending claims reserve owned by some `account_id`.
-	pub fn transfer_to_pending_claims(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
+	pub fn deposit_pending_claim(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_pending_claims_reserve(account_id, amount)
 	}
 }
@@ -537,7 +537,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 			amount <= Self::claimable_balance(account_id),
 			DispatchError::from(Error::<T>::InsufficientLiquidity)
 		);
-		Self::settle(account_id, Self::transfer_to_pending_claims(account_id, amount).into());
+		Self::settle(account_id, Self::deposit_pending_claim(account_id, amount).into());
 		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 
 		Ok(())
