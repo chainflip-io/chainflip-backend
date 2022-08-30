@@ -4,6 +4,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::FixedU128;
+
 pub type ExchangeRate = FixedU128;
 
 /// Primitive enum denoting different types of currencies.
@@ -66,38 +67,6 @@ impl LpAccountHandler for () {
 	}
 }
 
-/// Account Types.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum AccountType {
-	Validator,
-	Relayer,
-	LiquidityProvider,
-	None,
-}
-
-/// Trait that represents a registry of account types.
-pub trait AccountTypeRegistry {
-	type AccountId;
-	fn register_account(who: &Self::AccountId, account_type: AccountType) -> DispatchResult;
-	fn deregister_account(who: &Self::AccountId) -> DispatchResult;
-	fn account_type(who: &Self::AccountId) -> Option<AccountType>;
-}
-
-impl AccountTypeRegistry for () {
-	type AccountId = ();
-	fn register_account(_who: &Self::AccountId, _account_type: AccountType) -> DispatchResult {
-		Ok(())
-	}
-
-	fn deregister_account(_who: &Self::AccountId) -> DispatchResult {
-		Ok(())
-	}
-
-	fn account_type(_who: &Self::AccountId) -> Option<AccountType> {
-		None
-	}
-}
 pub trait LpProvisioningApi {
 	type AccountId;
 	type Amount;

@@ -8,11 +8,10 @@ pub use pallet::*;
 
 use cf_traits::{
 	liquidity::{
-		AccountType, AccountTypeRegistry, AmmPoolApi, Asset, EgressHandler, ForeignAsset,
-		LpAccountHandler, LpPositionManagement, LpProvisioningApi, LpWithdrawalApi, PoolId,
-		PositionId, TradingPosition,
+		AmmPoolApi, Asset, EgressHandler, ForeignAsset, LpAccountHandler, LpPositionManagement,
+		LpProvisioningApi, LpWithdrawalApi, PoolId, PositionId, TradingPosition,
 	},
-	FlipBalance,
+	AccountType, AccountTypeRegistry, FlipBalance,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::transactional;
@@ -58,10 +57,6 @@ pub mod pallet {
 		/// Address used to deposit withdrawn foreign assets.
 		type EgressAddress: Clone;
 
-		/// The minimum amount required to keep an account open.
-		#[pallet::constant]
-		type ExistentialDeposit: Get<FlipBalance>;
-
 		/// Registry for account types
 		type AccountTypeRegistry: AccountTypeRegistry<AccountId = Self::AccountId>;
 
@@ -80,14 +75,18 @@ pub mod pallet {
 		AccountAlreadyExist,
 		// The account is not registered as `Liquidity Provider`.
 		AccountNotLiquidProvider,
-		// The liquidity pool isn't enabled.
+		// The liquidity pool is not available for trade.
 		InvalidLiquidityPool,
 		// The TradingPosition provided is invalid for the liquidity pool.
 		InvalidTradingPosition,
 		// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
 		// The liquidity pool already exists.
-		LiquidityPoolAlreadyExist,
+		LiquidityPoolAlreadyExists,
+		// The liquidity pool does not exist.
+		LiquidityPoolDoesNotExist,
+		// The liquidity pool is currently disabled.
+		LiquidityPoolDisabled,
 	}
 
 	#[pallet::event]
@@ -110,6 +109,11 @@ pub mod pallet {
 		LiquidityPoolAdded {
 			asset0: Asset,
 			asset1: Asset,
+		},
+		LiquidityPoolStatusSet {
+			asset0: Asset,
+			asset1: Asset,
+			enabled: bool,
 		},
 		TradingPositionOpened {
 			who: T::AccountId,
@@ -162,7 +166,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [Error::LiquidityPoolAlreadyExist]
+		/// - [Error::LiquidityPoolAlreadyExists]
 		#[pallet::weight(0)]
 		pub fn add_liquidity_pool(
 			origin: OriginFor<T>,
@@ -171,14 +175,51 @@ pub mod pallet {
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			let pool_id = (asset0, asset1);
+
 			ensure!(
 				LiquidityPools::<T>::get(pool_id).is_none(),
-				Error::<T>::LiquidityPoolAlreadyExist
+				Error::<T>::LiquidityPoolAlreadyExists
 			);
 
 			LiquidityPools::<T>::insert(pool_id, LiquidityPool::<FlipBalance>::new(asset0, asset1));
 
 			Self::deposit_event(Event::LiquidityPoolAdded { asset0, asset1 });
+
+			Ok(())
+		}
+
+		/// Enable or disables an existing trading pool. Requires Governance.
+		///
+		/// ## Events
+		///
+		/// - [Event::LiquidityPoolEnabled]
+		/// - [Event::LiquidityPoolDisabled]
+		///
+		/// ## Errors
+		///
+		/// - [Error::LiquidityPoolDoesNotExist]
+		#[pallet::weight(0)]
+		pub fn set_liquidity_pool_status(
+			origin: OriginFor<T>,
+			asset0: Asset,
+			asset1: Asset,
+			enabled: bool,
+		) -> DispatchResult {
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			let pool_id = (asset0, asset1);
+
+			ensure!(
+				LiquidityPools::<T>::get(pool_id).is_some(),
+				Error::<T>::LiquidityPoolDoesNotExist
+			);
+
+			LiquidityPools::<T>::mutate(pool_id, |maybe_pool| {
+				let mut pool = maybe_pool.unwrap();
+				pool.enabled = enabled;
+				*maybe_pool = Some(pool);
+			});
+
+			Self::deposit_event(Event::LiquidityPoolStatusSet { asset0, asset1, enabled });
 
 			Ok(())
 		}
@@ -278,7 +319,8 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 
 		// Ensure the liquidity pool is enabled.
 		ensure!(LiquidityPools::<T>::get(pool_id).is_some(), Error::<T>::InvalidLiquidityPool);
-		let mut pool = LiquidityPools::<T>::get(pool_id).expect("Guaranteed to be Some");
+		let mut pool = LiquidityPools::<T>::get(pool_id).unwrap();
+		ensure!(pool.enabled, Error::<T>::LiquidityPoolDisabled);
 
 		let maybe_liquidity = pool.get_liquidity_requirement(&position);
 		ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
@@ -289,8 +331,8 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 		Pallet::<T>::try_debit(who, pool_id.1, liquidity_1)?;
 
 		// Update the pool's liquidity amount
-		pool.liquidity0 = pool.liquidity0.saturating_add(liquidity_0);
-		pool.liquidity1 = pool.liquidity1.saturating_add(liquidity_1);
+		pool.liquidity_0 = pool.liquidity_0.saturating_add(liquidity_0);
+		pool.liquidity_1 = pool.liquidity_1.saturating_add(liquidity_1);
 		LiquidityPools::<T>::insert(pool_id, pool);
 
 		let position_id = NextTradingPositionId::<T>::get();
@@ -337,6 +379,7 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 					let maybe_pool = LiquidityPools::<T>::get(pool_id);
 					ensure!(maybe_pool.is_some(), Error::<T>::InvalidLiquidityPool);
 					let mut pool = maybe_pool.unwrap();
+					ensure!(pool.enabled, Error::<T>::LiquidityPoolDisabled);
 
 					let maybe_liquidity =
 						pool.get_liquidity_requirement(&current_position.position);
@@ -358,12 +401,12 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 					Pallet::<T>::try_debit(who, pool_id.1, new_liquidity_1)?;
 
 					// Update the pool's liquidity amount
-					pool.liquidity0 = pool
-						.liquidity0
+					pool.liquidity_0 = pool
+						.liquidity_0
 						.saturating_add(new_liquidity_0)
 						.saturating_sub(old_liquidity_0);
-					pool.liquidity1 = pool
-						.liquidity1
+					pool.liquidity_1 = pool
+						.liquidity_1
 						.saturating_add(new_liquidity_1)
 						.saturating_sub(old_liquidity_1);
 					LiquidityPools::<T>::insert(pool_id, pool);
@@ -382,12 +425,6 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 
 	#[transactional]
 	fn close_position(who: &Self::AccountId, id: PositionId) -> DispatchResult {
-		// Ensure account is Liquidity Provider type.
-		ensure!(
-			T::AccountTypeRegistry::account_type(who) == Some(AccountType::LiquidityProvider),
-			Error::<T>::AccountNotLiquidProvider
-		);
-
 		// Remove the position.
 		let maybe_position = TradingPositions::<T>::take(id);
 
@@ -399,6 +436,7 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 		let maybe_pool = LiquidityPools::<T>::get(current_position.pool_id);
 		ensure!(maybe_pool.is_some(), Error::<T>::InvalidLiquidityPool);
 		let mut pool = maybe_pool.unwrap();
+		ensure!(pool.enabled, Error::<T>::LiquidityPoolDisabled);
 
 		let maybe_liquidity = pool.get_liquidity_requirement(&current_position.position);
 		ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
@@ -409,8 +447,8 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 		Pallet::<T>::credit(who, current_position.pool_id.1, liquidity_1)?;
 
 		// Update the pool's liquidity amount
-		pool.liquidity0 = pool.liquidity0.saturating_sub(liquidity_0);
-		pool.liquidity1 = pool.liquidity1.saturating_sub(liquidity_1);
+		pool.liquidity_0 = pool.liquidity_0.saturating_sub(liquidity_0);
+		pool.liquidity_1 = pool.liquidity_1.saturating_sub(liquidity_1);
 		LiquidityPools::<T>::insert(current_position.pool_id, pool);
 
 		Self::deposit_event(Event::<T>::TradingPositionClosed {
