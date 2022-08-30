@@ -693,15 +693,12 @@ mod keygen_reporting {
 			match outcome {
 				ReportedOutcome::Success => {
 					status.add_success_vote(&id, NEW_AGG_PUB_KEY);
-					status.remaining_candidates.remove(&id);
 				},
 				ReportedOutcome::BadKey => {
 					status.add_success_vote(&id, *b"bad!");
-					status.remaining_candidates.remove(&id);
 				},
 				ReportedOutcome::Failure => {
 					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)));
-					status.remaining_candidates.remove(&id);
 				},
 				ReportedOutcome::Timeout => {},
 			}
