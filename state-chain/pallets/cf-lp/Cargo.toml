@@ -23,7 +23,6 @@ features = ['derive']
 package = 'parity-scale-codec'
 version = '3.0.0'
 
-# Dev dependencies
 [dependencies.serde]
 features = ['derive']
 version = '1.0.126'

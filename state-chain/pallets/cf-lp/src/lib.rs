@@ -67,6 +67,9 @@ pub mod pallet {
 
 		/// API used to withdraw foreign assets off the chain.
 		type EgressHandler: EgressHandler<Amount = FlipBalance, EgressAddress = Self::EgressAddress>;
+
+		/// For governance checks.
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 	}
 
 	#[pallet::error]
@@ -151,26 +154,33 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Add a new Liquidity Pool and allow trading
+		/// Add a new Liquidity Pool and allow trading. Requires Governance.
 		///
 		/// ## Events
 		///
 		/// - [Event::LiquidityPoolAdded]
+		///
+		/// ## Errors
+		///
+		/// - [Error::LiquidityPoolAlreadyExist]
 		#[pallet::weight(0)]
 		pub fn add_liquidity_pool(
-			_origin: OriginFor<T>,
+			origin: OriginFor<T>,
 			asset0: Asset,
 			asset1: Asset,
 		) -> DispatchResult {
-			// let _ok = T::EnsureWitnessed::ensure_origin(origin)?;
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			let pool_id = (asset0, asset1);
-			ensure!(LiquidityPools::<T>::get(pool_id).is_none(), Error::<T>::LiquidityPoolAlreadyExist);
+			ensure!(
+				LiquidityPools::<T>::get(pool_id).is_none(),
+				Error::<T>::LiquidityPoolAlreadyExist
+			);
 
 			LiquidityPools::<T>::insert(pool_id, LiquidityPool::<FlipBalance>::new(asset0, asset1));
 
 			Self::deposit_event(Event::LiquidityPoolAdded { asset0, asset1 });
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
@@ -189,11 +199,15 @@ impl<T: Config> LpAccountHandler for Pallet<T> {
 		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
 		balance = balance.saturating_sub(amount);
 		FreeBalances::<T>::insert(who, asset, balance);
-		Self::deposit_event(Event::AccountDebited { who: who.clone(), asset, amount_debited: amount });
+		Self::deposit_event(Event::AccountDebited {
+			who: who.clone(),
+			asset,
+			amount_debited: amount,
+		});
 		Ok(())
 	}
 
-	fn credit(who: &Self::AccountId, asset: Asset, amount: Self::Amount) -> DispatchResult{
+	fn credit(who: &Self::AccountId, asset: Asset, amount: Self::Amount) -> DispatchResult {
 		ensure!(
 			T::AccountTypeRegistry::account_type(who) == Some(AccountType::LiquidityProvider),
 			Error::<T>::AccountNotLiquidProvider
@@ -204,7 +218,11 @@ impl<T: Config> LpAccountHandler for Pallet<T> {
 			*maybe_balance = Some(balance);
 		});
 
-		Self::deposit_event(Event::AccountCredited { who: who.clone(), asset, amount_credited: amount });
+		Self::deposit_event(Event::AccountCredited {
+			who: who.clone(),
+			asset,
+			amount_credited: amount,
+		});
 		Ok(())
 	}
 }
@@ -235,7 +253,7 @@ impl<T: Config> LpWithdrawalApi for Pallet<T> {
 		);
 
 		// Debit the asset from the account.
-		Pallet::<T>::try_debit(who, foreign_asset.asset, amount);
+		Pallet::<T>::try_debit(who, foreign_asset.asset, amount)?;
 
 		// Send the assets off-chain.
 		T::EgressHandler::add_to_egress_batch(foreign_asset, amount, egress_address)
@@ -250,7 +268,7 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 	fn open_position(
 		who: &Self::AccountId,
 		pool_id: PoolId,
-		position: TradingPosition<FlipBalance>,
+		position: TradingPosition<Self::Balance>,
 	) -> DispatchResult {
 		// Ensure account is Liquidity Provider type.
 		ensure!(
@@ -281,7 +299,7 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 		// Insert the position into
 		TradingPositions::<T>::insert(
 			position_id,
-			UserTradingPosition::<T::AccountId>::new(who.clone(), position.clone(), pool_id),
+			UserTradingPosition::<T::AccountId>::new(who.clone(), position, pool_id),
 		);
 
 		Self::deposit_event(Event::<T>::TradingPositionOpened {
@@ -295,10 +313,10 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 
 	#[transactional]
 	fn update_position(
-		who: &T::AccountId,
+		who: &Self::AccountId,
 		pool_id: PoolId,
 		id: PositionId,
-		new_position: TradingPosition<FlipBalance>,
+		new_position: TradingPosition<Self::Balance>,
 	) -> DispatchResult {
 		// Ensure account is Liquidity Provider type.
 		ensure!(
@@ -307,55 +325,63 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 		);
 
 		TradingPositions::<T>::try_mutate(id, |maybe_position| {
-			ensure!(maybe_position.is_some(), Error::<T>::InvalidTradingPosition);
-			let mut current_position = maybe_position.unwrap();
+			match maybe_position.as_mut() {
+				None => Err(Error::<T>::InvalidTradingPosition.into()),
+				Some(current_position) => {
+					ensure!(
+						current_position.pool_id == pool_id,
+						Error::<T>::InvalidTradingPosition
+					);
+					ensure!(current_position.who == *who, Error::<T>::UnauthorisedToModify);
 
-			ensure!(current_position.pool_id == pool_id, Error::<T>::InvalidTradingPosition);
-			ensure!(current_position.who == *who, Error::<T>::UnauthorisedToModify);
+					let maybe_pool = LiquidityPools::<T>::get(pool_id);
+					ensure!(maybe_pool.is_some(), Error::<T>::InvalidLiquidityPool);
+					let mut pool = maybe_pool.unwrap();
 
-			let maybe_pool = LiquidityPools::<T>::get(pool_id);
-			ensure!(maybe_pool.is_some(), Error::<T>::InvalidLiquidityPool);
-			let pool = maybe_pool.unwrap();
+					let maybe_liquidity =
+						pool.get_liquidity_requirement(&current_position.position);
+					ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
+					let (old_liquidity_0, old_liquidity_1) = maybe_liquidity.unwrap();
 
-			let maybe_liquidity = pool.get_liquidity_requirement(&current_position.position);
-			ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
-			let (old_liquidity_0, old_liquidity_1) = maybe_liquidity.unwrap();
+					// Refund the debited assets for the previous position
+					Pallet::<T>::credit(who, pool_id.0, old_liquidity_0)?;
+					Pallet::<T>::credit(who, pool_id.1, old_liquidity_1)?;
+					// Update the Position storage
+					current_position.position = new_position;
 
-			// Refund the debited assets for the previous position
-			Pallet::<T>::credit(who, pool_id.0, old_liquidity_0)?;
-			Pallet::<T>::credit(who, pool_id.1, old_liquidity_1)?;
+					// Debit the user's account for the new position.
+					let maybe_new_liquidity = pool.get_liquidity_requirement(&new_position);
+					ensure!(maybe_new_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
+					let (new_liquidity_0, new_liquidity_1) = maybe_new_liquidity.unwrap();
 
-			// Debit the user's account for the new position.
-			let maybe_new_liquidity = pool.get_liquidity_requirement(&new_position);
-			ensure!(maybe_new_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
-			let (new_liquidity_0, new_liquidity_1) = maybe_new_liquidity.unwrap();
+					Pallet::<T>::try_debit(who, pool_id.0, new_liquidity_0)?;
+					Pallet::<T>::try_debit(who, pool_id.1, new_liquidity_1)?;
 
-			Pallet::<T>::try_debit(who, pool_id.0, new_liquidity_0)?;
-			Pallet::<T>::try_debit(who, pool_id.1, new_liquidity_1)?;
+					// Update the pool's liquidity amount
+					pool.liquidity0 = pool
+						.liquidity0
+						.saturating_add(new_liquidity_0)
+						.saturating_sub(old_liquidity_0);
+					pool.liquidity1 = pool
+						.liquidity1
+						.saturating_add(new_liquidity_1)
+						.saturating_sub(old_liquidity_1);
+					LiquidityPools::<T>::insert(pool_id, pool);
 
-			// Update the pool's liquidity amount
-			pool.liquidity0 =
-				pool.liquidity0.saturating_add(new_liquidity_0).saturating_sub(old_liquidity_0);
-			pool.liquidity1 =
-				pool.liquidity1.saturating_add(new_liquidity_1).saturating_sub(old_liquidity_1);
-			LiquidityPools::<T>::insert(pool_id, pool);
-
-			// Update the Position storage
-			current_position.position = new_position;
-			*maybe_position = Some(current_position);
-
-			Self::deposit_event(Event::<T>::TradingPositionUpdated {
-				who: who.clone(),
-				position_id: id,
-				pool_id,
-				new_position,
-			});
-			Ok(())
+					Self::deposit_event(Event::<T>::TradingPositionUpdated {
+						who: who.clone(),
+						position_id: id,
+						pool_id,
+						new_position,
+					});
+					Ok(())
+				},
+			}
 		})
 	}
 
 	#[transactional]
-	fn close_position(who: &T::AccountId, id: PositionId) -> DispatchResult {
+	fn close_position(who: &Self::AccountId, id: PositionId) -> DispatchResult {
 		// Ensure account is Liquidity Provider type.
 		ensure!(
 			T::AccountTypeRegistry::account_type(who) == Some(AccountType::LiquidityProvider),
@@ -367,12 +393,12 @@ impl<T: Config> LpPositionManagement for Pallet<T> {
 
 		// Ensure the position exists and belongs to the user.
 		ensure!(maybe_position.is_some(), Error::<T>::InvalidTradingPosition);
-		let mut current_position = maybe_position.unwrap();
+		let current_position = maybe_position.unwrap();
 		ensure!(current_position.who == *who, Error::<T>::UnauthorisedToModify);
 
 		let maybe_pool = LiquidityPools::<T>::get(current_position.pool_id);
 		ensure!(maybe_pool.is_some(), Error::<T>::InvalidLiquidityPool);
-		let pool = maybe_pool.unwrap();
+		let mut pool = maybe_pool.unwrap();
 
 		let maybe_liquidity = pool.get_liquidity_requirement(&current_position.position);
 		ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);

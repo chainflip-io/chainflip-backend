@@ -1,29 +1,16 @@
-use core::fmt::Display;
-
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::DispatchResult;
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::FixedU128;
 pub type ExchangeRate = FixedU128;
 
 /// Primitive enum denoting different types of currencies.
 #[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Encode,
-	Decode,
-	Serialize,
-	Deserialize,
-	TypeInfo,
-	MaxEncodedLen,
+	Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen,
 )]
-#[serde(rename_all = "UPPERCASE")]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Asset {
 	Eth,
 	Dot,
@@ -31,46 +18,21 @@ pub enum Asset {
 	Flip,
 }
 
-impl core::fmt::Display for Asset {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Asset::Eth => write!(f, "ETH"),
-			Asset::Dot => write!(f, "DOT"),
-			Asset::Usdc => write!(f, "USDC"),
-			Asset::Flip => write!(f, "FLIP"),
-		}
-	}
-}
-
 pub type PoolId = (Asset, Asset);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChain {
 	Ethereum,
 	Polkadot,
 	Bitcoin,
 }
 
-impl Display for ForeignChain {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			ForeignChain::Ethereum => write!(f, "Ethereum"),
-			ForeignChain::Polkadot => write!(f, "Polkadot"),
-			ForeignChain::Bitcoin => write!(f, "Bitcoin"),
-		}
-	}
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ForeignAsset {
 	pub chain: ForeignChain,
 	pub asset: Asset,
-}
-
-impl Display for ForeignAsset {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "chain: {}, Asset: {}", self.chain, self.asset)
-	}
 }
 
 pub trait LpAccountHandler {
@@ -100,12 +62,13 @@ impl LpAccountHandler for () {
 	}
 
 	fn credit(_who: &Self::AccountId, _asset: Asset, _amount: Self::Amount) -> DispatchResult {
-        Ok(())
-    }
+		Ok(())
+	}
 }
 
 /// Account Types.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountType {
 	Validator,
 	Relayer,
@@ -250,48 +213,24 @@ pub type PositionId = u64;
 /// rust.
 pub type Tick = i32;
 
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	Default,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	TypeInfo,
-)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct AmmRange {
 	pub lower: Tick,
 	pub upper: Tick,
 }
 
 /// Denotes the two assets contained in a pool.
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-	TypeInfo,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum PoolAsset {
 	Asset0,
 	Asset1,
 }
 
 /// Represents the types of order that an LP can submit to the AMM.
-#[derive(
-	Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen, Serialize, Deserialize,
-)]
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TradingPosition<Volume> {
 	/// Standard Uniswap V3 style 'sticky' range order position. When executed, the converted
 	/// amount remains in the pool.

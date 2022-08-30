@@ -2,8 +2,10 @@ use cf_traits::liquidity::{AmmPoolApi, Asset, ExchangeRate, TradingPosition};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{FixedPointNumber, traits::{One, Zero}, FixedPointOperand};
-
+use sp_runtime::{
+	traits::{One, Zero},
+	FixedPointNumber, FixedPointOperand,
+};
 
 #[derive(Copy, Clone, Debug, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, TypeInfo)]
 pub struct LiquidityPool<Balance> {
@@ -42,11 +44,11 @@ impl<Balance: FixedPointOperand + Default> AmmPoolApi for LiquidityPool<Balance>
 
 	fn get_exchange_rate(&self) -> ExchangeRate {
 		// TODO: Add exchange rate calculation
-        if self.liquidity1 == Zero::zero() {
-            ExchangeRate::one()
-        } else {
-            ExchangeRate::saturating_from_rational(self.liquidity0, self.liquidity1)
-        }
+		if self.liquidity1 == Zero::zero() {
+			ExchangeRate::one()
+		} else {
+			ExchangeRate::saturating_from_rational(self.liquidity0, self.liquidity1)
+		}
 	}
 
 	fn get_liquidity_requirement(
