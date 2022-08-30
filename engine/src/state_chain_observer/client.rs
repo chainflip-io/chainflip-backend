@@ -13,7 +13,7 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::core::{Error as RpcError, RpcResult};
 use jsonrpsee::types::error::CallError;
-use jsonrpsee::types::ErrorObject;
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
@@ -412,6 +412,14 @@ mod storage_traits {
     }
 }
 
+fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
+    ErrorObject::owned(
+        1010,
+        "Invalid Transaction",
+        Some(<&'static str>::from(invalid_reason)),
+    )
+}
+
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     fn create_and_sign_extrinsic(
         &self,
@@ -504,12 +512,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     // This occurs when the nonce has already been *consumed* i.e a transaction with that nonce
                     // is in a block
                     RpcError::Call(CallError::Custom(ref obj))
-                        if obj
-                            == &ErrorObject::owned(
-                                1010,
-                                "Invalid Transaction",
-                                Some(<&'static str>::from(InvalidTransaction::Stale)),
-                            ) =>
+                        if obj == &invalid_err_obj(InvalidTransaction::Stale) =>
                     {
                         slog::error!(
                             logger,
@@ -519,12 +522,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         );
                     }
                     RpcError::Call(CallError::Custom(ref obj))
-                        if obj
-                            == &ErrorObject::owned(
-                                1010,
-                                "Invalid Transaction",
-                                Some(<&'static str>::from(InvalidTransaction::BadProof)),
-                            ) =>
+                        if obj == &invalid_err_obj(InvalidTransaction::BadProof) =>
                     {
                         slog::error!(
                             logger,
