@@ -954,3 +954,13 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
         logger,
     )
 }
+
+/// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for signers[0].
+pub fn get_key_data_for_test<P: ECPoint>(signers: &[AccountId]) -> KeygenResultInfo<P> {
+    generate_key_data(signers, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
+        .expect("Should not be able to fail generating key data")
+        .1
+        .get(&signers[0])
+        .expect("should get keygen for an account")
+        .to_owned()
+}

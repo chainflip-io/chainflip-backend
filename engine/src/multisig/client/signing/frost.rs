@@ -18,6 +18,9 @@ use crate::multisig::{
     crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
 };
 
+#[cfg(test)]
+pub use tests::{gen_signing_data_stage1, gen_signing_data_stage4};
+
 use sha2::{Digest, Sha256};
 
 /// A pair of secret single-use nonces (and their
@@ -343,7 +346,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
 
     use super::*;
 
@@ -367,10 +370,10 @@ pub mod tests {
         SigningData::<Point>::CommStage1(gen_invalid_signing_comm1(&mut rng))
     }
 
-    fn gen_signing_data_stage2(length: AuthorityCount) -> SigningData<Point> {
+    fn gen_signing_data_stage2(participant_count: AuthorityCount) -> SigningData<Point> {
         let mut rng = Rng::from_seed([0; 32]);
         SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
-            data: (0..length)
+            data: (0..participant_count)
                 .map(|i| {
                     (
                         i as AuthorityCount,
@@ -381,10 +384,10 @@ pub mod tests {
         })
     }
 
-    pub fn gen_signing_data_stage4(length: AuthorityCount) -> SigningData<Point> {
+    pub fn gen_signing_data_stage4(participant_count: AuthorityCount) -> SigningData<Point> {
         let mut rng = Rng::from_seed([0; 32]);
         SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
-            data: (0..length)
+            data: (0..participant_count)
                 .map(|i| (i as AuthorityCount, Some(gen_invalid_local_sig(&mut rng))))
                 .collect(),
         })

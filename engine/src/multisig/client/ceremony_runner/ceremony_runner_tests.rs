@@ -4,8 +4,7 @@ use crate::{
         client::{
             ceremony_manager::{KeygenCeremony, SigningCeremony},
             common::{broadcast::BroadcastStage, CeremonyCommon},
-            gen_signing_data_stage1, gen_signing_data_stage4,
-            keygen::get_key_data_for_test,
+            gen_signing_data_stage1, gen_signing_data_stage4, get_key_data_for_test,
             signing::{
                 frost::SigningData, frost_stages::AwaitCommitments1, SigningStateCommonInfo,
             },
@@ -108,20 +107,22 @@ async fn ensure_message_is_ignored(
     state: &mut CeremonyRunner<SigningCeremony<EthSigning>>,
     sender_id: AccountId,
     message: SigningData<Point>,
-    expected_awaited_parties: usize,
 ) {
+    let awaited_parties_before_message = state.get_awaited_parties_count();
+
     assert_eq!(
         state.process_or_delay_message(sender_id, message).await,
         None
     );
+
     assert!(state.delayed_messages.is_empty());
     assert_eq!(
         state.get_awaited_parties_count(),
-        Some(expected_awaited_parties as u32)
+        awaited_parties_before_message
     );
 }
 
-/// Setup a ceremony runner for a signing ceremony at stage 1 (in and authorised state)
+/// Setup a ceremony runner for a signing ceremony at stage 1 (in an authorised state)
 fn gen_stage_1_signing_state(
     own_idx: AuthorityCount,
     signing_idxs: BTreeSet<AuthorityCount>,
@@ -164,9 +165,10 @@ fn gen_stage_1_signing_state(
 async fn should_ignore_duplicate_message() {
     let own_idx = 0;
     let sender_idx = 1;
-    let signing_idxs = BTreeSet::from_iter(vec![own_idx, sender_idx].into_iter());
+    let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
 
-    // Setup a stage 1 signing ceremony state
+    // The relevant code path is the same for all stages,
+    // so we just use a stage 1 state for this test.
     let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
 
     // Process a valid message
@@ -185,7 +187,6 @@ async fn should_ignore_duplicate_message() {
         &mut stage_1_state,
         ACCOUNT_IDS[sender_idx as usize].clone(),
         gen_signing_data_stage1(),
-        signing_idxs.len(),
     )
     .await;
 }
@@ -194,11 +195,12 @@ async fn should_ignore_duplicate_message() {
 async fn should_ignore_message_from_non_participating_account() {
     let own_idx = 0;
     let sender_idx = 1;
-    let signing_idxs = BTreeSet::from_iter(vec![own_idx, sender_idx].into_iter());
+    let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
     let non_participant_idx = 2;
     assert!(!signing_idxs.contains(&(non_participant_idx)));
 
-    // Setup a stage 1 signing ceremony state
+    // The relevant code path is the same for all stages,
+    // so we just use a stage 1 state for this test.
     let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
 
     // Process a message from a node that is not in the signing ceremony
@@ -206,7 +208,6 @@ async fn should_ignore_message_from_non_participating_account() {
         &mut stage_1_state,
         ACCOUNT_IDS[non_participant_idx as usize].clone(),
         gen_signing_data_stage1(),
-        signing_idxs.len(),
     )
     .await;
 }
@@ -215,29 +216,25 @@ async fn should_ignore_message_from_non_participating_account() {
 async fn should_ignore_message_from_unknown_account_id() {
     let own_idx = 0;
     let sender_idx = 1;
-    let signing_idxs = BTreeSet::from_iter(vec![own_idx, sender_idx].into_iter());
+    let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
     let unknown_id = AccountId::new([0; 32]);
 
-    // Setup a stage 1 signing ceremony state
+    // The relevant code path is the same for all stages,
+    // so we just use a stage 1 state for this test.
     let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
 
     // Process a message from an unknown AccountId
-    ensure_message_is_ignored(
-        &mut stage_1_state,
-        unknown_id,
-        gen_signing_data_stage1(),
-        signing_idxs.len(),
-    )
-    .await;
+    ensure_message_is_ignored(&mut stage_1_state, unknown_id, gen_signing_data_stage1()).await;
 }
 
 #[tokio::test]
-async fn should_ignore_message_from_unexpected_state() {
+async fn should_ignore_message_from_unexpected_stage() {
     let own_idx = 0;
     let sender_idx = 1;
-    let signing_idxs = BTreeSet::from_iter(vec![own_idx, sender_idx].into_iter());
+    let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
 
-    // Setup a stage 1 signing ceremony state
+    // The relevant code path is the same for all stages,
+    // so we just use a stage 1 state for this test.
     let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
 
     // Process a message from an unexpected stage
@@ -245,7 +242,6 @@ async fn should_ignore_message_from_unexpected_state() {
         &mut stage_1_state,
         ACCOUNT_IDS[sender_idx as usize].clone(),
         gen_signing_data_stage4(signing_idxs.len() as u32),
-        signing_idxs.len(),
     )
     .await;
 }
