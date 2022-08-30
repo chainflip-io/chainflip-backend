@@ -529,7 +529,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [ThresholdSignatureUnavailable](Error::ThresholdSignatureUnavailable)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::on_keygen_verification_result())]
 		pub fn on_keygen_verification_result(
 			origin: OriginFor<T>,
 			keygen_ceremony_id: CeremonyId,
