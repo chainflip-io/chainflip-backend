@@ -54,3 +54,20 @@ fn signer_nomination_respects_epoch() {
 		assert!(new_nominees.len() > old_nominees.len());
 	})
 }
+
+#[test]
+fn nomination_from_participant_set_selects_participants() {
+	super::genesis::default().build().execute_with(|| {
+		let genesis_authorities = Validator::current_authorities();
+
+		let participants =
+			(0u8..50).into_iter().map(|i| AccountId32::from([i; 32])).collect::<Vec<_>>();
+		assert!(genesis_authorities.iter().all(|a| !participants.contains(a)));
+
+		// If there are no genesis authorities in the participant set, then it should not be
+		// possible to have them selected in the nominees
+		assert!(RandomSignerNomination::nomination_from_participant_set((), participants)
+			.iter()
+			.all(|a| !genesis_authorities.contains(a)));
+	})
+}
