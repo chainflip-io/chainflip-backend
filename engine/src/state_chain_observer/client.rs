@@ -1066,7 +1066,7 @@ async fn inner_connect_to_state_chain(
     };
 
     let (latest_block_hash, latest_block_number, account_nonce) = {
-        async fn get_account_nonce<C: StateApiClient<state_chain_runtime::Hash> + Send + Sync>(
+        async fn get_account_nonce<C: ChainflipClient + Send + Sync>(
             state_rpc_client: &C,
             account_storage_key: &StorageKey,
             block_hash: state_chain_runtime::Hash,
