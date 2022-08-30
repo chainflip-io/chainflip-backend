@@ -929,7 +929,6 @@ pub async fn connect_to_state_chain(
         .context("Failed to connect to state chain node")
 }
 
-// #[allow(clippy::mixed_read_write_in_expression)]
 async fn inner_connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
     wait_for_staking: bool,
