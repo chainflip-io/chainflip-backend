@@ -18,7 +18,7 @@ macro_rules! assert_last_event {
 	($pat:pat) => {
 		let event = last_event::<MockRuntime>();
 		assert!(
-			matches!(last_event::<MockRuntime>(), $crate::mock::Event::VaultsPallet($pat)),
+			matches!(event, $crate::mock::Event::VaultsPallet($pat)),
 			"Unexpected event {:?}",
 			event
 		);
@@ -108,6 +108,30 @@ fn keygen_failure() {
 			PalletOffence::FailedKeygen,
 			BAD_CANDIDATES.iter().cloned(),
 		);
+	});
+}
+
+#[test]
+fn keygen_verification_failure() {
+	new_test_ext().execute_with(|| {
+		let participants = (5u64..15).into_iter().collect::<Vec<_>>();
+
+		let keygen_ceremony_id = 12;
+		let (request_id, _) = VaultsPallet::trigger_keygen_verification(
+			keygen_ceremony_id,
+			NEW_AGG_PUB_KEY,
+			participants.clone(),
+		);
+
+		let blamed = vec![5, 6, 7, 8];
+		assert!(blamed.iter().all(|b| participants.contains(b)));
+
+		EthMockThresholdSigner::set_signature_ready(request_id, Err(blamed.clone()));
+
+		EthMockThresholdSigner::on_signature_ready(request_id);
+
+		assert_last_event!(PalletEvent::KeygenVerificationFailure { .. });
+		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed)
 	});
 }
 
@@ -329,8 +353,10 @@ fn keygen_report_success() {
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingKeygenVerification { .. }));
 
 
+		// 
+
 		let last_request_id = EthMockThresholdSigner::last_request_id().unwrap();
-		EthMockThresholdSigner::set_signature_ready(last_request_id, ETH_DUMMY_SIG);
+		EthMockThresholdSigner::set_signature_ready(last_request_id, Ok(ETH_DUMMY_SIG));
 		EthMockThresholdSigner::on_signature_ready(last_request_id);
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingRotation { .. }));
@@ -482,7 +508,10 @@ fn vault_key_rotated() {
 		);
 
 		let keygen_verification_request_id = EthMockThresholdSigner::last_request_id().unwrap();
-		EthMockThresholdSigner::set_signature_ready(keygen_verification_request_id, ETH_DUMMY_SIG);
+		EthMockThresholdSigner::set_signature_ready(
+			keygen_verification_request_id,
+			Ok(ETH_DUMMY_SIG),
+		);
 		EthMockThresholdSigner::on_signature_ready(keygen_verification_request_id);
 
 		assert_ok!(VaultsPallet::vault_key_rotated(

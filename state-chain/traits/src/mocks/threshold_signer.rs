@@ -29,13 +29,16 @@ where
 		Self::get_value(LAST_REQ_ID)
 	}
 
-	pub fn set_signature_ready(request_id: u32, signature: <C as ChainCrypto>::ThresholdSignature) {
+	pub fn set_signature_ready(
+		request_id: u32,
+		signature_result: Result<<C as ChainCrypto>::ThresholdSignature, Vec<MockValidatorId>>,
+	) {
 		Self::put_storage(
 			SIGNATURE,
 			request_id,
 			crate::AsyncResult::<
 				Result<<C as ChainCrypto>::ThresholdSignature, Vec<MockValidatorId>>,
-			>::Ready(Ok(signature)),
+			>::Ready(signature_result),
 		);
 	}
 
@@ -101,6 +104,6 @@ where
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(request_id: Self::RequestId, signature: C::ThresholdSignature) {
-		Self::set_signature_ready(request_id, signature)
+		Self::set_signature_ready(request_id, Ok(signature))
 	}
 }
