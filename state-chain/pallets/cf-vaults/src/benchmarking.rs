@@ -3,8 +3,10 @@
 
 use super::*;
 
+use crate::Pallet;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_traits::EpochInfo;
-use codec::{Decode, Encode};
+use codec::Decode;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
@@ -13,7 +15,6 @@ use frame_system::RawOrigin;
 // another chain we've to take this in account in our weight calculation benchmark.
 
 const CEREMONY_ID: u64 = 1;
-const NEW_PUBLIC_KEY: [u8; 33] = [0x01; 33];
 const TX_HASH: [u8; 32] = [0xab; 32];
 
 /// Generate an authority set
@@ -30,16 +31,6 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	authority_set.insert(caller);
 	authority_set
 }
-
-// ======================================================================================
-//            Helper methods to convert bytes to an associated type
-
-fn aggkey_from_slice<T: Config<I>, I: 'static>(key: &[u8]) -> AggKeyFor<T, I> {
-	let encoded = key.encode();
-	AggKeyFor::<T, I>::decode(&mut &encoded[..]).unwrap()
-}
-
-// ======================================================================================
 
 benchmarks_instance_pallet! {
 	on_initialize_failure {
@@ -81,7 +72,7 @@ benchmarks_instance_pallet! {
 		for validator_id in &keygen_participants {
 			let _result = keygen_response_status.add_success_vote(
 				validator_id,
-				aggkey_from_slice::<T, I>(&NEW_PUBLIC_KEY[..])
+				AggKeyFor::<T, I>::benchmark_value()
 			);
 		}
 
@@ -112,14 +103,14 @@ benchmarks_instance_pallet! {
 				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants)
 			},
 		);
-		use cf_chains::eth::sig_constants::{AGG_KEY_PUB, SIG};
+		use cf_chains::eth::sig_constants::SIG;
 		let bad_sig_byte = (SIG[SIG.len() - 1] + 1) % u8::MAX;
 		let bad_sig = [SIG[..SIG.len() - 1].to_vec(), vec![bad_sig_byte]].concat();
 
 		// Submit a key that doesn't verify the signature. This is approximately the same cost as success at time of writing.
 		// But is much easier to write, and we might add slashing, which would increase the cost of the failure. Making this test the more
 		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
-	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Ok(aggkey_from_slice::<T, I>(&AGG_KEY_PUB)))
+	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Ok(AggKeyFor::<T, I>::benchmark_value()))
 	verify {
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),
@@ -127,8 +118,28 @@ benchmarks_instance_pallet! {
 				if response_status.remaining_candidate_count() == 149
 		))
 	}
+	on_keygen_verification_result {
+		let caller: T::AccountId = whitelisted_caller();
+		let agg_key = AggKeyFor::<T, I>::benchmark_value();
+		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
+		let (request_id, signing_ceremony_id) = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
+		T::ThresholdSigner::insert_signature(
+			request_id,
+			ThresholdSignatureFor::<T, I>::benchmark_value(),
+		);
+		let call = Call::<T, I>::on_keygen_verification_result {
+			keygen_ceremony_id: CEREMONY_ID,
+			threshold_request_id: request_id,
+			signing_ceremony_id,
+			new_public_key: agg_key,
+		};
+		let origin = T::EnsureThresholdSigned::successful_origin();
+	} : { call.dispatch_bypass_filter(origin)? }
+	verify {
+
+	}
 	vault_key_rotated {
-		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
+		let new_public_key = AggKeyFor::<T, I>::benchmark_value();
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
@@ -144,9 +155,8 @@ benchmarks_instance_pallet! {
 	}
 	vault_key_rotated_externally {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
-		let new_public_key = aggkey_from_slice::<T, I>(&[0xbb; 33][..]);
 		let call = Call::<T, I>::vault_key_rotated_externally {
-			new_public_key: new_public_key,
+			new_public_key: AggKeyFor::<T, I>::benchmark_value(),
 			block_number: 5u64.into(),
 			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};

@@ -741,7 +741,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
 		participants: Vec<T::ValidatorId>,
-	) {
+	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
 		let byte_key: Vec<u8> = new_public_key.into();
 		let (request_id, signing_ceremony_id) = T::ThresholdSigner::request_signature_with(
 			byte_key.clone().into(),
@@ -768,7 +768,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
 		);
-		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id))
+		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
+		(request_id, signing_ceremony_id)
 	}
 
 	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
