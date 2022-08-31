@@ -973,14 +973,14 @@ async fn inner_connect_to_state_chain(
 
         let mut latest_finalized_header: state_chain_runtime::Header =
             sparse_finalized_block_header_stream.next().await.unwrap()?;
-        let chain_rpc_client = state_chain_rpc_client.rpc_client.clone();
+        let rpc_client = state_chain_rpc_client.rpc_client.clone();
 
         (
             latest_finalized_header.clone(),
             Box::pin(
                 sparse_finalized_block_header_stream
                     .and_then(move |next_finalized_header| {
-                        let chain_rpc_client = chain_rpc_client.clone();
+                        let rpc_client = rpc_client.clone();
                         assert!(latest_finalized_header.number < next_finalized_header.number);
 
                         let prev_finalized_header = std::mem::replace(
@@ -989,13 +989,13 @@ async fn inner_connect_to_state_chain(
                         );
 
                         async move {
-                            let chain_rpc_client = chain_rpc_client.as_ref();
+                            let rpc_client = rpc_client.as_ref();
                             let intervening_headers: Vec<_> = futures::stream::iter(
                                 prev_finalized_header.number + 1..next_finalized_header.number,
                             )
                             .then(|block_number| async move {
                                 let block_hash = try_unwrap_value(
-                                    chain_rpc_client
+                                    rpc_client
                                         .block_hash(Some(sp_rpc::list::ListOrValue::Value(
                                             block_number.into(),
                                         )))
@@ -1004,7 +1004,7 @@ async fn inner_connect_to_state_chain(
                                 )
                                 .unwrap();
                                 let block_header: state_chain_runtime::Header =
-                                    chain_rpc_client.header(Some(block_hash)).await?.unwrap();
+                                    rpc_client.header(Some(block_hash)).await?.unwrap();
                                 assert_eq!(block_header.hash(), block_hash);
                                 assert_eq!(block_header.number, block_number);
                                 Result::<_, anyhow::Error>::Ok((block_hash, block_header))
