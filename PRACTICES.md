@@ -17,7 +17,7 @@ We choose to document our practices here inside this repository, so they are eas
 # Requirements
 
 Our practices must be:
-- Clearly explained, as if they are ambiguous that will allow room for disagreement to persist.
+- As unambiguous as possible: it should be clear how and when the practice applies. If necessary, include clarifying examples so that debates can be swiftly resolved.
 - Well-reasoned otherwise we likely alienate some developers, as such each practice should be justified using logic, principles, ideals, and other practices.
 
 # Maintainence
