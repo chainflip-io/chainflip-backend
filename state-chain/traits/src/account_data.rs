@@ -7,12 +7,22 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+/// Account types of the Chainflip network.
+///
+/// Chainflip's network is permissioned and only accessible to owners of accounts with staked Flip.
+/// In addition to staking, the account owner is required to register their account as one fo the
+/// account types, to indicate the role they intend to play in the network.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountType {
+	/// The default account type - indicates a bare account with no special role or permissions.
 	Undefined,
+	/// Validators are responsible for the maintainance and operation of the Chainflip network. See
+	/// [ValidatorAccountState] for a further breakdown of this role.
 	Validator { state: ValidatorAccountState, is_active_bidder: bool },
+	/// Liquidity providers can deposit assets and deploy them in trading pools.
 	LiquidityProvider,
+	/// Relayers submit swap intents on behalf of users.
 	Relayer,
 }
 
@@ -25,9 +35,16 @@ impl Default for AccountType {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ValidatorAccountState {
+	/// Current authorities are those validator nodes whose stake is (partially) bonded and whose
+	/// responsibilities include participating in block authorship, witnessing, and threshold
+	/// signature ceremonies.
 	CurrentAuthority,
-	/// Historical implies backup too
+	/// Historical authority status implies Backup. It also implies that some bond is still being
+	/// held and that the validator may be required to participate in ceremonies using the keys
+	/// from an unexpired epoch.
 	HistoricalAuthority,
+	/// Backup state implies that the node is staked and may bid for an auction slot and compete
+	/// for backup rewards.
 	Backup,
 }
 
@@ -53,6 +70,7 @@ pub struct ChainflipAccountData {
 	pub account_type: AccountType,
 }
 
+/// Apis specific to accounts of type [AccountType::Validator].
 pub trait ValidatorAccount {
 	type AccountId;
 
@@ -105,6 +123,7 @@ impl From<AccountError> for DispatchError {
 	}
 }
 
+/// Chainflip-specific wrapper around [frame_system]'s account data accessors.
 pub struct ChainflipAccountStore<T>(PhantomData<T>);
 
 impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccountStore<T> {
