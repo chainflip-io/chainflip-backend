@@ -572,7 +572,7 @@ pub fn generate_keygen_context(
 
 struct CeremonyStates<Ceremony: CeremonyTrait> {
     // Collection of all ceremony handles used to send data to the ceremony tasks
-    inner: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
+    ceremony_handles: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
     /// used to get notified when a ceremony is finished
     ceremony_futures: FuturesUnordered<tokio::task::JoinHandle<CeremonyId>>,
 }
@@ -580,7 +580,7 @@ struct CeremonyStates<Ceremony: CeremonyTrait> {
 impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     fn new() -> Self {
         Self {
-            inner: HashMap::new(),
+            ceremony_handles: HashMap::new(),
             ceremony_futures: Default::default(),
         }
     }
@@ -613,7 +613,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) -> &mut CeremonyHandle<Ceremony> {
-        self.inner.entry(ceremony_id).or_insert_with(|| {
+        self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
             let (ceremony_handle, task_handle) = CeremonyHandle::spawn(ceremony_id, logger);
 
             self.ceremony_futures.push(task_handle);
@@ -627,9 +627,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         match id {
             Ok(id) => {
                 // We can't be sure that we have a ceremony to remove here because
-                // we may/may-not have an unauthorised ceremony to remove.
-                // This is due to unauthorised ceremonies being able to timeout.
-                let _removed = self.inner.remove(&id);
+                // of the case where the ceremony request is invalid, we may have an
+                // unauthorised ceremony to cleanup.
+                let _removed = self.ceremony_handles.remove(&id);
             }
             Err(err) => slog::error!(logger, "Ceremony panicked with: {}", err),
         };
@@ -637,7 +637,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 
     #[cfg(test)]
     fn len(&self) -> usize {
-        self.inner.len()
+        self.ceremony_handles.len()
     }
 }
 
