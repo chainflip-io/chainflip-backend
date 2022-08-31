@@ -199,7 +199,7 @@ where
 	}
 	// FIXME: Respect the block hash argument here
 	fn cf_tx_fee_multiplier(&self, _at: Option<<B as BlockT>::Hash>) -> RpcResult<u64> {
-		TX_FEE_MULTIPLIER.try_into().map_err(to_rpc_error)
+		Ok(TX_FEE_MULTIPLIER as u64)
 	}
 	fn cf_auction_parameters(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<(u32, u32)> {
 		self.client
