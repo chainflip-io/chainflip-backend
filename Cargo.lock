@@ -802,6 +802,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-primitives"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+]
+
+[[package]]
 name = "cf-runtime-macros"
 version = "0.1.0"
 dependencies = [
