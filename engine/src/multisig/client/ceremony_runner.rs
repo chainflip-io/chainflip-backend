@@ -22,7 +22,7 @@ use crate::{
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
-    ceremony_manager::{CeremonyTrait, DynStage, PreparedRequest},
+    ceremony_manager::{CeremonyOutcome, CeremonyTrait, DynStage, PreparedRequest},
     common::{CeremonyFailureReason, PreProcessStageDataCheck},
     utils::PartyIdxMapping,
 };
@@ -64,12 +64,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
         mut request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
         logger: slog::Logger,
-    ) -> CeremonyId {
+    ) -> (CeremonyId, CeremonyOutcome<Ceremony>) {
         // We always create unauthorised first, it can get promoted to
         // an authorised one with a ceremony request
         let mut runner = Self::new_unauthorised(ceremony_id, &logger);
-        // We don't get the result sender until the ceremony request comes in
-        let mut final_result_sender = None;
 
         let outcome = loop {
             tokio::select! {
@@ -82,10 +80,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 }
                 request = &mut request_receiver => {
 
-                    let PreparedRequest { init_stage, idx_mapping, participants_count, result_sender } = request.expect("Ceremony request channel was dropped unexpectedly");
-                    final_result_sender = Some(result_sender);
+                    let PreparedRequest { init_stage, idx_mapping, participants_count} = request.expect("Ceremony request channel was dropped unexpectedly");
 
-                    if let Some(result) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await {
+                    if let Some(result) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await { // TODO: use PreparedRequest as the argument
                         break result;
                     }
 
@@ -100,14 +97,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             }
         };
 
-        if let Some(result_sender) = final_result_sender {
-            let _result = result_sender.send(outcome);
-        } else {
-            // The ceremony has timed out before being authorised.
-            // There is no way to report this to the SC yet, so just ignore it.
-        }
-
-        ceremony_id
+        (ceremony_id, outcome)
     }
 
     /// Create ceremony state without a ceremony request (which is expected to arrive

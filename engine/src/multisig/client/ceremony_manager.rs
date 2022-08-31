@@ -5,7 +5,6 @@ use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio::task::JoinError;
 
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
@@ -116,14 +115,11 @@ pub struct PreparedRequest<C: CeremonyTrait> {
     pub init_stage: DynStage<C>,
     pub idx_mapping: Arc<PartyIdxMapping>,
     pub participants_count: AuthorityCount,
-    pub result_sender: CeremonyResultSender<C>,
 }
 
 // If the ceremony request is invalid, a failure reason is returned with the result sender
-type InitCeremonyFailure<Ceremony> = (
-    CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>,
-    CeremonyResultSender<Ceremony>,
-);
+type InitCeremonyFailure<Ceremony> =
+    CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>; // TODO: no need for this alias anymore
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
 pub fn prepare_signing_request<C: CryptoScheme>(
@@ -134,7 +130,6 @@ pub fn prepare_signing_request<C: CryptoScheme>(
     data: MessageHash,
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
     rng: Rng,
-    result_sender: CeremonyResultSender<SigningCeremony<C>>,
     logger: &slog::Logger,
 ) -> Result<PreparedRequest<SigningCeremony<C>>, InitCeremonyFailure<SigningCeremony<C>>> {
     // Check that we have enough signers
@@ -148,9 +143,8 @@ pub fn prepare_signing_request<C: CryptoScheme>(
             minimum_signers_needed
         );
 
-        return Err((
-            CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
-            result_sender,
+        return Err(CeremonyFailureReason::Other(
+            SigningFailureReason::NotEnoughSigners,
         ));
     }
 
@@ -160,7 +154,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
             Ok(result) => result,
             Err(reason) => {
                 slog::debug!(logger, "Request to sign invalid: {}", reason);
-                return Err((CeremonyFailureReason::InvalidParticipants, result_sender));
+                return Err(CeremonyFailureReason::InvalidParticipants);
             }
         };
 
@@ -193,7 +187,6 @@ pub fn prepare_signing_request<C: CryptoScheme>(
         init_stage,
         idx_mapping: key_info.validator_map,
         participants_count: signers_len,
-        result_sender,
     })
 }
 
@@ -205,7 +198,6 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
     rng: Rng,
     allowing_high_pubkey: bool,
-    result_sender: CeremonyResultSender<KeygenCeremony<C>>,
     logger: &slog::Logger,
 ) -> Result<PreparedRequest<KeygenCeremony<C>>, InitCeremonyFailure<KeygenCeremony<C>>> {
     let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
@@ -216,7 +208,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
             Err(reason) => {
                 slog::debug!(logger, "Keygen request invalid: {}", reason);
 
-                return Err((CeremonyFailureReason::InvalidParticipants, result_sender));
+                return Err(CeremonyFailureReason::InvalidParticipants);
             }
         };
 
@@ -249,7 +241,6 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
         init_stage,
         idx_mapping: validator_map,
         participants_count: num_of_participants,
-        result_sender,
     })
 }
 
@@ -346,11 +337,21 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                         },
                     }
                 }
-                Some(finished_ceremony_id) = self.signing_states.ceremony_futures.next() => {
-                    self.signing_states.cleanup_ceremony(finished_ceremony_id, &self.logger);
+                Some(result) = self.signing_states.ceremony_futures.next() => {
+                    match result{
+                        Ok((id,outcome))=>{
+                            self.signing_states.finalize_ceremony(id, outcome);
+                        },
+                        Err(e)=>panic!("Signing ceremony panicked with: {}", e),
+                    }
                 }
-                Some(finished_ceremony_id) = self.keygen_states.ceremony_futures.next() => {
-                    self.keygen_states.cleanup_ceremony(finished_ceremony_id, &self.logger);
+                Some(result) = self.keygen_states.ceremony_futures.next() => {
+                    match result{
+                        Ok((id,outcome))=>{
+                            self.keygen_states.finalize_ceremony(id, outcome);
+                        },
+                        Err(e)=>panic!("Keygen ceremony panicked with: {}", e),
+                    }
                 }
             }
         }
@@ -385,17 +386,17 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             &self.outgoing_p2p_message_sender,
             rng,
             self.allowing_high_pubkey,
-            result_sender,
             &logger_with_ceremony_id,
         ) {
             Ok(request) => request,
-            Err((failed_outcome, result_sender)) => {
+            Err(failed_outcome) => {
                 let _res = result_sender.send(CeremonyOutcome::<KeygenCeremony<C>>::Err((
                     BTreeSet::new(),
                     failed_outcome,
                 )));
-                self.keygen_states
-                    .cleanup_ceremony(Ok(ceremony_id), &logger_with_ceremony_id);
+
+                // Remove a possible unauthorised ceremony
+                let _result = self.keygen_states.cleanup_ceremony(&ceremony_id);
                 return;
             }
         };
@@ -405,7 +406,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
         ceremony_handle
-            .on_request(request)
+            .on_request(request, result_sender)
             .with_context(|| format!("Invalid keygen request with ceremony id {}", ceremony_id))
             .unwrap();
     }
@@ -439,17 +440,17 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             data,
             &self.outgoing_p2p_message_sender,
             rng,
-            result_sender,
             &logger_with_ceremony_id,
         ) {
             Ok(request) => request,
-            Err((failed_outcome, result_sender)) => {
+            Err(failed_outcome) => {
                 let _res = result_sender.send(CeremonyOutcome::<SigningCeremony<C>>::Err((
                     BTreeSet::new(),
                     failed_outcome,
                 )));
-                self.signing_states
-                    .cleanup_ceremony(Ok(ceremony_id), &logger_with_ceremony_id);
+
+                // Remove a possible unauthorised ceremony
+                let _result = self.signing_states.cleanup_ceremony(&ceremony_id);
                 return;
             }
         };
@@ -460,7 +461,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             .get_state_or_create_unauthorized(ceremony_id, &self.logger);
 
         ceremony_handle
-            .on_request(request)
+            .on_request(request, result_sender)
             .with_context(|| format!("Invalid sign request with ceremony id {}", ceremony_id))
             .unwrap();
     }
@@ -573,7 +574,8 @@ struct CeremonyStates<Ceremony: CeremonyTrait> {
     // Collection of all ceremony handles used to send data to the ceremony tasks
     ceremony_handles: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
     /// used to get notified when a ceremony is finished
-    ceremony_futures: FuturesUnordered<tokio::task::JoinHandle<CeremonyId>>,
+    ceremony_futures:
+        FuturesUnordered<tokio::task::JoinHandle<(CeremonyId, CeremonyOutcome<Ceremony>)>>,
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
@@ -621,17 +623,34 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         })
     }
 
-    /// Remove any state associated with the ceremony
-    fn cleanup_ceremony(&mut self, id: Result<CeremonyId, JoinError>, logger: &slog::Logger) {
-        match id {
-            Ok(id) => {
-                // We can't be sure that we have a ceremony to remove here because
-                // of the case where the ceremony request is invalid, we may have an
-                // unauthorised ceremony to cleanup.
-                let _removed = self.ceremony_handles.remove(&id);
+    /// Finish an authorised ceremony by sending the outcome and then cleaning up
+    fn finalize_ceremony(
+        &mut self,
+        ceremony_id: CeremonyId,
+        ceremony_outcome: CeremonyOutcome<Ceremony>,
+    ) {
+        if let Some(handle) = self.ceremony_handles.get_mut(&ceremony_id) {
+            if let CeremonyRequestState::Authorised(result_sender) = std::mem::replace(
+                &mut handle.request_state,
+                CeremonyRequestState::Authorised(None),
+            ) {
+                let _result = result_sender
+                    .expect("Should have result sender")
+                    .send(ceremony_outcome);
+
+                self.cleanup_ceremony(&ceremony_id).unwrap();
+            } else {
+                panic!("Should not finalize unauthorised ceremony");
             }
-            Err(err) => slog::error!(logger, "Ceremony panicked with: {}", err),
-        };
+        }
+    }
+
+    // Removing any state associated with the ceremony
+    fn cleanup_ceremony(&mut self, ceremony_id: &CeremonyId) -> Result<()> {
+        self.ceremony_handles
+            .remove(ceremony_id)
+            .ok_or_else(|| anyhow::Error::msg("Cleanup failed: Ceremony handle does not exist"))?;
+        Ok(())
     }
 
     #[cfg(test)]
@@ -642,17 +661,30 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 
 // ==================
 
-// Contains the channels used to send data to a running ceremony
+/// Contains the result sender and the channels used to send data to a running ceremony
 struct CeremonyHandle<Ceremony: CeremonyTrait> {
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
-    pub request_sender: Option<oneshot::Sender<PreparedRequest<Ceremony>>>,
+    pub request_state: CeremonyRequestState<Ceremony>,
+}
+
+/// Contains either the request sender or the result sender depending on the state of the ceremony
+enum CeremonyRequestState<Ceremony: CeremonyTrait> {
+    /// Initial state before we have received the request from the SC.
+    /// Contains the oneshot channel used to relay the request to the ceremony task.
+    Unauthorised(oneshot::Sender<PreparedRequest<Ceremony>>),
+    /// State after receiving the request from the SC.
+    /// Contains the result sender used to send the final outcome.
+    Authorised(Option<CeremonyResultSender<Ceremony>>),
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
     fn spawn(
         cid: CeremonyId,
         logger: &slog::Logger,
-    ) -> (Self, tokio::task::JoinHandle<CeremonyId>) {
+    ) -> (
+        Self,
+        tokio::task::JoinHandle<(CeremonyId, CeremonyOutcome<Ceremony>)>,
+    ) {
         let (msg_s, msg_r) = mpsc::unbounded_channel();
         let (req_s, req_r) = oneshot::channel();
 
@@ -666,19 +698,33 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
         (
             CeremonyHandle {
                 message_sender: msg_s,
-                request_sender: Some(req_s),
+                request_state: CeremonyRequestState::Unauthorised(req_s),
             },
             task_handle,
         )
     }
 
-    fn on_request(&mut self, request: PreparedRequest<Ceremony>) -> Result<()> {
-        if let Some(request_sender) = self.request_sender.take() {
-            let _res = request_sender.send(request);
-            Ok(())
-        } else {
-            // A request has already been sent to this ceremony
-            bail!("Duplicate ceremony id");
+    fn on_request(
+        &mut self,
+        request: PreparedRequest<Ceremony>,
+        result_sender: CeremonyResultSender<Ceremony>,
+    ) -> Result<()> {
+        match &self.request_state {
+            CeremonyRequestState::Unauthorised(_) => {
+                // Transition to an authorized state by consuming the
+                // request sender and storing the result sender
+                if let CeremonyRequestState::Unauthorised(request_sender) = std::mem::replace(
+                    &mut self.request_state,
+                    CeremonyRequestState::Authorised(Some(result_sender)),
+                ) {
+                    let _res = request_sender.send(request);
+                }
+                Ok(())
+            }
+            CeremonyRequestState::Authorised(_) => {
+                // A request has already been sent to this ceremony
+                bail!("Duplicate ceremony id");
+            }
         }
     }
 }
