@@ -315,9 +315,7 @@ mod epoch {
 					RotationPhase::VaultsRotating(..)
 				));
 
-				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 10);
-
-				println!("Moved forward some vault rotation blocks");
+				testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 				assert_eq!(
 					GENESIS_EPOCH + 1,
