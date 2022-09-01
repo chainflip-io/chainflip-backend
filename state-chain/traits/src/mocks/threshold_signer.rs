@@ -29,6 +29,14 @@ where
 		Self::get_value(LAST_REQ_ID)
 	}
 
+	pub fn signature_result_last_requested(
+		signature_result: Result<<C as ChainCrypto>::ThresholdSignature, Vec<MockValidatorId>>,
+	) {
+		let last_request_id = Self::last_request_id().unwrap();
+		Self::set_signature_ready(last_request_id, signature_result);
+		Self::on_signature_ready(last_request_id);
+	}
+
 	pub fn set_signature_ready(
 		request_id: u32,
 		signature_result: Result<<C as ChainCrypto>::ThresholdSignature, Vec<MockValidatorId>>,

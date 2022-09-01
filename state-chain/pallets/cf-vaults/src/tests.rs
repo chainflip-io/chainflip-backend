@@ -352,9 +352,7 @@ fn keygen_report_success() {
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingKeygenVerification { .. }));
 
-		let last_request_id = EthMockThresholdSigner::last_request_id().unwrap();
-		EthMockThresholdSigner::set_signature_ready(last_request_id, Ok(ETH_DUMMY_SIG));
-		EthMockThresholdSigner::on_signature_ready(last_request_id);
+		EthMockThresholdSigner::signature_result_last_requested(Ok(ETH_DUMMY_SIG));
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingRotation { .. }));
 
@@ -504,12 +502,7 @@ fn vault_key_rotated() {
 			ALL_CANDIDATES.to_vec(),
 		);
 
-		let keygen_verification_request_id = EthMockThresholdSigner::last_request_id().unwrap();
-		EthMockThresholdSigner::set_signature_ready(
-			keygen_verification_request_id,
-			Ok(ETH_DUMMY_SIG),
-		);
-		EthMockThresholdSigner::on_signature_ready(keygen_verification_request_id);
+		EthMockThresholdSigner::signature_result_last_requested(Ok(ETH_DUMMY_SIG));
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
