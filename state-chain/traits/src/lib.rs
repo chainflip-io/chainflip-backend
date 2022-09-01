@@ -9,6 +9,7 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+use cf_primitives::{AuthorityCount, ChainflipAccountData, ChainflipAccountState, EpochIndex};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
@@ -18,8 +19,6 @@ use frame_support::{
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
@@ -28,10 +27,6 @@ use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
-pub type EpochIndex = u32;
-
-pub type AuthorityCount = u32;
-pub type CeremonyId = u64;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -351,38 +346,6 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
 	fn request_emergency_rotation();
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ChainflipAccountState {
-	CurrentAuthority,
-	/// Historical implies backup too
-	HistoricalAuthority,
-	Backup,
-}
-
-impl ChainflipAccountState {
-	pub fn is_authority(&self) -> bool {
-		matches!(self, ChainflipAccountState::CurrentAuthority)
-	}
-
-	pub fn is_backup(&self) -> bool {
-		matches!(self, ChainflipAccountState::HistoricalAuthority | ChainflipAccountState::Backup)
-	}
-}
-
-// TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ChainflipAccountData {
-	pub state: ChainflipAccountState,
-}
-
-impl Default for ChainflipAccountData {
-	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Backup }
-	}
 }
 
 pub trait ChainflipAccount {

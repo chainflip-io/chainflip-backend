@@ -17,7 +17,8 @@ pub use weights::WeightInfo;
 mod tests;
 
 use bitvec::prelude::*;
-use cf_traits::{EpochIndex, EpochInfo};
+use cf_primitives::EpochIndex;
+use cf_traits::EpochInfo;
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
@@ -43,7 +44,6 @@ pub trait WitnessDataExtraction {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::EpochIndex;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 

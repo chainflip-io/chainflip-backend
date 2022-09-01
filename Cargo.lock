@@ -751,6 +751,7 @@ name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-traits",
  "frame-executive",
  "frame-support",
@@ -792,6 +793,16 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "state-chain-runtime",
+]
+
+[[package]]
+name = "cf-primitives"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -851,13 +862,13 @@ name = "cf-traits"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log 0.4.17",
  "parity-scale-codec",
  "scale-info",
- "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -938,7 +949,7 @@ dependencies = [
  "bincode",
  "bs58",
  "cf-chains",
- "cf-traits",
+ "cf-primitives",
  "chainflip-node",
  "chrono",
  "clap",
@@ -5112,6 +5123,7 @@ name = "pallet-cf-auction"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -5170,6 +5182,7 @@ name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -5266,6 +5279,7 @@ name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -5287,6 +5301,7 @@ name = "pallet-cf-threshold-signature"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5326,6 +5341,7 @@ dependencies = [
 name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -5353,6 +5369,7 @@ name = "pallet-cf-vaults"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
@@ -5376,6 +5393,7 @@ name = "pallet-cf-witnesser"
 version = "0.1.0"
 dependencies = [
  "bitvec 0.20.4",
+ "cf-primitives",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -8908,6 +8926,7 @@ name = "state-chain-runtime"
 version = "0.4.2"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-session-benchmarking",
  "cf-traits",
  "frame-benchmarking",

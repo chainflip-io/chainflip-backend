@@ -16,6 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 hex = { version = '0.4', default-features = false }
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
+cf-primitives = { path ='../../primitives', default-features = false }
 
 # Local deps
 utilities = { path = '../../../utilities', default-features = false }
@@ -78,6 +79,7 @@ default = ['std']
 std = [
   'bitvec/std',
   'cf-traits/std',
+  'cf-primitives/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking/std',

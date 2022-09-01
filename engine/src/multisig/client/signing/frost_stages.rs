@@ -10,7 +10,7 @@ use crate::multisig::{
 };
 
 use async_trait::async_trait;
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use client::common::{
     broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
     {CeremonyCommon, StageResult},

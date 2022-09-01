@@ -9,10 +9,9 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_traits::AuthorityCount;
-use cf_traits::CeremonyId;
-use futures::future::{BoxFuture, FutureExt};
+use cf_primitives::{AuthorityCount, CeremonyId};
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
+use futures::future::{BoxFuture, FutureExt};
 
 use crate::{
     common::format_iterator,

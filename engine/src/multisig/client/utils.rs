@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};

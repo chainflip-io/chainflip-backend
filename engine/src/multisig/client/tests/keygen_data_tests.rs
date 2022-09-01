@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use rand_legacy::SeedableRng;
 
 use crate::multisig::{

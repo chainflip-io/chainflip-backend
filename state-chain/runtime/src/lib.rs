@@ -60,9 +60,10 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
+pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
 pub use cf_traits::{
-	BlockNumber, ChainflipAccount, ChainflipAccountData, ChainflipAccountState,
-	ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
+	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode,
+	SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};

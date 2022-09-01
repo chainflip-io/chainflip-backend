@@ -16,12 +16,12 @@ pub use weights::WeightInfo;
 mod benchmarking;
 mod rotation_state;
 
+use cf_primitives::{AuthorityCount, EpochIndex, CeremonyId};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bid,
-	BidderProvider, Bonding, CeremonyId, Chainflip, ChainflipAccount, EmergencyRotation,
-	EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch,
-	MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo,
-	VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
+	Chainflip, ChainflipAccount, EmergencyRotation, EpochInfo, EpochTransitionHandler,
+	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
+	StakeHandler, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
