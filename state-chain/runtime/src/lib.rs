@@ -192,7 +192,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
 	type ThresholdSigner = EthereumThresholdSigner;
-	type SignerNomination = chainflip::RandomSignerNomination;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;

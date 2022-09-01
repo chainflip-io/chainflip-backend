@@ -464,12 +464,6 @@ pub trait SignerNomination {
 		exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId>;
 
-	/// Returns a list of signers from a given set of a participants.
-	fn nomination_from_participant_set<H: Hashable>(
-		seed: H,
-		participants: Vec<Self::SignerId>,
-	) -> Vec<Self::SignerId>;
-
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
 	fn threshold_nomination_with_seed<H: Hashable>(

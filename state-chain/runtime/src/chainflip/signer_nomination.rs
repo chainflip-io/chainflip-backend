@@ -68,19 +68,6 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 		)
 	}
 
-	fn nomination_from_participant_set<H: Hashable>(
-		seed: H,
-		participants: Vec<Self::SignerId>,
-	) -> Vec<Self::SignerId> {
-		assert!(!participants.is_empty(), "provided participants should not be empty");
-		try_select_random_subset(
-			seed_from_hashable(seed),
-			cf_utilities::success_threshold_from_share_count(participants.len() as u32) as usize,
-			participants,
-		)
-		.expect("asserted above")
-	}
-
 	fn threshold_nomination_with_seed<H: Hashable>(
 		seed: H,
 		epoch_index: EpochIndex,

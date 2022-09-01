@@ -7,8 +7,8 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster, CeremonyId,
 	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
-	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RetryPolicy, SignerNomination,
-	SystemStateManager, ThresholdSigner, VaultRotator,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RetryPolicy, SystemStateManager,
+	ThresholdSigner, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::{ensure_signed, pallet_prelude::*};
@@ -205,7 +205,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_traits::{SignerNomination, ThresholdSigner};
+	use cf_traits::ThresholdSigner;
 
 	use super::*;
 
@@ -237,8 +237,6 @@ pub mod pallet {
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
-
-		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 
 		type ThresholdSigner: ThresholdSigner<
 			Self::Chain,
@@ -744,8 +742,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
 		let byte_key: Vec<u8> = new_public_key.into();
 		let (request_id, signing_ceremony_id) = T::ThresholdSigner::request_signature_with(
-			byte_key.clone().into(),
-			T::SignerNomination::nomination_from_participant_set(byte_key, participants),
+			byte_key.into(),
+			participants,
 			T::Chain::agg_key_to_payload(new_public_key),
 			RetryPolicy::Never,
 		);
