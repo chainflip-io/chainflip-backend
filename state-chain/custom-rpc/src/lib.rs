@@ -1,10 +1,8 @@
-pub use self::gen_client::Client as CustomClient;
 use cf_chains::eth::SigData;
-use cf_utilities::JsonResultExt;
-use jsonrpc_core::serde::{Deserialize, Serialize};
-use jsonrpc_derive::rpc;
+use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
+use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::AccountId32;
@@ -44,120 +42,89 @@ pub struct RpcPenalty {
 
 type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 
-#[rpc]
+#[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
 	/// Returns true if the current phase is the auction phase.
-	#[rpc(name = "cf_is_auction_phase")]
-	fn cf_is_auction_phase(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<bool, jsonrpc_core::Error>;
-	#[rpc(name = "cf_eth_key_manager_address")]
+	#[method(name = "is_auction_phase")]
+	fn cf_is_auction_phase(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<bool>;
+	#[method(name = "eth_key_manager_address")]
 	fn cf_eth_key_manager_address(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<String, jsonrpc_core::Error>;
-	#[rpc(name = "cf_eth_stake_manager_address")]
+	) -> RpcResult<String>;
+	#[method(name = "eth_stake_manager_address")]
 	fn cf_eth_stake_manager_address(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<String, jsonrpc_core::Error>;
-	#[rpc(name = "cf_eth_flip_token_address")]
-	fn cf_eth_flip_token_address(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<String, jsonrpc_core::Error>;
-	#[rpc(name = "cf_eth_chain_id")]
-	fn cf_eth_chain_id(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<u64, jsonrpc_core::Error>;
+	) -> RpcResult<String>;
+	#[method(name = "eth_flip_token_address")]
+	fn cf_eth_flip_token_address(&self, at: Option<state_chain_runtime::Hash>)
+		-> RpcResult<String>;
+	#[method(name = "eth_chain_id")]
+	fn cf_eth_chain_id(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
-	#[rpc(name = "cf_eth_vault")]
-	fn cf_eth_vault(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<(String, u32), jsonrpc_core::Error>;
-	#[rpc(name = "cf_tx_fee_multiplier")]
-	fn cf_tx_fee_multiplier(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<u64, jsonrpc_core::Error>;
+	#[method(name = "eth_vault")]
+	fn cf_eth_vault(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<(String, u32)>;
+	#[method(name = "tx_fee_multiplier")]
+	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
-	#[rpc(name = "cf_auction_parameters")]
-	fn cf_auction_parameters(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<(u32, u32), jsonrpc_core::Error>;
-	#[rpc(name = "cf_min_stake")]
-	fn cf_min_stake(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<NumberOrHex, jsonrpc_core::Error>;
-	#[rpc(name = "cf_current_epoch")]
-	fn cf_current_epoch(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<u32, jsonrpc_core::Error>;
-	#[rpc(name = "cf_epoch_duration")]
-	fn cf_epoch_duration(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<u32, jsonrpc_core::Error>;
-	#[rpc(name = "cf_current_epoch_started_at")]
-	fn cf_current_epoch_started_at(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<u32, jsonrpc_core::Error>;
-	#[rpc(name = "cf_authority_emission_per_block")]
+	#[method(name = "auction_parameters")]
+	fn cf_auction_parameters(&self, at: Option<state_chain_runtime::Hash>)
+		-> RpcResult<(u32, u32)>;
+	#[method(name = "min_stake")]
+	fn cf_min_stake(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<NumberOrHex>;
+	#[method(name = "current_epoch")]
+	fn cf_current_epoch(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
+	#[method(name = "epoch_duration")]
+	fn cf_epoch_duration(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
+	#[method(name = "current_epoch_started_at")]
+	fn cf_current_epoch_started_at(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
+	#[method(name = "authority_emission_per_block")]
 	fn cf_authority_emission_per_block(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<NumberOrHex, jsonrpc_core::Error>;
-	#[rpc(name = "cf_backup_emission_per_block")]
+	) -> RpcResult<NumberOrHex>;
+	#[method(name = "backup_emission_per_block")]
 	fn cf_backup_emission_per_block(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<NumberOrHex, jsonrpc_core::Error>;
-	#[rpc(name = "cf_flip_supply")]
+	) -> RpcResult<NumberOrHex>;
+	#[method(name = "flip_supply")]
 	fn cf_flip_supply(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error>;
-	#[rpc(name = "cf_accounts")]
+	) -> RpcResult<(NumberOrHex, NumberOrHex)>;
+	#[method(name = "accounts")]
 	fn cf_accounts(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error>;
-	#[rpc(name = "cf_account_info")]
+	) -> RpcResult<Vec<(AccountId32, String)>>;
+	#[method(name = "account_info")]
 	fn cf_account_info(
 		&self,
 		account_id: AccountId32,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<RpcAccountInfo, jsonrpc_core::Error>;
-	#[rpc(name = "cf_pending_claim")]
+	) -> RpcResult<RpcAccountInfo>;
+	#[method(name = "pending_claim")]
 	fn cf_pending_claim(
 		&self,
 		account_id: AccountId32,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error>;
-	#[rpc(name = "cf_penalties")]
+	) -> RpcResult<Option<RpcPendingClaim>>;
+	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error>;
-	#[rpc(name = "cf_suspensions")]
-	fn cf_suspensions(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<RpcSuspensions, jsonrpc_core::Error>;
-	#[rpc(name = "cf_generate_gov_key_call_hash")]
+	) -> RpcResult<Vec<(Offence, RpcPenalty)>>;
+	#[method(name = "suspensions")]
+	fn cf_suspensions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcSuspensions>;
+	#[method(name = "generate_gov_key_call_hash")]
 	fn cf_generate_gov_key_call_hash(
 		&self,
 		call: Vec<u8>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> Result<GovCallHash, jsonrpc_core::Error>;
+	) -> RpcResult<GovCallHash>;
 }
 
 /// An RPC extension for the state chain node.
@@ -177,170 +144,137 @@ where
 	}
 }
 
-impl<C, B> CustomApi for CustomRpc<C, B>
+fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee::core::Error {
+	CallError::from_std_error(e).into()
+}
+
+impl<C, B> CustomApiServer for CustomRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	fn cf_is_auction_phase(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<bool, jsonrpc_core::Error> {
+	fn cf_is_auction_phase(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<bool> {
 		self.client
 			.runtime_api()
 			.cf_is_auction_phase(&self.query_block_id(at))
-			.map_to_json_error()
+			.map_err(to_rpc_error)
 	}
-	fn cf_eth_flip_token_address(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<String, jsonrpc_core::Error> {
+	fn cf_eth_flip_token_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
 		let eth_flip_token_address = self
 			.client
 			.runtime_api()
 			.cf_eth_flip_token_address(&self.query_block_id(at))
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(hex::encode(eth_flip_token_address))
 	}
-	fn cf_eth_stake_manager_address(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<String, jsonrpc_core::Error> {
+	fn cf_eth_stake_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
 		let eth_stake_manager_address = self
 			.client
 			.runtime_api()
 			.cf_eth_stake_manager_address(&self.query_block_id(at))
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(hex::encode(eth_stake_manager_address))
 	}
-	fn cf_eth_key_manager_address(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<String, jsonrpc_core::Error> {
+	fn cf_eth_key_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
 		let eth_key_manager_address = self
 			.client
 			.runtime_api()
 			.cf_eth_key_manager_address(&self.query_block_id(at))
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(hex::encode(eth_key_manager_address))
 	}
-	fn cf_eth_chain_id(&self, at: Option<<B as BlockT>::Hash>) -> Result<u64, jsonrpc_core::Error> {
+	fn cf_eth_chain_id(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u64> {
 		self.client
 			.runtime_api()
 			.cf_eth_chain_id(&self.query_block_id(at))
-			.map_to_json_error()
+			.map_err(to_rpc_error)
 	}
-	fn cf_eth_vault(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<(String, u32), jsonrpc_core::Error> {
-		let eth_vault = self
-			.client
+	fn cf_eth_vault(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<(String, u32)> {
+		self.client
 			.runtime_api()
 			.cf_eth_vault(&self.query_block_id(at))
-			.expect("The runtime API should not return error.");
-
-		Ok((hex::encode(eth_vault.0), eth_vault.1))
+			.map(|(public_key, active_from_block)| (hex::encode(public_key), active_from_block))
+			.map_err(to_rpc_error)
 	}
 	// FIXME: Respect the block hash argument here
-	fn cf_tx_fee_multiplier(
-		&self,
-		_at: Option<<B as BlockT>::Hash>,
-	) -> Result<u64, jsonrpc_core::Error> {
-		Ok(TX_FEE_MULTIPLIER
-			.try_into()
-			.expect("We never set a fee multiplier greater than u64::MAX"))
+	fn cf_tx_fee_multiplier(&self, _at: Option<<B as BlockT>::Hash>) -> RpcResult<u64> {
+		Ok(TX_FEE_MULTIPLIER as u64)
 	}
-	fn cf_auction_parameters(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<(u32, u32), jsonrpc_core::Error> {
+	fn cf_auction_parameters(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<(u32, u32)> {
 		self.client
 			.runtime_api()
 			.cf_auction_parameters(&self.query_block_id(at))
-			.map_to_json_error()
+			.map_err(to_rpc_error)
 	}
-	fn cf_min_stake(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<NumberOrHex, jsonrpc_core::Error> {
+	fn cf_min_stake(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<NumberOrHex> {
 		let min_stake = self
 			.client
 			.runtime_api()
 			.cf_min_stake(&self.query_block_id(at))
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(min_stake.into())
 	}
-	fn cf_current_epoch(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<u32, jsonrpc_core::Error> {
+	fn cf_current_epoch(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u32> {
 		self.client
 			.runtime_api()
 			.cf_current_epoch(&self.query_block_id(at))
-			.map_to_json_error()
+			.map_err(to_rpc_error)
 	}
-	fn cf_epoch_duration(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<u32, jsonrpc_core::Error> {
+	fn cf_epoch_duration(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u32> {
 		self.client
 			.runtime_api()
 			.cf_epoch_duration(&self.query_block_id(at))
-			.map_err(|_| jsonrpc_core::Error::new(jsonrpc_core::ErrorCode::ServerError(0)))
+			.map_err(to_rpc_error)
 	}
-	fn cf_current_epoch_started_at(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<u32, jsonrpc_core::Error> {
+	fn cf_current_epoch_started_at(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u32> {
 		self.client
 			.runtime_api()
 			.cf_current_epoch_started_at(&self.query_block_id(at))
-			.map_to_json_error()
+			.map_err(to_rpc_error)
 	}
 	fn cf_authority_emission_per_block(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<NumberOrHex, jsonrpc_core::Error> {
+	) -> RpcResult<NumberOrHex> {
 		let authority_emission_per_block = self
 			.client
 			.runtime_api()
 			.cf_authority_emission_per_block(&self.query_block_id(at))
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(authority_emission_per_block.into())
 	}
 	fn cf_backup_emission_per_block(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<NumberOrHex, jsonrpc_core::Error> {
+	) -> RpcResult<NumberOrHex> {
 		let backup_emission_per_block = self
 			.client
 			.runtime_api()
 			.cf_backup_emission_per_block(&self.query_block_id(at))
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 		Ok(backup_emission_per_block.into())
 	}
 	fn cf_flip_supply(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<(NumberOrHex, NumberOrHex), jsonrpc_core::Error> {
+	) -> RpcResult<(NumberOrHex, NumberOrHex)> {
 		let (issuance, offchain) = self
 			.client
 			.runtime_api()
 			.cf_flip_supply(&self.query_block_id(at))
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 		Ok((issuance.into(), offchain.into()))
 	}
 	fn cf_accounts(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<Vec<(AccountId32, String)>, jsonrpc_core::Error> {
+	) -> RpcResult<Vec<(AccountId32, String)>> {
 		Ok(self
 			.client
 			.runtime_api()
 			.cf_accounts(&self.query_block_id(at))
-			.map_to_json_error()?
+			.map_err(to_rpc_error)?
 			.into_iter()
 			.map(|(account_id, vanity_name_bytes)| {
 				// we can use from_utf8_lossy here because we're guaranteed utf8 when we
@@ -353,12 +287,12 @@ where
 		&self,
 		account_id: AccountId32,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<RpcAccountInfo, jsonrpc_core::Error> {
+	) -> RpcResult<RpcAccountInfo> {
 		let account_info = self
 			.client
 			.runtime_api()
 			.cf_account_info(&self.query_block_id(at), account_id)
-			.map_to_json_error()?;
+			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfo {
 			stake: account_info.stake.into(),
@@ -376,12 +310,12 @@ where
 		&self,
 		account_id: AccountId32,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<Option<RpcPendingClaim>, jsonrpc_core::Error> {
+	) -> RpcResult<Option<RpcPendingClaim>> {
 		let pending_claim = match self
 			.client
 			.runtime_api()
 			.cf_pending_claim(&self.query_block_id(at), account_id)
-			.map_to_json_error()?
+			.map_err(to_rpc_error)?
 		{
 			Some(pending_claim) => pending_claim,
 			None => return Ok(None),
@@ -397,12 +331,12 @@ where
 	fn cf_penalties(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<Vec<(Offence, RpcPenalty)>, jsonrpc_core::Error> {
+	) -> RpcResult<Vec<(Offence, RpcPenalty)>> {
 		Ok(self
 			.client
 			.runtime_api()
 			.cf_penalties(&self.query_block_id(at))
-			.map_to_json_error()?
+			.map_err(to_rpc_error)?
 			.iter()
 			.map(|(offence, runtime_api_penalty)| {
 				(
@@ -415,24 +349,21 @@ where
 			})
 			.collect())
 	}
-	fn cf_suspensions(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-	) -> Result<RpcSuspensions, jsonrpc_core::Error> {
+	fn cf_suspensions(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<RpcSuspensions> {
 		self.client
 			.runtime_api()
 			.cf_suspensions(&self.query_block_id(at))
-			.map_to_json_error()
+			.map_err(to_rpc_error)
 	}
 
 	fn cf_generate_gov_key_call_hash(
 		&self,
 		call: Vec<u8>,
 		at: Option<<B as BlockT>::Hash>,
-	) -> Result<GovCallHash, jsonrpc_core::Error> {
+	) -> RpcResult<GovCallHash> {
 		self.client
 			.runtime_api()
 			.cf_generate_gov_key_call_hash(&self.query_block_id(at), call)
-			.map_to_json_error()
+			.map_err(to_rpc_error)
 	}
 }

@@ -1,7 +1,7 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use custom_rpc::{CustomApi, CustomRpc};
-use jsonrpc_core::MetaIoHandler;
+use custom_rpc::{CustomApiServer, CustomRpc};
+use jsonrpsee::RpcModule;
 use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 pub use sc_executor::NativeElseWasmExecutor;
@@ -167,7 +167,7 @@ fn remote_keystore(_url: &str) -> Result<Arc<LocalKeystore>, &'static str> {
 
 /// Builds a new service for a full client.
 pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> {
-	use sc_finality_grandpa_rpc::{GrandpaApi, GrandpaRpcHandler};
+	use sc_finality_grandpa_rpc::{Grandpa, GrandpaApiServer};
 
 	let sc_service::PartialComponents {
 		client,
@@ -180,27 +180,18 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
 
-	let (
-		shared_voter_state,
-		shared_authority_set,
-		justification_stream,
-		subscription_executor,
-		finality_provider,
-	) = {
-		let (_grandpa_block_import, grandpa_link) =
-			sc_finality_grandpa::block_import_with_authority_set_hard_forks(
-				client.clone(),
-				&(client.clone() as Arc<_>),
-				select_chain.clone(),
-				Vec::new(),
-				telemetry.as_ref().map(|x| x.handle()),
-			)?;
+	let (shared_voter_state, shared_authority_set, justification_stream, finality_provider) = {
+		let (_grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
+			client.clone(),
+			&(client.clone() as Arc<_>),
+			select_chain.clone(),
+			telemetry.as_ref().map(|x| x.handle()),
+		)?;
 
 		(
 			sc_finality_grandpa::SharedVoterState::empty(),
 			grandpa_link.shared_authority_set().clone(),
 			grandpa_link.justification_stream(),
-			sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()),
 			sc_finality_grandpa::FinalityProofProvider::new_for_service(
 				backend.clone(),
 				Some(grandpa_link.shared_authority_set().clone()),
@@ -268,43 +259,50 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			multisig_p2p_transport::RETRY_SEND_INTERVAL,
 		);
 
-	let rpc_extensions_builder = {
-		let mut io = MetaIoHandler::default();
-		io.extend_with(multisig_p2p_transport::P2PValidatorNetworkNodeRpcApi::to_delegate(
-			rpc_request_handler,
-		));
-
+	let rpc_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
-		Box::new(move |deny_unsafe, _| {
-			let mut io = io.clone();
-			io.extend_with(substrate_frame_rpc_system::SystemApi::to_delegate(
-				substrate_frame_rpc_system::FullSystem::new(
-					client.clone(),
-					pool.clone(),
-					deny_unsafe,
-				),
-			));
 
-			io.extend_with(pallet_transaction_payment_rpc::TransactionPaymentApi::to_delegate(
-				pallet_transaction_payment_rpc::TransactionPayment::new(client.clone()),
-			));
+		Box::new(move |deny_unsafe, subscription_executor| {
+			let build = || {
+				let mut module = RpcModule::new(());
+				module.merge(
+					multisig_p2p_transport::P2PValidatorNetworkNodeRpcApiServer::into_rpc(
+						rpc_request_handler.clone(),
+					),
+				)?;
 
-			io.extend_with(GrandpaApi::to_delegate(GrandpaRpcHandler::new(
-				shared_authority_set.clone(),
-				shared_voter_state.clone(),
-				justification_stream.clone(),
-				subscription_executor.clone(),
-				finality_provider.clone(),
-			)));
+				module.merge(substrate_frame_rpc_system::SystemApiServer::into_rpc(
+					substrate_frame_rpc_system::System::new(
+						client.clone(),
+						pool.clone(),
+						deny_unsafe,
+					),
+				))?;
 
-			// Implement custom RPC extensions
-			io.extend_with(CustomApi::to_delegate(CustomRpc {
-				client: client.clone(),
-				_phantom: PhantomData::default(),
-			}));
+				module.merge(
+					pallet_transaction_payment_rpc::TransactionPaymentApiServer::into_rpc(
+						pallet_transaction_payment_rpc::TransactionPayment::new(client.clone()),
+					),
+				)?;
 
-			Ok(io)
+				module.merge(GrandpaApiServer::into_rpc(Grandpa::new(
+					subscription_executor,
+					shared_authority_set.clone(),
+					shared_voter_state.clone(),
+					justification_stream.clone(),
+					finality_provider.clone(),
+				)))?;
+
+				// Implement custom RPC extensions
+				module.merge(CustomApiServer::into_rpc(CustomRpc {
+					client: client.clone(),
+					_phantom: PhantomData::default(),
+				}))?;
+
+				Ok(module)
+			};
+			build().map_err(sc_service::Error::Application)
 		})
 	};
 
@@ -314,7 +312,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		keystore: keystore_container.sync_keystore(),
 		task_manager: &mut task_manager,
 		transaction_pool: transaction_pool.clone(),
-		rpc_extensions_builder,
+		rpc_builder,
 		backend,
 		system_rpc_tx,
 		config,

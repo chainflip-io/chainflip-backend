@@ -96,7 +96,7 @@ impl KeyComponents {
 		// just use the same signature nonce for every ceremony in tests
 		let k: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let k = SecretKey::parse(&k).unwrap();
-		let signature = self.agg_key.sign(&(*message).into(), &self.secret, &k);
+		let signature = self.agg_key.sign(message.as_fixed_bytes(), &self.secret, &k);
 
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
 		SchnorrVerificationComponents { s: signature, k_times_g_address }
@@ -216,7 +216,7 @@ impl Engine {
 					Event::Validator(
 						// A new epoch
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-							(&*self.threshold_signer).borrow_mut().use_proposed_key();
+							self.threshold_signer.borrow_mut().use_proposed_key();
 					},
 					Event::EthereumThresholdSigner(
 						// A signature request
@@ -233,7 +233,7 @@ impl Engine {
 								Origin::none(),
 								*ceremony_id,
 								// Sign with current key
-								(&*self.threshold_signer).borrow().key_components.sign(payload),
+								self.threshold_signer.borrow().key_components.sign(payload),
 							).expect("should be able to submit threshold signature for Ethereum");
 						} };
 					},
@@ -245,7 +245,7 @@ impl Engine {
 								state_chain_runtime::Witnesser::witness(
 									Origin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::vault_key_rotated {
-										new_public_key: (&*self.threshold_signer).borrow_mut().proposed_public_key(),
+										new_public_key: self.threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_hash: [1u8; 32].into(),
 									}.into()),
@@ -268,8 +268,8 @@ impl Engine {
 					// A keygen request has been made
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, authorities)) => {
 						if authorities.contains(&self.node_id) {
-							(&*self.threshold_signer).borrow_mut().propose_new_public_key();
-							let threshold_signer = (&*self.threshold_signer).borrow();
+							self.threshold_signer.borrow_mut().propose_new_public_key();
+							let threshold_signer = self.threshold_signer.borrow();
 							let proposed_key_components = threshold_signer.proposed_key_components.as_ref().expect("should have propposed key");
 							let payload: H256 = proposed_key_components.agg_key.pub_key_x.into();
 							let sig = proposed_key_components.sign(&payload);

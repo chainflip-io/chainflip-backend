@@ -646,7 +646,7 @@ pub fn verify_transaction(
 	#[allow(clippy::ptr_arg)] signed: &RawSignedTransaction,
 	address: &Address,
 ) -> Result<H256, TransactionVerificationError> {
-	let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
+	let decoded_tx: ethereum::TransactionV2 = match signed.first() {
 		Some(0x01) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP2930),
 		Some(0x02) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP1559),
 		_ => rlp::decode(&signed[..]).map(ethereum::TransactionV2::Legacy),

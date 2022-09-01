@@ -90,7 +90,7 @@ pub mod pallet {
 			parameters: SetSizeParameters,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let _ok = Self::try_update_auction_parameters(parameters)?;
+			Self::try_update_auction_parameters(parameters)?;
 			Self::deposit_event(Event::AuctionParametersChanged(parameters));
 			Ok(().into())
 		}

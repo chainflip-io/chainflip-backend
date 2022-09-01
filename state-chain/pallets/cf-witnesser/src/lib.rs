@@ -356,9 +356,9 @@ impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
 	/// Purge the pallet storage of stale entries. This is prevent the storage from growing
 	/// indefinitely.
 	fn on_expired_epoch(expired: EpochIndex) {
-		Votes::<T>::remove_prefix(expired, None);
-		ExtraCallData::<T>::remove_prefix(expired, None);
-		CallHashExecuted::<T>::remove_prefix(expired, None);
+		let _empty = Votes::<T>::clear_prefix(expired, u32::MAX, None);
+		let _empty = ExtraCallData::<T>::clear_prefix(expired, u32::MAX, None);
+		let _empty = CallHashExecuted::<T>::clear_prefix(expired, u32::MAX, None);
 	}
 }
 

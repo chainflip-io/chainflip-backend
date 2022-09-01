@@ -4,7 +4,7 @@ on:
     inputs:
       nightly_version:
         type: string
-        default: nightly-2021-11-16
+        default: nightly-2022-08-08
         description: Toolchain version you want to build
         required: true
 

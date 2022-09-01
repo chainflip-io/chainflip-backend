@@ -8,7 +8,7 @@ pub struct PolkadotSigning {}
 // Polkadot seems to be using this generic "substrate" context for signing
 const SIGNING_CTX: &[u8] = b"substrate";
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolkadotSignature(schnorrkel::Signature);
 
 impl Serialize for PolkadotSignature {

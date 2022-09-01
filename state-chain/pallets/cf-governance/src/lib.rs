@@ -17,14 +17,6 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
-mod old_storage {
-	frame_support::generate_storage_alias!(Governance, ProposalCount => Value<u32>);
-
-	pub fn take_old_id() -> Option<u32> {
-		ProposalCount::take()
-	}
-}
-
 /// Hash over (call, nonce, runtime_version)
 pub type GovCallHash = [u8; 32];
 
@@ -154,13 +146,6 @@ pub mod pallet {
 			// Execute all proposals which reached threshold in the last block
 			let execution_weight = Self::execute_proposals();
 			active_proposal_weight + execution_weight
-		}
-
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if let Some(old) = crate::old_storage::take_old_id() {
-				ProposalIdCounter::<T>::put(old);
-			}
-			0
 		}
 	}
 

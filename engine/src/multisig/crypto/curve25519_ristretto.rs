@@ -5,10 +5,10 @@ use super::{ECPoint, ECScalar};
 type SK = curve25519_dalek::scalar::Scalar;
 type PK = curve25519_dalek::ristretto::RistrettoPoint;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Point(PK);
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Scalar(SK);
 
 mod point_impls {

@@ -27,7 +27,6 @@ use pallet_cf_validator::SemVer;
 use sp_core::U256;
 use utilities::print_chainflip_ascii_art;
 
-#[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
     print_chainflip_ascii_art();
     use_chainflip_account_id_encoding();
