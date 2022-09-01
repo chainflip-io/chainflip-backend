@@ -9,6 +9,9 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use runtime_apis::BackupOrPassive;
 
+use cf_chains::eth::EthAddressDerivation;
+use chainflip::EthVaultAddressProvider;
+
 use crate::{
 	chainflip::Offence,
 	runtime_apis::{
@@ -184,6 +187,13 @@ impl pallet_cf_environment::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 	type EthEnvironmentProvider = Environment;
+}
+
+impl pallet_cf_relayer::Config for Runtime {
+	type Event = Event;
+	type EthVaultAddressProvider = EthVaultAddressProvider;
+	type EthAddressDerivation = EthAddressDerivation;
+	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -538,6 +548,7 @@ construct_runtime!(
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
+		Relayer: pallet_cf_relayer,
 	}
 );
 
@@ -601,6 +612,7 @@ mod benches {
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
+		[pallet_cf_relayer, Relayer]
 	);
 }
 

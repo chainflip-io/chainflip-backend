@@ -14,9 +14,8 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal dependencies
-cf-traits = { path = '../../traits', default-features = false }
+cf-traits = {path = '../../traits', default-features = false}
 cf-chains = {path = '../../chains', default-features = false}
-create2 = {default-features = false, version = '0.0.2'}
 
 # Parity deps
 [dependencies.codec]
@@ -61,32 +60,34 @@ git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
 tag = 'chainflip-monthly-2022-05'
 
-# Dev dependencies
-[dev-dependencies.sp-io]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
-
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-05'
 
 [dev-dependencies]
-quickcheck = '1'
-quickcheck_macros = '1'
+cf-test-utilities = { path = '../../test-utilities'}
+
+[dev-dependencies.sp-io]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-05'
 
 [features]
 default = ['std']
 std = [
   'cf-traits/std',
+  'cf-chains/std',
   'codec/std',
+  'sp-runtime/std',
+  'sp-core/std',
   'scale-info/std',
   'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
-  'sp-runtime/std',
   'sp-std/std',
 ]
 runtime-benchmarks = [
+  'cf-traits/runtime-benchmarks',
+  'cf-chains/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',

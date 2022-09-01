@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::assets::{Asset, AssetAddress};
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::*, sp_runtime::traits::BlockNumberProvider};
@@ -11,6 +12,12 @@ mod mock;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[scale_info(skip_type_params(T))]
@@ -45,9 +52,11 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type EthVaultAddressProvider: VaultAddressProvider<AddressType = eth::Address>;
 		type EthAddressDerivation: AddressDerivation<AddressType = eth::Address>;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -59,7 +68,7 @@ pub mod pallet {
 	/// TODO: write a doc comment
 	pub type IndexCounter<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// TODO: nice comment needed
+	/// Map of SwapIntents
 	#[pallet::storage]
 	#[pallet::getter(fn swap_intents)]
 	pub type SwapIntents<T: Config> =
@@ -69,12 +78,11 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		NewIngressIntent(AssetAddress, H256),
-		NewRelayer(T::AccountId),
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::request_swap_intent())]
 		pub fn request_swap_intent(
 			origin: OriginFor<T>,
 			trade: (Asset, Asset),

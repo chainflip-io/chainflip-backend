@@ -18,7 +18,7 @@ rlp = {default-features = false, version = '0.5'}
 
 # Other
 hex = {default-features = false, version = '0.4'}
-hex-literal = '0.3.1'
+hex-literal = {default-feature = false, version = '0.3.1'}
 # hex-literal = {default-features = false, version = '0.3', optional = true}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 log = { version = '0.4.16', default-features = false }
