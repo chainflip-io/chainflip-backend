@@ -980,7 +980,6 @@ async fn inner_connect_to_state_chain(
             Box::pin(
                 sparse_finalized_block_header_stream
                     .and_then(move |next_finalized_header| {
-                        let rpc_client = rpc_client.clone();
                         assert!(latest_finalized_header.number < next_finalized_header.number);
 
                         let prev_finalized_header = std::mem::replace(
@@ -988,8 +987,9 @@ async fn inner_connect_to_state_chain(
                             next_finalized_header.clone(),
                         );
 
+                        let rpc_client = rpc_client.clone();
                         async move {
-                            let rpc_client = rpc_client.as_ref();
+                            let rpc_client = &rpc_client;
                             let intervening_headers: Vec<_> = futures::stream::iter(
                                 prev_finalized_header.number + 1..next_finalized_header.number,
                             )
@@ -1003,7 +1003,7 @@ async fn inner_connect_to_state_chain(
                                     anyhow!("Finalized block missing hash"),
                                 )
                                 .unwrap();
-                                let block_header: state_chain_runtime::Header =
+                                let block_header =
                                     rpc_client.header(Some(block_hash)).await?.unwrap();
                                 assert_eq!(block_header.hash(), block_hash);
                                 assert_eq!(block_header.number, block_number);
@@ -1041,9 +1041,8 @@ async fn inner_connect_to_state_chain(
     // Often `finalized_header` returns a significantly newer latest block than the stream returns
     // so we move the stream forward to this block
     let (mut latest_block_hash, mut latest_block_number) = {
-        let rpc_client = state_chain_rpc_client.rpc_client.as_ref();
-        let finalised_header_hash = rpc_client.finalized_head().await?;
-        let finalised_header: state_chain_runtime::Header = rpc_client
+        let finalised_header_hash = state_chain_rpc_client.rpc_client.finalized_head().await?;
+        let finalised_header = state_chain_rpc_client.rpc_client
             .header(Some(finalised_header_hash))
             .await?
             .expect("We have the hash from the chain, so there should definitely be a header for this block");
