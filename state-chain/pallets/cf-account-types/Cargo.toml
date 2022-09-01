@@ -1,0 +1,95 @@
+[package]
+name = 'pallet-cf-account-types'
+version = '0.1.0'
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
+description = 'Chainflip account types pallet.'
+edition = '2021'
+homepage = 'https://chainflip.io'
+license = '<TODO>'
+publish = false
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
+
+[dependencies]
+# Chainflip
+cf-traits = { path = '../../traits', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+
+log = { version = '0.4.16', default-features = false }
+
+# Parity deps
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '3.0.0'
+
+[dependencies.frame-support]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.frame-system]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '2.1.1'
+
+[dependencies.sp-std]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.sp-io]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.frame-benchmarking]
+default-features = false
+optional = true
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+# Dev dependencies
+[dev-dependencies.sp-core]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+
+[features]
+default = ['std']
+std = [
+  'cf-traits/std',
+  'cf-runtime-upgrade-utilities/std',
+  'codec/std',
+  'scale-info/std',
+  'frame-benchmarking/std',
+  'frame-support/std',
+  'frame-system/std',
+  'log/std',
+  'sp-std/std',
+  'sp-runtime/std',
+  'sp-io/std',
+]
+runtime-benchmarks = [
+  'cf-traits/runtime-benchmarks',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+]
+try-runtime = [
+  'frame-support/try-runtime',
+  'cf-runtime-upgrade-utilities/try-runtime'
+]
