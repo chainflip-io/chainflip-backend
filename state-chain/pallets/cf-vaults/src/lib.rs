@@ -490,7 +490,7 @@ pub mod pallet {
 			// Make sure the ceremony id matches
 			ensure!(pending_ceremony_id == ceremony_id, Error::<T, I>::InvalidCeremonyId);
 			ensure!(
-				keygen_status.remaining_candidates.get(&reporter).is_some(),
+				keygen_status.remaining_candidates.contains(&reporter),
 				Error::<T, I>::InvalidRespondent
 			);
 
