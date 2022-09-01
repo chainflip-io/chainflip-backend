@@ -572,10 +572,10 @@ pub mod pallet {
 				Pallet::<T>::stake_account(staker, *amount);
 				ChainflipAccountStore::<T>::upgrade_account_type(
 					staker,
-					AccountType::Validator {
+					AccountType::Validator(ValidatorAccountData {
 						state: ValidatorAccountState::Backup,
 						is_active_bidder: false,
-					},
+					}),
 				)
 				.unwrap();
 				Pallet::<T>::activate(staker).unwrap();
@@ -661,7 +661,9 @@ impl<T: Config> Pallet<T> {
 	fn retire(account_id: &AccountId<T>) -> DispatchResult {
 		ChainflipAccountStore::<T>::try_mutate_account_data(account_id, |account_data| {
 			match account_data.account_type {
-				AccountType::Validator { ref mut is_active_bidder, .. } =>
+				AccountType::Validator(ValidatorAccountData {
+					ref mut is_active_bidder, ..
+				}) =>
 					if !*is_active_bidder {
 						Err(Error::<T>::AlreadyRetired)
 					} else {
@@ -690,7 +692,9 @@ impl<T: Config> Pallet<T> {
 	fn activate(account_id: &AccountId<T>) -> DispatchResult {
 		ChainflipAccountStore::<T>::try_mutate_account_data(account_id, |account_data| {
 			match account_data.account_type {
-				AccountType::Validator { ref mut is_active_bidder, .. } =>
+				AccountType::Validator(ValidatorAccountData {
+					ref mut is_active_bidder, ..
+				}) =>
 					if *is_active_bidder {
 						Err(Error::<T>::AlreadyActive)
 					} else {
@@ -715,7 +719,8 @@ impl<T: Config> Pallet<T> {
 	/// - Account doesn't exist.
 	pub fn is_retired(account_id: &AccountId<T>) -> Result<bool, Error<T>> {
 		match ChainflipAccountStore::<T>::get(account_id).account_type {
-			AccountType::Validator { is_active_bidder, .. } => Ok(!is_active_bidder),
+			AccountType::Validator(ValidatorAccountData { is_active_bidder, .. }) =>
+				Ok(!is_active_bidder),
 			_ => Err(Error::<T>::InvalidAccountType),
 		}
 	}
@@ -723,7 +728,8 @@ impl<T: Config> Pallet<T> {
 	/// Check if an account is actively bidding in auctions.
 	pub fn is_active_bidder(account_id: &AccountId<T>) -> bool {
 		match ChainflipAccountStore::<T>::get(account_id).account_type {
-			AccountType::Validator { is_active_bidder, .. } => is_active_bidder,
+			AccountType::Validator(ValidatorAccountData { is_active_bidder, .. }) =>
+				is_active_bidder,
 			_ => false,
 		}
 	}

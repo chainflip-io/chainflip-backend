@@ -2,7 +2,7 @@ use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 use sp_runtime::DispatchError;
 use sp_std::marker::PhantomData;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	error::BadOrigin,
 	traits::{EnsureOrigin, StoredMap},
@@ -17,14 +17,14 @@ use serde::{Deserialize, Serialize};
 /// Chainflip's network is permissioned and only accessible to owners of accounts with staked Flip.
 /// In addition to staking, the account owner is required to register their account as one fo the
 /// account types, to indicate the role they intend to play in the network.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountType {
 	/// The default account type - indicates a bare account with no special role or permissions.
 	Undefined,
 	/// Validators are responsible for the maintainance and operation of the Chainflip network. See
 	/// [ValidatorAccountState] for a further breakdown of this role.
-	Validator { state: ValidatorAccountState, is_active_bidder: bool },
+	Validator(ValidatorAccountData),
 	/// Liquidity providers can deposit assets and deploy them in trading pools.
 	LiquidityProvider,
 	/// Relayers submit swap intents on behalf of users.
@@ -37,7 +37,14 @@ impl Default for AccountType {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ValidatorAccountData {
+	pub state: ValidatorAccountState,
+	pub is_active_bidder: bool,
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ValidatorAccountState {
 	/// Current authorities are those validator nodes whose stake is (partially) bonded and whose
@@ -198,7 +205,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 		f: impl FnOnce(&mut ValidatorAccountState) -> R,
 	) -> Result<R, AccountError> {
 		Self::try_mutate_account_data(account_id, |account_data| match account_data.account_type {
-			AccountType::Validator { ref mut state, .. } => Ok(f(state)),
+			AccountType::Validator(ValidatorAccountData { ref mut state, .. }) => Ok(f(state)),
 			_ => Err(AccountError::InvalidAccountType),
 		})
 	}
@@ -207,7 +214,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ValidatorAccou
 		account_id: &Self::AccountId,
 	) -> Result<ValidatorAccountState, AccountError> {
 		match ChainflipAccountStore::<T>::get(account_id).account_type {
-			AccountType::Validator { state, .. } => Ok(state),
+			AccountType::Validator(ValidatorAccountData { state, .. }) => Ok(state),
 			_ => Err(AccountError::InvalidAccountType),
 		}
 	}
