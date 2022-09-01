@@ -26,7 +26,29 @@ These practices should be used to help resolve disagreements. If that is not pos
 
 # Principles
 
-These are the foundation of our practices...
+## Reviewers First
+
+Those who have the job of reviewing code are generally busy. To improve the efficiency of the team as a whole, we should strive to minimise the time reviewers need to spend time reviewing. This is achieved by making the reiew process as smooth as possible for the reviewers, which may mean the developer needs to spend some extra time organising their PR.
+
+### Small PRs
+
+Why are small PRs important? [Google has a good explanation](https://google.github.io/eng-practices/review/developer/small-cls.html) and we agree.
+
+Reviewers reserve the right to reject a PR becauase it's too big. Naturally, there are cases where big PRs are necessary, but in most cases, if the time is taken to think about how the work can be broken down there is a way.
+
+### Organised and meaningful commits
+
+Each commit should be well named. While writing the occasional "ARGHHH" commit meessage may give us the stress relief we need, we should instead seek other stress reduction strategies, and have well named commits like "fix: authority rewards are now rewarded at each block" so as not to annoy and stress your fellow developers (which might result in "ARGGGH"s with more "G"s). This is important for two reasons: debugging, to find where bugs were introduced and providing reviewers a nice description of what to expect in a commit, also allowing them to navigate your PR more easily.
+
+TODO: Organised commits
+
+How to structure commits? Interactive rebasing, "telling story" through commits etc. 
+
+
+### Self review
+
+Before requesting a review, developers are encouraged to conduct a thorough self-review of their own work. The approach to self-reviewing should be the same approach taken to reviewing the work of others. Investigate assumptions are being made, look for bugs, try and break it, think about how it could be structured to read better. Often you'll be able to find ways to improve your own code before the reviewer does.
+
 
 # Ideals
 
