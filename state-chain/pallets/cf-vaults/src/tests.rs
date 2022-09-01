@@ -341,8 +341,8 @@ fn keygen_report_success() {
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
-		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id, response_status, keygen_participants } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
-			assert_eq!(keygen_ceremony_id, keygen_ceremony_id);
+		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+			assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
 			assert_eq!(response_status.success_votes.get(&NEW_AGG_PUB_KEY).expect("new key should have votes"), &3);
 			assert_eq!(keygen_participants, ALL_CANDIDATES.to_vec());
 		} else {
@@ -351,9 +351,6 @@ fn keygen_report_success() {
 		VaultsPallet::on_initialize(1);
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingKeygenVerification { .. }));
-
-
-		// 
 
 		let last_request_id = EthMockThresholdSigner::last_request_id().unwrap();
 		EthMockThresholdSigner::set_signature_ready(last_request_id, Ok(ETH_DUMMY_SIG));
