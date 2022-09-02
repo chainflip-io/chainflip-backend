@@ -225,6 +225,7 @@ std = [
   'pallet-transaction-payment-rpc-runtime-api/std',
   'cf-chains/std',
   'cf-traits/std',
+  'cf-primitives/std',
   'cf-utilities/std',
   'codec/std',
   'frame-executive/std',

@@ -16,7 +16,7 @@ pub use weights::WeightInfo;
 mod benchmarking;
 mod rotation_state;
 
-use cf_primitives::{AuthorityCount, EpochIndex, CeremonyId};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
 	Chainflip, ChainflipAccount, EmergencyRotation, EpochInfo, EpochTransitionHandler,
