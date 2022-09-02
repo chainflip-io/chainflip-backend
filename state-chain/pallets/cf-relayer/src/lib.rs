@@ -19,6 +19,7 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+/// Payload of an swap intent
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[scale_info(skip_type_params(T))]
 #[codec(mel_bound(T: Config))]
@@ -30,6 +31,7 @@ pub struct SwapData<T: Config> {
 	index: u32,
 }
 
+/// Payload + generated ingress address + hash over the payload
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[scale_info(skip_type_params(T))]
 #[codec(mel_bound(T: Config))]
@@ -109,6 +111,7 @@ pub mod pallet {
 				index: next_index,
 			};
 
+			// TODO: Do we need the hash? If not - delete it.
 			let tx_hash = H256(Blake2_256::hash(swap_data.encode().as_slice()));
 
 			let ingress_address = match trade.0 {

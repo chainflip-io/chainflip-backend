@@ -2,11 +2,13 @@ use crate::eth;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+/// Supported assets
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum Asset {
 	EthEth,
 }
 
+/// Address types for assets
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum AssetAddress {
 	ETH(eth::Address),
