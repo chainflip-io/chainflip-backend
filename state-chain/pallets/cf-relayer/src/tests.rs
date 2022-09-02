@@ -1,4 +1,4 @@
-use crate::{mock::*, IndexCounter, SwapIntents};
+use crate::{mock::*, IntentCounter, SwapIntents};
 use cf_chains::{
 	assets::{Asset, AssetAddress},
 	eth::Address,
@@ -15,7 +15,7 @@ fn request_swap_intent() {
 			AssetAddress::ETH(Address::default()),
 			0
 		));
-		assert_eq!(IndexCounter::<Test>::get(), 1);
+		assert_eq!(IntentCounter::<Test>::get(), 1);
 		for swap_intent in SwapIntents::<Test>::iter_values() {
 			assert_eq!(
 				last_event::<Test>(),
