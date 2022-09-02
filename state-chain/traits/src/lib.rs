@@ -688,7 +688,9 @@ pub trait AddressDerivationApi {
 	fn generate_address(ingress_asset: ForeignChainAsset) -> (ForeignChainAddress, IntentId);
 }
 
+/// Something that provides an vault address for a chain type
 pub trait VaultAddressProvider {
 	type AddressType;
+	/// Returns an vault address
 	fn get_vault_address() -> Self::AddressType;
 }

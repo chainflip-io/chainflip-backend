@@ -12,8 +12,10 @@ pub enum AssetAddress {
 	ETH(eth::Address),
 }
 
+/// Something that can derive an ingress address
 pub trait AddressDerivation {
 	type AddressType;
+	/// Generates an ingress address
 	fn generate_address(
 		asset: Asset,
 		vault_address: Self::AddressType,

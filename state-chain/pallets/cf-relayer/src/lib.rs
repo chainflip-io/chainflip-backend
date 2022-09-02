@@ -54,8 +54,11 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		/// Provides the Smart Contract vault address for ETH
 		type EthVaultAddressProvider: VaultAddressProvider<AddressType = eth::Address>;
+		/// Generates an ingress address for ETH
 		type EthAddressDerivation: AddressDerivation<AddressType = eth::Address>;
+		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
 
@@ -64,11 +67,11 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	/// Counter which provides an unique index for an swap intent
 	#[pallet::storage]
-	/// TODO: write a doc comment
-	pub type IndexCounter<T> = StorageValue<_, u32, ValueQuery>;
+	pub type IntentCounter<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Map of SwapIntents
+	/// A storage map which stores the hash over the swap intent against the swap intent
 	#[pallet::storage]
 	#[pallet::getter(fn swap_intents)]
 	pub type SwapIntents<T: Config> =
@@ -77,11 +80,17 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// An new swap intent has been  made \[ingress_address, hash]
 		NewIngressIntent(AssetAddress, H256),
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Requests a new swap intent on the state chain.
+		///
+		/// ## Events
+		///
+		/// - [NewIngressIntent](Event::NewIngressIntent)
 		#[pallet::weight(T::WeightInfo::request_swap_intent())]
 		pub fn request_swap_intent(
 			origin: OriginFor<T>,
@@ -91,7 +100,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 
-			let next_index = IndexCounter::<T>::get().add(1);
+			let next_index = IntentCounter::<T>::get().add(1);
 			let swap_data = SwapData {
 				trade,
 				payout_address,
@@ -102,18 +111,16 @@ pub mod pallet {
 
 			let tx_hash = H256(Blake2_256::hash(swap_data.encode().as_slice()));
 
-			let vault_address = T::EthVaultAddressProvider::get_vault_address();
-
 			let ingress_address = match trade.0 {
 				Asset::EthEth => AssetAddress::ETH(T::EthAddressDerivation::generate_address(
 					Asset::EthEth,
-					vault_address,
+					T::EthVaultAddressProvider::get_vault_address(),
 					next_index,
 				)),
 			};
 
 			SwapIntents::<T>::insert(tx_hash, SwapIntent { swap_data, ingress_address, tx_hash });
-			IndexCounter::<T>::put(next_index);
+			IntentCounter::<T>::put(next_index);
 			Self::deposit_event(Event::<T>::NewIngressIntent(ingress_address, tx_hash));
 			Ok(().into())
 		}

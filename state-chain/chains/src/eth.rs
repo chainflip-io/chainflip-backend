@@ -713,6 +713,7 @@ impl core::fmt::Debug for TransactionHash {
 		f.write_fmt(format_args!("{:#?}", self.0))
 	}
 }
+
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
