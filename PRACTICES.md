@@ -41,3 +41,13 @@ These are the foundation of our practices...
 ### Issues
 
 ### Release Process
+
+# Code Reviews
+
+The principles above are primarily to be applied by those submittnig PRs. However, there are some principles that apply more specifically to when one is conducting a review of someone else's work.
+
+Improving the speed and effectiveness of code reviews directly improves the speed and effectiveness of the team.
+
+## Better not perfect
+
+If a PR improves the overall quality of the code base, reviewers should tend towards approving over holding up the PR. Assuming their are no bugs introduced, this may mean approving with some comments, perhaps suggesting that some improvements be taken out into their own issue, or for even smaller items, allowing the developer to make a judgement call on whether to include it before merging. 
