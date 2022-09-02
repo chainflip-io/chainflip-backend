@@ -679,7 +679,7 @@ pub trait IngressApi {
 		relayer_id: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
 		egress_asset: ForeignChainAsset,
-		relayer_commission_bps: u16,
 		egress_address: ForeignChainAddress,
+		relayer_commission_bps: u16,
 	);
 }

@@ -1041,6 +1041,7 @@ name = "chainflip-node"
 version = "0.5.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "clap",
  "custom-rpc",
  "frame-benchmarking",
@@ -5258,6 +5259,7 @@ dependencies = [
 name = "pallet-cf-ingress"
 version = "0.1.0"
 dependencies = [
+ "cf-primitives",
  "cf-traits",
  "frame-support",
  "frame-system",
@@ -8961,6 +8963,7 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
+ "pallet-cf-ingress",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
