@@ -122,6 +122,21 @@ where
 	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
 }
 
+/// A general trait for initializing types required for Fetching Assets deposited by Users as part
+/// of a swap for some External Chain.
+pub trait FetchAssetParams: ChainAbi {
+	type SwapID;
+	type Asset;
+}
+
+/// A general trait for initializing types required for Transfering Assets to Users as part of a
+/// swap for some External Chain.
+pub trait TransferAssetParams: ChainAbi {
+	type Asset;
+	type Account;
+	type Amount;
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
@@ -165,6 +180,14 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	) -> Self;
 
 	fn amount(&self) -> u128;
+}
+
+pub trait AllBatch<Abi: FetchAssetParams + TransferAssetParams>: ApiCall<Abi> {
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		fetch_params: Abi::FetchAssetParams,
+		transfer_params: Abi::TransferAssetParams,
+	) -> Self;
 }
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
