@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Result;
 use cf_traits::AuthorityCount;
-use pallet_cf_vaults::CeremonyId;
+use cf_traits::CeremonyId;
 
 use crate::{
     common::format_iterator,

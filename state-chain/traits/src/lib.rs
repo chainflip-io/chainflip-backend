@@ -31,6 +31,7 @@ pub type FlipBalance = u128;
 pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
+pub type CeremonyId = u64;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -502,8 +503,8 @@ where
 	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
-	type KeyId: TryInto<C::AggKey>;
-	type ValidatorId;
+	type KeyId: TryInto<C::AggKey> + From<Vec<u8>>;
+	type ValidatorId: Debug;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(payload: C::Payload) -> Self::RequestId;
@@ -513,7 +514,7 @@ where
 		participants: Vec<Self::ValidatorId>,
 		payload: C::Payload,
 		retry_policy: RetryPolicy,
-	) -> Self::RequestId;
+	) -> (Self::RequestId, CeremonyId);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -525,7 +526,7 @@ where
 	/// Attempt to retrieve a requested signature.
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> AsyncResult<Result<C::ThresholdSignature, ()>>;
+	) -> AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>;
 
 	/// Request a signature and register a callback for when the signature is available.
 	///

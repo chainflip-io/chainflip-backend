@@ -12,7 +12,7 @@ pub use crypto::{eth, ChainTag, Rng};
 #[cfg(test)]
 mod tests;
 
-use pallet_cf_threshold_signature::CeremonyId;
+use cf_traits::CeremonyId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};

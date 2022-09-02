@@ -360,13 +360,15 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
 			let participants: Vec<u64> = vec![1, 2, 3, 4, 5, 6];
-			let request_id = MockEthereumThresholdSigner::request_signature_with(
-				CUSTOM_AGG_KEY.into(),
-				participants.clone(),
-				PAYLOAD,
-				RetryPolicy::Never,
-			);
+			let (request_id, ceremony_id_from_req) =
+				MockEthereumThresholdSigner::request_signature_with(
+					CUSTOM_AGG_KEY.into(),
+					participants.clone(),
+					PAYLOAD,
+					RetryPolicy::Never,
+				);
 			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
+			assert_eq!(ceremony_id, ceremony_id_from_req);
 			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id);
 			let request = OpenRequests::<Test, Instance1>::get(ceremony_id);
 			let timeout_delay: <Test as frame_system::Config>::BlockNumber =

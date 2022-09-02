@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use cf_traits::AuthorityCount;
-use pallet_cf_vaults::CeremonyId;
+use cf_traits::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
