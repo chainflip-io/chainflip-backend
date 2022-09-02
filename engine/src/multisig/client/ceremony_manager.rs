@@ -14,13 +14,13 @@ use crate::multisig::client::CeremonyRequestDetails;
 use crate::multisig::crypto::ECScalar;
 use crate::multisig::crypto::{CryptoScheme, ECPoint, Rng};
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_traits::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
 
 use client::{
     ceremony_runner::CeremonyRunner, signing::frost::SigningData, utils::PartyIdxMapping,
 };
-
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
 
 use crate::logging::{CEREMONY_ID_KEY, CEREMONY_TYPE_KEY};

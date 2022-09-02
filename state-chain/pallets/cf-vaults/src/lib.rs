@@ -6,9 +6,10 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
-	ReplayProtectionProvider, RetryPolicy, SystemStateManager, ThresholdSigner, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuthorityCount, Broadcaster, CeremonyId,
+	CeremonyIdProvider, Chainflip, CurrentEpochIndex, EpochIndex, EpochTransitionHandler,
+	EthEnvironmentProvider, KeyProvider, ReplayProtectionProvider, RetryPolicy, SystemStateManager,
+	ThresholdSigner, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::{ensure_signed, pallet_prelude::*};

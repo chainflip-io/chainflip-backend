@@ -3,7 +3,7 @@ use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, 
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	ThresholdSigner, WaivedFees,
+	AuthorityCount, CeremonyId, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{

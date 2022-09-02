@@ -31,6 +31,9 @@ use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
 
+pub type AuthorityCount = u32;
+pub type CeremonyId = u64;
+
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
