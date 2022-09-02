@@ -28,7 +28,7 @@ These practices should be used to help resolve disagreements. If that is not pos
 
 ## Reviewers First
 
-Those who have the job of reviewing code are generally busy. To improve the efficiency of the team as a whole, we should strive to minimise the time reviewers need to spend time reviewing. This is achieved by making the reiew process as smooth as possible for the reviewers, which may mean the developer needs to spend some extra time organising their PR.
+Code reviewing is an important part of the software development lifecycle. It is the barrier between developer and production. In order to ensure reviews are most efficient and effective, we believe it's best to think about creating a PR from the perspective of the person who will be reviewing it. The following guidelines aim to assist in improving the quality of the review process.
 
 ### Small PRs
 
