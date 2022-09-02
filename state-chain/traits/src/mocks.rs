@@ -32,6 +32,8 @@ trait MockPalletStorage {
 	fn put_storage<K: Encode, V: Encode>(store: &[u8], k: K, v: V);
 	fn get_storage<K: Encode, V: Decode + Sized>(store: &[u8], k: K) -> Option<V>;
 	fn take_storage<K: Encode, V: Decode + Sized>(store: &[u8], k: K) -> Option<V>;
+	fn put_value<V: Encode>(store: &[u8], v: V);
+	fn get_value<V: Decode + Sized>(store: &[u8]) -> Option<V>;
 }
 
 fn storage_key<K: Encode>(prefix: &[u8], store: &[u8], k: K) -> Vec<u8> {
@@ -58,6 +60,21 @@ impl<T: MockPallet> MockPalletStorage for T {
 		storage::hashed::take(
 			&<Twox64Concat as StorageHasher>::hash,
 			&storage_key(Self::PREFIX, store, k),
+		)
+	}
+
+	fn put_value<V: Encode>(store: &[u8], v: V) {
+		storage::hashed::put(
+			&<Twox64Concat as StorageHasher>::hash,
+			&storage_key(Self::PREFIX, store, ()),
+			&v,
+		)
+	}
+
+	fn get_value<V: Decode + Sized>(store: &[u8]) -> Option<V> {
+		storage::hashed::get(
+			&<Twox64Concat as StorageHasher>::hash,
+			&storage_key(Self::PREFIX, store, ()),
 		)
 	}
 }

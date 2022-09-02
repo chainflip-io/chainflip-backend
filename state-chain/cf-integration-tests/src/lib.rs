@@ -157,9 +157,7 @@ mod epoch {
 
 	use super::*;
 	use crate::{genesis::GENESIS_BALANCE, network::Network};
-	use cf_traits::{
-		BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
-	};
+	use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo};
 	use pallet_cf_validator::RotationPhase;
 	use state_chain_runtime::Validator;
 
@@ -322,8 +320,7 @@ mod epoch {
 				assert_eq!(
 					GENESIS_EPOCH + 1,
 					Validator::epoch_index(),
-					"We should be in the next epoch. {:?}",
-					Staking::get_bidders()
+					"We should be in the next epoch."
 				);
 
 				assert_eq!(
