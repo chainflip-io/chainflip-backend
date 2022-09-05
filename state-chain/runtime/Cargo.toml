@@ -26,6 +26,7 @@ serde = { version = '1.0.126', optional = true, features = ['derive'] }
 
 # Chainflip local dependencies
 cf-traits = { path = '../traits', default-features = false }
+cf-primitives = { path = '../primitives', default-features = false }
 cf-chains = { path = '../chains', default-features = false }
 cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
 
@@ -224,6 +225,7 @@ std = [
   'pallet-transaction-payment-rpc-runtime-api/std',
   'cf-chains/std',
   'cf-traits/std',
+  'cf-primitives/std',
   'cf-utilities/std',
   'codec/std',
   'frame-executive/std',

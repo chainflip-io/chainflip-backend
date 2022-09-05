@@ -7,10 +7,10 @@ description = 'Common traits used in the Chainflip runtime'
 
 [dependencies]
 log = { version = '0.4.16', default-features = false }
-serde = { optional = true, version = '1.0.126', features = ['derive'] }
 
 # Internal
 cf-chains = { path ='../chains', default-features = false }
+cf-primitives = { path ='../primitives', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -62,6 +62,7 @@ tag = 'chainflip-monthly-2022-06'
 default = ['std']
 std = [
   'cf-chains/std',
+  'cf-primitives/std',
   'codec/std',
   'scale-info/std',
   'sp-std/std',
@@ -69,7 +70,6 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'sp-runtime/std',
-  'serde'
 ]
 runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',

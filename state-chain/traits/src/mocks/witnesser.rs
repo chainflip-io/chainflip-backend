@@ -30,7 +30,7 @@ macro_rules! impl_mock_witnesser_for_account_and_call_types {
 			fn witness_at_epoch(
 				who: Self::AccountId,
 				call: Self::Call,
-				_epoch: cf_traits::EpochIndex,
+				_epoch: cf_primitives::EpochIndex,
 			) -> frame_support::dispatch::DispatchResultWithPostInfo {
 				Self::witness(who, call)
 			}

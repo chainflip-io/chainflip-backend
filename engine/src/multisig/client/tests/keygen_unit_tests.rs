@@ -1,4 +1,4 @@
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use rand_legacy::FromEntropy;
 use std::collections::BTreeSet;
 

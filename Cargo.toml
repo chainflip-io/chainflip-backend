@@ -27,6 +27,7 @@ members = [
   'state-chain/runtime-utilities/macros',
   'state-chain/runtime',
   'state-chain/traits',
+  'state-chain/primitives',
   'engine',
   'engine/cli',
   'engine/generate-genesis-keys',

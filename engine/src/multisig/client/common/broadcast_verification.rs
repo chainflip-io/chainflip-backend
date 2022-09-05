@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
