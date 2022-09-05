@@ -69,6 +69,7 @@ impl pallet_cf_environment::Config for Test {
 
 pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
 pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
+pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
 
 pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
@@ -85,6 +86,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			stake_manager_address: STAKE_MANAGER_ADDRESS,
 			key_manager_address: KEY_MANAGER_ADDRESS,
 			ethereum_chain_id: ETH_CHAIN_ID,
+			vault_address: VAULT_ADDRESS,
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 		},
