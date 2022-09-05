@@ -62,6 +62,7 @@ where
     .await
     .expect(EVENT_STREAM_TIMEOUT_MESSAGE)
     .unwrap()
+    .filter_map(|result| std::future::ready(result.ok()))
     .map(|block| futures::stream::iter(block.events))
     .flatten()
     .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))

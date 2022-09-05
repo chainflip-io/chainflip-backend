@@ -54,7 +54,9 @@ where
                     .await?;
 
                 // TOOD: Handle None on stream, and result event being an error
-                while let Some(block) = block_stream.next().await {
+                loop {
+                    let block = block_stream.next().await.unwrap()?;
+
                     if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
                         if block.block_number >= end_block {
                             slog::info!(

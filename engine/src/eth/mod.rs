@@ -22,7 +22,7 @@ use sp_runtime::traits::Keccak256;
 use utilities::make_periodic_tick;
 
 use crate::{
-    common::read_clean_and_decode_hex_str_file,
+    common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt},
     constants::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_FALLING_BEHIND_MARGIN_BLOCKS,
         ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL, ETH_STILL_BEHIND_LOG_INTERVAL,
@@ -474,8 +474,9 @@ pub trait EthContractWitnesser {
         from_block: u64,
         logger: &slog::Logger,
         // This stream must be Send, so it can be used by the spawn
-    ) -> Result<Pin<Box<dyn Stream<Item = BlockWithEvents<Self::EventParameters>> + Send + '_>>>
-    {
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<BlockWithEvents<Self::EventParameters>>> + Send + '_>>,
+    > {
         let deployed_address = self.get_contract_address();
         slog::info!(
             logger,
@@ -529,7 +530,9 @@ pub trait EthContractWitnesser {
         safe_ws_block_events_stream: BlockEventsStreamWs,
         safe_http_block_events_stream: BlockEventsStreamHttp,
         logger: slog::Logger,
-    ) -> Result<Pin<Box<dyn Stream<Item = BlockWithEvents<Self::EventParameters>> + Send + 'a>>>
+    ) -> Result<
+        Pin<Box<dyn Stream<Item = Result<BlockWithEvents<Self::EventParameters>>> + Send + 'a>>,
+    >
     where
         BlockEventsStreamWs:
             Stream<Item = BlockWithDecodedEvents<Self::EventParameters>> + Unpin + Send + 'a,
@@ -753,7 +756,7 @@ pub trait EthContractWitnesser {
                         Some(block_events) = stream_state.http_stream.next() => {
                             do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, block_events).await
                         }
-                        else => break None
+                        else => break Some((Err(anyhow!("Both streams have ended")), stream_state))
                     };
 
                     match next_clean_block_events {
@@ -761,21 +764,16 @@ pub trait EthContractWitnesser {
                             if let Some(clean_block_events) = opt_clean_block_events {
                                 stream_state.merged_stream_state.last_block_yielded =
                                     clean_block_events.block_number;
-                                break Some((clean_block_events, stream_state));
+                                break Some((Ok(clean_block_events), stream_state));
                             }
                         }
                         Err(err) => {
-                            slog::error!(
-                                stream_state.merged_stream_state.logger,
-                                "Terminating ETH merged block stream due to error: {}",
-                                err
-                            );
-                            break None;
+                            break Some((Err(err), stream_state));
                         }
                     }
                 }
             },
-        )))
+        ).end_after_error()))
     }
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
@@ -968,6 +966,7 @@ mod merged_stream_tests {
                 .merged_block_events_stream(ws_stream, http_stream, logger)
                 .await
                 .unwrap()
+                .filter_map(|result| std::future::ready(result.ok()))
                 .map(move |x| {
                     (x, {
                         let protocol = if tag_cache.contains_tag(ETH_WS_STREAM_YIELDED)
@@ -1003,7 +1002,8 @@ mod merged_stream_tests {
             .unwrap()
             .next()
             .await
-            .is_none());
+            .unwrap()
+            .is_err());
     }
 
     #[tokio::test]
@@ -1027,6 +1027,7 @@ mod merged_stream_tests {
                 )
                 .await
                 .unwrap()
+                .filter_map(|result| std::future::ready(result.ok()))
                 .collect::<Vec<_>>()
                 .await,
             &[
@@ -1054,6 +1055,7 @@ mod merged_stream_tests {
                 )
                 .await
                 .unwrap()
+                .filter_map(|result| std::future::ready(result.ok()))
                 .collect::<Vec<_>>()
                 .await,
             &[
@@ -1149,6 +1151,7 @@ mod merged_stream_tests {
                 )
                 .await
                 .unwrap()
+                .filter_map(|result| std::future::ready(result.ok()))
                 .collect::<Vec<_>>()
                 .await
                 .into_iter(),
@@ -1182,7 +1185,8 @@ mod merged_stream_tests {
                 new_test_logger(),
             )
             .await
-            .unwrap();
+            .unwrap()
+            .filter_map(|result| std::future::ready(result.ok()));
 
         stream.next().await.unwrap();
         stream.next().await.unwrap();
@@ -1259,6 +1263,7 @@ mod merged_stream_tests {
                 )
                 .await
                 .unwrap()
+                .filter_map(|result| std::future::ready(result.ok()))
                 .collect::<Vec<_>>()
                 .await,
             &[block_with_events(11, &[0])]
