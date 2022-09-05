@@ -15,7 +15,7 @@ pub mod utils;
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use cf_traits::EpochIndex;
+use cf_primitives::EpochIndex;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
 use sp_runtime::traits::Keccak256;

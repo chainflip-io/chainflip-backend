@@ -20,7 +20,7 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use cf_traits::{AuthorityCount, CeremonyId};
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::Future;
 use state_chain_runtime::AccountId;
 

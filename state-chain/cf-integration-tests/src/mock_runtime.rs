@@ -9,7 +9,8 @@ use state_chain_runtime::{
 };
 
 use crate::{get_from_seed, network, GENESIS_KEY};
-use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
+use cf_primitives::AuthorityCount;
+use cf_traits::{BlockNumber, FlipBalance};
 
 pub struct ExtBuilder {
 	pub accounts: Vec<(AccountId, FlipBalance)>,

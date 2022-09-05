@@ -1,5 +1,6 @@
 pub mod common {
-	use cf_traits::{AuthorityCount, BlockNumber, FlipBalance};
+	use cf_primitives::AuthorityCount;
+	use cf_traits::{BlockNumber, FlipBalance};
 	use pallet_cf_broadcast::AttemptCount;
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;

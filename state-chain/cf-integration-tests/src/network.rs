@@ -1,9 +1,7 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
-use cf_traits::{
-	ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochIndex, EpochInfo,
-	FlipBalance,
-};
+use cf_primitives::{ChainflipAccountState, EpochIndex};
+use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance};
 use codec::Encode;
 use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
