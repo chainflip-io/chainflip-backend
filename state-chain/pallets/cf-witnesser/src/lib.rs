@@ -332,24 +332,6 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
-	type AccountId = T::ValidatorId;
-	type Call = <T as pallet::Config>::Call;
-	type BlockNumber = T::BlockNumber;
-
-	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-		Self::do_witness(who.into(), call)
-	}
-
-	fn witness_at_epoch(
-		who: Self::AccountId,
-		call: Self::Call,
-		epoch: EpochIndex,
-	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who.into(), call, epoch)
-	}
-}
-
 impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 

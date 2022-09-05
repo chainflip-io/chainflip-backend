@@ -22,7 +22,6 @@ pub mod threshold_signer;
 pub mod time_source;
 pub mod vault_rotation;
 pub mod waived_fees_mock;
-pub mod witnesser;
 
 trait MockPallet {
 	const PREFIX: &'static [u8];
