@@ -1,10 +1,10 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
-	CallHash, CallHashExecuted, Error, ExtraCallData, VoteMask, Votes,
+	CallHash, CallHashExecuted, EpochsToCull, Error, ExtraCallData, VoteMask, Votes,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::Hooks};
 
 #[test]
 fn call_on_threshold() {
@@ -166,23 +166,45 @@ fn can_purge_stale_storage() {
 			CallHashExecuted::<Test>::insert(e, &call, ());
 		}
 
-		// Purge storage in epoch 2.
+		// Add epoch 2 to `EpochsToCull`
 		Witnesser::on_expired_epoch(2);
+		Witnesser::on_expired_epoch(3);
+		Witnesser::on_expired_epoch(4);
+		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3, 4]);
 
-		// Storage items for epoch 2 should be removed.
+		// Nothing to clean up in epoch 4
+		assert_eq!(Witnesser::on_idle(1, 1_000_000_000_000), 0);
+		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3]);
+		for e in [2u32, 9, 10, 11] {
+			assert_eq!(Votes::<Test>::get(e, &call), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, &call), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, &call), Some(()));
+		}
+
+		assert_eq!(Witnesser::on_idle(2, 1_000_000_000_000), 0);
+		assert_eq!(Witnesser::on_idle(3, 1_000_000_000_000), 0);
+
+		// Epoch 2's stale data should be cleaned.
+		assert!(EpochsToCull::<Test>::get().is_empty());
+
 		assert_eq!(Votes::<Test>::get(2u32, &call), None);
 		assert_eq!(ExtraCallData::<Test>::get(2u32, call), None);
 		assert_eq!(CallHashExecuted::<Test>::get(2u32, call), None);
+
 		// Future epoch items are unaffected.
 		for e in [9u32, 10, 11] {
-			Votes::<Test>::insert(e, &call, vec![0, 0, e as u8]);
-			ExtraCallData::<Test>::insert(e, &call, vec![vec![0], vec![e as u8]]);
-			CallHashExecuted::<Test>::insert(e, &call, ());
+			assert_eq!(Votes::<Test>::get(e, &call), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, &call), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, &call), Some(()));
 		}
 
 		// Remove storage items for epoch 9 and 10.
 		Witnesser::on_expired_epoch(9);
 		Witnesser::on_expired_epoch(10);
+		assert_eq!(EpochsToCull::<Test>::get(), vec![9, 10]);
+		Witnesser::on_idle(4, 1_000_000_000_000);
+		Witnesser::on_idle(5, 1_000_000_000_000);
+		assert!(EpochsToCull::<Test>::get().is_empty());
 
 		for e in [9u32, 10] {
 			assert_eq!(Votes::<Test>::get(e, &call), None);

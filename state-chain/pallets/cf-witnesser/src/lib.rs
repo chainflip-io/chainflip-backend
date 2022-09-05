@@ -108,9 +108,75 @@ pub mod pallet {
 	pub type CallHashExecuted<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, ()>;
 
-	/// No hooks are implemented for this pallet.
+	/// This stores (expired) epochs that needs to have its data culled.
+	#[pallet::storage]
+	pub type EpochsToCull<T: Config> = StorageValue<_, Vec<EpochIndex>, ValueQuery>;
+
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Clear stale data from expired epochs
+		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			// Gets the next epoch to remove
+			let mut epochs_to_cull = EpochsToCull::<T>::get();
+			if epochs_to_cull.is_empty() {
+				return 0
+			}
+			let max_deletions_count_remaining = remaining_weight
+				.checked_div(T::WeightInfo::remove_one_storage_items())
+				.unwrap_or_default();
+			if max_deletions_count_remaining == 0 {
+				return 0
+			}
+			let mut deletions_count_remaining = max_deletions_count_remaining;
+
+			let epoch = epochs_to_cull.pop().expect("Checked for empty Epochs Vec.");
+			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
+				(false, false, false);
+
+			// Cull the Votes storage
+			let remove_result =
+				Votes::<T>::clear_prefix(epoch, deletions_count_remaining as u32, None);
+			deletions_count_remaining =
+				deletions_count_remaining.saturating_sub(remove_result.unique as u64);
+			if remove_result.maybe_cursor.is_none() {
+				cleared_votes = true;
+			}
+
+			// Cull the `ExtraCallData` storage
+			if deletions_count_remaining > 0 {
+				let remove_result =
+					ExtraCallData::<T>::clear_prefix(epoch, deletions_count_remaining as u32, None);
+				deletions_count_remaining =
+					deletions_count_remaining.saturating_sub(remove_result.unique as u64);
+				if remove_result.maybe_cursor.is_none() {
+					cleared_extra_call_data = true;
+				}
+			}
+
+			// Cull the `CallHashExecuted` storage
+			if deletions_count_remaining > 0 {
+				let remove_result = CallHashExecuted::<T>::clear_prefix(
+					epoch,
+					deletions_count_remaining as u32,
+					None,
+				);
+				deletions_count_remaining =
+					deletions_count_remaining.saturating_sub(remove_result.unique as u64);
+				if remove_result.maybe_cursor.is_none() {
+					cleared_call_hash = true;
+				}
+			}
+
+			// If all storages have been cleared, update storage.
+			if cleared_votes && cleared_extra_call_data && cleared_call_hash {
+				EpochsToCull::<T>::put(epochs_to_cull);
+			}
+
+			max_deletions_count_remaining
+				.saturating_sub(deletions_count_remaining)
+				.saturating_mul(T::WeightInfo::remove_one_storage_items())
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -353,12 +419,12 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
-	/// Purge the pallet storage of stale entries. This is prevent the storage from growing
-	/// indefinitely.
+	/// Add the expired epoch to the queue to have its data culled. This is prevent the storage from
+	/// growing indefinitely.
 	fn on_expired_epoch(expired: EpochIndex) {
-		let _empty = Votes::<T>::clear_prefix(expired, u32::MAX, None);
-		let _empty = ExtraCallData::<T>::clear_prefix(expired, u32::MAX, None);
-		let _empty = CallHashExecuted::<T>::clear_prefix(expired, u32::MAX, None);
+		EpochsToCull::<T>::mutate(|expired_epochs| {
+			expired_epochs.push(expired);
+		});
 	}
 }
 

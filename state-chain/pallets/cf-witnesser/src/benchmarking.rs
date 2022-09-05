@@ -26,5 +26,11 @@ benchmarks! {
 		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
 	}
 
+	remove_one_storage_items {
+		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
+		let call_hash = CallHash(Hashable::blake2_256(&call));
+		Votes::<T>::insert(0, call_hash, vec![0]);
+	} : {Votes::<T>::remove(0, call_hash);}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
