@@ -166,7 +166,7 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::do_witness(who, *call)
+			Self::do_witness_at_epoch(who, *call, T::EpochInfo::epoch_index())
 		}
 
 		/// Called as a witness of some external event.
@@ -322,13 +322,6 @@ impl<T: Config> Pallet<T> {
 			CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
 		}
 		Ok(().into())
-	}
-
-	fn do_witness(
-		who: <T as frame_system::Config>::AccountId,
-		call: <T as Config>::Call,
-	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index())
 	}
 }
 
