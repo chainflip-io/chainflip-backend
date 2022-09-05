@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, sync::Arc};
 
+use async_trait::async_trait;
 use cf_traits::AuthorityCount;
 use cf_traits::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;

@@ -20,7 +20,7 @@ use state_chain_runtime::AccountId;
 use client::{
     ceremony_runner::CeremonyRunner, signing::frost::SigningData, utils::PartyIdxMapping,
 };
-use tokio::sync::mpsc::UnboundedSender;
+
 use tokio::sync::oneshot;
 
 use crate::logging::{CEREMONY_ID_KEY, CEREMONY_TYPE_KEY};
