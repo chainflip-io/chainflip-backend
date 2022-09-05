@@ -42,6 +42,8 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen;
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+
+	type ChainAddress: Member + Parameter + MaxEncodedLen + Clone + BenchmarkValue;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -174,6 +176,7 @@ impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
 	type ChainAmount = u128;
 	type TrackedData = eth::TrackedData<Self>;
+	type ChainAddress = eth::Address;
 }
 
 impl ChainCrypto for Ethereum {
@@ -212,6 +215,7 @@ pub mod mocks {
 		type ChainBlockNumber = u64;
 		type ChainAmount = u128;
 		type TrackedData = MockTrackedData;
+		type ChainAddress = [u8; 4];
 	}
 
 	#[derive(

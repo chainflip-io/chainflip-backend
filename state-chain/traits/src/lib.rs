@@ -8,9 +8,9 @@ use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+	AuthorityCount, CeremonyId, ChainAsset, ChainflipAccountData, ChainflipAccountState, EpochIndex,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -23,7 +23,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, RuntimeDebug,
+	DispatchError, DispatchResult, Permill, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -687,4 +687,19 @@ pub trait StakingInfo {
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
 	/// Returns the total stake held on-chain.
 	fn total_onchain_stake() -> Self::Balance;
+}
+
+/// Allow pallets to register `Intent`s in the Ingress pallet.
+pub trait IngressApi<C: Chain> {
+	type AccountId;
+
+	fn register_liquidity_ingress_intent(lp_account: Self::AccountId, ingress_asset: ChainAsset);
+
+	fn register_swap_intent(
+		relayer_id: Self::AccountId,
+		ingress_asset: ChainAsset,
+		egress_asset: ChainAsset,
+		relayer_commission: Permill,
+		egress_address: C::ChainAddress,
+	);
 }
