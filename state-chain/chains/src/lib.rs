@@ -31,7 +31,15 @@ pub trait Chain: Member + Parameter {
 		+ From<u64>
 		+ MaxEncodedLen;
 
-	type ChainAmount: Member + Parameter + Copy + Default + FullCodec + MaxEncodedLen;
+	type ChainAmount: Member
+		+ Parameter
+		+ Copy
+		+ Default
+		+ Saturating
+		+ Into<u128>
+		+ From<u128>
+		+ FullCodec
+		+ MaxEncodedLen;
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
@@ -90,7 +98,7 @@ pub trait ChainAbi: ChainCrypto {
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
-pub trait ApiCall<Abi: ChainAbi>: Parameter + MaxEncodedLen {
+pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Get the payload over which the threshold signature should be generated.
 	fn threshold_signature_payload(&self) -> <Abi as ChainCrypto>::Payload;
 
@@ -198,7 +206,7 @@ pub struct Ethereum;
 
 impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
-	type ChainAmount = eth::Uint;
+	type ChainAmount = u128;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
 	type ChainAsset = eth::Address;

@@ -88,8 +88,8 @@ impl ApiCall<Ethereum> for AllBatch {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
-				self.fetch_params.tokenize(),
-				self.transfer_params.tokenize(),
+				self.fetch_params.clone().tokenize(),
+				self.transfer_params.clone().tokenize(),
 			])
 			.expect(
 				r#"
