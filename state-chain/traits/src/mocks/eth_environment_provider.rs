@@ -8,7 +8,7 @@ impl crate::EthEnvironmentProvider for MockEthEnvironmentProvider {
 	fn key_manager_address() -> [u8; 20] {
 		[0xcf; 20]
 	}
-	fn vault_address() -> [u8; 20] {
+	fn eth_vault_ddress() -> [u8; 20] {
 		[0xcf; 20]
 	}
 	fn stake_manager_address() -> [u8; 20] {

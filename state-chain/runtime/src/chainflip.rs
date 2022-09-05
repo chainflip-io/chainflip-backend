@@ -129,7 +129,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				EthereumApi::UpdateFlipSupply(_) => Environment::flip_token_address().into(),
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::AllBatch(_) => Environment::vault_address().into(),
+				EthereumApi::AllBatch(_) => Environment::eth_vault_ddress().into(),
 			},
 			data: signed_call.abi_encoded(),
 			..Default::default()
