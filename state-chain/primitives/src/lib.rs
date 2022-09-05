@@ -4,7 +4,7 @@
 //!
 //! Primitive types to be used across Chainflip's various crates
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 
@@ -47,4 +47,25 @@ impl Default for ChainflipAccountData {
 	fn default() -> Self {
 		ChainflipAccountData { state: ChainflipAccountState::Backup }
 	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub enum Chain {
+	Eth,
+	Dot,
+}
+
+/// These assets can be on multiple chains.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub enum Asset {
+	Eth,
+	Flip,
+	Usdc,
+	Dot,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub struct ChainAsset {
+	chain: Chain,
+	asset: Asset,
 }
