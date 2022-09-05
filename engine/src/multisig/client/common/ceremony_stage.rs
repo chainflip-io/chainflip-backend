@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, sync::Arc};
 
+use async_trait::async_trait;
 use cf_traits::AuthorityCount;
 use cf_traits::CeremonyId;
 use tokio::sync::mpsc::UnboundedSender;
@@ -15,7 +16,11 @@ use super::CeremonyFailureReason;
 pub enum StageResult<M, Result, FailureReason> {
     /// Ceremony proceeds to the next stage
     NextStage(
-        Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason> + Send>,
+        Box<
+            dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason>
+                + Send
+                + Sync,
+        >,
     ),
     /// Ceremony aborted (contains parties to report)
     Error(
@@ -37,6 +42,7 @@ pub enum ProcessMessageResult {
 }
 
 /// Defines actions that any given stage of a ceremony should be able to perform
+#[async_trait]
 pub trait CeremonyStage {
     // Message type to be processed by a particular stage
     type Message;
@@ -62,7 +68,9 @@ pub trait CeremonyStage {
 
     /// Verify data for this stage after it is received from all other parties,
     /// either abort or proceed to the next stage based on the result
-    fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
+    async fn finalize(
+        self: Box<Self>,
+    ) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
@@ -91,6 +99,6 @@ impl CeremonyCommon {
 }
 
 pub trait PreProcessStageDataCheck {
-    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool;
+    fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool;
     fn is_first_stage(&self) -> bool;
 }

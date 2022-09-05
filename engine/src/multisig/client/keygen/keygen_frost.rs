@@ -560,7 +560,7 @@ pub mod genesis {
             .to_owned()
     }
 
-    fn generate_key_data<P: ECPoint>(
+    pub fn generate_key_data<P: ECPoint>(
         signers: &[AccountId],
         rng: &mut Rng,
         allow_high_pubkey: bool,
