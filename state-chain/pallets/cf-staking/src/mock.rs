@@ -109,7 +109,6 @@ impl pallet_cf_flip::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call, u64);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 

@@ -71,9 +71,7 @@ impl pallet_cf_witness::Config for Test {
 
 impl dummy::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Test>;
 }
 
 impl WitnessDataExtraction for Call {

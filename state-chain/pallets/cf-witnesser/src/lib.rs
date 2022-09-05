@@ -161,12 +161,10 @@ pub mod pallet {
 		)]
 		pub fn witness(
 			origin: OriginFor<T>,
-			// TODO: Not possible to fix the clippy warning here. At the moment we
-			// need to ignore it on a global level.
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::do_witness(who, *call)
+			Self::do_witness_at_epoch(who, *call, T::EpochInfo::epoch_index())
 		}
 
 		/// Called as a witness of some external event.
@@ -322,31 +320,6 @@ impl<T: Config> Pallet<T> {
 			CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
 		}
 		Ok(().into())
-	}
-
-	fn do_witness(
-		who: <T as frame_system::Config>::AccountId,
-		call: <T as Config>::Call,
-	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who, call, T::EpochInfo::epoch_index())
-	}
-}
-
-impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
-	type AccountId = T::ValidatorId;
-	type Call = <T as pallet::Config>::Call;
-	type BlockNumber = T::BlockNumber;
-
-	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-		Self::do_witness(who.into(), call)
-	}
-
-	fn witness_at_epoch(
-		who: Self::AccountId,
-		call: Self::Call,
-		epoch: EpochIndex,
-	) -> DispatchResultWithPostInfo {
-		Self::do_witness_at_epoch(who.into(), call, epoch)
 	}
 }
 

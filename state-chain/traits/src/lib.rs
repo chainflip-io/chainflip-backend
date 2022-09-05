@@ -69,31 +69,6 @@ pub trait Chainflip: frame_system::Config {
 	type SystemState: SystemStateInfo;
 }
 
-/// A trait abstracting the functionality of the witnesser
-pub trait Witnesser {
-	/// The type of accounts that can witness.
-	type AccountId;
-	/// The call type of the runtime.
-	type Call: UnfilteredDispatchable;
-	/// The type for block numbers
-	type BlockNumber;
-
-	/// Witness an event. The event is represented by a call, which is dispatched when a threshold
-	/// number of witnesses have been made.
-	///
-	/// **IMPORTANT**
-	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should
-	/// be enforced by adding a salt or nonce to the function arguments.
-	/// **IMPORTANT**
-	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
-	/// Witness an event, as above, during a specific epoch
-	fn witness_at_epoch(
-		who: Self::AccountId,
-		call: Self::Call,
-		epoch: EpochIndex,
-	) -> DispatchResultWithPostInfo;
-}
-
 pub trait EpochInfo {
 	/// The id type used for the validators.
 	type ValidatorId;
