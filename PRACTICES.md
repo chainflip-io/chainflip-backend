@@ -50,4 +50,4 @@ Improving the speed and effectiveness of code reviews directly improves the spee
 
 ## Better not perfect
 
-If a PR improves the overall quality of the code base, reviewers should tend towards approving over holding up the PR. Assuming their are no bugs introduced, this may mean approving with some comments, perhaps suggesting that some improvements be taken out into their own issue, or for even smaller items, allowing the developer to make a judgement call on whether to include it before merging. 
+If a PR improves the overall quality of the code base, reviewers should tend towards approving over holding up the PR. Assuming there are no bugs introduced, this may mean approving with some comments, perhaps suggesting that some improvements be taken out into their own issue, or for even smaller items, allowing the developer to make a judgement call on whether to include it before merging. 
