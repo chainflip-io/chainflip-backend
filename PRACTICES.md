@@ -34,15 +34,9 @@ Code reviewing is an important part of the software development lifecycle. It is
 
 Why are small PRs important? [Google has a good explanation](https://google.github.io/eng-practices/review/developer/small-cls.html) and we agree.
 
-Reviewers reserve the right to reject a PR becauase it's too big. Naturally, there are cases where big PRs are necessary, but in most cases, if the time is taken to think about how the work can be broken down there is a way.
-
 ### Organised and meaningful commits
 
 Each commit should be well named. While writing the occasional "ARGHHH" commit meessage may give us the stress relief we need, we should instead seek other stress reduction strategies, and have well named commits like "fix: authority rewards are now rewarded at each block" so as not to annoy and stress your fellow developers (which might result in "ARGGGH"s with more "G"s). This is important for two reasons: debugging, to find where bugs were introduced and providing reviewers a nice description of what to expect in a commit, also allowing them to navigate your PR more easily.
-
-TODO: Organised commits
-
-How to structure commits? Interactive rebasing, "telling story" through commits etc. 
 
 
 ### Self review
