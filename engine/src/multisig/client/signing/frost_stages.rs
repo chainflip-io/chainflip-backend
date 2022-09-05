@@ -9,6 +9,7 @@ use crate::multisig::{
     crypto::CryptoScheme,
 };
 
+use async_trait::async_trait;
 use cf_traits::AuthorityCount;
 use client::common::{
     broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
@@ -62,6 +63,7 @@ impl<C: CryptoScheme> AwaitCommitments1<C> {
 
 derive_display_as_type_name!(AwaitCommitments1<C: CryptoScheme>);
 
+#[async_trait]
 impl<C: CryptoScheme>
     BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for AwaitCommitments1<C>
@@ -78,7 +80,7 @@ impl<C: CryptoScheme>
 
     should_delay!(SigningData::BroadcastVerificationStage2<C::Point>);
 
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> SigningStageResult<C> {
@@ -111,6 +113,7 @@ struct VerifyCommitmentsBroadcast2<C: CryptoScheme> {
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2<C: CryptoScheme>);
 
+#[async_trait]
 impl<C: CryptoScheme>
     BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for VerifyCommitmentsBroadcast2<C>
@@ -129,7 +132,7 @@ impl<C: CryptoScheme>
     should_delay!(SigningData::LocalSigStage3<C::Point>);
 
     /// Verify that all values have been broadcast correctly during stage 1
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> SigningStageResult<C> {
@@ -170,6 +173,7 @@ struct LocalSigStage3<C: CryptoScheme> {
 
 derive_display_as_type_name!(LocalSigStage3<C: CryptoScheme>);
 
+#[async_trait]
 impl<C: CryptoScheme>
     BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for LocalSigStage3<C>
@@ -202,7 +206,7 @@ impl<C: CryptoScheme>
 
     /// Nothing to process here yet, simply creating the new stage once all of the
     /// data has been collected
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> SigningStageResult<C> {
@@ -231,6 +235,7 @@ struct VerifyLocalSigsBroadcastStage4<C: CryptoScheme> {
 
 derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<C: CryptoScheme>);
 
+#[async_trait]
 impl<C: CryptoScheme>
     BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
     for VerifyLocalSigsBroadcastStage4<C>
@@ -252,7 +257,7 @@ impl<C: CryptoScheme>
 
     /// Verify that signature shares have been broadcast correctly, and if so,
     /// combine them into the (final) aggregate signature
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> SigningStageResult<C> {

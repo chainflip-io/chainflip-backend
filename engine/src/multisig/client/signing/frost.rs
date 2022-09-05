@@ -105,25 +105,17 @@ impl<P: ECPoint> Display for SigningData<P> {
 
 impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
     /// Check that the number of elements and indexes in the data is correct
-    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool {
-        if let Some(num_of_parties) = num_of_parties {
-            match self {
-                // For messages that don't contain a collection (eg. CommStage1), we don't need to check the size.
-                SigningData::CommStage1(_) => true,
-                SigningData::BroadcastVerificationStage2(message) => {
-                    message.data.len() == num_of_parties as usize
-                }
-                SigningData::LocalSigStage3(_) => true,
-                SigningData::VerifyLocalSigsStage4(message) => {
-                    message.data.len() == num_of_parties as usize
-                }
+    fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool {
+        match self {
+            // For messages that don't contain a collection (eg. CommStage1), we don't need to check the size.
+            SigningData::CommStage1(_) => true,
+            SigningData::BroadcastVerificationStage2(message) => {
+                message.data.len() == num_of_parties as usize
             }
-        } else {
-            assert!(
-                matches!(self, SigningData::CommStage1(_)),
-                "We should know the number of participants for any non-initial stage data"
-            );
-            true
+            SigningData::LocalSigStage3(_) => true,
+            SigningData::VerifyLocalSigsStage4(message) => {
+                message.data.len() == num_of_parties as usize
+            }
         }
     }
 
@@ -341,7 +333,6 @@ mod tests {
     };
 
     use rand_legacy::SeedableRng;
-    use utilities::assert_panics;
 
     const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
     const NONCE_KEY: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
@@ -410,9 +401,9 @@ mod tests {
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.data_size_is_valid(Some(test_size)));
-        assert!(!data_to_check.data_size_is_valid(Some(test_size - 1)));
-        assert!(!data_to_check.data_size_is_valid(Some(test_size + 1)));
+        assert!(data_to_check.data_size_is_valid(test_size));
+        assert!(!data_to_check.data_size_is_valid(test_size - 1));
+        assert!(!data_to_check.data_size_is_valid(test_size + 1));
     }
 
     #[test]
@@ -427,18 +418,8 @@ mod tests {
             });
 
         // Should fail on sizes larger or smaller then expected
-        assert!(data_to_check.data_size_is_valid(Some(test_size)));
-        assert!(!data_to_check.data_size_is_valid(Some(test_size - 1)));
-        assert!(!data_to_check.data_size_is_valid(Some(test_size + 1)));
-    }
-
-    #[test]
-    fn check_data_size_should_panic_with_none_on_non_initial_stage() {
-        let data_to_check =
-            SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
-                data: BTreeMap::new(),
-            });
-
-        assert_panics!(data_to_check.data_size_is_valid(None));
+        assert!(data_to_check.data_size_is_valid(test_size));
+        assert!(!data_to_check.data_size_is_valid(test_size - 1));
+        assert!(!data_to_check.data_size_is_valid(test_size + 1));
     }
 }
