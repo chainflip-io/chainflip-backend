@@ -4,9 +4,10 @@
 //!
 //! Primitive types to be used across Chainflip's various crates
 
+use cf_chains::eth;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{AccountId32, Permill, RuntimeDebug};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -55,7 +56,12 @@ pub enum ForeignChain {
 	Dot,
 }
 
-/// An Asset is a token or currency that can be traded via the Chainflip AMM.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub enum ForeignChainAddress {
+	Eth(eth::Address),
+}
+
+/// These assets can be on multiple chains.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum ForeignAsset {
 	Eth,
@@ -68,4 +74,26 @@ pub enum ForeignAsset {
 pub struct ForeignChainAsset {
 	chain: ForeignChain,
 	asset: ForeignAsset,
+}
+
+/// The intent id just needs to be unique for each intent.
+pub type IntentId = u64;
+
+pub struct IntentCommon {
+	_intent_id: IntentId,
+	_ingress_asset: ChainAsset,
+}
+
+/// There are two types of ingress intent.
+pub enum Intent {
+	Swap {
+		intent_common: IntentCommon,
+		egress_asset: ChainAsset,
+		egress_address: ChainAddress,
+		relayer_fee: Permill,
+	},
+	LiquidityProvision {
+		intent_common: IntentCommon,
+		lp_account: AccountId32,
+	},
 }
