@@ -9,7 +9,7 @@ use super::{ChainTag, CryptoScheme, ECPoint};
 pub use super::secp256k1::{Point, Scalar};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EthSchnorrSignature {
     /// Scalar component
     pub s: [u8; 32],

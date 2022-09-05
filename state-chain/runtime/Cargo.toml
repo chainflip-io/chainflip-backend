@@ -13,14 +13,14 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [build-dependencies.substrate-wasm-builder]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies]
 # Required to get wasm to compile.
 # See https://docs.rs/getrandom/#webassembly-support
 getrandom = { version = '0.2', features = ['js'], default-features = false }
 
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 nanorand = { version = '0.6', default-features = false, features = ['wyrand']}
 serde = { version = '1.0.126', optional = true, features = ['derive'] }
 
@@ -53,12 +53,12 @@ scale-info = { version = '2.0.1', default-features = false, features = ['derive'
 [dependencies.pallet-authorship]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.pallet-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 features = ['historical']
 
 # Substrate dependencies
@@ -66,28 +66,28 @@ features = ['historical']
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-executive]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-system-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.hex-literal]
 optional = true
@@ -96,87 +96,87 @@ version = '0.3.4'
 [dependencies.pallet-aura]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.pallet-grandpa]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.pallet-randomness-collective-flip]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.pallet-timestamp]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.pallet-transaction-payment]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-api]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-block-builder]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-consensus-aura]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 version = '0.10.0-dev'
 
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-inherents]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-offchain]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-session]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-transaction-pool]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-version]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-try-runtime]
 optional = true
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 
@@ -184,12 +184,12 @@ git = 'https://github.com/chainflip-io/substrate.git'
 [dependencies.frame-system-rpc-runtime-api]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.pallet-transaction-payment-rpc-runtime-api]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [features]
 default = ['std']

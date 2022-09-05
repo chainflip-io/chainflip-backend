@@ -1,8 +1,6 @@
 use std::cell::RefCell;
 
-use crate::{
-	self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence, SignerNomination,
-};
+use crate::{self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence};
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
 	ChainCrypto, Ethereum,
@@ -10,9 +8,10 @@ use cf_chains::{
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
-		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
+		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
+		threshold_signer::MockThresholdSigner,
 	},
-	Chainflip, EpochIndex,
+	Chainflip,
 };
 use frame_support::parameter_types;
 use sp_core::H256;
@@ -42,7 +41,6 @@ parameter_types! {
 }
 
 thread_local! {
-	pub static NOMINATION: std::cell::RefCell<Option<u64>> = RefCell::new(Some(0xc001d00d_u64));
 	pub static VALIDKEY: std::cell::RefCell<bool> = RefCell::new(true);
 }
 
@@ -82,48 +80,6 @@ impl Chainflip for Test {
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
-}
-
-pub struct MockNominator;
-
-impl SignerNomination for MockNominator {
-	type SignerId = u64;
-
-	fn nomination_with_seed<S>(
-		_seed: S,
-		_exclude_ids: &[Self::SignerId],
-	) -> Option<Self::SignerId> {
-		Self::get_nominee()
-	}
-
-	fn threshold_nomination_with_seed<S>(
-		_seed: S,
-		_epoch_index: EpochIndex,
-	) -> Option<Vec<Self::SignerId>> {
-		Some(vec![Self::get_nominee().unwrap()])
-	}
-}
-
-// Remove some threadlocal + refcell complexity from test code
-impl MockNominator {
-	pub fn get_nominee() -> Option<u64> {
-		NOMINATION.with(|cell| *cell.borrow())
-	}
-
-	pub fn set_nominee(nominee: Option<u64>) {
-		NOMINATION.with(|cell| *cell.borrow_mut() = nominee);
-	}
-
-	/// Increments nominee, if it's a Some
-	pub fn increment_nominee() {
-		NOMINATION.with(|cell| {
-			let mut nomination = cell.borrow_mut();
-			let nomination = nomination.as_mut();
-			if let Some(n) = nomination {
-				*n += 1;
-			}
-		});
-	}
 }
 
 pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;

@@ -64,10 +64,10 @@ where
 mod test {
 	use super::*;
 	use codec::{Decode, Encode};
+	use frame_support::storage_alias;
 
-	frame_support::generate_storage_alias!(
-		Test, Store => Value<MyEnumType>
-	);
+	#[storage_alias]
+	type Store = StorageValue<Test, MyEnumType>;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 	enum MyEnumType {
@@ -91,11 +91,10 @@ mod test {
 mod test_derive {
 	use super::*;
 	use codec::{Decode, Encode};
-	use frame_support::Twox64Concat;
+	use frame_support::{storage_alias, Twox64Concat};
 
-	frame_support::generate_storage_alias!(
-		Test, ValueStore => Value<MyEnumType>
-	);
+	#[storage_alias]
+	type ValueStore = StorageValue<Test, MyEnumType>;
 
 	trait Config {
 		type Inner: FullCodec;
@@ -107,9 +106,8 @@ mod test_derive {
 		type Inner = u32;
 	}
 
-	frame_support::generate_storage_alias!(
-		Test, MapStore<T: Config> => Map<(Twox64Concat, u32), MyGenericEnumType<T>>
-	);
+	#[storage_alias]
+	type MapStore<T> = StorageMap<Pallet, Twox64Concat, u32, MyGenericEnumType<T>>;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumVariant)]
 	enum MyEnumType {

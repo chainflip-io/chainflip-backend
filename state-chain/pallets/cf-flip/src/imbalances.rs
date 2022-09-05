@@ -20,6 +20,8 @@ pub enum InternalSource<AccountId> {
 	Account(AccountId),
 	/// Reserved funds. Could be a pot of rewards, a treasury balance, etc.
 	Reserve(ReserveId),
+	/// Pending claims for different accounts.
+	PendingClaim(AccountId),
 }
 
 /// The origin of an imbalance.
@@ -34,12 +36,16 @@ pub enum ImbalanceSource<AccountId> {
 }
 
 impl<AccountId> ImbalanceSource<AccountId> {
-	pub fn from_acct(id: AccountId) -> Self {
+	pub fn acct(id: AccountId) -> Self {
 		Self::Internal(InternalSource::Account(id))
 	}
 
-	pub fn from_reserve(id: ReserveId) -> Self {
+	pub fn reserve(id: ReserveId) -> Self {
 		Self::Internal(InternalSource::Reserve(id))
+	}
+
+	pub fn pending_claims(id: AccountId) -> Self {
+		Self::Internal(InternalSource::PendingClaim(id))
 	}
 }
 
@@ -79,16 +85,23 @@ impl<T: Config> Surplus<T> {
 	}
 
 	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has
-	/// insufficient funds.
-	pub(super) fn try_from_acct(account_id: &T::AccountId, amount: T::Balance) -> Option<Self> {
+	/// insufficient funds. Also ensures that we only touch funds from the bonded balance if
+	/// `check_liquidity` is `false`.
+	pub(super) fn try_from_acct(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+		check_liquidity: bool,
+	) -> Option<Self> {
 		Flip::Account::<T>::try_mutate_exists(account_id, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {
-				if account.stake < amount {
-					Err(())
-				} else {
-					account.stake = account.stake.saturating_sub(amount);
-					Ok(Self::new(amount, ImbalanceSource::from_acct(account_id.clone())))
+				if check_liquidity && account.liquid() < amount {
+					return Err(())
 				}
+				if account.stake < amount {
+					return Err(())
+				}
+				account.stake = account.stake.saturating_sub(amount);
+				Ok(Self::new(amount, ImbalanceSource::acct(account_id.clone())))
 			} else {
 				Err(())
 			}
@@ -105,7 +118,7 @@ impl<T: Config> Surplus<T> {
 		Flip::Account::<T>::mutate(account_id, |account| {
 			let deducted = account.stake.min(amount);
 			account.stake = account.stake.saturating_sub(deducted);
-			Self::new(deducted, ImbalanceSource::from_acct(account_id.clone()))
+			Self::new(deducted, ImbalanceSource::acct(account_id.clone()))
 		})
 	}
 
@@ -117,10 +130,17 @@ impl<T: Config> Surplus<T> {
 				Err(())
 			} else {
 				(*balance) = (*balance).saturating_sub(amount);
-				Ok(Self::new(amount, ImbalanceSource::from_reserve(reserve_id)))
+				Ok(Self::new(amount, ImbalanceSource::reserve(reserve_id)))
 			}
 		})
 		.ok()
+	}
+
+	/// Tries to withdraw funds from a Pending Claims reserve for the corresponding Account ID.
+	/// Fails if the pending claim doesn't exist for that ID
+	pub(super) fn try_from_pending_claims_reserve(account_id: &T::AccountId) -> Option<Self> {
+		Flip::PendingClaimsReserve::<T>::take(&account_id)
+			.map(|amount| Self::new(amount, ImbalanceSource::pending_claims(account_id.clone())))
 	}
 
 	/// Withdraw funds from a reserve. Deducts *up to* the requested amount, depending on available
@@ -132,7 +152,7 @@ impl<T: Config> Surplus<T> {
 		Flip::Reserve::<T>::mutate(reserve_id, |balance| {
 			let deducted = (*balance).min(amount);
 			*balance = (*balance).saturating_sub(deducted);
-			Self::new(deducted, ImbalanceSource::from_reserve(reserve_id))
+			Self::new(deducted, ImbalanceSource::reserve(reserve_id))
 		})
 	}
 
@@ -195,7 +215,7 @@ impl<T: Config> Deficit<T> {
 				},
 				None => Zero::zero(),
 			};
-			Self::new(added, ImbalanceSource::from_acct(account_id.clone()))
+			Self::new(added, ImbalanceSource::acct(account_id.clone()))
 		})
 	}
 
@@ -214,8 +234,17 @@ impl<T: Config> Deficit<T> {
 				},
 				None => Zero::zero(),
 			};
-			Self::new(added, ImbalanceSource::from_reserve(reserve_id))
+			Self::new(added, ImbalanceSource::reserve(reserve_id))
 		})
+	}
+
+	/// Creates a pending claims reserve account for the given account ID.
+	pub(super) fn from_pending_claims_reserve(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+	) -> Self {
+		Flip::PendingClaimsReserve::<T>::insert(&account_id, amount);
+		Self::new(amount, ImbalanceSource::pending_claims(account_id.clone()))
 	}
 
 	/// Funds deficit from offchain.
@@ -392,6 +421,13 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 							*rsrv = rsrv.saturating_add(self.amount)
 						})
 					},
+					InternalSource::PendingClaim(account_id) => {
+						// This means we took funds from a pending claim but didn't put them
+						// anywhere. Add the funds back to the account again.
+						if self.amount != 0_u128.into() {
+							Flip::PendingClaimsReserve::<T>::insert(account_id, self.amount);
+						}
+					},
 				}
 			},
 		};
@@ -427,6 +463,13 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
 							*rsrv = rsrv.saturating_sub(self.amount)
 						})
+					},
+					InternalSource::PendingClaim(account_id) => {
+						// This means we added funds to a pending claim without specifying a source.
+						// Deduct them again.
+						if self.amount != 0_u128.into() {
+							Flip::PendingClaimsReserve::<T>::remove(account_id);
+						}
 					},
 				}
 			},

@@ -7,7 +7,6 @@ use cf_traits::{
 use codec::Encode;
 use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
-use sp_core::H256;
 use state_chain_runtime::{Authorship, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -85,7 +84,6 @@ impl Cli {
 #[derive(Clone)]
 pub struct KeyComponents {
 	pub secret: SecretKey,
-	// agg key
 	pub agg_key: AggKey,
 }
 
@@ -96,7 +94,7 @@ impl KeyComponents {
 		// just use the same signature nonce for every ceremony in tests
 		let k: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let k = SecretKey::parse(&k).unwrap();
-		let signature = self.agg_key.sign(&(*message).into(), &self.secret, &k);
+		let signature = self.agg_key.sign(message.as_fixed_bytes(), &self.secret, &k);
 
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
 		SchnorrVerificationComponents { s: signature, k_times_g_address }
@@ -123,6 +121,26 @@ impl Default for ThresholdSigner {
 }
 
 impl ThresholdSigner {
+	pub fn sign_with_key(
+		&self,
+		key_id: &[u8],
+		message: &cf_chains::eth::H256,
+	) -> SchnorrVerificationComponents {
+		let curr_key_id = self.key_components.agg_key.to_pubkey_compressed();
+		if key_id == curr_key_id {
+			println!("Signing with current key");
+			return self.key_components.sign(message)
+		}
+		let next_key_id =
+			self.proposed_key_components.as_ref().unwrap().agg_key.to_pubkey_compressed();
+		if key_id == next_key_id {
+			println!("Signing with proposed key");
+			self.proposed_key_components.as_ref().unwrap().sign(message)
+		} else {
+			panic!("Unknown key");
+		}
+	}
+
 	// Generate a keypair with seed
 	pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey, AggKey) {
 		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
@@ -216,40 +234,37 @@ impl Engine {
 					Event::Validator(
 						// A new epoch
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-							(&*self.threshold_signer).borrow_mut().use_proposed_key();
+							self.threshold_signer.borrow_mut().use_proposed_key();
 					},
 					Event::EthereumThresholdSigner(
 						// A signature request
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
 							ceremony_id,
-							_,
-							ref signers,
+							key_id,
+							_signers,
 							payload)) => {
 
-						// Participate in signing ceremony if requested.
-						// We only need one node to submit the unsigned transaction.
-						if let Some(node_id) = signers.get(0) { if node_id == &self.node_id {
-							state_chain_runtime::EthereumThresholdSigner::signature_success(
-								Origin::none(),
-								*ceremony_id,
-								// Sign with current key
-								(&*self.threshold_signer).borrow().key_components.sign(payload),
-							).expect("should be able to submit threshold signature for Ethereum");
-						} };
+						// if we unwrap on this, we'll panic, because we will have already succeeded
+						// on a previous submission (all nodes submit this)
+						let _result = state_chain_runtime::EthereumThresholdSigner::signature_success(
+							Origin::none(),
+							*ceremony_id,
+							self.threshold_signer.borrow().sign_with_key(key_id, payload),
+						);
 					},
 					Event::EthereumThresholdSigner(
 						// A threshold has been met for this signature
 						pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 							if let EngineState::Rotation = self.engine_state {
 								// If we rotating let's witness the keys being rotated on the contract
-								state_chain_runtime::Witnesser::witness(
+								let _result = state_chain_runtime::Witnesser::witness(
 									Origin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::vault_key_rotated {
-										new_public_key: (&*self.threshold_signer).borrow_mut().proposed_public_key(),
+										new_public_key: self.threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_hash: [1u8; 32].into(),
 									}.into()),
-								).expect("should be able to vault key rotation for node");
+								);
 							}
 					},
 					Event::EthereumVault(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
@@ -268,16 +283,13 @@ impl Engine {
 					// A keygen request has been made
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, authorities)) => {
 						if authorities.contains(&self.node_id) {
-							(&*self.threshold_signer).borrow_mut().propose_new_public_key();
-							let threshold_signer = (&*self.threshold_signer).borrow();
+							self.threshold_signer.borrow_mut().propose_new_public_key();
+							let threshold_signer = self.threshold_signer.borrow();
 							let proposed_key_components = threshold_signer.proposed_key_components.as_ref().expect("should have propposed key");
-							let payload: H256 = proposed_key_components.agg_key.pub_key_x.into();
-							let sig = proposed_key_components.sign(&payload);
 							state_chain_runtime::EthereumVault::report_keygen_outcome(
 								Origin::signed(self.node_id.clone()),
 								*ceremony_id,
-								// Propose a new key
-								Ok((proposed_key_components.agg_key, payload, sig)),
+								Ok(proposed_key_components.agg_key),
 							).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
 						}
 				},

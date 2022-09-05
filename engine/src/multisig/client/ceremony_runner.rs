@@ -10,8 +10,8 @@ use std::{
 
 use anyhow::Result;
 use cf_traits::AuthorityCount;
+use cf_traits::CeremonyId;
 use futures::future::{BoxFuture, FutureExt};
-use pallet_cf_vaults::CeremonyId;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
 use crate::{

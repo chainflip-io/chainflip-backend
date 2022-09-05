@@ -31,6 +31,7 @@ pub type FlipBalance = u128;
 pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
+pub type CeremonyId = u64;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -258,13 +259,19 @@ pub trait StakeTransfer {
 	///
 	/// Note this function makes no assumptions about how many claims may be pending simultaneously:
 	/// if enough funds are available, it succeeds. Otherwise, it fails.
-	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError>;
+	fn try_initiate_claim(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError>;
 
-	/// Performs any necessary settlement once a claim has been confirmed off-chain.
-	fn settle_claim(amount: Self::Balance);
+	/// Performs necessary settlement once a claim has been confirmed off-chain.
+	fn finalize_claim(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 
 	/// Reverts a pending claim in the case of an expiry or cancellation.
-	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance);
+	fn revert_claim(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError>;
 }
 
 /// Trait for managing token issuance.
@@ -407,14 +414,14 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn set_current_authority(account_id: &Self::AccountId) {
 		log::debug!("Setting current authority {:?}", account_id);
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state = ChainflipAccountState::CurrentAuthority;
+			account_data.state = ChainflipAccountState::CurrentAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
 
 	fn set_historical_authority(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			(*account_data).state = ChainflipAccountState::HistoricalAuthority;
+			account_data.state = ChainflipAccountState::HistoricalAuthority;
 		})
 		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
 	}
@@ -422,7 +429,7 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 	fn from_historical_to_backup(account_id: &Self::AccountId) {
 		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
 			ChainflipAccountState::HistoricalAuthority => {
-				(*account_data).state = ChainflipAccountState::Backup;
+				account_data.state = ChainflipAccountState::Backup;
 			},
 			_ => {
 				const ERROR_MESSAGE: &str = "Attempted to transition to backup from historical, on a non-historical authority";
@@ -496,8 +503,8 @@ where
 	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
-	type KeyId: TryInto<C::AggKey>;
-	type ValidatorId;
+	type KeyId: TryInto<C::AggKey> + From<Vec<u8>>;
+	type ValidatorId: Debug;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(payload: C::Payload) -> Self::RequestId;
@@ -507,7 +514,7 @@ where
 		participants: Vec<Self::ValidatorId>,
 		payload: C::Payload,
 		retry_policy: RetryPolicy,
-	) -> Self::RequestId;
+	) -> (Self::RequestId, CeremonyId);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -519,7 +526,7 @@ where
 	/// Attempt to retrieve a requested signature.
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> AsyncResult<Result<C::ThresholdSignature, ()>>;
+	) -> AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>;
 
 	/// Request a signature and register a callback for when the signature is available.
 	///

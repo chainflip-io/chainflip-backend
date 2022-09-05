@@ -39,11 +39,11 @@ executors:
         auth: *dockerconfig
   rust-base:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2021-11-16
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2022-08-08
         auth: *dockerconfig
   rust-base-ci:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2021-11-16
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2022-08-08
         auth: *dockerconfig
         user: ci
   java-executor:

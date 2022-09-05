@@ -20,13 +20,11 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use cf_traits::AuthorityCount;
+use cf_traits::{AuthorityCount, CeremonyId};
 use futures::Future;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
-
-use pallet_cf_vaults::CeremonyId;
 
 use tokio::sync::mpsc::UnboundedSender;
 use utilities::threshold_from_share_count;

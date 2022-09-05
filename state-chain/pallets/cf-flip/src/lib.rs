@@ -29,9 +29,7 @@ use frame_support::{
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto},
 	DispatchError, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -64,7 +62,8 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
-			+ Debug;
+			+ Debug
+			+ From<u128>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
@@ -98,6 +97,11 @@ pub mod pallet {
 	#[pallet::getter(fn reserve)]
 	pub type Reserve<T: Config> =
 		StorageMap<_, Blake2_128Concat, ReserveId, T::Balance, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn pending_claims_reserve)]
+	pub type PendingClaimsReserve<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;
 
 	/// The total number of tokens issued.
 	#[pallet::storage]
@@ -142,6 +146,8 @@ pub mod pallet {
 		InsufficientReserves,
 		/// Invalid Slashing Rate: Has to be between 0 and 100
 		InvalidSlashingRate,
+		/// No pending claim for this ID.
+		NoPendingClaimForThisID,
 	}
 
 	#[pallet::hooks]
@@ -210,6 +216,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
+			use sp_runtime::traits::Zero;
 			Self { total_issuance: Zero::zero() }
 		}
 	}
@@ -246,7 +253,7 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 		self.stake.saturating_sub(self.bond)
 	}
 
-	// The current bond
+	/// The current bond
 	pub fn bond(&self) -> Balance {
 		self.bond
 	}
@@ -305,7 +312,16 @@ impl<T: Config> Pallet<T> {
 	/// available, otherwise returns `None`. Unlike [debit](Self::debit), does not create the
 	/// account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
-		Surplus::try_from_acct(account_id, amount)
+		Surplus::try_from_acct(account_id, amount, false)
+	}
+
+	/// Like `try_debit` but debits only the accounts liquid balance. Ensures that we don't burn
+	/// more than the available liquidity of the account and never touch the bonded balance.
+	pub fn try_debit_from_liquid_funds(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+	) -> Option<Surplus<T>> {
+		Surplus::try_from_acct(account_id, amount, true)
 	}
 
 	/// Credits an account with some staked funds. If the amount provided would result in overflow,
@@ -402,10 +418,23 @@ impl<T: Config> Pallet<T> {
 			.ok_or_else(|| Error::<T>::InsufficientReserves.into())
 	}
 
+	/// Tries to withdraw funds from a pending claim. Fails if the claim doesn't exist
+	pub fn try_withdraw_pending_claim(
+		account_id: &T::AccountId,
+	) -> Result<Surplus<T>, DispatchError> {
+		Surplus::try_from_pending_claims_reserve(account_id)
+			.ok_or_else(|| Error::<T>::NoPendingClaimForThisID.into())
+	}
+
 	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it
 	/// doesn't exist already.
 	pub fn deposit_reserves(reserve_id: ReserveId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_reserve(reserve_id, amount)
+	}
+
+	/// Create a pending claims reserve owned by some `account_id`.
+	pub fn deposit_pending_claim(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
+		Deficit::from_pending_claims_reserve(account_id, amount)
 	}
 }
 
@@ -435,7 +464,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 		account_id: &Self::AccountId,
 		amount: Self::Amount,
 	) -> sp_runtime::DispatchResult {
-		if let Some(surplus) = Pallet::<T>::try_debit(account_id, amount) {
+		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
 			let _ = surplus.offset(Pallet::<T>::burn(amount));
 			Ok(())
 		} else {
@@ -499,26 +528,36 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Self::total_balance_of(account_id)
 	}
 
-	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError> {
+	fn try_initiate_claim(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError> {
 		ensure!(
 			amount <= Self::claimable_balance(account_id),
 			DispatchError::from(Error::<T>::InsufficientLiquidity)
 		);
-
-		Self::settle(account_id, Self::bridge_out(amount).into());
+		Self::settle(account_id, Self::deposit_pending_claim(account_id, amount).into());
 		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
 
 		Ok(())
 	}
 
-	fn settle_claim(_amount: Self::Balance) {
-		// Nothing to do.
+	fn finalize_claim(account_id: &T::AccountId) -> Result<(), DispatchError> {
+		let imbalance = Self::try_withdraw_pending_claim(account_id)?;
+		let amount = imbalance.peek();
+		imbalance.offset(Self::bridge_out(amount));
+		Ok(())
 	}
 
-	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
-		Self::settle(account_id, Self::bridge_in(amount).into());
-		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+	fn revert_claim(
+		account_id: &Self::AccountId,
+		_amount: Self::Balance,
+	) -> Result<(), DispatchError> {
 		// claim reverts automatically when dropped
+		let imbalance = Self::try_withdraw_pending_claim(account_id)?;
+		Self::settle(account_id, imbalance.into());
+		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		Ok(())
 	}
 }
 

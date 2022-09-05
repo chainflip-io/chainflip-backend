@@ -19,7 +19,7 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	BuildStorage, Perbill,
+	BuildStorage,
 };
 use std::cell::RefCell;
 
@@ -81,10 +81,6 @@ impl From<UintAuthorityId> for MockSessionKeys {
 	fn from(dummy: UintAuthorityId) -> Self {
 		Self { dummy }
 	}
-}
-
-parameter_types! {
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
 impl pallet_session::Config for Test {

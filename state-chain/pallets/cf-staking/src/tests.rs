@@ -78,10 +78,25 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE_A1, STAKE_A1)),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE_A2, STAKE_A1 + STAKE_A2)),
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE_A1,
+				total_stake: STAKE_A1
+			}),
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE_A2,
+				total_stake: STAKE_A1 + STAKE_A2
+			}),
 			Event::System(frame_system::Event::NewAccount { account: BOB }),
-			Event::Staking(crate::Event::Staked(BOB, STAKE_B, STAKE_B))
+			Event::Staking(crate::Event::Staked {
+				account_id: BOB,
+				tx_hash: TX_HASH,
+				stake_added: STAKE_B,
+				total_stake: STAKE_B
+			})
 		);
 	});
 }
@@ -122,7 +137,12 @@ fn claiming_unclaimable_is_err() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE))
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			})
 		);
 	});
 }
@@ -229,7 +249,12 @@ fn staked_and_claimed_events_must_match() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			}),
 			Event::System(frame_system::Event::KilledAccount { account: ALICE }),
 			Event::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
 		);
@@ -279,7 +304,12 @@ fn signature_is_inserted() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			}),
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
 				vec![
@@ -392,7 +422,12 @@ fn test_retirement() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			}),
 			Event::Staking(crate::Event::AccountActivated(ALICE))
 		);
 	});
@@ -448,9 +483,19 @@ fn claim_expiry() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			}),
 			Event::System(frame_system::Event::NewAccount { account: BOB }),
-			Event::Staking(crate::Event::Staked(BOB, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked {
+				account_id: BOB,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			}),
 			Event::Staking(crate::Event::ClaimSignatureIssued(
 				ALICE,
 				vec![
@@ -515,7 +560,12 @@ fn test_claim_all() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE))
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			})
 		);
 	});
 }
@@ -541,7 +591,7 @@ fn test_check_withdrawal_address() {
 		);
 		let stake_attempts = FailedStakeAttempts::<Test>::get(ALICE);
 		assert_eq!(stake_attempts.len(), 1);
-		let stake_attempt = stake_attempts.get(0);
+		let stake_attempt = stake_attempts.first();
 		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
 		for e in System::events().into_iter().map(|e| e.event) {
@@ -550,7 +600,6 @@ fn test_check_withdrawal_address() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			Event::Staking(crate::Event::FailedStakeAttempt(ALICE, DIFFERENT_ETH_ADDR, STAKE))
 		);
 		// Case: User stakes again with the same address
@@ -606,7 +655,12 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 		assert_event_sequence!(
 			Test,
 			Event::System(frame_system::Event::NewAccount { account: ALICE }),
-			Event::Staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			Event::Staking(crate::Event::Staked {
+				account_id: ALICE,
+				tx_hash: TX_HASH,
+				stake_added: STAKE,
+				total_stake: STAKE
+			}),
 			Event::Staking(crate::Event::FailedStakeAttempt(ALICE, ETH_DUMMY_ADDR, STAKE))
 		);
 	});

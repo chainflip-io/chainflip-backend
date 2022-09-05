@@ -2,7 +2,7 @@ use crate as pallet_cf_staking;
 use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
 use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	AuthorityCount, ThresholdSigner, WaivedFees,
+	AuthorityCount, CeremonyId, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
@@ -159,7 +159,9 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 	fn signature_result(
 		_: Self::RequestId,
-	) -> cf_traits::AsyncResult<Result<<Ethereum as ChainCrypto>::ThresholdSignature, ()>> {
+	) -> cf_traits::AsyncResult<
+		Result<<Ethereum as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>,
+	> {
 		AsyncResult::Ready(Ok(ETH_DUMMY_SIG))
 	}
 
@@ -177,7 +179,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 		_participants: Vec<Self::ValidatorId>,
 		_payload: <Ethereum as ChainCrypto>::Payload,
 		_retry_policy: cf_traits::RetryPolicy,
-	) -> Self::RequestId {
+	) -> (Self::RequestId, CeremonyId) {
 		unimplemented!()
 	}
 }
@@ -212,7 +214,7 @@ pub const MIN_STAKE: u128 = 10;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000 },
+		flip: FlipConfig { total_issuance: 1_000_000 },
 		staking: StakingConfig {
 			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
 			minimum_stake: MIN_STAKE,

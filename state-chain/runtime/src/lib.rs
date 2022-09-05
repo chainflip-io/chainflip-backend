@@ -1,8 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-#![feature(iter_zip)]
-#![feature(int_abs_diff)]
 pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
@@ -11,8 +9,6 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use runtime_apis::BackupOrPassive;
 
-#[cfg(test)]
-mod tests;
 use crate::{
 	chainflip::Offence,
 	runtime_apis::{
@@ -191,7 +187,11 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type Call = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
+	type ThresholdSigner = EthereumThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;

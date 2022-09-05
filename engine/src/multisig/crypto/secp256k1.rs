@@ -8,11 +8,11 @@ type PK = secp256k1::PublicKey;
 
 // Wrapping in `Option` to make it easier to keep track
 // of "zero" scalars which often need special treatment
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scalar(Option<SK>);
 
 // None if it is a "point at infinity"
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Point(Option<PK>);
 
 const GENERATOR_COMPRESSED: [u8; 33] = [
