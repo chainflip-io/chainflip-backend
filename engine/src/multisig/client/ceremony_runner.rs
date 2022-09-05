@@ -9,8 +9,7 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_traits::AuthorityCount;
-use cf_traits::CeremonyId;
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::future::{BoxFuture, FutureExt};
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 

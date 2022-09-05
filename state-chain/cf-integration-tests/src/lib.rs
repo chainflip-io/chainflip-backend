@@ -158,7 +158,8 @@ mod epoch {
 
 	use super::*;
 	use crate::{genesis::GENESIS_BALANCE, network::Network};
-	use cf_traits::{ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo};
+	use cf_primitives::ChainflipAccountState;
+	use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo};
 	use pallet_cf_validator::RotationPhase;
 	use state_chain_runtime::Validator;
 

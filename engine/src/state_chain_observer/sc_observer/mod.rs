@@ -2,7 +2,7 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_traits::CeremonyId;
+use cf_primitives::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;

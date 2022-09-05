@@ -11,7 +11,6 @@ pub use async_result::AsyncResult;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
-	ForeignChainAddress, ForeignChainAsset,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -30,9 +29,6 @@ use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
-
-pub type AuthorityCount = u32;
-pub type CeremonyId = u64;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {

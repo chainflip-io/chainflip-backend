@@ -8,7 +8,7 @@ use crate::multisig::client::common::{
 use crate::multisig::client::{self, KeygenResult, KeygenResultInfo};
 
 use async_trait::async_trait;
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use client::{
     common::{
         broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
