@@ -1,11 +1,18 @@
-use ethabi::{ParamType, Token};
-use frame_support::RuntimeDebug;
+use codec::{Decode, Encode};
+use ethabi::ParamType;
 use scale_info::TypeInfo;
-use sp_std::vec;
+use sp_std::{boxed::Box, vec, vec::Vec};
 
-use crate::eth::SigData;
+use crate::{
+	eth::{SigData, Tokenizable},
+	ApiCall, ChainAbi, ChainCrypto, Ethereum,
+};
+
+use crate::{FetchAssetParams, TransferAssetParams};
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
+
+use sp_runtime::RuntimeDebug;
 
 /// Represents all the arguments required to build the call to Vault's 'allBatch'
 /// function.
@@ -14,16 +21,16 @@ pub struct AllBatch {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
-	pub fetch_params: Vec<FetchParams>,
+	pub fetch_params: Vec<FetchAssetParams<Ethereum>>,
 	/// The list of all outbound transfers that need to be made to given addresses.
-	pub transfer_params: Vec<TransferParams>,
+	pub transfer_params: Vec<TransferAssetParams<Ethereum>>,
 }
 
 impl AllBatch {
 	pub fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		fetch_params: Vec<FetchParams>,
-		transfer_params: Vec<TransferParams>,
+		fetch_params: Vec<FetchAssetParams<Ethereum>>,
+		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Self {
 		let mut calldata =
 			Self { sig_data: SigData::new_empty(replay_protection), fetch_params, transfer_params };

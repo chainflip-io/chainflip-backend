@@ -31,17 +31,13 @@ pub trait Chain: Member + Parameter {
 		+ From<u64>
 		+ MaxEncodedLen;
 
-	type ChainAmount: Member
-		+ Parameter
-		+ Copy
-		+ Default
-		+ Into<u128>
-		+ From<u128>
-		+ Saturating
-		+ FullCodec
-		+ MaxEncodedLen;
+	type ChainAmount: Member + Parameter + Copy + Default + FullCodec + MaxEncodedLen;
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+
+	type ChainAsset: Member + Parameter + MaxEncodedLen;
+
+	type ChainAccount: Member + Parameter + MaxEncodedLen;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -124,17 +120,24 @@ where
 
 /// A general trait for initializing types required for Fetching Assets deposited by Users as part
 /// of a swap for some External Chain.
-pub trait FetchAssetParams: ChainAbi {
-	type SwapID;
-	type Asset;
+/// #[derive(
+#[derive(
+	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+pub struct FetchAssetParams<T: Chain> {
+	swap_id: [u8; 32],
+	asset: T::ChainAsset,
 }
 
 /// A general trait for initializing types required for Transfering Assets to Users as part of a
 /// swap for some External Chain.
-pub trait TransferAssetParams: ChainAbi {
-	type Asset;
-	type Account;
-	type Amount;
+#[derive(
+	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+pub struct TransferAssetParams<T: Chain> {
+	asset: T::ChainAsset,
+	account: T::ChainAccount,
+	amount: T::ChainAmount,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -182,11 +185,11 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
-pub trait AllBatch<Abi: FetchAssetParams + TransferAssetParams>: ApiCall<Abi> {
+pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		fetch_params: Abi::FetchAssetParams,
-		transfer_params: Abi::TransferAssetParams,
+		fetch_params: Vec<FetchAssetParams<Abi>>,
+		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
 }
 
@@ -195,8 +198,10 @@ pub struct Ethereum;
 
 impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
-	type ChainAmount = u128;
+	type ChainAmount = eth::Uint;
 	type TrackedData = eth::TrackedData<Self>;
+	type ChainAccount = eth::Address;
+	type ChainAsset = eth::Address;
 }
 
 impl ChainCrypto for Ethereum {
@@ -235,6 +240,8 @@ pub mod mocks {
 		type ChainBlockNumber = u64;
 		type ChainAmount = u128;
 		type TrackedData = MockTrackedData;
+		type ChainAccount = (); // Currently, we don't care about this since we don't use them in tests
+		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
 	}
 
 	#[derive(

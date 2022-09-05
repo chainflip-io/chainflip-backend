@@ -6,10 +6,9 @@ pub mod benchmarking;
 
 use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::FixedBytes;
 pub use ethabi::{
 	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint,
+	Address, Hash as TxHash, Token, Uint, Word,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
@@ -715,47 +714,28 @@ impl From<H256> for TransactionHash {
 	}
 }
 
-#[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-pub struct FetchParams;
-impl FetchAssetParams for FetchParams {
-	type SwapID = Word;
-	type Asset = Address;
-}
-
-impl Tokenizable<FetchAssetParams> for FetchParams {
+impl Tokenizable for FetchAssetParams<Ethereum> {
 	fn tokenize(self) -> Token {
-		Token::Tuple(vec![Token::FixedBytes(self.SwapID), Token::Address(self.Asset)])
+		Token::Tuple(vec![Token::FixedBytes(self.swap_id.to_vec()), Token::Address(self.asset)])
 	}
 }
 
-impl Tokenizable for Vec<FetchParams> {
+impl Tokenizable for Vec<FetchAssetParams<Ethereum>> {
 	fn tokenize(self) -> Token {
 		Token::Array(self.iter().map(|fetch_params| fetch_params.tokenize()).collect())
 	}
 }
 
-#[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-pub struct TransferParams;
-impl TransferAssetParams for TransferParams {
-	type Asset = Address;
-	type Account = Address;
-	type Amount = Uint;
-}
-
-impl Tokenizable<TransferAssetParams> for TransferParams {
+impl Tokenizable for TransferAssetParams<Ethereum> {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
-			Token::Address(self.Asset),
-			Token::Address(self.Account),
-			Token::Uint(self.Amount),
+			Token::Address(self.asset),
+			Token::Address(self.account),
+			Token::Uint(self.amount),
 		])
 	}
 }
-impl Tokenizable for Vec<TransferParams> {
+impl Tokenizable for Vec<TransferAssetParams<Ethereum>> {
 	fn tokenize(self) -> Token {
 		Token::Array(self.iter().map(|transfer_params| transfer_params.tokenize()).collect())
 	}
