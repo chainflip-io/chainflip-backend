@@ -44,7 +44,7 @@ These are the foundation of our practices...
 
 # Code Reviews
 
-The principles above are primarily to be applied by those submittnig PRs. However, there are some principles that apply more specifically to when one is conducting a review of someone else's work.
+The principles above are primarily to be applied by those submitting PRs. However, there are some principles that apply more specifically to when one is conducting a review of someone else's work.
 
 Improving the speed and effectiveness of code reviews directly improves the speed and effectiveness of the team.
 
