@@ -8,9 +8,10 @@ use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, ChainAsset, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+	AuthorityCount, CeremonyId, ChainAddress, ChainAsset, ChainflipAccountData,
+	ChainflipAccountState, EpochIndex,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -690,7 +691,7 @@ pub trait StakingInfo {
 }
 
 /// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi<C: Chain> {
+pub trait IngressApi {
 	type AccountId;
 
 	fn register_liquidity_ingress_intent(lp_account: Self::AccountId, ingress_asset: ChainAsset);
@@ -700,6 +701,6 @@ pub trait IngressApi<C: Chain> {
 		ingress_asset: ChainAsset,
 		egress_asset: ChainAsset,
 		relayer_commission: Permill,
-		egress_address: C::ChainAddress,
+		egress_address: ChainAddress,
 	);
 }
