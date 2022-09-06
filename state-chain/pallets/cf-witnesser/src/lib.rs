@@ -156,7 +156,7 @@ pub mod pallet {
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[allow(clippy::boxed_local)]
 		#[pallet::weight(
-			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
+			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
 		)]
 		pub fn witness_at_epoch(
