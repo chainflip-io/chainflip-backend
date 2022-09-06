@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use zeroize::Zeroize;
@@ -560,7 +560,7 @@ pub mod genesis {
             .to_owned()
     }
 
-    fn generate_key_data<P: ECPoint>(
+    pub fn generate_key_data<P: ECPoint>(
         signers: &[AccountId],
         rng: &mut Rng,
         allow_high_pubkey: bool,

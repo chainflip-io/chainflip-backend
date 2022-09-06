@@ -9,6 +9,9 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
@@ -18,8 +21,6 @@ use frame_support::{
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, RuntimeDebug,
@@ -28,9 +29,6 @@ use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
 pub type BlockNumber = u32;
 pub type FlipBalance = u128;
-pub type EpochIndex = u32;
-
-pub type AuthorityCount = u32;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -69,31 +67,6 @@ pub trait Chainflip: frame_system::Config {
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state
 	type SystemState: SystemStateInfo;
-}
-
-/// A trait abstracting the functionality of the witnesser
-pub trait Witnesser {
-	/// The type of accounts that can witness.
-	type AccountId;
-	/// The call type of the runtime.
-	type Call: UnfilteredDispatchable;
-	/// The type for block numbers
-	type BlockNumber;
-
-	/// Witness an event. The event is represented by a call, which is dispatched when a threshold
-	/// number of witnesses have been made.
-	///
-	/// **IMPORTANT**
-	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should
-	/// be enforced by adding a salt or nonce to the function arguments.
-	/// **IMPORTANT**
-	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
-	/// Witness an event, as above, during a specific epoch
-	fn witness_at_epoch(
-		who: Self::AccountId,
-		call: Self::Call,
-		epoch: EpochIndex,
-	) -> DispatchResultWithPostInfo;
 }
 
 pub trait EpochInfo {
@@ -352,38 +325,6 @@ pub trait EmergencyRotation {
 	fn request_emergency_rotation();
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ChainflipAccountState {
-	CurrentAuthority,
-	/// Historical implies backup too
-	HistoricalAuthority,
-	Backup,
-}
-
-impl ChainflipAccountState {
-	pub fn is_authority(&self) -> bool {
-		matches!(self, ChainflipAccountState::CurrentAuthority)
-	}
-
-	pub fn is_backup(&self) -> bool {
-		matches!(self, ChainflipAccountState::HistoricalAuthority | ChainflipAccountState::Backup)
-	}
-}
-
-// TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ChainflipAccountData {
-	pub state: ChainflipAccountState,
-}
-
-impl Default for ChainflipAccountData {
-	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Backup }
-	}
-}
-
 pub trait ChainflipAccount {
 	type AccountId;
 
@@ -502,8 +443,8 @@ where
 	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
-	type KeyId: TryInto<C::AggKey>;
-	type ValidatorId;
+	type KeyId: TryInto<C::AggKey> + From<Vec<u8>>;
+	type ValidatorId: Debug;
 
 	/// Initiate a signing request and return the request id.
 	fn request_signature(payload: C::Payload) -> Self::RequestId;
@@ -513,7 +454,7 @@ where
 		participants: Vec<Self::ValidatorId>,
 		payload: C::Payload,
 		retry_policy: RetryPolicy,
-	) -> Self::RequestId;
+	) -> (Self::RequestId, CeremonyId);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -525,7 +466,7 @@ where
 	/// Attempt to retrieve a requested signature.
 	fn signature_result(
 		request_id: Self::RequestId,
-	) -> AsyncResult<Result<C::ThresholdSignature, ()>>;
+	) -> AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>;
 
 	/// Request a signature and register a callback for when the signature is available.
 	///

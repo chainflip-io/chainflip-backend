@@ -15,7 +15,8 @@ use state_chain_runtime::{
 	Reputation, Runtime, Staking, System, Timestamp, Validator, Witnesser,
 };
 
-use cf_traits::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
+use cf_primitives::{AuthorityCount, EpochIndex};
+use cf_traits::{BlockNumber, FlipBalance};
 use libsecp256k1::SecretKey;
 use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 use rand::{prelude::*, SeedableRng};
@@ -49,9 +50,9 @@ mod genesis {
 	use crate::mock_runtime::ExtBuilder;
 
 	use super::*;
+	use cf_primitives::ChainflipAccountState;
 	use cf_traits::{
-		ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo, QualifyNode,
-		StakeTransfer,
+		ChainflipAccount, ChainflipAccountStore, EpochInfo, QualifyNode, StakeTransfer,
 	};
 	pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -157,10 +158,9 @@ mod epoch {
 
 	use super::*;
 	use crate::{genesis::GENESIS_BALANCE, network::Network};
-	use cf_traits::{
-		BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
-	};
-	use frame_support::traits::Hooks;
+	use cf_primitives::ChainflipAccountState;
+	use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo};
+  use frame_support::traits::Hooks;
 	use pallet_cf_validator::RotationPhase;
 	use state_chain_runtime::Validator;
 
@@ -323,8 +323,7 @@ mod epoch {
 				assert_eq!(
 					GENESIS_EPOCH + 1,
 					Validator::epoch_index(),
-					"We should be in the next epoch. {:?}",
-					Staking::get_bidders()
+					"We should be in the next epoch."
 				);
 
 				assert_eq!(
@@ -642,9 +641,9 @@ mod authorities {
 	use crate::{
 		genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 	};
+	use cf_primitives::{AuthorityCount, ChainflipAccountState};
 	use cf_traits::{
-		AuthorityCount, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
-		FlipBalance, StakeTransfer,
+		ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance, StakeTransfer,
 	};
 	use sp_runtime::AccountId32;
 	use state_chain_runtime::{Flip, Runtime, Validator};

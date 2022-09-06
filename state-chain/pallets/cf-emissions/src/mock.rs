@@ -144,8 +144,6 @@ impl ReplayProtectionProvider<MockEthereum> for Test {
 	}
 }
 
-cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call, u64);
-
 pub const EMISSION_RATE: u128 = 10;
 pub struct MockRewardsDistribution;
 

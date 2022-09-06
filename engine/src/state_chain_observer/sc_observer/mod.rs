@@ -2,8 +2,8 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
+use cf_primitives::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
-use pallet_cf_validator::CeremonyId;
 use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::H256;
@@ -15,7 +15,7 @@ use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
     eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
-    logging::{CEREMONY_ID_KEY, COMPONENT_KEY},
+    logging::COMPONENT_KEY,
     multisig::{
         client::{CeremonyFailureReason, KeygenFailureReason, MultisigClientApi},
         KeyId, MessageHash,
@@ -37,60 +37,29 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
     RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
     if keygen_participants.contains(&state_chain_client.our_account_id) {
-        // Send a keygen request and wait to submit the result to the SC
         scope.spawn(async move {
-            let keygen_outcome = multisig_client
-                .keygen(ceremony_id, keygen_participants.clone())
-                .await;
-
-            let keygen_outcome = match keygen_outcome {
-                Ok(public_key) => {
-                    // Keygen verification: before the new key is returned to the SC,
-                    // we first ensure that all parties can use it for signing
-
-                    let public_key_bytes = public_key.get_element().serialize();
-
-                    // We arbitrarily choose the data to sign over to be the hash of the generated pubkey
-                    let data_to_sign = sp_core::hashing::blake2_256(&public_key_bytes);
-                    match multisig_client
-                        .sign(
-                            ceremony_id,
-                            KeyId(public_key_bytes.to_vec()),
-                            keygen_participants,
-                            MessageHash(data_to_sign),
-                        )
-                        .await
-                    {
-                        // Report keygen success if we are able to sign
-                        Ok(signature) => Ok((
-                            cf_chains::eth::AggKey::from_pubkey_compressed(public_key_bytes),
-                            data_to_sign.into(),
-                            signature.into(),
-                        )),
-                        // Report keygen failure if we failed to sign
-                        Err((bad_account_ids, _reason)) => {
-                            slog::debug!(logger, "Keygen ceremony verification failed"; CEREMONY_ID_KEY => ceremony_id);
-                            Err(KeygenError::Failure(BTreeSet::from_iter(bad_account_ids)))
-                        }
-                    }
-                }
-                Err((bad_account_ids, reason)) => Err({
-                    if let CeremonyFailureReason::<KeygenFailureReason>::Other(
-                        KeygenFailureReason::KeyNotCompatible,
-                    ) = reason
-                    {
-                        KeygenError::Incompatible
-                    } else {
-                        KeygenError::Failure(BTreeSet::from_iter(bad_account_ids))
-                    }
-                }),
-            };
-
             let _result = state_chain_client
                 .submit_signed_extrinsic(
                     pallet_cf_vaults::Call::report_keygen_outcome {
                         ceremony_id,
-                        reported_outcome: keygen_outcome,
+                        reported_outcome: multisig_client
+                            .keygen(ceremony_id, keygen_participants.clone())
+                            .await
+                            .map(|point| {
+                                cf_chains::eth::AggKey::from_pubkey_compressed(
+                                    point.get_element().serialize(),
+                                )
+                            })
+                            .map_err(|(bad_account_ids, reason)| {
+                                if let CeremonyFailureReason::<KeygenFailureReason>::Other(
+                                    KeygenFailureReason::KeyNotCompatible,
+                                ) = reason
+                                {
+                                    KeygenError::Incompatible
+                                } else {
+                                    KeygenError::Failure(bad_account_ids)
+                                }
+                            }),
                     },
                     &logger,
                 )
@@ -360,7 +329,7 @@ where
                                                 pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
                                                     ceremony_id,
                                                     key_id,
-                                                    validators,
+                                                    signers,
                                                     payload,
                                                 ),
                                             ) => {
@@ -370,7 +339,7 @@ where
                                                     state_chain_client.clone(),
                                                     ceremony_id,
                                                     KeyId(key_id),
-                                                    validators,
+                                                    signers,
                                                     MessageHash(payload.to_fixed_bytes()),
                                                     logger.clone(),
                                                 ).await;

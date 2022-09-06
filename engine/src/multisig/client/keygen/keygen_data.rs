@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
 
@@ -49,68 +49,60 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 
 impl<P: ECPoint> PreProcessStageDataCheck for KeygenData<P> {
     /// Check that the number of elements in the data is correct
-    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool {
-        if let Some(num_of_parties) = num_of_parties {
-            let num_of_parties = num_of_parties as usize;
-            match self {
-                // For messages that don't contain a collection (eg. HashComm1), we don't need to check the size.
-                KeygenData::HashComm1(_) => true,
-                KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
-                KeygenData::CoeffComm3(message) => {
-                    let coefficient_count =
-                        threshold_from_share_count(num_of_parties as u32) as usize + 1;
-                    message.get_commitments_len() == coefficient_count
-                }
-                KeygenData::VerifyCoeffComm4(message) => {
-                    let coefficient_count =
-                        threshold_from_share_count(num_of_parties as u32) as usize + 1;
-
-                    if message
-                        .data
-                        .values()
-                        .flatten()
-                        .any(|commitments| commitments.get_commitments_len() != coefficient_count)
-                    {
-                        return false;
-                    }
-
-                    message.data.len() == num_of_parties
-                }
-                KeygenData::SecretShares5(_) => true,
-                KeygenData::Complaints6(complaints) => {
-                    // The complaints are optional, so we just check the max length
-                    complaints.0.len() <= num_of_parties
-                }
-                KeygenData::VerifyComplaints7(message) => {
-                    for complaints in message.data.values().flatten() {
-                        if complaints.0.len() > num_of_parties {
-                            return false;
-                        }
-                    }
-                    message.data.len() == num_of_parties
-                }
-                KeygenData::BlameResponse8(blame_response) => {
-                    // The blame response will only contain a subset, so we just check the max length
-                    blame_response.0.len() <= num_of_parties
-                }
-                KeygenData::VerifyBlameResponses9(message) => {
-                    if message
-                        .data
-                        .values()
-                        .flatten()
-                        .any(|blame_response| blame_response.0.len() > num_of_parties)
-                    {
-                        return false;
-                    }
-                    message.data.len() == num_of_parties
-                }
+    fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool {
+        let num_of_parties = num_of_parties as usize;
+        match self {
+            // For messages that don't contain a collection (eg. HashComm1), we don't need to check the size.
+            KeygenData::HashComm1(_) => true,
+            KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
+            KeygenData::CoeffComm3(message) => {
+                let coefficient_count =
+                    threshold_from_share_count(num_of_parties as u32) as usize + 1;
+                message.get_commitments_len() == coefficient_count
             }
-        } else {
-            assert!(
-                matches!(self, KeygenData::HashComm1(_)),
-                "We should know the number of participants for any non-initial stage data"
-            );
-            true
+            KeygenData::VerifyCoeffComm4(message) => {
+                let coefficient_count =
+                    threshold_from_share_count(num_of_parties as u32) as usize + 1;
+
+                if message
+                    .data
+                    .values()
+                    .flatten()
+                    .any(|commitments| commitments.get_commitments_len() != coefficient_count)
+                {
+                    return false;
+                }
+
+                message.data.len() == num_of_parties
+            }
+            KeygenData::SecretShares5(_) => true,
+            KeygenData::Complaints6(complaints) => {
+                // The complaints are optional, so we just check the max length
+                complaints.0.len() <= num_of_parties
+            }
+            KeygenData::VerifyComplaints7(message) => {
+                for complaints in message.data.values().flatten() {
+                    if complaints.0.len() > num_of_parties {
+                        return false;
+                    }
+                }
+                message.data.len() == num_of_parties
+            }
+            KeygenData::BlameResponse8(blame_response) => {
+                // The blame response will only contain a subset, so we just check the max length
+                blame_response.0.len() <= num_of_parties
+            }
+            KeygenData::VerifyBlameResponses9(message) => {
+                if message
+                    .data
+                    .values()
+                    .flatten()
+                    .any(|blame_response| blame_response.0.len() > num_of_parties)
+                {
+                    return false;
+                }
+                message.data.len() == num_of_parties
+            }
         }
     }
 

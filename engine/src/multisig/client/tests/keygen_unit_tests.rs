@@ -1,4 +1,4 @@
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use rand_legacy::FromEntropy;
 use std::collections::BTreeSet;
 
@@ -49,30 +49,24 @@ async fn should_delay_comm1_before_keygen_request() {
     let (late_msg, early_msgs) =
         split_messages_for(messages.stage_1a_messages.clone(), &test_id, &late_id);
 
-    ceremony.distribute_messages(early_msgs);
+    ceremony.distribute_messages(early_msgs).await;
 
     assert_eq!(
-        ceremony.nodes[&test_id]
-            .ceremony_manager
-            .get_keygen_stage_name(ceremony.ceremony_id),
+        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
         None
     );
 
     ceremony.request().await;
 
     assert_eq!(
-        ceremony.nodes[&test_id]
-            .ceremony_manager
-            .get_keygen_stage_name(ceremony.ceremony_id),
+        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
         Some(CeremonyStageName::HashCommitments1),
     );
 
-    ceremony.distribute_messages(late_msg);
+    ceremony.distribute_messages(late_msg).await;
 
     assert_eq!(
-        ceremony.nodes[&test_id]
-            .ceremony_manager
-            .get_keygen_stage_name(ceremony.ceremony_id),
+        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
         Some(CeremonyStageName::VerifyHashCommitmentsBroadcast2),
     );
 }
@@ -93,38 +87,38 @@ async fn should_delay_stage_data() {
                 target_account_id,
                 &late_account_id,
             );
-            ceremony.distribute_messages(early_messages);
+            ceremony.distribute_messages(early_messages).await;
 
             let (late_messages_next, early_messages) = split_messages_for(
                 messages[stage_number].clone(),
                 target_account_id,
                 &late_account_id,
             );
-            ceremony.distribute_messages(early_messages);
+            ceremony.distribute_messages(early_messages).await;
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number)
             );
 
-            ceremony.distribute_messages(late_messages);
+            ceremony.distribute_messages(late_messages).await;
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number + 1)
             );
 
-            ceremony.distribute_messages(late_messages_next);
+            ceremony.distribute_messages(late_messages_next).await;
 
             // Check that the stage correctly advanced or finished
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number + 2)
             );
         },
@@ -139,7 +133,7 @@ async fn should_delay_stage_data() {
 async fn should_enter_blaming_stage_on_invalid_secret_shares() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -166,15 +160,15 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
         BlameResponse8,
         VerifyBlameResponses9
     );
-    ceremony.distribute_messages(messages);
-    ceremony.complete(result_receivers).await;
+    ceremony.distribute_messages(messages).await;
+    ceremony.complete().await;
 }
 
 #[tokio::test]
 async fn should_enter_blaming_stage_on_timeout_secret_shares() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -192,12 +186,13 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
         .unwrap()
         .remove(timed_out_party_id);
 
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
 
     // This node doesn't receive non_sending_party_id's message, so must timeout
     ceremony
         .get_mut_node(timed_out_party_id)
-        .force_stage_timeout();
+        .force_stage_timeout()
+        .await;
 
     let messages = ceremony
         .gather_outgoing_messages::<Complaints6, KeygenData>()
@@ -210,8 +205,8 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
         BlameResponse8,
         VerifyBlameResponses9
     );
-    ceremony.distribute_messages(messages);
-    ceremony.complete(result_receivers).await;
+    ceremony.distribute_messages(messages).await;
+    ceremony.complete().await;
 }
 
 /// If one or more parties send an invalid secret share both the first
@@ -225,7 +220,7 @@ async fn should_report_on_invalid_blame_response6() {
     );
     let [bad_node_id_1, bad_node_id_2, target_node_id] = ceremony.select_account_ids();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -272,11 +267,10 @@ async fn should_report_on_invalid_blame_response6() {
     let messages = ceremony
         .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_node_id_1.clone()],
-            result_receivers,
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
         )
         .await;
@@ -292,7 +286,7 @@ async fn should_report_on_incomplete_blame_response() {
 
     let [bad_node_id_1, target_node_id] = ceremony.select_account_ids();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -326,11 +320,10 @@ async fn should_report_on_incomplete_blame_response() {
     let messages = ceremony
         .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_node_id_1.clone()],
-            result_receivers,
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
         )
         .await;
@@ -354,7 +347,7 @@ async fn should_ignore_unexpected_message_for_stage() {
                 unexpected_message_sender,
             );
 
-            ceremony.distribute_messages(other_msgs.clone());
+            ceremony.distribute_messages(other_msgs.clone()).await;
 
             for ignored_stage_index in (0..stage_number - 1).chain(stage_number + 1..KEYGEN_STAGES)
             {
@@ -363,49 +356,51 @@ async fn should_ignore_unexpected_message_for_stage() {
                     target_account_id,
                     unexpected_message_sender,
                 );
-                ceremony.distribute_messages(msg_from_1);
+                ceremony.distribute_messages(msg_from_1).await;
             }
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unexpected stage"
             );
 
-            ceremony.distribute_messages(other_msgs);
+            ceremony.distribute_messages(other_msgs).await;
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore duplicate messages"
             );
 
             let unknown_id = AccountId::new([0; 32]);
             assert!(!ACCOUNT_IDS.contains(&unknown_id));
-            ceremony.distribute_messages(
-                msg_from_1
-                    .iter()
-                    .map(|(_, message)| (unknown_id.clone(), message.clone()))
-                    .collect(),
-            );
+            ceremony
+                .distribute_messages(
+                    msg_from_1
+                        .iter()
+                        .map(|(_, message)| (unknown_id.clone(), message.clone()))
+                        .collect(),
+                )
+                .await;
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number),
                 "Failed to ignore a message from an unknown account id"
             );
 
-            ceremony.distribute_messages(msg_from_1);
+            ceremony.distribute_messages(msg_from_1).await;
 
             assert_eq!(
                 ceremony.nodes[target_account_id]
-                    .ceremony_manager
-                    .get_keygen_stage_name(ceremony.ceremony_id),
+                    .ceremony_runner
+                    .get_stage_name(),
                 get_keygen_stage_name_from_number(stage_number + 1),
                 "Failed to proceed to next stage"
             );
@@ -421,7 +416,7 @@ async fn should_ignore_unexpected_message_for_stage() {
 async fn should_report_on_inconsistent_broadcast_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
     let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
     let [bad_account_id] = &ceremony.select_account_ids();
@@ -440,11 +435,10 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
     }
 
     let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
-            result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 CeremonyStageName::VerifyCommitmentsBroadcast4,
@@ -457,7 +451,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (mut messages, result_receivers) = ceremony.request().await;
+    let mut messages = ceremony.request().await;
 
     let bad_account_id = &ACCOUNT_IDS[1];
 
@@ -475,11 +469,10 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 
     let messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2,);
 
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
-            result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 CeremonyStageName::VerifyHashCommitmentsBroadcast2,
@@ -495,7 +488,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 async fn should_report_on_invalid_hash_comm1a() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
     let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
     let [bad_account_id] = ceremony.select_account_ids();
@@ -519,12 +512,11 @@ async fn should_report_on_invalid_hash_comm1a() {
     }
 
     let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
 
     ceremony
         .complete_with_error(
             &[bad_account_id],
-            result_receivers,
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment),
         )
         .await;
@@ -534,7 +526,7 @@ async fn should_report_on_invalid_hash_comm1a() {
 async fn should_report_on_inconsistent_broadcast_complaints4() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -565,11 +557,10 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
     let messages = ceremony
         .run_stage::<keygen::VerifyComplaints7, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
-            result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 CeremonyStageName::VerifyComplaintsBroadcastStage7,
@@ -586,7 +577,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
         &ceremony.nodes.keys().cloned().collect::<Vec<_>>()[..],
     );
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -638,11 +629,10 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
     let messages = ceremony
         .run_stage::<VerifyBlameResponses9, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id.clone()],
-            result_receivers,
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
                 CeremonyStageName::VerifyBlameResponsesBroadcastStage9,
@@ -657,7 +647,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
 async fn should_report_on_invalid_comm1() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
     let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
     let [bad_account_id] = ceremony.select_account_ids();
@@ -681,12 +671,11 @@ async fn should_report_on_invalid_comm1() {
     }
 
     let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
 
     ceremony
         .complete_with_error(
             &[bad_account_id],
-            result_receivers,
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment),
         )
         .await;
@@ -696,7 +685,7 @@ async fn should_report_on_invalid_comm1() {
 async fn should_report_on_invalid_complaints4() {
     let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-    let (messages, result_receivers) = ceremony.request().await;
+    let messages = ceremony.request().await;
 
     let mut messages = run_stages!(
         ceremony,
@@ -720,11 +709,10 @@ async fn should_report_on_invalid_complaints4() {
     let messages = ceremony
         .run_stage::<keygen::VerifyComplaints7, _, _>(messages)
         .await;
-    ceremony.distribute_messages(messages);
+    ceremony.distribute_messages(messages).await;
     ceremony
         .complete_with_error(
             &[bad_account_id],
-            result_receivers,
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
         )
         .await;
@@ -763,7 +751,7 @@ mod timeout {
         async fn should_recover_if_party_appears_offline_to_minority_stage1a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (mut messages, result_receivers) = ceremony.request().await;
+            let mut messages = ceremony.request().await;
 
             let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
@@ -772,12 +760,13 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyHashComm2, KeygenData>()
@@ -792,15 +781,15 @@ mod timeout {
                 Complaints6,
                 VerifyComplaints7
             );
-            ceremony.distribute_messages(messages);
-            ceremony.complete(result_receivers).await;
+            ceremony.distribute_messages(messages).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_recover_if_party_appears_offline_to_minority_stage1() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
@@ -811,12 +800,13 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyCoeffComm4, KeygenData>()
@@ -829,15 +819,15 @@ mod timeout {
                 Complaints6,
                 VerifyComplaints7
             );
-            ceremony.distribute_messages(messages);
-            ceremony.complete(result_receivers).await;
+            ceremony.distribute_messages(messages).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_recover_if_party_appears_offline_to_minority_stage4() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -856,26 +846,27 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyComplaints7, KeygenData>()
                 .await;
 
-            ceremony.distribute_messages(messages);
-            ceremony.complete(result_receivers).await;
+            ceremony.distribute_messages(messages).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_recover_if_party_appears_offline_to_minority_stage6() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -909,19 +900,20 @@ mod timeout {
                 .unwrap()
                 .remove(&timed_out_party_id);
 
-            ceremony.distribute_messages(messages);
+            ceremony.distribute_messages(messages).await;
 
             // This node doesn't receive non_sending_party's message, so must timeout
             ceremony
                 .get_mut_node(&timed_out_party_id)
-                .force_stage_timeout();
+                .force_stage_timeout()
+                .await;
 
             let messages = ceremony
                 .gather_outgoing_messages::<VerifyBlameResponses9, KeygenData>()
                 .await;
 
-            ceremony.distribute_messages(messages);
-            ceremony.complete(result_receivers).await;
+            ceremony.distribute_messages(messages).await;
+            ceremony.complete().await;
         }
     }
 
@@ -933,7 +925,7 @@ mod timeout {
         async fn should_recover_if_agree_on_values_stage2a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
 
@@ -951,15 +943,15 @@ mod timeout {
                 VerifyComplaints7
             );
 
-            ceremony.distribute_messages(messages);
-            ceremony.complete(result_receivers).await;
+            ceremony.distribute_messages(messages).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_recover_if_agree_on_values_stage2() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let messages = run_stages!(
                 ceremony,
@@ -976,15 +968,15 @@ mod timeout {
 
             let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
 
-            ceremony.distribute_messages(messages);
-            ceremony.complete(result_receivers).await;
+            ceremony.distribute_messages(messages).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_recover_if_agree_on_values_stage5() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let messages = run_stages!(
                 ceremony,
@@ -998,16 +990,18 @@ mod timeout {
             );
 
             let [non_sender_id] = ceremony.select_account_ids();
-            ceremony.distribute_messages_with_non_sender(messages, &non_sender_id);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sender_id)
+                .await;
 
-            ceremony.complete(result_receivers).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_recover_if_agree_on_values_stage7() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -1036,16 +1030,18 @@ mod timeout {
             );
 
             let [non_sender_id] = ceremony.select_account_ids();
-            ceremony.distribute_messages_with_non_sender(messages, &non_sender_id);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sender_id)
+                .await;
 
-            ceremony.complete(result_receivers).await;
+            ceremony.complete().await;
         }
 
         #[tokio::test]
         async fn should_report_if_insufficient_messages_stage2a() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
@@ -1058,12 +1054,13 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
                     &[non_sending_party_id_1],
-                    result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         CeremonyStageName::VerifyHashCommitmentsBroadcast2,
@@ -1076,7 +1073,7 @@ mod timeout {
         async fn should_report_if_insufficient_messages_stage2() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
 
@@ -1091,12 +1088,13 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
                     &[non_sending_party_id_1],
-                    result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         CeremonyStageName::VerifyCommitmentsBroadcast4,
@@ -1109,7 +1107,7 @@ mod timeout {
         async fn should_report_if_insufficient_messages_stage5() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let messages = run_stages!(
                 ceremony,
@@ -1132,12 +1130,13 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
                     &[non_sending_party_id_1],
-                    result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         CeremonyStageName::VerifyComplaintsBroadcastStage7,
@@ -1150,7 +1149,7 @@ mod timeout {
         async fn should_report_if_insufficient_messages_stage7() {
             let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
-            let (messages, result_receivers) = ceremony.request().await;
+            let messages = ceremony.request().await;
 
             let mut messages = run_stages!(
                 ceremony,
@@ -1188,12 +1187,13 @@ mod timeout {
                 .await;
 
             // bad party 2 times out during a broadcast verification stage. It won't get reported.
-            ceremony.distribute_messages_with_non_sender(messages, &non_sending_party_id_2);
+            ceremony
+                .distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+                .await;
 
             ceremony
                 .complete_with_error(
                     &[non_sending_party_id_1],
-                    result_receivers,
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
                         CeremonyStageName::VerifyBlameResponsesBroadcastStage9,

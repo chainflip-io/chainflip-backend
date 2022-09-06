@@ -1,13 +1,17 @@
+#[cfg(test)]
+mod ceremony_runner_tests;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt::Display,
+    pin::Pin,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use anyhow::Result;
-use cf_traits::AuthorityCount;
-use pallet_cf_vaults::CeremonyId;
+use cf_primitives::{AuthorityCount, CeremonyId};
+use futures::future::{BoxFuture, FutureExt};
+use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
 use crate::{
     common::format_iterator,
@@ -17,101 +21,136 @@ use crate::{
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
-    ceremony_manager::CeremonyResultSender,
-    common::{CeremonyFailureReason, CeremonyStage},
+    ceremony_manager::{CeremonyTrait, DynStage, PreparedRequest},
+    common::{CeremonyFailureReason, PreProcessStageDataCheck},
     utils::PartyIdxMapping,
 };
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
-type OptionalCeremonyReturn<CeremonyResult, FailureReason> =
-    Option<Result<CeremonyResult, (BTreeSet<AccountId>, CeremonyFailureReason<FailureReason>)>>;
-
-pub struct StateAuthorised<CeremonyData, CeremonyResult, FailureReason> {
-    pub stage: Option<
-        Box<
-            dyn CeremonyStage<
-                    Message = CeremonyData,
-                    Result = CeremonyResult,
-                    FailureReason = FailureReason,
-                > + Send,
-        >,
+type OptionalCeremonyReturn<Ceremony> = Option<
+    Result<
+        <Ceremony as CeremonyTrait>::Output,
+        (
+            BTreeSet<AccountId>,
+            CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>,
+        ),
     >,
-    pub result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
+>;
+
+pub struct StateAuthorised<Ceremony: CeremonyTrait> {
+    pub stage: Option<DynStage<Ceremony>>,
     pub idx_mapping: Arc<PartyIdxMapping>,
     pub num_of_participants: AuthorityCount,
 }
 
-pub struct CeremonyRunner<CeremonyData, CeremonyResult, FailureReason> {
-    inner: Option<StateAuthorised<CeremonyData, CeremonyResult, FailureReason>>,
-    // Note that we use a map here to limit the number of messages
-    // that can be delayed from any one party to one per stage.
-    delayed_messages: BTreeMap<AccountId, CeremonyData>,
-    /// Time point at which the current ceremony is considered expired and gets aborted
-    should_expire_at: std::time::Instant,
+pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
+    inner: Option<StateAuthorised<Ceremony>>,
+    // Note that because we use a map here, the number of messages
+    // that can be delayed from any one party is limited to one per stage.
+    delayed_messages: BTreeMap<AccountId, Ceremony::Data>,
+    /// This will fire on stage timeout
+    timeout_handle: Pin<Box<tokio::time::Sleep>>,
     logger: slog::Logger,
 }
 
-impl<CeremonyData, CeremonyResult, FailureReason>
-    CeremonyRunner<CeremonyData, CeremonyResult, FailureReason>
-where
-    CeremonyData: Display,
-    FailureReason: Display,
-{
+impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
+    /// Listen for requests until the ceremony is finished
+    /// Returns the id of the ceremony to make it easier to identify
+    /// which ceremony is finished when many are running
+    pub async fn run(
+        ceremony_id: CeremonyId,
+        mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
+        mut request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
+        logger: slog::Logger,
+    ) -> CeremonyId {
+        // We always create unauthorised first, it can get promoted to
+        // an authorised one with a ceremony request
+        let mut runner = Self::new_unauthorised(ceremony_id, &logger);
+        // We don't get the result sender until the ceremony request comes in
+        let mut final_result_sender = None;
+
+        let outcome = loop {
+            tokio::select! {
+                Some((sender_id, message)) = message_receiver.recv() => {
+
+                    if let Some(result) = runner.process_or_delay_message(sender_id, message).await {
+                        break result;
+                    }
+
+                }
+                request = &mut request_receiver => {
+
+                    let PreparedRequest { init_stage, idx_mapping, participants_count, result_sender } = request.expect("Ceremony request channel was dropped unexpectedly");
+                    final_result_sender = Some(result_sender);
+
+                    if let Some(result) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await {
+                        break result;
+                    }
+
+                }
+                () = runner.timeout_handle.as_mut() => {
+
+                    if let Some(result) = runner.on_timeout().await {
+                        break result;
+                    }
+
+                }
+            }
+        };
+
+        if let Some(result_sender) = final_result_sender {
+            let _result = result_sender.send(outcome);
+        } else {
+            // The ceremony has timed out before being authorised.
+            // There is no way to report this to the SC yet, so just ignore it.
+        }
+
+        ceremony_id
+    }
+
     /// Create ceremony state without a ceremony request (which is expected to arrive
     /// shortly). Until such request is received, we can start delaying messages, but
     /// cannot make any progress otherwise
-    pub fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
+    fn new_unauthorised(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
         CeremonyRunner {
             inner: None,
             delayed_messages: Default::default(),
-            should_expire_at: Instant::now() + MAX_STAGE_DURATION,
+            timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
             logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
     }
 
-    /// Process ceremony request from the State Chain, which allows
-    /// the state machine to make progress
-    pub fn on_ceremony_request(
+    /// Process ceremony request from the State Chain,
+    /// initializing the ceremony into an authorised stage 1 state.
+    pub async fn on_ceremony_request(
         &mut self,
-        mut stage: Box<
-            dyn CeremonyStage<
-                    Message = CeremonyData,
-                    Result = CeremonyResult,
-                    FailureReason = FailureReason,
-                > + Send,
-        >,
+        mut initial_stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
         num_of_participants: AuthorityCount,
-    ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
-        if self.inner.is_some() {
-            let _result = result_sender.send(Err((
-                BTreeSet::new(),
-                CeremonyFailureReason::DuplicateCeremonyId,
-            )));
-            return None;
-        }
+    ) -> OptionalCeremonyReturn<Ceremony> {
+        // This function is only ever called from a oneshot channel,
+        // so it should never get called twice.
+        // Therefore we can assume the inner is not initialized yet.
+        assert!(self.inner.is_none());
 
-        stage.init();
+        initial_stage.init();
 
         self.inner = Some(StateAuthorised {
-            stage: Some(stage),
+            stage: Some(initial_stage),
             idx_mapping,
-            result_sender,
             num_of_participants,
         });
 
         // Unlike other state transitions, we don't take into account
-        // any time left in the prior stage when receiving a request
-        // to sign (we don't want other parties to be able to
-        // control when our stages time out)
-        self.should_expire_at = Instant::now() + MAX_STAGE_DURATION;
+        // any time left in the prior stage when receiving a ceremony request because
+        // we don't want other parties to be able to control when our stages time out.
+        self.timeout_handle = Box::pin(tokio::time::sleep(MAX_STAGE_DURATION));
 
-        self.process_delayed()
+        self.process_delayed().await
     }
 
-    fn finalize_current_stage(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
+    async fn finalize_current_stage(&mut self) -> OptionalCeremonyReturn<Ceremony> {
         // Ideally, we would pass the authorised state as a parameter
         // as it is always present (i.e. not `None`) when this function
         // is called, but the borrow checker won't let allow this.
@@ -126,7 +165,7 @@ where
             .take()
             .expect("Stage must be present to be finalized");
 
-        match stage.finalize() {
+        match stage.finalize().await {
             StageResult::NextStage(mut next_stage) => {
                 slog::debug!(
                     self.logger,
@@ -144,9 +183,14 @@ where
                 // the time at which the stages in individual nodes time out
                 // (by sending their data at specific times) thus making some
                 // attacks possible.
-                self.should_expire_at += MAX_STAGE_DURATION;
+                {
+                    let current_deadline = self.timeout_handle.as_ref().deadline();
+                    self.timeout_handle
+                        .as_mut()
+                        .reset(current_deadline + MAX_STAGE_DURATION);
+                }
 
-                self.process_delayed()
+                self.process_delayed().await
             }
             StageResult::Error(bad_validators, reason) => Some(Err((
                 authorised_state.idx_mapping.get_ids(bad_validators),
@@ -162,13 +206,24 @@ where
 
     /// Process message from a peer, returning ceremony outcome if
     /// the ceremony stage machine cannot progress any further
-    pub fn process_or_delay_message(
+    pub async fn process_or_delay_message(
         &mut self,
         sender_id: AccountId,
-        data: CeremonyData,
-    ) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
+        data: Ceremony::Data,
+    ) -> OptionalCeremonyReturn<Ceremony> {
         match &mut self.inner {
             None => {
+                if !data.is_first_stage() {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring data: non-initial stage data for unauthorised ceremony";
+                        "from_id" => sender_id.to_string(),
+                    );
+                    return None;
+                }
+
+                // We do not need to check data_size_is_valid here because stage 1 messages are always the correct size.
+
                 self.add_delayed(sender_id, data);
             }
             Some(authorised_state) => {
@@ -189,6 +244,16 @@ where
                     }
                 };
 
+                // Check that the number of elements in the data is what we expect
+                if !data.data_size_is_valid(authorised_state.num_of_participants) {
+                    slog::debug!(
+                        self.logger,
+                        "Ignoring data: incorrect number of elements";
+                        "from_id" => sender_id.to_string(),
+                    );
+                    return None;
+                }
+
                 // Check if we should delay this message for the next stage to use
                 if stage.should_delay(&data) {
                     self.add_delayed(sender_id, data);
@@ -196,7 +261,7 @@ where
                 }
 
                 if let ProcessMessageResult::Ready = stage.process_message(sender_idx, data) {
-                    return self.finalize_current_stage();
+                    return self.finalize_current_stage().await;
                 }
             }
         }
@@ -205,27 +270,31 @@ where
     }
 
     /// Process previously delayed messages (which arrived one stage too early)
-    pub fn process_delayed(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
-        let messages = std::mem::take(&mut self.delayed_messages);
+    // NOTE: Need this boxed to help with async recursion
+    fn process_delayed(&mut self) -> BoxFuture<OptionalCeremonyReturn<Ceremony>> {
+        async {
+            let messages = std::mem::take(&mut self.delayed_messages);
 
-        for (id, m) in messages {
-            slog::debug!(
-                self.logger,
-                "Processing delayed message {} from party [{}]",
-                m,
-                id,
-            );
+            for (id, m) in messages {
+                slog::debug!(
+                    self.logger,
+                    "Processing delayed message {} from party [{}]",
+                    m,
+                    id,
+                );
 
-            if let Some(result) = self.process_or_delay_message(id, m) {
-                return Some(result);
+                if let Some(result) = self.process_or_delay_message(id, m).await {
+                    return Some(result);
+                }
             }
-        }
 
-        None
+            None
+        }
+        .boxed()
     }
 
     /// Delay message to be processed in the next stage
-    fn add_delayed(&mut self, id: AccountId, m: CeremonyData) {
+    fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
         match &self.inner {
             Some(authorised_state) => {
                 let stage = authorised_state
@@ -259,91 +328,88 @@ where
         );
     }
 
-    /// Check if the stage has timed out, and if so, proceed according to the
-    /// protocol rules for the stage
-    pub fn try_expiring(&mut self) -> OptionalCeremonyReturn<CeremonyResult, FailureReason> {
-        if self.should_expire_at < std::time::Instant::now() {
-            match &self.inner {
-                None => {
-                    // Report the parties that tried to initiate the ceremony.
-                    let reported_ids = self
-                        .delayed_messages
-                        .iter()
-                        .map(|(id, _)| id.clone())
-                        .collect();
+    async fn on_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
+        match &self.inner {
+            None => {
+                // Report the parties that tried to initiate the ceremony.
+                let reported_ids = self
+                    .delayed_messages
+                    .iter()
+                    .map(|(id, _)| id.clone())
+                    .collect();
 
-                    slog::warn!(
-                        self.logger,
-                        "Ceremony expired before being authorized, reporting parties: {}",
-                        format_iterator(&reported_ids)
-                    );
+                slog::warn!(
+                    self.logger,
+                    "Ceremony expired before being authorized, reporting parties: {}",
+                    format_iterator(&reported_ids)
+                );
 
-                    Some(Err((
-                        reported_ids,
-                        CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
-                    )))
-                }
-                Some(authorised_state) => {
-                    // We can't simply abort here as we don't know whether other
-                    // participants are going to do the same (e.g. if a malicious
-                    // node targeted us by communicating with everyone but us, it
-                    // would look to the rest of the network like we are the culprit).
-                    // Instead, we delegate the responsibility to the concrete stage
-                    // implementation to try to recover or agree on who to report.
+                Some(Err((
+                    reported_ids,
+                    CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
+                )))
+            }
+            Some(authorised_state) => {
+                // We can't simply abort here as we don't know whether other
+                // participants are going to do the same (e.g. if a malicious
+                // node targeted us by communicating with everyone but us, it
+                // would look to the rest of the network like we are the culprit).
+                // Instead, we delegate the responsibility to the concrete stage
+                // implementation to try to recover or agree on who to report.
 
-                    slog::warn!(
+                slog::warn!(
                         self.logger,
                         "Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
                     );
 
-                    // Log the account ids of the missing messages
-                    if let Some(stage) = &authorised_state.stage {
-                        let missing_messages_from_accounts = authorised_state
-                            .idx_mapping
-                            .get_ids(stage.awaited_parties());
-                        slog::debug!(
-                            self.logger,
-                            "Stage `{}` is missing messages from {} parties",
-                            stage.get_stage_name(),
-                            missing_messages_from_accounts.len();
-                            "missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
-                        )
-                    }
-
-                    self.finalize_current_stage()
+                // Log the account ids of the missing messages
+                if let Some(stage) = &authorised_state.stage {
+                    let missing_messages_from_accounts = authorised_state
+                        .idx_mapping
+                        .get_ids(stage.awaited_parties());
+                    slog::debug!(
+                        self.logger,
+                        "Stage `{}` is missing messages from {} parties",
+                        stage.get_stage_name(),
+                        missing_messages_from_accounts.len();
+                        "missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
+                    )
                 }
+
+                self.finalize_current_stage().await
             }
-        } else {
-            None
+        }
+    }
+}
+
+#[cfg(test)]
+impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
+    /// This is to allow calling a private method from tests
+    pub fn new_unauthorised_for_test(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
+        Self::new_unauthorised(ceremony_id, logger)
+    }
+
+    pub fn new_authorised(
+        ceremony_id: CeremonyId,
+        stage: DynStage<Ceremony>,
+        idx_mapping: Arc<PartyIdxMapping>,
+        num_of_participants: AuthorityCount,
+        logger: slog::Logger,
+    ) -> Self {
+        let inner = Some(StateAuthorised {
+            stage: Some(stage),
+            idx_mapping,
+            num_of_participants,
+        });
+
+        CeremonyRunner {
+            inner,
+            delayed_messages: Default::default(),
+            timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
+            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
         }
     }
 
-    /// returns true if the ceremony is authorized (has received a ceremony request)
-    pub fn is_authorized(&self) -> bool {
-        self.inner.is_some()
-    }
-
-    /// Returns the number of participants in the current ceremony
-    pub fn get_participant_count(&self) -> Option<AuthorityCount> {
-        self.inner
-            .as_ref()
-            .map(|authorised_state| authorised_state.num_of_participants)
-    }
-
-    pub fn try_into_result_sender(
-        self,
-    ) -> Option<CeremonyResultSender<CeremonyResult, FailureReason>> {
-        self.inner.map(|inner| inner.result_sender)
-    }
-
-    #[cfg(test)]
-    pub fn get_stage_name(&self) -> Option<super::common::CeremonyStageName> {
-        self.inner
-            .as_ref()
-            .and_then(|s| s.stage.as_ref().map(|s| s.get_stage_name()))
-    }
-
-    #[cfg(test)]
     pub fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
         self.inner.as_ref().and_then(|s| {
             s.stage
@@ -352,50 +418,13 @@ where
         })
     }
 
-    #[cfg(test)]
-    pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
-        self.should_expire_at = expiry_time;
+    pub async fn force_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
+        self.on_timeout().await
     }
 
-    #[cfg(test)]
-    pub fn get_delayed_messages_len(&self) -> usize {
-        self.delayed_messages.len()
-    }
-}
-
-#[cfg(test)]
-impl<CeremonyData, CeremonyResult, FailureReason>
-    CeremonyRunner<CeremonyData, CeremonyResult, FailureReason>
-where
-    CeremonyData: Display,
-    FailureReason: Display,
-{
-    pub fn new_authorised(
-        ceremony_id: CeremonyId,
-        stage: Box<
-            dyn CeremonyStage<
-                    Message = CeremonyData,
-                    Result = CeremonyResult,
-                    FailureReason = FailureReason,
-                > + Send,
-        >,
-        idx_mapping: Arc<PartyIdxMapping>,
-        result_sender: CeremonyResultSender<CeremonyResult, FailureReason>,
-        num_of_participants: AuthorityCount,
-        logger: slog::Logger,
-    ) -> Self {
-        let inner = Some(StateAuthorised {
-            stage: Some(stage),
-            idx_mapping,
-            result_sender,
-            num_of_participants,
-        });
-
-        CeremonyRunner {
-            inner,
-            delayed_messages: Default::default(),
-            should_expire_at: Instant::now() + MAX_STAGE_DURATION,
-            logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
-        }
+    pub fn get_stage_name(&self) -> Option<super::common::CeremonyStageName> {
+        self.inner
+            .as_ref()
+            .and_then(|s| s.stage.as_ref().map(|s| s.get_stage_name()))
     }
 }

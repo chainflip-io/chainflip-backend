@@ -16,15 +16,7 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
-
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-
-		type Witnesser: cf_traits::Witnesser<
-			Call = <Self as Config>::Call,
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
 	}
 
 	#[pallet::pallet]

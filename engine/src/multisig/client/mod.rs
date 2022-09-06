@@ -20,13 +20,11 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use cf_traits::AuthorityCount;
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::Future;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
-
-use pallet_cf_vaults::CeremonyId;
 
 use tokio::sync::mpsc::UnboundedSender;
 use utilities::threshold_from_share_count;
@@ -40,7 +38,9 @@ pub use utils::PartyIdxMapping;
 pub use utils::ensure_unsorted;
 
 use self::{
-    ceremony_manager::CeremonyResultSender, key_store::KeyStore, signing::frost::SigningData,
+    ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
+    key_store::KeyStore,
+    signing::frost::SigningData,
 };
 
 pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
@@ -176,14 +176,14 @@ pub enum CeremonyRequestDetails<C>
 where
     C: CryptoScheme,
 {
-    Keygen(KeygenRequestDetails<<C as CryptoScheme>::Point>),
+    Keygen(KeygenRequestDetails<C>),
     Sign(SigningRequestDetails<C>),
 }
 
-pub struct KeygenRequestDetails<P: ECPoint> {
+pub struct KeygenRequestDetails<C: CryptoScheme> {
     pub participants: Vec<AccountId>,
     pub rng: Rng,
-    pub result_sender: CeremonyResultSender<KeygenResultInfo<P>, KeygenFailureReason>,
+    pub result_sender: CeremonyResultSender<KeygenCeremony<C>>,
 }
 
 pub struct SigningRequestDetails<C>
@@ -194,7 +194,7 @@ where
     pub data: MessageHash,
     pub keygen_result_info: KeygenResultInfo<<C as CryptoScheme>::Point>,
     pub rng: Rng,
-    pub result_sender: CeremonyResultSender<<C as CryptoScheme>::Signature, SigningFailureReason>,
+    pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }
 
 /// Multisig client acts as the frontend for the multisig functionality, delegating

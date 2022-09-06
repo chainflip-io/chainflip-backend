@@ -13,13 +13,13 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{mocks::MockEthereum, ApiCall, ChainCrypto};
+use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		system_state_info::MockSystemStateInfo,
+		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
 	},
 	Chainflip,
 };
@@ -55,6 +55,10 @@ pub enum SystemState {
 	Normal,
 	Maintenance,
 }
+
+// TODO: Unify with staking pallet mock
+pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
+	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 // do not know how to solve this mock
 pub struct MockSystemStateManager;
@@ -200,7 +204,10 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
+	type Call = Call;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
 	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;

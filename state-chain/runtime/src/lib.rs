@@ -60,9 +60,10 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
+pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
 pub use cf_traits::{
-	BlockNumber, ChainflipAccount, ChainflipAccountData, ChainflipAccountState,
-	ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode, SessionKeysRegistered,
+	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode,
+	SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
@@ -187,7 +188,11 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type Call = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
+	type ThresholdSigner = EthereumThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;

@@ -1,5 +1,6 @@
 use crate::{Runtime, Validator};
-use cf_traits::{Chainflip, EpochIndex, EpochInfo};
+use cf_primitives::EpochIndex;
+use cf_traits::{Chainflip, EpochInfo};
 use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
 use pallet_cf_validator::HistoricalAuthorities;
