@@ -135,8 +135,7 @@ pub struct FetchAssetParams<T: Chain> {
 	asset: T::ChainAsset,
 }
 
-/// A general trait for initializing types required for Transfering Assets to Users as part of a
-/// swap for some External Chain.
+/// Contains all the parameters required for transferring an asset on an external chain.
 #[derive(
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
