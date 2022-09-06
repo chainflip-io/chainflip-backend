@@ -799,6 +799,7 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "parity-scale-codec",
  "scale-info",
  "serde",
