@@ -6,7 +6,7 @@ use crate::{
     state_chain_observer::client::StateChainRpcApi,
 };
 
-use cf_traits::EpochIndex;
+use cf_primitives::EpochIndex;
 use sp_runtime::AccountId32;
 
 use web3::{

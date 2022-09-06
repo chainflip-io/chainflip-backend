@@ -8,7 +8,7 @@ use std::{
     fmt::Display,
 };
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
 use zeroize::Zeroize;

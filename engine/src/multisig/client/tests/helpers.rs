@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
-use cf_traits::{AuthorityCount, CeremonyId};
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
 

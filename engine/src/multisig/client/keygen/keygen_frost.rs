@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use zeroize::Zeroize;

@@ -5,7 +5,7 @@ use crate::{
     state_chain_observer::client::StateChainRpcApi,
 };
 use cf_chains::eth::SchnorrVerificationComponents;
-use cf_traits::EpochIndex;
+use cf_primitives::EpochIndex;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,

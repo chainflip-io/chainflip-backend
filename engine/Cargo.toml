@@ -84,7 +84,7 @@ pin-project = "1.0.11"
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
 multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
-cf-traits = {path = "../state-chain/traits"}
+cf-primitives = {path = "../state-chain/primitives"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}

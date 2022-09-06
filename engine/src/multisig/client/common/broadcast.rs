@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fmt::Display, marker::PhantomData};
 
 use async_trait::async_trait;
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 
 use crate::{
     multisig::{
