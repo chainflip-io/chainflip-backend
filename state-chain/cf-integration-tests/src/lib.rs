@@ -160,7 +160,7 @@ mod epoch {
 	use crate::{genesis::GENESIS_BALANCE, network::Network};
 	use cf_primitives::ChainflipAccountState;
 	use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo};
-  use frame_support::traits::Hooks;
+	use frame_support::traits::Hooks;
 	use pallet_cf_validator::RotationPhase;
 	use state_chain_runtime::Validator;
 
