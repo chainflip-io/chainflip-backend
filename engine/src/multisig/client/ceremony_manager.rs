@@ -154,7 +154,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
 
     // Generate signer indexes
     let (own_idx, signer_idxs) =
-        match map_ceremony_parties(own_account_id, &signers, &key_info.validator_map) {
+        match map_ceremony_parties(own_account_id, &signers, &key_info.validator_mapping) {
             Ok(result) => result,
             Err(reason) => {
                 slog::debug!(logger, "Request to sign invalid: {}", reason);
@@ -169,7 +169,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
         let common = CeremonyCommon {
             ceremony_id,
             outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
-            validator_mapping: key_info.validator_map,
+            validator_mapping: key_info.validator_mapping,
             own_idx,
             all_idxs: signer_idxs,
             logger: logger.clone(),
@@ -204,10 +204,10 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     result_sender: CeremonyResultSender<KeygenCeremony<C>>,
     logger: &slog::Logger,
 ) -> Result<PreparedRequest<KeygenCeremony<C>>, InitCeremonyFailure<KeygenCeremony<C>>> {
-    let validator_map = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
+    let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
     let (our_idx, signer_idxs) =
-        match map_ceremony_parties(own_account_id, &participants, &validator_map) {
+        match map_ceremony_parties(own_account_id, &participants, &validator_mapping) {
             Ok(res) => res,
             Err(reason) => {
                 slog::debug!(logger, "Keygen request invalid: {}", reason);
@@ -220,7 +220,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
         let common = CeremonyCommon {
             ceremony_id,
             outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
-            validator_mapping: validator_map.clone(),
+            validator_mapping,
             own_idx: our_idx,
             all_idxs: signer_idxs,
             logger: logger.clone(),
@@ -245,7 +245,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
 fn map_ceremony_parties(
     own_account_id: &AccountId,
     participants: &BTreeSet<AccountId>,
-    validator_map: &PartyIdxMapping,
+    validator_mapping: &PartyIdxMapping,
 ) -> Result<(AuthorityCount, BTreeSet<AuthorityCount>), &'static str> {
     assert!(
         participants.contains(own_account_id),
@@ -255,12 +255,12 @@ fn map_ceremony_parties(
     // It should be impossible to fail here because of the check above,
     // but I don't like unwrapping (would be better if we
     // could combine this with the check above)
-    let our_idx = validator_map
+    let our_idx = validator_mapping
         .get_idx(own_account_id)
         .ok_or("could not derive our idx")?;
 
     // Check that signer ids are known for this key
-    let signer_idxs = validator_map
+    let signer_idxs = validator_mapping
         .get_all_idxs(participants)
         .map_err(|_| "invalid participants")?;
 

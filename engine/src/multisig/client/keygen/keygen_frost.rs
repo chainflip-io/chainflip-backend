@@ -582,7 +582,7 @@ pub mod genesis {
 
         let agg_pubkey = derive_aggregate_pubkey(&commitments, allow_high_pubkey)?;
 
-        let validator_map = PartyIdxMapping::from_participants(signers);
+        let validator_mapping = PartyIdxMapping::from_participants(signers);
 
         let keygen_result_infos: HashMap<_, _> = (1..=n)
             .map(|idx| {
@@ -593,7 +593,7 @@ pub mod genesis {
                     .collect();
 
                 (
-                    validator_map.get_id(idx).unwrap().clone(),
+                    validator_mapping.get_id(idx).unwrap().clone(),
                     KeygenResultInfo {
                         key: Arc::new(KeygenResult {
                             key_share: KeyShare {
@@ -605,7 +605,7 @@ pub mod genesis {
                                 &commitments,
                             ),
                         }),
-                        validator_map: Arc::new(validator_map.clone()),
+                        validator_mapping: Arc::new(validator_mapping.clone()),
                         params,
                     },
                 )
