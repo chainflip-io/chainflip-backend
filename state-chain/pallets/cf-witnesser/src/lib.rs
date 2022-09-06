@@ -147,7 +147,8 @@ pub mod pallet {
 		/// 1. Ensure we are not submitting a witness for an expired epoch
 		/// 2. Look up the account id in the list of authorities.
 		/// 3. Get the list of votes for the epoch and call, or an empty list if this is the first
-		/// vote. 4. Add the account's vote to the list.
+		/// vote.
+		/// 4. Add the account's vote to the list.
 		/// 5. Check the number of votes against the required threshold.
 		/// 6. The provided `call` will be dispatched when the configured threshold number of
 		/// authorities have submitted an identical transaction. This can be thought of as a vote
