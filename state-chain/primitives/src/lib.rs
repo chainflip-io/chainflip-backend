@@ -50,14 +50,14 @@ impl Default for ChainflipAccountData {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub enum Chain {
+pub enum ForeignChain {
 	Eth,
 	Dot,
 }
 
 /// An Asset is a token or currency that can be traded via the Chainflip AMM.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub enum Asset {
+pub enum ForeignAsset {
 	Eth,
 	Flip,
 	Usdc,
@@ -65,7 +65,7 @@ pub enum Asset {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub struct ChainAsset {
-	chain: Chain,
-	asset: Asset,
+pub struct ForeignChainAsset {
+	chain: ForeignChain,
+	asset: ForeignAsset,
 }
