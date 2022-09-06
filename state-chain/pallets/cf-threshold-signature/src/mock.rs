@@ -195,7 +195,7 @@ impl ExtBuilder {
 
 	pub fn with_nominees(mut self, nominees: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			let nominees = Vec::from_iter(nominees);
+			let nominees = BTreeSet::from_iter(nominees);
 			MockNominator::set_nominees(if nominees.is_empty() { None } else { Some(nominees) });
 		});
 		self

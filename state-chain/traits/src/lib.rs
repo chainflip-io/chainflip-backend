@@ -7,6 +7,7 @@ pub mod offence_reporting;
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
+use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
@@ -164,7 +165,7 @@ pub trait VaultRotator {
 	type ValidatorId;
 
 	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: Vec<Self::ValidatorId>);
+	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
 
 	/// Poll for the vault rotation outcome.
 	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
@@ -409,7 +410,7 @@ pub trait SignerNomination {
 	fn threshold_nomination_with_seed<H: Hashable>(
 		seed: H,
 		epoch_index: EpochIndex,
-	) -> Option<Vec<Self::SignerId>>;
+	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -451,7 +452,7 @@ where
 
 	fn request_signature_with(
 		key_id: Self::KeyId,
-		participants: Vec<Self::ValidatorId>,
+		participants: BTreeSet<Self::ValidatorId>,
 		payload: C::Payload,
 		retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId);

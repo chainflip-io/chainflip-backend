@@ -880,7 +880,7 @@ async fn should_handle_signing_request() {
         .with(
             predicate::eq(next_ceremony_id),
             predicate::eq(key_id.clone()),
-            predicate::eq(vec![our_account_id.clone()]),
+            predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
             predicate::eq(sign_data.clone()),
         )
         .returning(|_, _, _, _| {
@@ -901,7 +901,7 @@ async fn should_handle_signing_request() {
                 state_chain_client.clone(),
                 first_ceremony_id,
                 key_id.clone(),
-                vec![not_our_account_id.clone()],
+                BTreeSet::from_iter([not_our_account_id.clone()]),
                 sign_data.clone(),
                 logger.clone(),
             )
@@ -914,7 +914,7 @@ async fn should_handle_signing_request() {
                 state_chain_client.clone(),
                 next_ceremony_id,
                 key_id,
-                vec![our_account_id],
+                BTreeSet::from_iter([our_account_id]),
                 sign_data,
                 logger,
             )
@@ -956,7 +956,7 @@ async fn should_handle_keygen_request() {
         .expect_keygen()
         .with(
             predicate::eq(next_ceremony_id),
-            predicate::eq(vec![our_account_id.clone()]),
+            predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
         )
         .returning(|_, _| {
             Err((
@@ -975,7 +975,7 @@ async fn should_handle_keygen_request() {
                 multisig_client.clone(),
                 state_chain_client.clone(),
                 first_ceremony_id,
-                vec![not_our_account_id.clone()],
+                BTreeSet::from_iter([not_our_account_id.clone()]),
                 logger.clone(),
             )
             .await;
@@ -986,7 +986,7 @@ async fn should_handle_keygen_request() {
                 multisig_client.clone(),
                 state_chain_client.clone(),
                 next_ceremony_id,
-                vec![our_account_id.clone()],
+                BTreeSet::from_iter([our_account_id]),
                 logger.clone(),
             )
             .await;

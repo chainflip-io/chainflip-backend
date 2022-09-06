@@ -11,6 +11,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32, BuildStorage,
 };
+use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -176,7 +177,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 	fn request_signature_with(
 		_key_id: Self::KeyId,
-		_participants: Vec<Self::ValidatorId>,
+		_participants: BTreeSet<Self::ValidatorId>,
 		_payload: <Ethereum as ChainCrypto>::Payload,
 		_retry_policy: cf_traits::RetryPolicy,
 	) -> (Self::RequestId, CeremonyId) {
