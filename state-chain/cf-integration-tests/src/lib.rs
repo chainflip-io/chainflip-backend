@@ -160,6 +160,7 @@ mod epoch {
 	use cf_traits::{
 		BidderProvider, ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochInfo,
 	};
+	use frame_support::traits::Hooks;
 	use pallet_cf_validator::RotationPhase;
 	use state_chain_runtime::Validator;
 
@@ -381,93 +382,96 @@ mod epoch {
 	fn new_epoch_will_purge_stale_witnesser_storage() {
 		const EPOCH_BLOCKS: BlockNumber = 100;
 		const MAX_AUTHORITIES: AuthorityCount = 3;
-		super::genesis::default()
+		let storage_epoch = 4;
+		let mut ext = super::genesis::default()
 			.blocks_per_epoch(EPOCH_BLOCKS)
 			.min_authorities(MAX_AUTHORITIES)
-			.build()
-			.execute_with(|| {
-				let mut nodes = Validator::current_authorities();
-				nodes.sort();
-				let (mut testnet, _) = network::Network::create(0, &nodes);
+			.build();
 
-				assert_eq!(Validator::epoch_index(), 1);
+		ext.execute_with(|| {
+			let mut nodes = Validator::current_authorities();
+			nodes.sort();
+			let (mut testnet, _) = network::Network::create(0, &nodes);
 
-				let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
-					let start = Validator::epoch_index();
-					let finish = start + epochs;
-					for _ in start..finish {
-						testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS + 1);
-						testnet.submit_heartbeat_all_engines();
-					}
-				};
+			assert_eq!(Validator::epoch_index(), 1);
 
-				move_forward_by_epochs(3, &mut testnet);
-				let storage_epoch = 4;
-				assert_eq!(Validator::epoch_index(), 4);
-				assert_eq!(Validator::last_expired_epoch(), 2);
-				let mut current_authorities_after_some_epochs = Validator::current_authorities();
-				current_authorities_after_some_epochs.sort();
-				assert_eq!(nodes, current_authorities_after_some_epochs);
-
-				let call =
-					Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
-						remark: vec![],
-					}));
-				let call_hash =
-					pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
-
-				for node in &nodes {
-					assert_ok!(Witnesser::witness_at_epoch(
-						Origin::signed(node.clone()),
-						call.clone(),
-						storage_epoch
-					));
+			let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
+				let start = Validator::epoch_index();
+				let finish = start + epochs;
+				for _ in start..finish {
+					testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS + 1);
+					testnet.submit_heartbeat_all_engines();
 				}
-				pallet_cf_witnesser::ExtraCallData::<Runtime>::insert(
-					storage_epoch,
-					&call_hash,
-					vec![vec![0u8]],
-				);
+			};
 
-				// Execute the call after voting has passed.
-				testnet.move_forward_blocks(1);
+			move_forward_by_epochs(3, &mut testnet);
+			assert_eq!(Validator::epoch_index(), 4);
+			assert_eq!(Validator::last_expired_epoch(), 2);
+			let mut current_authorities_after_some_epochs = Validator::current_authorities();
+			current_authorities_after_some_epochs.sort();
+			assert_eq!(nodes, current_authorities_after_some_epochs);
 
-				// Ensure Votes and calldata are registered in storage.
-				assert!(
-					pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_some()
-				);
-				assert!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(
-					storage_epoch,
-					&call_hash
-				)
+			let call = Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
+				remark: vec![],
+			}));
+			let call_hash =
+				pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
+
+			for node in &nodes {
+				assert_ok!(Witnesser::witness_at_epoch(
+					Origin::signed(node.clone()),
+					call.clone(),
+					storage_epoch
+				));
+			}
+			pallet_cf_witnesser::ExtraCallData::<Runtime>::insert(
+				storage_epoch,
+				&call_hash,
+				vec![vec![0u8]],
+			);
+
+			// Execute the call after voting has passed.
+			testnet.move_forward_blocks(1);
+
+			// Ensure Votes and calldata are registered in storage.
+			assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_some());
+			assert!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, &call_hash)
 				.is_some());
-				assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(
-					storage_epoch,
-					&call_hash
-				)
-				.is_some());
+			assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(
+				storage_epoch,
+				&call_hash
+			)
+			.is_some());
 
-				// Move forward in time until Epoch 4 is expired.
-				move_forward_by_epochs(2, &mut testnet);
+			// Move forward in time until Epoch 4 is expired.
+			move_forward_by_epochs(2, &mut testnet);
 
-				assert_eq!(Validator::epoch_index(), 6);
-				assert_eq!(Validator::last_expired_epoch(), storage_epoch);
+			assert_eq!(Validator::epoch_index(), 6);
+			assert_eq!(Validator::last_expired_epoch(), storage_epoch);
+		});
 
-				// Test that the storage has been purged.
-				assert!(
-					pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_none()
-				);
-				assert!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(
-					storage_epoch,
-					&call_hash
-				)
+		let _res = ext.commit_all();
+
+		ext.execute_with(|| {
+			let call = Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
+				remark: vec![],
+			}));
+			let call_hash =
+				pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
+
+			// Call on_idle to purge stale storage
+			assert!(Witnesser::on_idle(0, 1_000_000_000_000) > 0);
+
+			// Test that the storage has been purged.
+			assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_none());
+			assert!(pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, &call_hash)
 				.is_none());
-				assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(
-					storage_epoch,
-					&call_hash
-				)
-				.is_none());
-			});
+			assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(
+				storage_epoch,
+				&call_hash
+			)
+			.is_none());
+		});
 	}
 }
 

@@ -1,6 +1,7 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
-	CallHash, CallHashExecuted, EpochsToCull, Error, ExtraCallData, VoteMask, Votes,
+	weights::WeightInfo,
+	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, VoteMask, Votes,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
@@ -155,16 +156,36 @@ fn can_continue_to_witness_for_old_epochs() {
 
 #[test]
 fn can_purge_stale_storage() {
-	new_test_ext().execute_with(|| {
-		let call = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
+	let mut ext = new_test_ext();
+	ext.execute_with(|| {
+		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
 			pallet_dummy::Call::<Test>::increment_value {},
+		))));
+		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
+			frame_system::Call::<Test>::remark { remark: vec![0] },
 		))));
 
 		for e in [2u32, 9, 10, 11] {
-			Votes::<Test>::insert(e, &call, vec![0, 0, e as u8]);
-			ExtraCallData::<Test>::insert(e, &call, vec![vec![0], vec![e as u8]]);
-			CallHashExecuted::<Test>::insert(e, &call, ());
+			Votes::<Test>::insert(e, &call1, vec![0, 0, e as u8]);
+			ExtraCallData::<Test>::insert(e, &call1, vec![vec![0], vec![e as u8]]);
+			CallHashExecuted::<Test>::insert(e, &call1, ());
+
+			Votes::<Test>::insert(e, &call2, vec![0, 0, e as u8]);
+			ExtraCallData::<Test>::insert(e, &call2, vec![vec![0], vec![e as u8]]);
+			CallHashExecuted::<Test>::insert(e, &call2, ());
 		}
+	});
+
+	let _ = ext.commit_all();
+
+	ext.execute_with(|| {
+		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
+			pallet_dummy::Call::<Test>::increment_value {},
+		))));
+		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
+			frame_system::Call::<Test>::remark { remark: vec![0] },
+		))));
+		let delete_weight = <Test as Config>::WeightInfo::remove_one_storage_items();
 
 		// Add epoch 2 to `EpochsToCull`
 		Witnesser::on_expired_epoch(2);
@@ -176,45 +197,84 @@ fn can_purge_stale_storage() {
 		assert_eq!(Witnesser::on_idle(1, 1_000_000_000_000), 0);
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3]);
 		for e in [2u32, 9, 10, 11] {
-			assert_eq!(Votes::<Test>::get(e, &call), Some(vec![0, 0, e as u8]));
-			assert_eq!(ExtraCallData::<Test>::get(e, &call), Some(vec![vec![0], vec![e as u8]]));
-			assert_eq!(CallHashExecuted::<Test>::get(e, &call), Some(()));
+			assert_eq!(Votes::<Test>::get(e, &call1), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, &call1), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, &call1), Some(()));
+
+			assert_eq!(Votes::<Test>::get(e, &call2), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, &call2), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, &call2), Some(()));
 		}
 
 		assert_eq!(Witnesser::on_idle(2, 1_000_000_000_000), 0);
-		assert_eq!(Witnesser::on_idle(3, 1_000_000_000_000), 0);
 
-		// Epoch 2's stale data should be cleaned.
+		// Partially clean data from epoch 2
+		assert_eq!(Witnesser::on_idle(3, delete_weight * 4), delete_weight * 4);
+
+		assert_eq!(Votes::<Test>::get(2u32, &call1), None);
+		assert_eq!(Votes::<Test>::get(2u32, &call2), None);
+		assert_eq!(ExtraCallData::<Test>::get(2u32, call1), None);
+		assert_eq!(ExtraCallData::<Test>::get(2u32, call2), None);
+		assert_eq!(CallHashExecuted::<Test>::get(2u32, call1), Some(()));
+		assert_eq!(CallHashExecuted::<Test>::get(2u32, call2), Some(()));
+
+		assert_eq!(EpochsToCull::<Test>::get(), vec![2]);
+	});
+
+	let _ = ext.commit_all();
+
+	ext.execute_with(|| {
+		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
+			pallet_dummy::Call::<Test>::increment_value {},
+		))));
+		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
+			frame_system::Call::<Test>::remark { remark: vec![0] },
+		))));
+		let delete_weight = <Test as Config>::WeightInfo::remove_one_storage_items();
+
+		// Clean the remaining storage
+		assert_eq!(Witnesser::on_idle(4, 1_000_000_000_000), delete_weight * 2);
+
+		// Epoch 2's stale data should be fully cleaned.
+		assert_eq!(CallHashExecuted::<Test>::get(2u32, call1), None);
+		assert_eq!(CallHashExecuted::<Test>::get(2u32, call2), None);
 		assert!(EpochsToCull::<Test>::get().is_empty());
-
-		assert_eq!(Votes::<Test>::get(2u32, &call), None);
-		assert_eq!(ExtraCallData::<Test>::get(2u32, call), None);
-		assert_eq!(CallHashExecuted::<Test>::get(2u32, call), None);
 
 		// Future epoch items are unaffected.
 		for e in [9u32, 10, 11] {
-			assert_eq!(Votes::<Test>::get(e, &call), Some(vec![0, 0, e as u8]));
-			assert_eq!(ExtraCallData::<Test>::get(e, &call), Some(vec![vec![0], vec![e as u8]]));
-			assert_eq!(CallHashExecuted::<Test>::get(e, &call), Some(()));
+			assert_eq!(Votes::<Test>::get(e, &call1), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, &call1), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, &call1), Some(()));
+
+			assert_eq!(Votes::<Test>::get(e, &call2), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, &call2), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, &call2), Some(()));
 		}
 
 		// Remove storage items for epoch 9 and 10.
 		Witnesser::on_expired_epoch(9);
 		Witnesser::on_expired_epoch(10);
 		assert_eq!(EpochsToCull::<Test>::get(), vec![9, 10]);
-		Witnesser::on_idle(4, 1_000_000_000_000);
-		Witnesser::on_idle(5, 1_000_000_000_000);
+		assert_eq!(Witnesser::on_idle(4, 1_000_000_000_000), delete_weight * 6);
+		assert_eq!(Witnesser::on_idle(5, 1_000_000_000_000), delete_weight * 6);
 		assert!(EpochsToCull::<Test>::get().is_empty());
 
 		for e in [9u32, 10] {
-			assert_eq!(Votes::<Test>::get(e, &call), None);
-			assert_eq!(ExtraCallData::<Test>::get(e, call), None);
-			assert_eq!(CallHashExecuted::<Test>::get(e, call), None);
+			assert_eq!(Votes::<Test>::get(e, &call1), None);
+			assert_eq!(ExtraCallData::<Test>::get(e, call1), None);
+			assert_eq!(CallHashExecuted::<Test>::get(e, call1), None);
+			assert_eq!(Votes::<Test>::get(e, &call2), None);
+			assert_eq!(ExtraCallData::<Test>::get(e, call2), None);
+			assert_eq!(CallHashExecuted::<Test>::get(e, call2), None);
 		}
 
 		// Epoch 11's storage items are unaffected.
-		assert_eq!(Votes::<Test>::get(11u32, &call), Some(vec![0, 0, 11]));
-		assert_eq!(ExtraCallData::<Test>::get(11u32, call), Some(vec![vec![0], vec![11]]));
-		assert_eq!(CallHashExecuted::<Test>::get(11u32, call), Some(()));
+		assert_eq!(Votes::<Test>::get(11u32, &call1), Some(vec![0, 0, 11]));
+		assert_eq!(ExtraCallData::<Test>::get(11u32, call1), Some(vec![vec![0], vec![11]]));
+		assert_eq!(CallHashExecuted::<Test>::get(11u32, call1), Some(()));
+
+		assert_eq!(Votes::<Test>::get(11u32, &call2), Some(vec![0, 0, 11]));
+		assert_eq!(ExtraCallData::<Test>::get(11u32, call2), Some(vec![vec![0], vec![11]]));
+		assert_eq!(CallHashExecuted::<Test>::get(11u32, call2), Some(()));
 	});
 }

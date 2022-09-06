@@ -30,7 +30,7 @@ benchmarks! {
 		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
 		let call_hash = CallHash(Hashable::blake2_256(&call));
 		Votes::<T>::insert(0, call_hash, vec![0]);
-	} : {Votes::<T>::remove(0, call_hash);}
+	} : { let _ = Votes::<T>::clear_prefix(0, u32::MAX, None); }
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
