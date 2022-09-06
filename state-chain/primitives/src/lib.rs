@@ -50,6 +50,7 @@ impl Default for ChainflipAccountData {
 	}
 }
 
+/// Chains that Chainflip can receive assets from and send assets to.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum ForeignChain {
 	Eth,
@@ -61,6 +62,7 @@ pub enum ForeignChainAddress {
 	Eth(eth::Address),
 }
 
+/// An Asset is a token or currency that can be traded via the Chainflip AMM.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum Asset {
 	Eth,
