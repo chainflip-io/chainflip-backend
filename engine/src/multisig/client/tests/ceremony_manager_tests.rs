@@ -26,7 +26,7 @@ use utilities::{assert_panics, threshold_from_share_count};
 /// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
 fn run_on_request_to_sign<C: CryptoScheme>(
     ceremony_manager: &mut CeremonyManager<C>,
-    participants: Vec<sp_runtime::AccountId32>,
+    participants: BTreeSet<sp_runtime::AccountId32>,
 ) -> oneshot::Receiver<
     Result<
         <C as CryptoScheme>::Signature,
@@ -41,7 +41,7 @@ fn run_on_request_to_sign<C: CryptoScheme>(
         DEFAULT_SIGNING_CEREMONY_ID,
         participants,
         MESSAGE_HASH.clone(),
-        get_key_data_for_test(&ACCOUNT_IDS),
+        get_key_data_for_test(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
         Rng::from_seed(DEFAULT_SIGNING_SEED),
         result_sender,
     );
@@ -70,7 +70,7 @@ async fn should_panic_keygen_request_if_not_participating() {
     let (result_sender, _result_receiver) = oneshot::channel();
     assert_panics!(ceremony_manager.on_keygen_request(
         DEFAULT_KEYGEN_CEREMONY_ID,
-        ACCOUNT_IDS.clone(),
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
         Rng::from_seed(DEFAULT_KEYGEN_SEED),
         result_sender,
     ));
@@ -87,67 +87,15 @@ async fn should_panic_rts_if_not_participating() {
     // Send a signing request where participants doesn't include non_participating_id
     assert_panics!(run_on_request_to_sign(
         &mut ceremony_manager,
-        ACCOUNT_IDS.clone()
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
     ));
-}
-
-#[tokio::test]
-async fn should_ignore_keygen_request_with_duplicate_signer() {
-    // Create a list of participants with a duplicate id
-    let mut participants = ACCOUNT_IDS.clone();
-    participants[1] = participants[2].clone();
-
-    let mut ceremony_manager = new_ceremony_manager_for_test(ACCOUNT_IDS[0].clone());
-
-    // Send a keygen request with the duplicate id
-    let (result_sender, mut result_receiver) = oneshot::channel();
-    ceremony_manager.on_keygen_request(
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        participants,
-        Rng::from_seed(DEFAULT_KEYGEN_SEED),
-        result_sender,
-    );
-
-    // Receive the InvalidParticipants error result
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result"),
-        Err((
-            BTreeSet::default(),
-            CeremonyFailureReason::InvalidParticipants
-        ))
-    );
-}
-
-#[tokio::test]
-async fn should_ignore_rts_with_duplicate_signer() {
-    // Create a list of signers with a duplicate id
-    let mut participants = ACCOUNT_IDS.clone();
-    participants[1] = participants[2].clone();
-
-    let mut ceremony_manager = new_ceremony_manager_for_test(ACCOUNT_IDS[0].clone());
-
-    // Send a signing request with the duplicate id
-    let mut result_receiver = run_on_request_to_sign(&mut ceremony_manager, participants);
-
-    // Receive the InvalidParticipants error result
-    assert_eq!(
-        result_receiver
-            .try_recv()
-            .expect("Failed to receive ceremony result"),
-        Err((
-            BTreeSet::default(),
-            CeremonyFailureReason::InvalidParticipants
-        ))
-    );
 }
 
 #[tokio::test]
 async fn should_ignore_rts_with_insufficient_number_of_signers() {
     // Create a list of signers that is equal to the threshold (not enough to generate a signature)
     let threshold = threshold_from_share_count(ACCOUNT_IDS.len() as u32) as usize;
-    let not_enough_participants = ACCOUNT_IDS[0..threshold].to_vec();
+    let not_enough_participants = BTreeSet::from_iter(ACCOUNT_IDS[0..threshold].iter().cloned());
 
     let mut ceremony_manager = new_ceremony_manager_for_test(ACCOUNT_IDS[0].clone());
 
@@ -187,7 +135,10 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     participants[unknown_signer_idx] = unknown_signer_id;
 
     // Send a signing request with the modified participants
-    let mut result_receiver = run_on_request_to_sign(&mut ceremony_manager, participants);
+    let mut result_receiver = run_on_request_to_sign(
+        &mut ceremony_manager,
+        BTreeSet::from_iter(participants.into_iter()),
+    );
 
     // Receive the InvalidParticipants error result
     assert_eq!(

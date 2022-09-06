@@ -30,7 +30,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
     // allowing us to process a stage 2 message.
     let mut stage_2_state = gen_invalid_keygen_stage_2_state::<<EthSigning as CryptoScheme>::Point>(
         ceremony_id,
-        &ACCOUNT_IDS[..],
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
         rng,
         logger.clone(),
     );

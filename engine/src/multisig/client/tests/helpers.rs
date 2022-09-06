@@ -111,7 +111,7 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool)
 pub struct SigningCeremonyDetails {
     pub rng: Rng,
     pub ceremony_id: CeremonyId,
-    pub signers: Vec<AccountId>,
+    pub signers: BTreeSet<AccountId>,
     pub message_hash: MessageHash,
     pub keygen_result_info: KeygenResultInfo<Point>,
 }
@@ -119,7 +119,7 @@ pub struct SigningCeremonyDetails {
 pub struct KeygenCeremonyDetails {
     pub rng: Rng,
     pub ceremony_id: CeremonyId,
-    pub signers: Vec<AccountId>,
+    pub signers: BTreeSet<AccountId>,
 }
 
 impl<C: CeremonyTrait> Node<C> {
@@ -759,9 +759,12 @@ pub async fn new_signing_ceremony_with_keygen() -> (
     SigningCeremonyRunner,
     HashMap<AccountId, Node<SigningCeremonyEth>>,
 ) {
-    let (key_id, key_data) =
-        generate_key_data(&ACCOUNT_IDS, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
-            .expect("Should generate key for test");
+    let (key_id, key_data) = generate_key_data(
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+        &mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+        true,
+    )
+    .expect("Should generate key for test");
 
     SigningCeremonyRunner::new_with_threshold_subset_of_signers(
         new_nodes(ACCOUNT_IDS.clone()),
@@ -1187,15 +1190,15 @@ pub fn verify_sig_with_aggkey(sig: &EthSchnorrSignature, key_id: &KeyId) -> Resu
 
 pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
     ceremony_id: CeremonyId,
-    account_ids: &[AccountId],
+    account_ids: BTreeSet<AccountId>,
     mut rng: Rng,
     logger: Logger,
 ) -> CeremonyRunner<KeygenCeremony<EthSigning>> {
-    let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(account_ids));
+    let validator_mapping = Arc::new(PartyIdxMapping::from_participants(account_ids.clone()));
     let common = CeremonyCommon {
         ceremony_id,
         own_idx: 0,
-        all_idxs: BTreeSet::from_iter((0..account_ids.len()).into_iter().map(|id| id as u32)),
+        all_idxs: BTreeSet::from_iter((0..account_ids.len()).into_iter().map(|idx| idx as u32)),
         outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
         validator_mapping: validator_mapping.clone(),
         rng: rng.clone(),

@@ -4,6 +4,7 @@ use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
+use sp_std::collections::btree_set::BTreeSet;
 use std::marker::PhantomData;
 
 pub struct MockThresholdSigner<C, Call>(PhantomData<(C, Call)>);
@@ -102,7 +103,7 @@ where
 
 	fn request_signature_with(
 		_key_id: Self::KeyId,
-		_participants: Vec<Self::ValidatorId>,
+		_participants: BTreeSet<Self::ValidatorId>,
 		payload: <C as ChainCrypto>::Payload,
 		_retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId) {
