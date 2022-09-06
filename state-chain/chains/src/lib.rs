@@ -126,9 +126,7 @@ where
 	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
 }
 
-/// A general trait for initializing types required for Fetching Assets deposited by Users as part
-/// of a swap for some External Chain.
-/// #[derive(
+/// Contains all the parameters required to fetch incoming transactions on an external chain.
 #[derive(
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
