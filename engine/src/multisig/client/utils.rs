@@ -50,12 +50,12 @@ impl PartyIdxMapping {
     }
 
     pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
-        let mut id_to_idx = HashMap::new();
-
-        for (i, account_id) in participants.iter().enumerate() {
-            // indexes start with 1 for signing
-            id_to_idx.insert(account_id.clone(), i as AuthorityCount + 1);
-        }
+        // The protocol requires that the indexes start at 1
+        let id_to_idx = participants
+            .iter()
+            .enumerate()
+            .map(|(i, account_id)| (account_id.clone(), i as AuthorityCount + 1))
+            .collect();
 
         PartyIdxMapping {
             id_to_idx,

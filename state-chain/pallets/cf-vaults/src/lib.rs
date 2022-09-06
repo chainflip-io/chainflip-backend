@@ -796,7 +796,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			keygen_ceremony_id: ceremony_id,
 			keygen_participants: candidates.clone(),
-			response_status: KeygenResponseStatus::new(BTreeSet::from_iter(candidates.clone())),
+			response_status: KeygenResponseStatus::new(candidates.clone()),
 		});
 
 		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each

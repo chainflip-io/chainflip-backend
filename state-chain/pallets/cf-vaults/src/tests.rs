@@ -41,10 +41,10 @@ fn start_vault_rotation_panics_with_no_candidates() {
 
 #[test]
 fn keygen_request_emitted() {
+	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
-			ALL_CANDIDATES.iter().cloned(),
-		));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
 		// Confirm we have a new vault rotation process running
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
@@ -52,11 +52,8 @@ fn keygen_request_emitted() {
 		);
 		assert_eq!(
 			last_event::<MockRuntime>(),
-			PalletEvent::<MockRuntime, _>::KeygenRequest(
-				current_ceremony_id(),
-				BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-			)
-			.into()
+			PalletEvent::<MockRuntime, _>::KeygenRequest(current_ceremony_id(), btree_candidates)
+				.into()
 		);
 	});
 }
@@ -64,25 +61,23 @@ fn keygen_request_emitted() {
 #[test]
 #[should_panic]
 fn start_vault_rotation_panics_if_called_while_vault_rotation_in_progress() {
+	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
-			ALL_CANDIDATES.iter().cloned(),
-		));
-		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
-			ALL_CANDIDATES.iter().cloned(),
-		));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates);
 	});
 }
 
 #[test]
 fn keygen_success_triggers_keygen_verification() {
+	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
-			ALL_CANDIDATES.iter().cloned(),
-		));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
 		let ceremony_id = current_ceremony_id();
 
-		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
@@ -505,6 +500,7 @@ fn vault_key_rotated() {
 	new_test_ext().execute_with(|| {
 		const ROTATION_BLOCK_NUMBER: u64 = 42;
 		const TX_HASH: [u8; 4] = [0xab; 4];
+		let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
@@ -516,15 +512,9 @@ fn vault_key_rotated() {
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
-		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
-			ALL_CANDIDATES.iter().cloned(),
-		));
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
 		let ceremony_id = current_ceremony_id();
-		VaultsPallet::trigger_keygen_verification(
-			ceremony_id,
-			NEW_AGG_PUB_KEY,
-			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-		);
+		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
 
 		EthMockThresholdSigner::signature_result_last_requested(Ok(ETH_DUMMY_SIG));
 
