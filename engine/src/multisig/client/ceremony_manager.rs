@@ -1,12 +1,13 @@
 use anyhow::{bail, Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{hash_map, BTreeSet, HashMap};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinError;
 
+use crate::constants::CEREMONY_ID_WINDOW;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::client::keygen::generate_key_data_until_compatible;
@@ -590,14 +591,32 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: Ceremony::Data,
-        _latest_ceremony_id: CeremonyId,
+        latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
 
-        // TODO: Check ceremony id here, See issue #1972
-
-        let ceremony_handle = self.get_state_or_create_unauthorized(ceremony_id, logger);
+        // Get the existing ceremony or create an unauthorised one (with ceremony id tracking check)
+        let ceremony_handle = match self.ceremony_handles.entry(ceremony_id) {
+            hash_map::Entry::Vacant(entry) => {
+                // Only a ceremony id that is within the ceremony id window can create unauthorised ceremonies
+                if ceremony_id > latest_ceremony_id
+                    && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
+                {
+                    let (ceremony_handle, task_handle) = CeremonyHandle::spawn(ceremony_id, logger);
+                    self.ceremony_futures.push(task_handle);
+                    entry.insert(ceremony_handle)
+                } else {
+                    slog::debug!(
+                        logger,
+                        "Ignoring data: unexpected ceremony id {}",
+                        ceremony_id
+                    );
+                    return;
+                }
+            }
+            hash_map::Entry::Occupied(entry) => entry.into_mut(),
+        };
 
         ceremony_handle
             .message_sender
