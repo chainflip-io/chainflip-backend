@@ -12,6 +12,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+	ForeignChainAddress, ForeignChainAsset,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -664,4 +665,22 @@ pub trait StakingInfo {
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
 	/// Returns the total stake held on-chain.
 	fn total_onchain_stake() -> Self::Balance;
+}
+
+/// Allow pallets to register `Intent`s in the Ingress pallet.
+pub trait IngressApi {
+	type AccountId;
+
+	fn register_liquidity_ingress_intent(
+		lp_account: Self::AccountId,
+		ingress_asset: ForeignChainAsset,
+	);
+
+	fn register_swap_intent(
+		relayer_id: Self::AccountId,
+		ingress_asset: ForeignChainAsset,
+		egress_asset: ForeignChainAsset,
+		relayer_commission_bps: u16,
+		egress_address: ForeignChainAddress,
+	);
 }
