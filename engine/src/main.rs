@@ -212,7 +212,7 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     witnessing_instruction_receiver_1,
-                    false,
+                    true,
                     state_chain_client.clone(),
                     &root_logger,
                 )
@@ -223,7 +223,7 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client,
                     eth_http_rpc_client,
                     witnessing_instruction_receiver_2,
-                    true,
+                    false,
                     state_chain_client.clone(),
                     &root_logger,
                 )
