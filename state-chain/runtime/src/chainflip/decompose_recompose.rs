@@ -111,7 +111,8 @@ mod tests {
 			let calls = [1, 100, 12, 10, 9, 11].map(eth_chain_tracking_call_with_fee);
 
 			let authorities = (0..calls.len()).map(|i| [i as u8; 32].into()).collect::<Vec<_>>();
-			pallet_cf_validator::CurrentEpoch::<Runtime>::put(1);
+			let current_epoch = 1;
+			pallet_cf_validator::CurrentEpoch::<Runtime>::put(current_epoch);
 			pallet_cf_validator::CurrentAuthorities::<Runtime>::put(&authorities);
 			pallet_cf_validator::EpochAuthorityCount::<Runtime>::insert(
 				<Validator as EpochInfo>::epoch_index(),
@@ -124,9 +125,10 @@ mod tests {
 					&authority_id,
 					index as u32,
 				);
-				assert_ok!(Witnesser::witness(
+				assert_ok!(Witnesser::witness_at_epoch(
 					Origin::signed(authority_id),
-					Box::new(calls[index].clone())
+					Box::new(calls[index].clone()),
+					current_epoch
 				));
 			}
 

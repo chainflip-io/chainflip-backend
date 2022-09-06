@@ -157,34 +157,6 @@ pub mod pallet {
 		#[allow(clippy::boxed_local)]
 		#[pallet::weight(
 			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
-				T::EpochInfo::authority_count_at_epoch(T::EpochInfo::epoch_index()).unwrap_or(1u32) as u64)
-		)]
-		pub fn witness(
-			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			Self::do_witness_at_epoch(who, *call, T::EpochInfo::epoch_index())
-		}
-
-		/// Called as a witness of some external event.
-		///
-		/// The provided `call` will be dispatched when the configured threshold number of
-		/// authorities have submitted an identical transaction. This can be thought of as a vote
-		/// for the encoded [Call](Config::Call) value.
-		///
-		/// ## Events
-		///
-		/// - [WitnessExecutionFailed](Event::WitnessExecutionFailed)
-		///
-		/// ## Errors
-		///
-		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
-		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
-		/// - [DuplicateWitness](Error::DuplicateWitness)
-		#[allow(clippy::boxed_local)]
-		#[pallet::weight(
-			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
 		)]
 		pub fn witness_at_epoch(
