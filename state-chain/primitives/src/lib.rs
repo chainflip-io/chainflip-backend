@@ -55,7 +55,7 @@ pub enum Chain {
 	Dot,
 }
 
-/// These assets can be on multiple chains.
+/// An Asset is a token or currency that can be traded via the Chainflip AMM.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum Asset {
 	Eth,
