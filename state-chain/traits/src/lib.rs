@@ -24,7 +24,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, Permill, RuntimeDebug,
+	DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -703,7 +703,7 @@ pub trait IngressApi {
 		relayer_id: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
 		egress_asset: ForeignChainAsset,
-		relayer_commission: Permill,
+		relayer_commission_bps: u16,
 		egress_address: ForeignChainAddress,
 	);
 }
