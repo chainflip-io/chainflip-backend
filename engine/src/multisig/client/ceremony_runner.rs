@@ -4,7 +4,6 @@ mod ceremony_runner_tests;
 use std::{
     collections::{BTreeMap, BTreeSet},
     pin::Pin,
-    sync::Arc,
     time::Duration,
 };
 
@@ -23,7 +22,6 @@ use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, Account
 use super::{
     ceremony_manager::{CeremonyTrait, DynStage, PreparedRequest},
     common::{CeremonyFailureReason, PreProcessStageDataCheck},
-    utils::PartyIdxMapping,
 };
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
@@ -40,7 +38,6 @@ type OptionalCeremonyReturn<Ceremony> = Option<
 
 pub struct StateAuthorised<Ceremony: CeremonyTrait> {
     pub stage: Option<DynStage<Ceremony>>,
-    pub idx_mapping: Arc<PartyIdxMapping>,
 }
 
 pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
@@ -80,10 +77,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 }
                 request = &mut request_receiver => {
 
-                    let PreparedRequest { init_stage, idx_mapping, result_sender } = request.expect("Ceremony request channel was dropped unexpectedly");
+                    let PreparedRequest { init_stage, result_sender } = request.expect("Ceremony request channel was dropped unexpectedly");
                     final_result_sender = Some(result_sender);
 
-                    if let Some(result) = runner.on_ceremony_request(init_stage, idx_mapping).await {
+                    if let Some(result) = runner.on_ceremony_request(init_stage).await {
                         break result;
                     }
 
@@ -125,7 +122,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub async fn on_ceremony_request(
         &mut self,
         mut initial_stage: DynStage<Ceremony>,
-        idx_mapping: Arc<PartyIdxMapping>,
     ) -> OptionalCeremonyReturn<Ceremony> {
         // This function is only ever called from a oneshot channel,
         // so it should never get called twice.
@@ -136,7 +132,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
         self.inner = Some(StateAuthorised {
             stage: Some(initial_stage),
-            idx_mapping,
         });
 
         // Unlike other state transitions, we don't take into account
@@ -161,6 +156,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
             .stage
             .take()
             .expect("Stage must be present to be finalized");
+
+        let validator_mapping = stage.ceremony_common().validator_mapping.clone();
 
         match stage.finalize().await {
             StageResult::NextStage(mut next_stage) => {
@@ -189,10 +186,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
                 self.process_delayed().await
             }
-            StageResult::Error(bad_validators, reason) => Some(Err((
-                authorised_state.idx_mapping.get_ids(bad_validators),
-                reason,
-            ))),
+            StageResult::Error(bad_validators, reason) => {
+                Some(Err((validator_mapping.get_ids(bad_validators), reason)))
+            }
             StageResult::Done(result) => {
                 slog::debug!(self.logger, "Ceremony reached the final stage!");
 
@@ -229,7 +225,11 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 );
 
                 // Check that the sender is a possible participant in the ceremony
-                let sender_idx = match authorised_state.idx_mapping.get_idx(&sender_id) {
+                let sender_idx = match stage
+                    .ceremony_common()
+                    .validator_mapping
+                    .get_idx(&sender_id)
+                {
                     Some(idx) => idx,
                     None => {
                         slog::debug!(
@@ -363,8 +363,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
                 // Log the account ids of the missing messages
                 if let Some(stage) = &authorised_state.stage {
-                    let missing_messages_from_accounts = authorised_state
-                        .idx_mapping
+                    let missing_messages_from_accounts = stage
+                        .ceremony_common()
+                        .validator_mapping
                         .get_ids(stage.awaited_parties());
                     slog::debug!(
                         self.logger,
@@ -391,13 +392,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub fn new_authorised(
         ceremony_id: CeremonyId,
         stage: DynStage<Ceremony>,
-        idx_mapping: Arc<PartyIdxMapping>,
         logger: slog::Logger,
     ) -> Self {
-        let inner = Some(StateAuthorised {
-            stage: Some(stage),
-            idx_mapping,
-        });
+        let inner = Some(StateAuthorised { stage: Some(stage) });
 
         CeremonyRunner {
             inner,

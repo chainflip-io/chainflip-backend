@@ -114,7 +114,6 @@ pub type DynStage<Ceremony> = Box<
 // A ceremony request that has passed initial checks and setup its initial stage
 pub struct PreparedRequest<C: CeremonyTrait> {
     pub init_stage: DynStage<C>,
-    pub idx_mapping: Arc<PartyIdxMapping>,
     pub result_sender: CeremonyResultSender<C>,
 }
 
@@ -170,7 +169,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
         let common = CeremonyCommon {
             ceremony_id,
             outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
-            validator_mapping: key_info.validator_map.clone(),
+            validator_mapping: key_info.validator_map,
             own_idx,
             all_idxs: signer_idxs,
             logger: logger.clone(),
@@ -181,7 +180,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
             common.clone(),
             SigningStateCommonInfo {
                 data,
-                key: key_info.key.clone(),
+                key: key_info.key,
             },
         );
 
@@ -190,7 +189,6 @@ pub fn prepare_signing_request<C: CryptoScheme>(
 
     Ok(PreparedRequest {
         init_stage,
-        idx_mapping: key_info.validator_map,
         result_sender,
     })
 }
@@ -240,7 +238,6 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
 
     Ok(PreparedRequest {
         init_stage,
-        idx_mapping: validator_map,
         result_sender,
     })
 }
