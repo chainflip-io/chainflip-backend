@@ -4,6 +4,7 @@
 //!
 //! Primitive types to be used across Chainflip's various crates
 
+use cf_chains::eth;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
@@ -49,15 +50,21 @@ impl Default for ChainflipAccountData {
 	}
 }
 
+/// Chains that Chainflip can receive assets from and send assets to.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub enum ForeignChain {
 	Eth,
 	Dot,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub enum ForeignChainAddress {
+	Eth(eth::Address),
+}
+
 /// An Asset is a token or currency that can be traded via the Chainflip AMM.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub enum ForeignAsset {
+pub enum Asset {
 	Eth,
 	Flip,
 	Usdc,
@@ -67,5 +74,5 @@ pub enum ForeignAsset {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct ForeignChainAsset {
 	chain: ForeignChain,
-	asset: ForeignAsset,
+	asset: Asset,
 }
