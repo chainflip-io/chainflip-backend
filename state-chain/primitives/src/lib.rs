@@ -76,3 +76,24 @@ impl Default for AccountRole {
 		AccountRole::None
 	}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub enum ForeignChain {
+	Eth,
+	Dot,
+}
+
+/// An Asset is a token or currency that can be traded via the Chainflip AMM.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub enum ForeignAsset {
+	Eth,
+	Flip,
+	Usdc,
+	Dot,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub struct ForeignChainAsset {
+	chain: ForeignChain,
+	asset: ForeignAsset,
+}
