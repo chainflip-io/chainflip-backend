@@ -115,7 +115,6 @@ pub type DynStage<Ceremony> = Box<
 pub struct PreparedRequest<C: CeremonyTrait> {
     pub init_stage: DynStage<C>,
     pub idx_mapping: Arc<PartyIdxMapping>,
-    pub participants_count: AuthorityCount,
     pub result_sender: CeremonyResultSender<C>,
 }
 
@@ -192,7 +191,6 @@ pub fn prepare_signing_request<C: CryptoScheme>(
     Ok(PreparedRequest {
         init_stage,
         idx_mapping: key_info.validator_map,
-        participants_count: signers_len,
         result_sender,
     })
 }
@@ -220,11 +218,6 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
             }
         };
 
-    let num_of_participants: AuthorityCount = participants
-        .len()
-        .try_into()
-        .expect("too many participants");
-
     let init_stage = {
         let common = CeremonyCommon {
             ceremony_id,
@@ -248,7 +241,6 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     Ok(PreparedRequest {
         init_stage,
         idx_mapping: validator_map,
-        participants_count: num_of_participants,
         result_sender,
     })
 }
