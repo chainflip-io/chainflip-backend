@@ -61,9 +61,8 @@ pub enum ForeignChainAddress {
 	Eth(eth::Address),
 }
 
-/// These assets can be on multiple chains.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub enum ForeignAsset {
+pub enum Asset {
 	Eth,
 	Flip,
 	Usdc,
@@ -73,5 +72,5 @@ pub enum ForeignAsset {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct ForeignChainAsset {
 	chain: ForeignChain,
-	asset: ForeignAsset,
+	asset: Asset,
 }
