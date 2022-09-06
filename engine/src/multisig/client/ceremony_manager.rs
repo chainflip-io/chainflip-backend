@@ -112,7 +112,7 @@ pub type DynStage<Ceremony> = Box<
 
 // A ceremony request that has passed initial checks and setup its initial stage
 pub struct PreparedRequest<C: CeremonyTrait> {
-    pub init_stage: DynStage<C>,
+    pub initial_stage: DynStage<C>,
     pub idx_mapping: Arc<PartyIdxMapping>,
     pub participants_count: AuthorityCount,
 }
@@ -159,7 +159,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
         };
 
     // Prepare initial ceremony stage
-    let init_stage = {
+    let initial_stage = {
         use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
 
         let common = CeremonyCommon {
@@ -184,7 +184,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
     };
 
     Ok(PreparedRequest {
-        init_stage,
+        initial_stage,
         idx_mapping: key_info.validator_map,
         participants_count: signers_len,
     })
@@ -217,7 +217,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
         .try_into()
         .expect("too many participants");
 
-    let init_stage = {
+    let initial_stage = {
         let common = CeremonyCommon {
             ceremony_id,
             outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
@@ -238,7 +238,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     };
 
     Ok(PreparedRequest {
-        init_stage,
+        initial_stage,
         idx_mapping: validator_map,
         participants_count: num_of_participants,
     })

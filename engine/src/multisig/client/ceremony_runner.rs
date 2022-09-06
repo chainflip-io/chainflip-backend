@@ -42,7 +42,7 @@ type OptionalCeremonyReturn<Ceremony> = Option<
 pub struct StateAuthorised<Ceremony: CeremonyTrait> {
     pub stage: Option<DynStage<Ceremony>>,
     pub idx_mapping: Arc<PartyIdxMapping>,
-    pub num_of_participants: AuthorityCount,
+    pub participants_count: AuthorityCount,
 }
 
 pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
@@ -79,10 +79,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
                 }
                 request = &mut request_receiver => {
-
-                    let PreparedRequest { init_stage, idx_mapping, participants_count} = request.expect("Ceremony request channel was dropped unexpectedly");
-
-                    if let Some(result) = runner.on_ceremony_request(init_stage, idx_mapping, participants_count).await { // TODO: use PreparedRequest as the argument
+                    if let Some(result) = runner.on_ceremony_request(request.expect("Ceremony request channel was dropped unexpectedly")).await {
                         break result;
                     }
 
@@ -116,21 +113,25 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     /// initializing the ceremony into an authorised stage 1 state.
     pub async fn on_ceremony_request(
         &mut self,
-        mut initial_stage: DynStage<Ceremony>,
-        idx_mapping: Arc<PartyIdxMapping>,
-        num_of_participants: AuthorityCount,
+        prepared_request: PreparedRequest<Ceremony>,
     ) -> OptionalCeremonyReturn<Ceremony> {
         // This function is only ever called from a oneshot channel,
         // so it should never get called twice.
         // Therefore we can assume the inner is not initialized yet.
         assert!(self.inner.is_none());
 
+        let PreparedRequest {
+            mut initial_stage,
+            idx_mapping,
+            participants_count,
+        } = prepared_request;
+
         initial_stage.init();
 
         self.inner = Some(StateAuthorised {
             stage: Some(initial_stage),
             idx_mapping,
-            num_of_participants,
+            participants_count,
         });
 
         // Unlike other state transitions, we don't take into account
@@ -236,7 +237,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 };
 
                 // Check that the number of elements in the data is what we expect
-                if !data.data_size_is_valid(authorised_state.num_of_participants) {
+                if !data.data_size_is_valid(authorised_state.participants_count) {
                     slog::debug!(
                         self.logger,
                         "Ignoring data: incorrect number of elements";
@@ -384,13 +385,13 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
         ceremony_id: CeremonyId,
         stage: DynStage<Ceremony>,
         idx_mapping: Arc<PartyIdxMapping>,
-        num_of_participants: AuthorityCount,
+        participants_count: AuthorityCount,
         logger: slog::Logger,
     ) -> Self {
         let inner = Some(StateAuthorised {
             stage: Some(stage),
             idx_mapping,
-            num_of_participants,
+            participants_count,
         });
 
         CeremonyRunner {

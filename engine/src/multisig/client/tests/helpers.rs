@@ -168,15 +168,7 @@ impl Node<SigningCeremonyEth> {
         )
         .expect("invalid request");
 
-        if let Some(outcome) = self
-            .ceremony_runner
-            .on_ceremony_request(
-                request.init_stage,
-                request.idx_mapping,
-                request.participants_count,
-            )
-            .await
-        {
+        if let Some(outcome) = self.ceremony_runner.on_ceremony_request(request).await {
             self.on_ceremony_outcome(outcome);
         }
     }
@@ -201,15 +193,7 @@ impl Node<KeygenCeremonyEth> {
         )
         .expect("invalid request");
 
-        if let Some(outcome) = self
-            .ceremony_runner
-            .on_ceremony_request(
-                request.init_stage,
-                request.idx_mapping,
-                request.participants_count,
-            )
-            .await
-        {
+        if let Some(outcome) = self.ceremony_runner.on_ceremony_request(request).await {
             self.on_ceremony_outcome(outcome)
         }
     }
