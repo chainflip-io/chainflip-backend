@@ -79,7 +79,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
                 }
                 request = &mut request_receiver => {
-                    if let Some(result) = runner.on_ceremony_request(request.expect("Ceremony request channel was dropped unexpectedly")).await {
+                    let request = request.expect("Ceremony request channel was dropped unexpectedly");
+
+                    if let Some(result) = runner.on_ceremony_request(request).await {
                         break result;
                     }
 

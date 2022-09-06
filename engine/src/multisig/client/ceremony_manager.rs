@@ -117,10 +117,6 @@ pub struct PreparedRequest<C: CeremonyTrait> {
     pub participants_count: AuthorityCount,
 }
 
-// If the ceremony request is invalid, a failure reason is returned with the result sender
-type InitCeremonyFailure<Ceremony> =
-    CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>; // TODO: no need for this alias anymore
-
 // Initial checks and setup before sending the request to the `CeremonyRunner`
 pub fn prepare_signing_request<C: CryptoScheme>(
     ceremony_id: CeremonyId,
@@ -131,7 +127,10 @@ pub fn prepare_signing_request<C: CryptoScheme>(
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
     rng: Rng,
     logger: &slog::Logger,
-) -> Result<PreparedRequest<SigningCeremony<C>>, InitCeremonyFailure<SigningCeremony<C>>> {
+) -> Result<
+    PreparedRequest<SigningCeremony<C>>,
+    CeremonyFailureReason<<SigningCeremony<C> as CeremonyTrait>::FailureReason>,
+> {
     // Check that we have enough signers
     let minimum_signers_needed = key_info.params.threshold + 1;
     let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
@@ -199,7 +198,10 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     rng: Rng,
     allowing_high_pubkey: bool,
     logger: &slog::Logger,
-) -> Result<PreparedRequest<KeygenCeremony<C>>, InitCeremonyFailure<KeygenCeremony<C>>> {
+) -> Result<
+    PreparedRequest<KeygenCeremony<C>>,
+    CeremonyFailureReason<<KeygenCeremony<C> as CeremonyTrait>::FailureReason>,
+> {
     let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
 
     let (our_idx, signer_idxs) =
@@ -338,19 +340,19 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                     }
                 }
                 Some(result) = self.signing_states.ceremony_futures.next() => {
-                    match result{
-                        Ok((id,outcome))=>{
+                    match result {
+                        Ok((id, outcome)) => {
                             self.signing_states.finalize_ceremony(id, outcome);
-                        },
-                        Err(e)=>panic!("Signing ceremony panicked with: {}", e),
+                        }
+                        Err(e) => panic!("Signing ceremony panicked with: {}", e),
                     }
                 }
                 Some(result) = self.keygen_states.ceremony_futures.next() => {
-                    match result{
-                        Ok((id,outcome))=>{
+                    match result {
+                        Ok((id, outcome)) => {
                             self.keygen_states.finalize_ceremony(id, outcome);
-                        },
-                        Err(e)=>panic!("Keygen ceremony panicked with: {}", e),
+                        }
+                        Err(e) => panic!("Keygen ceremony panicked with: {}", e),
                     }
                 }
             }
@@ -645,7 +647,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         }
     }
 
-    // Removing any state associated with the ceremony
+    /// Removing any state associated with the ceremony
     fn cleanup_ceremony(&mut self, ceremony_id: &CeremonyId) -> Result<()> {
         self.ceremony_handles
             .remove(ceremony_id)
@@ -673,7 +675,8 @@ enum CeremonyRequestState<Ceremony: CeremonyTrait> {
     /// Contains the oneshot channel used to relay the request to the ceremony task.
     Unauthorised(oneshot::Sender<PreparedRequest<Ceremony>>),
     /// State after receiving the request from the SC.
-    /// Contains the result sender used to send the final outcome.
+    /// Contains the optional result sender that is consumed when sending
+    /// the ceremony outcome right before being cleaned up.
     Authorised(Option<CeremonyResultSender<Ceremony>>),
 }
 
