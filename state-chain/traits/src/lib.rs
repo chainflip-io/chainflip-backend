@@ -10,8 +10,8 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, ChainAddress, ChainAsset, ChainflipAccountData,
-	ChainflipAccountState, EpochIndex,
+	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+	ForeignChainAddress, ForeignChainAsset,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -694,13 +694,16 @@ pub trait StakingInfo {
 pub trait IngressApi {
 	type AccountId;
 
-	fn register_liquidity_ingress_intent(lp_account: Self::AccountId, ingress_asset: ChainAsset);
+	fn register_liquidity_ingress_intent(
+		lp_account: Self::AccountId,
+		ingress_asset: ForeignChainAsset,
+	);
 
 	fn register_swap_intent(
 		relayer_id: Self::AccountId,
-		ingress_asset: ChainAsset,
-		egress_asset: ChainAsset,
+		ingress_asset: ForeignChainAsset,
+		egress_asset: ForeignChainAsset,
 		relayer_commission: Permill,
-		egress_address: ChainAddress,
+		egress_address: ForeignChainAddress,
 	);
 }
