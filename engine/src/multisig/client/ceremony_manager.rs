@@ -497,6 +497,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
     /// Override the latest ceremony id. Used to limit the spamming of unauthorised ceremonies.
     pub fn update_latest_ceremony_id(&mut self, ceremony_id: CeremonyId) {
+        assert_eq!(self.latest_ceremony_id + 1, ceremony_id);
         self.latest_ceremony_id = ceremony_id;
     }
 
