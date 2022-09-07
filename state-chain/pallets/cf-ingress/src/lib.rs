@@ -22,9 +22,11 @@ pub mod pallet {
 	use cf_primitives::Asset;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
+		sp_runtime::app_crypto::sp_core,
 		traits::{EnsureOrigin, IsType},
 		Blake2_128,
 	};
+	use sp_core::H256;
 
 	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 
@@ -99,6 +101,8 @@ pub mod pallet {
 			ingress_address: ForeignChainAddress,
 			asset: Asset,
 			amount: u128,
+			// required to ensure the witness is unique to that transaction
+			_tx_hash: H256,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
